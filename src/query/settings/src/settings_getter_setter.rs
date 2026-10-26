@@ -866,6 +866,10 @@ impl Settings {
         self.try_get_u64("prewhere_selectivity_threshold")
     }
 
+    pub fn get_enable_encoded_columns(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_encoded_columns")? != 0)
+    }
+
     pub fn get_numeric_cast_option(&self) -> Result<String> {
         self.try_get_string("numeric_cast_option")
     }

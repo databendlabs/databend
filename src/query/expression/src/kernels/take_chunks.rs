@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
@@ -36,6 +37,7 @@ use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
+use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnVec;
 use crate::types::geography::GeographyColumn;
@@ -187,11 +189,42 @@ impl DataBlock {
     }
 }
 
+struct TakeColumns<'a> {
+    first: Cow<'a, Column>,
+    rest: &'a [Column],
+}
+
+impl<'a> TakeColumns<'a> {
+    fn new(columns: &'a [Column]) -> Self {
+        let (first, rest) = columns.split_first().expect("take from no columns");
+        let first = match first {
+            Column::Encoded(encoded) => Cow::Owned(encoded.decode()),
+            column => Cow::Borrowed(column),
+        };
+        TakeColumns { first, rest }
+    }
+
+    fn first(&self) -> &Column {
+        &self.first
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &Column> {
+        std::iter::once(self.first.as_ref()).chain(self.rest)
+    }
+}
+
+/// The buffer of a decimal `column` with the physical type of `_like`, decoded if encoded.
+fn decimal_buffer<T: Decimal>(_like: &Buffer<T>, column: &Column) -> Buffer<T> {
+    T::try_downcast_column(column).unwrap().0
+}
+
 impl Column {
     pub fn take_column_indices(columns: &[Column], indices: &[BlockIndex]) -> Column {
+        let columns = TakeColumns::new(columns);
         let result_size = indices.len();
-        let data_type = columns[0].data_type();
-        match &columns[0] {
+        let data_type = columns.first().data_type();
+        match columns.first() {
+            Column::Encoded(_) => unreachable!("EncodedColumn::decode returns a regular column"),
             Column::Null { .. } => Column::Null { len: result_size },
             Column::EmptyArray { .. } => Column::EmptyArray { len: result_size },
             Column::EmptyMap { .. } => Column::EmptyMap { len: result_size },
@@ -199,18 +232,16 @@ impl Column {
                 NumberColumn::NUM_TYPE(_) => {
                     let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
                     Self::take_block_value_types::<NumberType<NUM_TYPE>>(
-                        columns, &data_type, builder, indices,
+                        &columns, &data_type, builder, indices,
                     )
                 }
             }),
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
-                DecimalColumn::DECIMAL_TYPE(_, size) => {
+                DecimalColumn::DECIMAL_TYPE(first, size) => {
+                    // Columns other than the first may be encoded; the downcast decodes them.
                     let columns = columns
                         .iter()
-                        .map(|col| match col {
-                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(col, _)) => col,
-                            _ => unreachable!(),
-                        })
+                        .map(|col| decimal_buffer(first, col))
                         .collect_vec();
                     let mut builder = Vec::with_capacity(result_size);
                     for &(block_index, row) in indices {
@@ -223,33 +254,35 @@ impl Column {
             }),
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BooleanType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<BooleanType>(&columns, &data_type, builder, indices)
             }
             Column::Binary(_) => {
                 let builder = BinaryType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BinaryType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<BinaryType>(&columns, &data_type, builder, indices)
             }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<StringType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<StringType>(&columns, &data_type, builder, indices)
             }
             Column::Timestamp(_) => {
                 let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<TimestampType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<TimestampType>(
+                    &columns, &data_type, builder, indices,
+                )
             }
             Column::TimestampTz(_) => {
                 let builder = TimestampTzType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<TimestampTzType>(
-                    columns, &data_type, builder, indices,
+                    &columns, &data_type, builder, indices,
                 )
             }
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<DateType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<DateType>(&columns, &data_type, builder, indices)
             }
             Column::Interval(_) => {
                 let builder = IntervalType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<IntervalType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<IntervalType>(&columns, &data_type, builder, indices)
             }
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
@@ -258,7 +291,7 @@ impl Column {
                     ColumnBuilder::with_capacity(&column.values().data_type(), result_size);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_value_types::<ArrayType<AnyType>>(
-                    columns, &data_type, builder, indices,
+                    &columns, &data_type, builder, indices,
                 )
             }
             Column::Map(column) => {
@@ -277,12 +310,12 @@ impl Column {
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_value_types::<MapType<AnyType, AnyType>>(
-                    columns, &data_type, builder, indices,
+                    &columns, &data_type, builder, indices,
                 )
             }
             Column::Bitmap(_) => {
                 let builder = BitmapType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BitmapType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<BitmapType>(&columns, &data_type, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_columns = columns
@@ -322,15 +355,17 @@ impl Column {
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<VariantType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<VariantType>(&columns, &data_type, builder, indices)
             }
             Column::Geometry(_) => {
                 let builder = GeometryType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<GeometryType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<GeometryType>(&columns, &data_type, builder, indices)
             }
             Column::Geography(_) => {
                 let builder = GeographyType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<GeographyType>(columns, &data_type, builder, indices)
+                Self::take_block_value_types::<GeographyType>(
+                    &columns, &data_type, builder, indices,
+                )
             }
             Column::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
                 VectorColumn::NUM_TYPE((_, dimension)) => {
@@ -355,7 +390,7 @@ impl Column {
                     N => {
                         let builder = Vec::with_capacity(result_size);
                         Self::take_block_value_types::<OpaqueType<N>>(
-                            columns, &data_type, builder, indices,
+                            &columns, &data_type, builder, indices,
                         )
                     }
                     _ => unreachable!("Unsupported Opaque size: {}", first.size()),
@@ -365,7 +400,9 @@ impl Column {
     }
 
     pub fn take_downcast_column_vec(columns: &[Column]) -> ColumnVec {
-        match &columns[0] {
+        let columns = TakeColumns::new(columns);
+        match columns.first() {
+            Column::Encoded(_) => unreachable!("EncodedColumn::decode returns a regular column"),
             Column::Null { .. } => ColumnVec::Null,
             Column::EmptyArray { .. } => ColumnVec::EmptyArray,
             Column::EmptyMap { .. } => ColumnVec::EmptyMap,
@@ -442,13 +479,11 @@ impl Column {
                 }
             },
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
-                DecimalColumn::DECIMAL_TYPE(_, size) => {
+                DecimalColumn::DECIMAL_TYPE(first, size) => {
+                    // Columns other than the first may be encoded; the downcast decodes them.
                     let columns = columns
                         .iter()
-                        .map(|col| match col {
-                            Column::Decimal(DecimalColumn::DECIMAL_TYPE(col, _)) => col.clone(),
-                            _ => unreachable!(),
-                        })
+                        .map(|col| decimal_buffer(first, col))
                         .collect_vec();
                     ColumnVec::Decimal(DecimalColumnVec::DECIMAL_TYPE(columns, *size))
                 }
@@ -880,7 +915,7 @@ impl Column {
     }
 
     fn take_block_value_types<T: ValueType>(
-        columns: &[Column],
+        columns: &TakeColumns<'_>,
         data_type: &DataType,
         mut builder: T::ColumnBuilder,
         indices: &[BlockIndex],

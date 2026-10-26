@@ -237,6 +237,14 @@ where I: TakeIndex + ?Sized
         Ok(())
     }
 
+    /// Takes the encoded values (keys / deltas) and keeps the encoding.
+    fn visit_encoded(&mut self, mut column: Box<EncodedColumn>) -> Result<()> {
+        // Reuses the box of the input column.
+        *column = column.map_codes(|codes| self.take_narrow(codes));
+        self.result = Some(Value::Column(Column::Encoded(column)));
+        Ok(())
+    }
+
     fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
         self.result = Some(Value::Column(
             (with_opaque_mapped_type!(|T| match column {
@@ -252,6 +260,10 @@ where I: TakeIndex + ?Sized
 impl<'a, I> TakeVisitor<'a, I>
 where I: TakeIndex + ?Sized
 {
+    fn take_narrow(&mut self, buffer: NarrowBuffer) -> NarrowBuffer {
+        crate::map_narrow_buffer!(buffer, |b| self.take_primitive_types(b))
+    }
+
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         let mut builder = Vec::with_capacity(self.indices.len());
         self.indices

@@ -45,6 +45,8 @@ pub struct AlterUserPlan {
     pub user_info: UserInfo,
     pub change_auth: bool,
     pub change_user_option: bool,
+    /// The explicitly requested default role, even if the option is unchanged.
+    pub default_role: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

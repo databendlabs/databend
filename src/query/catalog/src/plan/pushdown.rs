@@ -25,12 +25,14 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
+use databend_common_expression::types::NumberDataType;
 use databend_storages_common_table_meta::meta::supported_stat_type;
 use databend_storages_common_table_meta::table::ChangeType;
 use jsonb::keypath::OwnedKeyPaths;
@@ -308,6 +310,47 @@ impl PushDownInfo {
                 .merge(&dependencies.difference(&prewhere.prewhere_columns));
         }
         Ok(())
+    }
+
+    /// Number of candidates to collect per FTS index for an exact score TopK.
+    ///
+    /// The planner's limit includes OFFSET. Keeping that many documents from every
+    /// block preserves the global TopK, provided no later predicate can remove a
+    /// candidate. Do not use a generic scan limit here: ascending scores, additional
+    /// sort keys, prewhere, security filters and sampling need the full match set.
+    /// The global ORDER BY and LIMIT must still run over the collected candidates.
+    ///
+    /// Eligibility is a subset of the score TopN block pruning in `TopNPruner`, which
+    /// already assumes the best `limit` matched rows are sufficient. Truncated per-block
+    /// score lists only raise its lower bound, so its pruning stays valid. Tied scores
+    /// beyond the K-th candidate of a block are dropped; `ORDER BY score()` alone does
+    /// not define their order, and a secondary sort key disables the pushdown.
+    /// `IndexPredicateChecker` lets the planner push the limit for `score()` predicates
+    /// too, so `filter_only_use_index` is the guard against residual filters here.
+    pub fn inverted_index_top_k(&self) -> Option<usize> {
+        let index = self.inverted_index.as_ref()?;
+        let limit = self.limit.filter(|limit| *limit > 0)?;
+        if !index.has_score
+            || !self.is_deterministic
+            || !self.filter_only_use_index()
+            || self.prewhere.is_some()
+            || self.secure_filters.is_some()
+            || self.sample.is_some()
+            || self.vector_index.is_some()
+            || self.change_type.is_some()
+        {
+            return None;
+        }
+
+        match self.order_by.as_slice() {
+            [(RemoteExpr::ColumnRef { id, data_type, .. }, false, _)]
+                if id == SEARCH_SCORE_COL_NAME
+                    && *data_type == DataType::Number(NumberDataType::Float32) =>
+            {
+                Some(limit)
+            }
+            _ => None,
+        }
     }
 
     pub fn filter_only_use_index(&self) -> bool {

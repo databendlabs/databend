@@ -381,7 +381,7 @@ impl SpatialIndexBuilder {
             let concated_column = if columns.len() == 1 {
                 columns[0].clone()
             } else {
-                Column::concat_columns(columns.into_iter())?
+                Column::concat_columns(columns)?
             };
             concated_columns.insert(offset, concated_column);
         }

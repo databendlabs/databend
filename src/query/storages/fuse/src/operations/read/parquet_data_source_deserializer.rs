@@ -46,6 +46,7 @@ use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
+use crate::io::RowSelection;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
@@ -206,7 +207,6 @@ impl Processor for DeserializeDataTransform {
 
             let ReadStateOutput {
                 block: mut data_block,
-                row_selection,
                 bitmap_selection,
                 mut scan_stats,
             } = self
@@ -227,7 +227,9 @@ impl Processor for DeserializeDataTransform {
                     .deserialize_virtual_columns(
                         data_block,
                         read_res.virtual_data,
-                        row_selection.as_ref().map(|s| s.selection.clone()),
+                        bitmap_selection
+                            .as_ref()
+                            .map(|bitmap| RowSelection::from(bitmap).selection),
                     )
                     .inspect_err(|error| {
                         log::warn!(

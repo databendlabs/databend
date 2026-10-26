@@ -33,6 +33,7 @@ mod constant_folder;
 mod conversion;
 mod decimal;
 mod display;
+mod encoded;
 mod evaluator;
 mod fill_field_default_value;
 mod filter_executor;
