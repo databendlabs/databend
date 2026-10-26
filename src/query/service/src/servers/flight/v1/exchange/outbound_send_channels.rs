@@ -17,20 +17,20 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::servers::flight::v1::network::DummyOutboundChannel;
-use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
+use crate::servers::flight::v1::network::outbound::BlockSender;
+use crate::servers::flight::v1::network::outbound::DummyBlockSender;
 
 pub(super) type OutboundSendResult = (usize, Result<()>);
 pub(super) type OutboundSendResults = Vec<OutboundSendResult>;
 pub(super) type OutboundSendHandle = SyncTaskHandle<'static, OutboundSendResults>;
 
 pub(super) struct OutboundSendChannels {
-    channels: Vec<Arc<dyn OutboundChannel>>,
+    channels: Vec<Arc<dyn BlockSender>>,
 }
 
 impl OutboundSendChannels {
-    pub(super) fn create(channels: Vec<Arc<dyn OutboundChannel>>) -> Self {
+    pub(super) fn create(channels: Vec<Arc<dyn BlockSender>>) -> Self {
         Self { channels }
     }
 
@@ -38,11 +38,11 @@ impl OutboundSendChannels {
         self.channels.len()
     }
 
-    pub(super) fn channel(&self, idx: usize) -> &Arc<dyn OutboundChannel> {
+    pub(super) fn channel(&self, idx: usize) -> &Arc<dyn BlockSender> {
         &self.channels[idx]
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = (usize, &Arc<dyn OutboundChannel>)> {
+    pub(super) fn iter(&self) -> impl Iterator<Item = (usize, &Arc<dyn BlockSender>)> {
         self.channels.iter().enumerate()
     }
 
@@ -72,7 +72,7 @@ impl OutboundSendChannels {
     pub(super) fn close(&mut self, idx: usize) {
         // Closed destinations still own the shared send buffer. Release their
         // references so other destinations can receive EOF before the graph drops.
-        let closed = std::mem::replace(&mut self.channels[idx], DummyOutboundChannel::create());
+        let closed = std::mem::replace(&mut self.channels[idx], DummyBlockSender::create());
         closed.close();
     }
 

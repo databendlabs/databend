@@ -27,22 +27,22 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use petgraph::graph::NodeIndex;
 
-use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
+use crate::servers::flight::v1::network::inbound::ExchangeReceiver;
 
 pub struct HashSendSource {
     id: NodeIndex,
     output: Arc<OutputPort>,
     tasks: SyncTaskSet,
-    receiver: Arc<dyn InboundChannel>,
+    receiver: Arc<dyn ExchangeReceiver>,
     handle: Option<SyncTaskHandle<'static, Result<Option<DataBlock>>>>,
 }
 
 impl HashSendSource {
     pub fn create_item(
         worker_id: usize,
-        receiver: Arc<dyn InboundChannel>,
+        receiver: Arc<dyn ExchangeReceiver>,
         waker: Arc<ExecutorWaker>,
     ) -> PipeItem {
         let output = OutputPort::create();

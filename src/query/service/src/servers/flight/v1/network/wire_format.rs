@@ -12,220 +12,163 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Flight item serialization and single-thread batch framing shared by both directions.
+//! A batch carries one thread ID; its items inherit that ID when unpacked.
+
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 
+use arrow_array::RecordBatch;
+use arrow_array::RecordBatchOptions;
 use arrow_flight::FlightData;
+use arrow_flight::FlightDescriptor;
 use arrow_flight::utils::flight_data_to_arrow_batch;
+use arrow_ipc::CompressionType;
+use arrow_ipc::writer::CompressionContext;
+use arrow_ipc::writer::DictionaryTracker;
+use arrow_ipc::writer::IpcDataGenerator;
+use arrow_ipc::writer::IpcWriteOptions;
 use arrow_schema::Schema as ArrowSchema;
-use async_channel::Receiver;
-use async_channel::Sender;
 use bytes::Buf;
 use bytes::BufMut;
+use bytes::Bytes;
 use bytes::BytesMut;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::BinaryRead;
+use databend_common_io::prelude::BinaryWrite;
 use databend_common_io::prelude::bincode_deserialize_from_stream;
-use tokio::sync::Semaphore;
+use databend_common_io::prelude::bincode_serialize_into_buf;
+use databend_common_settings::FlightCompression;
 
-use super::inbound_quota::QueueItem;
-use super::inbound_quota::SubQueue;
-
-pub struct NetworkInboundChannel {
-    pub sender: Sender<QueueItem>,
-    pub receiver: Receiver<QueueItem>,
-
-    pub sender_count: Arc<AtomicUsize>,
-}
-
-impl NetworkInboundChannel {
-    pub fn create() -> Self {
-        let (tx, rx) = async_channel::unbounded();
-        Self {
-            sender: tx,
-            receiver: rx,
-            sender_count: Arc::new(AtomicUsize::new(0)),
-        }
-    }
-
-    pub async fn recv_raw(&self) -> Option<QueueItem> {
-        if let Ok(item) = self.receiver.try_recv() {
-            return Some(item);
-        }
-
-        self.receiver.recv().await.ok()
+fn flight_compression(compression: Option<FlightCompression>) -> Option<CompressionType> {
+    match compression {
+        None => None,
+        Some(FlightCompression::Lz4) => Some(CompressionType::LZ4_FRAME),
+        Some(FlightCompression::Zstd) => Some(CompressionType::ZSTD),
     }
 }
 
-/// The set of NetworkInboundChannels for one channel_id.
-pub struct NetworkInboundChannelSet {
-    pub channels: Arc<Vec<Arc<NetworkInboundChannel>>>,
+pub(crate) fn make_ipc_options(compression: Option<FlightCompression>) -> Result<IpcWriteOptions> {
+    Ok(IpcWriteOptions::default().try_with_compression(flight_compression(compression))?)
 }
 
-impl NetworkInboundChannelSet {
-    pub fn new(num_threads: usize) -> Self {
-        let channels = (0..num_threads)
-            .map(|_| Arc::new(NetworkInboundChannel::create()))
-            .collect();
-        Self {
-            channels: Arc::new(channels),
-        }
-    }
-
-    pub fn create_receiver(&self, t_idx: usize, schema: &DataSchemaRef) -> Arc<dyn InboundChannel> {
-        NetworkInboundReceiver::create(schema, self.channels[t_idx].clone())
-    }
+fn encode_batch(
+    batch: &RecordBatch,
+    ipc_options: &IpcWriteOptions,
+) -> Result<(Vec<FlightData>, FlightData)> {
+    let data_gen = IpcDataGenerator::default();
+    let mut dictionary_tracker = DictionaryTracker::new(false);
+    let mut compression_context = CompressionContext::default();
+    let (encoded_dictionaries, encoded_batch) = data_gen.encode(
+        batch,
+        &mut dictionary_tracker,
+        ipc_options,
+        &mut compression_context,
+    )?;
+    let dictionaries: Vec<FlightData> = encoded_dictionaries.into_iter().map(Into::into).collect();
+    let batch_data: FlightData = encoded_batch.into();
+    Ok((dictionaries, batch_data))
 }
 
-/// Network-side handle. Each do_exchange connection gets one.
-///
-/// When dropped, closes this connection's sub-queues and notifies processors.
-pub struct NetworkInboundSender {
-    /// This connection's sub-queue in each tid's NetworkInboundChannel.
-    sub_queues: Vec<Arc<SubQueue>>,
-}
-
-impl NetworkInboundSender {
-    /// Create a new sender for a connection.
-    /// Adds a sub-queue to each NetworkInboundChannel for this connection.
-    pub fn new(channel_set: &NetworkInboundChannelSet, max_bytes_per_connection: usize) -> Self {
-        let semaphore = Arc::new(Semaphore::new(max_bytes_per_connection));
-        let mut sub_queues = Vec::with_capacity(channel_set.channels.len());
-
-        for channel in channel_set.channels.iter() {
-            channel.sender_count.fetch_add(1, Ordering::AcqRel);
-
-            let sub_queue = Arc::new(SubQueue {
-                max_bytes_per_connection,
-                sender: channel.sender.clone(),
-                receiver: channel.receiver.clone(),
-                semaphore: semaphore.clone(),
-                sender_count: channel.sender_count.clone(),
-            });
-
-            sub_queues.push(sub_queue);
-        }
-
-        Self { sub_queues }
-    }
-
-    /// Add data to the inbound channel.
-    ///
-    /// Extracts tid from the FlightData, pushes to the appropriate sub-queue,
-    /// and waits for backpressure to clear.
-    ///
-    /// Returns `Err(())` only when ALL receivers are closed (network should disconnect).
-    /// If only the target tid's receiver is closed, discards the data and returns `Ok(())`.
-    #[allow(
-        clippy::result_unit_err,
-        reason = "Callers only need a disconnect signal"
-    )]
-    pub async fn add_data(&self, data: FlightData) -> Result<(), ()> {
-        if is_batch(&data) {
-            return self.add_batch_data(data).await;
-        }
-
-        let tid = extract_tid(&data);
-
-        match self.sub_queues[tid].add_data(data).await {
-            Ok(()) => Ok(()),
-            Err(()) => match self.all_receivers_closed() {
-                true => Err(()),
-                false => Ok(()),
-            },
-        }
-    }
-
-    async fn add_batch_data(&self, data: FlightData) -> Result<(), ()> {
-        let items = split_batch_flight_data(data);
-        for item in items {
-            let tid = extract_tid(&item);
-            match self.sub_queues[tid].add_data(item).await {
-                Ok(()) => {}
-                Err(()) => {
-                    if self.all_receivers_closed() {
-                        return Err(());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Check if all channels are closed by receivers.
-    pub fn all_receivers_closed(&self) -> bool {
-        self.sub_queues.iter().all(|q| q.sender.is_closed())
+fn serialize_to_batches(
+    block: DataBlock,
+    ipc_options: &IpcWriteOptions,
+) -> Result<(Vec<FlightData>, Vec<FlightData>)> {
+    if block.is_empty() {
+        let empty_batch = RecordBatch::try_new_with_options(
+            Arc::new(ArrowSchema::empty()),
+            vec![],
+            &RecordBatchOptions::new().with_row_count(Some(0)),
+        )?;
+        let (dicts, batch) = encode_batch(&empty_batch, ipc_options)?;
+        Ok((dicts, vec![batch]))
+    } else {
+        let schema = block.infer_schema();
+        let arrow_schema = ArrowSchema::from(&schema);
+        let batch = block.to_record_batch_with_dataschema(&schema)?;
+        let _ = &arrow_schema; // used for schema inference, batch carries it
+        let (dicts, batch_data) = encode_batch(&batch, ipc_options)?;
+        Ok((dicts, vec![batch_data]))
     }
 }
 
-impl Drop for NetworkInboundSender {
-    fn drop(&mut self) {
-        for sub_queue in &self.sub_queues {
-            if sub_queue.sender_count.fetch_sub(1, Ordering::AcqRel) == 1 {
-                sub_queue.sender.close();
-            }
-        }
-    }
-}
-
-/// Trait for receiving data blocks from the network.
-#[async_trait::async_trait]
-pub trait InboundChannel: Send + Sync {
-    fn close(&self);
-
-    fn is_closed(&self) -> bool;
-
-    async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode>;
-}
-
-pub struct NetworkInboundReceiver {
-    channel: Arc<NetworkInboundChannel>,
-    schema: DataSchemaRef,
-    arrow_schema: Arc<ArrowSchema>,
-}
-
-impl NetworkInboundReceiver {
-    pub fn create(
-        schema: &DataSchemaRef,
-        channel: Arc<NetworkInboundChannel>,
-    ) -> Arc<dyn InboundChannel> {
-        Arc::new(Self {
-            channel,
-            arrow_schema: Arc::new(ArrowSchema::from(schema.as_ref())),
-            schema: schema.clone(),
-        })
-    }
-}
-
-#[async_trait::async_trait]
-impl InboundChannel for NetworkInboundReceiver {
-    fn close(&self) {
-        self.channel.receiver.close();
-
-        while self.channel.receiver.try_recv().is_ok() {}
+/// Serialize a DataBlock into a list of FlightData (dictionaries + fragments).
+/// The `descriptor` is attached to each FlightData for routing.
+pub fn serialize_block(
+    block: DataBlock,
+    ipc_options: &IpcWriteOptions,
+    descriptor: Option<FlightDescriptor>,
+) -> Result<Vec<FlightData>> {
+    if block.is_empty() && block.get_meta().is_none() {
+        return Ok(vec![]);
     }
 
-    fn is_closed(&self) -> bool {
-        self.channel.receiver.is_empty() && self.channel.receiver.is_closed()
+    // Build metadata (row count + block meta) before moving block
+    let mut meta = vec![];
+    meta.write_scalar_own(block.num_rows() as u32)?;
+    bincode_serialize_into_buf(&mut meta, &block.get_meta())?;
+
+    let (dict_data, value_data) = serialize_to_batches(block, ipc_options)?;
+
+    let meta_bytes: Bytes = meta.into();
+    let mut result = Vec::with_capacity(dict_data.len() + value_data.len());
+
+    // Dictionary data with marker (0x05)
+    for mut dict in dict_data {
+        let mut app_metadata = dict.app_metadata.to_vec();
+        app_metadata.push(0x05);
+        dict.app_metadata = app_metadata.into();
+        dict.flight_descriptor = descriptor.clone();
+        result.push(dict);
     }
 
-    async fn recv(&self) -> Result<Option<DataBlock>, ErrorCode> {
-        match self.channel.recv_raw().await {
-            None => Ok(None),
-            Some(QueueItem::LocalData(v)) => Ok(Some(v.into_data())),
-            Some(QueueItem::RemoteData(r)) => {
-                let flight_data = strip_tid(r.into_data());
-                Ok(Some(deserialize_flight_data(
-                    flight_data,
-                    &self.schema,
-                    &self.arrow_schema,
-                )?))
-            }
-        }
+    // Fragment data with metadata (0x01)
+    for value in value_data {
+        let mut metadata = meta_bytes.to_vec();
+        metadata.push(0x01);
+        result.push(FlightData {
+            app_metadata: metadata.into(),
+            data_body: value.data_body,
+            data_header: value.data_header,
+            flight_descriptor: descriptor.clone(),
+        });
+    }
+
+    Ok(result)
+}
+
+pub(crate) const BATCH_MARKER: u8 = 0x02;
+
+pub(crate) fn merge_flight_data_batch(tid_bytes: [u8; 2], items: Vec<FlightData>) -> FlightData {
+    let mut app_metadata = BytesMut::with_capacity(5);
+    app_metadata.put_slice(&tid_bytes);
+    app_metadata.put_u16_le(items.len() as u16);
+    app_metadata.put_u8(BATCH_MARKER);
+
+    let estimated: usize = items
+        .iter()
+        .map(|i| 12 + (i.app_metadata.len() - 2) + i.data_header.len() + i.data_body.len())
+        .sum();
+
+    let mut body = BytesMut::with_capacity(estimated);
+    for item in items {
+        let inner_meta = &item.app_metadata[2..]; // strip tid
+        body.put_u32_le(inner_meta.len() as u32);
+        body.put_slice(inner_meta);
+        body.put_u32_le(item.data_header.len() as u32);
+        body.put_slice(&item.data_header);
+        body.put_u32_le(item.data_body.len() as u32);
+        body.put_slice(&item.data_body);
+    }
+
+    FlightData {
+        flight_descriptor: None,
+        app_metadata: app_metadata.freeze(),
+        data_header: Bytes::new(),
+        data_body: body.freeze(),
     }
 }
 
@@ -253,14 +196,14 @@ pub fn strip_tid(mut data: FlightData) -> FlightData {
 }
 
 /// Detect a batch FlightData by checking for the BATCH_MARKER (0x02) as the last byte.
-fn is_batch(data: &FlightData) -> bool {
+pub(crate) fn is_batch(data: &FlightData) -> bool {
     const BATCH_MARKER: u8 = 0x02;
     data.app_metadata.len() >= 5 && data.app_metadata[data.app_metadata.len() - 1] == BATCH_MARKER
 }
 
 /// Split a batch FlightData back into individual FlightData items.
 /// Uses zero-copy `Bytes::split_to()` for the large data_header and data_body fields.
-fn split_batch_flight_data(data: FlightData) -> Vec<FlightData> {
+pub(crate) fn split_batch_flight_data(data: FlightData) -> Vec<FlightData> {
     let meta = &data.app_metadata;
     let tid_bytes: [u8; 2] = [meta[0], meta[1]];
     let num_items = u16::from_le_bytes([meta[2], meta[3]]) as usize;
@@ -303,7 +246,7 @@ pub(crate) fn deserialize_flight_data(
     flight_data: FlightData,
     schema: &DataSchemaRef,
     arrow_schema: &Arc<ArrowSchema>,
-) -> Result<DataBlock, ErrorCode> {
+) -> std::result::Result<DataBlock, ErrorCode> {
     let meta_bytes = &flight_data.app_metadata;
     if meta_bytes.is_empty() {
         return Err(ErrorCode::BadBytes("empty app_metadata in FlightData"));

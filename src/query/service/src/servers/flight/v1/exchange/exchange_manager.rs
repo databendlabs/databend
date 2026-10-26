@@ -81,9 +81,9 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
-use crate::servers::flight::v1::network::NetworkInboundChannelSet;
-use crate::servers::flight::v1::network::NetworkInboundSender;
-use crate::servers::flight::v1::network::PingPongExchange;
+use crate::servers::flight::v1::network::PingPongTransport;
+use crate::servers::flight::v1::network::inbound::ExchangeFrameRouter;
+use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
 use crate::servers::flight::v1::packets::Edge;
 use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
@@ -106,7 +106,7 @@ enum QueryExchange {
     PingPong {
         exchange_id: String,
         target_id: String,
-        exchange: PingPongExchange,
+        exchange: PingPongTransport,
     },
 }
 
@@ -367,7 +367,7 @@ impl DataExchangeManager {
                         }
                         Edge::ExchangeFragment { .. } => {
                             // Skip: remote sender will call do_exchange on us,
-                            // handled by handle_do_exchange → NetworkInboundSender
+                            // handled by handle_do_exchange → ExchangeFrameRouter
                         }
                     }
                 }
@@ -417,7 +417,7 @@ impl DataExchangeManager {
                             Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
                                 target_id: target_id.clone(),
                                 exchange_id,
-                                exchange: PingPongExchange::from_parts(
+                                exchange: PingPongTransport::from_parts(
                                     num_threads,
                                     send_tx,
                                     response_stream,
@@ -432,7 +432,7 @@ impl DataExchangeManager {
                 let flight_exchanges = futures::future::try_join_all(flight_exchanges).await?;
 
                 let mut ping_pong_exchanges =
-                    HashMap::<String, HashMap<String, PingPongExchange>>::new();
+                    HashMap::<String, HashMap<String, PingPongTransport>>::new();
 
                 for flight_exchange in flight_exchanges {
                     match flight_exchange {
@@ -703,8 +703,8 @@ impl DataExchangeManager {
 
     /// Handle a do_exchange request from a remote node.
     ///
-    /// Creates a `NetworkInboundSender` for this connection, bound to the
-    /// `NetworkInboundChannelSet` for the given channel_id. The caller (flight_service)
+    /// Creates an `ExchangeFrameRouter` for this connection, bound to the
+    /// `ExchangeReceiveChannels` for the given channel_id. The caller (flight_service)
     /// uses the sender to push incoming FlightData into per-tid queues.
     #[fastrace::trace]
     pub fn handle_do_exchange(
@@ -712,7 +712,7 @@ impl DataExchangeManager {
         query_id: &str,
         channel_id: &str,
         num_threads: usize,
-    ) -> Result<NetworkInboundSender> {
+    ) -> Result<ExchangeFrameRouter> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -724,15 +724,15 @@ impl DataExchangeManager {
         }
     }
 
-    /// Get the NetworkInboundReceivers for a given query and channel.
+    /// Get the ExchangeQueueReceivers for a given query and channel.
     ///
-    /// Returns one `Arc<NetworkInboundReceiver>` per tid, for building
+    /// Returns one `Arc<ExchangeQueueReceiver>` per tid, for building
     /// `ThreadChannelReader` processors in the pipeline.
     pub fn get_exchange_channel_set(
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<Arc<NetworkInboundChannelSet>> {
+    ) -> Result<Arc<ExchangeReceiveChannels>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -743,7 +743,7 @@ impl DataExchangeManager {
             ))),
             Some(coordinator) => match coordinator.inbound_channel_sets.get(channel_id) {
                 None => Err(ErrorCode::Internal(format!(
-                    "NetworkInboundChannelSet not found for channel {}",
+                    "ExchangeReceiveChannels not found for channel {}",
                     channel_id
                 ))),
                 Some(channel_set) => Ok(channel_set.clone()),
@@ -758,7 +758,7 @@ impl DataExchangeManager {
         query_id: &str,
         channel_id: &str,
         num_threads: usize,
-    ) -> Result<Arc<NetworkInboundChannelSet>> {
+    ) -> Result<Arc<ExchangeReceiveChannels>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -773,7 +773,7 @@ impl DataExchangeManager {
         }
     }
 
-    /// Take the PingPongExchanges for a given query and channel.
+    /// Take the PingPongTransports for a given query and channel.
     ///
     /// Returns the exchanges that were created during init_query_env.
     /// The exchanges are removed from the coordinator (taken, not borrowed).
@@ -781,7 +781,7 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<HashMap<String, PingPongExchange>> {
+    ) -> Result<HashMap<String, PingPongTransport>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -1035,8 +1035,8 @@ pub(crate) struct QueryCoordinator {
     statistics_exchanges: HashMap<String, FlightExchange>,
     flight_data_senders: HashMap<String, Vec<FlightSender>>,
     flight_data_receivers: HashMap<String, Vec<FlightReceiver>>,
-    inbound_channel_sets: HashMap<String, Arc<NetworkInboundChannelSet>>,
-    ping_pong_exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
+    inbound_channel_sets: HashMap<String, Arc<ExchangeReceiveChannels>>,
+    ping_pong_exchanges: HashMap<String, HashMap<String, PingPongTransport>>,
 }
 
 impl QueryCoordinator {
@@ -1131,7 +1131,7 @@ impl QueryCoordinator {
 
     pub fn register_ping_pong_exchanges(
         &mut self,
-        exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
+        exchanges: HashMap<String, HashMap<String, PingPongTransport>>,
     ) {
         for (channel, pps) in exchanges {
             match self.ping_pong_exchanges.entry(channel) {
@@ -1145,20 +1145,20 @@ impl QueryCoordinator {
         }
     }
 
-    /// Create a NetworkInboundSender for a new do_exchange connection.
+    /// Create an ExchangeFrameRouter for a new do_exchange connection.
     ///
     /// The `num_threads` value is provided by the coordinator via DoExchangeParams.
     fn create_inbound_sender(
         &mut self,
         channel_id: &str,
         num_threads: usize,
-    ) -> Result<NetworkInboundSender> {
+    ) -> Result<ExchangeFrameRouter> {
         let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
 
         // TODO: get max_bytes_per_connection from query settings
         let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
 
-        Ok(NetworkInboundSender::new(
+        Ok(ExchangeFrameRouter::new(
             &channel_set,
             max_bytes_per_connection,
         ))
@@ -1168,15 +1168,15 @@ impl QueryCoordinator {
         &mut self,
         channel_id: &str,
         num_threads: usize,
-    ) -> Result<Arc<NetworkInboundChannelSet>> {
+    ) -> Result<Arc<ExchangeReceiveChannels>> {
         let channel_set = self
             .inbound_channel_sets
             .entry(channel_id.to_string())
-            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
+            .or_insert_with(|| Arc::new(ExchangeReceiveChannels::new(num_threads)))
             .clone();
         if channel_set.channels.len() != num_threads {
             return Err(ErrorCode::Internal(format!(
-                "NetworkInboundChannelSet {} has {} channels, expected {}",
+                "ExchangeReceiveChannels {} has {} channels, expected {}",
                 channel_id,
                 channel_set.channels.len(),
                 num_threads

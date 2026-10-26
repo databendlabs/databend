@@ -29,8 +29,8 @@ use petgraph::prelude::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
-use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskSet;
+use crate::servers::flight::v1::network::outbound::BlockSender;
 
 pub struct BroadcastSendTransform {
     id: NodeIndex,
@@ -47,7 +47,7 @@ impl BroadcastSendTransform {
     pub fn create_item(
         worker_id: usize,
         local_pos: usize,
-        channels: Vec<Arc<dyn OutboundChannel>>,
+        channels: Vec<Arc<dyn BlockSender>>,
         waker: Arc<ExecutorWaker>,
     ) -> PipeItem {
         let input = InputPort::create();
@@ -130,7 +130,7 @@ impl Processor for BroadcastSendTransform {
                 futures.push({
                     let data_block = data_block.clone();
                     let output_channel = output_channel.clone();
-                    async move { (idx, output_channel.add_block(data_block).await) }
+                    async move { (idx, output_channel.send_block(data_block).await) }
                 });
             }
 

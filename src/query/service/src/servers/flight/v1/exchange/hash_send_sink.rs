@@ -29,8 +29,8 @@ use petgraph::graph::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
 use super::outbound_send_channels::OutboundSendHandle;
-use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::SyncTaskSet;
+use crate::servers::flight::v1::network::outbound::BlockSender;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 pub struct HashSendSink {
@@ -47,7 +47,7 @@ impl HashSendSink {
     pub fn create_item(
         worker_id: usize,
         scatter: Arc<Box<dyn FlightScatter>>,
-        channels: Vec<Arc<dyn OutboundChannel>>,
+        channels: Vec<Arc<dyn BlockSender>>,
         waker: Arc<ExecutorWaker>,
         rows_threshold: usize,
         bytes_threshold: usize,
@@ -119,7 +119,7 @@ impl Processor for HashSendSink {
 
                     futures.push({
                         let channel = self.channels.channel(partition_id).clone();
-                        async move { (partition_id, channel.add_block(block).await) }
+                        async move { (partition_id, channel.send_block(block).await) }
                     });
                 }
 
@@ -160,7 +160,7 @@ impl Processor for HashSendSink {
 
                     futures.push({
                         let channel = self.channels.channel(partition_id).clone();
-                        async move { (partition_id, channel.add_block(block).await) }
+                        async move { (partition_id, channel.send_block(block).await) }
                     });
                 }
             }

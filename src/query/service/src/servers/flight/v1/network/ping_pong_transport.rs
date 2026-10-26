@@ -47,7 +47,7 @@ pub trait PingPongCallback: Send + Sync + 'static {
     fn on_closed(&self);
 }
 
-pub struct PingPongExchangeInner {
+pub struct PingPongTransportInner {
     in_flight: AtomicBool,
     send_time: Mutex<Option<Instant>>,
     send_tx: Sender<FlightData>,
@@ -61,27 +61,27 @@ pub struct PingPongExchangeInner {
 /// This exchange guarantees that at most one request is in-flight at any time.
 /// When a request is sent, subsequent sends will return the data back to the caller
 /// until a response is received.
-pub struct PingPongExchange {
+pub struct PingPongTransport {
     pub num_threads: usize,
-    inner: Arc<PingPongExchangeInner>,
+    inner: Arc<PingPongTransportInner>,
     response_stream: Mutex<Option<BoxStream<'static, Result<FlightData, Status>>>>,
 }
 
-impl Drop for PingPongExchange {
+impl Drop for PingPongTransport {
     fn drop(&mut self) {
         self.inner.shutdown.notify_waiters();
     }
 }
 
-impl std::ops::Deref for PingPongExchange {
-    type Target = PingPongExchangeInner;
+impl std::ops::Deref for PingPongTransport {
+    type Target = PingPongTransportInner;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl PingPongExchangeInner {
+impl PingPongTransportInner {
     pub fn get_rtt(&self) -> Duration {
         self.send_time
             .lock()
@@ -125,7 +125,7 @@ impl PingPongExchangeInner {
     }
 }
 
-impl PingPongExchange {
+impl PingPongTransport {
     pub fn from_parts(
         num_threads: usize,
         send_tx: async_channel::Sender<FlightData>,
@@ -149,7 +149,7 @@ impl PingPongExchange {
         local_node_id: impl Into<String>,
         remote_node_id: impl Into<String>,
     ) -> Self {
-        let inner = Arc::new(PingPongExchangeInner {
+        let inner = Arc::new(PingPongTransportInner {
             in_flight: AtomicBool::new(false),
             send_time: Mutex::new(None),
             send_tx,
@@ -262,13 +262,13 @@ mod tests {
     fn create_mock_exchange(
         num_threads: usize,
     ) -> (
-        PingPongExchange,
+        PingPongTransport,
         async_channel::Receiver<FlightData>,
         async_channel::Sender<Result<FlightData, Status>>,
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(
+        let exchange = PingPongTransport::from_stream(
             num_threads,
             send_tx,
             pong_rx,

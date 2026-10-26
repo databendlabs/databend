@@ -12,28 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod inbound_channel;
-pub mod inbound_quota;
-pub mod local_channel;
-pub mod outbound_buffer;
-pub mod outbound_channel;
-pub mod outbound_transport;
+//! Exchange block delivery and Flight transport.
+//!
+//! [`outbound`] owns block senders and per-destination send buffering;
+//! [`inbound`] owns receive channels, frame routing, and block consumption.
+//! [`wire_format`] handles serialization and single-thread batch framing.
+//! [`ping_pong_transport`] provides the request/response transport shared by them.
+//!
+//! Local delivery passes a DataBlock directly to its receive channel. Remote
+//! delivery serializes it, waits for send-queue capacity, and sends a Flight
+//! frame. The frame router routes its items to receive channels before replying.
+//! Pipeline receivers deserialize remote items on the thread polling `recv`.
+//!
+//! Receive channels keep both endpoints. Local senders and connection routers
+//! share an explicit producer count and close the channel when the last producer
+//! drops. Receivers drain queued items before EOF, or close and drain on cancel.
+//! The coordinator retains the channel collection throughout execution.
+
+pub mod inbound;
+pub mod outbound;
+pub mod ping_pong_transport;
+pub mod wire_format;
 
 pub use databend_common_pipeline::core::SyncTaskHandle;
 pub use databend_common_pipeline::core::SyncTaskSet;
-pub use inbound_channel::InboundChannel;
-pub use inbound_channel::NetworkInboundChannelSet;
-pub use inbound_channel::NetworkInboundReceiver;
-pub use inbound_channel::NetworkInboundSender;
-pub use local_channel::LocalOutboundChannel;
-pub use local_channel::create_local_channels;
-pub use outbound_buffer::ExchangeBufferConfig;
-pub use outbound_buffer::ExchangeSinkBuffer;
-pub use outbound_channel::DummyOutboundChannel;
-pub use outbound_channel::OutboundChannel;
-pub use outbound_channel::RemoteChannel;
-pub use outbound_channel::RoundRobinChannel;
-pub use outbound_transport::PingPongCallback;
-pub use outbound_transport::PingPongExchange;
-pub use outbound_transport::PingPongExchangeInner;
-pub use outbound_transport::PingPongResponse;
+pub use ping_pong_transport::PingPongCallback;
+pub use ping_pong_transport::PingPongResponse;
+pub use ping_pong_transport::PingPongTransport;
+pub use ping_pong_transport::PingPongTransportInner;

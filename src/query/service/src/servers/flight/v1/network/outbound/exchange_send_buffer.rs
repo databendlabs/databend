@@ -15,9 +15,6 @@
 use std::sync::Arc;
 
 use arrow_flight::FlightData;
-use bytes::BufMut;
-use bytes::Bytes;
-use bytes::BytesMut;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
@@ -27,24 +24,25 @@ use tokio::sync::Semaphore;
 use tonic::Code;
 use tonic::Status;
 
-use super::outbound_transport::PingPongCallback;
-use super::outbound_transport::PingPongExchange;
-use super::outbound_transport::PingPongResponse;
-use super::outbound_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
+use super::super::ping_pong_transport::PingPongCallback;
+use super::super::ping_pong_transport::PingPongResponse;
+use super::super::ping_pong_transport::PingPongTransport;
+use super::super::ping_pong_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
+use super::super::wire_format::merge_flight_data_batch;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
-use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
+use crate::servers::flight::v1::network::inbound::exchange_queue::RemoteQueueItem;
 
-/// Configuration for ExchangeSinkBuffer.
+/// Configuration for ExchangeSendBuffer.
 #[derive(Clone)]
-pub struct ExchangeBufferConfig {
+pub struct ExchangeSendBufferConfig {
     /// Queue capacity factor. Actual capacity = factor * num_destinations.
     pub queue_capacity_factor: usize,
     /// Maximum bytes per batch.
     pub max_batch_bytes: usize,
 }
 
-impl Default for ExchangeBufferConfig {
+impl Default for ExchangeSendBufferConfig {
     fn default() -> Self {
         Self {
             queue_capacity_factor: 64,
@@ -93,38 +91,6 @@ impl Channel {
     }
 }
 
-const BATCH_MARKER: u8 = 0x02;
-
-fn merge_flight_data_batch(tid_bytes: [u8; 2], items: Vec<FlightData>) -> FlightData {
-    let mut app_metadata = BytesMut::with_capacity(5);
-    app_metadata.put_slice(&tid_bytes);
-    app_metadata.put_u16_le(items.len() as u16);
-    app_metadata.put_u8(BATCH_MARKER);
-
-    let estimated: usize = items
-        .iter()
-        .map(|i| 12 + (i.app_metadata.len() - 2) + i.data_header.len() + i.data_body.len())
-        .sum();
-
-    let mut body = BytesMut::with_capacity(estimated);
-    for item in items {
-        let inner_meta = &item.app_metadata[2..]; // strip tid
-        body.put_u32_le(inner_meta.len() as u32);
-        body.put_slice(inner_meta);
-        body.put_u32_le(item.data_header.len() as u32);
-        body.put_slice(&item.data_header);
-        body.put_u32_le(item.data_body.len() as u32);
-        body.put_slice(&item.data_body);
-    }
-
-    FlightData {
-        flight_descriptor: None,
-        app_metadata: app_metadata.freeze(),
-        data_header: Bytes::new(),
-        data_body: body.freeze(),
-    }
-}
-
 /// Mutable state within RemoteInstance, protected by its own lock.
 struct RemoteInstanceState {
     /// Pre-allocated channels, indexed by channel_id
@@ -153,11 +119,11 @@ impl RemoteInstanceState {
 /// Each RemoteInstance has its own lock for fine-grained concurrency.
 struct RemoteInstance {
     state: Mutex<RemoteInstanceState>,
-    exchange: PingPongExchange,
+    exchange: PingPongTransport,
 }
 
 impl RemoteInstance {
-    fn new(num_threads: usize, exchange: PingPongExchange) -> Self {
+    fn new(num_threads: usize, exchange: PingPongTransport) -> Self {
         let channels = (0..num_threads).map(|_| Channel::new()).collect();
         Self {
             exchange,
@@ -174,20 +140,20 @@ impl RemoteInstance {
     }
 }
 
-/// Inner state of ExchangeSinkBuffer, shared with callbacks.
-struct ExchangeSinkBufferSharedState {
-    config: ExchangeBufferConfig,
+/// Inner state of ExchangeSendBuffer, shared with callbacks.
+struct ExchangeSendBufferSharedState {
+    config: ExchangeSendBufferConfig,
 
     /// Pre-allocated remote instances, indexed by destination index
     remotes: Vec<Arc<RemoteInstance>>,
 }
 
-/// Inner state of ExchangeSinkBuffer, shared with callbacks.
-struct ExchangeSinkBufferInner {
-    state: Arc<ExchangeSinkBufferSharedState>,
+/// Inner state of ExchangeSendBuffer, shared with callbacks.
+struct ExchangeSendBufferInner {
+    state: Arc<ExchangeSendBufferSharedState>,
 }
 
-impl Drop for ExchangeSinkBufferInner {
+impl Drop for ExchangeSendBufferInner {
     fn drop(&mut self) {
         for remote in &self.state.remotes {
             remote.exchange.shutdown.notify_waiters();
@@ -195,7 +161,7 @@ impl Drop for ExchangeSinkBufferInner {
     }
 }
 
-impl ExchangeSinkBufferSharedState {
+impl ExchangeSendBufferSharedState {
     fn status_to_error(status: Status, local_node_id: &str, remote_node_id: &str) -> ErrorCode {
         let error = if status.code() == Code::Aborted {
             ErrorCode::AbortedQuery(status.message().to_string())
@@ -246,12 +212,12 @@ impl ExchangeSinkBufferSharedState {
 }
 
 /// Callback for handling PingPong responses.
-struct SinkBufferCallback {
+struct SendBufferCallback {
     dest_idx: usize,
-    buffer: Arc<ExchangeSinkBufferSharedState>,
+    buffer: Arc<ExchangeSendBufferSharedState>,
 }
 
-impl PingPongCallback for SinkBufferCallback {
+impl PingPongCallback for SendBufferCallback {
     fn has_pending(&self) -> bool {
         let state = self.buffer.remotes[self.dest_idx].state.lock();
         state.channels.iter().any(|x| !x.pending_queue.is_empty())
@@ -274,20 +240,20 @@ impl PingPongCallback for SinkBufferCallback {
     }
 }
 
-pub struct ExchangeSinkBuffer {
+pub struct ExchangeSendBuffer {
     semaphore: Arc<Semaphore>,
-    inner: Arc<ExchangeSinkBufferInner>,
+    inner: Arc<ExchangeSendBufferInner>,
 }
 
-impl ExchangeSinkBuffer {
-    /// Create a new ExchangeSinkBuffer.
+impl ExchangeSendBuffer {
+    /// Create a new ExchangeSendBuffer.
     ///
-    /// - `exchanges`: Pre-created PingPongExchange instances (not yet started).
+    /// - `exchanges`: Pre-created PingPongTransport instances (not yet started).
     /// - `num_threads`: Number of channels per remote instance.
     /// - `config`: Buffer configuration.
     pub fn create(
-        exchanges: Vec<PingPongExchange>,
-        config: ExchangeBufferConfig,
+        exchanges: Vec<PingPongTransport>,
+        config: ExchangeSendBufferConfig,
         runtime: &Runtime,
     ) -> Result<Self> {
         let queue_capacity = config.queue_capacity_factor * exchanges.len().max(1);
@@ -295,7 +261,7 @@ impl ExchangeSinkBuffer {
         let remotes = Vec::with_capacity(exchanges.len());
 
         let semaphore = Arc::new(Semaphore::new(queue_capacity));
-        let mut shared_state = ExchangeSinkBufferSharedState { config, remotes };
+        let mut shared_state = ExchangeSendBufferSharedState { config, remotes };
 
         for exchange in exchanges.into_iter() {
             let num_threads = exchange.num_threads;
@@ -306,7 +272,7 @@ impl ExchangeSinkBuffer {
         let shared_state = Arc::new(shared_state);
         for (dest_idx, remote) in shared_state.remotes.iter().enumerate() {
             let _ = remote.exchange.start(
-                Arc::new(SinkBufferCallback {
+                Arc::new(SendBufferCallback {
                     dest_idx,
                     buffer: shared_state.clone(),
                 }),
@@ -316,7 +282,7 @@ impl ExchangeSinkBuffer {
 
         Ok(Self {
             semaphore,
-            inner: Arc::new(ExchangeSinkBufferInner {
+            inner: Arc::new(ExchangeSendBufferInner {
                 state: shared_state,
             }),
         })
@@ -337,7 +303,7 @@ impl ExchangeSinkBuffer {
             Ok(None) => return Ok(()),
             Ok(Some(data)) => data,
             Err(status) => {
-                let error = ExchangeSinkBufferSharedState::status_to_error(
+                let error = ExchangeSendBufferSharedState::status_to_error(
                     status,
                     remote.exchange.local_node_id(),
                     remote.exchange.remote_node_id(),
@@ -366,7 +332,7 @@ impl ExchangeSinkBuffer {
                     let _ = state.channels[tid].pending_queue.push(item);
                 }
                 Err(status) => {
-                    let error = ExchangeSinkBufferSharedState::status_to_error(
+                    let error = ExchangeSendBufferSharedState::status_to_error(
                         status,
                         remote.exchange.local_node_id(),
                         remote.exchange.remote_node_id(),
@@ -404,12 +370,16 @@ mod tests {
     use std::time::Duration;
 
     use arrow_flight::FlightData;
+    use bytes::BufMut;
+    use bytes::Bytes;
+    use bytes::BytesMut;
     use databend_common_base::runtime::Runtime;
     use databend_common_base::runtime::spawn;
     use tonic::Status;
 
     use super::*;
-    use crate::servers::flight::v1::network::outbound_transport::PingPongExchange;
+    use crate::servers::flight::v1::network::ping_pong_transport::PingPongTransport;
+    use crate::servers::flight::v1::network::wire_format::BATCH_MARKER;
 
     fn test_runtime() -> Arc<Runtime> {
         Arc::new(Runtime::with_worker_threads(2, None).unwrap())
@@ -418,13 +388,13 @@ mod tests {
     fn create_mock_exchange(
         num_threads: usize,
     ) -> (
-        PingPongExchange,
+        PingPongTransport,
         async_channel::Receiver<FlightData>,
         async_channel::Sender<std::result::Result<FlightData, Status>>,
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(
+        let exchange = PingPongTransport::from_stream(
             num_threads,
             send_tx,
             pong_rx,
@@ -531,7 +501,7 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(2);
         let buffer =
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
         // First add_data should send directly
@@ -554,7 +524,7 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(2);
         let buffer = Arc::new(
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap(),
         );
 
@@ -587,7 +557,7 @@ mod tests {
         let (ex0, rx0, pong0) = create_mock_exchange(1);
         let (ex1, rx1, pong1) = create_mock_exchange(1);
         let buffer =
-            ExchangeSinkBuffer::create(vec![ex0, ex1], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![ex0, ex1], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
         // Send to dest 0
@@ -614,9 +584,9 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(2);
         let buffer = Arc::new(
-            ExchangeSinkBuffer::create(
+            ExchangeSendBuffer::create(
                 vec![exchange],
-                ExchangeBufferConfig {
+                ExchangeSendBufferConfig {
                     queue_capacity_factor: 1, // capacity = 1 * 1 = 1
                     ..Default::default()
                 },
@@ -658,7 +628,7 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer =
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
         buffer.add_data(0, 0, make_flight_data(1)).await.unwrap();
@@ -704,9 +674,9 @@ mod tests {
     async fn test_force_send_error_drains_remaining_pending_queue() {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
-        let buffer = ExchangeSinkBuffer::create(
+        let buffer = ExchangeSendBuffer::create(
             vec![exchange],
-            ExchangeBufferConfig {
+            ExchangeSendBufferConfig {
                 queue_capacity_factor: 2,
                 max_batch_bytes: 1,
             },
@@ -785,7 +755,7 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
         let buffer =
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
         drop(send_rx);
@@ -813,9 +783,9 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer = Arc::new(
-            ExchangeSinkBuffer::create(
+            ExchangeSendBuffer::create(
                 vec![exchange],
-                ExchangeBufferConfig {
+                ExchangeSendBufferConfig {
                     queue_capacity_factor: 1,
                     max_batch_bytes: 1,
                 },
@@ -860,9 +830,9 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer = Arc::new(
-            ExchangeSinkBuffer::create(
+            ExchangeSendBuffer::create(
                 vec![exchange],
-                ExchangeBufferConfig {
+                ExchangeSendBufferConfig {
                     queue_capacity_factor: 1,
                     ..Default::default()
                 },

@@ -34,9 +34,9 @@ use crate::servers::flight::v1::exchange::BroadcastRecvTransform;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
-use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_outbound_channels;
-use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_channels;
-use crate::servers::flight::v1::network::create_local_channels;
+use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_senders;
+use crate::servers::flight::v1::exchange::exchange_sink::build_hash_senders;
+use crate::servers::flight::v1::network::outbound::create_local_block_senders;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
@@ -152,8 +152,8 @@ impl ExchangeTransform {
 
         assert_eq!(channel_set.channels.len(), local_threads);
 
-        let local_outbound = create_local_channels(&channel_set);
-        let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
+        let local_outbound = create_local_block_senders(&channel_set);
+        let channels = build_broadcast_senders(params, local_outbound, compression)?;
 
         let mut items = Vec::with_capacity(local_threads);
 
@@ -216,8 +216,8 @@ impl ExchangeTransform {
         )?;
         assert_eq!(channel_set.channels.len(), local_threads);
 
-        let local_outbound = create_local_channels(&channel_set);
-        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+        let local_outbound = create_local_block_senders(&channel_set);
+        let remote_outbound = build_hash_senders(params, local_outbound, compression)?;
 
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
