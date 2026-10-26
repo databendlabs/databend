@@ -492,6 +492,68 @@ async fn test_select_ownership_fallback_and_denial() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The fast path reads grants from the role cache. Revoking through the production
+/// interpreters must be visible to the next check in an already-authenticated session on the
+/// same node, without any manual cache invalidation in the test.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_revoked_role_grants_are_visible_to_existing_session() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    setup_table(&fixture).await?;
+    // `inner_reader` holds the SELECT grant; `outer_reader` only inherits it.
+    for sql in [
+        "CREATE ROLE inner_reader",
+        "CREATE ROLE outer_reader",
+        "GRANT SELECT ON select_access.t TO ROLE inner_reader",
+        "GRANT ROLE inner_reader TO ROLE outer_reader",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+
+    let session = fixture.new_session_with_type(SessionType::Dummy).await?;
+    let mut user = UserInfo::new_no_auth("role_user", "%");
+    user.grants.grant_role("outer_reader".into());
+    session.set_authed_user(user, None).await?;
+    let select = || async {
+        check_access(
+            session.create_query_context(&BUILD_INFO).await?,
+            "SELECT * FROM select_access.t",
+        )
+        .await
+    };
+    let assert_denied = |result: Result<()>| {
+        let error = result.unwrap_err();
+        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED, "{error}");
+    };
+
+    // Revoke the privilege on the inherited role while the cache is warm.
+    select().await?;
+    fixture
+        .execute_command("REVOKE SELECT ON select_access.t FROM ROLE inner_reader")
+        .await?;
+    assert_denied(select().await);
+
+    // Re-grant, then revoke the inheritance relationship instead of the privilege.
+    fixture
+        .execute_command("GRANT SELECT ON select_access.t TO ROLE inner_reader")
+        .await?;
+    select().await?;
+    fixture
+        .execute_command("REVOKE ROLE inner_reader FROM ROLE outer_reader")
+        .await?;
+    assert_denied(select().await);
+
+    // Direct role grant: revoke from the role the user holds directly.
+    fixture
+        .execute_command("GRANT SELECT ON select_access.t TO ROLE outer_reader")
+        .await?;
+    select().await?;
+    fixture
+        .execute_command("REVOKE SELECT ON select_access.t FROM ROLE outer_reader")
+        .await?;
+    assert_denied(select().await);
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_select_grants_respect_auth_role_and_secondary_roles() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
