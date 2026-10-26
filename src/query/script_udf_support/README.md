@@ -1,9 +1,23 @@
 # Script UDF execution
 
 JavaScript and WebAssembly retain their in-process execution paths. With the
-`python-udf` feature, **scalar Python script UDFs** execute in fresh child processes
-of the query executable. The hidden worker entrypoint runs before service
-initialization; workers do not start query servers or load service configuration.
+`python-udf` feature, **Python script UDFs** (scalar and aggregate) execute in
+fresh child processes of the query executable. The hidden worker entrypoint runs
+before service initialization; workers do not start query servers or load
+service configuration.
+
+Responsibilities are split between this crate and the `datafuse-extras/arrow-udf`
+fork:
+
+- `arrow-udf-python-worker` (fork): worker launch, the IPC protocol, process
+  lifecycle (kill/reap of the worker's process group), the environment
+  allowlist and pre-exec hardening, and the Landlock/seccomp sandbox.
+- `arrow-udf-runtime` (fork): the JavaScript engine, including its
+  operation-wide execution deadline and memory limit.
+- This crate: configuration and defaults, query admission, quotas and pooling
+  (`python_worker.rs`, `python_worker_pool.rs`), pipeline lifecycle, aggregate
+  state ownership, dependency installation and the worker entrypoint, which
+  stops jemalloc background threads before the sandbox is entered.
 
 ## Isolation and scheduling
 
@@ -110,8 +124,9 @@ through a shared interpreter into another query.
 
 ## Sandbox
 
-Every Python worker enters an unprivileged OS sandbox (`python_sandbox.rs`)
-after the interpreter has started and before any user code runs. There is no
+Every Python worker enters an unprivileged OS sandbox (implemented by
+`arrow-udf-python-worker`) after the interpreter has started and before any user
+code runs. There is no
 switch: if the sandbox cannot be entered, the worker reports
 `Python UDF sandbox is unavailable, refusing to run user code: ...` and the
 query fails. Requirements: Linux 5.13+ with `landlock` in the active LSM list
@@ -236,11 +251,11 @@ udf_script_memory_limit_mb = 1024        # JS heap per runtime / WASM linear mem
 udf_script_execution_timeout_secs = 300  # JS only: per call and for top-level module code, 0 = unlimited
 ```
 
-The JavaScript deadline spans a whole operation (`call`, `create_state`,
-`accumulate`, `merge`, `finish`): argument conversion, the user function,
-continuations of async functions and Arrow conversion of the result, which can
-run user getters and `toJSON`. `arrow-udf-runtime`'s own `set_timeout` only
-covers the user function call and is not used.
+The JavaScript deadline is enforced by `arrow-udf-runtime` and spans a whole
+operation (`call`, `create_state`, `accumulate`, `merge`, `finish`): argument
+conversion, the user function, continuations of async functions and Arrow
+conversion of the result, which can run user getters and `toJSON`. It is set
+before functions are added, so top-level module code is bounded too.
 
 WebAssembly has no execution timeout yet: `arrow-udf-runtime` creates the
 wasmtime `Store` internally, so epoch/fuel deadlines need an upstream change.

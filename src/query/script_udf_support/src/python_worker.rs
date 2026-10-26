@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::io::Read;
-use std::io::Write;
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::OnceLock;
@@ -27,34 +24,20 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use arrow_array::RecordBatch;
-use arrow_ipc::reader::StreamReader;
-use arrow_ipc::writer::StreamWriter;
 use arrow_schema::Field;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use parking_lot::Mutex;
-use serde::Deserialize;
-use serde::Serialize;
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::net::UnixStream;
-use tokio::process::Child;
-use tokio::process::Command;
 use tokio::sync::OnceCell;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::time::Instant;
 
-use super::python_sandbox::PYTHON_SANDBOX_ENFORCED;
-use super::python_sandbox::sandbox_python_worker;
 use super::transform_udf_script::python_pool::RESTRICTED_PYTHON_CODE;
-use super::transform_udf_script::venv;
 use super::transform_udf_script::venv::TempDir;
 
 pub const PYTHON_WORKER_ARG: &str = "--internal-python-udf-worker";
-// Bound allocations before reading a frame, including malformed worker output.
-const MAX_FRAME_BYTES: usize = 256 * 1024 * 1024;
 
 fn udf_error(error: impl std::fmt::Display) -> ErrorCode {
     ErrorCode::UDFRuntimeError(format!("Python UDF worker: {error}"))
@@ -449,190 +432,56 @@ impl PythonQueryWorkers {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) struct PythonFunction {
-    pub name: String,
-    /// Scalar functions only: aggregates use the fixed `create_state`,
-    /// `accumulate`, `merge` and `finish` names.
-    pub handler: String,
-    pub code: String,
-    pub return_field: Field,
-    /// `Some` for an aggregate function: requests are `AggregateRequest`s.
-    pub aggregate_state: Option<Field>,
-}
+/// The function a worker serves; see `arrow_udf_python_worker::WorkerFunction`.
+pub(crate) type PythonFunction = arrow_udf_python_worker::WorkerFunction;
+pub(crate) use arrow_udf_python_worker::AggregateOp;
+pub(crate) use arrow_udf_python_worker::SANDBOX_ENFORCED as PYTHON_SANDBOX_ENFORCED;
 
-/// Aggregate requests. States stay in the query process and travel with every
-/// request, so workers are stateless: any pooled worker serves any request, and
-/// a killed worker loses no aggregation state.
-///
-/// A request frame is the op code followed by length-prefixed Arrow streams
-/// (`parts`). Group-wise operations update `G` states from `N` rows: a UInt32
-/// `groups` column maps each row to its state, and rows are applied to their
-/// state in input order. The response is one Arrow stream with `G` rows.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub(crate) enum AggregateOp {
-    /// parts: none. Response: one initial state.
-    CreateState = 0,
-    /// parts: states (G), groups (N), arguments (N).
-    Accumulate = 1,
-    /// parts: states (G), groups (N), states to merge into them (N).
-    Merge = 2,
-    /// parts: states (G). Response: G results.
-    Finish = 3,
-}
-
-impl AggregateOp {
-    fn from_u8(op: u8) -> Result<Self> {
-        Ok(match op {
-            0 => Self::CreateState,
-            1 => Self::Accumulate,
-            2 => Self::Merge,
-            3 => Self::Finish,
-            _ => return Err(udf_error(format!("invalid aggregate op {op}"))),
-        })
-    }
-
-    fn parts(self) -> usize {
-        match self {
-            Self::CreateState => 0,
-            Self::Finish => 1,
-            Self::Accumulate | Self::Merge => 3,
-        }
+/// A scalar or aggregate Python function of a query, executed by workers.
+pub(crate) fn python_function(
+    name: String,
+    handler: String,
+    code: String,
+    return_field: Field,
+    aggregate_state: Option<Field>,
+) -> PythonFunction {
+    PythonFunction {
+        name,
+        handler,
+        code,
+        return_field,
+        aggregate_state,
+        prelude: Some(RESTRICTED_PYTHON_CODE.to_owned()),
     }
 }
 
-/// Wrap an array as a single-column batch, the unit of aggregate IPC.
 pub(crate) fn array_batch(array: arrow_array::ArrayRef) -> Result<RecordBatch> {
-    let schema = arrow_schema::Schema::new(vec![Field::new(
-        "value",
-        array.data_type().clone(),
-        true,
-    )]);
-    RecordBatch::try_new(Arc::new(schema), vec![array]).map_err(udf_error)
+    arrow_udf_python_worker::array_batch(array).map_err(udf_error)
 }
 
 pub(crate) fn encode_aggregate_request(op: AggregateOp, parts: &[RecordBatch]) -> Result<Vec<u8>> {
-    if parts.len() != op.parts() {
-        return Err(udf_error(format!("{op:?} takes {} parts", op.parts())));
-    }
-    let mut bytes = vec![op as u8];
-    for part in parts {
-        let encoded = encode_batch(part)?;
-        bytes.extend_from_slice(&(encoded.len() as u32).to_be_bytes());
-        bytes.extend_from_slice(&encoded);
-    }
-    check_length(bytes.len())?;
-    Ok(bytes)
+    arrow_udf_python_worker::encode_aggregate_request(op, parts).map_err(udf_error)
 }
 
-fn decode_aggregate_request(bytes: &[u8]) -> Result<(AggregateOp, Vec<RecordBatch>)> {
-    let (&op, mut rest) = bytes
-        .split_first()
-        .ok_or_else(|| udf_error("empty aggregate request"))?;
-    let op = AggregateOp::from_u8(op)?;
-    let mut parts = Vec::with_capacity(op.parts());
-    while !rest.is_empty() {
-        let (len, tail) = rest
-            .split_first_chunk::<4>()
-            .ok_or_else(|| udf_error("truncated aggregate request"))?;
-        let len = u32::from_be_bytes(*len) as usize;
-        if tail.len() < len {
-            return Err(udf_error("truncated aggregate request"));
-        }
-        parts.push(decode_batch(&tail[..len])?);
-        rest = &tail[len..];
-    }
-    if parts.len() != op.parts() {
-        return Err(udf_error(format!("{op:?} takes {} parts", op.parts())));
-    }
-    Ok((op, parts))
+fn encode_batch(batch: &RecordBatch) -> Result<Vec<u8>> {
+    arrow_udf_python_worker::encode_batch(batch).map_err(udf_error)
 }
 
-/// Apply `apply(state, rows)` to every state that has rows, in row order.
-/// States without rows are returned unchanged.
-fn update_groups(
-    states: &arrow_array::ArrayRef,
-    groups: &RecordBatch,
-    mut apply: impl FnMut(&dyn arrow_array::Array, &arrow_array::UInt32Array) -> anyhow::Result<arrow_array::ArrayRef>,
-) -> Result<arrow_array::ArrayRef> {
-    use arrow_array::cast::AsArray;
-
-    let groups = groups
-        .column(0)
-        .as_primitive_opt::<arrow_array::types::UInt32Type>()
-        .ok_or_else(|| udf_error("aggregate groups must be UInt32"))?;
-    let mut rows = vec![Vec::new(); states.len()];
-    for (row, group) in groups.values().iter().enumerate() {
-        rows.get_mut(*group as usize)
-            .ok_or_else(|| udf_error("aggregate group out of range"))?
-            .push(row as u32);
-    }
-    let updated = rows
-        .into_iter()
-        .enumerate()
-        .map(|(group, rows)| {
-            let state = states.slice(group, 1);
-            if rows.is_empty() {
-                Ok(state)
-            } else {
-                apply(&state, &arrow_array::UInt32Array::from(rows)).map_err(udf_error)
-            }
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let updated = updated.iter().map(AsRef::as_ref).collect::<Vec<_>>();
-    if updated.is_empty() {
-        return Ok(states.slice(0, 0));
-    }
-    arrow_select::concat::concat(&updated).map_err(udf_error)
-}
-
-fn serve_aggregate(
-    runtime: &arrow_udf_runtime::python::Runtime,
-    name: &str,
-    bytes: &[u8],
-) -> Result<Vec<u8>> {
-    let (op, parts) = decode_aggregate_request(bytes)?;
-    let output = match op {
-        AggregateOp::CreateState => runtime.create_state(name).map_err(udf_error)?,
-        AggregateOp::Accumulate => {
-            let (states, groups, input) = (parts[0].column(0), &parts[1], &parts[2]);
-            if groups.num_rows() != input.num_rows() {
-                return Err(udf_error("aggregate groups and arguments differ in length"));
-            }
-            update_groups(states, groups, |state, rows| {
-                let input = arrow_select::take::take_record_batch(input, rows)?;
-                runtime.accumulate(name, state, &input)
-            })?
-        }
-        AggregateOp::Merge => {
-            let (states, groups, others) = (parts[0].column(0), &parts[1], parts[2].column(0));
-            if groups.num_rows() != others.len() {
-                return Err(udf_error("aggregate groups and states differ in length"));
-            }
-            update_groups(states, groups, |state, rows| {
-                let others = arrow_select::take::take(others.as_ref(), rows, None)?;
-                let states = arrow_select::concat::concat(&[state, others.as_ref()])?;
-                runtime.merge(name, states.as_ref())
-            })?
-        }
-        AggregateOp::Finish => runtime.finish(name, parts[0].column(0)).map_err(udf_error)?,
-    };
-    encode_batch(&array_batch(output)?)
+pub(crate) fn decode_batch(bytes: &[u8]) -> Result<RecordBatch> {
+    arrow_udf_python_worker::decode_batch(bytes).map_err(udf_error)
 }
 
 include!("python_worker_pool.rs");
 
+/// A started worker together with the quota it occupies. The process (see
+/// `arrow_udf_python_worker::WorkerProcess`) keeps a clone of the reservation
+/// and its private directory until it has exited.
 struct Worker {
-    child: Option<Child>,
-    socket: UnixStream,
+    /// `None` only for scheduling tests, which never send requests.
+    process: Option<arrow_udf_python_worker::WorkerProcess>,
     reservation: Arc<Reservation>,
-    directory: Option<TempDir>,
-    runtime: tokio::runtime::Handle,
 }
 
-// A private listener path is used instead of stdout (UDF print() is arbitrary).
-// No fork-without-exec, Python objects, or inherited interpreter state.
 impl Worker {
     async fn start(
         reservation: Arc<Reservation>,
@@ -640,7 +489,7 @@ impl Worker {
         function: &PythonFunction,
         runtime: tokio::runtime::Handle,
     ) -> Result<Self> {
-        let directory = Some(match directory {
+        let directory = match directory {
             Some(template) => {
                 let quota = reservation.clone();
                 databend_common_base::runtime::spawn_blocking(move || {
@@ -654,365 +503,48 @@ impl Worker {
                 .map_err(udf_error)?
             }
             None => TempDir::new().map_err(udf_error)?,
-        });
-        let ipc_dir = TempDir::new().map_err(udf_error)?;
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(ipc_dir.path(), std::fs::Permissions::from_mode(0o700))
-                .map_err(udf_error)?;
-        }
-        let socket_path = ipc_dir.path().join("ipc");
-        let listener = tokio::net::UnixListener::bind(&socket_path).map_err(udf_error)?;
-        let executable = std::env::current_exe().map_err(udf_error)?;
-        let mut command = Command::new(executable);
-        command
-            .arg(PYTHON_WORKER_ARG)
-            .arg(&socket_path)
-            // UDF code must not see the query node's credentials or service
-            // configuration through os.environ.
-            .env_clear()
-            .envs(venv::allowed_env(
-                &[venv::PYTHON_ENV, WORKER_ENV].concat(),
-                &["LC_"],
-            ))
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .kill_on_drop(true);
-        if let Some(dir) = &directory {
-            // The private directory is the only writable location inside the
-            // sandbox, so temporary files go there too.
-            command.current_dir(dir.path()).env("TMPDIR", dir.path());
-        }
-        #[cfg(unix)]
-        command.process_group(0);
-        // SAFETY: the hook runs between fork and exec and only issues
-        // async-signal-safe syscalls; it neither allocates nor takes locks.
-        unsafe {
-            command.pre_exec(restrict_worker_process);
-        }
-        let child = command.spawn().map_err(udf_error)?;
-        let process_group = child.id().ok_or_else(|| udf_error("missing worker pid"))?;
-        log::debug!("Started Python UDF worker pid={process_group}");
-        // The startup guard also reaps a child if accept is cancelled or fails.
-        let mut guard = ChildGuard {
-            child: Some(child),
-            process_group,
-            reservation: reservation.clone(),
-            directory: directory.clone(),
-            runtime: runtime.clone(),
         };
-        let socket = tokio::select! {
-            connection = listener.accept() => connection.map_err(udf_error)?.0,
-            status = guard.child.as_mut().unwrap().wait() => {
-                return Err(udf_error(format!("exited during startup: {:?}", status.map_err(udf_error)?)));
-            }
-        };
-        let mut worker = Self {
-            child: guard.child.take(),
-            socket,
-            reservation,
-            directory,
+        let command = arrow_udf_python_worker::WorkerCommand::current_exe([PYTHON_WORKER_ARG])
+            .map_err(udf_error)?;
+        let working_dir = directory.path().to_path_buf();
+        let process = arrow_udf_python_worker::WorkerProcess::spawn(
+            &command,
+            function,
+            &working_dir,
+            // Quota and files stay alive until the child has actually exited.
+            Box::new((reservation.clone(), directory)),
             runtime,
-        };
-        worker
-            .write_frame(&serde_json::to_vec(function).map_err(udf_error)?)
-            .await?;
-        worker.read_response().await?;
-        Ok(worker)
-    }
-
-    async fn write_frame(&mut self, bytes: &[u8]) -> Result<()> {
-        check_length(bytes.len())?;
-        self.socket
-            .write_u32(bytes.len() as u32)
-            .await
-            .map_err(udf_error)?;
-        self.socket.write_all(bytes).await.map_err(udf_error)
-    }
-
-    async fn read_response(&mut self) -> Result<Vec<u8>> {
-        let status = self.socket.read_u8().await.map_err(udf_error)?;
-        let len = self.socket.read_u32().await.map_err(udf_error)? as usize;
-        check_length(len)?;
-        let mut bytes = vec![0; len];
-        self.socket
-            .read_exact(&mut bytes)
-            .await
-            .map_err(udf_error)?;
-        match status {
-            0 => Ok(bytes),
-            1 => Err(udf_error(String::from_utf8_lossy(&bytes))),
-            _ => Err(udf_error("invalid response status")),
-        }
-    }
-}
-
-struct ChildGuard {
-    child: Option<Child>,
-    process_group: u32,
-    reservation: Arc<Reservation>,
-    directory: Option<TempDir>,
-    runtime: tokio::runtime::Handle,
-}
-
-/// Worker-specific variables on top of `venv::PYTHON_ENV`: interpreter I/O
-/// and native thread-pool tuning that operators set for numeric libraries.
-const WORKER_ENV: &[&str] = &[
-    "PYTHONIOENCODING",
-    "PYTHONUTF8",
-    "PYTHONHASHSEED",
-    "OMP_NUM_THREADS",
-    "OPENBLAS_NUM_THREADS",
-    "MKL_NUM_THREADS",
-];
-
-/// Applied in the forked child before exec. This is hardening, not a sandbox:
-/// - no_new_privs: setuid/file-capability binaries cannot raise privileges;
-/// - RLIMIT_CORE=0: a crashing worker never writes UDF memory to disk.
-///
-/// PR_SET_PDEATHSIG is deliberately not used: it fires when the spawning Tokio
-/// thread retires, not when the query node exits (see `watch_parent`).
-fn restrict_worker_process() -> std::io::Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        // SAFETY: prctl with integer arguments has no memory side effects.
-        if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-    }
-    let no_core = libc::rlimit {
-        rlim_cur: 0,
-        rlim_max: 0,
-    };
-    // SAFETY: the pointer refers to a live, initialized rlimit.
-    if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &no_core) } != 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-fn reap(
-    child: &mut Option<Child>,
-    process_group: u32,
-    reservation: Arc<Reservation>,
-    directory: Option<TempDir>,
-    runtime: &tokio::runtime::Handle,
-) {
-    if let Some(mut child) = child.take() {
-        // Keep quota AND files until the process has actually exited, including
-        // cancellation during startup. Count starting/exiting workers too.
-        if let Some(pid) = child.id() {
-            // SAFETY: negative pid targets the worker's dedicated process group.
-            // An unreaped child PID cannot have been reused by another process.
-            unsafe {
-                libc::kill(-(pid as i32), libc::SIGKILL);
-            }
-        }
-        let _ = child.start_kill();
-        let _entered = runtime.enter();
-        databend_common_base::runtime::spawn(async move {
-            if let Err(error) = child.wait().await {
-                log::warn!("Failed to reap Python UDF worker pid={process_group}: {error}");
-            }
-            log::debug!("Reaped Python UDF worker pid={process_group}");
-            drop(directory);
-            drop(reservation);
-        });
-    }
-}
-
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
-        reap(
-            &mut self.child,
-            self.process_group,
-            self.reservation.clone(),
-            self.directory.clone(),
-            &self.runtime,
-        );
-    }
-}
-
-impl Drop for Worker {
-    fn drop(&mut self) {
-        let process_group = self.child.as_ref().and_then(Child::id).unwrap_or_default();
-        reap(
-            &mut self.child,
-            process_group,
-            self.reservation.clone(),
-            self.directory.clone(),
-            &self.runtime,
-        );
-    }
-}
-
-fn check_length(len: usize) -> Result<()> {
-    if len > MAX_FRAME_BYTES {
-        return Err(udf_error(format!(
-            "IPC frame exceeds {MAX_FRAME_BYTES} bytes; reduce batch size"
-        )));
-    }
-    Ok(())
-}
-
-fn encode_batch(batch: &RecordBatch) -> Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    {
-        let mut writer =
-            StreamWriter::try_new(&mut bytes, batch.schema().as_ref()).map_err(udf_error)?;
-        writer.write(batch).map_err(udf_error)?;
-        writer.finish().map_err(udf_error)?;
-    }
-    check_length(bytes.len())?;
-    Ok(bytes)
-}
-
-pub(crate) fn decode_batch(bytes: &[u8]) -> Result<RecordBatch> {
-    let mut reader = StreamReader::try_new(bytes, None).map_err(udf_error)?;
-    let batch = reader
-        .next()
-        .ok_or_else(|| udf_error("missing Arrow batch"))?
+        )
+        .await
         .map_err(udf_error)?;
-    if reader.next().is_some() {
-        return Err(udf_error("unexpected extra Arrow batch"));
+        log::debug!("Started Python UDF worker pid={:?}", process.id());
+        Ok(Self {
+            process: Some(process),
+            reservation,
+        })
     }
-    Ok(batch)
-}
 
-fn read_frame(socket: &mut std::os::unix::net::UnixStream) -> Result<Vec<u8>> {
-    let mut len = [0; 4];
-    socket.read_exact(&mut len).map_err(udf_error)?;
-    let len = u32::from_be_bytes(len) as usize;
-    check_length(len)?;
-    let mut bytes = vec![0; len];
-    socket.read_exact(&mut bytes).map_err(udf_error)?;
-    Ok(bytes)
-}
-
-fn respond(socket: &mut std::os::unix::net::UnixStream, result: Result<Vec<u8>>) -> Result<()> {
-    let (status, bytes) = match result {
-        Ok(bytes) => (0, bytes),
-        Err(error) => (1, error.message().into_bytes()),
-    };
-    check_length(bytes.len())?;
-    socket.write_all(&[status]).map_err(udf_error)?;
-    socket
-        .write_all(&(bytes.len() as u32).to_be_bytes())
-        .map_err(udf_error)?;
-    socket.write_all(&bytes).map_err(udf_error)
-}
-
-// Monitor peer closure independently of Python. A SIGKILLed query node cannot
-// run Rust drops, and a UDF may never return to the protocol loop. Unlike Linux
-// PR_SET_PDEATHSIG this does not kill a worker when just its spawning Tokio
-// thread retires. This is lifecycle management, not a sandbox against hostile code.
-fn watch_parent(socket: &std::os::unix::net::UnixStream) -> Result<()> {
-    use std::os::fd::AsRawFd;
-    let socket = socket.try_clone().map_err(udf_error)?;
-    databend_common_base::runtime::Thread::named_spawn(
-        Some("python-parent-watch".to_owned()),
-        move || {
-            let mut descriptor = libc::pollfd {
-                fd: socket.as_raw_fd(),
-                events: 0,
-                revents: 0,
-            };
-            loop {
-                // SAFETY: descriptor is initialized and its owning socket stays
-                // alive for this loop. We observe hangup only, never consume IPC.
-                let result = unsafe { libc::poll(&mut descriptor, 1, -1) };
-                if result < 0
-                    && std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted
-                {
-                    continue;
-                }
-                if result < 0
-                    || descriptor.revents & (libc::POLLHUP | libc::POLLERR | libc::POLLNVAL) != 0
-                {
-                    // SAFETY: kill a group only when this worker is its leader.
-                    // _exit terminates the entire worker even if Python holds GIL.
-                    unsafe {
-                        let pid = libc::getpid();
-                        if libc::getpgrp() == pid {
-                            libc::kill(-pid, libc::SIGKILL);
-                        }
-                        libc::_exit(1);
-                    }
-                }
-            }
-        },
-    );
-    Ok(())
+    async fn request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        let process = self
+            .process
+            .as_mut()
+            .ok_or_else(|| udf_error("worker is not running"))?;
+        process.request(request).await.map_err(udf_error)
+    }
 }
 
 /// Internal binary entrypoint. Must run before initializing the query service,
 /// crash tracker, Tokio thread pools, or command-line configuration.
 pub fn run_python_udf_worker(socket_path: PathBuf) -> Result<()> {
-    let mut socket = std::os::unix::net::UnixStream::connect(socket_path).map_err(udf_error)?;
-    let init = (|| {
-        let function: PythonFunction =
-            serde_json::from_slice(&read_frame(&mut socket)?).map_err(udf_error)?;
-        let mut runtime = arrow_udf_runtime::python::Builder::default()
-            .safe_codes(RESTRICTED_PYTHON_CODE.to_owned())
-            .build()
-            .map_err(udf_error)?;
-        // The interpreter is initialized but no user code has run. Confine the
-        // process now, while it is still single-threaded: the parent watcher
-        // thread starts afterwards so it inherits the sandbox.
+    arrow_udf_python_worker::run_worker(&socket_path, arrow_udf_python_worker::WorkerHooks {
         // jemalloc (`background_thread:true` in the query binary) runs purge
-        // threads that would stay outside the Landlock domain.
-        databend_common_base::mem_allocator::stop_allocator_background_threads()
-            .map_err(udf_error)?;
-        sandbox_python_worker().map_err(udf_error)?;
-        watch_parent(&socket)?;
-        let aggregate = function.aggregate_state.is_some();
-        match function.aggregate_state {
-            Some(state_field) => runtime.add_aggregate(
-                &function.name,
-                state_field,
-                function.return_field,
-                arrow_udf_runtime::CallMode::CalledOnNullInput,
-                &function.code,
-            ),
-            None => runtime.add_function_with_handler(
-                &function.name,
-                function.return_field,
-                arrow_udf_runtime::CallMode::CalledOnNullInput,
-                &function.code,
-                &function.handler,
-            ),
-        }
-        .map_err(udf_error)?;
-        Ok((runtime, function.name, aggregate))
-    })();
-    let (runtime, name, aggregate) = match init {
-        Ok(value) => {
-            respond(&mut socket, Ok(Vec::new()))?;
-            value
-        }
-        Err(error) => {
-            respond(&mut socket, Err(error))?;
-            return Ok(());
-        }
-    };
-    loop {
-        let bytes = read_frame(&mut socket)?;
-        let result = if aggregate {
-            serve_aggregate(&runtime, &name, &bytes)
-        } else {
-            (|| {
-                let input = decode_batch(&bytes)?;
-                let output = runtime.call(&name, &input).map_err(udf_error)?;
-                encode_batch(&output)
-            })()
-        };
-        let failed = result.is_err();
-        respond(&mut socket, result)?;
-        if failed {
-            return Ok(());
-        }
-    }
+        // threads that would stay outside the sandbox.
+        before_sandbox: Some(Box::new(|| {
+            databend_common_base::mem_allocator::stop_allocator_background_threads()
+                .map_err(anyhow::Error::msg)
+        })),
+    })
+    .map_err(udf_error)
 }
 
 include!("python_worker_tests.rs");

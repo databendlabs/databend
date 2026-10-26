@@ -270,12 +270,18 @@ def handler(x):
     let result = udf.transform(input(0)).await.unwrap();
     let pid = result.get_by_offset(1).index(0).unwrap().to_string();
     let status = std::fs::read_to_string(format!("/proc/{pid}/status")).unwrap();
-    assert!(
+    // Containers may filter every process already: the worker must have
+    // installed a filter of its own on top of the host's.
+    let filters = |status: &str| {
         status
             .lines()
-            .any(|line| line.split_whitespace().eq(["Seccomp:", "2"])),
-        "worker {pid} runs without a seccomp filter"
-    );
+            .find_map(|line| line.strip_prefix("Seccomp_filters:"))
+            .map(|count| count.trim().parse::<u32>().unwrap())
+    };
+    let host = std::fs::read_to_string("/proc/self/status").unwrap();
+    if let (Some(worker), Some(host)) = (filters(&status), filters(&host)) {
+        assert!(worker > host, "worker {pid} installed no seccomp filter");
+    }
     query.finish();
     assert_eq!(
         std::fs::read_to_string(&secret).unwrap(),
@@ -542,7 +548,9 @@ def handler(x):
         max_workers: 1,
         max_workers_per_tenant: 1,
         max_workers_per_query: 1,
-        execution_timeout: Duration::from_secs(2),
+        // Covers interpreter startup: exec of the debug test binary alone
+        // takes about a second, so 2s timed out healthy workers under load.
+        execution_timeout: Duration::from_secs(5),
         ..Default::default()
     })
     .unwrap();

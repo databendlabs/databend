@@ -54,7 +54,7 @@ use databend_common_storage::init_stage_operator;
 
 use self::venv::TempDir;
 #[cfg(feature = "python-udf")]
-use super::python_worker::PythonFunction;
+use super::python_worker::python_function;
 #[cfg(feature = "python-udf")]
 use super::python_worker::PythonQueryWorkers;
 #[cfg(feature = "python-udf")]
@@ -64,7 +64,7 @@ use super::python_worker::PythonWorkerManager;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
 use super::script_udf_limits::ScriptUdfLimits;
-use super::script_udf_limits::LimitedJsRuntime;
+use super::script_udf_limits::new_js_runtime;
 use super::script_udf_limits::wasm_runtime_config;
 use crate::ScriptUdfFunctionDesc;
 
@@ -162,13 +162,13 @@ impl ScriptRuntime {
                     }
                 }
 
-                let function = PythonFunction {
-                    name: func.name.clone(),
-                    handler: func.func_name.clone(),
+                let function = python_function(
+                    func.name.clone(),
+                    func.func_name.clone(),
                     code,
-                    return_field: arrow_field_from_data_type(&func.name, *func.data_type.clone()),
-                    aggregate_state: None,
-                };
+                    arrow_field_from_data_type(&func.name, *func.data_type.clone()),
+                    None,
+                );
                 Ok(Self::Python(PythonRuntime::new(
                     function,
                     query.clone(),
@@ -190,7 +190,7 @@ impl ScriptRuntime {
         let result_batch = match self {
             ScriptRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance().block_on(async move {
-                    runtime.bounded(|js| js.call(&func.name, input_batch)).await.map_err(|err| {
+                    runtime.call(&func.name, input_batch).await.map_err(|err| {
                         ErrorCode::UDFRuntimeError(format!(
                             "JavaScript UDF {:?} execution failed: {err}",
                             func.name
@@ -502,25 +502,24 @@ pub struct JsRuntimeBuilder {
     counter: AtomicUsize,
 }
 
-impl RuntimeBuilder<LimitedJsRuntime> for JsRuntimeBuilder {
+impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder {
     type Error = ErrorCode;
 
-    fn build(&self) -> Result<LimitedJsRuntime> {
+    fn build(&self) -> Result<arrow_udf_runtime::javascript::Runtime> {
         let start = std::time::Instant::now();
         let limits = ScriptUdfLimits::current();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            LimitedJsRuntime::new(&limits)
+            new_js_runtime(&limits)
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
 
-        let converter = runtime.runtime_mut().converter_mut();
+        let converter = runtime.converter_mut();
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
         let rt = GlobalIORuntime::instance().block_on(async move {
             runtime
-                .runtime_mut()
                 .add_function(
                     &self.name,
                     // we pass the field instead of the data type because arrow-udf-js
@@ -534,7 +533,7 @@ impl RuntimeBuilder<LimitedJsRuntime> for JsRuntimeBuilder {
                 )
                 .await?;
 
-            Ok(runtime.initialized())
+            Ok(runtime)
         });
 
         log::info!(
@@ -553,7 +552,7 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
     (&field).into()
 }
 
-type JsRuntimePool = Pool<LimitedJsRuntime, JsRuntimeBuilder>;
+type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
 
 #[cfg(feature = "python-udf")]
 pub(super) mod python_pool {

@@ -298,9 +298,7 @@ impl WorkerLease {
             );
             self.reservation.take();
         }
-        let worker = self.worker.as_mut().unwrap();
-        worker.write_frame(request).await?;
-        worker.read_response().await
+        self.worker.as_mut().unwrap().request(request).await
     }
 
     fn complete(mut self) -> Result<()> {

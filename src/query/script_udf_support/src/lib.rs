@@ -21,10 +21,6 @@ mod script_udf {
     pub mod python_worker {
         include!("python_worker.rs");
     }
-    #[cfg(feature = "python-udf")]
-    mod python_sandbox {
-        include!("python_sandbox.rs");
-    }
     mod runtime_pool {
         include!("runtime_pool.rs");
     }

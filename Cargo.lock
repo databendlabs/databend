@@ -569,9 +569,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrow-udf-python-worker"
+version = "0.1.0"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=ffd6f943ee240bc9a8f424c8113ff274f8bb86f1#ffd6f943ee240bc9a8f424c8113ff274f8bb86f1"
+dependencies = [
+ "anyhow",
+ "arrow-array",
+ "arrow-ipc",
+ "arrow-schema",
+ "arrow-select",
+ "arrow-udf-runtime",
+ "libc",
+ "log",
+ "pyo3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=c1de708add62ecd1afa2721b2e5c639f29be1f9d#c1de708add62ecd1afa2721b2e5c639f29be1f9d"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=ffd6f943ee240bc9a8f424c8113ff274f8bb86f1#ffd6f943ee240bc9a8f424c8113ff274f8bb86f1"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -5789,6 +5809,7 @@ dependencies = [
  "arrow-ipc",
  "arrow-schema",
  "arrow-select",
+ "arrow-udf-python-worker",
  "arrow-udf-runtime",
  "async-trait",
  "databend-common-base",
@@ -5804,9 +5825,6 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.12.3",
- "pyo3",
- "serde",
- "serde_json",
  "tokio",
  "toml 0.8.22",
  "uuid",

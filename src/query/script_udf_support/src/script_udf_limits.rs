@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use parking_lot::Mutex;
 
 /// Resource limits of in-process script UDF engines and of dependency
 /// installation. `None` means unlimited.
@@ -62,86 +59,17 @@ fn mib_to_bytes(mib: usize) -> Option<usize> {
     (mib != 0).then(|| mib.saturating_mul(1024 * 1024))
 }
 
-/// A JavaScript runtime whose user code is bounded by one deadline per
-/// operation. `arrow-udf-runtime`'s own `set_timeout` only arms the deadline
-/// around the user function call itself: input conversion, Arrow output
-/// conversion (struct getters, `toJSON` of variant results) and the
-/// continuation of async functions would run unbounded. Here the deadline
-/// spans the whole operation instead, and covers top-level module code while
-/// functions are added.
-pub struct LimitedJsRuntime {
-    runtime: arrow_udf_runtime::javascript::Runtime,
-    timeout: Option<Duration>,
-    deadline: Arc<Mutex<Option<Instant>>>,
-}
-
-impl LimitedJsRuntime {
-    /// Create a runtime whose initialization deadline is already armed.
-    pub async fn new(limits: &ScriptUdfLimits) -> anyhow::Result<Self> {
-        let runtime = arrow_udf_runtime::javascript::Runtime::new().await?;
-        // `set_memory_limit(None)` maps to a QuickJS limit of 0 bytes rather
-        // than "unlimited"; a fresh runtime is already unlimited.
-        if let Some(limit) = limits.js_memory_limit {
-            runtime.set_memory_limit(Some(limit)).await;
-        }
-        let deadline = Arc::new(Mutex::new(None::<Instant>));
-        if limits.js_timeout.is_some() {
-            let armed = deadline.clone();
-            // The upstream timeout stays unset, so nothing replaces this handler.
-            runtime
-                .context()
-                .runtime()
-                .set_interrupt_handler(Some(Box::new(move || {
-                    armed.lock().is_some_and(|deadline| Instant::now() >= deadline)
-                })))
-                .await;
-        }
-        let runtime = Self {
-            runtime,
-            timeout: limits.js_timeout,
-            deadline,
-        };
-        runtime.arm();
-        Ok(runtime)
-    }
-
-    /// For setup while the initialization deadline is armed: converter
-    /// options and `add_function`/`add_aggregate`.
-    pub fn runtime_mut(&mut self) -> &mut arrow_udf_runtime::javascript::Runtime {
-        &mut self.runtime
-    }
-
-    /// End initialization: no user code runs between operations.
-    pub fn initialized(self) -> Self {
-        *self.deadline.lock() = None;
-        self
-    }
-
-    fn arm(&self) {
-        *self.deadline.lock() = self
-            .timeout
-            .and_then(|timeout| Instant::now().checked_add(timeout));
-    }
-
-    /// Run one operation under a fresh deadline. The deadline is cleared when
-    /// the operation completes or its future is dropped.
-    pub async fn bounded<'a, F, T>(
-        &'a self,
-        operation: impl FnOnce(&'a arrow_udf_runtime::javascript::Runtime) -> F,
-    ) -> T
-    where
-        F: Future<Output = T>,
-    {
-        struct Disarm<'a>(&'a Mutex<Option<Instant>>);
-        impl Drop for Disarm<'_> {
-            fn drop(&mut self) {
-                *self.0.lock() = None;
-            }
-        }
-        self.arm();
-        let _disarm = Disarm(&self.deadline);
-        operation(&self.runtime).await
-    }
+/// A JavaScript runtime with the node's limits applied. Create it before adding
+/// functions: `arrow-udf-runtime` bounds every operation as a whole (argument
+/// and result conversion, async continuations) and top-level module code
+/// evaluated while functions are added.
+pub async fn new_js_runtime(
+    limits: &ScriptUdfLimits,
+) -> anyhow::Result<arrow_udf_runtime::javascript::Runtime> {
+    let mut runtime = arrow_udf_runtime::javascript::Runtime::new().await?;
+    runtime.set_memory_limit(limits.js_memory_limit).await;
+    runtime.set_timeout(limits.js_timeout).await;
+    Ok(runtime)
 }
 
 pub fn wasm_runtime_config(limits: &ScriptUdfLimits) -> arrow_udf_runtime::wasm::Config {
@@ -161,6 +89,7 @@ mod tests {
     use arrow_schema::Field;
     use arrow_schema::Schema;
     use arrow_udf_runtime::javascript::FunctionOptions;
+    use arrow_udf_runtime::javascript::Runtime;
 
     use super::*;
 
@@ -173,14 +102,9 @@ mod tests {
         }
     }
 
-    async fn runtime_with(
-        limits: &ScriptUdfLimits,
-        return_type: DataType,
-        code: &str,
-    ) -> LimitedJsRuntime {
-        let mut runtime = LimitedJsRuntime::new(limits).await.unwrap();
+    async fn runtime(limits: &ScriptUdfLimits, return_type: DataType, code: &str) -> Runtime {
+        let mut runtime = new_js_runtime(limits).await.unwrap();
         runtime
-            .runtime_mut()
             .add_function(
                 "f",
                 Field::new("f", return_type, true),
@@ -189,20 +113,15 @@ mod tests {
             )
             .await
             .unwrap();
-        runtime.initialized()
+        runtime
     }
 
-    async fn runtime(limits: &ScriptUdfLimits, body: &str) -> LimitedJsRuntime {
-        let code = format!("export function f(x) {{ {body} }}");
-        runtime_with(limits, DataType::Int32, &code).await
-    }
-
-    async fn call(runtime: &LimitedJsRuntime) -> anyhow::Result<RecordBatch> {
+    async fn call(runtime: &Runtime) -> anyhow::Result<RecordBatch> {
         let input = RecordBatch::try_new(
             Arc::new(Schema::new(vec![Field::new("x", DataType::Int32, true)])),
             vec![Arc::new(Int32Array::from(vec![1]))],
         )?;
-        runtime.bounded(|js| js.call("f", &input)).await
+        runtime.call("f", &input).await
     }
 
     #[test]
@@ -234,54 +153,14 @@ mod tests {
         assert_eq!(ScriptUdfLimits::from_config(&config).js_timeout, None);
     }
 
-    // QuickJS evaluates synchronously: a missing interrupt hangs these tests
-    // (caught by the test runner timeout) rather than failing an assertion.
+    // The runtime's own tests cover each phase; these check that Databend's
+    // runtimes get the limits. A missing interrupt hangs instead of failing.
     #[tokio::test]
-    async fn test_js_top_level_code_is_interrupted() {
-        let limits = limits(None, Some(Duration::from_millis(200)));
-        let mut runtime = LimitedJsRuntime::new(&limits).await.unwrap();
-        let start = Instant::now();
-        // arrow-udf-runtime drops the module evaluation promise, so an
-        // interrupted top level is not reported as an error. What matters is
-        // that the loop ran until the deadline and pipeline construction returns.
-        let _ = runtime
-            .runtime_mut()
-            .add_function(
-                "f",
-                Field::new("f", DataType::Int32, true),
-                "while (true) {}\nexport function f(x) { return x; }",
-                FunctionOptions::default().return_null_on_null_input(),
-            )
-            .await;
-        assert!(start.elapsed() >= Duration::from_millis(200));
-    }
-
-    #[tokio::test]
-    async fn test_js_call_is_interrupted() {
-        let limits = limits(None, Some(Duration::from_millis(200)));
-        let runtime = runtime(&limits, "while (true) {}").await;
-        assert!(call(&runtime).await.is_err());
-        // Every call gets a fresh deadline on the same runtime.
-        assert!(call(&runtime).await.is_err());
-        // Neither the initialization deadline nor an expired call deadline
-        // leaks into later calls.
-        let healthy = runtime_with_sleep(&limits).await;
-        call(&healthy).await.unwrap();
-    }
-
-    async fn runtime_with_sleep(limits: &ScriptUdfLimits) -> LimitedJsRuntime {
-        let healthy = runtime(limits, "return x;").await;
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        healthy
-    }
-
-    // Arrow conversion of the result reads object properties, which runs user
-    // getters after the user function has returned.
-    #[tokio::test]
-    async fn test_js_result_conversion_is_interrupted() {
+    async fn test_js_timeout_is_applied() {
         let limits = limits(None, Some(Duration::from_millis(200)));
         let output = DataType::Struct(vec![Field::new("a", DataType::Int32, true)].into());
-        let runtime = runtime_with(
+        // Result conversion runs the getter after the function returned.
+        let runtime = runtime(
             &limits,
             output,
             "export function f(x) { return { get a() { while (true) {} } }; }",
@@ -290,17 +169,31 @@ mod tests {
         let start = Instant::now();
         assert!(call(&runtime).await.is_err());
         assert!(start.elapsed() >= Duration::from_millis(200));
+
+        let runtime = runtime_unlimited_memory(&limits).await;
+        call(&runtime).await.unwrap();
+    }
+
+    async fn runtime_unlimited_memory(limits: &ScriptUdfLimits) -> Runtime {
+        // No memory limit configured: the runtime must still allocate.
+        runtime(
+            limits,
+            DataType::Int32,
+            "export function f(x) { new Array(1 << 20).fill(0); return x; }",
+        )
+        .await
     }
 
     #[tokio::test]
-    async fn test_js_memory_is_limited() {
+    async fn test_js_memory_limit_is_applied() {
         let limits = limits(Some(64 * 1024 * 1024), None);
         // Bounded so a broken limit fails the assertion instead of the host.
         for (iterations, fits) in [(1, true), (64, false)] {
             let runtime = runtime(
                 &limits,
+                DataType::Int32,
                 &format!(
-                    "let a = []; for (let i = 0; i < {iterations}; i++) {{ a.push(new Array(1000000).fill(i)); }} return a.length;"
+                    "export function f(x) {{ let a = []; for (let i = 0; i < {iterations}; i++) {{ a.push(new Array(1000000).fill(i)); }} return a.length; }}"
                 ),
             )
             .await;

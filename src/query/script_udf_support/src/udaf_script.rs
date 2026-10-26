@@ -60,7 +60,7 @@ use databend_common_sql::plans::UDFScriptCode;
 #[cfg(feature = "python-udf")]
 use super::python_worker::AggregateOp;
 #[cfg(feature = "python-udf")]
-use super::python_worker::PythonFunction;
+use super::python_worker::python_function;
 #[cfg(feature = "python-udf")]
 use super::python_worker::PythonQueryWorkers;
 #[cfg(feature = "python-udf")]
@@ -76,7 +76,7 @@ use super::python_worker::encode_aggregate_request;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
 use super::script_udf_limits::ScriptUdfLimits;
-use super::script_udf_limits::LimitedJsRuntime;
+use super::script_udf_limits::new_js_runtime;
 
 pub struct AggregateUdfScript {
     display_name: String,
@@ -485,13 +485,13 @@ pub fn create_udaf_script_function(
             // processes owned by the query.
             let query = python_workers
                 .unwrap_or_else(|| PythonWorkerManager::instance().query("default", 1));
-            let function = PythonFunction {
-                name: name.clone(),
-                handler: String::new(),
-                code: String::from_utf8(code.to_vec())?,
-                return_field: arrow_field_from_data_type(&name, output_type.clone()),
-                aggregate_state: Some(arrow_schema::Field::new(&name, state_type, true)),
-            };
+            let function = python_function(
+                name.clone(),
+                String::new(),
+                String::from_utf8(code.to_vec())?,
+                arrow_field_from_data_type(&name, output_type.clone()),
+                Some(arrow_schema::Field::new(&name, state_type, true)),
+            );
             UDAFRuntime::Python(PythonUdaf {
                 runtime: query.aggregate_runtime(function)?,
                 handle: tokio::runtime::Handle::try_current()
@@ -546,23 +546,22 @@ struct JsRuntimeBuilder {
     output_type: DataType,
 }
 
-impl RuntimeBuilder<LimitedJsRuntime> for JsRuntimeBuilder {
+impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder {
     type Error = ErrorCode;
 
-    fn build(&self) -> std::result::Result<LimitedJsRuntime, Self::Error> {
+    fn build(&self) -> std::result::Result<arrow_udf_runtime::javascript::Runtime, Self::Error> {
         let limits = ScriptUdfLimits::current();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            LimitedJsRuntime::new(&limits)
+            new_js_runtime(&limits)
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
-        let converter = runtime.runtime_mut().converter_mut();
+        let converter = runtime.converter_mut();
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
         GlobalIORuntime::instance().block_on(async move {
             runtime
-                .runtime_mut()
                 .add_aggregate(
                     &self.name,
                     self.state_type.clone(),
@@ -576,7 +575,7 @@ impl RuntimeBuilder<LimitedJsRuntime> for JsRuntimeBuilder {
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot add aggregate: {e}")))?;
 
-            Ok(runtime.initialized())
+            Ok(runtime)
         })
     }
 }
@@ -586,7 +585,7 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
     (&field).into()
 }
 
-type JsRuntimePool = Pool<LimitedJsRuntime, JsRuntimeBuilder>;
+type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
 
 /// Aggregate requests to the query's Python workers. Pipeline processors
 /// call aggregate functions synchronously, so each request blocks on the
@@ -687,7 +686,7 @@ impl UDAFRuntime {
                 GlobalIORuntime::instance()
                     .block_on(async move {
                         Ok(runtime
-                            .bounded(|js| js.create_state(&pool.builder.name))
+                            .create_state(&pool.builder.name)
                             .await?)
                     })
                     .map_err(|err| anyhow::anyhow!(err))
@@ -708,7 +707,7 @@ impl UDAFRuntime {
                 GlobalIORuntime::instance()
                     .block_on(async move {
                         Ok(runtime
-                            .bounded(|js| js.accumulate(&pool.builder.name, state, input))
+                            .accumulate(&pool.builder.name, state, input)
                             .await?)
                     })
                     .map_err(|err| anyhow::anyhow!(err))
@@ -728,7 +727,7 @@ impl UDAFRuntime {
                 GlobalIORuntime::instance()
                     .block_on(async move {
                         Ok(runtime
-                            .bounded(|js| js.merge(&pool.builder.name, states))
+                            .merge(&pool.builder.name, states)
                             .await?)
                     })
                     .map_err(|err| anyhow::anyhow!(err))
@@ -751,7 +750,7 @@ impl UDAFRuntime {
                 GlobalIORuntime::instance()
                     .block_on(async move {
                         Ok(runtime
-                            .bounded(|js| js.finish(&pool.builder.name, state))
+                            .finish(&pool.builder.name, state)
                             .await?)
                     })
                     .map_err(|err| anyhow::anyhow!(err))
