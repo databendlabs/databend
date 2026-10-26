@@ -365,13 +365,14 @@ SELECT count(*) FROM encoded_like l JOIN encoded_like r ON l.k = r.k AND l.nulla
 ----
 4000
 
+# `k` is unique, so set difference compares the rows exactly (`EXCEPT ALL` is not supported).
 query I
-SELECT count(*) FROM (SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2) EXCEPT ALL SELECT k, url FROM encoded_like_expected);
+SELECT count(*) FROM (SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2) EXCEPT SELECT k, url FROM encoded_like_expected);
 ----
 0
 
 query I
-SELECT count(*) FROM (SELECT k, url FROM encoded_like_expected EXCEPT ALL SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2));
+SELECT count(*) FROM (SELECT k, url FROM encoded_like_expected EXCEPT SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2));
 ----
 0
 
