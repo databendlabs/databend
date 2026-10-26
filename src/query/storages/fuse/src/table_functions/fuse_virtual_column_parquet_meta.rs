@@ -42,8 +42,9 @@ use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
-use jsonb::keypath::OwnedKeyPath;
-use jsonb::keypath::OwnedKeyPaths;
+use jsonb::JsonbPathSegment;
+use jsonb::OwnedJsonbPathSegment;
+use jsonb::keypath::encode_canonical_structure_path;
 use log::warn;
 
 use crate::FuseTable;
@@ -285,7 +286,7 @@ pub(crate) fn collect_virtual_column_entries(
             .get(&source_column_id)
             .cloned()
             .unwrap_or_else(|| source_column_id.to_string());
-        let mut key_paths = OwnedKeyPaths { paths: Vec::new() };
+        let mut key_paths = Vec::new();
         collect_virtual_column_leaves(
             virtual_meta,
             source_column_id,
@@ -399,12 +400,16 @@ fn collect_virtual_column_leaves(
     source_column_id: u32,
     source_column_name: &str,
     node: &VirtualColumnNode,
-    key_paths: &mut OwnedKeyPaths,
+    key_paths: &mut Vec<OwnedJsonbPathSegment>,
     entries: &mut Vec<VirtualColumnEntry>,
     shared_buckets: &mut HashMap<(u32, VirtualColumnSharedDataType), SharedPathBucket>,
 ) {
     if let Some(leaf) = node.leaf.as_ref() {
-        let canonical_path = key_paths.to_canonical_path();
+        let canonical_path =
+            encode_canonical_structure_path(key_paths.iter().map(|part| match part {
+                OwnedJsonbPathSegment::Key(key) => JsonbPathSegment::Key(key),
+                OwnedJsonbPathSegment::Element => JsonbPathSegment::Element,
+            }));
         let column_name = format!("{}.{}", source_column_name, canonical_path);
         match leaf {
             VirtualColumnNameIndex::Column(leaf_index) => {
@@ -444,6 +449,20 @@ fn collect_virtual_column_leaves(
         }
     }
 
+    if let Some(element) = node.element.as_deref() {
+        key_paths.push(OwnedJsonbPathSegment::Element);
+        collect_virtual_column_leaves(
+            virtual_meta,
+            source_column_id,
+            source_column_name,
+            element,
+            key_paths,
+            entries,
+            shared_buckets,
+        );
+        key_paths.pop();
+    }
+
     let mut children: Vec<(u32, &VirtualColumnNode)> = node
         .children
         .iter()
@@ -454,7 +473,7 @@ fn collect_virtual_column_leaves(
         let Some(segment) = virtual_meta.string_table.get(child_id as usize) else {
             continue;
         };
-        key_paths.paths.push(OwnedKeyPath::Name(segment.clone()));
+        key_paths.push(OwnedJsonbPathSegment::Key(segment.clone()));
         collect_virtual_column_leaves(
             virtual_meta,
             source_column_id,
@@ -464,7 +483,7 @@ fn collect_virtual_column_leaves(
             entries,
             shared_buckets,
         );
-        key_paths.paths.pop();
+        key_paths.pop();
     }
 }
 

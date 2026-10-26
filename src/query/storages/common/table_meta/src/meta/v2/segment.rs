@@ -45,6 +45,7 @@ use crate::meta::SpatialStatistics;
 use crate::meta::Statistics;
 use crate::meta::StatisticsOfVectorColumns;
 use crate::meta::Versioned;
+use crate::meta::VirtualPathKind;
 use crate::meta::v0;
 use crate::meta::v1;
 
@@ -144,7 +145,11 @@ impl VirtualColumnPhysicalType {
             Self::Timestamp => TableDataType::Timestamp,
             Self::TimestampTz => TableDataType::TimestampTz,
             Self::Interval => TableDataType::Interval,
-            Self::Array(inner) => TableDataType::Array(Box::new(inner.table_data_type())),
+            // Like scalar virtual columns, element leaves are nullable: NULL
+            // denotes a missing field, while JSON null is stored inline as Jsonb.
+            Self::Array(inner) => {
+                TableDataType::Array(Box::new(inner.table_data_type().wrap_nullable()))
+            }
         }
     }
 
@@ -213,6 +218,105 @@ pub struct VirtualColumnMeta {
     pub extended_physical_type: Option<VirtualColumnPhysicalType>,
     /// virtual column statistics.
     pub column_stat: Option<ColumnStatistics>,
+    /// For `VirtualPathKind::Value` columns, the bit set of `VirtualValueState`
+    /// kinds of this path's values that this block stores in the source's
+    /// overflow map instead of this column. Zero means every value of the path
+    /// is in this column. Zero for legacy metadata, whose value columns keep
+    /// JSON null, `{}` and `[]` inline.
+    #[serde(default)]
+    pub value_state_mask: u32,
+}
+
+/// Kinds of path values stored in the overflow map instead of the path's value
+/// column. Used as bit positions of `value_state_mask`.
+///
+/// Assigned bit positions must never be renumbered.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[repr(u8)]
+pub enum VirtualValueState {
+    JsonNull = 0,
+    EmptyObject = 1,
+    EmptyArray = 2,
+    /// A value whose type does not match the path's value column type.
+    Outlier = 3,
+}
+
+impl VirtualValueState {
+    /// The bit of this state in `value_state_mask`.
+    pub fn mask_bit(self) -> u32 {
+        1 << (self as u32)
+    }
+
+    /// Whether `mask` contains this state.
+    pub fn in_mask(self, mask: u32) -> bool {
+        mask & self.mask_bit() != 0
+    }
+}
+
+/// Byte ranges of one overflow map bucket in the virtual column file.
+///
+/// A bucket is a `Map(String, Variant)` column with one entry list per row.
+/// Keys are canonical paths (the root is the empty string), sorted within a
+/// row; values are the Jsonb values of those paths.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct VirtualOverflowBucketMeta {
+    /// Byte range of the map key leaf.
+    pub key_offset: u64,
+    pub key_len: u64,
+    /// Byte range of the map value leaf.
+    pub value_offset: u64,
+    pub value_len: u64,
+    /// Number of leaf values of the map, as recorded by Parquet.
+    pub num_values: u64,
+    /// Union of the `VirtualValueState` bits of all values in this bucket.
+    pub value_state_mask: u32,
+}
+
+/// Per-source structure columns of a block.
+///
+/// Blocks written with structure columns record one entry for every source
+/// Variant column that has virtual columns, even when both fields are empty.
+/// A missing entry means the block uses the legacy scalar layout.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq, FrozenAPI)]
+pub struct VirtualSourceBlockMeta {
+    /// Nullable `Boolean` column that is false for rows whose source value is
+    /// SQL NULL. Absent when the block has no SQL NULL rows.
+    pub validity: Option<VirtualColumnMeta>,
+    /// Overflow map buckets. The length is the bucket count, see
+    /// `virtual_overflow_bucket`; `None` marks an empty bucket. Empty when the
+    /// block has no overflow values.
+    pub overflow_buckets: Vec<Option<VirtualOverflowBucketMeta>>,
+}
+
+impl VirtualSourceBlockMeta {
+    /// The bucket that may hold `canonical_path`, or `None` when it is empty.
+    pub fn overflow_bucket(
+        &self,
+        canonical_path: &str,
+    ) -> Option<(usize, &VirtualOverflowBucketMeta)> {
+        if self.overflow_buckets.is_empty() {
+            return None;
+        }
+        let bucket = virtual_overflow_bucket(canonical_path, self.overflow_buckets.len());
+        self.overflow_buckets[bucket]
+            .as_ref()
+            .map(|meta| (bucket, meta))
+    }
+}
+
+/// The overflow bucket of a canonical path, given the bucket count.
+///
+/// Part of the persisted format: SipHash-2-4 with zero keys over the UTF-8
+/// bytes of the path. Must never change.
+pub fn virtual_overflow_bucket(canonical_path: &str, bucket_count: usize) -> usize {
+    use std::hash::Hasher;
+
+    if bucket_count <= 1 {
+        return 0;
+    }
+    let mut hasher = siphasher::sip::SipHasher24::new();
+    hasher.write(canonical_path.as_bytes());
+    (hasher.finish() % bucket_count as u64) as usize
 }
 
 impl VirtualColumnMeta {
@@ -267,10 +371,11 @@ impl VirtualColumnMeta {
 pub struct VirtualColumnPathStatistics {
     /// `(segment-local virtual path id, saturated value_count)` pairs.
     pub path_counts: Vec<(ColumnId, u32)>,
-    /// Whether every observed non-direct path for this source is represented in
-    /// `path_counts`. Direct paths are intentionally represented only by
-    /// `VirtualBlockMeta.virtual_column_metas`; false means producer-side
-    /// truncation omitted some non-direct paths.
+    /// Whether every observed non-direct path and typed Array leaf for this
+    /// source is represented in `path_counts`. Scalar direct paths are counted
+    /// from `VirtualBlockMeta.virtual_column_metas`; Array paths retain source-row
+    /// counts here because their Parquet num_values counts elements instead.
+    /// False means producer-side truncation omitted some path frequencies.
     pub path_statistics_complete: bool,
 }
 
@@ -279,9 +384,9 @@ pub struct VirtualColumnPathStatistics {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DraftVirtualColumnPathStatistics {
     pub path_counts: Vec<(String, u32)>,
-    /// Whether every observed non-direct path for this source is represented in
-    /// `path_counts`. Direct paths are intentionally represented only by draft
-    /// virtual column metadata.
+    /// Whether every observed non-direct path and typed Array leaf for this
+    /// source is represented in `path_counts`. Scalar direct paths are counted
+    /// from draft metadata; typed Array leaves retain source-row frequencies here.
     pub path_statistics_complete: bool,
 }
 
@@ -298,9 +403,13 @@ pub struct VirtualBlockMeta {
     pub virtual_location: Location,
     /// Whether BlockMeta completely describes every path physically present in
     /// the sidecar. If false, readers must inspect the sidecar footer for shared
-    /// paths before concluding that an unlisted path is missing.
+    /// paths or array-group topology before concluding that a path is missing.
     #[serde(default)]
     pub virtual_columns_complete: bool,
+    /// Per-source structure columns, keyed by source column id. Empty for
+    /// legacy metadata.
+    #[serde(default)]
+    pub sources: HashMap<ColumnId, VirtualSourceBlockMeta>,
 }
 
 /// The draft column meta of virtual columns, virtual ColumnId is not set.
@@ -310,6 +419,9 @@ pub struct DraftVirtualColumnMeta {
     pub name: String,
     pub data_type: VirtualColumnPhysicalType,
     pub column_meta: VirtualColumnMeta,
+    /// The role of this column for the path `name`.
+    #[serde(default)]
+    pub kind: VirtualPathKind,
 }
 
 /// Draft metadata for a generated virtual-column sidecar.
@@ -318,12 +430,16 @@ pub struct DraftVirtualColumnBlockMeta {
     /// The draft virtual column metas; segment-local virtual ColumnIds are not assigned yet.
     pub virtual_column_metas: Vec<DraftVirtualColumnMeta>,
     /// Whether every path physically present in the sidecar is represented by
-    /// `virtual_column_metas`; false means the sidecar also contains shared paths.
+    /// `virtual_column_metas`; false means shared paths or array-group topology
+    /// still require the sidecar footer.
     pub virtual_columns_complete: bool,
     /// The file size of virtual columns.
     pub virtual_column_size: u64,
     /// The file location of virtual columns.
     pub virtual_location: Location,
+    /// Per-source structure columns, keyed by source column id.
+    #[serde(default)]
+    pub sources: HashMap<ColumnId, VirtualSourceBlockMeta>,
 }
 
 /// Independent optional payloads produced while writing a block.

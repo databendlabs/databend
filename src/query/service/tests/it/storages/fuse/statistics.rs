@@ -294,6 +294,7 @@ fn test_generate_virtual_column_statistics_in_memory_size() -> anyhow::Result<()
                 data_type: data_type_code,
                 extended_physical_type: None,
                 column_stat: Some(col_stats),
+                value_state_mask: 0,
             };
             Some((idx, virtual_col_meta))
         })

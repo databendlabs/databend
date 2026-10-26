@@ -25,6 +25,7 @@ use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnPathStatistics;
+use databend_storages_common_table_meta::meta::VirtualPathKind;
 use databend_storages_common_table_meta::meta::VirtualSegmentColumnPath;
 use databend_storages_common_table_meta::meta::VirtualSegmentPath;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
@@ -33,8 +34,8 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualB
 /// Collects virtual paths for one output segment.
 ///
 /// Path indexes and direct column ids are deliberately assigned from scratch in
-/// deterministic `(source_column_id, canonical_path)` order. Existing ids are
-/// interpreted through their input schema, but are never reused.
+/// deterministic `(source_column_id, canonical_path, kind)` order. Existing ids
+/// are interpreted through their input schema, but are never reused.
 #[derive(Default)]
 pub struct VirtualSegmentSchemaBuilder {
     /// Paths grouped by source Variant column. `BTreeMap` makes schema and id
@@ -44,8 +45,21 @@ pub struct VirtualSegmentSchemaBuilder {
 
 #[derive(Default)]
 struct SourcePaths {
-    /// Canonical paths retained by metadata producers.
-    paths: BTreeSet<String>,
+    /// Canonical paths and the kinds retained for each path by metadata
+    /// producers. Iterating the maps yields `(canonical path, kind)` order.
+    /// Path statistics only describe `Value` entries.
+    paths: BTreeMap<String, BTreeSet<VirtualPathKind>>,
+}
+
+impl SourcePaths {
+    fn insert(&mut self, path: &str, kind: VirtualPathKind) {
+        // Avoid allocating the key when the path is already present.
+        if let Some(kinds) = self.paths.get_mut(path) {
+            kinds.insert(kind);
+        } else {
+            self.paths.insert(path.to_string(), BTreeSet::from([kind]));
+        }
+    }
 }
 
 impl VirtualSegmentSchemaBuilder {
@@ -56,10 +70,10 @@ impl VirtualSegmentSchemaBuilder {
         if let Some(meta) = &block.virtual_block_meta {
             for column_id in meta.virtual_column_metas.keys() {
                 if let Some((source_column_id, path)) = schema.field_of_column_id(*column_id) {
-                    let paths = &mut self.sources.entry(source_column_id).or_default().paths;
-                    if !paths.contains(path.path.as_str()) {
-                        paths.insert(path.path.clone());
-                    }
+                    self.sources
+                        .entry(source_column_id)
+                        .or_default()
+                        .insert(&path.path, path.kind);
                 }
             }
         }
@@ -71,9 +85,7 @@ impl VirtualSegmentSchemaBuilder {
                         schema.field_of_column_id(*column_id)
                         && path_source_column_id == *source_column_id
                     {
-                        if !source_paths.paths.contains(path.path.as_str()) {
-                            source_paths.paths.insert(path.path.clone());
-                        }
+                        source_paths.insert(&path.path, path.kind);
                     }
                 }
             }
@@ -85,14 +97,10 @@ impl VirtualSegmentSchemaBuilder {
     pub fn add_draft_block(&mut self, draft: &DraftVirtualBlockMeta) {
         if let Some(columns) = &draft.virtual_columns {
             for column in &columns.virtual_column_metas {
-                let paths = &mut self
-                    .sources
+                self.sources
                     .entry(column.source_column_id)
                     .or_default()
-                    .paths;
-                if !paths.contains(column.name.as_str()) {
-                    paths.insert(column.name.clone());
-                }
+                    .insert(&column.name, column.kind);
             }
         }
 
@@ -100,21 +108,20 @@ impl VirtualSegmentSchemaBuilder {
             for (source_column_id, statistics) in statistics {
                 let source_paths = self.sources.entry(*source_column_id).or_default();
                 for (path, _) in &statistics.path_counts {
-                    if !source_paths.paths.contains(path.as_str()) {
-                        source_paths.paths.insert(path.clone());
-                    }
+                    source_paths.insert(path, VirtualPathKind::Value);
                 }
             }
         }
     }
 
     /// Builds the deterministic output schema. `BTreeMap` iteration guarantees
-    /// source ids and canonical paths are sorted; ids are assigned in that exact
-    /// order, so path order and column-id order are identical and contiguous.
+    /// source ids and `(canonical path, kind)` entries are sorted; ids are
+    /// assigned in that exact order, so entry order and column-id order are
+    /// identical and contiguous.
     pub fn build(self) -> Option<VirtualSegmentSchema> {
         let mut next_column_id = 0;
-        // `BTreeMap` orders source ids and `BTreeSet<String>` orders canonical
-        // paths lexicographically by their UTF-8 byte sequences.
+        // `BTreeMap` orders source ids and canonical paths lexicographically by
+        // their UTF-8 byte sequences; `BTreeSet` then orders kinds per path.
         let column_paths = self
             .sources
             .into_iter()
@@ -123,10 +130,17 @@ impl VirtualSegmentSchemaBuilder {
                 paths: source
                     .paths
                     .into_iter()
-                    .map(|path| {
+                    .flat_map(|(path, kinds)| {
+                        kinds.into_iter().map(move |kind| (path.clone(), kind))
+                    })
+                    .map(|(path, kind)| {
                         let column_id = next_column_id;
                         next_column_id += 1;
-                        VirtualSegmentPath { path, column_id }
+                        VirtualSegmentPath {
+                            path,
+                            column_id,
+                            kind,
+                        }
                     })
                     .collect(),
             })
@@ -140,7 +154,7 @@ impl VirtualSegmentSchemaBuilder {
         );
         debug_assert!(schema.column_paths.iter().all(|column| {
             column.paths.windows(2).all(|paths| {
-                paths[0].path < paths[1].path && paths[0].column_id < paths[1].column_id
+                paths[0].sort_key() < paths[1].sort_key() && paths[0].column_id < paths[1].column_id
             })
         }));
         (!schema.is_empty()).then_some(schema)
@@ -208,16 +222,18 @@ pub fn build_virtual_segment_schema(
         return Ok(None);
     };
 
-    // 3. Build the canonical path -> new segment-local id lookup, then
-    // materialize draft blocks directly with their final ids.
+    // 3. Build the `(source, canonical path, kind)` -> new segment-local id
+    // lookup, then materialize draft blocks directly with their final ids.
     let output_column_ids = output_schema
         .column_paths
         .iter()
         .flat_map(|source| {
-            source
-                .paths
-                .iter()
-                .map(move |path| ((source.source_column_id, path.path.clone()), path.column_id))
+            source.paths.iter().map(move |path| {
+                (
+                    (source.source_column_id, path.path.clone(), path.kind),
+                    path.column_id,
+                )
+            })
         })
         .collect::<HashMap<_, _>>();
 
@@ -233,7 +249,7 @@ pub fn build_virtual_segment_schema(
                 .into_iter()
                 .filter_map(|(path, value_count)| {
                     output_column_ids
-                        .get(&(source_column_id, path))
+                        .get(&(source_column_id, path, VirtualPathKind::Value))
                         .copied()
                         .map(|column_id| (column_id, value_count))
                 })
@@ -252,7 +268,7 @@ pub fn build_virtual_segment_schema(
         if let Some(virtual_columns) = draft.virtual_columns {
             for column in virtual_columns.virtual_column_metas {
                 if let Some(column_id) = output_column_ids
-                    .get(&(column.source_column_id, column.name))
+                    .get(&(column.source_column_id, column.name, column.kind))
                     .copied()
                 {
                     virtual_column_metas.insert(column_id, column.column_meta);
@@ -263,6 +279,7 @@ pub fn build_virtual_segment_schema(
                 virtual_column_size: virtual_columns.virtual_column_size,
                 virtual_location: virtual_columns.virtual_location,
                 virtual_columns_complete: virtual_columns.virtual_columns_complete,
+                sources: virtual_columns.sources,
             });
         }
         block.virtual_path_statistics = (!path_statistics.is_empty()).then_some(path_statistics);
@@ -304,7 +321,7 @@ pub fn build_virtual_segment_schema(
                         continue;
                     }
                     let Some(new_column_id) = output_column_ids
-                        .get(&(source_column_id, path.path.clone()))
+                        .get(&(source_column_id, path.path.clone(), path.kind))
                         .copied()
                     else {
                         path_statistics_complete = false;
@@ -331,7 +348,7 @@ pub fn build_virtual_segment_schema(
         for (old_column_id, column_meta) in old_columns {
             let path = input_schema
                 .field_of_column_id(old_column_id)
-                .map(|(source_column_id, path)| (source_column_id, path.path.clone()));
+                .map(|(source_column_id, path)| (source_column_id, path.path.clone(), path.kind));
             let Some(new_column_id) = path.and_then(|key| output_column_ids.get(&key).copied())
             else {
                 meta.virtual_columns_complete = false;
@@ -373,6 +390,7 @@ mod tests {
             data_type: VirtualColumnPhysicalType::String.encode().0,
             extended_physical_type: None,
             column_stat: None,
+            value_state_mask: 0,
         }
     }
 
@@ -389,6 +407,7 @@ mod tests {
             virtual_column_size: 0,
             virtual_location: (String::new(), 0),
             virtual_columns_complete: true,
+            sources: Default::default(),
         });
         Arc::make_mut(&mut block).virtual_block_meta = None;
         block
@@ -450,10 +469,12 @@ mod tests {
             VirtualSegmentPath {
                 path: "user.name".to_string(),
                 column_id: 0,
+                kind: VirtualPathKind::Value,
             },
             VirtualSegmentPath {
                 path: "user.email".to_string(),
                 column_id: 1,
+                kind: VirtualPathKind::Value,
             },
         ]);
         let mut block = block_with_virtual(VirtualBlockMeta {
@@ -461,6 +482,7 @@ mod tests {
             virtual_column_size: 0,
             virtual_location: (String::new(), 0),
             virtual_columns_complete: true,
+            sources: Default::default(),
         });
         Arc::make_mut(&mut block).virtual_path_statistics = Some(path_stats(1, &[(0, 10), (1, 4)]));
         let mut blocks = vec![block];
@@ -507,10 +529,12 @@ mod tests {
             VirtualSegmentPath {
                 path: "user.city".to_string(),
                 column_id: VIRTUAL_COLUMN_ID_START + 7,
+                kind: VirtualPathKind::Value,
             },
             VirtualSegmentPath {
                 path: "user.name".to_string(),
                 column_id: VIRTUAL_COLUMN_ID_START + 8,
+                kind: VirtualPathKind::Value,
             },
         ]);
         let mut blocks = vec![block_with_virtual(VirtualBlockMeta {
@@ -521,6 +545,7 @@ mod tests {
             virtual_column_size: 8,
             virtual_location: ("vb".to_string(), 0),
             virtual_columns_complete: true,
+            sources: Default::default(),
         })];
         Arc::make_mut(&mut blocks[0]).virtual_path_statistics =
             Some(path_stats(1, &[(VIRTUAL_COLUMN_ID_START + 7, 2)]));
@@ -561,15 +586,18 @@ mod tests {
             VirtualSegmentPath {
                 path: "user.age".to_string(),
                 column_id: VIRTUAL_COLUMN_ID_START + 9,
+                kind: VirtualPathKind::Value,
             },
             VirtualSegmentPath {
                 path: "user.name".to_string(),
                 column_id: VIRTUAL_COLUMN_ID_START + 10,
+                kind: VirtualPathKind::Value,
             },
         ]);
         let replaced_schema = schema_from_paths(1, vec![VirtualSegmentPath {
             path: "user.email".to_string(),
             column_id: 0,
+            kind: VirtualPathKind::Value,
         }]);
         let remaining = block_with_virtual(VirtualBlockMeta {
             virtual_column_metas: HashMap::from([(
@@ -579,12 +607,14 @@ mod tests {
             virtual_column_size: 8,
             virtual_location: ("old".to_string(), 0),
             virtual_columns_complete: true,
+            sources: Default::default(),
         });
         let replaced = block_with_virtual(VirtualBlockMeta {
             virtual_column_metas: HashMap::new(),
             virtual_column_size: 0,
             virtual_location: (String::new(), 0),
             virtual_columns_complete: true,
+            sources: Default::default(),
         });
         let mut blocks = vec![remaining, replaced];
         Arc::make_mut(&mut blocks[0]).virtual_path_statistics =
@@ -638,6 +668,7 @@ mod tests {
         let schema = schema_from_paths(1, vec![VirtualSegmentPath {
             path: "user.name".to_string(),
             column_id: VIRTUAL_COLUMN_ID_START + 3,
+            kind: VirtualPathKind::Value,
         }]);
         let mut blocks = vec![block_with_virtual(VirtualBlockMeta {
             virtual_column_metas: HashMap::from([(
@@ -647,6 +678,7 @@ mod tests {
             virtual_column_size: 16,
             virtual_location: ("new".to_string(), 0),
             virtual_columns_complete: true,
+            sources: Default::default(),
         })];
         Arc::make_mut(&mut blocks[0]).virtual_path_statistics = Some(path_stats(1, &[(0, 12)]));
         let input = vec![Some(schema)];
@@ -681,10 +713,12 @@ mod tests {
                     name: "a".to_string(),
                     data_type: VirtualColumnPhysicalType::String,
                     column_meta: dummy_column_meta_with_offset(11),
+                    kind: VirtualPathKind::Value,
                 }],
                 virtual_columns_complete: false,
                 virtual_column_size: 8,
                 virtual_location: ("draft".to_string(), 0),
+                sources: Default::default(),
             }),
             path_statistics: Some(HashMap::from([(1, DraftVirtualColumnPathStatistics {
                 // VirtualColumnBuilder removes direct path `a` before handing
@@ -728,10 +762,12 @@ mod tests {
             schema_from_paths(1, vec![VirtualSegmentPath {
                 path: "b".to_string(),
                 column_id: old_id,
+                kind: VirtualPathKind::Value,
             }]),
             schema_from_paths(1, vec![VirtualSegmentPath {
                 path: "a".to_string(),
                 column_id: old_id,
+                kind: VirtualPathKind::Value,
             }]),
         ];
         let mut blocks = vec![
@@ -740,12 +776,14 @@ mod tests {
                 virtual_column_size: 8,
                 virtual_location: ("b".to_string(), 0),
                 virtual_columns_complete: true,
+                sources: Default::default(),
             }),
             block_with_virtual(VirtualBlockMeta {
                 virtual_column_metas: HashMap::from([(old_id, dummy_column_meta_with_offset(11))]),
                 virtual_column_size: 8,
                 virtual_location: ("a".to_string(), 0),
                 virtual_columns_complete: true,
+                sources: Default::default(),
             }),
         ];
         let mut inputs = schemas

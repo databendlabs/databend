@@ -34,6 +34,7 @@ use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
+use databend_storages_common_table_meta::meta::VirtualPathKind;
 use itertools::Itertools;
 use jsonb::keypath::OwnedKeyPaths;
 
@@ -132,6 +133,10 @@ impl AsyncSystemTable for VirtualColumnsTable {
                         };
                         for column in &schema.column_paths {
                             for path in &column.paths {
+                                // Only non-root value columns are user-visible paths.
+                                if path.kind != VirtualPathKind::Value || path.path.is_empty() {
+                                    continue;
+                                }
                                 let column_id = path.column_id;
                                 let entry = merged
                                     .entry((column.source_column_id, path.path.clone()))
