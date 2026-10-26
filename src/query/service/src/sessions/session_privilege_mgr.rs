@@ -69,14 +69,12 @@ pub trait SessionPrivilegeManager {
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
-    /// Checks explicit user and role grants, without checking ownership.
-    /// A missing grant is `Ok(false)`; failures to evaluate grants remain errors.
-    async fn has_privilege(
+    async fn validate_privilege(
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
-    ) -> Result<bool>;
+    ) -> Result<()>;
 
     async fn has_ownership(
         &self,
@@ -298,16 +296,17 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     }
 
     #[async_backtrace::framed]
-    async fn has_privilege(
+    async fn validate_privilege(
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
-        if current_user.grants.verify_privilege(object, privilege) {
-            return Ok(true);
+        let user_verified = current_user.grants.verify_privilege(object, privilege);
+        if user_verified {
+            return Ok(());
         }
 
         // 2. check the user's roles' privilege set
@@ -325,9 +324,14 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
             self.get_all_effective_roles().await?
         };
 
-        Ok(effective_roles
+        let role_verified = &effective_roles
             .iter()
-            .any(|r| r.grants.verify_privilege(object, privilege)))
+            .any(|r| r.grants.verify_privilege(object, privilege));
+        if *role_verified {
+            return Ok(());
+        }
+
+        Err(ErrorCode::PermissionDenied("Permission denied"))
     }
 
     #[async_backtrace::framed]
