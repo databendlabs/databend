@@ -33,13 +33,13 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::ExecutorWaker;
-use futures::future::BoxFuture;
 use petgraph::graph::NodeIndex;
 
-use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::RemoteNodeChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
+use crate::servers::flight::v1::network::outbound::HashShuffleDispatcher;
+use crate::servers::flight::v1::network::outbound::ShuffleSendAddress;
+use crate::servers::flight::v1::network::outbound::ShuffleSendFuture;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 /// Per-thread send buffer: the share of `node_budget` of each local sender.
@@ -47,34 +47,19 @@ pub fn hash_shuffle_send_budget(local_threads: usize, node_budget: usize) -> usi
     (node_budget / local_threads.max(1)).max(1)
 }
 
-#[derive(Clone)]
-pub enum ShuffleTarget {
-    /// Threads of the local node, one channel per thread. `None` once closed.
-    Local(Vec<Option<Arc<dyn OutboundChannel>>>),
-    /// All threads of a remote node, reached through one channel. `None` once closed.
-    Remote(Option<Arc<RemoteNodeChannel>>),
-}
-
 /// The threads of one node, which own partitions `partitions`.
 #[derive(Clone)]
 pub struct ShuffleNode {
     pub partitions: Range<usize>,
-    pub target: ShuffleTarget,
+    pub dispatcher: HashShuffleDispatcher,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct SendTarget {
-    node: usize,
-    /// Thread of a local node; remote nodes are sent to as a whole.
-    thread: Option<usize>,
-}
-
-type SendResults = Vec<(SendTarget, Result<()>)>;
+type ShuffleSendResults = Vec<(ShuffleSendAddress, Result<()>)>;
 
 pub struct HashShuffleWriter {
     id: NodeIndex,
     tasks: SyncTaskSet,
-    handle: Option<SyncTaskHandle<'static, SendResults>>,
+    handle: Option<SyncTaskHandle<'static, ShuffleSendResults>>,
 
     scatter: Arc<Box<dyn FlightScatter>>,
     stream: BlockPartitionStream,
@@ -178,70 +163,14 @@ impl HashShuffleWriter {
             }
         }
 
-        let mut own_block = None;
-        let mut futures: Vec<BoxFuture<'static, (SendTarget, Result<()>)>> = vec![];
+        // Keep the direct-output partition out of both local and remote delivery.
+        let own_block = own.and_then(|partition| partitions[partition].take());
+        let mut futures: Vec<ShuffleSendFuture> = vec![];
 
         for (node_idx, node) in self.nodes.iter().enumerate() {
             let blocks = &mut partitions[node.partitions.clone()];
-
-            match &node.target {
-                ShuffleTarget::Remote(None) => {}
-                ShuffleTarget::Remote(Some(channel)) => {
-                    if channel.is_closed() {
-                        continue;
-                    }
-
-                    // Encode now, so that only compressed bytes wait for the network.
-                    let mut items = Vec::with_capacity(blocks.len());
-                    for (thread, block) in blocks.iter_mut().enumerate() {
-                        if let Some(block) = block.take() {
-                            items.push(channel.encode(thread, block)?);
-                        }
-                    }
-
-                    if items.is_empty() {
-                        continue;
-                    }
-
-                    let channel = channel.clone();
-                    let target = SendTarget {
-                        node: node_idx,
-                        thread: None,
-                    };
-                    futures.push(Box::pin(
-                        async move { (target, channel.add_items(items).await) },
-                    ));
-                }
-                ShuffleTarget::Local(channels) => {
-                    for (thread, block) in blocks.iter_mut().enumerate() {
-                        let Some(block) = block.take() else {
-                            continue;
-                        };
-
-                        if own == Some(node.partitions.start + thread) {
-                            own_block = Some(block);
-                            continue;
-                        }
-
-                        let Some(channel) = &channels[thread] else {
-                            continue;
-                        };
-
-                        if channel.is_closed() {
-                            continue;
-                        }
-
-                        let channel = channel.clone();
-                        let target = SendTarget {
-                            node: node_idx,
-                            thread: Some(thread),
-                        };
-                        futures.push(Box::pin(
-                            async move { (target, channel.add_block(block).await) },
-                        ));
-                    }
-                }
-            }
+            node.dispatcher
+                .prepare_send(node_idx, blocks, &mut futures)?;
         }
 
         if futures.is_empty() {
@@ -264,11 +193,15 @@ impl HashShuffleWriter {
         }
     }
 
-    fn handle_results(&mut self, results: SendResults) -> Result<()> {
-        for (target, result) in results {
+    fn handle_results(&mut self, results: ShuffleSendResults) -> Result<()> {
+        for (address, result) in results {
             match result {
                 Ok(()) => {}
-                Err(cause) if cause.code() == ErrorCode::ABORTED_QUERY => self.close(target),
+                Err(cause) if cause.code() == ErrorCode::ABORTED_QUERY => {
+                    self.nodes[address.node]
+                        .dispatcher
+                        .stop_sending(address.thread);
+                }
                 Err(cause) => return Err(cause),
             }
         }
@@ -276,68 +209,33 @@ impl HashShuffleWriter {
         Ok(())
     }
 
-    fn close(&mut self, target: SendTarget) {
-        // Closed destinations still own the shared send buffer. Release their
-        // references so other destinations can receive EOF before the graph drops.
-        match (&mut self.nodes[target.node].target, target.thread) {
-            (ShuffleTarget::Local(channels), Some(thread)) => {
-                if let Some(channel) = channels[thread].take() {
-                    channel.close();
-                }
-            }
-            (ShuffleTarget::Local(channels), None) => {
-                for channel in channels.iter_mut().filter_map(Option::take) {
-                    channel.close();
-                }
-            }
-            (ShuffleTarget::Remote(channel), _) => {
-                channel.take();
-            }
-        }
-    }
-
-    /// Close the channel of `partition`, which must belong to the local node.
-    pub fn close_partition(&mut self, partition: usize) {
-        for (node_idx, node) in self.nodes.iter().enumerate() {
+    /// Stop this writer's sends to `partition`, which belongs to the local node.
+    pub fn stop_sending_partition(&mut self, partition: usize) {
+        for node in &mut self.nodes {
             if node.partitions.contains(&partition) {
-                return self.close(SendTarget {
-                    node: node_idx,
-                    thread: Some(partition - node.partitions.start),
-                });
+                node.dispatcher
+                    .stop_sending(Some(partition - node.partitions.start));
+                return;
             }
         }
     }
 
-    pub fn close_all(&mut self) {
-        for node in 0..self.nodes.len() {
-            self.close(SendTarget { node, thread: None });
+    pub fn stop_sending_all(&mut self) {
+        for node in &mut self.nodes {
+            node.dispatcher.stop_sending(None);
         }
     }
 
     /// True when no destination can accept data any more.
     pub fn all_closed(&self) -> bool {
-        self.nodes.iter().all(|node| match &node.target {
-            ShuffleTarget::Local(channels) => channels
-                .iter()
-                .all(|x| x.as_ref().is_none_or(|x| x.is_closed())),
-            ShuffleTarget::Remote(channel) => channel.as_ref().is_none_or(|x| x.is_closed()),
-        })
+        self.nodes.iter().all(|node| node.dispatcher.is_closed())
     }
 
     pub fn details_status(&self) -> String {
         let closed = self
             .nodes
             .iter()
-            .map(|node| match &node.target {
-                ShuffleTarget::Local(channels) => channels
-                    .iter()
-                    .filter(|x| x.as_ref().is_none_or(|x| x.is_closed()))
-                    .count(),
-                ShuffleTarget::Remote(channel) => match channel.as_ref() {
-                    Some(channel) if !channel.is_closed() => 0,
-                    _ => node.partitions.len(),
-                },
-            })
+            .map(|node| node.dispatcher.closed_partitions(node.partitions.len()))
             .sum::<usize>();
 
         format!(
@@ -354,9 +252,6 @@ impl HashShuffleWriter {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::Ordering;
-
     use arrow_flight::FlightData;
     use arrow_schema::Schema as ArrowSchema;
     use databend_common_base::runtime::Runtime;
@@ -368,13 +263,15 @@ mod tests {
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
     use databend_common_settings::FlightCompression;
-    use parking_lot::Mutex;
     use tonic::Status;
 
     use super::*;
-    use crate::servers::flight::v1::network::ExchangeBufferConfig;
-    use crate::servers::flight::v1::network::ExchangeSinkBuffer;
-    use crate::servers::flight::v1::network::PingPongExchange;
+    use crate::servers::flight::v1::network::PingPongTransport;
+    use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
+    use crate::servers::flight::v1::network::inbound::exchange_queue::QueueItem;
+    use crate::servers::flight::v1::network::outbound::ExchangeSendBuffer;
+    use crate::servers::flight::v1::network::outbound::ExchangeSendBufferConfig;
+    use crate::servers::flight::v1::network::outbound::create_local_block_senders;
     use crate::servers::flight::v1::network::wire_format::deserialize_flight_data;
     use crate::servers::flight::v1::network::wire_format::extract_tid;
     use crate::servers::flight::v1::network::wire_format::split_batch_flight_data;
@@ -427,26 +324,6 @@ mod tests {
         }
     }
 
-    #[derive(Default)]
-    struct CollectChannel {
-        closed: AtomicBool,
-        blocks: Mutex<Vec<DataBlock>>,
-    }
-
-    #[async_trait::async_trait]
-    impl OutboundChannel for CollectChannel {
-        fn close(&self) {}
-
-        fn is_closed(&self) -> bool {
-            self.closed.load(Ordering::SeqCst)
-        }
-
-        async fn add_block(&self, block: DataBlock) -> Result<()> {
-            self.blocks.lock().push(block);
-            Ok(())
-        }
-    }
-
     fn values(block: &DataBlock) -> Vec<u64> {
         let column = block.get_by_offset(0).to_column();
         UInt64Type::try_downcast_column(&column)
@@ -495,24 +372,28 @@ mod tests {
     fn local_nodes(
         num_nodes: usize,
         threads: usize,
-    ) -> (Vec<ShuffleNode>, Vec<Arc<CollectChannel>>) {
+    ) -> (Vec<ShuffleNode>, Vec<async_channel::Receiver<QueueItem>>) {
         let mut nodes = vec![];
-        let mut collectors = vec![];
+        let mut receivers = vec![];
         for node in 0..num_nodes {
-            let channels = (0..threads)
-                .map(|_| {
-                    let channel = Arc::new(CollectChannel::default());
-                    collectors.push(channel.clone());
-                    Some(channel as Arc<dyn OutboundChannel>)
-                })
-                .collect();
-
+            let receive_channels = ExchangeReceiveChannels::new(threads);
+            let channels = create_local_block_senders(&receive_channels);
+            receivers.extend(receive_channels.receivers.iter().cloned());
             nodes.push(ShuffleNode {
                 partitions: node * threads..(node + 1) * threads,
-                target: ShuffleTarget::Local(channels),
+                dispatcher: HashShuffleDispatcher::local(channels),
             });
         }
-        (nodes, collectors)
+        (nodes, receivers)
+    }
+
+    fn drain_blocks(
+        receiver: &async_channel::Receiver<QueueItem>,
+    ) -> impl Iterator<Item = DataBlock> + '_ {
+        std::iter::from_fn(move || receiver.try_recv().ok()).map(|item| match item {
+            QueueItem::LocalData(item) => item.into_data(),
+            QueueItem::RemoteData(_) => panic!("expected a local block"),
+        })
     }
 
     fn writer(nodes: Vec<ShuffleNode>, budget: usize) -> HashShuffleWriter {
@@ -535,7 +416,7 @@ mod tests {
     fn test_writer_routes_rows_within_budget() -> Result<()> {
         let (num_nodes, threads) = (30, 16);
         let num_partitions = (num_nodes * threads) as u64;
-        let (nodes, collectors) = local_nodes(num_nodes, threads);
+        let (nodes, receivers) = local_nodes(num_nodes, threads);
 
         let budget = 256 * 1024;
         let mut writer = writer(nodes, budget);
@@ -556,9 +437,9 @@ mod tests {
         assert!(flushes > 1, "budget should trigger flushes before the end");
 
         let mut total = 0;
-        for (partition, collector) in collectors.iter().enumerate() {
-            for block in collector.blocks.lock().iter() {
-                check_rows(block, partition as u64, num_partitions);
+        for (partition, receiver) in receivers.iter().enumerate() {
+            for block in drain_blocks(receiver) {
+                check_rows(&block, partition as u64, num_partitions);
                 total += block.num_rows();
             }
         }
@@ -583,7 +464,7 @@ mod tests {
         };
 
         for make_block in [&no_columns as &dyn Fn() -> DataBlock, &only_null] {
-            let (nodes, collectors) = local_nodes(1, 4);
+            let (nodes, receivers) = local_nodes(1, 4);
             let scatter: Arc<Box<dyn FlightScatter>> =
                 Arc::new(Box::new(RowScatter { num_partitions: 4 }));
             let mut writer =
@@ -594,9 +475,10 @@ mod tests {
             writer.add_block(make_block())?;
             writer.flush(None)?;
 
-            let rows = collectors
+            let rows = receivers
                 .iter()
-                .map(|x| x.blocks.lock().iter().map(|x| x.num_rows()).sum::<usize>())
+                .flat_map(drain_blocks)
+                .map(|block| block.num_rows())
                 .sum::<usize>();
             assert_eq!(rows, 20);
         }
@@ -620,7 +502,7 @@ mod tests {
         let expanded = block().convert_to_full().memory_size();
         assert!(block().memory_size() * 100 < expanded);
 
-        let (nodes, collectors) = local_nodes(1, 4);
+        let (nodes, receivers) = local_nodes(1, 4);
         let scatter: Arc<Box<dyn FlightScatter>> =
             Arc::new(Box::new(RowScatter { num_partitions: 4 }));
         let mut writer =
@@ -630,9 +512,10 @@ mod tests {
         assert_eq!(writer.buffered_bytes, expanded);
         writer.flush(None)?;
 
-        let rows = collectors
+        let rows = receivers
             .iter()
-            .map(|x| x.blocks.lock().iter().map(|x| x.num_rows()).sum::<usize>())
+            .flat_map(drain_blocks)
+            .map(|block| block.num_rows())
             .sum::<usize>();
         assert_eq!(rows, 1000);
         Ok(())
@@ -640,39 +523,124 @@ mod tests {
 
     #[test]
     fn test_writer_returns_own_partition_and_skips_closed() -> Result<()> {
-        let (nodes, collectors) = local_nodes(1, 4);
+        let (nodes, receivers) = local_nodes(1, 4);
         let mut writer = writer(nodes, usize::MAX);
 
-        collectors[3].closed.store(true, Ordering::SeqCst);
+        receivers[3].close();
         writer.add_block(make_block(0..100))?;
 
         let (own, pending) = writer.flush(Some(1))?;
         assert!(!pending);
         check_rows(&own.unwrap(), 1, 4);
 
-        assert!(collectors[1].blocks.lock().is_empty());
-        assert!(collectors[3].blocks.lock().is_empty());
+        assert!(receivers[1].is_empty());
+        assert!(receivers[3].is_empty());
         for partition in [0, 2] {
-            let blocks = collectors[partition].blocks.lock();
-            assert_eq!(blocks.iter().map(|x| x.num_rows()).sum::<usize>(), 25);
+            let rows = drain_blocks(&receivers[partition])
+                .map(|block| block.num_rows())
+                .sum::<usize>();
+            assert_eq!(rows, 25);
         }
 
         assert!(!writer.all_closed());
-        writer.close_all();
+        writer.stop_sending_all();
         assert!(writer.all_closed());
+        Ok(())
+    }
+
+    #[test]
+    fn test_writer_returns_own_partition_with_node_offset() -> Result<()> {
+        let (nodes, receivers) = local_nodes(2, 4);
+        let mut writer = writer(nodes, usize::MAX);
+        writer.add_block(make_block(0..200))?;
+
+        let (own, pending) = writer.flush(Some(5))?;
+        assert!(!pending);
+        let own = own.unwrap();
+        assert_eq!(own.num_rows(), 25);
+        check_rows(&own, 5, 8);
+        for (partition, receiver) in receivers.iter().enumerate() {
+            let blocks = drain_blocks(receiver).collect::<Vec<_>>();
+            if partition == 5 {
+                assert!(blocks.is_empty());
+            } else {
+                assert_eq!(blocks.iter().map(|x| x.num_rows()).sum::<usize>(), 25);
+                for block in blocks.iter() {
+                    check_rows(block, partition as u64, 8);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_writer_closes_local_partitions_independently() -> Result<()> {
+        let (nodes, receivers) = local_nodes(1, 4);
+        let mut writer = writer(nodes, usize::MAX);
+
+        writer.stop_sending_partition(1);
+        assert!(!writer.all_closed());
+        assert!(writer.details_status().contains("closed_partitions=1/4"));
+        for (partition, receiver) in receivers.iter().enumerate() {
+            assert_eq!(receiver.is_closed(), partition == 1);
+        }
+
+        writer.add_block(make_block(0..100))?;
+        assert!(!writer.flush(None)?.1);
+        for (partition, receiver) in receivers.iter().enumerate() {
+            let rows = drain_blocks(receiver)
+                .map(|block| block.num_rows())
+                .sum::<usize>();
+            assert_eq!(rows, if partition == 1 { 0 } else { 25 });
+        }
+
+        // Closing a partition again must not affect the other threads.
+        writer.stop_sending_partition(1);
+        assert!(writer.details_status().contains("closed_partitions=1/4"));
+        writer.stop_sending_all();
+        assert!(writer.all_closed());
+        assert!(receivers.iter().all(|x| x.is_closed()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_stopping_one_writer_keeps_other_writers_sending() -> Result<()> {
+        let (nodes, receivers) = local_nodes(1, 2);
+        let mut first = writer(nodes.clone(), usize::MAX);
+        let mut second = writer(nodes, usize::MAX);
+
+        first.stop_sending_all();
+        assert!(first.all_closed());
+        assert!(!second.all_closed());
+        assert!(receivers.iter().all(|receiver| !receiver.is_closed()));
+
+        second.add_block(make_block(0..100))?;
+        assert!(!second.flush(None)?.1);
+        for (partition, receiver) in receivers.iter().enumerate() {
+            let rows = drain_blocks(receiver)
+                .map(|block| {
+                    check_rows(&block, partition as u64, 2);
+                    block.num_rows()
+                })
+                .sum::<usize>();
+            assert_eq!(rows, 50);
+        }
+
+        second.stop_sending_all();
+        assert!(receivers.iter().all(|receiver| receiver.is_closed()));
         Ok(())
     }
 
     fn create_mock_exchange(
         num_threads: usize,
     ) -> (
-        PingPongExchange,
+        PingPongTransport,
         async_channel::Receiver<FlightData>,
         async_channel::Sender<std::result::Result<FlightData, Status>>,
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(
+        let exchange = PingPongTransport::from_stream(
             num_threads,
             send_tx,
             pong_rx,
@@ -705,19 +673,24 @@ mod tests {
                 Some(FlightCompression::Lz4),
                 Some(FlightCompression::Zstd),
             ] {
-                let (exchange, _send_rx, _pong_tx) = create_mock_exchange(1);
-                let buffer = Arc::new(ExchangeSinkBuffer::create(
+                let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
+                let buffer = Arc::new(ExchangeSendBuffer::create(
                     vec![exchange],
-                    ExchangeBufferConfig::default(),
+                    ExchangeSendBufferConfig::default(),
                     &runtime,
                 )?);
 
                 let schema = Arc::new(block.infer_schema());
                 let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
-                let channel =
-                    RemoteNodeChannel::create(0, buffer, compression, arrow_schema.clone())?;
+                let dispatcher =
+                    HashShuffleDispatcher::remote(0, buffer, compression, arrow_schema.clone())?;
+                let mut sends = Vec::new();
+                dispatcher.prepare_send(0, &mut [Some(block.clone())], &mut sends)?;
+                for (_, result) in futures::future::join_all(sends).await {
+                    result?;
+                }
 
-                let item = channel.encode(0, block.clone())?;
+                let item = send_rx.recv().await.unwrap();
                 let decoded = deserialize_flight_data(strip_tid(item), &schema, &arrow_schema)?;
                 assert_eq!(decoded.num_rows(), 10);
                 assert_eq!(decoded.num_columns(), block.num_columns());
@@ -737,24 +710,25 @@ mod tests {
         ] {
             let runtime = Runtime::with_worker_threads(2, None)?;
             let (exchange, send_rx, _pong_tx) = create_mock_exchange(4);
-            let buffer = Arc::new(ExchangeSinkBuffer::create(
+            let buffer = Arc::new(ExchangeSendBuffer::create(
                 vec![exchange],
-                ExchangeBufferConfig::default(),
+                ExchangeSendBufferConfig::default(),
                 &runtime,
             )?);
 
             let schema = Arc::new(make_block(0..1).infer_schema());
             let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
 
-            let (mut nodes, _collectors) = local_nodes(1, 4);
+            let weak_buffer = Arc::downgrade(&buffer);
+            let (mut nodes, _receivers) = local_nodes(1, 4);
             nodes.push(ShuffleNode {
                 partitions: 4..8,
-                target: ShuffleTarget::Remote(Some(RemoteNodeChannel::create(
+                dispatcher: HashShuffleDispatcher::remote(
                     0,
                     buffer,
                     compression,
                     arrow_schema.clone(),
-                )?)),
+                )?,
             });
 
             let mut writer = writer(nodes, usize::MAX);
@@ -776,6 +750,22 @@ mod tests {
                 total += block.num_rows();
             }
             assert_eq!(total, 400);
+
+            assert!(!writer.all_closed());
+            writer.stop_sending_all();
+            assert!(writer.all_closed());
+            assert!(writer.details_status().contains("closed_partitions=8/8"));
+            assert!(
+                weak_buffer.upgrade().is_none(),
+                "stopped dispatcher must release its send buffer"
+            );
+
+            writer.add_block(make_block(800..1200))?;
+            assert!(!writer.flush(None)?.1);
+            assert!(
+                send_rx.try_recv().is_err(),
+                "closed node must not receive frames"
+            );
         }
         Ok(())
     }

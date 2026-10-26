@@ -18,7 +18,7 @@
 //! nodes through the real writer, send buffer, local channels and receivers. Each
 //! remote connection is a ping-pong exchange served by a "network" thread, which
 //! delays a frame by half the round trip plus its transfer time, hands it to the
-//! remote node's inbound channels, and answers after the other half.
+//! remote node's router channels, and answers after the other half.
 //!
 //! The tests check results and memory only. `hash_shuffle_bench` measures speed
 //! locally and is not run in CI:
@@ -63,7 +63,12 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::ExecutorWaker;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::port::connect;
 use databend_common_settings::FlightCompression;
 use databend_common_settings::Settings;
 use parking_lot::Mutex;
@@ -76,20 +81,22 @@ use tonic::Status;
 use super::block_coalescer::BlockCoalescer;
 use super::block_coalescer::CoalesceThreshold;
 use super::exchange_manager::recv_queue_bytes_per_connection;
-use super::exchange_sink::exchange_buffer_config;
+use super::exchange_sink::exchange_send_buffer_config;
+use super::hash_send_sink::HashSendSink;
+use super::hash_send_transform::HashSendTransform;
 use super::hash_shuffle_writer::HashShuffleWriter;
 use super::hash_shuffle_writer::ShuffleNode;
-use super::hash_shuffle_writer::ShuffleTarget;
 use super::hash_shuffle_writer::hash_shuffle_send_budget;
-use crate::servers::flight::v1::network::ExchangeBufferConfig;
-use crate::servers::flight::v1::network::ExchangeSinkBuffer;
-use crate::servers::flight::v1::network::InboundChannel;
-use crate::servers::flight::v1::network::NetworkInboundChannelSet;
-use crate::servers::flight::v1::network::NetworkInboundSender;
-use crate::servers::flight::v1::network::PingPongExchange;
-use crate::servers::flight::v1::network::RemoteNodeChannel;
-use crate::servers::flight::v1::network::create_local_channels;
-use crate::servers::flight::v1::network::local_channel::LOCAL_CHANNEL_MAX_BYTES;
+use crate::servers::flight::v1::network::PingPongTransport;
+use crate::servers::flight::v1::network::inbound::ExchangeFrameRouter;
+use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
+use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
+use crate::servers::flight::v1::network::inbound::exchange_queue::QueueItem;
+use crate::servers::flight::v1::network::outbound::ExchangeSendBuffer;
+use crate::servers::flight::v1::network::outbound::ExchangeSendBufferConfig;
+use crate::servers::flight::v1::network::outbound::HashShuffleDispatcher;
+use crate::servers::flight::v1::network::outbound::LOCAL_CHANNEL_MAX_BYTES;
+use crate::servers::flight::v1::network::outbound::create_local_block_senders;
 use crate::servers::flight::v1::network::wire_format::flight_data_size;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
@@ -107,7 +114,7 @@ struct ShuffleSetup {
     nodes: usize,
     threads: usize,
     node_budget: usize,
-    buffer: ExchangeBufferConfig,
+    buffer: ExchangeSendBufferConfig,
     /// Receive quota of each connection.
     recv_quota: usize,
     compression: Option<FlightCompression>,
@@ -170,7 +177,7 @@ fn network_thread(
     link: Link,
     send_rx: async_channel::Receiver<FlightData>,
     pong_tx: async_channel::Sender<std::result::Result<FlightData, Status>>,
-    inbound: NetworkInboundSender,
+    router: ExchangeFrameRouter,
     run: &ShuffleRun,
     nodes: Option<(TrackingPayload, TrackingPayload)>,
 ) {
@@ -186,11 +193,11 @@ fn network_thread(
         std::thread::sleep(link.rtt / 2 + transfer);
 
         let added = match &nodes {
-            None => futures::executor::block_on(inbound.add_data(data)),
+            None => futures::executor::block_on(router.route_frame(data)),
             Some((from, to)) => {
                 let copy = tracked(to, || copy_flight_data(&data));
                 tracked(from, move || drop(data));
-                tracked(to, || futures::executor::block_on(inbound.add_data(copy)))
+                tracked(to, || futures::executor::block_on(router.route_frame(copy)))
             }
         };
         if added.is_err() {
@@ -207,7 +214,7 @@ fn network_thread(
 
 fn receive<O>(
     partition: usize,
-    receiver: Arc<dyn InboundChannel>,
+    receiver: Arc<ExchangeQueueReceiver>,
     coalesce: Option<CoalesceThreshold>,
     output: &O,
 ) -> Result<()>
@@ -215,7 +222,7 @@ where
     O: Fn(usize, DataBlock),
 {
     let mut coalescer = BlockCoalescer::create(coalesce);
-    while let Some(block) = futures::executor::block_on(receiver.recv())? {
+    while let Some(block) = futures::executor::block_on(receiver.recv_block())? {
         coalescer.push(block)?;
         while let Some(block) = coalescer.pop() {
             output(partition, block);
@@ -256,7 +263,7 @@ fn send(
     }
 
     flush_writer(&mut writer)?;
-    writer.close_all();
+    writer.stop_sending_all();
     flush_mem_stat();
     Ok(())
 }
@@ -280,11 +287,16 @@ where
     let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
     let runtime = Runtime::with_worker_threads(2, None)?;
 
-    let local_set = NetworkInboundChannelSet::new(threads);
+    let local_set = ExchangeReceiveChannels::new(threads);
     let mut receivers = (0..threads)
-        .map(|t| (t, local_set.create_receiver(t, schema)))
+        .map(|t| {
+            (
+                t,
+                ExchangeQueueReceiver::create(schema, local_set.receivers[t].clone()),
+            )
+        })
         .collect::<Vec<_>>();
-    let local_channels = create_local_channels(&local_set);
+    let local_senders = create_local_block_senders(&local_set);
     drop(local_set);
 
     let mut exchanges = vec![];
@@ -292,7 +304,7 @@ where
     for node in 1..setup.nodes {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        exchanges.push(PingPongExchange::from_stream(
+        exchanges.push(PingPongTransport::from_stream(
             threads,
             send_tx,
             pong_rx,
@@ -300,17 +312,21 @@ where
             format!("node-{node}"),
         ));
 
-        let set = NetworkInboundChannelSet::new(threads);
-        receivers
-            .extend((0..threads).map(|t| (node * threads + t, set.create_receiver(t, schema))));
+        let set = ExchangeReceiveChannels::new(threads);
+        receivers.extend((0..threads).map(|t| {
+            (
+                node * threads + t,
+                ExchangeQueueReceiver::create(schema, set.receivers[t].clone()),
+            )
+        }));
         links.push((
             send_rx,
             pong_tx,
-            NetworkInboundSender::new(&set, setup.recv_quota),
+            ExchangeFrameRouter::new(&set, setup.recv_quota),
         ));
     }
 
-    let buffer = Arc::new(ExchangeSinkBuffer::create(
+    let buffer = Arc::new(ExchangeSendBuffer::create(
         exchanges,
         setup.buffer.clone(),
         &runtime,
@@ -318,17 +334,17 @@ where
 
     let mut nodes = vec![ShuffleNode {
         partitions: 0..threads,
-        target: ShuffleTarget::Local(local_channels.into_iter().map(Some).collect()),
+        dispatcher: HashShuffleDispatcher::local(local_senders),
     }];
     for node in 1..setup.nodes {
         nodes.push(ShuffleNode {
             partitions: node * threads..(node + 1) * threads,
-            target: ShuffleTarget::Remote(Some(RemoteNodeChannel::create(
+            dispatcher: HashShuffleDispatcher::remote(
                 node - 1,
                 buffer.clone(),
                 setup.compression,
                 arrow_schema.clone(),
-            )?)),
+            )?,
         });
     }
     drop(buffer);
@@ -339,10 +355,10 @@ where
     let started = Instant::now();
 
     std::thread::scope(|scope| -> Result<()> {
-        for (send_rx, pong_tx, inbound) in links {
+        for (send_rx, pong_tx, router) in links {
             let (link, run) = (setup.link, &run);
             scope.spawn(ThreadTracker::tracking_function(move || {
-                network_thread(link, send_rx, pong_tx, inbound, run, None)
+                network_thread(link, send_rx, pong_tx, router, run, None)
             }));
         }
 
@@ -400,6 +416,131 @@ impl FlightScatter for KeyScatter {
         let keys = UInt64Type::try_downcast_column(&column).unwrap();
         Ok(Some(keys.iter().map(|x| x % self.num_partitions).collect()))
     }
+}
+
+#[test]
+fn test_hash_senders_flush_tail_and_release_channels_before_processor_drop() -> Result<()> {
+    for has_output in [false, true] {
+        let channels = ExchangeReceiveChannels::new(2);
+        let receivers = channels.receivers.clone();
+        let nodes = vec![ShuffleNode {
+            partitions: 0..2,
+            dispatcher: HashShuffleDispatcher::local(create_local_block_senders(&channels)),
+        }];
+        drop(channels);
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(KeyScatter { num_partitions: 2 }));
+        let item = if has_output {
+            HashSendTransform::create_item(
+                0,
+                0,
+                scatter,
+                nodes,
+                ExecutorWaker::create(),
+                usize::MAX,
+            )
+        } else {
+            HashSendSink::create_item(0, scatter, nodes, ExecutorWaker::create(), usize::MAX)
+        };
+        let upstream = OutputPort::create();
+        // Ports are connected before use; this test alone drives the processor sequentially.
+        unsafe { connect(&item.inputs_port[0], &upstream) };
+        assert!(matches!(
+            unsafe { item.processor.event(EventCause::Other)? },
+            Event::NeedData
+        ));
+        upstream.push_data(Ok(DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![0, 1, 2, 3]),
+        ])));
+        assert!(matches!(
+            unsafe { item.processor.event(EventCause::Input(0))? },
+            Event::NeedData
+        ));
+        assert!(receivers.iter().all(|receiver| receiver.is_empty()));
+
+        upstream.finish();
+        assert!(matches!(
+            unsafe { item.processor.event(EventCause::Input(0))? },
+            Event::Finished
+        ));
+        assert!(item.outputs_port.iter().all(|output| output.is_finished()));
+        for (partition, receiver) in receivers.iter().enumerate() {
+            assert!(
+                receiver.is_closed(),
+                "Finished must release senders while the processor still exists"
+            );
+            let QueueItem::LocalData(data) = receiver.try_recv().unwrap() else {
+                panic!("expected local data");
+            };
+            let column = data.into_data().get_by_offset(0).to_column();
+            let keys = UInt64Type::try_downcast_column(&column).unwrap();
+            assert_eq!(keys.iter().copied().collect::<Vec<_>>(), vec![
+                partition as u64,
+                partition as u64 + 2
+            ]);
+            assert!(matches!(
+                receiver.try_recv(),
+                Err(async_channel::TryRecvError::Closed)
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_hash_transform_closed_output_keeps_sending_other_partitions() -> Result<()> {
+    let channels = ExchangeReceiveChannels::new(2);
+    let receivers = channels.receivers.clone();
+    let nodes = vec![ShuffleNode {
+        partitions: 0..2,
+        dispatcher: HashShuffleDispatcher::local(create_local_block_senders(&channels)),
+    }];
+    drop(channels);
+    let scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(KeyScatter { num_partitions: 2 }));
+    let item = HashSendTransform::create_item(0, 0, scatter, nodes, ExecutorWaker::create(), 1);
+    let upstream = OutputPort::create();
+    let downstream = InputPort::create();
+    // Ports are connected before use; this test alone drives the processor sequentially.
+    unsafe {
+        connect(&item.inputs_port[0], &upstream);
+        connect(&downstream, &item.outputs_port[0]);
+    }
+    downstream.finish();
+    assert!(matches!(
+        unsafe { item.processor.event(EventCause::Output(0))? },
+        Event::NeedData
+    ));
+    assert!(receivers[0].is_closed());
+    assert!(!receivers[1].is_closed());
+
+    upstream.push_data(Ok(DataBlock::new_from_columns(vec![
+        UInt64Type::from_data(vec![0, 1, 2, 3]),
+    ])));
+    assert!(matches!(
+        unsafe { item.processor.event(EventCause::Input(0))? },
+        Event::NeedData
+    ));
+    let QueueItem::LocalData(data) = receivers[1].try_recv().unwrap() else {
+        panic!("expected local data");
+    };
+    let column = data.into_data().get_by_offset(0).to_column();
+    let keys = UInt64Type::try_downcast_column(&column).unwrap();
+    assert_eq!(keys.iter().copied().collect::<Vec<_>>(), vec![1, 3]);
+    assert!(matches!(
+        receivers[0].try_recv(),
+        Err(async_channel::TryRecvError::Closed)
+    ));
+
+    upstream.finish();
+    assert!(matches!(
+        unsafe { item.processor.event(EventCause::Input(0))? },
+        Event::Finished
+    ));
+    assert!(matches!(
+        receivers[1].try_recv(),
+        Err(async_channel::TryRecvError::Closed)
+    ));
+    Ok(())
 }
 
 /// Spreads the rows of blocks without columns over the partitions.
@@ -590,7 +731,7 @@ impl FuzzCase {
             nodes: self.nodes,
             threads: self.threads,
             node_budget: self.node_budget,
-            buffer: ExchangeBufferConfig {
+            buffer: ExchangeSendBufferConfig {
                 max_queued_bytes: self.max_queued_bytes,
                 max_batch_bytes: self.max_batch_bytes,
             },
@@ -782,7 +923,7 @@ fn check_node_memory(nodes: usize) -> Result<()> {
 
     let settings = Settings::create(Tenant::new_literal("test"));
     let node_budget = settings.get_hash_shuffle_send_buffer_bytes()?;
-    let buffer_config = exchange_buffer_config(&settings)?;
+    let buffer_config = exchange_send_buffer_config(&settings)?;
     let recv_quota =
         recv_queue_bytes_per_connection(settings.get_exchange_recv_queue_bytes()?, peers);
     let compression = settings.get_query_flight_compression()?;
@@ -793,7 +934,7 @@ fn check_node_memory(nodes: usize) -> Result<()> {
 
     // Peers split the data they send to node 0 over a few threads each.
     let peer_threads = threads.div_ceil(peers);
-    let peer_buffer_config = ExchangeBufferConfig {
+    let peer_buffer_config = ExchangeSendBufferConfig {
         max_queued_bytes: 8 * MIB,
         max_batch_bytes: MIB,
     };
@@ -814,11 +955,11 @@ fn check_node_memory(nodes: usize) -> Result<()> {
         .collect::<Vec<_>>();
     let runtime = Runtime::with_worker_threads(4, None)?;
 
-    let node0_set = NetworkInboundChannelSet::new(threads);
+    let node0_set = ExchangeReceiveChannels::new(threads);
     let node0_receivers = (0..threads)
-        .map(|t| node0_set.create_receiver(t, &schema))
+        .map(|t| ExchangeQueueReceiver::create(&schema, node0_set.receivers[t].clone()))
         .collect::<Vec<_>>();
-    let local_channels = create_local_channels(&node0_set);
+    let local_senders = create_local_block_senders(&node0_set);
 
     let mut links = vec![];
     let mut node0_exchanges = vec![];
@@ -829,62 +970,69 @@ fn check_node_memory(nodes: usize) -> Result<()> {
 
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        node0_exchanges.push(PingPongExchange::from_stream(
+        node0_exchanges.push(PingPongTransport::from_stream(
             threads,
             send_tx,
             pong_rx,
             "node-0",
             peer.clone(),
         ));
-        let peer_set = NetworkInboundChannelSet::new(threads);
-        peer_receivers
-            .extend((0..threads).map(|t| (payload.clone(), peer_set.create_receiver(t, &schema))));
+        let peer_set = ExchangeReceiveChannels::new(threads);
+        peer_receivers.extend((0..threads).map(|t| {
+            (
+                payload.clone(),
+                ExchangeQueueReceiver::create(&schema, peer_set.receivers[t].clone()),
+            )
+        }));
         links.push((
             send_rx,
             pong_tx,
-            NetworkInboundSender::new(&peer_set, recv_quota),
+            ExchangeFrameRouter::new(&peer_set, recv_quota),
             node0.clone(),
             payload.clone(),
         ));
 
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(threads, send_tx, pong_rx, peer, "node-0");
+        let exchange = PingPongTransport::from_stream(threads, send_tx, pong_rx, peer, "node-0");
         let buffer = tracked(payload, || {
-            ExchangeSinkBuffer::create(vec![exchange], peer_buffer_config.clone(), &runtime)
+            ExchangeSendBuffer::create(vec![exchange], peer_buffer_config.clone(), &runtime)
         })?;
         links.push((
             send_rx,
             pong_tx,
-            NetworkInboundSender::new(&node0_set, recv_quota),
+            ExchangeFrameRouter::new(&node0_set, recv_quota),
             payload.clone(),
             node0.clone(),
         ));
-        let channel =
-            RemoteNodeChannel::create(0, Arc::new(buffer), compression, arrow_schema.clone())?;
         peer_senders.push((payload.clone(), vec![ShuffleNode {
             partitions: 0..threads,
-            target: ShuffleTarget::Remote(Some(channel)),
+            dispatcher: HashShuffleDispatcher::remote(
+                0,
+                Arc::new(buffer),
+                compression,
+                arrow_schema.clone(),
+            )?,
         }]));
     }
     drop(node0_set);
 
     let node0_buffer = Arc::new(tracked(&node0, || {
-        ExchangeSinkBuffer::create(node0_exchanges, buffer_config.clone(), &runtime)
+        ExchangeSendBuffer::create(node0_exchanges, buffer_config.clone(), &runtime)
     })?);
     let mut node0_nodes = vec![ShuffleNode {
         partitions: 0..threads,
-        target: ShuffleTarget::Local(local_channels.into_iter().map(Some).collect()),
+        dispatcher: HashShuffleDispatcher::local(local_senders),
     }];
     for peer in 1..nodes {
         node0_nodes.push(ShuffleNode {
             partitions: peer * threads..(peer + 1) * threads,
-            target: ShuffleTarget::Remote(Some(RemoteNodeChannel::create(
+            dispatcher: HashShuffleDispatcher::remote(
                 peer - 1,
                 node0_buffer.clone(),
                 compression,
                 arrow_schema.clone(),
-            )?)),
+            )?,
         });
     }
     drop(node0_buffer);
@@ -902,10 +1050,10 @@ fn check_node_memory(nodes: usize) -> Result<()> {
     let node0_rows = AtomicUsize::new(0);
     let peer_rows = AtomicUsize::new(0);
     std::thread::scope(|scope| -> Result<()> {
-        for (send_rx, pong_tx, inbound, from, to) in links {
+        for (send_rx, pong_tx, router, from, to) in links {
             let run = &run;
             scope.spawn(move || {
-                network_thread(link, send_rx, pong_tx, inbound, run, Some((from, to)))
+                network_thread(link, send_rx, pong_tx, router, run, Some((from, to)))
             });
         }
 
@@ -1038,7 +1186,7 @@ fn hash_shuffle_bench() {
         nodes,
         threads,
         node_budget: 256 * MIB,
-        buffer: ExchangeBufferConfig::default(),
+        buffer: ExchangeSendBufferConfig::default(),
         recv_quota: (64 * MIB / (nodes - 1)).max(MIB),
         compression: match env("HASH_SHUFFLE_BENCH_CODEC", 1) {
             0 => None,

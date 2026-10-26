@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use arrow_flight::FlightData;
-use concurrent_queue::ConcurrentQueue;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,27 +25,27 @@ use tokio::sync::Semaphore;
 use tonic::Code;
 use tonic::Status;
 
-use super::outbound_transport::PingPongCallback;
-use super::outbound_transport::PingPongExchange;
-use super::outbound_transport::PingPongResponse;
-use super::outbound_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
-use super::wire_format::flight_data_size;
-use super::wire_format::merge_flight_data_batch;
+use super::super::ping_pong_transport::PingPongCallback;
+use super::super::ping_pong_transport::PingPongResponse;
+use super::super::ping_pong_transport::PingPongTransport;
+use super::super::ping_pong_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
+use super::super::wire_format::flight_data_size;
+use super::super::wire_format::merge_flight_data_batch;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
-use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
 
-/// Configuration for ExchangeSinkBuffer.
+/// Configuration for ExchangeSendBuffer.
 #[derive(Clone)]
-pub struct ExchangeBufferConfig {
+pub struct ExchangeSendBufferConfig {
     /// Maximum bytes queued or in flight for all destinations of one exchange.
     /// Senders wait once the queue is full.
     pub max_queued_bytes: usize,
-    /// Maximum bytes per batch.
+    /// Maximum total item bytes per batch, excluding batch framing.
+    /// A single oversized item is sent on its own.
     pub max_batch_bytes: usize,
 }
 
-impl Default for ExchangeBufferConfig {
+impl Default for ExchangeSendBufferConfig {
     fn default() -> Self {
         Self {
             max_queued_bytes: 64 * 1024 * 1024,
@@ -56,7 +56,7 @@ impl Default for ExchangeBufferConfig {
 
 const MIN_BATCH_BYTES: usize = 256 * 1024;
 
-impl ExchangeBufferConfig {
+impl ExchangeSendBufferConfig {
     /// Batch size used for `num_remotes` destinations.
     ///
     /// A destination has one frame in flight and sends the next one only after the
@@ -69,27 +69,37 @@ impl ExchangeBufferConfig {
     }
 }
 
-/// Pending FlightData for one destination node.
-struct PendingQueue {
-    queue: ConcurrentQueue<RemoteQueueItem>,
+/// Encoded data holding send quota while queued; batching transfers the permit
+/// to the in-flight frame until acknowledgement or connection closure.
+struct PendingSendItem {
+    data: FlightData,
+    permit: OwnedSemaphorePermit,
 }
 
-impl PendingQueue {
-    fn new() -> Self {
-        Self {
-            queue: ConcurrentQueue::unbounded(),
-        }
-    }
+/// Pending encoded items for one destination node, protected by its state lock.
+#[derive(Default)]
+struct PendingSendQueue {
+    items: VecDeque<PendingSendItem>,
+}
 
-    /// Pop items up to `max_batch_bytes` as one frame, with the quota they hold.
-    fn pop_front(&self, max_batch_bytes: usize) -> Option<(FlightData, Vec<OwnedSemaphorePermit>)> {
+impl PendingSendQueue {
+    /// Take one batch and transfer its permits to the in-flight frame.
+    /// An oversized first item must make progress, but is never batched with others.
+    fn pop_batch(
+        &mut self,
+        max_batch_bytes: usize,
+    ) -> Option<(FlightData, Vec<OwnedSemaphorePermit>)> {
         let mut items = Vec::new();
         let mut permits = Vec::new();
         let mut total = 0usize;
 
-        while let Ok(next) = self.queue.pop() {
-            let (data, permit) = next.into_parts();
-            total += data.data_body.len();
+        while let Some(next) = self.items.front() {
+            let size = flight_data_size(&next.data);
+            if !items.is_empty() && size > max_batch_bytes.saturating_sub(total) {
+                break;
+            }
+            let PendingSendItem { data, permit } = self.items.pop_front().unwrap();
+            total += size;
             items.push(data);
             permits.push(permit);
             if total >= max_batch_bytes {
@@ -108,10 +118,10 @@ impl PendingQueue {
 
 /// Mutable state within RemoteInstance, protected by its own lock.
 struct RemoteInstanceState {
-    pending: PendingQueue,
+    pending: PendingSendQueue,
     /// Quota of the frame in flight, released when its response arrives.
     in_flight: Vec<OwnedSemaphorePermit>,
-    /// Last error from the exchange, returned on next poll_send call
+    /// First terminal error; checked under the same lock before every enqueue.
     last_error: Option<ErrorCode>,
 }
 
@@ -121,8 +131,7 @@ impl RemoteInstanceState {
             self.last_error = Some(error);
         }
 
-        self.pending.queue.close();
-        while self.pending.queue.pop().is_ok() {}
+        self.pending.items.clear();
         self.in_flight.clear();
     }
 }
@@ -131,49 +140,31 @@ impl RemoteInstanceState {
 /// Each RemoteInstance has its own lock for fine-grained concurrency.
 struct RemoteInstance {
     state: Mutex<RemoteInstanceState>,
-    exchange: PingPongExchange,
+    exchange: PingPongTransport,
 }
 
 impl RemoteInstance {
-    fn new(exchange: PingPongExchange) -> Self {
+    fn new(exchange: PingPongTransport) -> Self {
         Self {
             exchange,
             state: Mutex::new(RemoteInstanceState {
-                pending: PendingQueue::new(),
+                pending: PendingSendQueue::default(),
                 in_flight: Vec::new(),
                 last_error: None,
             }),
         }
     }
-
-    fn close_state_and_notify(&self, state: &mut RemoteInstanceState, error: ErrorCode) {
-        state.close(error);
-        self.exchange.shutdown.notify_waiters();
-    }
 }
 
-/// Inner state of ExchangeSinkBuffer, shared with callbacks.
-struct ExchangeSinkBufferSharedState {
-    config: ExchangeBufferConfig,
+/// State kept alive by response callbacks until all transports finish draining.
+struct ExchangeSendBufferState {
+    config: ExchangeSendBufferConfig,
 
     /// Pre-allocated remote instances, indexed by destination index
-    remotes: Vec<Arc<RemoteInstance>>,
+    remotes: Vec<RemoteInstance>,
 }
 
-/// Inner state of ExchangeSinkBuffer, shared with callbacks.
-struct ExchangeSinkBufferInner {
-    state: Arc<ExchangeSinkBufferSharedState>,
-}
-
-impl Drop for ExchangeSinkBufferInner {
-    fn drop(&mut self) {
-        for remote in &self.state.remotes {
-            remote.exchange.shutdown.notify_waiters();
-        }
-    }
-}
-
-impl ExchangeSinkBufferSharedState {
+impl ExchangeSendBufferState {
     fn status_to_error(status: Status, local_node_id: &str, remote_node_id: &str) -> ErrorCode {
         let error = if status.code() == Code::Aborted {
             ErrorCode::AbortedQuery(status.message().to_string())
@@ -195,16 +186,17 @@ impl ExchangeSinkBufferSharedState {
         let mut state = remote.state.lock();
 
         let Some(status) = status else {
-            // The caller owns the in-flight slot, so the previous frame was answered.
+            // The slot was idle or its previous frame was answered. Release the
+            // acknowledged quota before taking the next batch.
             state.in_flight.clear();
 
-            let Some((flight, permits)) = state.pending.pop_front(self.config.max_batch_bytes)
+            let Some((flight, permits)) = state.pending.pop_batch(self.config.max_batch_bytes)
             else {
-                return remote.exchange.ready_send();
+                return remote.exchange.release_send_slot();
             };
             state.in_flight = permits;
 
-            let Err(status) = remote.exchange.force_send(flight) else {
+            let Err(status) = remote.exchange.send_frame(flight) else {
                 return;
             };
 
@@ -213,8 +205,9 @@ impl ExchangeSinkBufferSharedState {
                 remote.exchange.local_node_id(),
                 remote.exchange.remote_node_id(),
             );
-            remote.close_state_and_notify(&mut state, error);
-            remote.exchange.ready_send();
+            state.close(error);
+            remote.exchange.shutdown.notify_waiters();
+            remote.exchange.release_send_slot();
             return;
         };
 
@@ -227,15 +220,15 @@ impl ExchangeSinkBufferSharedState {
 }
 
 /// Callback for handling PingPong responses.
-struct SinkBufferCallback {
+struct SendBufferCallback {
     dest_idx: usize,
-    buffer: Arc<ExchangeSinkBufferSharedState>,
+    buffer: Arc<ExchangeSendBufferState>,
 }
 
-impl PingPongCallback for SinkBufferCallback {
+impl PingPongCallback for SendBufferCallback {
     fn has_pending(&self) -> bool {
         let state = self.buffer.remotes[self.dest_idx].state.lock();
-        !state.pending.queue.is_empty()
+        !state.pending.items.is_empty()
     }
 
     fn on_response(&self, response: PingPongResponse) {
@@ -258,40 +251,48 @@ impl PingPongCallback for SinkBufferCallback {
 /// Byte-bounded send queue shared by all senders of one exchange.
 ///
 /// Each destination node has one FIFO queue and at most one request in flight.
-/// Queued items to the same node are packed into batch frames of up to
-/// `max_batch_bytes`, regardless of which thread of the node they target.
-pub struct ExchangeSinkBuffer {
+/// Queued items to the same node share batches regardless of their target thread.
+/// `max_batch_bytes` bounds their total payload size, except for a single oversized
+/// item; batch framing adds a small overhead.
+pub struct ExchangeSendBuffer {
     max_permits: usize,
     semaphore: Arc<Semaphore>,
-    inner: Arc<ExchangeSinkBufferInner>,
+    state: Arc<ExchangeSendBufferState>,
 }
 
-impl ExchangeSinkBuffer {
-    /// Create a new ExchangeSinkBuffer.
+impl Drop for ExchangeSendBuffer {
+    fn drop(&mut self) {
+        // Callbacks retain the state to drain pending frames after the final
+        // producer releases this buffer. Do not clear their queues here.
+        for remote in &self.state.remotes {
+            remote.exchange.shutdown.notify_waiters();
+        }
+    }
+}
+
+impl ExchangeSendBuffer {
+    /// Create a new ExchangeSendBuffer.
     ///
-    /// - `exchanges`: Pre-created PingPongExchange instances (not yet started).
+    /// - `exchanges`: Pre-created PingPongTransport instances (not yet started).
     /// - `config`: Buffer configuration.
     pub fn create(
-        exchanges: Vec<PingPongExchange>,
-        config: ExchangeBufferConfig,
+        exchanges: Vec<PingPongTransport>,
+        config: ExchangeSendBufferConfig,
         runtime: &Runtime,
     ) -> Result<Self> {
         let max_permits = config.max_queued_bytes.clamp(1, u32::MAX as usize);
         let semaphore = Arc::new(Semaphore::new(max_permits));
-        let config = ExchangeBufferConfig {
+        let config = ExchangeSendBufferConfig {
             max_batch_bytes: config.batch_bytes(exchanges.len()),
             ..config
         };
 
-        let remotes = exchanges
-            .into_iter()
-            .map(|exchange| Arc::new(RemoteInstance::new(exchange)))
-            .collect();
+        let remotes = exchanges.into_iter().map(RemoteInstance::new).collect();
 
-        let shared_state = Arc::new(ExchangeSinkBufferSharedState { config, remotes });
+        let shared_state = Arc::new(ExchangeSendBufferState { config, remotes });
         for (dest_idx, remote) in shared_state.remotes.iter().enumerate() {
             let _ = remote.exchange.start(
-                Arc::new(SinkBufferCallback {
+                Arc::new(SendBufferCallback {
                     dest_idx,
                     buffer: shared_state.clone(),
                 }),
@@ -302,19 +303,18 @@ impl ExchangeSinkBuffer {
         Ok(Self {
             max_permits,
             semaphore,
-            inner: Arc::new(ExchangeSinkBufferInner {
-                state: shared_state,
-            }),
+            state: shared_state,
         })
     }
 
     /// Queue items for one destination node and send them, packed into as few
     /// frames as the batch size allows.
     ///
-    /// Each item holds queue quota proportional to its size until the frame
-    /// carrying it is answered.
-    pub async fn add_items(&self, dest_idx: usize, items: Vec<FlightData>) -> Result<()> {
-        let remote = &self.inner.state.remotes[dest_idx];
+    /// Completion means the items have entered the send buffer; it does not wait
+    /// for a network response. Each item holds queue quota proportional to its
+    /// size until the frame carrying it is answered.
+    pub async fn enqueue_items(&self, dest_idx: usize, items: Vec<FlightData>) -> Result<()> {
+        let remote = &self.state.remotes[dest_idx];
 
         if let Some(error) = remote.state.lock().last_error.clone() {
             return Err(error);
@@ -328,17 +328,24 @@ impl ExchangeSinkBuffer {
                 Err(_) => {
                     // Queue is full: send what is queued before waiting for quota.
                     self.try_flush(dest_idx);
-                    self.acquire(permits).await?
+                    self.semaphore
+                        .clone()
+                        .acquire_many_owned(permits)
+                        .await
+                        .expect("exchange send quota is never closed")
                 }
             };
 
-            let state = remote.state.lock();
+            let mut state = remote.state.lock();
 
             if let Some(error) = state.last_error.clone() {
                 return Err(error);
             }
 
-            let _ = state.pending.queue.push(RemoteQueueItem::new(data, permit));
+            state
+                .pending
+                .items
+                .push_back(PendingSendItem { data, permit });
         }
 
         self.try_flush(dest_idx);
@@ -349,26 +356,18 @@ impl ExchangeSinkBuffer {
         }
     }
 
-    async fn acquire(&self, permits: u32) -> Result<OwnedSemaphorePermit> {
-        self.semaphore
-            .clone()
-            .acquire_many_owned(permits)
-            .await
-            .map_err(|_| ErrorCode::Internal("Logical error, exchange sink semaphore is closed."))
-    }
-
     /// Start sending if the destination has no request in flight. Otherwise the
     /// response callback sends the queued data.
     fn try_flush(&self, dest_idx: usize) {
-        let remote = &self.inner.state.remotes[dest_idx];
+        let remote = &self.state.remotes[dest_idx];
 
-        if remote.exchange.try_acquire_send() {
-            self.inner.state.try_flush_remote(dest_idx, None);
+        if remote.exchange.try_acquire_send_slot() {
+            self.state.try_flush_remote(dest_idx, None);
         }
     }
 
     pub fn is_closed(&self, dest_idx: usize) -> bool {
-        let remote = &self.inner.state.remotes[dest_idx];
+        let remote = &self.state.remotes[dest_idx];
         let state = remote.state.lock();
         state.last_error.is_some()
     }
@@ -388,7 +387,7 @@ mod tests {
     use tonic::Status;
 
     use super::*;
-    use crate::servers::flight::v1::network::outbound_transport::PingPongExchange;
+    use crate::servers::flight::v1::network::ping_pong_transport::PingPongTransport;
     use crate::servers::flight::v1::network::wire_format::extract_tid;
     use crate::servers::flight::v1::network::wire_format::is_batch;
     use crate::servers::flight::v1::network::wire_format::split_batch_flight_data;
@@ -400,13 +399,13 @@ mod tests {
     fn create_mock_exchange(
         num_threads: usize,
     ) -> (
-        PingPongExchange,
+        PingPongTransport,
         async_channel::Receiver<FlightData>,
         async_channel::Sender<std::result::Result<FlightData, Status>>,
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(
+        let exchange = PingPongTransport::from_stream(
             num_threads,
             send_tx,
             pong_rx,
@@ -435,9 +434,9 @@ mod tests {
         }
     }
 
-    fn push(queue: &PendingQueue, semaphore: &Arc<Semaphore>, data: FlightData) {
+    fn push(queue: &mut PendingSendQueue, semaphore: &Arc<Semaphore>, data: FlightData) {
         let permit = semaphore.clone().try_acquire_many_owned(1).unwrap();
-        let _ = queue.queue.push(RemoteQueueItem::new(data, permit));
+        queue.items.push_back(PendingSendItem { data, permit });
     }
 
     fn batch_len(data: &FlightData) -> u32 {
@@ -446,15 +445,15 @@ mod tests {
 
     #[test]
     fn test_pop_front_single_item_no_batch() {
-        let queue = PendingQueue::new();
+        let mut queue = PendingSendQueue::default();
         let semaphore = Arc::new(Semaphore::new(1));
         push(
-            &queue,
+            &mut queue,
             &semaphore,
             make_flight_data_with_tid(3, &[0x01], 100),
         );
 
-        let (result, permits) = queue.pop_front(256 * 1024).unwrap();
+        let (result, permits) = queue.pop_batch(256 * 1024).unwrap();
         // Single item: no batch wrapping, original data returned as-is
         assert_eq!(result.data_body.len(), 100);
         assert_eq!(result.app_metadata.len(), 3); // 2 tid + 1 marker
@@ -467,18 +466,18 @@ mod tests {
 
     #[test]
     fn test_pop_front_batch_keeps_tid_per_item() {
-        let queue = PendingQueue::new();
+        let mut queue = PendingSendQueue::default();
         let semaphore = Arc::new(Semaphore::new(10));
 
         for tid in [5u16, 0, 7] {
             push(
-                &queue,
+                &mut queue,
                 &semaphore,
                 make_flight_data_with_tid(tid, &[tid as u8, 0x01], 50),
             );
         }
 
-        let (result, permits) = queue.pop_front(256 * 1024).unwrap();
+        let (result, permits) = queue.pop_batch(256 * 1024).unwrap();
         assert!(is_batch(&result));
         assert_eq!(batch_len(&result), 3);
         assert_eq!(permits.len(), 3);
@@ -494,36 +493,186 @@ mod tests {
 
     #[test]
     fn test_pop_front_budget_control() {
-        let queue = PendingQueue::new();
+        let mut queue = PendingSendQueue::default();
         let semaphore = Arc::new(Semaphore::new(100));
 
-        // Push 10 items of 100 bytes each
+        // Push 10 items with 100-byte bodies and 3-byte metadata each
         for _ in 0..10 {
             push(
-                &queue,
+                &mut queue,
                 &semaphore,
                 make_flight_data_with_tid(0, &[0x01], 100),
             );
         }
 
-        // Budget of 250 bytes: should pop 3 items (100+100+100 >= 250)
-        let (result, _permits) = queue.pop_front(250).unwrap();
+        // A third 103-byte item would exceed the 250-byte budget.
+        let (result, _permits) = queue.pop_batch(250).unwrap();
         assert!(is_batch(&result));
-        assert_eq!(batch_len(&result), 3);
-        // 7 items remain
-        assert_eq!(queue.queue.len(), 7);
+        assert_eq!(batch_len(&result), 2);
+        assert_eq!(queue.items.len(), 8);
     }
 
     #[test]
     fn test_pop_front_empty_queue() {
-        let queue = PendingQueue::new();
-        assert!(queue.pop_front(256 * 1024).is_none());
+        let mut queue = PendingSendQueue::default();
+        assert!(queue.pop_batch(256 * 1024).is_none());
+    }
+
+    #[test]
+    fn test_batch_budget_counts_metadata_and_header_without_body() {
+        let mut queue = PendingSendQueue::default();
+        let semaphore = Arc::new(Semaphore::new(3));
+        for tid in 0..3 {
+            let mut data = make_flight_data_with_tid(tid, &[0x01; 30], 0);
+            data.data_header = Bytes::from(vec![0; 64]);
+            push(&mut queue, &semaphore, data);
+        }
+
+        let (frame, permits) = queue.pop_batch(192).unwrap();
+        let items = split_batch_flight_data(frame);
+        assert_eq!(items.iter().map(extract_tid).collect::<Vec<_>>(), vec![
+            0, 1
+        ]);
+        assert_eq!(items.iter().map(flight_data_size).sum::<usize>(), 192);
+        assert_eq!(queue.items.len(), 1);
+        assert_eq!(semaphore.available_permits(), 0);
+        drop(permits);
+        assert_eq!(semaphore.available_permits(), 2);
+    }
+
+    #[test]
+    fn test_oversized_item_is_sent_alone_without_reordering() {
+        let mut queue = PendingSendQueue::default();
+        let semaphore = Arc::new(Semaphore::new(2));
+        push(
+            &mut queue,
+            &semaphore,
+            make_flight_data_with_tid(3, &[0x01], 300),
+        );
+        push(
+            &mut queue,
+            &semaphore,
+            make_flight_data_with_tid(1, &[0x01], 10),
+        );
+
+        let (frame, permits) = queue.pop_batch(100).unwrap();
+        assert!(!is_batch(&frame));
+        assert_eq!(extract_tid(&frame), 3);
+        assert_eq!(frame.data_body.len(), 300);
+        drop(permits);
+        let (frame, permits) = queue.pop_batch(100).unwrap();
+        assert_eq!(extract_tid(&frame), 1);
+        assert!(queue.items.is_empty());
+        drop(permits);
+        assert_eq!(semaphore.available_permits(), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_last_buffer_owner_drop_drains_pending_frames_before_eof() {
+        let rt = test_runtime();
+        let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
+        let buffer = Arc::new(
+            ExchangeSendBuffer::create(
+                vec![exchange],
+                ExchangeSendBufferConfig {
+                    max_queued_bytes: 6,
+                    max_batch_bytes: 1,
+                },
+                &rt,
+            )
+            .unwrap(),
+        );
+        let semaphore = buffer.semaphore.clone();
+        let draining_state = Arc::downgrade(&buffer.state);
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            buffer
+                .enqueue_items(0, vec![make_flight_data(1)])
+                .await
+                .unwrap();
+            assert_eq!(send_rx.recv().await.unwrap().data_body.len(), 1);
+            buffer
+                .enqueue_items(0, vec![make_flight_data(2)])
+                .await
+                .unwrap();
+
+            let remaining_owner = buffer.clone();
+            drop(buffer);
+            assert!(!send_rx.is_closed());
+            remaining_owner
+                .enqueue_items(0, vec![make_flight_data(3)])
+                .await
+                .unwrap();
+            drop(remaining_owner);
+            assert_eq!(semaphore.available_permits(), 0);
+
+            // Shutdown must leave queued frames and their quota with the callbacks.
+            pong_tx.send(Ok(FlightData::default())).await.unwrap();
+            assert_eq!(send_rx.recv().await.unwrap().data_body.len(), 2);
+            pong_tx.send(Ok(FlightData::default())).await.unwrap();
+            assert_eq!(send_rx.recv().await.unwrap().data_body.len(), 3);
+            assert!(send_rx.recv().await.is_err());
+
+            // Request EOF does not release the final frame's quota before its pong.
+            assert_eq!(semaphore.available_permits(), 3);
+            pong_tx.send(Ok(FlightData::default())).await.unwrap();
+            let permits = semaphore.clone().acquire_many_owned(6).await.unwrap();
+            drop(permits);
+            drop(pong_tx);
+            // The last response task must release the drain state after peer EOF.
+            while draining_state.strong_count() != 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("last-owner shutdown must drain pending frames and acknowledge them");
+        assert_eq!(semaphore.available_permits(), 6);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_full_request_queue_fails_exchange_and_releases_quota() {
+        let rt = test_runtime();
+        let (send_tx, send_rx) = async_channel::bounded(1);
+        let (pong_tx, pong_rx) = async_channel::unbounded();
+        // Violate the transport invariant: a frame is queued without owning the slot.
+        send_tx.try_send(make_flight_data(99)).unwrap();
+        let exchange = PingPongTransport::from_stream(1, send_tx, pong_rx, "local", "remote");
+        let buffer = ExchangeSendBuffer::create(
+            vec![exchange],
+            ExchangeSendBufferConfig {
+                max_queued_bytes: 8,
+                max_batch_bytes: 1,
+            },
+            &rt,
+        )
+        .unwrap();
+
+        let error = buffer
+            .enqueue_items(0, vec![make_flight_data(1), make_flight_data(2)])
+            .await
+            .expect_err("an unsent frame must not be reported as successful");
+        assert!(error.message().contains("Flight request queue is full"));
+        assert!(buffer.is_closed(0));
+        assert_eq!(buffer.semaphore.available_permits(), 8);
+        let later_error = buffer
+            .enqueue_items(0, vec![make_flight_data(3)])
+            .await
+            .unwrap_err();
+        assert_eq!(later_error.message(), error.message());
+        assert_eq!(send_rx.recv().await.unwrap().data_body.len(), 99);
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), send_rx.recv())
+                .await
+                .expect("send failure must close the request stream")
+                .is_err()
+        );
+        drop(pong_tx);
     }
 
     #[test]
     fn test_batch_bytes_shares_queue_among_remotes() {
         const MIB: usize = 1024 * 1024;
-        let config = ExchangeBufferConfig {
+        let config = ExchangeSendBufferConfig {
             max_queued_bytes: 64 * MIB,
             max_batch_bytes: 4 * MIB,
         };
@@ -536,7 +685,7 @@ mod tests {
         assert_eq!(config.batch_bytes(29), 64 * MIB / 58);
         // Never below the minimum batch size, unless max_batch_bytes is lower.
         assert_eq!(config.batch_bytes(1000), MIN_BATCH_BYTES);
-        let config = ExchangeBufferConfig {
+        let config = ExchangeSendBufferConfig {
             max_queued_bytes: 64 * MIB,
             max_batch_bytes: 1,
         };
@@ -549,12 +698,12 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(2);
         let buffer =
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
-        // First add_items should send directly
+        // First enqueue_items should send directly
         buffer
-            .add_items(0, vec![make_flight_data(10)])
+            .enqueue_items(0, vec![make_flight_data(10)])
             .await
             .unwrap();
         let received = send_rx.recv().await.unwrap();
@@ -565,7 +714,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         buffer
-            .add_items(0, vec![make_flight_data(20)])
+            .enqueue_items(0, vec![make_flight_data(20)])
             .await
             .unwrap();
         let received = send_rx.recv().await.unwrap();
@@ -577,13 +726,13 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, _pong_tx) = create_mock_exchange(4);
         let buffer =
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
         let items = (0..4)
             .map(|tid| make_flight_data_with_tid(tid, &[0x01], 10))
             .collect();
-        buffer.add_items(0, items).await.unwrap();
+        buffer.enqueue_items(0, items).await.unwrap();
 
         let received = send_rx.recv().await.unwrap();
         assert!(is_batch(&received));
@@ -596,13 +745,13 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(2);
         let buffer = Arc::new(
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap(),
         );
 
         // First send goes directly
         buffer
-            .add_items(0, vec![make_flight_data(10)])
+            .enqueue_items(0, vec![make_flight_data(10)])
             .await
             .unwrap();
         let received = send_rx.recv().await.unwrap();
@@ -610,7 +759,7 @@ mod tests {
 
         // Second send while in-flight gets queued
         buffer
-            .add_items(0, vec![make_flight_data(20)])
+            .enqueue_items(0, vec![make_flight_data(20)])
             .await
             .unwrap();
 
@@ -635,12 +784,12 @@ mod tests {
         let (ex0, rx0, pong0) = create_mock_exchange(1);
         let (ex1, rx1, pong1) = create_mock_exchange(1);
         let buffer =
-            ExchangeSinkBuffer::create(vec![ex0, ex1], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![ex0, ex1], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
         // Send to dest 0
         buffer
-            .add_items(0, vec![make_flight_data(10)])
+            .enqueue_items(0, vec![make_flight_data(10)])
             .await
             .unwrap();
         let r0 = rx0.recv().await.unwrap();
@@ -648,7 +797,7 @@ mod tests {
 
         // Send to dest 1
         buffer
-            .add_items(1, vec![make_flight_data(20)])
+            .enqueue_items(1, vec![make_flight_data(20)])
             .await
             .unwrap();
         let r1 = rx1.recv().await.unwrap();
@@ -668,9 +817,9 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(2);
         let buffer = Arc::new(
-            ExchangeSinkBuffer::create(
+            ExchangeSendBuffer::create(
                 vec![exchange],
-                ExchangeBufferConfig {
+                ExchangeSendBufferConfig {
                     max_queued_bytes: 10,
                     ..Default::default()
                 },
@@ -681,7 +830,7 @@ mod tests {
 
         // The frame in flight keeps the whole quota until it is answered.
         buffer
-            .add_items(0, vec![make_flight_data(10)])
+            .enqueue_items(0, vec![make_flight_data(10)])
             .await
             .unwrap();
         let _ = send_rx.recv().await.unwrap();
@@ -691,7 +840,7 @@ mod tests {
         let buffer2 = buffer.clone();
         let send_handle = spawn(async move {
             buffer2
-                .add_items(0, vec![make_flight_data(1)])
+                .enqueue_items(0, vec![make_flight_data(1)])
                 .await
                 .unwrap();
         });
@@ -727,9 +876,9 @@ mod tests {
     async fn test_buffer_charges_metadata_and_header() {
         let rt = test_runtime();
         let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
-        let buffer = ExchangeSinkBuffer::create(
+        let buffer = ExchangeSendBuffer::create(
             vec![exchange],
-            ExchangeBufferConfig {
+            ExchangeSendBufferConfig {
                 max_queued_bytes: 1024,
                 ..Default::default()
             },
@@ -743,7 +892,7 @@ mod tests {
         assert_eq!(size, 108);
 
         // Sent right away, the frame in flight keeps its quota.
-        buffer.add_items(0, vec![item]).await.unwrap();
+        buffer.enqueue_items(0, vec![item]).await.unwrap();
         let _ = send_rx.recv().await.unwrap();
         assert_eq!(buffer.semaphore.available_permits(), 1024 - size);
     }
@@ -752,9 +901,9 @@ mod tests {
     async fn test_buffer_oversized_item_does_not_deadlock() {
         let rt = test_runtime();
         let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
-        let buffer = ExchangeSinkBuffer::create(
+        let buffer = ExchangeSendBuffer::create(
             vec![exchange],
-            ExchangeBufferConfig {
+            ExchangeSendBufferConfig {
                 max_queued_bytes: 4,
                 ..Default::default()
             },
@@ -764,7 +913,7 @@ mod tests {
 
         tokio::time::timeout(
             Duration::from_secs(2),
-            buffer.add_items(0, vec![make_flight_data(100)]),
+            buffer.enqueue_items(0, vec![make_flight_data(100)]),
         )
         .await
         .expect("an item larger than the queue should still be sent")
@@ -777,11 +926,11 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer =
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
         buffer
-            .add_items(0, vec![make_flight_data(1)])
+            .enqueue_items(0, vec![make_flight_data(1)])
             .await
             .unwrap();
         let _ = send_rx.recv().await.unwrap();
@@ -791,8 +940,8 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(2), async {
             loop {
                 let closed = {
-                    let state = buffer.inner.state.remotes[0].state.lock();
-                    state.last_error.is_some() && state.pending.queue.is_closed()
+                    let state = buffer.state.remotes[0].state.lock();
+                    state.last_error.is_some() && state.pending.items.is_empty()
                 };
 
                 if closed {
@@ -807,12 +956,12 @@ mod tests {
 
         let result = tokio::time::timeout(
             Duration::from_millis(200),
-            buffer.add_items(0, vec![make_flight_data(2)]),
+            buffer.enqueue_items(0, vec![make_flight_data(2)]),
         )
         .await;
         assert!(
             result.is_ok(),
-            "add_items should not block on the semaphore"
+            "enqueue_items should not block on the semaphore"
         );
         let error = result
             .unwrap()
@@ -825,12 +974,12 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_force_send_error_drains_remaining_pending_queue() {
+    async fn test_send_frame_error_drains_remaining_pending_queue() {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
-        let buffer = ExchangeSinkBuffer::create(
+        let buffer = ExchangeSendBuffer::create(
             vec![exchange],
-            ExchangeBufferConfig {
+            ExchangeSendBufferConfig {
                 max_queued_bytes: 8,
                 max_batch_bytes: 1,
             },
@@ -839,23 +988,23 @@ mod tests {
         .unwrap();
 
         buffer
-            .add_items(0, vec![make_flight_data(1)])
+            .enqueue_items(0, vec![make_flight_data(1)])
             .await
             .unwrap();
         let _ = send_rx.recv().await.unwrap();
 
         buffer
-            .add_items(0, vec![make_flight_data(2)])
+            .enqueue_items(0, vec![make_flight_data(2)])
             .await
             .unwrap();
         buffer
-            .add_items(0, vec![make_flight_data(3)])
+            .enqueue_items(0, vec![make_flight_data(3)])
             .await
             .unwrap();
 
         {
-            let state = buffer.inner.state.remotes[0].state.lock();
-            assert_eq!(state.pending.queue.len(), 2);
+            let state = buffer.state.remotes[0].state.lock();
+            assert_eq!(state.pending.items.len(), 2);
         }
         // The frame in flight still holds its quota.
         assert_eq!(buffer.semaphore.available_permits(), 2);
@@ -866,7 +1015,7 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(2), async {
             loop {
                 let has_error = {
-                    let state = buffer.inner.state.remotes[0].state.lock();
+                    let state = buffer.state.remotes[0].state.lock();
                     state.last_error.is_some()
                 };
 
@@ -878,19 +1027,15 @@ mod tests {
             }
         })
         .await
-        .expect("force_send failure should set last_error");
+        .expect("send_frame failure should set last_error");
 
         {
-            let state = buffer.inner.state.remotes[0].state.lock();
+            let state = buffer.state.remotes[0].state.lock();
             assert!(state.last_error.is_some());
             assert_eq!(
-                state.pending.queue.len(),
+                state.pending.items.len(),
                 0,
-                "force_send error should drain the rest of the pending queue"
-            );
-            assert!(
-                state.pending.queue.is_closed(),
-                "force_send error should close the pending queue"
+                "send_frame error should drain the rest of the pending queue"
             );
         }
 
@@ -902,16 +1047,16 @@ mod tests {
 
         let result = tokio::time::timeout(
             Duration::from_millis(200),
-            buffer.add_items(0, vec![make_flight_data(4)]),
+            buffer.enqueue_items(0, vec![make_flight_data(4)]),
         )
         .await;
         assert!(
             result.is_ok(),
-            "add_items should not block after force_send error"
+            "enqueue_items should not block after send_frame error"
         );
         let error = result
             .unwrap()
-            .expect_err("later add_items should observe the exchange error");
+            .expect_err("later enqueue_items should observe the exchange error");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
     }
 
@@ -920,13 +1065,13 @@ mod tests {
         let rt = test_runtime();
         let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
         let buffer =
-            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
                 .unwrap();
 
         drop(send_rx);
 
         let error = buffer
-            .add_items(0, vec![make_flight_data(1)])
+            .enqueue_items(0, vec![make_flight_data(1)])
             .await
             .expect_err("closed request channel should abort the exchange");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
@@ -944,13 +1089,13 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_force_send_error_unblocks_waiting_add_items() {
+    async fn test_send_frame_error_unblocks_waiting_enqueue_items() {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer = Arc::new(
-            ExchangeSinkBuffer::create(
+            ExchangeSendBuffer::create(
                 vec![exchange],
-                ExchangeBufferConfig {
+                ExchangeSendBufferConfig {
                     max_queued_bytes: 3,
                     max_batch_bytes: 1,
                 },
@@ -960,24 +1105,20 @@ mod tests {
         );
 
         buffer
-            .add_items(0, vec![make_flight_data(1)])
+            .enqueue_items(0, vec![make_flight_data(1)])
             .await
             .unwrap();
         let _ = send_rx.recv().await.unwrap();
 
         buffer
-            .add_items(0, vec![make_flight_data(2)])
+            .enqueue_items(0, vec![make_flight_data(2)])
             .await
             .unwrap();
 
-        let blocked_buffer = buffer.clone();
-        let blocked =
-            spawn(async move { blocked_buffer.add_items(0, vec![make_flight_data(2)]).await });
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        let mut blocked = Box::pin(buffer.enqueue_items(0, vec![make_flight_data(2)]));
         assert!(
-            !blocked.is_finished(),
-            "third add_items should wait for the pending-queue semaphore"
+            futures::poll!(blocked.as_mut()).is_pending(),
+            "third enqueue_items should wait for the pending-queue semaphore"
         );
 
         drop(send_rx);
@@ -985,9 +1126,8 @@ mod tests {
 
         let result = tokio::time::timeout(Duration::from_secs(2), blocked)
             .await
-            .expect("blocked add_items should be released after remote close")
-            .unwrap();
-        let error = result.expect_err("released add_items should observe exchange abort");
+            .expect("blocked enqueue_items should be released after remote close");
+        let error = result.expect_err("released enqueue_items should observe exchange abort");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
         assert_eq!(
             buffer.semaphore.available_permits(),
@@ -997,54 +1137,58 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_response_stream_close_unblocks_waiting_add_items() {
-        let rt = test_runtime();
-        let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
-        let buffer = Arc::new(
-            ExchangeSinkBuffer::create(
+    async fn test_response_failure_unblocks_waiting_enqueue_items() {
+        for status in [None, Some(Status::unavailable("peer disconnected"))] {
+            let rt = test_runtime();
+            let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
+            let buffer = ExchangeSendBuffer::create(
                 vec![exchange],
-                ExchangeBufferConfig {
+                ExchangeSendBufferConfig {
                     max_queued_bytes: 3,
                     ..Default::default()
                 },
                 &rt,
             )
-            .unwrap(),
-        );
-
-        buffer
-            .add_items(0, vec![make_flight_data(1)])
-            .await
-            .unwrap();
-        let _ = send_rx.recv().await.unwrap();
-
-        buffer
-            .add_items(0, vec![make_flight_data(2)])
-            .await
             .unwrap();
 
-        let blocked_buffer = buffer.clone();
-        let blocked =
-            spawn(async move { blocked_buffer.add_items(0, vec![make_flight_data(2)]).await });
+            buffer
+                .enqueue_items(0, vec![make_flight_data(1)])
+                .await
+                .unwrap();
+            let _ = send_rx.recv().await.unwrap();
+            buffer
+                .enqueue_items(0, vec![make_flight_data(2)])
+                .await
+                .unwrap();
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        assert!(
-            !blocked.is_finished(),
-            "third add_items should wait for the pending-queue semaphore"
-        );
+            let mut blocked = Box::pin(buffer.enqueue_items(0, vec![make_flight_data(2)]));
+            assert!(futures::poll!(blocked.as_mut()).is_pending());
+            let expected_code = if let Some(status) = status {
+                pong_tx.send(Err(status)).await.unwrap();
+                ErrorCode::CANNOT_CONNECT_NODE
+            } else {
+                ErrorCode::ABORTED_QUERY
+            };
+            drop(pong_tx);
 
-        drop(pong_tx);
+            let error = tokio::time::timeout(Duration::from_secs(2), blocked)
+                .await
+                .expect("response failure must wake a sender waiting for quota")
+                .expect_err("a waiting sender must observe the connection failure");
+            assert_eq!(error.code(), expected_code);
+            assert!(
+                error
+                    .message()
+                    .contains("client=query-node-0, service=query-node-1")
+            );
+            assert!(buffer.is_closed(0));
+            assert_eq!(buffer.semaphore.available_permits(), 3);
 
-        let result = tokio::time::timeout(Duration::from_secs(2), blocked)
-            .await
-            .expect("blocked add_items should be released after response stream close")
-            .unwrap();
-        let error = result.expect_err("released add_items should observe exchange abort");
-        assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
-        assert_eq!(
-            buffer.semaphore.available_permits(),
-            3,
-            "closing should release the queued and in-flight permits"
-        );
+            let later_error = buffer
+                .enqueue_items(0, vec![make_flight_data(1)])
+                .await
+                .expect_err("a failed destination must reject subsequent data");
+            assert_eq!(later_error.message(), error.message());
+        }
     }
 }

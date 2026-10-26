@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Receive side of broadcast and hash exchanges. Merges the blocks from its input
-//! port (the local sender's own partition) with those from its InboundChannel.
+//! port (the local sender's own partition) with those from its ExchangeQueueReceiver.
 
 use std::any::Any;
 use std::sync::Arc;
@@ -33,9 +33,9 @@ use petgraph::graph::NodeIndex;
 
 use super::block_coalescer::BlockCoalescer;
 use super::block_coalescer::CoalesceThreshold;
-use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
+use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
 
 pub struct ExchangeRecvTransform {
     input: Arc<InputPort>,
@@ -43,7 +43,7 @@ pub struct ExchangeRecvTransform {
 
     id: NodeIndex,
     tasks: SyncTaskSet,
-    receiver: Arc<dyn InboundChannel>,
+    receiver: Arc<ExchangeQueueReceiver>,
     handle: Option<SyncTaskHandle<'static, Result<Option<DataBlock>>>>,
     coalescer: BlockCoalescer,
 }
@@ -51,7 +51,7 @@ pub struct ExchangeRecvTransform {
 impl ExchangeRecvTransform {
     pub fn create_item(
         worker_id: usize,
-        receiver: Arc<dyn InboundChannel>,
+        receiver: Arc<ExchangeQueueReceiver>,
         waker: Arc<ExecutorWaker>,
         coalesce: Option<CoalesceThreshold>,
     ) -> PipeItem {
@@ -101,7 +101,7 @@ impl Processor for ExchangeRecvTransform {
 
             if self.handle.is_none() && !self.receiver.is_closed() {
                 let receiver = self.receiver.clone();
-                let recv_fut = Box::pin(async move { receiver.recv().await });
+                let recv_fut = Box::pin(async move { receiver.recv_block().await });
                 self.handle = Some(self.tasks.spawn(self.id, recv_fut));
             }
 

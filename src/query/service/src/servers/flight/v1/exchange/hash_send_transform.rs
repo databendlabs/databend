@@ -30,20 +30,11 @@ use super::hash_shuffle_writer::HashShuffleWriter;
 use super::hash_shuffle_writer::ShuffleNode;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
-/// Output port for the rows of this sender's own partition, pushed downstream
-/// directly instead of going through a channel.
-struct OwnPartition {
-    output: Arc<OutputPort>,
-    partition: usize,
-}
-
-/// Hash shuffle sender.
-///
-/// With an own partition, its rows are pushed to the output port. Without one, it
-/// is a sink that sends every partition through channels.
+/// Hash shuffle sender with a direct output for its own partition.
 pub struct HashSendTransform {
     input: Arc<InputPort>,
-    own: Option<OwnPartition>,
+    output: Arc<OutputPort>,
+    local_pos: usize,
     writer: HashShuffleWriter,
 }
 
@@ -56,54 +47,21 @@ impl HashSendTransform {
         waker: Arc<ExecutorWaker>,
         budget: usize,
     ) -> PipeItem {
-        let writer = HashShuffleWriter::create(worker_id, waker, scatter, nodes, budget);
-        Self::create(
-            Some(OwnPartition {
-                output: OutputPort::create(),
-                partition: local_pos,
-            }),
-            writer,
-        )
-    }
-
-    pub fn create_sink_item(
-        worker_id: usize,
-        scatter: Arc<Box<dyn FlightScatter>>,
-        nodes: Vec<ShuffleNode>,
-        waker: Arc<ExecutorWaker>,
-        budget: usize,
-    ) -> PipeItem {
-        let writer = HashShuffleWriter::create(worker_id, waker, scatter, nodes, budget);
-        Self::create(None, writer)
-    }
-
-    fn create(own: Option<OwnPartition>, writer: HashShuffleWriter) -> PipeItem {
         let input = InputPort::create();
-        let outputs = own.iter().map(|x| x.output.clone()).collect();
+        let output = OutputPort::create();
         let processor = ProcessorPtr::create(Box::new(Self {
             input: input.clone(),
-            own,
-            writer,
+            output: output.clone(),
+            local_pos,
+            writer: HashShuffleWriter::create(worker_id, waker, scatter, nodes, budget),
         }));
-        PipeItem::create(processor, vec![input], outputs)
-    }
-
-    fn finish(&mut self) -> Result<Event> {
-        self.input.finish();
-        if let Some(own) = &self.own {
-            own.output.finish();
-        }
-        self.writer.close_all();
-        Ok(Event::Finished)
+        PipeItem::create(processor, vec![input], vec![output])
     }
 }
 
 impl Processor for HashSendTransform {
     fn name(&self) -> String {
-        match self.own {
-            Some(_) => String::from("HashSendTransform"),
-            None => String::from("HashSendSink"),
-        }
+        String::from("HashSendTransform")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -118,47 +76,50 @@ impl Processor for HashSendTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(own) = self.own.as_ref().filter(|x| x.output.is_finished()) {
-            self.writer.close_partition(own.partition);
+        if self.output.is_finished() {
+            self.writer.stop_sending_partition(self.local_pos);
         }
 
         if self.writer.all_closed() {
-            return self.finish();
+            self.input.finish();
+            self.output.finish();
+            self.writer.stop_sending_all();
+            return Ok(Event::Finished);
         }
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
 
-            if self.writer.add_block(data_block)? {
-                let own = self.own.as_ref().filter(|x| x.output.can_push());
-                let (own_block, pending) = self.writer.flush(own.map(|x| x.partition))?;
-
-                let pushed = match (own, own_block) {
-                    (Some(own), Some(block)) => {
-                        own.output.push_data(Ok(block));
-                        true
-                    }
-                    _ => false,
+            let budget_reached = self.writer.add_block(data_block)?;
+            if budget_reached {
+                let own = self.output.can_push().then_some(self.local_pos);
+                let (own_block, sends_pending) = self.writer.flush(own)?;
+                let pushed = if let Some(block) = own_block {
+                    self.output.push_data(Ok(block));
+                    true
+                } else {
+                    false
                 };
 
-                if pending || pushed {
+                if sends_pending || pushed {
                     return Ok(Event::NeedConsume);
                 }
             }
         }
 
         if self.input.is_finished() {
-            // The output is finished first, so the rows of the own partition go
-            // through its local channel like every other partition.
-            if let Some(own) = &self.own {
-                own.output.finish();
-            }
-
-            if self.writer.flush(None)?.1 {
+            // Finish the direct output before flushing the tail through channels,
+            // so the receive processor can drain it without waiting on this port.
+            self.output.finish();
+            // `None` sends every partition through channels, so no block is returned.
+            let (_, sends_pending) = self.writer.flush(None)?;
+            if sends_pending {
                 return Ok(Event::NeedConsume);
             }
 
-            return self.finish();
+            self.input.finish();
+            self.writer.stop_sending_all();
+            return Ok(Event::Finished);
         }
 
         self.input.set_need_data();
@@ -166,14 +127,11 @@ impl Processor for HashSendTransform {
     }
 
     fn details_status(&self) -> Option<String> {
-        Some(match &self.own {
-            Some(own) => format!(
-                "local_pos={}, {}",
-                own.partition,
-                self.writer.details_status()
-            ),
-            None => self.writer.details_status(),
-        })
+        Some(format!(
+            "local_pos={}, {}",
+            self.local_pos,
+            self.writer.details_status()
+        ))
     }
 
     fn set_id(&mut self, id: NodeIndex) {
