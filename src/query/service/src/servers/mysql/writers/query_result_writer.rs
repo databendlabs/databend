@@ -312,7 +312,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                         .consume_convert_to_full()
                         .take_columns()
                         .into_iter()
-                        .map(|column| column.into_column().unwrap())
+                        .map(|column| column.into_column().unwrap().decode_encoded())
                         .collect::<Vec<_>>();
 
                     for row_index in 0..num_rows {

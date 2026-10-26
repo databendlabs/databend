@@ -328,24 +328,33 @@ impl AggregateHashTable {
         group_columns: ProjectedBlock,
         row_count: usize,
     ) -> Option<usize> {
-        // Code of a row = mixed radix number of the codes of its keys.
-        let mut row_codes = vec![0u32; row_count];
+        // Check every key before allocating, so regular group columns cost nothing here.
         let mut code_space = 1usize;
         for entry in group_columns.iter() {
             let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
                 return None;
             };
-            let (codes, count) = encoded.codes();
-            let stride = code_space;
+            let (_, count) = encoded.codes();
             code_space = code_space.checked_mul(usize::try_from(count).ok()?)?;
             // Only worth it with several rows per combination.
             if code_space.saturating_mul(4) > row_count {
                 return None;
             }
+        }
+
+        // Code of a row = mixed radix number of the codes of its keys.
+        let mut row_codes = vec![0u32; row_count];
+        let mut stride = 1usize;
+        for entry in group_columns.iter() {
+            let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
+                unreachable!()
+            };
+            let (codes, count) = encoded.codes();
             // `code < count`, so the result is below `code_space <= row_count`.
             for (row_code, code) in row_codes.iter_mut().zip(codes.iter()) {
                 *row_code += (code as usize * stride) as u32;
             }
+            stride *= count as usize;
         }
 
         // Rank of each combination in first-seen order, and its first row.

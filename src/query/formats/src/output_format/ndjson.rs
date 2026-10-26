@@ -69,7 +69,7 @@ impl<const STRINGS: bool, const COMPACT: bool> OutputFormat
             .convert_to_full()
             .columns()
             .iter()
-            .map(|column| column.value().into_column().unwrap())
+            .map(|column| column.value().into_column().unwrap().decode_encoded())
             .collect();
 
         for row_index in 0..rows_size {
