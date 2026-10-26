@@ -41,6 +41,7 @@ use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::DefaultSettings;
 use databend_common_settings::ScopeLevel;
 use databend_common_settings::SettingMode;
+use databend_common_settings::Settings;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnState;
 use fastrace::future::FutureExt;
@@ -463,6 +464,26 @@ impl HttpSessionConf {
     pub async fn restore(&self, session: &Arc<Session>, http_ctx: &HttpQueryContext) -> Result<()> {
         let query_id = &http_ctx.query_id;
         let http_query_manager = HttpQueryManager::instance();
+        // Ordinary settings can determine the role lookup context (sandbox_tenant).
+        // Security settings must wait until the effective roles are restored.
+        if let Some(conf_settings) = &self.settings {
+            let settings = session.get_settings();
+            for (k, v) in conf_settings {
+                if Settings::requires_super_to_change(k) {
+                    continue;
+                }
+                settings
+                    .set_setting(k.to_string(), v.to_string())
+                    .or_else(|e| {
+                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
+                            warn!("Unknown session setting ignored: {}", k);
+                            Ok(())
+                        } else {
+                            Err(e)
+                        }
+                    })?;
+            }
+        }
         if let Some(catalog) = &self.catalog {
             if !catalog.is_empty() {
                 session.set_current_catalog(catalog.clone());
@@ -489,16 +510,9 @@ impl HttpSessionConf {
             }
             let settings = session.get_settings();
             for (k, v) in conf_settings {
-                settings
-                    .set_setting(k.to_string(), v.to_string())
-                    .or_else(|e| {
-                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                            warn!("Unknown session setting ignored: {}", k);
-                            Ok(())
-                        } else {
-                            Err(e)
-                        }
-                    })?;
+                if Settings::requires_super_to_change(k) {
+                    settings.set_setting(k.to_string(), v.to_string())?;
+                }
             }
         }
         if let Some(state) = &self.internal {

@@ -32,10 +32,14 @@ use databend_common_config::UserConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
+use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_SEMVER;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
@@ -1914,7 +1918,9 @@ async fn test_affect() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_session_secondary_roles() -> anyhow::Result<()> {
-    let _fixture = TestFixture::setup().await?;
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.internal_enable_sandbox_tenant = true;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
 
     let route = create_endpoint()?;
 
@@ -1939,6 +1945,39 @@ async fn test_session_secondary_roles() -> anyhow::Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded);
     assert_eq!(result.session.unwrap().secondary_roles, None);
 
+    // Each temporary embedded provider has its own store; initialize the
+    // sandbox's public role in the fixture's store as well.
+    UserApiProvider::instance()
+        .create_role(
+            &Tenant::new_literal("role_restore_sandbox"),
+            RoleInfo::new(BUILTIN_ROLE_PUBLIC, None),
+            &CreateOption::CreateIfNotExists,
+        )
+        .await?;
+    // Match the sqllogic client: echo the returned session on each request.
+    // sandbox_tenant must be restored before validating its current role.
+    let mut session = serde_json::Value::Null;
+    for (sql, expected_role) in [
+        ("SET sandbox_tenant='role_restore_sandbox'", None),
+        ("CREATE ROLE sandbox_role", None),
+        ("SET ROLE sandbox_role", None),
+        ("SET SECONDARY ROLES NONE", None),
+        ("SELECT current_role()", Some("sandbox_role")),
+        ("SET SECONDARY ROLES ALL", None),
+        ("DROP ROLE sandbox_role", None),
+        ("SELECT current_role()", Some(BUILTIN_ROLE_PUBLIC)),
+    ] {
+        let mut request = TestHttpQueryRequest::new(serde_json::json!({
+            "sql": sql,
+            "session": session,
+        }));
+        let result = request.fetch_total().await?;
+        assert!(result.error().is_none(), "{sql}: {:?}", result.error());
+        if let Some(role) = expected_role {
+            assert_eq!(result.data(), vec![vec![Some(role.to_string())]]);
+        }
+        session = serde_json::to_value(result.last().1.session.unwrap())?;
+    }
     Ok(())
 }
 
