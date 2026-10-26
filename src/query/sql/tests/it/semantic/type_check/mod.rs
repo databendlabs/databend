@@ -183,6 +183,7 @@ impl UdfAdapter for TestUdfAdapter {
             ..
         } = udf_definition;
         Ok(UDFServer {
+            external_access_integrations: vec![],
             address: "http://127.0.0.1:8815".to_string(),
             handler,
             headers: Default::default(),

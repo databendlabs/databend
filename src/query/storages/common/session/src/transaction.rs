@@ -129,11 +129,7 @@ impl TxnBuffer {
         std::mem::take(self);
     }
 
-    fn update_multi_table_meta(
-        &mut self,
-        tenant: &Tenant,
-        mut req: UpdateMultiTableMetaReq,
-    ) -> Result<()> {
+    fn bind_tenant(&mut self, tenant: &Tenant) -> Result<()> {
         // Bind the transaction to the first non-conflicting tenant that updates meta.
         // Later updates must stay on the same tenant; commit uses this bound value.
         match &self.tenant {
@@ -147,6 +143,15 @@ impl TxnBuffer {
                 )));
             }
         }
+        Ok(())
+    }
+
+    fn update_multi_table_meta(
+        &mut self,
+        tenant: &Tenant,
+        mut req: UpdateMultiTableMetaReq,
+    ) -> Result<()> {
+        self.bind_tenant(tenant)?;
 
         for (req, table_info) in req.update_table_metas {
             let table_id = req.table_id;
@@ -349,8 +354,42 @@ impl TxnManager {
             .collect()
     }
 
-    pub fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
-        self.txn_buffer.update_stream_metas(reqs);
+    /// Buffer explicit consumption and advance this transaction's stream view.
+    /// DML only buffers consumption; both paths use the same fixed source batch.
+    /// Returns false in auto-commit mode so the caller can commit through catalog.
+    pub fn buffer_query_stream_updates(
+        &mut self,
+        tenant: &Tenant,
+        updates: &[UpdateStreamMetaReq],
+    ) -> Result<bool> {
+        if !self.is_active() {
+            return Ok(false);
+        }
+        // Validate the entire batch before changing either pending or visible cursors.
+        for update in updates {
+            if !self
+                .txn_buffer
+                .stream_tables
+                .contains_key(&update.stream_id)
+            {
+                return Err(ErrorCode::Internal(format!(
+                    "Missing read snapshot for consumed stream {}",
+                    update.stream_id
+                )));
+            }
+        }
+        self.txn_buffer.bind_tenant(tenant)?;
+        self.txn_buffer.update_stream_metas(updates);
+        for update in updates {
+            let snapshot = self
+                .txn_buffer
+                .stream_tables
+                .get_mut(&update.stream_id)
+                .expect("validated above");
+            snapshot.stream.meta.options.clone_from(&update.options);
+            snapshot.stream.meta.updated_on = Utc::now();
+        }
+        Ok(true)
     }
 
     // for caching stream table to impl the rr semantics
@@ -565,10 +604,13 @@ mod tests {
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableLvtCheck;
     use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+    use databend_common_meta_app::schema::UpdateStreamMetaReq;
     use databend_common_meta_app::schema::UpdateTableMetaReq;
     use databend_common_meta_app::tenant::Tenant;
     use databend_meta_client::types::MatchSeq;
     use databend_storages_common_table_meta::meta::BlockHLL;
+    use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+    use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
     use super::TxnBuffer;
     use super::TxnManager;
@@ -624,6 +666,60 @@ mod tests {
             check.touch,
             "later requests must not discard a historical publication touch"
         );
+    }
+
+    #[test]
+    fn test_query_stream_updates_buffer_request_and_read_view() {
+        let mut stream = TableInfo::default();
+        stream.ident.table_id = 7;
+        stream.ident.seq = 3;
+        stream.desc = "'db'.'s'".to_string();
+        stream.meta.engine = "STREAM".to_string();
+        stream
+            .meta
+            .options
+            .insert(OPT_KEY_TABLE_VER.to_string(), "10".to_string());
+        let mut source = TableInfo::default();
+        source.ident.table_id = 8;
+        source.ident.seq = 11;
+        source.meta.options.insert(
+            OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+            "snapshot".to_string(),
+        );
+        let mut options = stream.meta.options.clone();
+        options.insert(OPT_KEY_TABLE_VER.to_string(), "11".to_string());
+        options.insert(
+            OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+            "snapshot".to_string(),
+        );
+        let update = UpdateStreamMetaReq {
+            stream_id: stream.ident.table_id,
+            seq: MatchSeq::Exact(stream.ident.seq),
+            options,
+        };
+        let tenant = Tenant::new_literal("tenant");
+        let mgr = TxnManager::init();
+        let mut txn = mgr.lock();
+        txn.begin();
+        txn.upsert_table_desc_to_id(stream.clone());
+        txn.upsert_stream_table(stream.clone(), source.clone(), Some(1));
+        assert!(
+            txn.buffer_query_stream_updates(&tenant, std::slice::from_ref(&update))
+                .unwrap()
+        );
+        let visible = txn.get_table_from_buffer(&stream.desc).unwrap();
+        assert_eq!(visible.ident, stream.ident);
+        assert_eq!(visible.meta.options, update.options);
+        let read = &txn.txn_buffer.stream_tables[&stream.ident.table_id];
+        assert_eq!(read.source.ident, source.ident);
+        assert_eq!(read.source.meta.options, source.meta.options);
+        assert_eq!(read.max_batch_size, Some(1));
+        let request = txn.req();
+        assert!(request.update_table_metas.is_empty());
+        assert_eq!(request.update_stream_metas.len(), 1);
+        assert_eq!(request.update_stream_metas[0].stream_id, update.stream_id);
+        assert_eq!(request.update_stream_metas[0].seq, update.seq);
+        assert_eq!(request.update_stream_metas[0].options, update.options);
     }
 
     fn stats_hll(values: &[u64]) -> BlockHLL {

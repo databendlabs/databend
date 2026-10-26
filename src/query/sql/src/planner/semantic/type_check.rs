@@ -48,6 +48,7 @@ use crate::BindContext;
 use crate::MetadataRef;
 use crate::binder::AliasLookup;
 use crate::optimizer::ir::SExpr;
+use crate::planner::expression::UDFValidator;
 use crate::planner::expression::UdfValidationConfig;
 use crate::plans::DictGetFunctionArgument;
 
@@ -371,6 +372,18 @@ pub trait UdfAdapter: Clone {
         _udf_definition: UDFServer,
     ) -> Result<Scalar> {
         Err(missing_type_check_adapter_dependency("udf server folding"))
+    }
+
+    fn validate_udf_server(&self, definition: &UDFServer) -> Result<()> {
+        if !definition.external_access_integrations.is_empty() {
+            return Err(missing_type_check_adapter_dependency(
+                "external access validation",
+            ));
+        }
+        UDFValidator::is_udf_server_allowed_with_config(
+            &definition.address,
+            &self.validation_config()?,
+        )
     }
 
     fn validation_config(&self) -> Result<UdfValidationConfig> {

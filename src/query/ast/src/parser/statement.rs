@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use educe::Educe;
 use nom::Parser;
+use nom::branch::permutation;
 use nom_rule::rule;
 
 use super::sequence::sequence;
@@ -2462,6 +2463,86 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let network_rule_options = permutation((
+        map(rule! { TYPE ~ "=" ~ #ident }, |(_, _, rule_type)| rule_type),
+        map(rule! { MODE ~ "=" ~ #ident }, |(_, _, mode)| mode),
+        map(
+            rule! { VALUE_LIST ~ "=" ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
+            |(_, _, _, values, _)| values,
+        ),
+    ));
+    let create_network_rule = map_res(
+        rule! { CREATE ~ (OR ~ REPLACE)? ~ NETWORK ~ RULE ~ (IF ~ NOT ~ EXISTS)? ~ #ident ~ #network_rule_options },
+        |(_, replace, _, _, exists, name, (rule_type, mode, values))| {
+            Ok(Statement::ExternalAccess(
+                ExternalAccessStmt::CreateNetworkRule {
+                    name,
+                    create_option: parse_create_option(replace.is_some(), exists.is_some())?,
+                    rule_type,
+                    mode,
+                    values,
+                },
+            ))
+        },
+    );
+    let alter_network_rule = map(
+        rule! { ALTER ~ NETWORK ~ RULE ~ (IF ~ EXISTS)? ~ #ident ~ SET ~ VALUE_LIST ~ "=" ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
+        |(_, _, _, exists, name, _, _, _, _, values, _)| {
+            Statement::ExternalAccess(ExternalAccessStmt::AlterNetworkRule {
+                name,
+                if_exists: exists.is_some(),
+                values,
+            })
+        },
+    );
+    let drop_network_rule = map(
+        rule! { DROP ~ NETWORK ~ RULE ~ (IF ~ EXISTS)? ~ #ident },
+        |(_, _, _, exists, name)| {
+            Statement::ExternalAccess(ExternalAccessStmt::DropNetworkRule {
+                name,
+                if_exists: exists.is_some(),
+            })
+        },
+    );
+    let create_external_access = map_res(
+        rule! { CREATE ~ (OR ~ REPLACE)? ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ (IF ~ NOT ~ EXISTS)? ~ #ident ~ #external_access_options },
+        |(_, replace, _, _, _, exists, name, (rules, enabled))| {
+            let (Some(rules), Some(enabled)) = (rules, enabled) else {
+                return Err(nom::Err::Failure(ErrorKind::other(
+                    "Expected ALLOWED_NETWORK_RULES and ENABLED",
+                )));
+            };
+            Ok(Statement::ExternalAccess(
+                ExternalAccessStmt::CreateIntegration {
+                    name,
+                    create_option: parse_create_option(replace.is_some(), exists.is_some())?,
+                    rules,
+                    enabled,
+                },
+            ))
+        },
+    );
+    let alter_external_access = map(
+        rule! { ALTER ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ (IF ~ EXISTS)? ~ #ident ~ SET ~ #external_access_options },
+        |(_, _, _, _, exists, name, _, (rules, enabled))| {
+            Statement::ExternalAccess(ExternalAccessStmt::AlterIntegration {
+                name,
+                if_exists: exists.is_some(),
+                rules,
+                enabled,
+            })
+        },
+    );
+    let drop_external_access = map(
+        rule! { DROP ~ (EXTERNAL ~ ACCESS)? ~ INTEGRATION ~ (IF ~ EXISTS)? ~ #ident },
+        |(_, _, _, exists, name)| {
+            Statement::ExternalAccess(ExternalAccessStmt::DropIntegration {
+                name,
+                if_exists: exists.is_some(),
+            })
+        },
+    );
+
     // connections
     let connection_opt = connection_opt("=");
     let create_connection = map_res(
@@ -3327,6 +3408,8 @@ AS
     ENABLED = <bool>
     [ WEBHOOK = ( url = <string_literal>, method = <string_literal>, authorization_header = <string_literal> ) ]
     [ COMMENT = '<string_literal>' ]`"
+                | #create_network_rule: "CREATE NETWORK RULE"
+                | #create_external_access: "CREATE EXTERNAL ACCESS INTEGRATION"
                 | #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
                 | #create_row_access : "`CREATE ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
                 | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
@@ -3365,6 +3448,8 @@ AS
                 | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
                 | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
                 | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"
+                | #drop_network_rule: "DROP NETWORK RULE"
+                | #drop_external_access: "DROP EXTERNAL ACCESS INTEGRATION"
                 | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
                 | #drop_row_access : "`DROP ROW ACCESS POLICY [ IF EXISTS ] <name>`"
                 | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
@@ -3405,7 +3490,11 @@ AS
             | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
             | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
             | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
-            | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            | (
+                #alter_network_rule: "ALTER NETWORK RULE"
+                | #alter_external_access: "ALTER EXTERNAL ACCESS INTEGRATION"
+                | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            )
         ).parse(i),
         RENAME => rule!(
             #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
@@ -3430,6 +3519,34 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             format: opt_format.map(|(_, format)| format.name),
         },
     )
+    .parse(i)
+}
+
+fn external_access_options(i: Input) -> IResult<(Option<Vec<Identifier>>, Option<bool>)> {
+    let rules = map(
+        rule! { ALLOWED_NETWORK_RULES ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")" },
+        |(_, _, _, rules, _)| (Some(rules), None),
+    );
+    let enabled = map(
+        rule! { ENABLED ~ "=" ~ #literal_bool },
+        |(_, _, enabled)| (None, Some(enabled)),
+    );
+    map_res(rule! { (#rules | #enabled)+ }, |options| {
+        let mut rules = None;
+        let mut enabled = None;
+        for (new_rules, new_enabled) in options {
+            if (rules.is_some() && new_rules.is_some())
+                || (enabled.is_some() && new_enabled.is_some())
+            {
+                return Err(nom::Err::Failure(ErrorKind::other(
+                    "Duplicate external access integration option",
+                )));
+            }
+            rules = rules.or(new_rules);
+            enabled = enabled.or(new_enabled);
+        }
+        Ok((rules, enabled))
+    })
     .parse(i)
 }
 
@@ -4129,6 +4246,20 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
+    let integration_all_privs = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ INTEGRATION ~ #ident },
+        |(_, _, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Integration(name),
+        },
+    );
+    let integration_privs = map(
+        rule! { USAGE ~ ON ~ INTEGRATION ~ #ident },
+        |(_, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Integration(name),
+        },
+    );
     let udf_privs = map(
         rule! {
             USAGE ~ ON ~ UDF ~ #ident
@@ -4290,6 +4421,8 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
         | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
+        | #integration_all_privs: "ALL [ PRIVILEGES ] ON INTEGRATION <name>"
+        | #integration_privs: "USAGE ON INTEGRATION <name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
         | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
         | #connection_privs: "ACCESS CONNECTION ON CONNECTION <connection_name>"
@@ -6403,6 +6536,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ HANDLER ~ ^"=" ~ ^#literal_string
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
+            ~ (EXTERNAL_ACCESS_INTEGRATIONS ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
         },
         |(
             arg_types,
@@ -6418,8 +6552,14 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             handler,
             headers,
             address_or_code,
+            external_access_integrations,
         )| {
             if address_or_code.1 {
+                if external_access_integrations.is_some() {
+                    return Err(nom::Err::Failure(ErrorKind::other(
+                        "EXTERNAL_ACCESS_INTEGRATIONS requires a remote UDF ADDRESS",
+                    )));
+                }
                 Ok(UDFDefinition::UDFScript {
                     arg_types,
                     return_type,
@@ -6439,6 +6579,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                 })
             } else {
                 Ok(UDFDefinition::UDFServer {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     return_type,
                     address: address_or_code.0,

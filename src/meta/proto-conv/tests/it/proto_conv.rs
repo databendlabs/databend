@@ -331,6 +331,7 @@ fn new_virtual_data_schema() -> ce::VirtualDataSchema {
 
 fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
     databend_common_meta_app::principal::UDFServer {
+        external_access_integrations: vec![],
         address: "http://127.0.0.1:8888".to_string(),
         handler: "isempty".to_string(),
         headers: BTreeMap::from([

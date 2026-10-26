@@ -3075,7 +3075,6 @@ dependencies = [
  "databend-common-storage",
  "databend-common-users",
  "databend-meta-client 260205.13.5",
- "databend-meta-runtime",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "dyn-clone",
@@ -3196,6 +3195,7 @@ dependencies = [
  "serde_with",
  "serfig",
  "temp-env",
+ "tempfile",
  "toml 0.8.22",
 ]
 
@@ -3248,6 +3248,7 @@ dependencies = [
 name = "databend-common-expression"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.12",
  "anyhow",
  "arrow-array",
  "arrow-buffer",
@@ -3646,11 +3647,7 @@ name = "databend-common-meta-app-storage"
 version = "0.1.0"
 dependencies = [
  "databend-common-exception",
- "log",
- "opendal 0.55.0",
- "parking_lot 0.12.3",
  "serde",
- "tokio",
 ]
 
 [[package]]
@@ -4012,7 +4009,6 @@ dependencies = [
  "databend-common-storage",
  "databend-common-users",
  "databend-meta-client 260205.13.5",
- "databend-meta-runtime",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "goldenfile",
@@ -4538,6 +4534,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-backtrace",
+ "async-trait",
  "base64 0.22.1",
  "chrono",
  "cidr",
@@ -4559,6 +4556,7 @@ dependencies = [
  "databend-meta-runtime",
  "divan",
  "enumflags2",
+ "futures",
  "itertools 0.13.0",
  "jwt-simple",
  "log",
@@ -4572,6 +4570,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "url",
  "wiremock",
 ]
 
@@ -5793,6 +5792,7 @@ dependencies = [
  "arrow-schema",
  "arrow-select",
  "arrow-udf-runtime",
+ "async-trait",
  "databend-common-base",
  "databend-common-cache",
  "databend-common-exception",
@@ -5802,8 +5802,11 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storage",
  "futures",
+ "libc",
  "log",
  "parking_lot 0.12.3",
+ "serde",
+ "serde_json",
  "tokio",
  "toml 0.8.22",
  "uuid",

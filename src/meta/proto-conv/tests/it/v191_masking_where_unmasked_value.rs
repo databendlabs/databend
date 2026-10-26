@@ -37,14 +37,14 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v190_masking_where_unmasked_value() -> anyhow::Result<()> {
+fn test_decode_v191_masking_where_unmasked_value() -> anyhow::Result<()> {
     // Run test_pb_from_to first to get these bytes
-    let table_meta_v190: Vec<u8> = vec![
-        10, 7, 160, 6, 190, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+    let table_meta_v191: Vec<u8> = vec![
+        10, 7, 160, 6, 191, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
         56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49,
         49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 190,
-        1, 168, 6, 24, 162, 2, 14, 18, 12, 8, 7, 18, 1, 0, 160, 6, 190, 1, 168, 6, 24, 200, 2, 0,
-        218, 2, 1, 0, 160, 6, 190, 1, 168, 6, 24,
+        1, 168, 6, 24, 162, 2, 14, 18, 12, 8, 7, 18, 1, 0, 160, 6, 191, 1, 168, 6, 24, 200, 2, 0,
+        218, 2, 1, 0, 160, 6, 191, 1, 168, 6, 24,
     ];
 
     let want = || mt::TableMeta {
@@ -80,7 +80,7 @@ fn test_decode_v190_masking_where_unmasked_value() -> anyhow::Result<()> {
     };
     common::test_pb_from_to(func_name!(), want())?;
 
-    common::test_load_old(func_name!(), table_meta_v190.as_slice(), 190, want())?;
+    common::test_load_old(func_name!(), table_meta_v191.as_slice(), 191, want())?;
 
     // The authorization must not lock older readers out of the table: an older
     // reader ignores field 43 and keeps masked WHERE semantics instead.

@@ -387,7 +387,7 @@ where
                     }
                 }
             }
-            (ColumnView::Column(column_validity), None) => {
+            (column_validity @ (ColumnView::Column(_) | ColumnView::Encoded(_)), None) => {
                 for (value, valid) in values.iter().zip(column_validity.iter()) {
                     if valid {
                         state.add(value);
@@ -396,7 +396,10 @@ where
                     }
                 }
             }
-            (ColumnView::Column(column_validity), Some(validity)) => {
+            (
+                column_validity @ (ColumnView::Column(_) | ColumnView::Encoded(_)),
+                Some(validity),
+            ) => {
                 for ((value, valid), selected) in values
                     .iter()
                     .zip(column_validity.iter())
@@ -441,19 +444,21 @@ where
                     input.validity,
                     |state, value| state.add(value),
                 ),
-            ColumnView::Column(column_validity) => input
-                .states
-                .for_each_state_value::<NumberArrayMovingState<I, S>, _>(
-                    values.iter().zip(column_validity.iter()),
-                    input.validity,
-                    |state, (value, valid)| {
-                        if valid {
-                            state.add(value);
-                        } else {
-                            state.add_default();
-                        }
-                    },
-                ),
+            column_validity @ (ColumnView::Column(_) | ColumnView::Encoded(_)) => {
+                input
+                    .states
+                    .for_each_state_value::<NumberArrayMovingState<I, S>, _>(
+                        values.iter().zip(column_validity.iter()),
+                        input.validity,
+                        |state, (value, valid)| {
+                            if valid {
+                                state.add(value);
+                            } else {
+                                state.add_default();
+                            }
+                        },
+                    )
+            }
         }
     }
 
@@ -470,8 +475,8 @@ where
         match nulls {
             ColumnView::Const(false, _) => state.add_default(),
             ColumnView::Const(true, _) => state.add(values.index(input.row).unwrap()),
-            ColumnView::Column(validity) => {
-                if validity.get(input.row).unwrap() {
+            validity @ (ColumnView::Column(_) | ColumnView::Encoded(_)) => {
+                if validity.index(input.row).unwrap() {
                     state.add(values.index(input.row).unwrap());
                 } else {
                     state.add_default();
@@ -577,7 +582,7 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
                     }
                 }
             }
-            (ColumnView::Column(column_validity), None) => {
+            (column_validity @ (ColumnView::Column(_) | ColumnView::Encoded(_)), None) => {
                 for (value, valid) in values.iter().zip(column_validity.iter()) {
                     if valid {
                         state.add(value);
@@ -586,7 +591,10 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
                     }
                 }
             }
-            (ColumnView::Column(column_validity), Some(validity)) => {
+            (
+                column_validity @ (ColumnView::Column(_) | ColumnView::Encoded(_)),
+                Some(validity),
+            ) => {
                 for ((value, valid), selected) in values
                     .iter()
                     .zip(column_validity.iter())
@@ -631,19 +639,21 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
                     input.validity,
                     |state, value| state.add(value),
                 ),
-            ColumnView::Column(column_validity) => input
-                .states
-                .for_each_state_value::<AggregateDecimalArrayMovingState<T>, _>(
-                    values.iter().zip(column_validity.iter()),
-                    input.validity,
-                    |state, (value, valid)| {
-                        if valid {
-                            state.add(value);
-                        } else {
-                            state.add_default();
-                        }
-                    },
-                ),
+            column_validity @ (ColumnView::Column(_) | ColumnView::Encoded(_)) => {
+                input
+                    .states
+                    .for_each_state_value::<AggregateDecimalArrayMovingState<T>, _>(
+                        values.iter().zip(column_validity.iter()),
+                        input.validity,
+                        |state, (value, valid)| {
+                            if valid {
+                                state.add(value);
+                            } else {
+                                state.add_default();
+                            }
+                        },
+                    )
+            }
         }
     }
 
@@ -660,8 +670,8 @@ where T: Decimal + std::fmt::Debug + std::ops::AddAssign + std::ops::SubAssign
         match nulls {
             ColumnView::Const(false, _) => state.add_default(),
             ColumnView::Const(true, _) => state.add(values.index(input.row).unwrap()),
-            ColumnView::Column(validity) => {
-                if validity.get(input.row).unwrap() {
+            validity @ (ColumnView::Column(_) | ColumnView::Encoded(_)) => {
+                if validity.index(input.row).unwrap() {
                     state.add(values.index(input.row).unwrap());
                 } else {
                     state.add_default();

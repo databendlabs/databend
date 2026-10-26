@@ -15,6 +15,7 @@
 use std::ops::*;
 use std::sync::Arc;
 
+use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -23,6 +24,7 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarFunction;
 use databend_common_expression::ScalarFunctionDomain;
 use databend_common_expression::Value;
@@ -35,6 +37,7 @@ use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_narrow_buffer;
 
 use super::convert_to_decimal_domain;
 use crate::decimal_to_decimal_fast;
@@ -192,6 +195,21 @@ fn op_decimal(
     } else {
         result_type.size()
     };
+    if a.0.is_encoded() || b.0.is_encoded() {
+        if let Some(value) = op_decimal_encoded(a, b, ctx, result_type, op) {
+            return value;
+        }
+        let a_value = a.0.decoded();
+        let b_value = b.0.decoded();
+        return op_decimal(
+            (&*a_value, a.1, a.2),
+            (&*b_value, b.1, b.2),
+            ctx,
+            result_type,
+            op,
+        );
+    }
+
     let (a, a_type) = convert_to_decimal(a.0, a.1, a.2, ctx);
     let (b, b_type) = convert_to_decimal(b.0, b.1, b.2, ctx);
 
@@ -218,6 +236,197 @@ fn op_decimal(
             })
         }
     })
+}
+
+/// Plus, minus and multiply with frame of reference encoded operands.
+///
+/// When the bounds of the operands prove that every result fits both `i64` and the result
+/// precision, the operation is computed in `i64` and the result is returned frame of reference
+/// encoded, whatever physical type the result size implies (e.g. `Decimal(38, 6)` is declared
+/// `i128`). Returns `None` to fall back to the decoded computation.
+///
+/// TODO: extend to the other frame of reference encodable types (integers, `Date`, `Timestamp`).
+/// Their arithmetic is registered through the generic function builder, whose
+/// `accepts_encoded_args` is `false`, so encoded operands are decoded before the call. The bounds
+/// and chunked kernel here are not decimal specific; only the scale and precision checks are.
+fn op_decimal_encoded(
+    a: (&Value<AnyType>, &DataType, DecimalSize),
+    b: (&Value<AnyType>, &DataType, DecimalSize),
+    ctx: &mut EvalContext,
+    result_type: DecimalDataType,
+    op: ArithmeticOp,
+) -> Option<Value<AnyType>> {
+    let size = result_type.size();
+    // Decoding picks the physical type from the size, which must be the result type's.
+    let same_kind = matches!(
+        (DecimalDataType::from(size), result_type),
+        (DecimalDataType::Decimal64(_), DecimalDataType::Decimal64(_))
+            | (
+                DecimalDataType::Decimal128(_),
+                DecimalDataType::Decimal128(_)
+            )
+            | (
+                DecimalDataType::Decimal256(_),
+                DecimalDataType::Decimal256(_)
+            )
+    );
+    // Raw values are unscaled, so no operand may need rescaling.
+    let scale_matches = match op {
+        ArithmeticOp::Plus | ArithmeticOp::Minus => {
+            a.2.scale() == size.scale() && b.2.scale() == size.scale()
+        }
+        ArithmeticOp::Multiply => a.2.scale() + b.2.scale() == size.scale(),
+        _ => false,
+    };
+    if !same_kind || !scale_matches {
+        return None;
+    }
+    let lhs = I64Operand::new(a, ctx)?;
+    let rhs = I64Operand::new(b, ctx)?;
+    let len = lhs.len().or(rhs.len())?;
+
+    let ((a_min, a_max), (b_min, b_max)) = (lhs.bounds(), rhs.bounds());
+    let (min, max) = match op {
+        ArithmeticOp::Plus => (a_min + b_min, a_max + b_max),
+        ArithmeticOp::Minus => (a_min - b_max, a_max - b_min),
+        _ => {
+            let corners = [a_min * b_min, a_min * b_max, a_max * b_min, a_max * b_max];
+            (*corners.iter().min()?, *corners.iter().max()?)
+        }
+    };
+    let limit = 10i128
+        .checked_pow(size.precision() as u32)
+        .map_or(i128::MAX, |p| p - 1);
+    if min < (-limit).max(i64::MIN as i128) || max > limit.min(i64::MAX as i128) {
+        return None;
+    }
+    let max_delta = (max - min) as u64;
+    let deltas = compute_deltas(op, &lhs, &rhs, len, min as i64, max_delta);
+    let column = ForColumn::new(DataType::Decimal(size), min, max_delta, deltas);
+    Some(Value::Column(Column::Encoded(Box::new(
+        EncodedColumn::For(column),
+    ))))
+}
+
+/// An operand of [`op_decimal_encoded`]: raw `i64` values at its binded scale.
+enum I64Operand<'a> {
+    Column {
+        base: i64,
+        max_delta: u64,
+        deltas: &'a NarrowBuffer,
+    },
+    Scalar(i64),
+}
+
+impl<'a> I64Operand<'a> {
+    fn new(
+        (value, data_type, size): (&'a Value<AnyType>, &DataType, DecimalSize),
+        ctx: &mut EvalContext,
+    ) -> Option<Self> {
+        match value {
+            Value::Column(Column::Encoded(encoded)) => {
+                let column = encoded.as_for()?;
+                let DataType::Decimal(column_size) = column.data_type() else {
+                    return None;
+                };
+                if column_size.scale() != size.scale() || !column.fits::<i64>() {
+                    return None;
+                }
+                Some(I64Operand::Column {
+                    base: column.base() as i64,
+                    max_delta: column.max_delta(),
+                    deltas: column.deltas(),
+                })
+            }
+            Value::Scalar(_) => {
+                let ((value, _), _) = convert_to_decimal(value, data_type, size, ctx);
+                let Value::Scalar(Scalar::Decimal(scalar)) = value else {
+                    return None;
+                };
+                let raw = match scalar {
+                    DecimalScalar::Decimal64(v, _) => v as i128,
+                    DecimalScalar::Decimal128(v, _) => v,
+                    DecimalScalar::Decimal256(v, _) => {
+                        let raw = v.as_i128();
+                        (i256::from(raw) == v).then_some(raw)?
+                    }
+                };
+                i64::try_from(raw).ok().map(I64Operand::Scalar)
+            }
+            Value::Column(_) => None,
+        }
+    }
+
+    fn len(&self) -> Option<usize> {
+        match self {
+            I64Operand::Column { deltas, .. } => Some(deltas.len()),
+            I64Operand::Scalar(_) => None,
+        }
+    }
+
+    fn bounds(&self) -> (i128, i128) {
+        match self {
+            I64Operand::Column {
+                base, max_delta, ..
+            } => (*base as i128, *base as i128 + *max_delta as i128),
+            I64Operand::Scalar(v) => (*v as i128, *v as i128),
+        }
+    }
+
+    /// Writes the values of rows `start..start + out.len()` into `out`.
+    fn fill(&self, start: usize, out: &mut [i64]) {
+        match self {
+            I64Operand::Scalar(v) => out.fill(*v),
+            I64Operand::Column { base, deltas, .. } => with_narrow_buffer!(*deltas, |d| {
+                let deltas = &d.as_slice()[start..start + out.len()];
+                for (value, delta) in out.iter_mut().zip(deltas) {
+                    *value = base.wrapping_add(*delta as i64);
+                }
+            }),
+        }
+    }
+}
+
+/// Computes `lhs <op> rhs` chunk by chunk and stores the results as deltas from `min`.
+fn compute_deltas(
+    op: ArithmeticOp,
+    lhs: &I64Operand,
+    rhs: &I64Operand,
+    len: usize,
+    min: i64,
+    max_delta: u64,
+) -> NarrowBuffer {
+    const CHUNK: usize = 1024;
+    let mut lhs_values = [0i64; CHUNK];
+    let mut rhs_values = [0i64; CHUNK];
+
+    macro_rules! compute {
+        ($t:ty, $variant:ident) => {{
+            let mut out = Vec::<$t>::with_capacity(len);
+            for start in (0..len).step_by(CHUNK) {
+                let n = (len - start).min(CHUNK);
+                let (a, b) = (&mut lhs_values[..n], &mut rhs_values[..n]);
+                lhs.fill(start, a);
+                rhs.fill(start, b);
+                // Wrapping arithmetic is exact: the bounds prove every result fits `i64`.
+                let pairs = a.iter_mut().zip(b.iter());
+                match op {
+                    ArithmeticOp::Plus => pairs.for_each(|(x, y)| *x = x.wrapping_add(*y)),
+                    ArithmeticOp::Minus => pairs.for_each(|(x, y)| *x = x.wrapping_sub(*y)),
+                    _ => pairs.for_each(|(x, y)| *x = x.wrapping_mul(*y)),
+                }
+                out.extend(a.iter().map(|v| v.wrapping_sub(min) as $t));
+            }
+            NarrowBuffer::$variant(out.into())
+        }};
+    }
+
+    match NarrowBuffer::width_for(max_delta) {
+        1 => compute!(u8, U8),
+        2 => compute!(u16, U16),
+        4 => compute!(u32, U32),
+        _ => compute!(u64, U64),
+    }
 }
 
 fn binary_decimal<C, L, R, T, U>(
@@ -507,6 +716,10 @@ impl ScalarFunction for DecimalBinaryFunctionEvaluator {
             return_decimal_type,
             self.arithmetic_op,
         )
+    }
+
+    fn accepts_encoded_args(&self) -> bool {
+        true
     }
 }
 

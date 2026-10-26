@@ -14,6 +14,7 @@ databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-storages-common-index = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
@@ -32,8 +33,6 @@ rustix = { workspace = true }
 siphasher = { workspace = true }
 
 [dev-dependencies]
-databend-common-expression = { workspace = true }
-
 divan = { workspace = true }
 mockall = { workspace = true }
 tempfile = { workspace = true }

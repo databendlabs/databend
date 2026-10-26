@@ -1,0 +1,82 @@
+# Policy management requires SUPER. No remote UDF server is needed for DDL.
+statement ok
+DROP INTEGRATION IF EXISTS ddl_udf_access;
+
+statement ok
+DROP NETWORK RULE IF EXISTS ddl_udf_rule;
+
+statement error Only TYPE = HOST_PORT and MODE = EGRESS are supported
+CREATE NETWORK RULE ddl_udf_rule TYPE = IPV4 MODE = EGRESS VALUE_LIST = ('example.com:443');
+
+statement error Only TYPE = HOST_PORT and MODE = EGRESS are supported
+CREATE NETWORK RULE ddl_udf_rule TYPE = HOST_PORT MODE = INGRESS VALUE_LIST = ('example.com:443');
+
+statement error Invalid HOST_PORT value
+CREATE NETWORK RULE ddl_udf_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('https://example.com');
+
+statement error Invalid HOST_PORT value
+CREATE NETWORK RULE ddl_udf_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('*.example.com:443');
+
+statement ok
+CREATE NETWORK RULE ddl_udf_rule TYPE = HOST_PORT VALUE_LIST = ('example.com:443', 'other.example.com:8443') MODE = EGRESS;
+
+statement ok
+CREATE NETWORK RULE IF NOT EXISTS ddl_udf_rule MODE = EGRESS TYPE = HOST_PORT VALUE_LIST = ('ignored.example.com');
+
+statement ok
+CREATE OR REPLACE NETWORK RULE ddl_udf_rule MODE = EGRESS VALUE_LIST = ('example.com:8443') TYPE = HOST_PORT;
+
+statement error option IF NOT EXISTS and OR REPLACE are incompatible
+CREATE OR REPLACE NETWORK RULE IF NOT EXISTS ddl_udf_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com:443');
+
+statement ok
+CREATE EXTERNAL ACCESS INTEGRATION ddl_udf_access ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = FALSE;
+
+statement ok
+CREATE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS ddl_udf_access ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = TRUE;
+
+statement ok
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION ddl_udf_access ENABLED = TRUE ALLOWED_NETWORK_RULES = (ddl_udf_rule);
+
+statement error option IF NOT EXISTS and OR REPLACE are incompatible
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS ddl_udf_access ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = TRUE;
+
+statement error Duplicate external access integration option
+ALTER EXTERNAL ACCESS INTEGRATION ddl_udf_access SET ENABLED = TRUE ENABLED = FALSE;
+
+# Quoted policy names survive CREATE, ALTER and the generic DROP INTEGRATION.
+statement ok
+CREATE EXTERNAL ACCESS INTEGRATION "Quoted access/r""x" ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = TRUE;
+
+statement ok
+ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS "Quoted access/r""x" SET ENABLED = FALSE ALLOWED_NETWORK_RULES = (ddl_udf_rule);
+
+statement ok
+DROP INTEGRATION "Quoted access/r""x";
+
+statement ok
+ALTER NETWORK RULE IF EXISTS ddl_udf_rule SET VALUE_LIST = ('example.com:443');
+
+statement ok
+ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS ddl_udf_access SET ENABLED = TRUE ALLOWED_NETWORK_RULES = (ddl_udf_rule);
+
+statement ok
+ALTER EXTERNAL ACCESS INTEGRATION ddl_udf_access SET ENABLED = FALSE;
+
+statement ok
+DROP INTEGRATION ddl_udf_access;
+
+statement ok
+DROP EXTERNAL ACCESS INTEGRATION IF EXISTS ddl_udf_access;
+
+statement ok
+DROP NETWORK RULE ddl_udf_rule;
+
+statement ok
+ALTER NETWORK RULE IF EXISTS ddl_udf_rule SET VALUE_LIST = ('example.com:443');
+
+statement ok
+ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS ddl_udf_access SET ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = FALSE;
+
+statement ok
+DROP INTEGRATION IF EXISTS ddl_udf_access;

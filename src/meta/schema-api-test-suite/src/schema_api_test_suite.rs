@@ -2415,24 +2415,33 @@ impl SchemaApiTestSuite {
             )
         };
 
-        // A missing source rejects CREATE.
+        // A missing MV source must not reuse an option update for a different source.
         {
             let missing_source_id = u64::MAX;
             let invalid_definition = new_definition("missing_source");
-            let err = mt
-                .create_table(new_mv_req(
+            let source_before = util.get_table().await?;
+            for source_table_option in [
+                None,
+                Some(enable_change_tracking(
+                    source_table_id,
+                    source_before.ident.seq,
+                )),
+            ] {
+                let mut req = new_mv_req(
                     "mv_missing_source",
                     CreateOption::Create,
                     missing_source_id,
                     0,
                     &invalid_definition,
-                ))
-                .await
-                .unwrap_err();
-            assert!(matches!(
-                err,
-                KVAppError::AppError(AppError::InvalidMaterializedView(_))
-            ));
+                );
+                req.source_table_option = source_table_option;
+                let err = mt.create_table(req).await.unwrap_err();
+                assert!(matches!(
+                    err,
+                    KVAppError::AppError(AppError::InvalidMaterializedView(_))
+                ));
+                assert_eq!(util.get_table().await?, source_before);
+            }
         }
 
         // The legacy hidden-table CREATE path is not valid for an MV.
@@ -2862,6 +2871,27 @@ impl SchemaApiTestSuite {
                 Some(replacement_source_name)
             );
             assert!(!dropped.source.is_active);
+
+            // Reusing the source-option read must still reject a dropped MV source.
+            let source_ident = TableId::new(replacement_source_table_id);
+            let source_before = mt.get_pb(&source_ident).await?.unwrap();
+            let mut req = new_mv_req(
+                "mv_dropped_source",
+                CreateOption::Create,
+                replacement_source_table_id,
+                0,
+                &replacement_definition,
+            );
+            req.source_table_option = Some(enable_change_tracking(
+                replacement_source_table_id,
+                source_before.seq,
+            ));
+            let err = mt.create_table(req).await.unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::InvalidMaterializedView(_))
+            ));
+            assert_eq!(mt.get_pb(&source_ident).await?.unwrap(), source_before);
 
             mt.gc_drop_tables(GcDroppedTableReq {
                 tenant: tenant.clone(),

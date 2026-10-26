@@ -47,6 +47,41 @@ curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
   -d '{"sql": "SELECT * FROM t_params_test WHERE a = ? AND b = ?", "params": [1, "row1"], "pagination": {"wait_time_secs": 6}}' \
   | jq -r '.data, .error'
 
+# Issue #20775: drivers often send numeric bounds as strings. Their SQL
+# comparison semantics must not be replaced by lexicographic range checks.
+echo "=== numeric column ranges with string params ==="
+curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
+  --header 'Content-Type: application/json' \
+  -d '{"sql": "CREATE OR REPLACE TABLE t_range_params_test(id INT, n INT, f DOUBLE)", "pagination": {"wait_time_secs": 6}}' \
+  | jq -r '.error'
+
+curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
+  --header 'Content-Type: application/json' \
+  -d '{"sql": "INSERT INTO t_range_params_test VALUES (1, 9, 9.5), (2, 10, 10), (3, 50, 50)", "pagination": {"wait_time_secs": 6}}' \
+  | jq -r '.error'
+
+curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
+  --header 'Content-Type: application/json' \
+  -d '{"sql": "SELECT id FROM t_range_params_test WHERE n >= ? AND n <= ? ORDER BY id", "params": ["9", "10"], "pagination": {"wait_time_secs": 6}}' \
+  | jq -r '.data, .error'
+
+echo "=== numeric column ranges with numeric params ==="
+curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
+  --header 'Content-Type: application/json' \
+  -d '{"sql": "SELECT id FROM t_range_params_test WHERE n >= ? AND n <= ? ORDER BY id", "params": [9, 10], "pagination": {"wait_time_secs": 6}}' \
+  | jq -r '.data, .error'
+
+echo "=== double column ranges with string params ==="
+curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
+  --header 'Content-Type: application/json' \
+  -d '{"sql": "SELECT id FROM t_range_params_test WHERE f >= ? AND f <= ? ORDER BY id", "params": ["9.5", "10"], "pagination": {"wait_time_secs": 6}}' \
+  | jq -r '.data, .error'
+
+curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
+  --header 'Content-Type: application/json' \
+  -d '{"sql": "DROP TABLE t_range_params_test", "pagination": {"wait_time_secs": 6}}' \
+  | jq -r '.error'
+
 echo "=== sql injection prevention ==="
 curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
   --header 'Content-Type: application/json' \

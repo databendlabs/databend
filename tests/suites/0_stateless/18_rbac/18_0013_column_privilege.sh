@@ -73,8 +73,8 @@ run_root_sql "
 drop user if exists a;
 drop role if exists role1;
 drop database if exists sysdb;
-create user a identified by '$TEST_USER_PASSWORD' with default_role='role1';
 create role role1;
+create user a identified by '$TEST_USER_PASSWORD' with default_role='role1';
 grant role role1 to a;
 create database sysdb;
 create table sysdb.sysdb_tt(id int);
