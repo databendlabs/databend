@@ -65,6 +65,7 @@ async fn register_legacy_view(ctx: &Arc<QueryContext>, name: &str, query: &str) 
             source_table_option: None,
             as_dropped: false,
             materialized_view: None,
+            clone: None,
             table_properties: None,
             table_partition: None,
         })
