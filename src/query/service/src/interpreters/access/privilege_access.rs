@@ -580,7 +580,7 @@ impl PrivilegeAccess {
         Ok(())
     }
 
-    /// Ordinary SELECTs can satisfy either legacy name grants or ID grants without consulting
+    /// Ordinary SELECT queries can satisfy either legacy name grants or ID grants without consulting
     /// ownership. Resolve IDs once and only use ownership as a fallback after both grant checks.
     #[fastrace::trace(name = "Access.SelectTable")]
     async fn validate_table_select_access(
