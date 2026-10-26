@@ -99,9 +99,10 @@ impl VectorIndexReader {
             .generate_scores(row_count as u32, &self.query_values)
     }
 
-    /// FP16 scores of every valid row, for paths that must output the scores of all
-    /// rows with refinement enabled (the rows to keep are only known after reading
-    /// the data). Reads every FP16 page of the block.
+    /// FP16 scores of every valid row, for paths that output the scores of all rows
+    /// with refinement enabled. Reads the whole FP16 data of the block in one
+    /// request, bypassing the refine data cache.
+    #[fastrace::trace]
     pub async fn generate_refined_scores(
         &self,
         row_count: usize,
@@ -111,7 +112,38 @@ impl VectorIndexReader {
         let offsets: Vec<u32> = TrueIdxIter::new(row_count, index.index().validity())
             .map(|row| row as u32)
             .collect();
-        self.refine_scores(row_count, location, &offsets).await
+        if offsets.is_empty() {
+            return Ok(Vec::new());
+        }
+        let start = Instant::now();
+        let (scorer, refine) = self.open_refine(row_count, location).await?;
+        let data = refine.read_all(&self.settings).await?;
+        let scores = scorer.score_page(&data, 0, &offsets)?;
+        debug!(
+            "Vector FP16 full read: rows={}, bytes={}, elapsed_ms={}",
+            offsets.len(),
+            data.len(),
+            start.elapsed().as_millis()
+        );
+        Ok(scores)
+    }
+
+    /// The FP16 scorer and the block's FP16 data, checked to match.
+    async fn open_refine(
+        &self,
+        row_count: usize,
+        location: &IndexFileLocation,
+    ) -> Result<(&Fp16QueryScorer, RefineData)> {
+        let scorer = self
+            .refine_scorer
+            .as_deref()
+            .ok_or_else(|| ErrorCode::BadArguments("FP16 refinement is not enabled"))?;
+        let refine =
+            RefineData::open(&self.operator, location, self.loader.identity(), row_count).await?;
+        if refine.dimension != scorer.dimension() {
+            return Err(ErrorCode::StorageOther("FP16 bundle dimension mismatch"));
+        }
+        Ok((scorer, refine))
     }
 
     /// Rescores `offsets` from the FP16 data. `offsets` must be valid (non-NULL)
@@ -127,18 +159,10 @@ impl VectorIndexReader {
             return Ok(Vec::new());
         }
         let start = Instant::now();
-        let scorer = self
-            .refine_scorer
-            .as_deref()
-            .ok_or_else(|| ErrorCode::BadArguments("FP16 refinement is not enabled"))?;
         if offsets.iter().any(|&offset| offset as usize >= row_count) {
             return Err(ErrorCode::StorageOther("FP16 row offset outside block"));
         }
-        let refine =
-            RefineData::open(&self.operator, location, self.loader.identity(), row_count).await?;
-        if refine.dimension != scorer.dimension() {
-            return Err(ErrorCode::StorageOther("FP16 bundle dimension mismatch"));
-        }
+        let (scorer, refine) = self.open_refine(row_count, location).await?;
         // Group the rows by page; read only those pages, exactly (no gap merging).
         let mut pages: BTreeMap<usize, Vec<u32>> = BTreeMap::new();
         for &offset in offsets {
@@ -184,7 +208,7 @@ mod tests {
     const COLUMN_ID: u32 = 3;
 
     fn reader(operator: Operator) -> Result<VectorIndexReader> {
-        let options = BTreeMap::from([("refine_factor".to_owned(), "4".to_owned())]);
+        let options = BTreeMap::from([("refine".to_owned(), "true".to_owned())]);
         Ok(VectorIndexReader::create(
             operator,
             ReadSettings {
@@ -199,7 +223,7 @@ mod tests {
                 version: "v1".to_owned(),
                 column_id: COLUMN_ID,
             },
-            VectorIndexSearchOptions::parse(&options)?,
+            VectorIndexSearchOptions::new(&options, 4, 0)?,
         ))
     }
 
@@ -242,10 +266,14 @@ mod tests {
         let scores = index.generate_scores(ROWS, &location).await?;
         assert_eq!(scores.len(), 90);
         assert!(scores.iter().all(|score| !is_null(score.idx)));
-        assert_eq!(
-            index.generate_refined_scores(ROWS, &location).await?.len(),
-            90
-        );
+        // A full read scores every valid row like page reads do.
+        let all = index.generate_refined_scores(ROWS, &location).await?;
+        assert_eq!(all.len(), 90);
+        let paged = index.refine_scores(ROWS, &location, &[1, 98, 99]).await?;
+        for score in &paged {
+            let full = all.iter().find(|full| full.idx == score.idx).unwrap();
+            assert_eq!(full.score, score.score);
+        }
 
         // FP16 scores, sorted by row: L2 distance to [1.0; DIM] is
         // sqrt(DIM) * (1 - r * 0.01), up to FP16 rounding.

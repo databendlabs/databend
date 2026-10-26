@@ -237,6 +237,16 @@ impl RefineData {
         self.entry.page_row_range(page, self.row_count)
     }
 
+    /// Reads the whole FP16 data in one request, checked against its checksum and
+    /// not cached: a full scan would evict the pages that TopN refinement reuses.
+    pub async fn read_all(&self, settings: &ReadSettings) -> Result<Bytes> {
+        let requests = vec![(self.name.clone(), self.entry.component_read())];
+        let mut data =
+            load_bundle_reads(self.operator.clone(), settings, &self.path, requests, None).await?;
+        data.pop()
+            .ok_or_else(|| ErrorCode::Internal("Missing FP16 component read"))
+    }
+
     /// Reads `pages` through the refine data cache.
     pub async fn read_pages(&self, settings: &ReadSettings, pages: &[usize]) -> Result<Vec<Bytes>> {
         let requests = pages

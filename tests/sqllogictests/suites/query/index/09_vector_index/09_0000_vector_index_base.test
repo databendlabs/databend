@@ -333,11 +333,12 @@ SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.5584
 8 0.1490264
 15 0.150944
 
-# FP16 refinement: exactly representable values and fewer rows than the candidate
-# budget keep the results independent of HNSW build randomness.
+# FP16 refinement: exactly representable values, and blocks (3 rows each) no larger
+# than the candidate budget (limit 3 * vector_refine_factor 2), keep the results
+# independent of HNSW build randomness. Distance filters score all rows.
 statement ok
 CREATE TABLE t_refine(id Int NOT NULL, embedding Vector(4) NOT NULL,
-  VECTOR INDEX idx(embedding) distance='cosine,l1,l2' refine_factor=4)
+  VECTOR INDEX idx(embedding) distance='cosine,l1,l2' refine=true)
 
 statement ok
 INSERT INTO t_refine VALUES (1,[1,0,0,0]), (2,[1,1,0,0]), (3,[0,1,0,0])
@@ -353,7 +354,7 @@ SELECT id, round(cosine_distance(embedding,[1,0,0,0]::Vector(4)),3) AS d FROM t_
 5 0.106
 
 query IR
-SELECT id, l1_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine ORDER BY d LIMIT 3
+SETTINGS (vector_refine_factor = 4, vector_search_ef = 16) SELECT id, l1_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine ORDER BY d LIMIT 3
 ----
 1 0
 6 0.25

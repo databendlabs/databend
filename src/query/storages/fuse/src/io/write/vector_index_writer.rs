@@ -38,13 +38,9 @@ use databend_storages_common_table_meta::meta::VectorColumnStatistics;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_EF_CONSTRUCT;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_M;
-use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE_FACTOR;
-use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE_PAGE_ROWS;
-use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_SEARCH_EF;
-use databend_storages_common_table_meta::table::VECTOR_REFINE_FACTOR_MAX;
-use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS_DEFAULT;
-use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS_MAX;
-use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS_MIN;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE;
+use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS;
+use databend_storages_common_table_meta::table::parse_vector_index_refine;
 use log::debug;
 use log::info;
 use opendal::Buffer;
@@ -60,68 +56,34 @@ use crate::io::write::block_index::PendingVectorIndex;
 const DEFAULT_M: usize = 16;
 const DEFAULT_EF_CONSTRUCT: usize = 100;
 
-/// Shared writer/query policy, parsed here rather than in table metadata. Presence
-/// of a positive refine_factor both builds the FP16 store and enables its use.
+/// Whether the index stores FP16 vectors for refinement (`refine = true`).
+fn vector_index_refine(options: &BTreeMap<String, String>) -> Result<bool> {
+    match options.get(VECTOR_INDEX_OPT_REFINE) {
+        None => Ok(false),
+        Some(value) => parse_vector_index_refine(value)
+            .ok_or_else(|| ErrorCode::IndexOptionInvalid("`refine` must be `true` or `false`")),
+    }
+}
+
+/// Query-time search parameters, from the `vector_refine_factor` and
+/// `vector_search_ef` settings (0 disables / uses the default).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct VectorIndexSearchOptions {
+    /// Candidate multiplier; set only when the index stores FP16 data.
     pub refine_factor: Option<usize>,
     pub search_ef: Option<usize>,
-    pub refine_page_rows: Option<usize>,
 }
 
 impl VectorIndexSearchOptions {
-    pub fn parse(options: &BTreeMap<String, String>) -> Result<Self> {
-        let refine_factor = options
-            .get(VECTOR_INDEX_OPT_REFINE_FACTOR)
-            .map(|value| {
-                value
-                    .parse::<usize>()
-                    .ok()
-                    .filter(|factor| (1..=VECTOR_REFINE_FACTOR_MAX).contains(factor))
-                    .ok_or_else(|| {
-                        ErrorCode::IndexOptionInvalid(format!(
-                            "`refine_factor` must be an integer in [1, {VECTOR_REFINE_FACTOR_MAX}]"
-                        ))
-                    })
-            })
-            .transpose()?;
-        let search_ef = options
-            .get(VECTOR_INDEX_OPT_SEARCH_EF)
-            .map(|value| {
-                value
-                    .parse::<usize>()
-                    .ok()
-                    .filter(|ef| *ef > 0)
-                    .ok_or_else(|| {
-                        ErrorCode::IndexOptionInvalid("`search_ef` must be a positive integer")
-                    })
-            })
-            .transpose()?;
-        let refine_page_rows = options
-            .get(VECTOR_INDEX_OPT_REFINE_PAGE_ROWS)
-            .map(|value| {
-                value
-                    .parse::<usize>()
-                    .ok()
-                    .filter(|rows| {
-                        (VECTOR_REFINE_PAGE_ROWS_MIN..=VECTOR_REFINE_PAGE_ROWS_MAX).contains(rows)
-                    })
-                    .ok_or_else(|| {
-                        ErrorCode::IndexOptionInvalid(format!(
-                            "`refine_page_rows` must be an integer in [{VECTOR_REFINE_PAGE_ROWS_MIN}, {VECTOR_REFINE_PAGE_ROWS_MAX}]"
-                        ))
-                    })
-            })
-            .transpose()?;
-        if refine_page_rows.is_some() && refine_factor.is_none() {
-            return Err(ErrorCode::IndexOptionInvalid(
-                "`refine_page_rows` requires `refine_factor`",
-            ));
-        }
+    pub fn new(
+        index_options: &BTreeMap<String, String>,
+        refine_factor: u64,
+        search_ef: u64,
+    ) -> Result<Self> {
+        let refine = refine_factor > 0 && vector_index_refine(index_options)?;
         Ok(Self {
-            refine_factor,
-            search_ef,
-            refine_page_rows,
+            refine_factor: refine.then_some(refine_factor as usize),
+            search_ef: (search_ef > 0).then_some(search_ef as usize),
         })
     }
 }
@@ -132,8 +94,7 @@ struct VectorIndexParam {
     index_version: String,
     m: usize,
     ef_construct: usize,
-    refine_factor: Option<usize>,
-    refine_page_rows: Option<usize>,
+    refine: bool,
     distances: Vec<DistanceType>,
     field_offsets: Vec<(usize, ColumnId)>,
 }
@@ -220,9 +181,9 @@ impl VectorIndexBuilder {
                 continue;
             }
 
-            // Parse search/refinement parameters here as well as validating SQL at bind time.
-            // Invalid persisted metadata must return an error, not silently omit the index.
-            let search_options = VectorIndexSearchOptions::parse(&index.options)?;
+            // Validated at bind time too; invalid persisted metadata must return an
+            // error, not silently omit the index.
+            let refine = vector_index_refine(&index.options)?;
             let m = match index.options.get(VECTOR_INDEX_OPT_M) {
                 Some(value) => value.parse::<usize>().unwrap_or(DEFAULT_M),
                 None => DEFAULT_M,
@@ -273,9 +234,8 @@ impl VectorIndexBuilder {
             let index_param = VectorIndexParam {
                 index_name: index.name.clone(),
                 index_version: index.version.clone(),
-                // Without refine_factor the new bundle contains HNSW components only.
-                refine_factor: search_options.refine_factor,
-                refine_page_rows: search_options.refine_page_rows,
+                // Without refine the bundle contains HNSW components only.
+                refine,
                 m,
                 ef_construct,
                 distances,
@@ -362,11 +322,8 @@ impl VectorIndexBuilder {
                         bundle.add_hnsw(field.name().clone(), bytes)?;
                     }
                 }
-                if param.refine_factor.is_some() {
-                    let page_rows = param
-                        .refine_page_rows
-                        .unwrap_or(VECTOR_REFINE_PAGE_ROWS_DEFAULT);
-                    bundle.add_fp16_data(column_id, column, page_rows)?;
+                if param.refine {
+                    bundle.add_fp16_data(column_id, column, VECTOR_REFINE_PAGE_ROWS)?;
                 }
             }
             let file = PendingIndexFile {

@@ -58,7 +58,6 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::IndexFileLocation;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
-use databend_storages_common_table_meta::table::VECTOR_REFINE_MIN_CANDIDATES;
 use futures_util::future;
 use log::info;
 use tokio::sync::OwnedSemaphorePermit;
@@ -121,7 +120,12 @@ impl VectorIndexPruner {
             unsafe { std::mem::transmute::<Vec<F32>, Vec<f32>>(vector_index.query_values.clone()) };
         let vector_distance_type = distance_type.vector_distance_type();
 
-        let refine_options = VectorIndexSearchOptions::parse(&vector_index.index_options)?;
+        let query_settings = pruning_ctx.ctx.get_settings();
+        let refine_options = VectorIndexSearchOptions::new(
+            &vector_index.index_options,
+            query_settings.get_vector_refine_factor()?,
+            query_settings.get_vector_search_ef()?,
+        )?;
         let vector_reader = VectorIndexReader::create(
             pruning_ctx.dal.clone(),
             settings,
@@ -158,9 +162,7 @@ impl VectorIndexPruner {
                 // Saturation treats an overflowing budget as effectively unlimited.
                 let (candidate_limit, candidate_filter) = match refine_options.refine_factor {
                     Some(factor) => (
-                        limit
-                            .saturating_mul(factor)
-                            .max(VECTOR_REFINE_MIN_CANDIDATES),
+                        limit.saturating_mul(factor),
                         filter_expr
                             .as_ref()
                             .map(|expr| widen_score_filter(expr, vector_distance_type)),
@@ -327,14 +329,32 @@ impl VectorIndexPruner {
             })
             .await?;
         if self.refine_options.refine_factor.is_some() {
-            // Widen only the SQ8 candidate filter to reduce threshold-boundary
-            // losses. The budget stays fixed, so results can still be incomplete.
+            // Rows passing the original predicate on SQ8 scores fill the candidate
+            // budget, as without widening. Rows that pass only the widened predicate
+            // (near the threshold, where SQ8 may misjudge) get a separate budget, so
+            // they add candidates rather than crowding out the confident ones.
             // The original predicate is applied below to the FP16 scores.
-            let passed = self.eval_score_filters(param.candidate_filter.as_ref(), &results)?;
-            let candidates = select_refine_candidates(
+            let passed = self.eval_score_filters(param.filter_expr.as_ref(), &results)?;
+            let mut candidates = select_refine_candidates(
                 ranked_scores(&results, &passed, param.asc),
                 param.candidate_limit,
             );
+            if param.candidate_filter.is_some() {
+                let widened = self.eval_score_filters(param.candidate_filter.as_ref(), &results)?;
+                let near = near_threshold(
+                    results.iter().map(|result| result.scores.len()),
+                    &passed,
+                    &widened,
+                );
+                let extra = select_refine_candidates(
+                    ranked_scores(&results, &near, param.asc),
+                    param.candidate_limit,
+                );
+                // Disjoint from `candidates`: `near` excludes rows passing `passed`.
+                for (block, rows) in extra {
+                    candidates.entry(block).or_default().extend(rows);
+                }
+            }
             results = self.refine_candidates(results, candidates).await?;
         }
 
@@ -438,8 +458,10 @@ impl VectorIndexPruner {
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let start = Instant::now();
-        // Every row's score is output and the rows to keep are only known after
-        // reading the data, so with refinement every row gets an FP16 score.
+        // Every row's score is output. With refinement, scores are FP16 as in a
+        // refined TopN, so a row's score does not depend on the query having a
+        // limit. Each block's FP16 data is read whole in one uncached request
+        // (vector_refine_factor = 0 uses SQ8 scores instead).
         let refine = self.refine_options.refine_factor.is_some();
         let scoring = self.score_blocks(metas, move |reader, row_count, location| async move {
             if refine {
@@ -764,6 +786,29 @@ fn ranked_scores<'a>(
         })
 }
 
+/// Rows that pass the widened predicate but not the original one, per block.
+/// `None` in `original` (no predicate) excludes every row; `None` in `widened`
+/// (widened to TRUE) passes every row.
+fn near_threshold(
+    lengths: impl Iterator<Item = usize>,
+    original: &[Option<Bitmap>],
+    widened: &[Option<Bitmap>],
+) -> Vec<Option<Bitmap>> {
+    lengths
+        .zip(original.iter().zip(widened))
+        .map(|(len, (original, widened))| {
+            let rejected = match original {
+                Some(original) => !original,
+                None => Bitmap::new_zeroed(len),
+            };
+            Some(match widened {
+                Some(widened) => &rejected & widened,
+                None => rejected,
+            })
+        })
+        .collect()
+}
+
 /// Keeps the `candidate_limit` lowest scores (callers negate scores for descending
 /// order) and groups their row ids by block.
 fn select_refine_candidates(
@@ -972,5 +1017,20 @@ mod tests {
             select_refine_candidates(scores, 2),
             HashMap::from([(0, vec![17]), (1, vec![42])])
         );
+    }
+
+    #[test]
+    fn test_refine_near_threshold_rows() {
+        let bitmap = |bits: &[bool]| Some(Bitmap::from_iter(bits.iter().copied()));
+        let near = near_threshold(
+            [3, 2, 2].into_iter(),
+            &[bitmap(&[true, false, false]), bitmap(&[true, false]), None],
+            &[bitmap(&[true, true, false]), None, None],
+        );
+        let bits = |bitmap: &Option<Bitmap>| bitmap.as_ref().unwrap().iter().collect::<Vec<_>>();
+        // Widened but not original; widened to TRUE; no original predicate.
+        assert_eq!(bits(&near[0]), vec![false, true, false]);
+        assert_eq!(bits(&near[1]), vec![false, true]);
+        assert_eq!(bits(&near[2]), vec![false, false]);
     }
 }

@@ -174,10 +174,30 @@ fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -
         })
 }
 
+/// Settings that change vector index pruning results; part of the prune cache key
+/// of vector index queries.
+fn vector_prune_settings(
+    ctx: &Arc<dyn TableContext>,
+    push_downs: &Option<PushDownInfo>,
+) -> Result<Option<(u64, u64)>> {
+    if !push_downs
+        .as_ref()
+        .is_some_and(|push_downs| push_downs.vector_index.is_some())
+    {
+        return Ok(None);
+    }
+    let settings = ctx.get_settings();
+    Ok(Some((
+        settings.get_vector_refine_factor()?,
+        settings.get_vector_search_ef()?,
+    )))
+}
+
 fn deterministic_prune_cache_key(
     segments_location: &[SegmentLocation],
     push_downs: &Option<PushDownInfo>,
     pruning_mode: ReadPartitionsPruningMode,
+    vector_settings: Option<(u64, u64)>,
 ) -> Option<String> {
     let mut push_downs = push_downs.as_ref()?.clone();
     if !push_downs.is_deterministic {
@@ -186,7 +206,10 @@ fn deterministic_prune_cache_key(
     push_downs.read_partitions_pruning_mode = pruning_mode;
     Some(format!(
         "{:x}",
-        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+        Sha256::digest(format!(
+            "{:?}_{:?}_{:?}",
+            segments_location, push_downs, vector_settings
+        ))
     ))
 }
 
@@ -353,6 +376,7 @@ impl FuseTable {
 
         // If we can get the pruning result from cache, we don't need to prune again, but need sent
         // the parts to the next pipeline
+        let vector_settings = vector_prune_settings(&ctx, &push_downs)?;
         let derterministic_cache_key =
             push_downs
                 .as_ref()
@@ -360,7 +384,10 @@ impl FuseTable {
                 .map(|push_downs| {
                     format!(
                         "{:x}",
-                        Sha256::digest(format!("{:?}_{:?}", lazy_init_segments, push_downs))
+                        Sha256::digest(format!(
+                            "{:?}_{:?}_{:?}",
+                            lazy_init_segments, push_downs, vector_settings
+                        ))
                     )
                 });
 
@@ -483,8 +510,12 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key =
-            deterministic_prune_cache_key(&segments_location, &push_downs, pruning_mode);
+        let derterministic_cache_key = deterministic_prune_cache_key(
+            &segments_location,
+            &push_downs,
+            pruning_mode,
+            vector_prune_settings(&ctx, &push_downs)?,
+        );
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
         if enable_prune_cache
             && let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key)

@@ -53,22 +53,23 @@ pub const VECTOR_INDEX_OPT_M: &str = "m";
 pub const VECTOR_INDEX_OPT_EF_CONSTRUCT: &str = "ef_construct";
 /// Comma separated distance functions the index is built for.
 pub const VECTOR_INDEX_OPT_DISTANCE: &str = "distance";
-/// Optional integer candidate multiplier in [1, 16]. Presence enables FP16 storage
-/// and refinement; absence preserves the original SQ8-only index/query behavior.
-/// Refinement keeps `max(limit * refine_factor, VECTOR_REFINE_MIN_CANDIDATES)`.
-pub const VECTOR_INDEX_OPT_REFINE_FACTOR: &str = "refine_factor";
-pub const VECTOR_REFINE_FACTOR_MAX: usize = 16;
-/// Lower bound of the refine candidate count, so a small limit (e.g. 1) still
-/// reranks enough SQ8 candidates. HNSW already explores >= this many points.
-pub const VECTOR_REFINE_MIN_CANDIDATES: usize = 64;
-/// HNSW exploration budget; the effective value is never smaller than the candidate count.
-pub const VECTOR_INDEX_OPT_SEARCH_EF: &str = "search_ef";
-/// Optional persisted FP16 page row count in [64, 4096], used only with
-/// refine_factor. Default 128 (192 KiB per page at 768D, 256 KiB at 1024D).
-pub const VECTOR_INDEX_OPT_REFINE_PAGE_ROWS: &str = "refine_page_rows";
-pub const VECTOR_REFINE_PAGE_ROWS_MIN: usize = 64;
-pub const VECTOR_REFINE_PAGE_ROWS_MAX: usize = 4096;
-pub const VECTOR_REFINE_PAGE_ROWS_DEFAULT: usize = 128;
+/// `refine = true` stores FP16 vectors with the index, so queries can refine SQ8
+/// candidates. The candidate multiplier is the `vector_refine_factor` setting.
+pub const VECTOR_INDEX_OPT_REFINE: &str = "refine";
+/// Rows per FP16 page (192 KiB at 768D, 256 KiB at 1024D). Readers use the
+/// value persisted in each bundle, so it can change without affecting old files.
+pub const VECTOR_REFINE_PAGE_ROWS: usize = 128;
+
+/// Parses the `refine` option value (`true` or `false`, case-insensitive).
+pub fn parse_vector_index_refine(value: &str) -> Option<bool> {
+    if value.eq_ignore_ascii_case("true") {
+        Some(true)
+    } else if value.eq_ignore_ascii_case("false") {
+        Some(false)
+    } else {
+        None
+    }
+}
 
 /// Options that are derived by the system and must not be shown to or set by users.
 pub fn is_internal_table_index_option(key: &str) -> bool {
