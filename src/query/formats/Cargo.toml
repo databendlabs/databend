@@ -41,14 +41,6 @@ goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }
 tokio = { workspace = true }
 
-[[bench]]
-name = "ndjson_parser"
-harness = false
-
-[[bench]]
-name = "json_object_lookup"
-harness = false
-
 [lints]
 workspace = true
 

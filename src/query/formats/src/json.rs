@@ -24,6 +24,10 @@
 //! for the reserved key. Include these costs, object indexes and MAP validation
 //! in end-to-end COPY measurements; isolated parser gains are not COPY gains.
 //! CPU/SIMD flags and release configuration are unchanged.
+//!
+//! Compatibility: typed MAP keys are validated after conversion for both
+//! parsers. Inputs such as `{"1":"a","1.0":"b"}` for MAP(DECIMAL, STRING)
+//! now report `map keys have to be unique` even when Sonic is disabled.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -257,26 +261,58 @@ impl<'a, V: JsonValue> JsonObjectLookup<'a, V> {
     }
 }
 
-/// Ordered, unique object entries for MAP decoding. Serde already provides
-/// this view; only Sonic needs an ordered index. Values and keys borrow the DOM.
+enum ObjectEntries<I, M> {
+    Original(I),
+    Merged(M),
+}
+
+impl<I: Iterator, M: Iterator<Item = I::Item>> Iterator for ObjectEntries<I, M> {
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Original(iter) => iter.next(),
+            Self::Merged(iter) => iter.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Original(iter) => iter.size_hint(),
+            Self::Merged(iter) => iter.size_hint(),
+        }
+    }
+}
+
+fn has_duplicate_object_keys<'a, V: 'a>(
+    mut object: impl ExactSizeIterator<Item = (&'a str, &'a V)>,
+) -> bool {
+    if object.len() <= 16 {
+        let mut keys = [""; 16];
+        for (len, (key, _)) in object.enumerate() {
+            if keys[..len].contains(&key) {
+                return true;
+            }
+            keys[len] = key;
+        }
+        false
+    } else {
+        let mut keys = HashSet::with_capacity(object.len());
+        object.any(|(key, _)| !keys.insert(key))
+    }
+}
+
+/// Ordered, unique object entries for MAP decoding. Serde already guarantees
+/// uniqueness. Sonic checks small objects on the stack; larger objects use a
+/// borrowed-key set. Only an actual duplicate needs the ordered merge index.
 pub fn unique_object_entries<V: JsonValue>(value: &V) -> Option<impl Iterator<Item = (&str, &V)>> {
     let object = value.object_iter()?;
-    let merged = if V::OBJECT_HAS_UNIQUE_KEYS {
-        None
+    if V::OBJECT_HAS_UNIQUE_KEYS || !has_duplicate_object_keys(object) {
+        Some(ObjectEntries::Original(value.object_iter()?))
     } else {
-        Some(object.collect::<IndexMap<_, _>>())
-    };
-    let original = if V::OBJECT_HAS_UNIQUE_KEYS {
-        value.object_iter()
-    } else {
-        None
-    };
-    Some(
-        original
-            .into_iter()
-            .flatten()
-            .chain(merged.into_iter().flat_map(|entries| entries.into_iter())),
-    )
+        let entries: IndexMap<_, _> = value.object_iter()?.collect();
+        Some(ObjectEntries::Merged(entries.into_iter()))
+    }
 }
 
 impl JsonValue for serde_json::Value {
@@ -635,6 +671,41 @@ mod tests {
                 }
                 data[pos] = original;
             }
+        }
+    }
+
+    #[test]
+    fn test_map_object_duplicate_detection() {
+        for width in [0, 1, 4, 15, 16, 17, 64] {
+            let entries: Vec<_> = (0..width).map(|i| format!("\"k{i}\":{i}")).collect();
+            let text = format!("{{{}}}", entries.join(","));
+            let sonic = parse_sonic(text.as_bytes()).unwrap();
+            assert!(!has_duplicate_object_keys(sonic.object_iter().unwrap()));
+            assert_eq!(unique_object_entries(&sonic).unwrap().count(), width);
+            if width == 0 {
+                continue;
+            }
+            let text = format!("{{{},\"k0\":999}}", entries.join(","));
+            let serde: serde_json::Value = serde_json::from_str(&text).unwrap();
+            let sonic = parse_sonic(text.as_bytes()).unwrap();
+            assert!(has_duplicate_object_keys(sonic.object_iter().unwrap()));
+            let actual: Vec<_> = unique_object_entries(&sonic)
+                .unwrap()
+                .map(|(key, value)| (key, value.to_string()))
+                .collect();
+            let expected: Vec<_> = serde
+                .object_iter()
+                .unwrap()
+                .map(|(key, value)| (key, value.to_string()))
+                .collect();
+            assert_eq!(actual, expected);
+        }
+        for (text, duplicate) in [(r#"{"A":1,"a":2}"#, false), (r#"{"a":1,"\u0061":2}"#, true)] {
+            let sonic = parse_sonic(text.as_bytes()).unwrap();
+            assert_eq!(
+                has_duplicate_object_keys(sonic.object_iter().unwrap()),
+                duplicate
+            );
         }
     }
 

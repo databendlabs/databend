@@ -96,12 +96,16 @@ impl NdJsonDecoder {
                 });
             }
         } else {
-            let object_keys = json.object_iter().map(|object| object.len()).unwrap_or(0);
             let object_values = JsonObjectLookup::for_row(
                 json,
                 self.field_decoder.ident_case_sensitive,
                 columns.len(),
             );
+            let object_keys = if self.load_context.schema_evolution {
+                object_values.unique_len()
+            } else {
+                0
+            };
             let mut used_keys = 0;
 
             for ((column_index, field), column) in self
@@ -396,6 +400,7 @@ mod test {
 
         for text in [
             r#"{"A":1,"a":2,"Å":3,"extra":4}"#,
+            r#"{"A":1,"a":2,"A":3,"extra":4,"extra":5}"#,
             r#"{"id":1,"d":165.6263,"nested":{"a":-0.0003}}"#,
         ] {
             let serde: serde_json::Value = serde_json::from_str(text).unwrap();
@@ -403,6 +408,7 @@ mod test {
             for case_sensitive in [false, true] {
                 let expected_map = JsonObjectLookup::for_row(&serde, case_sensitive, 8);
                 let actual_map = JsonObjectLookup::for_row(&sonic, case_sensitive, 8);
+                assert_eq!(actual_map.unique_len(), expected_map.unique_len());
                 for key in ["A", "a", "Å", "å", "id", "d", "nested", "missing"] {
                     let expected = expected_map.get(key);
                     let actual = actual_map.get(key);

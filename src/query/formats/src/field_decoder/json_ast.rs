@@ -481,6 +481,7 @@ impl FieldJsonAstDecoder {
         match unique_object_entries(value) {
             Some(obj) => {
                 let mut keys = HashSet::new();
+                let start = map_builder[KEY].len();
                 for (key, val) in obj {
                     let key = Value::String(key.to_string());
                     self.read_field_with_data_type(&mut map_builder[KEY], &key, key_type)?;
@@ -489,6 +490,13 @@ impl FieldJsonAstDecoder {
                     if !matches!(key_type, TableDataType::String) {
                         let key = map_builder[KEY].pop().unwrap();
                         if keys.contains(&key) {
+                            // No MAP row has been committed yet. Discard its
+                            // completed pairs before ON_ERROR=CONTINUE can
+                            // decode another row into the same builder.
+                            while map_builder[KEY].len() > start {
+                                map_builder[KEY].pop().unwrap();
+                                map_builder[VALUE].pop().unwrap();
+                            }
                             return Err(ErrorCode::BadBytes("map keys have to be unique"));
                         }
                         map_builder[KEY].push(key.as_ref());
@@ -918,6 +926,15 @@ mod tests {
         ] {
             assert!(error.to_string().contains("map keys have to be unique"));
         }
+        let good: serde_json::Value = serde_json::from_str(r#"{"2":"ok"}"#).unwrap();
+        let good_sonic = crate::json::parse_sonic(br#"{"2":"ok"}"#).unwrap();
+        decoder.read_field_with_data_type(&mut expected, &good, &decimal_map)?;
+        decoder.read_field_with_data_type(&mut actual, &good_sonic, &decimal_map)?;
+        let mut clean = ColumnBuilder::with_capacity(&DataType::from(&decimal_map), 1);
+        decoder.read_field_with_data_type(&mut clean, &good, &decimal_map)?;
+        let clean = clean.build();
+        assert_eq!(expected.build(), clean);
+        assert_eq!(actual.build(), clean);
         Ok(())
     }
 
