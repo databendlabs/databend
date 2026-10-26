@@ -18,6 +18,7 @@ use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
 
+use arrow_schema::Schema;
 use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -41,8 +42,10 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_mil
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
+use databend_storages_common_blocks::ColumnWiseParquetWriter;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
@@ -162,6 +165,51 @@ pub struct BlockBuilder {
 impl BlockBuilder {
     pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<ClusterStatsState> {
+        let (mut serialized, data_block) = self.prepare(data_block, f)?;
+        let (col_metas, buffer) = serialize_block_with_column_stats(
+            &self.write_settings,
+            &self.source_schema,
+            Some(&serialized.block_meta.col_stats),
+            data_block,
+        )?;
+        serialized.block_meta.file_size = buffer.len() as u64;
+        serialized.block_meta.col_metas = col_metas;
+        serialized.block_raw_data = buffer;
+        Ok(serialized)
+    }
+
+    /// Like [`Self::build`], but defers parquet encoding: returns a [`ColumnWiseParquetWriter`]
+    /// that encodes one column at a time so each can be uploaded before the next is encoded.
+    /// The returned `block_meta` has `file_size == 0` and empty `col_metas`; the caller fills
+    /// them in once the upload completes. Only valid for [`FuseStorageFormat::Parquet`].
+    pub fn build_column_wise<F>(
+        &self,
+        data_block: DataBlock,
+        f: F,
+    ) -> Result<(BlockSerialization, ColumnWiseParquetWriter, TableSchemaRef)>
+    where
+        F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<ClusterStatsState>,
+    {
+        let (serialized, data_block) = self.prepare(data_block, f)?;
+        let schema = Arc::new(self.source_schema.remove_virtual_computed_fields());
+        let props = build_parquet_writer_properties(
+            self.write_settings.table_compression,
+            self.write_settings.enable_parquet_dictionary,
+            Some(&serialized.block_meta.col_stats),
+            None,
+            data_block.num_rows(),
+            &schema,
+            self.write_settings.data_page_rows,
+            self.write_settings.data_page_bytes,
+        );
+        let arrow_schema = Arc::new(Schema::from(schema.as_ref()));
+        let writer = ColumnWiseParquetWriter::new(arrow_schema, Arc::new(props), data_block)?;
+        Ok((serialized, writer, schema))
+    }
+
+    /// Everything in [`Self::build`] except encoding the data block itself.
+    fn prepare<F>(&self, data_block: DataBlock, f: F) -> Result<(BlockSerialization, DataBlock)>
+    where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<ClusterStatsState> {
         let partition_stats = self
             .cluster_stats_gen
             .extract_partition_stats(&data_block)?;
@@ -264,13 +312,6 @@ impl BlockBuilder {
         )?;
 
         let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
-        let (col_metas, buffer) = serialize_block_with_column_stats(
-            &self.write_settings,
-            &self.source_schema,
-            Some(&col_stats),
-            data_block,
-        )?;
-        let file_size = buffer.len() as u64;
         let mut inverted_index_size = None;
         let mut inverted_index_metas = Vec::with_capacity(block_indexes.inverted.len());
         for inverted in &block_indexes.inverted {
@@ -281,9 +322,9 @@ impl BlockBuilder {
         let block_meta = BlockMeta {
             row_count,
             block_size,
-            file_size,
+            file_size: 0,
             col_stats,
-            col_metas,
+            col_metas: HashMap::new(),
             cluster_stats,
             partition_stats,
             location: block_location,
@@ -337,7 +378,7 @@ impl BlockBuilder {
             })
             .transpose()?;
         let serialized = BlockSerialization {
-            block_raw_data: buffer,
+            block_raw_data: Buffer::new(),
             block_meta,
             block_indexes,
             virtual_column_state,
@@ -345,7 +386,7 @@ impl BlockBuilder {
             column_hlls,
             column_top_n,
         };
-        Ok(serialized)
+        Ok((serialized, data_block))
     }
 }
 
@@ -354,12 +395,21 @@ pub struct BlockWriter;
 impl BlockWriter {
     pub async fn write_down(
         dal: &Operator,
+        mut serialized: BlockSerialization,
+    ) -> Result<ExtendedBlockMeta> {
+        let raw = std::mem::take(&mut serialized.block_raw_data);
+        Self::write_down_data_block(dal, raw, &serialized.block_meta.location.0).await?;
+        Self::write_down_except_data(dal, serialized).await
+    }
+
+    /// Write indexes and virtual columns of an already-uploaded data block, returning its meta.
+    pub async fn write_down_except_data(
+        dal: &Operator,
         serialized: BlockSerialization,
     ) -> Result<ExtendedBlockMeta> {
         let block_meta = serialized.block_meta;
         let column_hlls = serialized.column_hlls;
         let column_top_n = serialized.column_top_n;
-        let block_location = block_meta.location.0.clone();
 
         let draft_virtual_block_meta = match (
             serialized
@@ -381,7 +431,6 @@ impl BlockWriter {
             column_top_n,
         };
 
-        Self::write_down_data_block(dal, serialized.block_raw_data, &block_location).await?;
         Self::write_down_block_indexes(dal, serialized.block_indexes).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
