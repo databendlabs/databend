@@ -58,7 +58,6 @@ use databend_common_version::DATABEND_TELEMETRY_SOURCE;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::NodeInfo;
 use databend_meta_client::types::SeqV;
-use databend_meta_runtime::DatabendRuntime;
 use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
@@ -265,10 +264,7 @@ impl ClusterDiscovery {
         _version: BuildInfoRef,
     ) -> Result<MetaStore> {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
-        match meta_api_provider
-            .create_meta_store::<DatabendRuntime>()
-            .await
-        {
+        match meta_api_provider.create_default_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
                 "Failed to create meta store: {}",

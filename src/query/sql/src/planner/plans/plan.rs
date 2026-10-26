@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExternalAccessStmt;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -444,6 +445,7 @@ pub enum Plan {
     RemoveStage(Box<RemoveStagePlan>),
 
     // Connection
+    ExternalAccess(Box<ExternalAccessStmt>),
     CreateConnection(Box<CreateConnectionPlan>),
     DescConnection(Box<DescConnectionPlan>),
     DropConnection(Box<DropConnectionPlan>),

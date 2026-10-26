@@ -57,7 +57,6 @@ use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_runtime::DatabendRuntime;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
@@ -1585,10 +1584,7 @@ async fn new_local_meta() -> MetaStore {
     let meta_config = MetaConfig::default();
     let config = meta_config.to_meta_grpc_client_conf();
     let provider = MetaStoreProvider::new(config);
-    provider
-        .create_meta_store::<DatabendRuntime>()
-        .await
-        .unwrap()
+    provider.create_default_meta_store().await.unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -207,6 +207,10 @@ pub struct QueryContextShared {
     /// Limits concurrent RowFetch reads and decodes across all pipelines and
     /// QueryContext instances belonging to this query on the local node.
     row_fetch_io_semaphore: OnceLock<Arc<Semaphore>>,
+
+    #[cfg(feature = "python-udf")]
+    pub(super) python_udf_workers:
+        Mutex<Option<Arc<databend_query_script_udf_support::PythonQueryWorkers>>>,
 }
 
 impl QueryContextShared {
@@ -285,6 +289,8 @@ impl QueryContextShared {
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
             row_fetch_io_semaphore: Default::default(),
+            #[cfg(feature = "python-udf")]
+            python_udf_workers: Default::default(),
         }))
     }
 
@@ -323,6 +329,10 @@ impl QueryContextShared {
     }
 
     pub fn kill<C>(&self, cause: ErrorCode<C>) {
+        #[cfg(feature = "python-udf")]
+        if let Some(workers) = self.python_udf_workers.lock().as_ref() {
+            workers.finish();
+        }
         self.set_error(cause.clone());
 
         if let Some(executor) = self.executor.read().upgrade() {

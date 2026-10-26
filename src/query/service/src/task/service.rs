@@ -66,7 +66,6 @@ use databend_common_version::BUILD_INFO;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::WatchResponse;
-use databend_meta_runtime::DatabendRuntime;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use futures_util::stream::BoxStream;
@@ -170,7 +169,7 @@ impl TaskService {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
         let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf())
-            .create_meta_store::<DatabendRuntime>()
+            .create_default_meta_store()
             .await
             .map_err(|e| {
                 ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))

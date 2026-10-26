@@ -20,7 +20,6 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_query::test_kits::context::EESetup;
-use databend_meta_runtime::DatabendRuntime;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::query_count;
@@ -48,7 +47,7 @@ async fn assert_secured_rows(
 async fn test_clone_inherited_policies_for_restricted_owner() -> anyhow::Result<()> {
     // Catalog metadata and policy APIs must share one Meta service, as they do in production.
     let meta = MetaStoreProvider::new(MetaConfig::default().to_meta_grpc_client_conf())
-        .create_meta_store::<DatabendRuntime>()
+        .create_default_meta_store()
         .await?;
     let mut setup = EESetup::new();
     setup.config_mut().meta.endpoints = meta.inner().endpoints.clone();

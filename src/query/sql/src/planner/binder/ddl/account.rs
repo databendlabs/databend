@@ -210,6 +210,9 @@ impl Binder {
             AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),
             AccountMgrLevel::Warehouse(w) => Ok(GrantObject::Warehouse(w.clone())),
             AccountMgrLevel::Connection(c) => Ok(GrantObject::Connection(c.clone())),
+            AccountMgrLevel::Integration(c) => {
+                Ok(GrantObject::Integration(self.normalize_identifier(c).name))
+            }
             AccountMgrLevel::Sequence(s) => Ok(GrantObject::Sequence(s.clone())),
             AccountMgrLevel::Procedure(p) => {
                 let procedure_id = self.resolve_procedure_id(p).await?;
@@ -286,6 +289,9 @@ impl Binder {
             AccountMgrLevel::Stage(stage) => Ok(vec![GrantObject::Stage(stage.clone())]),
             AccountMgrLevel::Warehouse(w) => Ok(vec![GrantObject::Warehouse(w.clone())]),
             AccountMgrLevel::Connection(c) => Ok(vec![GrantObject::Connection(c.clone())]),
+            AccountMgrLevel::Integration(c) => Ok(vec![GrantObject::Integration(
+                self.normalize_identifier(c).name,
+            )]),
             AccountMgrLevel::Sequence(s) => Ok(vec![GrantObject::Sequence(s.clone())]),
             AccountMgrLevel::Procedure(p) => {
                 let procedure_id = self.resolve_procedure_id(p).await?;

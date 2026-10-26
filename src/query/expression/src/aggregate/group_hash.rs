@@ -41,6 +41,21 @@ use crate::with_number_type;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
+/// Maps a group hash to one of `n` routing targets, such as the nodes or channels of
+/// a hash shuffle.
+///
+/// Local consumers read raw bits of the same group hash: the aggregate hash index uses
+/// the low bits as the slot and the top 7 bits as the tag, aggregate radix partitions use
+/// bits below 48, and window partitioning uses `hash % num_partitions`. Routing with
+/// `hash % n` would fix the low bits of every row a target receives, so each target
+/// would only see a fraction of the slots and window partitions. Remixing before the
+/// range reduction keeps the routing independent of those bits.
+#[inline(always)]
+pub fn group_hash_route_index(hash: u64, n: u64) -> u64 {
+    let mixed = hash.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    ((mixed as u128 * n as u128) >> 64) as u64
+}
+
 pub fn group_hash_entries(entries: ProjectedBlock, values: &mut [u64]) {
     debug_assert!(!entries.is_empty());
     for (i, entry) in entries.iter().enumerate() {

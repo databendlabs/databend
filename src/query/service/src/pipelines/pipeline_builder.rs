@@ -94,6 +94,16 @@ impl PipelineBuilder {
             }
         }
 
+        #[cfg(feature = "python-udf")]
+        {
+            let lease = self.ctx.python_udf_workers()?.pipeline();
+            self.main_pipeline
+                .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+                    drop(lease);
+                    Ok(())
+                }));
+        }
+
         // unload spill metas
         if !self.ctx.mark_unload_callbacked() {
             self.main_pipeline

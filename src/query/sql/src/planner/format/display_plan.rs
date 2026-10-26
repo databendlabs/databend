@@ -284,6 +284,7 @@ impl Plan {
             Plan::ShowTasks(_) => Ok("ShowTasks".to_string()),
 
             // task
+            Plan::ExternalAccess(stmt) => Ok(stmt.to_string()),
             Plan::CreateConnection(_) => Ok("CreateConnection".to_string()),
             Plan::DescConnection(_) => Ok("DescConnection".to_string()),
             Plan::DropConnection(_) => Ok("DropConnection".to_string()),
