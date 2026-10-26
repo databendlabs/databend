@@ -77,6 +77,7 @@ use databend_common_storages_fuse::operations::ReclusterIndexInput;
 use databend_common_storages_fuse::operations::ReclusterIndexRowRange;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_io::blocked_nanos;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Versioned;
 
@@ -90,17 +91,32 @@ struct ReclusterMergeInputBlock {
     ordinal: u32,
 }
 
+/// Upper bounds (ms) of the per-`read()` latency histogram buckets; the last bucket is
+/// open-ended. Prefetch hits land in the first bucket, a cold object-storage round trip
+/// in the third or fourth. A bimodal shape means prefetch depth is sometimes enough and
+/// sometimes not.
+const READ_HIST_BOUNDS_MS: [f64; 4] = [1.0, 10.0, 50.0, 200.0];
+
 /// Per-group wall-clock breakdown of the synchronous work inside a recluster group
 /// source, emitted as `recluster.profile.group_source` when the group finishes.
 ///
 /// The executor's `CpuTime` for a `SyncSource` includes time blocked on object storage
 /// inside `generate()`, so it cannot separate "waiting for S3" from "merging rows". This
-/// struct records the read phase separately; `cpu ≈ CpuTime - read`.
+/// struct records the read phase separately and splits it into the part spent blocked in
+/// `recv_blocking` (`blocked_nanos`) and the rest (parquet decode).
 #[derive(Default)]
 struct ReclusterGroupMetrics {
     /// `FuseLowLevelFullRowReader::read` (object storage fetch + parquet decode).
     read_nanos: AtomicU64,
     read_calls: AtomicU64,
+    /// Portion of `read_nanos` spent blocked waiting for a range to arrive. The
+    /// remainder is decode. Also accumulated on the `QueryContext` so the round-level
+    /// log can report it without joining per-group lines.
+    blocked_nanos: AtomicU64,
+    /// Longest single `read()`.
+    max_read_nanos: AtomicU64,
+    /// Histogram of `read()` latencies, see `READ_HIST_BOUNDS_MS`.
+    read_hist: [AtomicU64; READ_HIST_BOUNDS_MS.len() + 1],
     /// Cluster-key expression evaluation (`CompoundBlockOperator`).
     eval_nanos: AtomicU64,
     /// Sort key encoding (`RowConverter::convert`).
@@ -123,6 +139,32 @@ impl ReclusterGroupMetrics {
 
     fn ms(counter: &AtomicU64) -> f64 {
         counter.load(Ordering::Relaxed) as f64 / 1e6
+    }
+
+    /// Record one `read()`: total elapsed, the blocked part of it, histogram, max.
+    fn record_read(&self, elapsed: Duration, blocked: Duration, ctx: &QueryContext) {
+        let nanos = elapsed.as_nanos() as u64;
+        self.read_nanos.fetch_add(nanos, Ordering::Relaxed);
+        self.read_calls.fetch_add(1, Ordering::Relaxed);
+        let blocked_nanos = blocked.as_nanos() as u64;
+        self.blocked_nanos
+            .fetch_add(blocked_nanos, Ordering::Relaxed);
+        ctx.incr_recluster_blocked_nanos(blocked_nanos);
+        self.max_read_nanos.fetch_max(nanos, Ordering::Relaxed);
+        let ms = elapsed.as_secs_f64() * 1e3;
+        let bucket = READ_HIST_BOUNDS_MS
+            .iter()
+            .position(|&b| ms < b)
+            .unwrap_or(READ_HIST_BOUNDS_MS.len());
+        self.read_hist[bucket].fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn hist_string(&self) -> String {
+        self.read_hist
+            .iter()
+            .map(|c| c.load(Ordering::Relaxed).to_string())
+            .collect::<Vec<_>>()
+            .join("/")
     }
 }
 
@@ -374,13 +416,15 @@ where R::Converter: Send
                 }
                 let minimum = self.merge_config.minimum_batch;
                 let metrics = &self.merge_config.metrics;
+                let blocked_before = blocked_nanos();
                 let t = Instant::now();
                 let read = reader
                     .as_mut()
                     .expect("initialized reader")
                     .read(self.merge_config.batch_rows, minimum)?;
-                ReclusterGroupMetrics::add(&metrics.read_nanos, t.elapsed());
-                metrics.read_calls.fetch_add(1, Ordering::Relaxed);
+                let elapsed = t.elapsed();
+                let blocked = Duration::from_nanos(blocked_nanos().saturating_sub(blocked_before));
+                metrics.record_read(elapsed, blocked, &self.merge_config.ctx);
                 let Some(block) = read else {
                     reader.take().expect("initialized reader").finish()?;
                     return Ok((None, false));
@@ -979,6 +1023,9 @@ impl HorizontalReclusterSource {
             .unwrap_or(0.0);
         let generate_ms = self.generate_nanos as f64 / 1e6;
         let read_ms = ReclusterGroupMetrics::ms(&m.read_nanos);
+        let blocked_ms = ReclusterGroupMetrics::ms(&m.blocked_nanos);
+        let decode_ms = (read_ms - blocked_ms).max(0.0);
+        let max_read_ms = ReclusterGroupMetrics::ms(&m.max_read_nanos);
         let eval_ms = ReclusterGroupMetrics::ms(&m.eval_nanos);
         let convert_ms = ReclusterGroupMetrics::ms(&m.convert_nanos);
         let validate_ms = ReclusterGroupMetrics::ms(&m.validate_nanos);
@@ -1004,10 +1051,18 @@ impl HorizontalReclusterSource {
             wall_ms = format!("{wall_ms:.1}"),
             // time inside generate(); ~ executor CpuTime for this source.
             generate_ms = format!("{generate_ms:.1}"),
-            // object storage fetch + parquet decode; the blocking part of generate().
+            // object storage fetch + parquet decode.
             read_ms = format!("{read_ms:.1}"),
+            // part of read_ms spent blocked in recv_blocking waiting for S3; the only
+            // genuinely non-CPU time inside generate().
+            blocked_ms = format!("{blocked_ms:.1}"),
+            // read_ms - blocked_ms: parquet decode + range bookkeeping.
+            decode_ms = format!("{decode_ms:.1}"),
             read_calls,
             avg_read_ms = format!("{avg_read_ms:.2}"),
+            max_read_ms = format!("{max_read_ms:.1}"),
+            // read() latency buckets: <1ms / 1-10 / 10-50 / 50-200 / >=200
+            read_hist = m.hist_string(),
             eval_ms = format!("{eval_ms:.1}"),
             convert_ms = format!("{convert_ms:.1}"),
             validate_ms = format!("{validate_ms:.1}"),

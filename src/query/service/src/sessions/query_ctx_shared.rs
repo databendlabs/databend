@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -169,6 +170,10 @@ pub struct QueryContextShared {
     pub(super) table_meta_timestamps: Arc<Mutex<HashMap<u64, TableMetaTimestamps>>>,
 
     pub(super) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
+    /// Monotonic sum of time recluster group sources spent blocked on object-storage
+    /// reads inside `generate()`. The recluster interpreter snapshots it around each
+    /// round to report how much of the executor's `CpuTime` was actually I/O wait.
+    pub(super) recluster_blocked_nanos: AtomicU64,
     pub(super) spilled_files: Arc<RwLock<HashMap<spillers::Location, spillers::Layout>>>,
     pub(super) unload_callbacked: AtomicBool,
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
@@ -274,6 +279,7 @@ impl QueryContextShared {
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
             table_meta_timestamps: Arc::new(Mutex::new(HashMap::new())),
             cluster_spill_progress: Default::default(),
+            recluster_blocked_nanos: AtomicU64::new(0),
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
             warehouse_cache: Arc::new(RwLock::new(None)),

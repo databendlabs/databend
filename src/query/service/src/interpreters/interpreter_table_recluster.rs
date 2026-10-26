@@ -432,11 +432,17 @@ impl ReclusterTableInterpreter {
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
         self.ctx.set_executor(complete_executor.get_inner())?;
+        let io_before = self.ctx.get_io_stats();
+        let blocked_before = self.ctx.get_recluster_blocked_nanos();
         let execute_started = std::time::Instant::now();
         let execution_result = complete_executor.execute().await;
         log_recluster_processor_profile(
             &complete_executor.get_inner().get_proc_profiles(),
             execute_started.elapsed(),
+            self.ctx.get_io_stats().delta_since(&io_before),
+            self.ctx
+                .get_recluster_blocked_nanos()
+                .saturating_sub(blocked_before),
         );
 
         // Make sure the executor and any pipeline-held claim start releasing before an error is
@@ -612,6 +618,8 @@ impl ReclusterTableInterpreter {
 fn log_recluster_processor_profile(
     profiles: &[Arc<databend_common_base::runtime::profile::Profile>],
     execute_elapsed: Duration,
+    io: databend_common_base::runtime::IoStatsSnapshot,
+    blocked_nanos: u64,
 ) {
     use std::sync::atomic::Ordering;
 
@@ -644,9 +652,25 @@ fn log_recluster_processor_profile(
 
     let wall_ms = execute_elapsed.as_secs_f64() * 1e3;
     let total_cpu_ms = total_cpu_nanos as f64 / 1e6;
-    // Average number of busy executor threads over the round.
-    let cpu_parallelism = if wall_ms > 0.0 {
+    let blocked_ms = blocked_nanos as f64 / 1e6;
+    // Executor CpuTime for sync sources includes time blocked on S3; take it back out.
+    let true_cpu_ms = (total_cpu_ms - blocked_ms).max(0.0);
+    // Average executor threads occupied (busy or blocked) over the round.
+    let thread_occupancy = if wall_ms > 0.0 {
         total_cpu_ms / wall_ms
+    } else {
+        0.0
+    };
+    // Average threads actually computing.
+    let cpu_parallelism = if wall_ms > 0.0 {
+        true_cpu_ms / wall_ms
+    } else {
+        0.0
+    };
+    // Object-storage read time summed over requests vs. round wall clock: how many
+    // reads were in flight on average. Compare with the number of group sources.
+    let io_read_concurrency = if wall_ms > 0.0 {
+        io.read_duration_ms as f64 / wall_ms
     } else {
         0.0
     };
@@ -654,13 +678,34 @@ fn log_recluster_processor_profile(
         event = "recluster.profile.round",
         wall_ms = format!("{wall_ms:.1}"),
         processors = profiles.len(),
+        // sum of executor CpuTime over all processors
         total_cpu_ms = format!("{total_cpu_ms:.1}"),
-        cpu_parallelism = format!("{cpu_parallelism:.2}");
+        // sum over group sources of time blocked in recv_blocking
+        blocked_ms = format!("{blocked_ms:.1}"),
+        true_cpu_ms = format!("{true_cpu_ms:.1}"),
+        thread_occupancy = format!("{thread_occupancy:.2}"),
+        cpu_parallelism = format!("{cpu_parallelism:.2}"),
+        // per-query opendal stats for this round
+        io_read_count = io.read_count,
+        io_read_bytes = io.read_bytes,
+        io_read_ms = io.read_duration_ms,
+        io_read_concurrency = format!("{io_read_concurrency:.2}"),
+        io_write_count = io.write_count,
+        io_write_bytes = io.write_bytes,
+        io_write_ms = io.write_duration_ms;
         "Recluster round processor profile"
     );
     for (name, agg) in by_name {
         let cpu_ms = agg.cpu_nanos as f64 / 1e6;
         let max_cpu_ms = agg.max_cpu_nanos as f64 / 1e6;
+        // Only the recluster group source blocks on S3 inside process(); for it, show
+        // how much of cpu_ms was really I/O wait. Zero for every other kind.
+        let kind_blocked_ms = if name == "HorizontalMultiwayReclusterSource" {
+            blocked_ms
+        } else {
+            0.0
+        };
+        let kind_true_cpu_ms = (cpu_ms - kind_blocked_ms).max(0.0);
         // 1.0 = CPU spread evenly across instances; N = one instance did all the work.
         let cpu_skew = if agg.cpu_nanos > 0 {
             agg.max_cpu_nanos as f64 * agg.instances as f64 / agg.cpu_nanos as f64
@@ -678,6 +723,8 @@ fn log_recluster_processor_profile(
             name = name.as_str(),
             instances = agg.instances,
             cpu_ms = format!("{cpu_ms:.1}"),
+            blocked_ms = format!("{kind_blocked_ms:.1}"),
+            true_cpu_ms = format!("{kind_true_cpu_ms:.1}"),
             wait_ms = format!("{:.1}", agg.wait_nanos as f64 / 1e6),
             max_instance_cpu_ms = format!("{max_cpu_ms:.1}"),
             cpu_skew = format!("{cpu_skew:.2}"),
