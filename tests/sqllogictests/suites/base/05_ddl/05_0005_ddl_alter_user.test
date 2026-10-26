@@ -57,10 +57,19 @@ statement ok
 ALTER USER 'test-i' IDENTIFIED WITH sha256_password BY 'new-password'
 
 statement ok
-ALTER USER 'test-h' WITH DEFAULT_ROLE = role1
+CREATE ROLE IF NOT EXISTS alter_user_default_role
+
+statement ok
+GRANT ROLE alter_user_default_role TO USER 'test-h'
+
+statement ok
+ALTER USER 'test-h' WITH DEFAULT_ROLE = alter_user_default_role
 
 statement ok
 ALTER USER 'test-h' WITH DEFAULT_WAREHOUSE = 'my_warehouse'
+
+statement ok
+DROP ROLE alter_user_default_role
 
 statement ok
 DROP USER IF EXISTS 'test-e'
