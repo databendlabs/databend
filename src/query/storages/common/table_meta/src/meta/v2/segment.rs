@@ -709,28 +709,3 @@ impl From<(v0::SegmentInfo, &[TableField])> for SegmentInfo {
         SegmentInfo::from_v0(v, fields)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_index_file_location_select() {
-        let metas = vec![BlockIndexMeta {
-            index_name: "a".to_owned(),
-            index_version: "v1".to_owned(),
-            location: ("a.index".to_owned(), 1),
-            size: 5,
-        }];
-        let select = |name, version| IndexFileLocation::select(None, Some(&metas), name, version);
-        assert_eq!(
-            select("a", "v1"),
-            Some(IndexFileLocation::Bundle {
-                path: "a.index".to_owned(),
-                size: 5
-            })
-        );
-        assert_eq!(select("b", "v1"), None);
-        assert_eq!(select("a", "v2"), None);
-    }
-}

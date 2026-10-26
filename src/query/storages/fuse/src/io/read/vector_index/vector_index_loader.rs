@@ -24,6 +24,7 @@ use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
 use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
@@ -39,7 +40,6 @@ use databend_storages_common_table_meta::meta::IndexFileLocation;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use opendal::Operator;
 
-use super::VectorIndexIdentity;
 use super::vector_index_bundle_loader::load_bundle_components;
 use super::vector_index_bundle_loader::load_bundle_footer;
 use super::vector_index_bundle_loader::load_bundle_reads;
@@ -103,6 +103,14 @@ impl IndexLoadSpec for VectorIndexLoadSpec {
 #[fastrace::trace]
 pub async fn load_vector_index_meta(dal: Operator, path: &str) -> Result<Arc<VectorIndexMeta>> {
     load_index_meta::<VectorIndexLoadSpec>(dal, path).await
+}
+
+/// The vector index a reader expects, checked against the file it reads.
+#[derive(Clone, Debug)]
+pub struct VectorIndexIdentity {
+    pub name: String,
+    pub version: String,
+    pub column_id: ColumnId,
 }
 
 /// Loads legacy Parquet components as bytes sharing the decoded value buffers.

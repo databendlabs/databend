@@ -52,15 +52,15 @@ use crate::hnsw_index::quantization::EncodedVectorsU8;
 use crate::hnsw_index::quantization::VectorParameters;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 
-pub const SINGLE_THREADED_HNSW_BUILD_THRESHOLD: usize = 256;
+const SINGLE_THREADED_HNSW_BUILD_THRESHOLD: usize = 256;
 
 /// Name suffixes of the four HNSW components, in the order `HNSWIndex::build`
 /// produces and `HNSWIndex::open` expects them.
-pub const HNSW_GRAPH_LINKS_SUFFIX: &str = "_graph_links";
-pub const HNSW_GRAPH_DATA_SUFFIX: &str = "_graph_data";
-pub const HNSW_ENCODED_U8_META_SUFFIX: &str = "_encoded_u8_meta";
-pub const HNSW_ENCODED_U8_DATA_SUFFIX: &str = "_encoded_u8_data";
-pub const HNSW_COMPONENT_SUFFIXES: [&str; 4] = [
+const HNSW_GRAPH_LINKS_SUFFIX: &str = "_graph_links";
+const HNSW_GRAPH_DATA_SUFFIX: &str = "_graph_data";
+const HNSW_ENCODED_U8_META_SUFFIX: &str = "_encoded_u8_meta";
+const HNSW_ENCODED_U8_DATA_SUFFIX: &str = "_encoded_u8_data";
+const HNSW_COMPONENT_SUFFIXES: [&str; 4] = [
     HNSW_GRAPH_LINKS_SUFFIX,
     HNSW_GRAPH_DATA_SUFFIX,
     HNSW_ENCODED_U8_META_SUFFIX,

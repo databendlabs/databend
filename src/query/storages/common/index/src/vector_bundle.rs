@@ -14,6 +14,15 @@
 
 //! One immutable object per table vector index: independently addressable components,
 //! footer directory, fixed trailer. No Parquet schema, rows or column chunks.
+//!
+//! ```text
+//! [components]
+//! [footer]  magic "DBVF" | version u32 | CRC32 u32 of the payload | JSON payload
+//! [trailer] footer start u64 | version u32 | magic "DBVI"        (16 bytes)
+//! ```
+//!
+//! Integers are little-endian. The layout follows the inverted index bundle; the
+//! footer adds a checksum and uses JSON.
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -33,8 +42,8 @@ use serde::Serialize;
 use crate::IndexMeta;
 
 /// Name suffixes of the per-column validity and FP16 components.
-pub const VECTOR_VALIDITY_SUFFIX: &str = "_validity";
-pub const VECTOR_FP16_DATA_SUFFIX: &str = "_fp16_data";
+const VECTOR_VALIDITY_SUFFIX: &str = "_validity";
+const VECTOR_FP16_DATA_SUFFIX: &str = "_fp16_data";
 
 /// Components are identified by name; these names are part of the file format.
 /// HNSW components use `hnsw_component_name`.
@@ -48,14 +57,19 @@ pub fn vector_fp16_data_name(column_id: u32) -> String {
 /// Values converted per step when writing FP16 data (16 KiB of FP16 on the stack).
 const FP16_CONVERT_CHUNK: usize = 8192;
 
-pub const VECTOR_BUNDLE_VERSION: u64 = 1;
-pub const VECTOR_BUNDLE_TRAILER_SIZE: usize = 32;
+pub const VECTOR_BUNDLE_VERSION: u32 = 1;
+/// Fixed trailer: footer start (u64), bundle version (u32) and magic `DBVI`.
+pub const VECTOR_BUNDLE_TRAILER_SIZE: usize = 16;
+/// Footer header: magic `DBVF`, footer version (u32) and CRC32 (u32) of the JSON payload.
+const FOOTER_HEADER_SIZE: usize = 12;
 pub const VECTOR_BUNDLE_MAX_FOOTER_SIZE: usize = 16 * 1024 * 1024;
 /// Bytes read from the end of a bundle on a footer cache miss. A footer is a few
 /// KiB per indexed column, so one read usually returns footer and trailer
 /// together; a larger footer is read with a second request.
 pub const VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE: usize = 64 * 1024;
-const MAGIC: &[u8; 8] = b"DBVINDEX";
+
+const TRAILER_MAGIC: &[u8; 4] = b"DBVI";
+const FOOTER_MAGIC: &[u8; 4] = b"DBVF";
 const MAX_COMPONENT_SIZE: u64 = 1024 * 1024 * 1024;
 /// ZSTD level for HNSW components. Level 1 matches the legacy Parquet default and,
 /// for SQ8 data (few repeats, skewed bytes), compresses better than higher levels:
@@ -244,12 +258,21 @@ impl VectorBundleFooter {
         }
     }
 
-    /// Decodes the footer at `trailer.footer`; `bytes` are those footer bytes.
+    /// Decodes the footer at `trailer.footer`; `bytes` are those footer bytes
+    /// (header and JSON payload).
     pub fn decode(bytes: &[u8], trailer: &VectorBundleTrailer) -> Result<Self> {
-        if crc32fast::hash(bytes) != trailer.checksum {
+        if bytes.len() < FOOTER_HEADER_SIZE || &bytes[0..4] != FOOTER_MAGIC {
+            return Err(invalid("Invalid vector footer header"));
+        }
+        let read_u32 = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+        if read_u32(4) != VECTOR_BUNDLE_VERSION {
+            return Err(invalid("Unsupported vector footer version"));
+        }
+        let payload = &bytes[FOOTER_HEADER_SIZE..];
+        if crc32fast::hash(payload) != read_u32(8) {
             return Err(invalid("Vector footer checksum mismatch"));
         }
-        let footer: Self = serde_json::from_slice(bytes)
+        let footer: Self = serde_json::from_slice(payload)
             .map_err(|error| invalid(&format!("Invalid vector footer: {error}")))?;
         footer.validate(trailer.footer.start)?;
         Ok(footer)
@@ -314,39 +337,34 @@ impl TryFrom<Bytes> for VectorIndexMeta {
     }
 }
 
-/// The fixed-size bundle trailer: where the footer is and its checksum.
+/// The fixed-size bundle trailer: where the footer is.
 pub struct VectorBundleTrailer {
     pub footer: Range<u64>,
-    checksum: u32,
 }
 
 impl VectorBundleTrailer {
     /// Parses the last `VECTOR_BUNDLE_TRAILER_SIZE` bytes of a bundle of
     /// `object_size` bytes.
     pub fn parse(trailer: &[u8], object_size: u64) -> Result<Self> {
-        if trailer.len() != VECTOR_BUNDLE_TRAILER_SIZE || &trailer[24..32] != MAGIC {
+        if trailer.len() != VECTOR_BUNDLE_TRAILER_SIZE || &trailer[12..16] != TRAILER_MAGIC {
             return Err(invalid("Invalid vector bundle trailer"));
         }
-        let read_u64 = |at: usize| u64::from_le_bytes(trailer[at..at + 8].try_into().unwrap());
-        let read_u32 = |at: usize| u32::from_le_bytes(trailer[at..at + 4].try_into().unwrap());
-        if u64::from(read_u32(16)) != VECTOR_BUNDLE_VERSION {
+        let start = u64::from_le_bytes(trailer[0..8].try_into().unwrap());
+        if u32::from_le_bytes(trailer[8..12].try_into().unwrap()) != VECTOR_BUNDLE_VERSION {
             return Err(invalid("Unsupported vector bundle version"));
         }
-        let (offset, length) = (read_u64(0), read_u64(8));
         // The footer ends where the trailer starts.
         let end = object_size
             .checked_sub(VECTOR_BUNDLE_TRAILER_SIZE as u64)
             .ok_or_else(|| invalid("Truncated vector bundle"))?;
-        if length == 0
-            || length > VECTOR_BUNDLE_MAX_FOOTER_SIZE as u64
-            || offset.checked_add(length) != Some(end)
+        // A footer has at least its header and is limited in size.
+        if start > end
+            || end - start < FOOTER_HEADER_SIZE as u64
+            || end - start > (FOOTER_HEADER_SIZE + VECTOR_BUNDLE_MAX_FOOTER_SIZE) as u64
         {
             return Err(invalid("Invalid vector footer range"));
         }
-        Ok(Self {
-            footer: offset..end,
-            checksum: read_u32(20),
-        })
+        Ok(Self { footer: start..end })
     }
 }
 
@@ -468,20 +486,23 @@ impl VectorBundleBuilder {
 
     pub fn finish(mut self) -> Result<Vec<u8>> {
         // Components were appended in order, so they lie before the footer.
-        let offset = self.bytes.len() as u64;
-        let footer = serde_json::to_vec(&self.footer)?;
-        if footer.len() > VECTOR_BUNDLE_MAX_FOOTER_SIZE {
+        let footer_start = self.bytes.len() as u64;
+        let payload = serde_json::to_vec(&self.footer)?;
+        if payload.len() > VECTOR_BUNDLE_MAX_FOOTER_SIZE {
             return Err(invalid("Vector footer too large"));
         }
-        self.bytes.extend_from_slice(&footer);
-        self.bytes.extend_from_slice(&offset.to_le_bytes());
+        // Footer: magic | version | CRC32 of the payload | JSON payload.
+        self.bytes.extend_from_slice(FOOTER_MAGIC);
         self.bytes
-            .extend_from_slice(&(footer.len() as u64).to_le_bytes());
+            .extend_from_slice(&VECTOR_BUNDLE_VERSION.to_le_bytes());
         self.bytes
-            .extend_from_slice(&(VECTOR_BUNDLE_VERSION as u32).to_le_bytes());
+            .extend_from_slice(&crc32fast::hash(&payload).to_le_bytes());
+        self.bytes.extend_from_slice(&payload);
+        // Trailer: footer start | version | magic. The footer ends at the trailer.
+        self.bytes.extend_from_slice(&footer_start.to_le_bytes());
         self.bytes
-            .extend_from_slice(&crc32fast::hash(&footer).to_le_bytes());
-        self.bytes.extend_from_slice(MAGIC);
+            .extend_from_slice(&VECTOR_BUNDLE_VERSION.to_le_bytes());
+        self.bytes.extend_from_slice(TRAILER_MAGIC);
         Ok(self.bytes)
     }
 
@@ -603,11 +624,16 @@ mod tests {
         assert!(builder.add_hnsw("a".to_owned(), b"y").is_err());
         let bytes = builder.finish()?;
 
-        // The footer is covered by its checksum, the trailer by the magic.
-        let footer_end = bytes.len() - VECTOR_BUNDLE_TRAILER_SIZE;
-        let mut corrupted = bytes.clone();
-        corrupted[footer_end - 1] ^= 1;
-        assert!(VectorBundleFooter::from_bundle(&corrupted).is_err());
+        // The footer payload is covered by its checksum, the footer header and the
+        // trailer by their magics.
+        let trailer_start = bytes.len() - VECTOR_BUNDLE_TRAILER_SIZE;
+        let footer_start =
+            u64::from_le_bytes(bytes[trailer_start..trailer_start + 8].try_into().unwrap());
+        for at in [trailer_start - 1, footer_start as usize] {
+            let mut corrupted = bytes.clone();
+            corrupted[at] ^= 1;
+            assert!(VectorBundleFooter::from_bundle(&corrupted).is_err());
+        }
         let mut corrupted = bytes;
         *corrupted.last_mut().unwrap() ^= 1;
         assert!(VectorBundleFooter::from_bundle(&corrupted).is_err());

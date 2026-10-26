@@ -32,16 +32,43 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use futures::future::Shared;
 use opendal::Operator;
+use opendal::raw::AccessorInfo;
 use parking_lot::Mutex;
+use uuid::Uuid;
 
 use super::VectorIndexIdentity;
 use super::vector_index_loader::check_index_current;
 use super::vector_index_loader::load_hnsw;
 
+// OpenDAL's scheme/name/root do not identify the endpoint (e.g. S3 name is just the bucket).
+// Assign a non-reused identity to each live backend info instead. Unlike the outer accessor,
+// this identity survives per-table StorageMetricsLayer wrappers. Replacing a backend cannot
+// accidentally reuse an old cache namespace.
+type StorageNamespace = (Weak<AccessorInfo>, Uuid);
+static STORAGE_NAMESPACES: LazyLock<Mutex<Vec<StorageNamespace>>> =
+    LazyLock::new(|| Mutex::new(Vec::new()));
+
+fn storage_namespace(operator: &Operator) -> Uuid {
+    let info = operator.inner().info_dyn();
+    let accessor = Arc::downgrade(&info);
+    let mut namespaces = STORAGE_NAMESPACES.lock();
+    namespaces.retain(|(accessor, _)| accessor.strong_count() > 0);
+    if let Some((_, namespace)) = namespaces
+        .iter()
+        .find(|(existing, _)| existing.ptr_eq(&accessor))
+    {
+        return *namespace;
+    }
+    let namespace = Uuid::new_v4();
+    namespaces.push((accessor, namespace));
+    namespace
+}
+
 #[derive(Clone)]
 pub(super) struct VectorIndexLoader {
     operator: Operator,
     settings: ReadSettings,
+    namespace: Uuid,
     distance_type: DistanceType,
     dim: usize,
     identity: VectorIndexIdentity,
@@ -55,9 +82,11 @@ impl VectorIndexLoader {
         dim: usize,
         identity: VectorIndexIdentity,
     ) -> Self {
+        let namespace = storage_namespace(&operator);
         Self {
             operator,
             settings,
+            namespace,
             distance_type,
             dim,
             identity,
@@ -68,12 +97,13 @@ impl VectorIndexLoader {
         &self.identity
     }
 
-    /// Index files are immutable and uniquely named, so the path, column and
-    /// distance identify a decoded HNSW object.
+    /// Index files are immutable and uniquely named, so the storage backend, path,
+    /// column and distance identify a decoded HNSW object. The namespace is per
+    /// process, which suits this memory-only cache.
     fn cache_key(&self, location: &str) -> String {
         format!(
-            "{location}:{}:{}",
-            self.identity.column_id, self.distance_type
+            "{}:{location}:{}:{}",
+            self.namespace, self.identity.column_id, self.distance_type
         )
     }
 

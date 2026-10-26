@@ -1558,6 +1558,13 @@ mod tests {
             (default_config, Some(default_capacity)),
             (
                 CacheConfig {
+                    vector_index_filter_size: 54321,
+                    ..Default::default()
+                },
+                Some(54321),
+            ),
+            (
+                CacheConfig {
                     vector_index_filter_size: 1,
                     vector_index_filter_memory_ratio: 25,
                     ..Default::default()
@@ -1567,6 +1574,21 @@ mod tests {
             (
                 CacheConfig {
                     vector_index_filter_size: 0,
+                    vector_index_filter_memory_ratio: 25,
+                    ..Default::default()
+                },
+                Some(max_server_memory_usage / 4),
+            ),
+            (
+                CacheConfig {
+                    vector_index_filter_size: 0,
+                    ..Default::default()
+                },
+                None,
+            ),
+            (
+                CacheConfig {
+                    enable_table_meta_cache: false,
                     ..Default::default()
                 },
                 None,
@@ -1594,6 +1616,66 @@ mod tests {
                 );
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_index_capacity_names_resize_the_same_budget() -> Result<()> {
+        let config = CacheConfig {
+            vector_index_filter_size: 0,
+            ..Default::default()
+        };
+        let manager = CacheManager::try_new(&config, &(1024 * 1024), "test", false)?;
+        assert!(manager.get_vector_index_cache().is_none());
+        for name in [HYBRID_CACHE_VECTOR_INDEX_FILE, MEMORY_CACHE_VECTOR_INDEX] {
+            manager.set_cache_capacity(name, 12345)?;
+            let cache = manager.get_vector_index_cache().unwrap();
+            assert_eq!(cache.bytes_capacity(), 12345);
+            manager.set_cache_capacity(name, 0)?;
+            assert_eq!(cache.bytes_capacity(), 0);
+            assert_eq!(manager.get_vector_index_cache().bytes_capacity(), 0);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_index_cache_memory_clearance() -> Result<()> {
+        use databend_common_expression::Column;
+        use databend_common_expression::types::F32;
+        use databend_common_expression::types::VectorColumn;
+        use databend_storages_common_index::DistanceType;
+        use databend_storages_common_index::HNSWIndex;
+
+        use crate::CachedVectorIndex;
+
+        let config = CacheConfig {
+            vector_index_filter_size: 1024 * 1024,
+            ..Default::default()
+        };
+        let manager = CacheManager::try_new(&config, &(1024 * 1024), "test", false)?;
+        let cache = manager.get_vector_index_cache().unwrap();
+        let values = (0..64)
+            .map(|i| F32::from((i as f32 * 0.17).sin()))
+            .collect::<Vec<_>>();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), 8)));
+        let (_, entries) = HNSWIndex::build(4, 8, 0, column, DistanceType::L2)?;
+        // Each component is a single-row binary column.
+        let columns = entries
+            .iter()
+            .map(|entry| entry.to_column())
+            .collect::<Vec<_>>();
+        let components = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect::<Vec<_>>();
+        let index = HNSWIndex::open(DistanceType::L2, 8, 8, &components, None)?;
+        let reader = cache.insert("index".to_string(), CachedVectorIndex::new(index));
+        manager.release_cache_memory(CacheClearanceLevel::Basic);
+        assert!(cache.is_empty());
+        // Still held by the reader, so still accounted for.
+        assert!(cache.bytes_size() > 0);
+        drop(reader);
+        assert_eq!(cache.bytes_size(), 0);
         Ok(())
     }
 

@@ -521,19 +521,6 @@ async fn purge_vector_index_objects(
         if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
             continue;
         }
-        let name = entry.path().rsplit('/').next().unwrap_or_default();
-        let recognised = if legacy {
-            name.ends_with(".parquet")
-        } else {
-            name.starts_with(VACUUM2_OBJECT_KEY_PREFIX)
-        };
-        if !recognised {
-            warn!(
-                "skip object with unrecognised vector-index naming during vacuum: path={}",
-                entry.path()
-            );
-            continue;
-        }
         if !legacy {
             match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
                 Ok(Some(timestamp)) if timestamp < gc_root_timestamp => {}

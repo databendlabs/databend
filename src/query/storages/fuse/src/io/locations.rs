@@ -206,7 +206,7 @@ impl TableMetaLocationGenerator {
                 VACUUM2_OBJECT_KEY_PREFIX,
                 Uuid::now_v7().as_simple(),
             ),
-            VECTOR_BUNDLE_VERSION,
+            u64::from(VECTOR_BUNDLE_VERSION),
         )
     }
 
