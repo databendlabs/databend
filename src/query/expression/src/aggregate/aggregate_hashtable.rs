@@ -31,6 +31,7 @@ use super::hash_index_adapter::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
+use super::row_ptr::RowPtr;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -41,6 +42,28 @@ use crate::aggregate::aggregate_function::AggregateStateSet;
 use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
+
+#[derive(Default)]
+struct GroupKeyState {
+    dict_hashes: Option<Vec<u64>>,
+    rank_of_code: Vec<u32>,
+    code_addresses: Vec<RowPtr>,
+    row_count: usize,
+    row_offset: usize,
+}
+
+impl GroupKeyState {
+    fn dict_hashes(&self, row_count: usize) -> Option<&[u64]> {
+        self.dict_hashes
+            .as_deref()
+            .map(|hashes| &hashes[self.row_offset..self.row_offset + row_count])
+    }
+
+    fn clear_codes(&mut self) {
+        self.code_addresses.fill(RowPtr::null());
+        self.rank_of_code.fill(u32::MAX);
+    }
+}
 
 pub struct AggregateHashTable {
     // Hash index entries store RowRef values into these payload pages. Any path
@@ -176,17 +199,29 @@ impl AggregateHashTable {
         agg_states: ProjectedBlock,
         row_count: usize,
     ) -> Result<usize> {
+        let mut group_state = GroupKeyState {
+            row_count,
+            ..Default::default()
+        };
         if row_count <= BATCH_SIZE {
-            self.add_groups_inner(state, group_columns, params, agg_states, row_count, None)
+            self.add_groups_inner(
+                state,
+                group_columns,
+                params,
+                agg_states,
+                row_count,
+                &mut group_state,
+            )
         } else {
-            let dict_hashes = group_columns
-                .iter()
-                .any(BlockEntry::is_dict_encoded)
-                .then(|| {
-                    let mut hashes = vec![0; row_count];
-                    group_hash_entries(group_columns, &mut hashes);
-                    hashes
-                });
+            group_state.dict_hashes =
+                group_columns
+                    .iter()
+                    .any(BlockEntry::is_dict_encoded)
+                    .then(|| {
+                        let mut hashes = vec![0; row_count];
+                        group_hash_entries(group_columns, &mut hashes);
+                        hashes
+                    });
             let mut new_count = 0;
             for start in (0..row_count).step_by(BATCH_SIZE) {
                 let end = (start + BATCH_SIZE).min(row_count);
@@ -205,13 +240,14 @@ impl AggregateHashTable {
                     .map(|c| c.slice(start..end))
                     .collect::<Vec<_>>();
 
+                group_state.row_offset = start;
                 new_count += self.add_groups_inner(
                     state,
                     (&step_group_columns).into(),
                     &step_params,
                     (&agg_states).into(),
                     end - start,
-                    dict_hashes.as_deref().map(|hashes| &hashes[start..end]),
+                    &mut group_state,
                 )?;
             }
             Ok(new_count)
@@ -241,7 +277,7 @@ impl AggregateHashTable {
         params: &[ProjectedBlock],
         agg_states: ProjectedBlock,
         row_count: usize,
-        dict_hashes: Option<&[u64]>,
+        group_state: &mut GroupKeyState,
     ) -> Result<usize> {
         #[cfg(debug_assertions)]
         {
@@ -264,7 +300,7 @@ impl AggregateHashTable {
             Self::fill_group_hashes(
                 group_columns,
                 &mut state.group_hashes[..row_count],
-                dict_hashes,
+                group_state.dict_hashes(row_count),
                 0..row_count,
             );
             for (i, entry) in state.empty_vector[..row_count].iter_mut().enumerate() {
@@ -273,7 +309,7 @@ impl AggregateHashTable {
             self.payload.append_rows(state, row_count, group_columns);
             row_count
         } else if let Some(new_group_count) =
-            self.probe_and_create_by_codes(state, group_columns, row_count, dict_hashes)
+            self.probe_and_create_by_codes(state, group_columns, row_count, group_state)
         {
             new_group_count
         } else {
@@ -281,7 +317,7 @@ impl AggregateHashTable {
             Self::fill_group_hashes(
                 group_columns,
                 &mut state.group_hashes[..row_count],
-                dict_hashes,
+                group_state.dict_hashes(row_count),
                 0..row_count,
             );
             self.probe_and_create(state, group_columns, row_count)
@@ -328,6 +364,7 @@ impl AggregateHashTable {
             // check maybe_repartition
             if self.maybe_repartition() {
                 self.clear_ht();
+                group_state.clear_codes();
             }
         }
 
@@ -335,14 +372,9 @@ impl AggregateHashTable {
     }
 
     /// Probes once per distinct combination of codes when every group key is an encoded column
-    /// with few codes (see [`EncodedColumn::codes`]): rows with the same codes have the same
-    /// keys, so a representative row per combination goes through the regular hash and probe,
-    /// and every row takes the address of its combination.
-    ///
-    /// The code of a combination is a mixed radix number (each key a digit whose radix is its
-    /// number of codes, like a row-major array index), used to index a direct-address table of
-    /// ranks. It is the idea of perfect hash aggregation, applied only to deduplicate the rows of
-    /// a batch, so the hash table is still used for the representatives.
+    /// with few codes (see [`EncodedColumn::codes`]). The mixed-radix code indexes addresses
+    /// shared by batches of one input block. Unseen codes are deduplicated within the batch,
+    /// and their representatives still go through the regular value-aware hash and probe.
     ///
     /// For example, grouping by `(flag, status)` with codes `N=0, R=1` and `F=0, O=1`:
     ///
@@ -362,10 +394,10 @@ impl AggregateHashTable {
         state: &mut ProbeState,
         group_columns: ProjectedBlock,
         row_count: usize,
-        dict_hashes: Option<&[u64]>,
+        group_state: &mut GroupKeyState,
     ) -> Option<usize> {
         // Check every key before allocating the row codes, so regular group columns cost
-        // nothing here.
+        // nothing here. The shared tables are sized against the block, not each batch.
         let mut code_space = 1usize;
         for entry in group_columns.iter() {
             let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
@@ -373,11 +405,13 @@ impl AggregateHashTable {
             };
             let (_, count) = encoded.codes();
             code_space = code_space.checked_mul(usize::try_from(count).ok()?)?;
-            // Only worth it with several rows per combination.
-            if code_space.saturating_mul(4) > row_count {
+            if code_space.saturating_mul(4) > group_state.row_count {
                 return None;
             }
         }
+        u32::try_from(code_space).ok()?;
+        group_state.rank_of_code.resize(code_space, u32::MAX);
+        group_state.code_addresses.resize(code_space, RowPtr::null());
 
         // Code of a row = mixed radix number of the codes of its keys.
         let mut row_codes = vec![0u32; row_count];
@@ -387,47 +421,61 @@ impl AggregateHashTable {
                 return None;
             };
             let (codes, count) = encoded.codes();
-            // `code < count`, so the result is below `code_space <= row_count`.
             for (row_code, code) in row_codes.iter_mut().zip(codes.iter()) {
                 *row_code += (code as usize * stride) as u32;
             }
             stride *= count as usize;
         }
 
-        // Rank of each combination in first-seen order, and its first row.
-        let mut rank_of_code = vec![u32::MAX; code_space];
+        // Only codes without a cached address need a representative in this batch.
         let mut representatives = Vec::new();
-        for (row, row_code) in row_codes.iter_mut().enumerate() {
-            let rank = &mut rank_of_code[*row_code as usize];
+        for (row, code) in row_codes.iter().enumerate() {
+            if !group_state.code_addresses[*code as usize]
+                .as_ptr()
+                .is_null()
+            {
+                continue;
+            }
+            let rank = &mut group_state.rank_of_code[*code as usize];
             if *rank == u32::MAX {
                 *rank = representatives.len() as u32;
                 representatives.push(row as u32);
             }
-            *row_code = *rank;
         }
 
-        // The representative rows stay encoded.
-        let keys = group_columns
-            .iter()
-            .map(|entry| entry.take(representatives.as_slice()))
-            .collect::<Result<Vec<_>>>()
-            .ok()?;
+        let new_group_count = if representatives.is_empty() {
+            0
+        } else {
+            // The representative rows stay encoded.
+            let keys = group_columns
+                .iter()
+                .map(|entry| entry.take(representatives.as_slice()))
+                .collect::<Result<Vec<_>>>()
+                .inspect_err(|_| group_state.rank_of_code.fill(u32::MAX))
+                .ok()?;
 
-        let distinct = representatives.len();
-        state.row_count = distinct;
-        Self::fill_group_hashes(
-            (&keys).into(),
-            &mut state.group_hashes[..distinct],
-            dict_hashes,
-            representatives.iter().map(|row| *row as usize),
-        );
-        let new_group_count = self.probe_and_create(state, (&keys).into(), distinct);
+            let distinct = representatives.len();
+            state.row_count = distinct;
+            Self::fill_group_hashes(
+                (&keys).into(),
+                &mut state.group_hashes[..distinct],
+                group_state.dict_hashes(row_count),
+                representatives.iter().map(|row| *row as usize),
+            );
+            // Functions map dictionary values without changing codes, so distinct codes can
+            // produce equal values. Probe representatives normally to find their actual groups
+            // before reusing the addresses for rows with the same code.
+            let count = self.probe_and_create(state, (&keys).into(), distinct);
+            for (rank, row) in representatives.iter().enumerate() {
+                let code = row_codes[*row as usize] as usize;
+                group_state.code_addresses[code] = state.addresses[rank];
+                group_state.rank_of_code[code] = u32::MAX;
+            }
+            count
+        };
 
-        // The addresses of the representatives are at the front, by rank. `rank <= row` (ranks
-        // are assigned in first-seen order), so writing from the last row never overwrites an
-        // address that is still to be read.
-        for row in (0..row_count).rev() {
-            state.addresses[row] = state.addresses[row_codes[row] as usize];
+        for (address, code) in state.addresses[..row_count].iter_mut().zip(&row_codes) {
+            *address = group_state.code_addresses[*code as usize];
         }
         state.row_count = row_count;
         Some(new_group_count)

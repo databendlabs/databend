@@ -41,15 +41,16 @@ DROP TABLE dictionary_scalar_expected;
 statement ok
 DROP TABLE dictionary_scalar;
 
-# Keep dictionary hashes consistent across 2048-row batches and the final short batch.
+# Reuse dictionary hashes and code addresses across batches, including multiple keys
+# and the final short batch.
 statement ok
 SET max_threads = 1;
 
 statement ok
-CREATE OR REPLACE TABLE dictionary_group_hash (s STRING NOT NULL, v BIGINT NOT NULL) STORAGE_FORMAT = 'parquet';
+CREATE OR REPLACE TABLE dictionary_group_hash (s STRING NOT NULL, t TINYINT NOT NULL, v BIGINT NOT NULL) STORAGE_FORMAT = 'parquet';
 
 statement ok
-INSERT INTO dictionary_group_hash SELECT concat('key', to_string(number % 1025)), number FROM numbers(32769);
+INSERT INTO dictionary_group_hash SELECT concat('key', to_string(number % 1025)), number % 2, number FROM numbers(32769);
 
 statement ok
 UNSET max_threads;
@@ -63,6 +64,16 @@ query III
 SELECT count(*), sum(n), sum(total) FROM (SELECT s, v % 3 AS k, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY s, k);
 ----
 3075 32769 536887296
+
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT s, t, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY s, t);
+----
+2050 32769 536887296
+
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT regexp_replace(s, '[0-9]+', '') AS k, t, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY k, t);
+----
+2 32769 536887296
 
 statement ok
 DROP TABLE dictionary_group_hash;
