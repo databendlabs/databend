@@ -715,7 +715,11 @@ mod tests {
 
         assert!(writer.add_block(block())?);
         assert_eq!(writer.buffered_bytes, expanded);
-        writer.flush(None)?;
+        // The partition builders copy each string, so the send queue may split
+        // the partitions into pieces sent over several flushes.
+        while writer.has_queued() {
+            writer.flush(None)?;
+        }
 
         let rows = receivers
             .iter()

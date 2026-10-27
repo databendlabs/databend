@@ -519,12 +519,21 @@ fn test_hash_transform_closed_output_keeps_sending_other_partitions() -> Result<
         unsafe { item.processor.event(EventCause::Input(0))? },
         Event::NeedData
     ));
-    let QueueItem::LocalData(data) = receivers[1].try_recv().unwrap() else {
-        panic!("expected local data");
-    };
-    let column = data.into_data().get_by_offset(0).to_column();
-    let keys = UInt64Type::try_downcast_column(&column).unwrap();
-    assert_eq!(keys.iter().copied().collect::<Vec<_>>(), vec![1, 3]);
+    // The budget of 1 byte makes the send queue split the partition into pieces.
+    let mut keys = vec![];
+    while let Ok(item) = receivers[1].try_recv() {
+        let QueueItem::LocalData(data) = item else {
+            panic!("expected local data");
+        };
+        let column = data.into_data().get_by_offset(0).to_column();
+        keys.extend(
+            UInt64Type::try_downcast_column(&column)
+                .unwrap()
+                .iter()
+                .copied(),
+        );
+    }
+    assert_eq!(keys, vec![1, 3]);
     assert!(matches!(
         receivers[0].try_recv(),
         Err(async_channel::TryRecvError::Closed)
