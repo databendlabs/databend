@@ -90,8 +90,12 @@ impl TextDecoder {
         // `trim_space` must apply after escape decoding so escaped trailing
         // whitespace such as `\ ` is preserved until it becomes a real space.
         let mut data = vec![];
-        let decoded =
-            decode_tsv_field_with_trim(col_data, &mut data, self.trim_space).map_err(|e| {
+        let delimiters = [
+            self.field_delimiter.unwrap_or(self.record_delimiter),
+            self.record_delimiter,
+        ];
+        let decoded = decode_tsv_field_with_trim(col_data, &mut data, &delimiters, self.trim_space)
+            .map_err(|e| {
                 get_decode_error_by_pos(
                     column_index,
                     &self.load_context.schema,

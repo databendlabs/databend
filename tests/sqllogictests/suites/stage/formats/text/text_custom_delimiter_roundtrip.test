@@ -1,0 +1,143 @@
+# Regression for #20794: TEXT/TSV must decode the delimiter escapes emitted by COPY.
+statement ok
+create or replace stage text_delimiter_roundtrip
+
+statement ok
+create or replace file format tsv_pipe_roundtrip type = TSV field_delimiter = '|'
+
+statement ok
+create or replace file format text_comma_roundtrip type = TEXT field_delimiter = ','
+
+statement ok
+create or replace file format text_semicolon_roundtrip type = TEXT field_delimiter = ';'
+
+statement ok
+create or replace file format text_hash_roundtrip type = TEXT field_delimiter = '#'
+
+statement ok
+create or replace table text_delimiter_source (id int, a string, b string)
+
+statement ok
+insert into text_delimiter_source values
+    (1, 'a|b,c;d#e', 'tail|,;#'),
+    (2, '|,;#', 'tail|,;#'),
+    (3, '\\|\\,\\;\\#', 'tail|,;#'),
+    (4, 'tab\tline\ncr\r', 'tail|,;#'),
+    (5, 'unknown\\q', 'tail|,;#'),
+    (6, 'literal\\x7c', 'tail|,;#'),
+    (7, '\\\\|', 'tail|,;#'),
+    (8, 'quotes\'"`/', 'tail|,;#')
+
+statement ok
+create or replace table text_delimiter_copy like text_delimiter_source
+
+statement ok
+copy into @text_delimiter_roundtrip/pipe/ from text_delimiter_source
+file_format = (format_name = 'tsv_pipe_roundtrip')
+
+# Stage SELECT uses the projected-column decoding path.
+query TT
+select hex($2), hex($3) from @text_delimiter_roundtrip/pipe/
+(file_format => 'tsv_pipe_roundtrip') where $1 = '1'
+----
+617c622c633b642365 7461696c7c2c3b23
+
+statement ok
+copy into text_delimiter_copy from @text_delimiter_roundtrip/pipe/
+file_format = (format_name = 'tsv_pipe_roundtrip')
+
+query III
+select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
+----
+8 8 8
+
+# A second unload/load cycle must not accumulate backslashes.
+statement ok
+copy into @text_delimiter_roundtrip/pipe_again/ from text_delimiter_copy
+file_format = (format_name = 'tsv_pipe_roundtrip')
+
+statement ok
+truncate table text_delimiter_copy
+
+statement ok
+copy into text_delimiter_copy from @text_delimiter_roundtrip/pipe_again/
+file_format = (format_name = 'tsv_pipe_roundtrip')
+
+query III
+select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
+----
+8 8 8
+
+statement ok
+copy into @text_delimiter_roundtrip/comma/ from text_delimiter_source
+file_format = (format_name = 'text_comma_roundtrip')
+
+statement ok
+truncate table text_delimiter_copy
+
+statement ok
+copy into text_delimiter_copy from @text_delimiter_roundtrip/comma/
+file_format = (format_name = 'text_comma_roundtrip')
+
+query III
+select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
+----
+8 8 8
+
+statement ok
+copy into @text_delimiter_roundtrip/semicolon/ from text_delimiter_source
+file_format = (format_name = 'text_semicolon_roundtrip')
+
+statement ok
+truncate table text_delimiter_copy
+
+statement ok
+copy into text_delimiter_copy from @text_delimiter_roundtrip/semicolon/
+file_format = (format_name = 'text_semicolon_roundtrip')
+
+query III
+select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
+----
+8 8 8
+
+statement ok
+copy into @text_delimiter_roundtrip/hash/ from text_delimiter_source
+file_format = (format_name = 'text_hash_roundtrip')
+
+statement ok
+truncate table text_delimiter_copy
+
+statement ok
+copy into text_delimiter_copy from @text_delimiter_roundtrip/hash/
+file_format = (format_name = 'text_hash_roundtrip')
+
+query III
+select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
+----
+8 8 8
+
+statement ok
+drop table text_delimiter_source
+
+statement ok
+drop table text_delimiter_copy
+
+statement ok
+drop stage text_delimiter_roundtrip
+
+statement ok
+drop file format tsv_pipe_roundtrip
+
+statement ok
+drop file format text_comma_roundtrip
+
+statement ok
+drop file format text_semicolon_roundtrip
+
+statement ok
+drop file format text_hash_roundtrip
