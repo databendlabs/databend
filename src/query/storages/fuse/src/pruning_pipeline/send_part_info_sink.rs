@@ -71,14 +71,11 @@ impl SendPartState {
         limit: Option<usize>,
         fuse_pruner: Arc<FusePruner>,
         data_metrics: Arc<StorageMetrics>,
-        partitions_total: usize,
     ) -> Self {
-        let mut statistics = PartStatistics::default_exact();
-        statistics.partitions_total = partitions_total;
         SendPartState {
             cache: Mutex::new(SendPartCache {
                 partitions: Partitions::default(),
-                statistics,
+                statistics: PartStatistics::default_exact(),
                 derterministic_cache_key,
                 fuse_pruner,
             }),
@@ -88,11 +85,36 @@ impl SendPartState {
         }
     }
 
+    /// Statistics of the whole prune pipeline. Call it once all sinkers are detached.
+    ///
+    /// `partitions_total` counts the blocks of the segments read by the pipeline,
+    /// so that it is in the same unit as `partitions_scanned`.
     pub fn get_pruned_stats(&self) -> PartStatistics {
         let mut send_part_cache = self.cache.lock();
-        let pruning_stats = send_part_cache.fuse_pruner.pruning_stats();
-        send_part_cache.statistics.pruning_stats = pruning_stats;
+        Self::refresh_statistics(&mut send_part_cache);
         send_part_cache.statistics.clone()
+    }
+
+    /// Account the partitions of the whole prune pipeline into the table data metrics.
+    /// Call it once all sinkers are detached.
+    pub fn report_data_metrics(&self) {
+        let mut send_part_cache = self.cache.lock();
+        Self::refresh_statistics(&mut send_part_cache);
+        self.data_metrics
+            .inc_partitions_total(send_part_cache.statistics.partitions_total as u64);
+        self.data_metrics
+            .inc_partitions_scanned(send_part_cache.statistics.partitions_scanned as u64);
+    }
+
+    fn refresh_statistics(send_part_cache: &mut SendPartCache) {
+        let fuse_pruner = &send_part_cache.fuse_pruner;
+        let partitions_total = fuse_pruner
+            .pruning_ctx
+            .pruning_stats
+            .get_segments_blocks_total() as usize;
+        let pruning_stats = fuse_pruner.pruning_stats();
+        send_part_cache.statistics.partitions_total = partitions_total;
+        send_part_cache.statistics.pruning_stats = pruning_stats;
     }
 
     pub fn populating_cache(&self) {
@@ -101,7 +123,8 @@ impl SendPartState {
         }
 
         type CacheItem = (PartStatistics, Partitions);
-        let send_part_cache = self.cache.lock();
+        let mut send_part_cache = self.cache.lock();
+        Self::refresh_statistics(&mut send_part_cache);
         if let Some(cache_key) = &send_part_cache.derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
                 let mut cache_statistics = send_part_cache.statistics.clone();
@@ -127,10 +150,6 @@ impl SendPartState {
         }
         // the kind is determined by the push_downs, should be same for all partitions
         send_part_cache.partitions.kind = partitions.kind.clone();
-        self.data_metrics
-            .inc_partitions_total(send_part_cache.statistics.partitions_total as u64);
-        self.data_metrics
-            .inc_partitions_scanned(send_part_cache.statistics.partitions_scanned as u64);
     }
 }
 

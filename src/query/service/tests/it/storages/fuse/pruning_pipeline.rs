@@ -102,7 +102,6 @@ async fn apply_snapshot_pruning(
         segment_rx,
         res_tx,
         cache_key,
-        segment_locs.len(),
         plan_id,
     )?;
     prune_pipeline.set_max_threads(1);
@@ -373,9 +372,12 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         assert_eq!(expected_rows, rows);
         assert_eq!(expected_blocks, parts.len());
 
-        check_stats(stats, &stats_res, id)?;
+        check_stats(stats.clone(), &stats_res, id)?;
+        // Every segment is read, so every block counts in the total.
+        assert_eq!(num_blocks, stats.partitions_total);
         let (stats, partitions) = FuseTable::check_prune_cache(&cache_key).unwrap();
         assert_eq!(stats.pruning_stats, Default::default());
+        assert_eq!(num_blocks, stats.partitions_total);
         assert_eq!(expected_blocks, partitions.partitions.len());
     }
 

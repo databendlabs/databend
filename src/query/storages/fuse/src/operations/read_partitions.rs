@@ -277,13 +277,15 @@ impl FuseTable {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
+                    // Partitions are counted in blocks, like the non-lazy path, so
+                    // the estimate is comparable to the pruned statistics.
                     return Ok((
                         PartStatistics::new_estimated(
                             Some(snapshot_location),
                             read_info.row_count,
                             read_info.compressed_byte_size,
-                            segment_len,
-                            segment_len,
+                            read_info.block_count,
+                            read_info.block_count,
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
                         None,
@@ -415,7 +417,6 @@ impl FuseTable {
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
-                    lazy_init_segments.len(),
                     plan_id,
                 )?;
             }
@@ -612,7 +613,6 @@ impl FuseTable {
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
-        partitions_total: usize,
         plan_id: u32,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -751,7 +751,6 @@ impl FuseTable {
             limit,
             pruner.clone(),
             self.data_metrics.clone(),
-            partitions_total,
         ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
@@ -768,6 +767,8 @@ impl FuseTable {
         })?;
 
         prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            // All sinkers are detached here, so the partitions are reported once.
+            send_part_state.report_data_metrics();
             if let Ok(()) = info.res {
                 // only populating cache when the pipeline is finished successfully
                 let pruned_part_stats = send_part_state.get_pruned_stats();

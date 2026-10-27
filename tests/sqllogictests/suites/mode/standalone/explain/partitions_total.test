@@ -1,0 +1,76 @@
+# Issue #20713: with several segments, the lazy pruning path must count
+# `partitions total` in blocks, the same unit as `partitions scanned`.
+
+statement ok
+create or replace table partitions_total_t(a int) row_per_block = 2
+
+statement ok
+set enable_compact_after_write = 0
+
+statement ok
+insert into partitions_total_t values (1), (2), (3), (4)
+
+statement ok
+insert into partitions_total_t values (5), (6), (7), (8)
+
+statement ok
+insert into partitions_total_t values (9), (10), (11), (12)
+
+query II
+select (select count(*) from fuse_segment('default', 'partitions_total_t')), (select count(*) from fuse_block('default', 'partitions_total_t'))
+----
+3 6
+
+# One block is pruned, 5 of 6 blocks are scanned.
+query T
+explain select a from partitions_total_t where a > 2
+----
+TableScan
+├── table: default.default.partitions_total_t
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 10
+├── read size: < 1 KiB
+├── partitions total: 6
+├── partitions scanned: 5
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 6 to 5 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(partitions_total_t.a (#0) > 2)], limit: NONE]
+└── estimated rows: 10.00
+
+# The first segment is pruned, its blocks still count in the total.
+query T
+explain select a from partitions_total_t where a > 6
+----
+TableScan
+├── table: default.default.partitions_total_t
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 6
+├── read size: < 1 KiB
+├── partitions total: 6
+├── partitions scanned: 3
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 2 cost: <slt:ignore>>, blocks: <range pruning: 4 to 3 cost: <slt:ignore>>]
+├── push downs: [filters: [is_true(partitions_total_t.a (#0) > 6)], limit: NONE]
+└── estimated rows: 6.00
+
+# No filter: every block is scanned.
+query T
+explain select a from partitions_total_t
+----
+TableScan
+├── table: default.default.partitions_total_t
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 12
+├── read size: < 1 KiB
+├── partitions total: 6
+├── partitions scanned: 6
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 12.00
+
+statement ok
+unset enable_compact_after_write
+
+statement ok
+drop table partitions_total_t

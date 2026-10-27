@@ -83,6 +83,7 @@ impl SegmentPruner {
                 metrics_inc_bytes_segment_range_pruning_before(total_bytes);
 
                 pruning_stats.set_segments_range_pruning_before(1);
+                pruning_stats.add_segments_blocks_total(info.summary().block_count);
             }
 
             let range_input = RangeIndexInput::new(

@@ -158,18 +158,19 @@ impl FuseTable {
         is_delete: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         if is_lazy {
-            let segment_len = snapshot.segments.len();
             let mut segments = Vec::with_capacity(snapshot.segments.len());
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                 segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
             }
+            // Partitions are counted in blocks, like the non-lazy path.
+            let block_count = snapshot.summary.block_count as usize;
             Ok((
                 PartStatistics::new_estimated(
                     None,
                     snapshot.summary.row_count as usize,
                     snapshot.summary.compressed_byte_size as usize,
-                    segment_len,
-                    segment_len,
+                    block_count,
+                    block_count,
                 ),
                 Partitions::create(PartitionsShuffleKind::Mod, segments),
             ))

@@ -28,6 +28,10 @@ pub struct FusePruningStatistics {
     /// Segment block metas decompress cost in nanoseconds.
     pub segments_decompress_cost: AtomicU64,
 
+    /// Number of blocks in the segments read by the segment pruner, counted
+    /// before any segment or block pruning.
+    pub segments_blocks_total: AtomicU64,
+
     /// Segment range pruning stats.
     pub segments_range_pruning_before: AtomicU64,
     pub segments_range_pruning_after: AtomicU64,
@@ -90,6 +94,14 @@ impl FusePruningStatistics {
 
     pub fn get_segments_decompress_cost(&self) -> u64 {
         nanos_to_display_micros(self.segments_decompress_cost.load(Ordering::Relaxed))
+    }
+
+    pub fn add_segments_blocks_total(&self, v: u64) {
+        self.segments_blocks_total.fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_segments_blocks_total(&self) -> u64 {
+        self.segments_blocks_total.load(Ordering::Relaxed)
     }
 
     pub fn set_segments_range_pruning_before(&self, v: u64) {
