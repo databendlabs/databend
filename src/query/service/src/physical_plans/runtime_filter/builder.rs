@@ -630,6 +630,12 @@ async fn get_build_table_rows(
             metadata_read.table(table_index).table().clone()
         };
 
+        // A change scan needs its ChangeType to define the row set. This
+        // denominator is optional: do not request whole-table statistics for
+        // CHANGES/stream sources or turn their absence into a planning error.
+        if table.has_changes_source() {
+            return Ok(None);
+        }
         let table_stats = table.table_statistics(ctx, false, None).await?;
         return Ok(table_stats.and_then(|s| s.num_rows));
     }
