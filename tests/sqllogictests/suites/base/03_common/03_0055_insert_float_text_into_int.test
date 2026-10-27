@@ -1,0 +1,64 @@
+# Non-integer numeric text (fraction / exponent) inserted into integer columns must
+# be converted exactly, not through f64 which loses precision beyond 2^53.
+# https://github.com/databendlabs/databend/issues/20786
+
+statement ok
+CREATE OR REPLACE TABLE t_float_text_int (id INT, b BIGINT, u UINT64)
+
+statement ok
+INSERT INTO t_float_text_int VALUES
+    (1, 1760000000123456789.4, 1760000000123456789.4),
+    (2, 1.760000000123456789e18, 1.760000000123456789e18),
+    (3, 9007199254740993.4, 9007199254740993.4),
+    (4, 9223372036854775807.4, 18446744073709551615.4),
+    (5, -9223372036854775808.4, 0),
+    (6, 1760000000123456789.5, 1760000000123456789.5),
+    (7, -1.5, 1.5),
+    (8, 1e-50, 0e300)
+
+query III
+SELECT id, b, u FROM t_float_text_int ORDER BY id
+----
+1 1760000000123456789 1760000000123456789
+2 1760000000123456789 1760000000123456789
+3 9007199254740993 9007199254740993
+4 9223372036854775807 18446744073709551615
+5 -9223372036854775808 0
+6 1760000000123456790 1760000000123456790
+7 -2 2
+8 0 0
+
+# Out of range values are rejected instead of being clamped to the type bounds.
+statement error
+INSERT INTO t_float_text_int VALUES (9, -9223372036854775809, 0)
+
+statement error
+INSERT INTO t_float_text_int VALUES (9, -9223372036854776000, 0)
+
+statement error
+INSERT INTO t_float_text_int VALUES (9, 9223372036854775807.5, 0)
+
+statement error
+INSERT INTO t_float_text_int VALUES (9, 0, 18446744073709551615.5)
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+statement ok
+INSERT INTO t_float_text_int VALUES
+    (10, 1760000000123456789.9, 1760000000123456789.9),
+    (11, -9223372036854775808.9, 18446744073709551615.9),
+    (12, -1.9, 1.9)
+
+query III
+SELECT id, b, u FROM t_float_text_int WHERE id >= 10 ORDER BY id
+----
+10 1760000000123456789 1760000000123456789
+11 -9223372036854775808 18446744073709551615
+12 -1 1
+
+statement ok
+unset numeric_cast_option
+
+statement ok
+DROP TABLE t_float_text_int

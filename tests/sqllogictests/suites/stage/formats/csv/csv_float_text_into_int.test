@@ -1,0 +1,68 @@
+# Non-integer numeric text (fraction / exponent) loaded into integer columns must
+# be converted exactly, not through f64 which loses precision beyond 2^53.
+# https://github.com/databendlabs/databend/issues/20786
+
+statement ok
+CREATE OR REPLACE TABLE csv_float_text_src (id INT, s STRING)
+
+statement ok
+INSERT INTO csv_float_text_src VALUES
+    (1, '1760000000123456789.4'),
+    (2, '1.760000000123456789e18'),
+    (3, '9007199254740993.4'),
+    (4, '9223372036854775807.4'),
+    (5, '1760000000123456789.5')
+
+statement ok
+CREATE OR REPLACE STAGE csv_float_text_stage FILE_FORMAT = (TYPE = CSV)
+
+statement ok
+COPY INTO @csv_float_text_stage/ok/ FROM csv_float_text_src
+
+statement ok
+CREATE OR REPLACE TABLE csv_float_text_int (id INT, b BIGINT)
+
+statement ok
+COPY INTO csv_float_text_int FROM @csv_float_text_stage/ok/
+
+query II
+SELECT id, b FROM csv_float_text_int ORDER BY id
+----
+1 1760000000123456789
+2 1760000000123456789
+3 9007199254740993
+4 9223372036854775807
+5 1760000000123456790
+
+# Out of range text is rejected instead of being clamped to the type bounds.
+statement ok
+CREATE OR REPLACE TABLE csv_float_text_src (id INT, s STRING)
+
+statement ok
+INSERT INTO csv_float_text_src VALUES (1, '-9223372036854775809'), (2, '-9223372036854776000'), (3, '9223372036854775807.5')
+
+statement ok
+COPY INTO @csv_float_text_stage/overflow/ FROM csv_float_text_src
+
+statement ok
+TRUNCATE TABLE csv_float_text_int
+
+statement ok
+COPY INTO csv_float_text_int FROM @csv_float_text_stage/overflow/ ON_ERROR = CONTINUE
+
+query I
+SELECT count(*) FROM csv_float_text_int
+----
+0
+
+statement error
+COPY INTO csv_float_text_int FROM @csv_float_text_stage/overflow/ FORCE = TRUE
+
+statement ok
+DROP TABLE csv_float_text_src
+
+statement ok
+DROP TABLE csv_float_text_int
+
+statement ok
+DROP STAGE csv_float_text_stage

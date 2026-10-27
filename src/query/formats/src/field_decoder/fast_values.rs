@@ -52,16 +52,17 @@ use databend_common_io::cursor_ext::BufferReadStringExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
+use databend_common_io::cursor_ext::collect_number;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::prelude::InputFormatSettings;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
-use num_traits::NumCast;
 
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
+use crate::field_decoder::common::read_int_from_decimal_text;
 use crate::field_decoder::common::read_timestamp;
 use crate::field_decoder::common::read_timestamp_tz;
 
@@ -197,27 +198,30 @@ impl FastFieldDecoderValues {
     fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical + NumCast,
+        T::Native: FromLexical,
     {
         let val: Result<T::Native> = reader.read_int_text();
         let v = match val {
-            Ok(v) => v,
+            Ok(v) => v.into(),
             Err(_) => {
-                // cast float value to integer value
-                let val: f64 = reader.read_float_text()?;
-                let new_val: Option<T::Native> = if self.common_settings.settings.is_rounding_mode {
-                    num_traits::cast::cast(val.round())
-                } else {
-                    num_traits::cast::cast(val)
-                };
-                if let Some(v) = new_val {
-                    v
-                } else {
-                    return Err(ErrorCode::BadBytes(format!("number {} is overflowed", val)));
+                // Not a plain integer (e.g. '1.5', '1.76e18' or out of range):
+                // parse it as an exact decimal so no precision is lost via f64.
+                let buf = Cursor::split(reader).1;
+                let (n_in, effective) = collect_number(buf);
+                if n_in == 0 {
+                    return Err(ErrorCode::BadBytes(
+                        "Failed to parse number from text: input does not contain a valid numeric format.",
+                    ));
                 }
+                let v = read_int_from_decimal_text(
+                    &buf[..effective],
+                    self.common_settings.settings.is_rounding_mode,
+                )?;
+                reader.consume(n_in);
+                v
             }
         };
-        column.push(v.into());
+        column.push(v);
         Ok(())
     }
 
