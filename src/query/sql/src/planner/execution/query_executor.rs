@@ -13,10 +13,28 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+
+use crate::DefinitionScope;
 
 #[async_trait]
 pub trait QueryExecutor: Send + Sync {
     async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>>;
+
+    /// Execute a materialized CTE producer in its definition's scope, without
+    /// changing the enclosing session.
+    async fn execute_query_in_scope(
+        &self,
+        sql: &str,
+        scope: DefinitionScope,
+    ) -> Result<Vec<DataBlock>> {
+        if !scope.is_session() {
+            return Err(ErrorCode::Unimplemented(
+                "Query executor does not support a stored query binding context",
+            ));
+        }
+        self.execute_query_with_sql_string(sql).await
+    }
 }

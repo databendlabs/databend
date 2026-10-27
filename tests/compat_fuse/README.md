@@ -18,6 +18,17 @@ All test cases are defined in `test_cases.yaml`. Each entry specifies:
 
 To add a test case, append an entry to `test_cases.yaml`.
 
+## View CTE compatibility
+
+The `view_cte` suite uses a 1.2.833 writer because its `ViewRewriter` stored CTE
+references as `db.cte_name`, without namespace options. The current reader must
+preserve those views' results (including same-named real tables, nested/scalar
+queries, recursion and repeated references) while ordinary SQL and newly created
+views resolve qualified names strictly as tables. The suite also checks that
+recreating a view adopts the new rules. To retain CTE semantics, recreate from the
+original unqualified SQL; historical `SHOW CREATE` text may already have had a
+database added by the system.
+
 ## Usage
 
 Run all cases (CI mode):

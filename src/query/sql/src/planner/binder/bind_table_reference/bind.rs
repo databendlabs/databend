@@ -25,7 +25,8 @@ impl Binder {
         bind_context: &mut BindContext,
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
-        let (s_expr, bind_context) = match table_ref {
+        self.debug_assert_definition_scope(bind_context);
+        let (s_expr, mut bind_context) = match table_ref {
             TableReference::Table {
                 span,
                 table,
@@ -77,6 +78,9 @@ impl Binder {
             } => self.bind_location(bind_context, location, options, alias),
             TableReference::Join { join, .. } => self.bind_join(bind_context, join),
         }?;
+        // Some FROM items (SQL UDTFs, materialized views) build their output context
+        // from scratch. Hand later items, such as lateral consumers, the caller's scope.
+        bind_context.definition_scope = self.definition_scope.clone();
 
         if let Some(unpivot) = table_ref.unpivot() {
             self.bind_unpivot(s_expr, bind_context, unpivot)
