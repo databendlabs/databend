@@ -86,6 +86,11 @@ impl InvertedIndexPruner {
                 has_score,
                 prepared.tokenizer_manager,
                 prepared.warmup,
+            )
+            .with_top_k(
+                push_down
+                    .as_ref()
+                    .and_then(PushDownInfo::inverted_index_top_k),
             );
 
             return Ok(Some(Arc::new(InvertedIndexPruner {

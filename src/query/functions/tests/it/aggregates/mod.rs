@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_encoded;
 mod agg_hashtable;
 mod aggregate_distinct;
 mod aggregate_if;

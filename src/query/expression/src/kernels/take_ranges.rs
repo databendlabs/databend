@@ -122,6 +122,24 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
         Ok(())
     }
 
+    fn visit_encoded(&mut self, mut column: Box<EncodedColumn>) -> Result<()> {
+        *column = column.map_codes(|codes| {
+            crate::map_narrow_buffer!(&codes, |buffer| {
+                self.ranges
+                    .iter()
+                    .flat_map(|range| {
+                        buffer.as_slice()[range.start as usize..range.end as usize]
+                            .iter()
+                            .copied()
+                    })
+                    .collect::<Vec<_>>()
+                    .into()
+            })
+        });
+        self.result = Some(Value::Column(Column::Encoded(column)));
+        Ok(())
+    }
+
     fn visit_typed_column<T: ValueType>(
         &mut self,
         column: T::Column,

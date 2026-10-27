@@ -1202,12 +1202,13 @@ pub enum ModifyColumnAction {
     // - Identifier: The column name to apply the masking policy to
     // - String: The masking policy name
     // - Option<Vec<Identifier>>: Optional USING clause columns
+    // - Option<bool>: Optional authorization to inspect original values in SELECT WHERE
     //
     // USING clause behavior (follows Snowflake semantics):
     // - First column: The column to mask/tokenize (must match the target column)
     // - Additional columns: Condition columns to evaluate for conditional masking
     // - If USING is omitted: Treats as normal (non-conditional) masking policy
-    SetMaskingPolicy(Identifier, String, Option<Vec<Identifier>>),
+    SetMaskingPolicy(Identifier, String, Option<Vec<Identifier>>, Option<bool>),
     // Unset masking policy from a column
     UnsetMaskingPolicy(Identifier),
     // vec<ColumnDefinition>
@@ -1221,13 +1222,21 @@ pub enum ModifyColumnAction {
 impl Display for ModifyColumnAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
-            ModifyColumnAction::SetMaskingPolicy(column, name, using_columns) => {
+            ModifyColumnAction::SetMaskingPolicy(
+                column,
+                name,
+                using_columns,
+                where_use_unmasked_value,
+            ) => {
                 if let Some(using_columns) = using_columns {
                     write!(f, "{} SET MASKING POLICY {} USING (", column, name)?;
                     write_comma_separated_list(f, using_columns)?;
                     write!(f, ")")?
                 } else {
                     write!(f, "{} SET MASKING POLICY {}", column, name)?
+                }
+                if let Some(value) = where_use_unmasked_value {
+                    write!(f, " OPTIONS (where_use_unmasked_value = {})", value)?;
                 }
             }
             ModifyColumnAction::UnsetMaskingPolicy(column) => {

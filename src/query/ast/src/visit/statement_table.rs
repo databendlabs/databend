@@ -292,7 +292,7 @@ impl Walk for AlterTableAction {
                 try_walk!(ttl.walk(visitor));
             }
             AlterTableAction::ModifyColumn { action } => match action {
-                ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
+                ModifyColumnAction::SetMaskingPolicy(column, _, using_columns, _) => {
                     try_walk!(column.walk(visitor));
                     if let Some(using_columns) = using_columns {
                         for ident in using_columns {
@@ -406,7 +406,7 @@ impl WalkMut for AlterTableAction {
                 try_walk!(ttl.walk_mut(visitor));
             }
             AlterTableAction::ModifyColumn { action } => match action {
-                ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
+                ModifyColumnAction::SetMaskingPolicy(column, _, using_columns, _) => {
                     try_walk!(column.walk_mut(visitor));
                     if let Some(using_columns) = using_columns {
                         for ident in using_columns {

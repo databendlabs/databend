@@ -43,6 +43,7 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_column_view_iter;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
@@ -437,8 +438,8 @@ where
         validity: Option<&Bitmap>,
         function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        try_for_each_selected(values.iter(), validity, |value| {
-            self.add(value, function_info)
+        with_column_view_iter!(I, &values, |values| {
+            try_for_each_selected(values, validity, |value| self.add(value, function_info))
         })
     }
 
@@ -516,11 +517,13 @@ where
 
     fn accumulate_keys(&self, input: UnaryAccumulateKeysInput<'_>) -> Result<()> {
         let values = input.column.downcast::<I>().unwrap();
-        input.states.try_for_each_state_value::<S, _>(
-            values.iter(),
-            input.validity,
-            |state, value| state.add(value, &self.function_info),
-        )
+        with_column_view_iter!(I, &values, |values| {
+            input
+                .states
+                .try_for_each_state_value::<S, _>(values, input.validity, |state, value| {
+                    state.add(value, &self.function_info)
+                })
+        })
     }
 
     fn accumulate_row(&self, input: UnaryAccumulateRowInput<'_>) -> Result<()> {
