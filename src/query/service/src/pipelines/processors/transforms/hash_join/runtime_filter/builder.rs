@@ -23,35 +23,23 @@ pub(super) fn should_enable_runtime_filter(
         return false;
     }
 
-    let Some(build_table_rows) = desc.build_table_rows else {
-        log::info!(
-            "RUNTIME-FILTER: Disable bloom runtime filter {} - no build table statistics available",
-            desc.id
-        );
-        return false;
+    // Unknown/zero denominators cannot justify the optimization. Preserve
+    // the existing build-statistics path; probe statistics only add an OR.
+    let below_threshold = |table_rows: Option<u64>| {
+        table_rows.is_some_and(|rows| {
+            rows > 0
+                && (build_num_rows as u128) * 100 < (rows as u128) * (selectivity_threshold as u128)
+        })
     };
-
-    let selectivity_pct = (build_num_rows as f64 / build_table_rows as f64) * 100.0;
-
-    if selectivity_pct < selectivity_threshold as f64 {
-        log::info!(
-            "RUNTIME-FILTER: Enable bloom runtime filter {} - low selectivity: {:.2}% < {}% (build_rows={}, build_table_rows={})",
-            desc.id,
-            selectivity_pct,
-            selectivity_threshold,
-            build_num_rows,
-            build_table_rows
-        );
-        true
-    } else {
-        log::info!(
-            "RUNTIME-FILTER: Disable bloom runtime filter {} - high selectivity: {:.2}% >= {}% (build_rows={}, build_table_rows={})",
-            desc.id,
-            selectivity_pct,
-            selectivity_threshold,
-            build_num_rows,
-            build_table_rows
-        );
-        false
-    }
+    let enabled = below_threshold(desc.build_table_rows) || below_threshold(desc.probe_table_rows);
+    log::info!(
+        "RUNTIME-FILTER: bloom runtime filter {} enabled={} (build_rows={}, build_table_rows={:?}, probe_table_rows={:?}, threshold={}%)",
+        desc.id,
+        enabled,
+        build_num_rows,
+        desc.build_table_rows,
+        desc.probe_table_rows,
+        selectivity_threshold
+    );
+    enabled
 }

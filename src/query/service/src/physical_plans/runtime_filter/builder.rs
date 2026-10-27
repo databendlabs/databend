@@ -292,7 +292,7 @@ pub async fn build_runtime_filter(
         let probe_targets = find_probe_targets(
             metadata,
             probe_side,
-            probe_key,
+            probe_key.clone(),
             scan_id,
             column_idx,
             is_connector,
@@ -301,6 +301,16 @@ pub async fn build_runtime_filter(
 
         let build_table_rows =
             get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
+        let probe_table_index = resolve_probe_table_index(
+            metadata,
+            probe_side,
+            &probe_targets,
+            &probe_key,
+            scan_id,
+            column_idx,
+        );
+        let probe_table_rows =
+            get_build_table_rows(ctx.clone(), metadata, probe_table_index).await?;
 
         let data_type = build_key
             .as_expr(&BUILTIN_FUNCTIONS)
@@ -322,6 +332,7 @@ pub async fn build_runtime_filter(
             build_key: build_key.clone(),
             probe_targets,
             build_table_rows,
+            probe_table_rows,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
@@ -330,6 +341,43 @@ pub async fn build_runtime_filter(
     }
 
     Ok(PhysicalRuntimeFilters { filters })
+}
+
+// Only the original, single target may supply the new probe denominator.
+// Do not reuse the root table's statistics for propagated targets, and do not
+// impose any new restriction on the existing build-statistics path.
+fn resolve_probe_table_index(
+    metadata: &MetadataRef,
+    probe_side: &PExpr,
+    targets: &[(RemoteExpr<String>, usize)],
+    source_key: &RemoteExpr<String>,
+    source_scan_id: usize,
+    source_column: Symbol,
+) -> Option<IndexType> {
+    let [(target_key, target_scan_id)] = targets else {
+        return None;
+    };
+    if *target_scan_id != source_scan_id || target_key != source_key {
+        return None;
+    }
+    let metadata = metadata.read();
+    if metadata.base_column_scan_id(source_column) != Some(source_scan_id) {
+        return None;
+    }
+    let ColumnEntry::BaseTableColumn(column) = metadata.column(source_column) else {
+        return None;
+    };
+    fn find_scan(expr: &PExpr, scan_id: usize) -> Option<&databend_common_sql::plans::Scan> {
+        if let PhysicalRelOperator::Scan(scan) = expr.plan() {
+            if scan.scan_id == scan_id {
+                return Some(scan);
+            }
+        }
+        expr.children().find_map(|child| find_scan(child, scan_id))
+    }
+    let scan = find_scan(probe_side, source_scan_id)?;
+    (scan.table_index == column.table_index && scan.columns.contains(&source_column))
+        .then_some(scan.table_index)
 }
 
 async fn get_build_table_rows(
@@ -691,6 +739,59 @@ mod tests {
             column_idx: Symbol::new(column_idx),
             is_connector,
         }
+    }
+
+    #[test]
+    fn test_probe_statistics_only_for_the_confirmed_target_scan() {
+        use databend_common_expression::TableDataType;
+        use databend_common_sql::Metadata;
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::Join;
+        use databend_common_sql::plans::Scan;
+        use parking_lot::RwLock;
+
+        let mut metadata = Metadata::default();
+        let source = metadata.add_base_table_column(
+            "a".into(),
+            TableDataType::Number(NumberDataType::Int32),
+            3,
+            None,
+            0,
+            None,
+            None,
+        );
+        metadata.add_base_column_scan_id(std::collections::HashMap::from([(source, 7)]));
+        let metadata = std::sync::Arc::new(RwLock::new(metadata));
+        let scan = |scan_id, table_index| {
+            PExpr::create_leaf(Scan {
+                scan_id,
+                table_index,
+                columns: [source].into_iter().collect(),
+                ..Default::default()
+            })
+        };
+        let key = column("a", DataType::Number(NumberDataType::Int32)).as_remote_expr();
+        let targets = vec![(key.clone(), 7)];
+        let resolve = |plan: &PExpr, targets: &[(RemoteExpr<String>, usize)]| {
+            super::resolve_probe_table_index(&metadata, plan, targets, &key, 7, source)
+        };
+        assert_eq!(resolve(&scan(7, 3), &targets), Some(3));
+        assert_eq!(resolve(&scan(8, 3), &targets), None);
+        assert_eq!(resolve(&scan(7, 4), &targets), None);
+        assert_eq!(resolve(&scan(7, 3), &[(key.clone(), 8)]), None);
+        assert_eq!(
+            resolve(&scan(7, 3), &[(key.clone(), 7), (key.clone(), 8)]),
+            None
+        );
+        let joined = PExpr::create_binary(Join::default(), scan(7, 3), scan(8, 4));
+        assert_eq!(resolve(&joined, &targets), Some(3)); // No whole-side single-scan guard.
+        let derived = metadata
+            .write()
+            .add_derived_column("d".into(), DataType::Boolean);
+        assert_eq!(
+            super::resolve_probe_table_index(&metadata, &scan(7, 3), &targets, &key, 7, derived,),
+            None
+        );
     }
 
     #[test]
