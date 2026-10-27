@@ -137,10 +137,11 @@ enum UserAuth {
 /// - the password of `CREATE [OR REPLACE] USER` / `ALTER USER`: string
 ///   literals after `IDENTIFIED` and the token after `BY`;
 /// - `<key> = '<value>'` pairs whose key (quoted or not) satisfies
-///   [`is_secret_name`], and credentials of URL literals. In queries and DML
-///   (`SELECT`, `INSERT`, `UPDATE`, ...) only inside `CONNECTION = (...)` /
-///   `CONNECTION => (...)`: elsewhere they compare or write user data, e.g.
-///   `ON f.date_key = d.date_key`;
+///   [`is_secret_name`]. In queries and DML (`SELECT`, `INSERT`, `UPDATE`,
+///   ...) only inside `CONNECTION = (...)` / `CONNECTION => (...)`: elsewhere
+///   they compare or write user data, e.g. `ON f.date_key = d.date_key`;
+/// - credentials of URL literals (userinfo, query values, fragments), in any
+///   context;
 /// - every value inside `HEADERS = ( ... )`.
 ///
 /// Masked values keep their first and last two characters. SQL inside
@@ -301,15 +302,15 @@ fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
                 } else if pending_key.is_some() || pending_header {
                     secrets.push_literal(text);
                     Some(mask_partial(&value))
-                } else if options {
+                } else {
+                    // URL credentials are hidden even in query data, e.g.
+                    // `SELECT * FROM 'https://user:password@host/file.csv'`.
                     let url = mask_url(&value, url_key && webhook_depth > 0);
                     if url != value {
                         secrets.push_literal(text);
                         secrets.extend(url_secrets(&value));
                     }
                     (url != value).then_some(url)
-                } else {
-                    None
                 };
                 if let Some(value) = replacement {
                     let quoted = QuotedString(&value, text.as_bytes()[0] as char).to_string();
@@ -959,9 +960,18 @@ mod tests {
                 "EXPLAIN (SELECT a FROM t WHERE customer_key = customer_id) UNION ALL SELECT 1",
                 "EXPLAIN (SELECT a FROM t WHERE customer_key = customer_id) UNION ALL SELECT 1",
             ),
+            // URL credentials are hidden in any context, including query data.
             (
                 "INSERT INTO t VALUES ('https://u:leak@x.test/f?sig=1'); UPDATE t SET password = 'p'",
-                "INSERT INTO t VALUES ('https://u:leak@x.test/f?sig=1'); UPDATE t SET password = 'p'",
+                "INSERT INTO t VALUES ('https://***:***@x.test/f?sig=***'); UPDATE t SET password = 'p'",
+            ),
+            (
+                "SELECT * FROM 'https://u:leak_pw@h.test/x.csv'",
+                "SELECT * FROM 'https://***:***@h.test/x.csv'",
+            ),
+            (
+                "INSERT INTO t SELECT $1 FROM 'https://u:leak_pw@h.test/x.csv'",
+                "INSERT INTO t SELECT $1 FROM 'https://***:***@h.test/x.csv'",
             ),
             (
                 "SELECT * FROM 's3://b/x.csv' (CONNECTION => (ACCESS_KEY_ID = 'akid123', SECRET_ACCESS_KEY = 'secret456')) WHERE token = 'abc'",
@@ -980,6 +990,21 @@ mod tests {
             let masked = mask_sql_secrets(sql);
             assert_eq!(masked, expected, "{sql}");
             assert_eq!(mask_sql_secrets(&masked), masked, "{sql}");
+        }
+    }
+
+    #[test]
+    fn test_mask_log_sql_url_credentials() {
+        // Pre-planning request logs do not parse SQL; URL credentials in
+        // queries and DML must still be hidden.
+        for sql in [
+            "SELECT * FROM 'https://u:leak_pw@h.test/x.csv'",
+            "INSERT INTO t SELECT $1 FROM 'https://u:leak_pw@h.test/x.csv'",
+            "COPY INTO t FROM 'https://u:leak_pw@h.test/x.csv'",
+        ] {
+            let masked = mask_log_sql_secrets(sql);
+            assert!(!masked.contains("leak_pw"), "{masked}");
+            assert!(masked.contains("h.test/x.csv"), "{masked}");
         }
     }
 

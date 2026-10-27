@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -33,7 +32,6 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::util::ScriptClient;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextSettings;
 
 #[derive(Debug)]
@@ -155,13 +153,9 @@ impl Interpreter for ExecuteImmediateInterpreter {
                 }
             };
 
-            res.map_err(|err| {
-                // The error is returned as is, but its excerpt of the script
-                // must be scrubbed in query history and logs.
-                self.ctx
-                    .add_query_secrets(mask_raw_sql_with_secrets(&self.plan.script).1);
-                err.display_with_sql(&self.plan.script)
-            })
+            // The binder recorded the script's secrets for scrubbing the
+            // error's excerpt in query history and logs.
+            res.map_err(|err| err.display_with_sql(&self.plan.script))
         })
     }
 }
