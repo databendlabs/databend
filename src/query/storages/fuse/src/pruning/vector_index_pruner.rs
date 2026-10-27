@@ -33,17 +33,12 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
-use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::NumberColumn;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_pruning_milliseconds;
 use databend_common_metrics::storage::metrics_inc_blocks_vector_index_pruning_after;
@@ -68,17 +63,10 @@ use crate::io::read::VectorIndexReader;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
 
-// Experimental margins for SQ8 candidate filtering, not quantization error bounds.
-// Keep them independent of the refinement candidate budget.
-const REFINE_COSINE_FILTER_MARGIN: f64 = 0.02;
-const REFINE_RELATIVE_FILTER_MARGIN: f64 = 0.05;
-const REFINE_MIN_FILTER_MARGIN: f64 = 1e-3;
-
 #[derive(Clone)]
 struct VectorTopNParam {
     has_filter: bool,
     filter_expr: Option<Expr>,
-    candidate_filter: Option<Expr>,
     asc: bool,
     limit: usize,
     candidate_limit: usize,
@@ -158,21 +146,15 @@ impl VectorIndexPruner {
             (Some((RemoteExpr::ColumnRef { id, .. }, asc, _)), Some(limit))
                 if id == VECTOR_SCORE_COL_NAME =>
             {
-                // Prepare the budget and filter once for all pruning batches.
-                // Saturation treats an overflowing budget as effectively unlimited.
-                let (candidate_limit, candidate_filter) = match refine_options.refine_factor {
-                    Some(factor) => (
-                        limit.saturating_mul(factor),
-                        filter_expr
-                            .as_ref()
-                            .map(|expr| widen_score_filter(expr, vector_distance_type)),
-                    ),
-                    None => (limit, None),
+                // Prepare the budget once for all pruning batches. Saturation treats
+                // an overflowing budget as effectively unlimited.
+                let candidate_limit = match refine_options.refine_factor {
+                    Some(factor) => limit.saturating_mul(factor),
+                    None => limit,
                 };
                 Some(VectorTopNParam {
                     has_filter: filters.is_some(),
                     filter_expr,
-                    candidate_filter,
                     asc: *asc,
                     limit,
                     candidate_limit,
@@ -323,40 +305,22 @@ impl VectorIndexPruner {
         if param.limit == 0 || metas.is_empty() {
             return Ok(Vec::new());
         }
-        let mut results = self
+        // Descending order and score filters need the scores of every row: the
+        // returned blocks are read whole, and a row without a score would get the
+        // placeholder score, which ranks first in descending order and passes a
+        // lower-bound filter. With refinement, every row is scored with FP16 data
+        // (one read per block, not cached), as for full-row scoring, so the filter
+        // and TopN below use the FP16 scores.
+        let refine = self.refine_options.refine_factor.is_some();
+        let results = self
             .score_blocks(metas, move |reader, row_count, location| async move {
-                reader.generate_scores(row_count, &location).await
+                if refine {
+                    reader.generate_refined_scores(row_count, &location).await
+                } else {
+                    reader.generate_scores(row_count, &location).await
+                }
             })
             .await?;
-        if self.refine_options.refine_factor.is_some() {
-            // Rows passing the original predicate on SQ8 scores fill the candidate
-            // budget, as without widening. Rows that pass only the widened predicate
-            // (near the threshold, where SQ8 may misjudge) get a separate budget, so
-            // they add candidates rather than crowding out the confident ones.
-            // The original predicate is applied below to the FP16 scores.
-            let passed = self.eval_score_filters(param.filter_expr.as_ref(), &results)?;
-            let mut candidates = select_refine_candidates(
-                ranked_scores(&results, &passed, param.asc),
-                param.candidate_limit,
-            );
-            if param.candidate_filter.is_some() {
-                let widened = self.eval_score_filters(param.candidate_filter.as_ref(), &results)?;
-                let near = near_threshold(
-                    results.iter().map(|result| result.scores.len()),
-                    &passed,
-                    &widened,
-                );
-                let extra = select_refine_candidates(
-                    ranked_scores(&results, &near, param.asc),
-                    param.candidate_limit,
-                );
-                // Disjoint from `candidates`: `near` excludes rows passing `passed`.
-                for (block, rows) in extra {
-                    candidates.entry(block).or_default().extend(rows);
-                }
-            }
-            results = self.refine_candidates(results, candidates).await?;
-        }
 
         let passed = self.eval_score_filters(param.filter_expr.as_ref(), &results)?;
         let mut top_queue = FixedLengthPriorityQueue::new(param.limit);
@@ -418,12 +382,6 @@ impl VectorIndexPruner {
         filter_expr: Option<&Expr>,
         results: &[VectorPruneResult],
     ) -> Result<Vec<Option<Bitmap>>> {
-        // Unsupported candidate predicates widen to TRUE. Treat that as no filter
-        // rather than materializing a score column and an all-true bitmap per block.
-        let filter_expr = match filter_expr {
-            Some(Expr::Constant(value)) if matches!(&value.scalar, Scalar::Boolean(true)) => None,
-            other => other,
-        };
         results
             .iter()
             .map(|result| match filter_expr {
@@ -663,103 +621,6 @@ impl VectorIndexPruner {
     }
 }
 
-/// Widen a score-only predicate for approximate candidate selection. Unsupported
-/// expressions pass all candidates; the original predicate remains unchanged and
-/// is evaluated after FP16 scoring. In particular, do not rewrite inside NOT.
-fn widen_score_filter(expr: &Expr, distance: VectorDistanceType) -> Expr {
-    try_widen_score_filter(expr, distance)
-        .unwrap_or_else(|| Expr::constant(Scalar::Boolean(true), None))
-}
-
-fn try_widen_score_filter(expr: &Expr, distance: VectorDistanceType) -> Option<Expr> {
-    let call = match expr {
-        Expr::Constant(value) if matches!(&value.scalar, Scalar::Boolean(_)) => {
-            return Some(expr.clone());
-        }
-        Expr::FunctionCall(call) => call,
-        _ => return None,
-    };
-    let name = call.function.signature.name.as_str();
-    if matches!(
-        name,
-        "and" | "and_filters" | "or" | "or_filters" | "is_true"
-    ) {
-        let args = call
-            .args
-            .iter()
-            .map(|arg| widen_score_filter(arg, distance))
-            .collect::<Vec<_>>();
-        return check_function(call.span, name, &[], &args, &BUILTIN_FUNCTIONS).ok();
-    }
-    let (reversed, lower_threshold) = match name {
-        "gt" => ("lt", true),
-        "gte" => ("lte", true),
-        "lt" => ("gt", false),
-        "lte" => ("gte", false),
-        _ => return None,
-    };
-    let [left, right] = call.args.as_slice() else {
-        return None;
-    };
-    // Normalize comparisons to score OP constant; reversing also flips the margin.
-    let (name, score, value, lower_threshold) = if is_score_column(left) {
-        (name, left, right, lower_threshold)
-    } else if is_score_column(right) {
-        (reversed, right, left, !lower_threshold)
-    } else {
-        return None;
-    };
-    let Expr::Constant(value) = value else {
-        return None;
-    };
-    let threshold = match &value.scalar {
-        Scalar::Number(value) => value.to_f64().0,
-        Scalar::Decimal(value) => value.to_float64(),
-        _ => return None,
-    };
-    if !threshold.is_finite() {
-        return None;
-    }
-    let margin = match distance {
-        VectorDistanceType::Dot => REFINE_COSINE_FILTER_MARGIN,
-        VectorDistanceType::L1 | VectorDistanceType::L2 => {
-            (threshold.abs() * REFINE_RELATIVE_FILTER_MARGIN).max(REFINE_MIN_FILTER_MARGIN)
-        }
-    };
-    let threshold = if lower_threshold {
-        threshold - margin
-    } else {
-        threshold + margin
-    };
-    if !threshold.is_finite() {
-        return None;
-    }
-    let args = [
-        score.clone(),
-        Expr::constant(
-            Scalar::Number(NumberScalar::Float64(threshold.into())),
-            None,
-        ),
-    ];
-    check_function(call.span, name, &[], &args, &BUILTIN_FUNCTIONS).ok()
-}
-
-/// The projected score is column zero. Only lossless widening casts are allowed;
-/// arithmetic or narrowing casts need different margins and are not rewritten.
-fn is_score_column(expr: &Expr) -> bool {
-    match expr {
-        Expr::ColumnRef(column) => column.id == 0,
-        Expr::Cast(cast)
-            if !cast.is_try
-                && cast.dest_type.remove_nullable()
-                    == DataType::Number(NumberDataType::Float64) =>
-        {
-            is_score_column(&cast.expr)
-        }
-        _ => false,
-    }
-}
-
 /// Scores that pass the score filter, ranked so that the best is the lowest
 /// (negated for descending order).
 fn ranked_scores<'a>(
@@ -784,29 +645,6 @@ fn ranked_scores<'a>(
                     }
                 })
         })
-}
-
-/// Rows that pass the widened predicate but not the original one, per block.
-/// `None` in `original` (no predicate) excludes every row; `None` in `widened`
-/// (widened to TRUE) passes every row.
-fn near_threshold(
-    lengths: impl Iterator<Item = usize>,
-    original: &[Option<Bitmap>],
-    widened: &[Option<Bitmap>],
-) -> Vec<Option<Bitmap>> {
-    lengths
-        .zip(original.iter().zip(widened))
-        .map(|(len, (original, widened))| {
-            let rejected = match original {
-                Some(original) => !original,
-                None => Bitmap::new_zeroed(len),
-            };
-            Some(match widened {
-                Some(widened) => &rejected & widened,
-                None => rejected,
-            })
-        })
-        .collect()
 }
 
 /// Keeps the `candidate_limit` lowest scores (callers negate scores for descending
@@ -902,107 +740,7 @@ impl VectorScore {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::ColumnRef;
-
     use super::*;
-
-    fn score_filter(name: &str, threshold: f64, reversed: bool) -> Result<Expr> {
-        let score = Expr::ColumnRef(ColumnRef {
-            span: None,
-            id: 0,
-            data_type: DataType::Number(NumberDataType::Float32),
-            display_name: VECTOR_SCORE_COL_NAME.to_string(),
-        });
-        let threshold = Expr::constant(
-            Scalar::Number(NumberScalar::Float64(threshold.into())),
-            None,
-        );
-        let args = if reversed {
-            [threshold, score]
-        } else {
-            [score, threshold]
-        };
-        check_function(None, name, &[], &args, &BUILTIN_FUNCTIONS)
-    }
-
-    fn eval_filter(expr: &Expr, scores: &[f32]) -> Result<Vec<bool>> {
-        let column = Column::Number(NumberColumn::Float32(
-            scores
-                .iter()
-                .copied()
-                .map(F32::from)
-                .collect::<Vec<_>>()
-                .into(),
-        ));
-        let block = DataBlock::new(vec![BlockEntry::from(column)], scores.len());
-        let context = FunctionContext::default();
-        let value = Evaluator::new(&block, &context, &BUILTIN_FUNCTIONS).run(expr)?;
-        let column = value
-            .into_full_column(expr.data_type(), scores.len())
-            .remove_nullable();
-        Ok(column.as_boolean().unwrap().iter().collect())
-    }
-
-    #[test]
-    fn test_refine_candidate_filter_margins() -> Result<()> {
-        for (op, threshold, reversed, distance, inside, outside) in [
-            ("gt", 0.5, false, VectorDistanceType::Dot, 0.49, 0.47),
-            ("lt", 0.5, false, VectorDistanceType::Dot, 0.51, 0.53),
-            ("lt", 0.5, true, VectorDistanceType::Dot, 0.49, 0.47),
-            ("gt", 100.0, false, VectorDistanceType::L1, 96.0, 94.0),
-            ("lt", 0.0, false, VectorDistanceType::L2, 0.0005, 0.002),
-        ] {
-            let original = score_filter(op, threshold, reversed)?;
-            let widened = widen_score_filter(&original, distance);
-            assert_eq!(eval_filter(&widened, &[inside, outside])?, vec![
-                true, false
-            ]);
-            assert_eq!(eval_filter(&original, &[inside, outside])?, vec![
-                false, false
-            ]);
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_refine_candidate_filter_combinations() -> Result<()> {
-        for (name, left, right, values, expected, original_expected) in [
-            (
-                "and_filters",
-                score_filter("gt", 0.5, false)?,
-                score_filter("lt", 0.8, false)?,
-                [0.47, 0.49, 0.6, 0.81, 0.83],
-                [false, true, true, true, false],
-                [false, false, true, false, false],
-            ),
-            (
-                "or_filters",
-                score_filter("lt", 0.2, false)?,
-                score_filter("gt", 0.8, false)?,
-                [0.1, 0.21, 0.5, 0.79, 0.9],
-                [true, true, false, true, true],
-                [true, false, false, false, true],
-            ),
-        ] {
-            let original = check_function(None, name, &[], &[left, right], &BUILTIN_FUNCTIONS)?;
-            let original = check_function(None, "is_true", &[], &[original], &BUILTIN_FUNCTIONS)?;
-            let widened = widen_score_filter(&original, VectorDistanceType::Dot);
-            assert_eq!(eval_filter(&widened, &values)?, expected.to_vec());
-            assert_eq!(eval_filter(&original, &values)?, original_expected.to_vec());
-        }
-        let negated = check_function(
-            None,
-            "not",
-            &[],
-            &[score_filter("gt", 0.5, false)?],
-            &BUILTIN_FUNCTIONS,
-        )?;
-        assert_eq!(
-            widen_score_filter(&negated, VectorDistanceType::Dot),
-            Expr::constant(Scalar::Boolean(true), None)
-        );
-        Ok(())
-    }
 
     #[test]
     fn test_refine_candidate_budget_is_global() {
@@ -1017,20 +755,5 @@ mod tests {
             select_refine_candidates(scores, 2),
             HashMap::from([(0, vec![17]), (1, vec![42])])
         );
-    }
-
-    #[test]
-    fn test_refine_near_threshold_rows() {
-        let bitmap = |bits: &[bool]| Some(Bitmap::from_iter(bits.iter().copied()));
-        let near = near_threshold(
-            [3, 2, 2].into_iter(),
-            &[bitmap(&[true, false, false]), bitmap(&[true, false]), None],
-            &[bitmap(&[true, true, false]), None, None],
-        );
-        let bits = |bitmap: &Option<Bitmap>| bitmap.as_ref().unwrap().iter().collect::<Vec<_>>();
-        // Widened but not original; widened to TRUE; no original predicate.
-        assert_eq!(bits(&near[0]), vec![false, true, false]);
-        assert_eq!(bits(&near[1]), vec![false, true]);
-        assert_eq!(bits(&near[2]), vec![false, false]);
     }
 }
