@@ -23,7 +23,9 @@ use databend_common_expression::RemoteExpr;
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::HashShuffleCodec;
 use crate::servers::flight::v1::scatter::FlightScatter;
+use crate::servers::flight::v1::scatter::GlobalScatterBuilder;
 
 #[derive(Clone)]
 pub struct ShuffleExchangeParams {
@@ -67,6 +69,9 @@ pub struct GlobalExchangeParams {
     pub exchange_id: String,
     pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
+    /// Routes the producer's blocks in place of the hash of `shuffle_keys`.
+    pub scatter: Option<GlobalScatterBuilder>,
+    pub codec: Option<Arc<dyn HashShuffleCodec>>,
 }
 
 #[allow(clippy::enum_variant_names)]

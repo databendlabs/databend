@@ -37,6 +37,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
 use crate::pipelines::processors::transforms::aggregator::PARTITIONED_AGGREGATE_TYPE;
+use crate::pipelines::processors::transforms::aggregator::PartitionItem;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SPILLED_TYPE;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
@@ -103,122 +104,136 @@ impl TransformDeserializer {
             };
         };
 
-        match meta.typ {
-            BUCKET_TYPE => {
-                let mut block = deserialize_block(
-                    dict,
-                    fragment_data,
-                    &self.schema,
-                    self.arrow_schema.clone(),
-                )?;
-
-                if meta.is_empty {
-                    block = block.slice(0..0);
-                }
-
-                Ok(vec![DataBlock::empty_with_meta(
-                    AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
-                )])
-            }
-            PARTITIONED_AGGREGATE_TYPE => {
-                let data_block = deserialize_block(
-                    dict,
-                    fragment_data,
-                    &self.schema,
-                    self.arrow_schema.clone(),
-                )?;
-
-                if meta.is_empty {
-                    return Ok(vec![]);
-                }
-
-                if meta.buckets.len() != meta.payload_row_counts.len() {
-                    return Err(ErrorCode::Internal(
-                        "Invalid partitioned aggregate serde meta".to_string(),
-                    ));
-                }
-
-                let mut offset = 0;
-                let mut metas = Vec::with_capacity(meta.buckets.len());
-                for (bucket, rows) in meta.buckets.iter().zip(meta.payload_row_counts.iter()) {
-                    let rows = *rows;
-                    let start = offset;
-                    offset += rows;
-                    if offset > data_block.num_rows() {
-                        return Err(ErrorCode::Internal(
-                            "Partitioned aggregate payload rows exceed block rows".to_string(),
-                        ));
-                    }
-
-                    let payload_block = if rows == 0 {
-                        DataBlock::empty()
-                    } else {
-                        data_block.slice(start..offset)
-                    };
-
-                    metas.push(SerializedPayload {
-                        bucket: *bucket,
-                        data_block: payload_block,
-                        max_partition_count: 0,
-                    });
-                }
-
-                if offset != data_block.num_rows() {
-                    return Err(ErrorCode::Internal(
-                        "Partitioned aggregate payload rows do not match block rows".to_string(),
-                    ));
-                }
-                Ok(vec![DataBlock::empty_with_meta(
-                    AggregateMeta::create_partitioned(None, PartitionedData::Serialized(metas)),
-                )])
-            }
+        let data_block = match meta.typ {
             SPILLED_TYPE => {
                 let data_schema = Arc::new(exchange_defines::spilled_schema());
                 let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());
-                let data_block =
-                    deserialize_block(dict, fragment_data, &data_schema, arrow_schema.clone())?;
+                deserialize_block(dict, fragment_data, &data_schema, arrow_schema)?
+            }
+            _ => deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?,
+        };
 
-                let columns = data_block
-                    .columns()
-                    .iter()
-                    .map(|c| c.as_column().unwrap().clone())
-                    .collect::<Vec<_>>();
+        Ok(decode_aggregate_block(meta, data_block)?
+            .into_iter()
+            .collect())
+    }
+}
 
-                let buckets = NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();
-                let locations = StringType::try_downcast_column(&columns[1]).unwrap();
-                let row_groups = BinaryType::try_downcast_column(&columns[2]).unwrap();
+/// Restore the aggregate meta of `data_block`, which was serialized with `meta`
+/// and decoded with the schema of its type. Returns `None` for an empty payload.
+pub fn decode_aggregate_block(
+    meta: &AggregateSerdeMeta,
+    data_block: DataBlock,
+) -> Result<Option<DataBlock>> {
+    match meta.typ {
+        BUCKET_TYPE => {
+            let mut block = data_block;
+            if meta.is_empty {
+                block = block.slice(0..0);
+            }
 
-                let mut spilled_payloads = Vec::with_capacity(data_block.num_rows());
-                for index in 0..data_block.num_rows() {
-                    unsafe {
-                        let bucket = *buckets.get_unchecked(index) as isize;
-                        let location = locations.value_unchecked(index).to_string();
-                        let row_group_bytes = row_groups.index_unchecked(index);
-                        let row_group = deserialize_row_group_meta_from_bytes(row_group_bytes)?;
+            Ok(Some(DataBlock::empty_with_meta(
+                AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
+            )))
+        }
+        PARTITIONED_AGGREGATE_TYPE => {
+            if meta.is_empty {
+                return Ok(None);
+            }
 
-                        spilled_payloads.push(SpilledPayload {
-                            bucket,
-                            location,
-                            row_group,
-                        });
-                    }
+            if meta.buckets.len() != meta.payload_row_counts.len() {
+                return Err(ErrorCode::Internal(
+                    "Invalid partitioned aggregate serde meta".to_string(),
+                ));
+            }
+
+            let mut offset = 0;
+            let mut metas = Vec::with_capacity(meta.buckets.len());
+            for (bucket, rows) in meta.buckets.iter().zip(meta.payload_row_counts.iter()) {
+                let rows = *rows;
+                let start = offset;
+                offset += rows;
+                if offset > data_block.num_rows() {
+                    return Err(ErrorCode::Internal(
+                        "Partitioned aggregate payload rows exceed block rows".to_string(),
+                    ));
                 }
 
-                let shuffle_bucket = meta.shuffle_bucket;
-                if shuffle_bucket == -1 {
-                    todo!()
+                let payload_block = if rows == 0 {
+                    DataBlock::empty()
                 } else {
-                    let partitioned = AggregateMeta::create_partitioned(
-                        None,
-                        PartitionedData::BucketSpilled(spilled_payloads),
-                    );
-                    return Ok(vec![DataBlock::empty_with_meta(partitioned)]);
+                    data_block.slice(start..offset)
+                };
+
+                metas.push(SerializedPayload {
+                    bucket: *bucket,
+                    data_block: payload_block,
+                    max_partition_count: 0,
+                });
+            }
+
+            if offset != data_block.num_rows() {
+                return Err(ErrorCode::Internal(
+                    "Partitioned aggregate payload rows do not match block rows".to_string(),
+                ));
+            }
+
+            let mut items = metas
+                .into_iter()
+                .map(PartitionItem::Serialized)
+                .collect::<Vec<_>>();
+            for spilled in &meta.spilled {
+                items.push(PartitionItem::BucketSpilled(SpilledPayload {
+                    bucket: spilled.bucket,
+                    location: spilled.location.clone(),
+                    row_group: deserialize_row_group_meta_from_bytes(&spilled.row_group)?,
+                }));
+            }
+            Ok(Some(DataBlock::empty_with_meta(
+                AggregateMeta::create_partitioned(None, PartitionedData::from_items(items)),
+            )))
+        }
+        SPILLED_TYPE => {
+            let columns = data_block
+                .columns()
+                .iter()
+                .map(|c| c.as_column().unwrap().clone())
+                .collect::<Vec<_>>();
+
+            let buckets = NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();
+            let locations = StringType::try_downcast_column(&columns[1]).unwrap();
+            let row_groups = BinaryType::try_downcast_column(&columns[2]).unwrap();
+
+            let mut spilled_payloads = Vec::with_capacity(data_block.num_rows());
+            for index in 0..data_block.num_rows() {
+                unsafe {
+                    let bucket = *buckets.get_unchecked(index) as isize;
+                    let location = locations.value_unchecked(index).to_string();
+                    let row_group_bytes = row_groups.index_unchecked(index);
+                    let row_group = deserialize_row_group_meta_from_bytes(row_group_bytes)?;
+
+                    spilled_payloads.push(SpilledPayload {
+                        bucket,
+                        location,
+                        row_group,
+                    });
                 }
             }
-            other => Err(ErrorCode::Internal(format!(
-                "Unknown aggregate serde meta type {other}"
-            ))),
+
+            if meta.shuffle_bucket == -1 {
+                todo!()
+            }
+
+            Ok(Some(DataBlock::empty_with_meta(
+                AggregateMeta::create_partitioned(
+                    None,
+                    PartitionedData::BucketSpilled(spilled_payloads),
+                ),
+            )))
         }
+        other => Err(ErrorCode::Internal(format!(
+            "Unknown aggregate serde meta type {other}"
+        ))),
     }
 }
 

@@ -22,8 +22,16 @@
 //! still carries `budget / P` bytes per thread. Every remote node receives the
 //! blocks of all its threads in one call, which the send buffer packs into shared
 //! frames.
+//!
+//! Blocks whose rows cannot be addressed (e.g. the states of a partial
+//! aggregate) are routed whole by the scatter, one block per partition, and wait
+//! in a per-partition send queue. The queue resizes them to about `budget / P`
+//! bytes: a large block is split into pieces sent over successive flushes, and
+//! small meta-only blocks are merged, through the hooks of their `BlockMetaInfo`.
+//! Each flush sends at most one piece per partition.
 
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::Arc;
 use std::task::Poll;
@@ -69,6 +77,12 @@ pub struct HashShuffleWriter {
     buffered_rows: usize,
     buffered_bytes: usize,
     budget: usize,
+    /// The target size of what one flush sends to a partition.
+    piece_bytes: usize,
+    /// The pieces waiting to be sent to each partition, with their sizes.
+    queues: Vec<VecDeque<(usize, DataBlock)>>,
+    queued_bytes: usize,
+    queued_pieces: usize,
     nodes: Vec<ShuffleNode>,
 }
 
@@ -93,6 +107,10 @@ impl HashShuffleWriter {
             buffered_rows: 0,
             buffered_bytes: 0,
             budget,
+            piece_bytes: (budget / num_partitions.max(1)).max(1),
+            queues: (0..num_partitions).map(|_| VecDeque::new()).collect(),
+            queued_bytes: 0,
+            queued_pieces: 0,
             nodes,
         }
     }
@@ -119,10 +137,11 @@ impl HashShuffleWriter {
         }
     }
 
-    /// Copy the rows of `block` into their partitions. Returns true when the
-    /// buffered rows reached the budget and should be flushed.
+    /// Buffer the rows of `block` in their partitions, or route it whole and
+    /// queue its blocks when the scatter cannot index its rows. Returns
+    /// `needs_flush()`.
     pub fn add_block(&mut self, block: DataBlock) -> Result<bool> {
-        if block.is_empty() {
+        if block.is_empty() && block.get_meta().is_none() {
             return Ok(false);
         }
 
@@ -130,37 +149,139 @@ impl HashShuffleWriter {
         // a constant's memory size is a single value.
         let block = block.consume_convert_to_full();
 
-        let Some(partition_ids) = self.scatter.scatter_indices(&block)? else {
-            return Err(ErrorCode::Internal(format!(
-                "Logical error, {} scatter cannot be used for hash shuffle",
-                self.scatter.name()
-            )));
-        };
-
-        self.buffered_rows += block.num_rows();
-        self.buffered_bytes += block.memory_size();
-        self.stream.partition(partition_ids, block, false);
-        Ok(self.buffered_bytes >= self.budget)
+        match self.scatter.scatter_indices(&block)? {
+            Some(partition_ids) => {
+                self.buffered_rows += block.num_rows();
+                self.buffered_bytes += block.memory_size();
+                self.stream.partition(partition_ids, block, false);
+            }
+            None => {
+                let blocks = self.scatter.execute(block)?;
+                if blocks.len() != self.num_partitions {
+                    return Err(ErrorCode::Internal(format!(
+                        "{} scatter returned {} blocks for {} partitions",
+                        self.scatter.name(),
+                        blocks.len(),
+                        self.num_partitions
+                    )));
+                }
+                for (partition, block) in blocks.into_iter().enumerate() {
+                    self.enqueue(partition, block)?;
+                }
+            }
+        }
+        Ok(self.needs_flush())
     }
 
-    /// Send every buffered partition.
+    /// True when the writer should flush before taking more input: the buffered
+    /// and queued data reached the budget, or a partition has more than one piece
+    /// waiting.
+    pub fn needs_flush(&self) -> bool {
+        self.buffered_bytes.saturating_add(self.queued_bytes) >= self.budget
+            || self.queues.iter().any(|queue| queue.len() > 1)
+    }
+
+    /// True while there is data left to flush.
+    pub fn has_queued(&self) -> bool {
+        self.queued_pieces != 0 || self.buffered_rows != 0
+    }
+
+    /// Queue `block` for `partition` in pieces of about `piece_bytes`.
+    fn enqueue(&mut self, partition: usize, block: DataBlock) -> Result<()> {
+        // A block holding its data in the meta reports its size through it.
+        let stats = block.profile_statistics();
+        if stats.rows == 0 {
+            return Ok(());
+        }
+
+        // Leave blocks up to twice the piece size whole, so that a block only
+        // slightly over it is not cut into a full piece and a sliver.
+        if stats.bytes <= self.piece_bytes.saturating_mul(2) {
+            return self.push_piece(partition, stats.bytes, block);
+        }
+
+        for piece in self.split(block, stats.rows, stats.bytes)? {
+            let bytes = piece.profile_statistics().bytes;
+            self.push_piece(partition, bytes, piece)?;
+        }
+        Ok(())
+    }
+
+    fn split(&self, mut block: DataBlock, rows: usize, bytes: usize) -> Result<Vec<DataBlock>> {
+        if is_meta_only(&block) {
+            let mut meta = block.take_meta().unwrap();
+            let rest = meta.split(self.piece_bytes)?;
+            return Ok(std::iter::once(meta)
+                .chain(rest)
+                .map(DataBlock::empty_with_meta)
+                .collect());
+        }
+
+        // The meta of a block with columns describes the block as a whole.
+        if block.get_meta().is_some() {
+            return Ok(vec![block]);
+        }
+
+        let pieces = bytes.div_ceil(self.piece_bytes).min(rows);
+        Ok(block.split_by_rows_no_tail(rows.div_ceil(pieces)))
+    }
+
+    /// Append `block` to the queue of `partition`, merged into the last piece
+    /// when both are meta-only and fit in a piece together.
+    fn push_piece(&mut self, partition: usize, bytes: usize, mut block: DataBlock) -> Result<()> {
+        self.queued_bytes += bytes;
+
+        let piece_bytes = self.piece_bytes;
+        let queue = &mut self.queues[partition];
+        if let Some((back_bytes, back)) = queue.back_mut() {
+            if is_meta_only(back) && is_meta_only(&block) && *back_bytes + bytes <= piece_bytes {
+                let meta = block.take_meta().unwrap();
+                match back.mut_meta().unwrap().merge(meta)? {
+                    None => {
+                        *back_bytes += bytes;
+                        return Ok(());
+                    }
+                    Some(meta) => block = DataBlock::empty_with_meta(meta),
+                }
+            }
+        }
+
+        queue.push_back((bytes, block));
+        self.queued_pieces += 1;
+        Ok(())
+    }
+
+    /// Send one piece of every partition, after queueing the buffered rows.
+    /// Callers flush until `has_queued()` is false to send everything.
     ///
     /// The rows of partition `own` are returned instead of sent, so the caller can
     /// push them to its own output. Returns whether sends are still pending.
     pub fn flush(&mut self, own: Option<usize>) -> Result<(Option<DataBlock>, bool)> {
         debug_assert!(self.handle.is_none());
 
-        if self.buffered_rows == 0 {
+        if self.buffered_rows != 0 {
+            self.buffered_rows = 0;
+            self.buffered_bytes = 0;
+            for (partition, block) in self.stream.take_partitions(&HashSet::new()) {
+                if !block.is_empty() {
+                    self.enqueue(partition, block)?;
+                }
+            }
+        }
+
+        if self.queued_pieces == 0 {
             return Ok((None, false));
         }
-        self.buffered_rows = 0;
-        self.buffered_bytes = 0;
 
-        let mut partitions: Vec<Option<DataBlock>> = vec![None; self.num_partitions];
-        for (partition, block) in self.stream.take_partitions(&HashSet::new()) {
-            if !block.is_empty() {
-                partitions[partition] = Some(block);
-            }
+        let mut partitions = Vec::with_capacity(self.num_partitions);
+        for queue in &mut self.queues {
+            let Some((bytes, block)) = queue.pop_front() else {
+                partitions.push(None);
+                continue;
+            };
+            self.queued_bytes -= bytes;
+            self.queued_pieces -= 1;
+            partitions.push(Some(block));
         }
 
         // Keep the direct-output partition out of both local and remote delivery.
@@ -239,15 +360,23 @@ impl HashShuffleWriter {
             .sum::<usize>();
 
         format!(
-            "handle_pending={}, closed_partitions={}/{}, buffered_rows={}, buffered_bytes={}, budget={}",
+            "handle_pending={}, closed_partitions={}/{}, buffered_rows={}, buffered_bytes={}, queued_pieces={}, queued_bytes={}, budget={}",
             self.handle.is_some(),
             closed,
             self.num_partitions,
             self.buffered_rows,
             self.buffered_bytes,
+            self.queued_pieces,
+            self.queued_bytes,
             self.budget,
         )
     }
+}
+
+/// A block carrying its data only in the meta, which knows how to split and
+/// merge it.
+fn is_meta_only(block: &DataBlock) -> bool {
+    block.num_columns() == 0 && block.num_rows() == 0 && block.get_meta().is_some()
 }
 
 #[cfg(test)]
@@ -256,8 +385,13 @@ mod tests {
     use arrow_schema::Schema as ArrowSchema;
     use databend_common_base::runtime::Runtime;
     use databend_common_expression::BlockEntry;
+    use databend_common_expression::BlockMetaInfo;
+    use databend_common_expression::BlockMetaInfoDowncast;
+    use databend_common_expression::BlockMetaInfoPtr;
+    use databend_common_expression::BlockProfileStatistics;
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
+    use databend_common_expression::local_block_meta_serde;
     use databend_common_expression::types::AccessType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::StringType;
@@ -266,6 +400,7 @@ mod tests {
     use tonic::Status;
 
     use super::*;
+    use crate::servers::flight::v1::network::HashShuffleCodec;
     use crate::servers::flight::v1::network::PingPongTransport;
     use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
     use crate::servers::flight::v1::network::inbound::exchange_queue::QueueItem;
@@ -324,6 +459,101 @@ mod tests {
         }
     }
 
+    /// Values carried only in meta, standing in for a producer's own block form.
+    #[derive(Debug)]
+    struct ValuesMeta(Vec<u64>);
+
+    local_block_meta_serde!(ValuesMeta);
+
+    impl BlockMetaInfo for ValuesMeta {
+        fn typetag_deserialize(&self) {
+            unimplemented!("ValuesMeta is local to the test")
+        }
+
+        fn typetag_name(&self) -> &'static str {
+            unimplemented!("ValuesMeta is local to the test")
+        }
+
+        fn output_stats(&self) -> Option<BlockProfileStatistics> {
+            Some(BlockProfileStatistics {
+                rows: self.0.len(),
+                bytes: self.0.len() * size_of::<u64>(),
+            })
+        }
+
+        fn split(&mut self, max_bytes: usize) -> Result<Vec<BlockMetaInfoPtr>> {
+            let per_part = (max_bytes / size_of::<u64>()).max(1);
+            if self.0.len() <= per_part {
+                return Ok(vec![]);
+            }
+            let rest = self.0.split_off(per_part);
+            Ok(rest
+                .chunks(per_part)
+                .map(|values| Box::new(ValuesMeta(values.to_vec())) as BlockMetaInfoPtr)
+                .collect())
+        }
+
+        fn merge(&mut self, other: BlockMetaInfoPtr) -> Result<Option<BlockMetaInfoPtr>> {
+            match ValuesMeta::downcast_from_err(other) {
+                Ok(other) => {
+                    self.0.extend(other.0);
+                    Ok(None)
+                }
+                Err(other) => Ok(Some(other)),
+            }
+        }
+    }
+
+    /// Routes value `v` to partition `v % num_partitions`, keeping the values of
+    /// a partition in the meta of its block.
+    struct ValuesScatter {
+        num_partitions: usize,
+    }
+
+    impl FlightScatter for ValuesScatter {
+        fn name(&self) -> &'static str {
+            "Values"
+        }
+
+        fn execute(&self, mut block: DataBlock) -> Result<Vec<DataBlock>> {
+            let values = block
+                .take_meta()
+                .and_then(ValuesMeta::downcast_from)
+                .unwrap()
+                .0;
+            let mut partitions = vec![vec![]; self.num_partitions];
+            for value in values {
+                partitions[value as usize % self.num_partitions].push(value);
+            }
+            Ok(partitions
+                .into_iter()
+                .map(|values| DataBlock::empty_with_meta(Box::new(ValuesMeta(values))))
+                .collect())
+        }
+    }
+
+    /// Encodes the values of a partition as a `UInt64` column.
+    struct ValuesCodec;
+
+    impl HashShuffleCodec for ValuesCodec {
+        fn encode(&self, mut block: DataBlock) -> Result<DataBlock> {
+            let values = block
+                .take_meta()
+                .and_then(ValuesMeta::downcast_from)
+                .unwrap()
+                .0;
+            Ok(DataBlock::new_from_columns(vec![UInt64Type::from_data(
+                values,
+            )]))
+        }
+
+        fn decode(&self, block: DataBlock) -> Result<DataBlock> {
+            Ok(DataBlock::empty_with_meta(Box::new(ValuesMeta(values(
+                &block,
+            )))))
+        }
+    }
+
     fn values(block: &DataBlock) -> Vec<u64> {
         let column = block.get_by_offset(0).to_column();
         UInt64Type::try_downcast_column(&column)
@@ -331,6 +561,25 @@ mod tests {
             .iter()
             .copied()
             .collect()
+    }
+
+    fn meta_values(block: &DataBlock) -> &[u64] {
+        &block
+            .get_meta()
+            .and_then(ValuesMeta::downcast_ref_from)
+            .expect("local partitions must receive the producer's form")
+            .0
+    }
+
+    fn values_writer(nodes: Vec<ShuffleNode>, budget: usize) -> HashShuffleWriter {
+        let num_partitions = nodes.last().unwrap().partitions.end;
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(ValuesScatter { num_partitions }));
+        HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, budget)
+    }
+
+    fn values_block(range: std::ops::Range<u64>) -> DataBlock {
+        DataBlock::empty_with_meta(Box::new(ValuesMeta(range.collect())))
     }
 
     fn strings(block: &DataBlock) -> Vec<String> {
@@ -636,8 +885,13 @@ mod tests {
 
                 let schema = Arc::new(block.infer_schema());
                 let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
-                let dispatcher =
-                    HashShuffleDispatcher::remote(0, buffer, compression, arrow_schema.clone())?;
+                let dispatcher = HashShuffleDispatcher::remote(
+                    0,
+                    buffer,
+                    compression,
+                    arrow_schema.clone(),
+                    None,
+                )?;
                 let mut sends = Vec::new();
                 dispatcher.prepare_send(0, &mut [Some(block.clone())], &mut sends)?;
                 for (_, result) in futures::future::join_all(sends).await {
@@ -650,6 +904,111 @@ mod tests {
                 assert_eq!(decoded.num_columns(), block.num_columns());
             }
         }
+        Ok(())
+    }
+
+    /// Blocks routed whole are resized to `budget / P` per partition: small ones
+    /// are merged until the budget is reached, and a large one is split into
+    /// pieces sent one per partition per flush, all in the producer's form.
+    #[test]
+    fn test_writer_merges_and_splits_blocks_routed_whole() -> Result<()> {
+        // 4 partitions of 80 bytes, i.e. 10 values, each.
+        let (nodes, receivers) = local_nodes(1, 4);
+        let mut writer = values_writer(nodes, 320);
+
+        assert!(!writer.add_block(values_block(0..20))?);
+        assert!(writer.add_block(values_block(20..40))?);
+        let (own, pending) = writer.flush(Some(0))?;
+        assert!(!pending);
+        assert!(!writer.has_queued());
+
+        let own = own.expect("the own partition must be returned");
+        assert_eq!(meta_values(&own), (0..40).step_by(4).collect::<Vec<_>>());
+        for (partition, receiver) in receivers.iter().enumerate().skip(1) {
+            let blocks = drain_blocks(receiver).collect::<Vec<_>>();
+            assert_eq!(blocks.len(), 1, "small blocks must be merged");
+            assert_eq!(
+                meta_values(&blocks[0]),
+                (partition as u64..40).step_by(4).collect::<Vec<_>>()
+            );
+        }
+
+        assert!(writer.add_block(values_block(0..160))?);
+        let mut received = vec![vec![]; 4];
+        for _ in 0..4 {
+            assert!(writer.needs_flush());
+            assert!(!writer.flush(None)?.1);
+            for (partition, receiver) in receivers.iter().enumerate() {
+                let blocks = drain_blocks(receiver).collect::<Vec<_>>();
+                assert_eq!(blocks.len(), 1, "one piece per partition per flush");
+                assert_eq!(meta_values(&blocks[0]).len(), 10);
+                received[partition].extend_from_slice(meta_values(&blocks[0]));
+            }
+        }
+        assert!(!writer.has_queued());
+        for (partition, values) in received.iter().enumerate() {
+            assert_eq!(values, &(partition as u64..160).step_by(4).collect::<Vec<_>>());
+        }
+        Ok(())
+    }
+
+    /// The sender's own partition is returned, the other local ones are delivered
+    /// in the producer's form, and remote ones are encoded by the codec.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_writer_encodes_blocks_routed_whole_for_remote_nodes() -> Result<()> {
+        let runtime = Runtime::with_worker_threads(2, None)?;
+        let (exchange, send_rx, pong_tx) = create_mock_exchange(2);
+        let buffer = Arc::new(ExchangeSendBuffer::create(
+            vec![exchange],
+            ExchangeSendBufferConfig::default(),
+            &runtime,
+        )?);
+
+        let schema = Arc::new(
+            DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![0_u64])]).infer_schema(),
+        );
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        let codec: Arc<dyn HashShuffleCodec> = Arc::new(ValuesCodec);
+
+        let (mut nodes, receivers) = local_nodes(1, 2);
+        nodes.push(ShuffleNode {
+            partitions: 2..4,
+            dispatcher: HashShuffleDispatcher::remote(
+                0,
+                buffer,
+                None,
+                arrow_schema.clone(),
+                Some(codec.clone()),
+            )?,
+        });
+
+        // 4 partitions of 5 values each fill the budget.
+        let mut writer = values_writer(nodes, 160);
+        assert!(writer.add_block(values_block(0..20))?);
+        let (own, pending) = writer.flush(Some(0))?;
+        assert!(!pending);
+
+        let own = own.expect("the own partition must be returned");
+        assert_eq!(meta_values(&own), (0..20).step_by(4).collect::<Vec<_>>());
+        assert_eq!(drain_blocks(&receivers[0]).count(), 0);
+
+        let local = drain_blocks(&receivers[1]).collect::<Vec<_>>();
+        assert_eq!(local.len(), 1);
+        assert_eq!(
+            meta_values(&local[0]),
+            (1..20).step_by(4).collect::<Vec<_>>()
+        );
+
+        let items = split_batch_flight_data(send_rx.recv().await.unwrap());
+        assert_eq!(items.len(), 2);
+        for item in items {
+            let tid = extract_tid(&item) as u64;
+            let block = deserialize_flight_data(strip_tid(item), &schema, &arrow_schema)?;
+            assert_eq!(values(&block), (2 + tid..20).step_by(4).collect::<Vec<_>>());
+        }
+        pong_tx.send(Ok(FlightData::default())).await.unwrap();
+
+        writer.stop_sending_all();
         Ok(())
     }
 
@@ -682,6 +1041,7 @@ mod tests {
                     buffer,
                     compression,
                     arrow_schema.clone(),
+                    None,
                 )?,
             });
 

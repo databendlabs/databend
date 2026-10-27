@@ -23,6 +23,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use tokio::sync::OwnedSemaphorePermit;
 
+use super::super::HashShuffleCodec;
 use super::super::wire_format::deserialize_flight_data;
 use super::super::wire_format::strip_tid;
 
@@ -94,14 +95,25 @@ pub struct ExchangeQueueReceiver {
     receiver: Receiver<QueueItem>,
     schema: DataSchemaRef,
     arrow_schema: Arc<ArrowSchema>,
+    codec: Option<Arc<dyn HashShuffleCodec>>,
 }
 
 impl ExchangeQueueReceiver {
     pub fn create(schema: &DataSchemaRef, receiver: Receiver<QueueItem>) -> Arc<Self> {
+        Self::create_with_codec(schema, receiver, None)
+    }
+
+    /// Like `create`, also restoring remote blocks with `codec` after decoding them.
+    pub fn create_with_codec(
+        schema: &DataSchemaRef,
+        receiver: Receiver<QueueItem>,
+        codec: Option<Arc<dyn HashShuffleCodec>>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             receiver,
             arrow_schema: Arc::new(ArrowSchema::from(schema.as_ref())),
             schema: schema.clone(),
+            codec,
         })
     }
 
@@ -124,11 +136,11 @@ impl ExchangeQueueReceiver {
             Ok(QueueItem::LocalData(v)) => Ok(Some(v.into_data())),
             Ok(QueueItem::RemoteData(r)) => {
                 let flight_data = strip_tid(r.into_data());
-                Ok(Some(deserialize_flight_data(
-                    flight_data,
-                    &self.schema,
-                    &self.arrow_schema,
-                )?))
+                let block = deserialize_flight_data(flight_data, &self.schema, &self.arrow_schema)?;
+                Ok(Some(match &self.codec {
+                    Some(codec) => codec.decode(block)?,
+                    None => block,
+                }))
             }
         }
     }

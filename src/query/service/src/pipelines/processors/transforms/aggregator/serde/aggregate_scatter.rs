@@ -33,7 +33,6 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::PartitionItem;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
-use crate::servers::flight::v1::scatter::FlightScatter;
 
 pub trait LocalScatter: Sync + Send {
     fn name(&self) -> &'static str;
@@ -273,16 +272,6 @@ impl AggregateRowScatter {
     }
 }
 
-impl FlightScatter for AggregateRowScatter {
-    fn name(&self) -> &'static str {
-        "RowHash"
-    }
-
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        self.scatter(data_block)
-    }
-}
-
 impl LocalScatter for AggregateRowScatter {
     fn name(&self) -> &'static str {
         "RowHash"
@@ -298,144 +287,91 @@ pub struct AggregateBucketScatter {
 }
 
 impl AggregateBucketScatter {
-    pub fn scatter(&self, mut data_block: DataBlock, is_local: bool) -> Result<Vec<DataBlock>> {
-        let Some(block_meta) = data_block
+    /// Send bucket `b` to output `b % buckets`.
+    pub fn scatter(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
+        let buckets = self.buckets;
+        Self::scatter_by(data_block, buckets, |bucket| bucket % buckets)
+    }
+
+    /// Send every bucket of a partitioned block to output `route(bucket)` of
+    /// `outputs`, keeping its bucket id.
+    pub fn scatter_by(
+        mut data_block: DataBlock,
+        outputs: usize,
+        route: impl Fn(usize) -> usize,
+    ) -> Result<Vec<DataBlock>> {
+        let Some(AggregateMeta::Partitioned { data, .. }) = data_block
             .take_meta()
             .and_then(AggregateMeta::downcast_from)
         else {
             return Err(ErrorCode::Internal(
-                "Internal, AggregateBucketScatter only recv AggregateMeta",
+                "Internal, AggregateBucketScatter only recv Partitioned AggregateMeta",
             ));
         };
 
-        Ok(match block_meta {
-            AggregateMeta::Partitioned { data, .. } => match data {
-                PartitionedData::Empty => (0..self.buckets)
-                    .map(|_| {
-                        AggregateMeta::Partitioned {
-                            bucket: None,
-                            data: PartitionedData::Empty,
-                        }
-                        .into_datablock()
-                    })
-                    .collect(),
-                PartitionedData::Serialized(payloads) => {
-                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
-                    for mut payload in payloads {
-                        let bucket = payload.bucket as usize;
-                        if !is_local {
-                            payload.bucket /= self.buckets as isize;
-                        }
-                        chunks[bucket % self.buckets].push(payload);
-                    }
-                    chunks
-                        .into_iter()
-                        .map(|payload| {
-                            AggregateMeta::Partitioned {
-                                bucket: None,
-                                data: PartitionedData::Serialized(payload),
-                            }
-                            .into_datablock()
-                        })
-                        .collect()
-                }
-                PartitionedData::AggregatePayload(payloads) => {
-                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
-                    for mut payload in payloads {
-                        let bucket = payload.bucket as usize;
-                        if !is_local {
-                            payload.bucket /= self.buckets as isize;
-                        }
-                        chunks[bucket % self.buckets].push(payload);
-                    }
-                    chunks
-                        .into_iter()
-                        .map(|payload| {
-                            AggregateMeta::Partitioned {
-                                bucket: None,
-                                data: PartitionedData::AggregatePayload(payload),
-                            }
-                            .into_datablock()
-                        })
-                        .collect()
-                }
-                PartitionedData::BucketSpilled(payloads) => {
-                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
-                    for mut spilled_payload in payloads {
-                        let bucket = spilled_payload.bucket as usize;
-                        if !is_local {
-                            spilled_payload.bucket /= self.buckets as isize;
-                        }
-                        chunks[bucket % self.buckets].push(spilled_payload);
-                    }
-                    chunks
-                        .into_iter()
-                        .map(|payload| {
-                            AggregateMeta::Partitioned {
-                                bucket: None,
-                                data: PartitionedData::BucketSpilled(payload),
-                            }
-                            .into_datablock()
-                        })
-                        .collect()
-                }
-                PartitionedData::Mixed(items) => {
-                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
-                    for item in items {
-                        match item {
-                            PartitionItem::Serialized(mut payload) => {
-                                let bucket = payload.bucket as usize;
-                                if !is_local {
-                                    payload.bucket /= self.buckets as isize;
-                                }
-                                chunks[bucket % self.buckets]
-                                    .push(PartitionItem::Serialized(payload));
-                            }
-                            PartitionItem::AggregatePayload(mut payload) => {
-                                let bucket = payload.bucket as usize;
-                                if !is_local {
-                                    payload.bucket /= self.buckets as isize;
-                                }
-                                chunks[bucket % self.buckets]
-                                    .push(PartitionItem::AggregatePayload(payload));
-                            }
-                            PartitionItem::BucketSpilled(mut payload) => {
-                                let bucket = payload.bucket as usize;
-                                if !is_local {
-                                    payload.bucket /= self.buckets as isize;
-                                }
-                                chunks[bucket % self.buckets]
-                                    .push(PartitionItem::BucketSpilled(payload));
-                            }
-                        }
-                    }
-
-                    chunks
-                        .into_iter()
-                        .map(|data| {
-                            AggregateMeta::Partitioned {
-                                bucket: None,
-                                data: PartitionedData::Mixed(data),
-                            }
-                            .into_datablock()
-                        })
-                        .collect()
-                }
-            },
-            _ => {
-                unreachable!("Internal, AggregateBucketScatter only recv Partitioned AggregateMeta")
+        fn split<T>(
+            items: Vec<T>,
+            outputs: usize,
+            route: impl Fn(&T) -> usize,
+            wrap: impl Fn(Vec<T>) -> PartitionedData,
+        ) -> Vec<DataBlock> {
+            let mut chunks = (0..outputs).map(|_| vec![]).collect::<Vec<_>>();
+            for item in items {
+                chunks[route(&item)].push(item);
             }
+            chunks
+                .into_iter()
+                .map(|chunk| {
+                    AggregateMeta::Partitioned {
+                        bucket: None,
+                        data: wrap(chunk),
+                    }
+                    .into_datablock()
+                })
+                .collect()
+        }
+
+        Ok(match data {
+            PartitionedData::Empty => (0..outputs)
+                .map(|_| {
+                    AggregateMeta::Partitioned {
+                        bucket: None,
+                        data: PartitionedData::Empty,
+                    }
+                    .into_datablock()
+                })
+                .collect(),
+            PartitionedData::Serialized(payloads) => split(
+                payloads,
+                outputs,
+                |payload| route(payload.bucket as usize),
+                PartitionedData::Serialized,
+            ),
+            PartitionedData::AggregatePayload(payloads) => split(
+                payloads,
+                outputs,
+                |payload| route(payload.bucket as usize),
+                PartitionedData::AggregatePayload,
+            ),
+            PartitionedData::BucketSpilled(payloads) => split(
+                payloads,
+                outputs,
+                |payload| route(payload.bucket as usize),
+                PartitionedData::BucketSpilled,
+            ),
+            PartitionedData::Mixed(items) => split(
+                items,
+                outputs,
+                |item| {
+                    route(match item {
+                        PartitionItem::Serialized(payload) => payload.bucket as usize,
+                        PartitionItem::AggregatePayload(payload) => payload.bucket as usize,
+                        PartitionItem::BucketSpilled(payload) => payload.bucket as usize,
+                    })
+                },
+                PartitionedData::Mixed,
+            ),
         })
-    }
-}
-
-impl FlightScatter for AggregateBucketScatter {
-    fn name(&self) -> &'static str {
-        "Bucket"
-    }
-
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        self.scatter(data_block, false)
     }
 }
 
@@ -445,6 +381,6 @@ impl LocalScatter for AggregateBucketScatter {
     }
 
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        self.scatter(data_block, true)
+        self.scatter(data_block)
     }
 }

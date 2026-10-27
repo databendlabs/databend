@@ -1244,7 +1244,6 @@ impl QueryCoordinator {
                     fragment_coordinator
                         .pipeline_build_res
                         .as_ref()
-                        .map(|x| x.exchange_injector.clone())
                         .ok_or_else(|| {
                             ErrorCode::Internal("Pipeline build result is none, It's a bug")
                         })?,
@@ -1313,18 +1312,12 @@ impl QueryCoordinator {
 
         let mut params = Vec::with_capacity(self.fragments_coordinator.len());
         for coordinator in self.fragments_coordinator.values() {
-            params.push(
-                coordinator.create_exchange_params(
-                    info,
-                    coordinator
-                        .pipeline_build_res
-                        .as_ref()
-                        .map(|x| x.exchange_injector.clone())
-                        .ok_or_else(|| {
-                            ErrorCode::Internal("Pipeline build result is none, It's a bug")
-                        })?,
-                )?,
-            );
+            params.push(coordinator.create_exchange_params(
+                info,
+                coordinator.pipeline_build_res.as_ref().ok_or_else(|| {
+                    ErrorCode::Internal("Pipeline build result is none, It's a bug")
+                })?,
+            )?);
         }
 
         for ((_, coordinator), params) in self.fragments_coordinator.iter_mut().zip(params) {
@@ -1445,11 +1438,12 @@ impl FragmentCoordinator {
     pub fn create_exchange_params(
         &self,
         info: &QueryInfo,
-        exchange_injector: Arc<dyn ExchangeInjector>,
+        build_res: &PipelineBuildResult,
     ) -> Result<Option<ExchangeParams>> {
         let Some(data_exchange) = &self.data_exchange else {
             return Ok(None);
         };
+        let exchange_injector = &build_res.exchange_injector;
         match data_exchange {
             DataExchange::Merge(exchange) => {
                 Ok(Some(ExchangeParams::MergeExchange(MergeExchangeParams {
@@ -1494,6 +1488,8 @@ impl FragmentCoordinator {
                     exchange_id: exchange.id.clone(),
                     shuffle_keys: exchange.shuffle_keys.clone(),
                     destination_channels: exchange.destination_channels.clone(),
+                    scatter: build_res.shuffle_scatter.clone(),
+                    codec: build_res.shuffle_codec.clone(),
                 }),
             )),
         }

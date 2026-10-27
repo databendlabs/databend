@@ -87,11 +87,10 @@ impl Processor for HashSendTransform {
             return Ok(Event::Finished);
         }
 
-        if self.input.has_data() {
-            let data_block = self.input.pull_data().unwrap()?;
-
-            let budget_reached = self.writer.add_block(data_block)?;
-            if budget_reached {
+        // Flush before taking more input until the writer is below its budget and
+        // has at most one piece waiting per partition.
+        loop {
+            while self.writer.needs_flush() {
                 let own = self.output.can_push().then_some(self.local_pos);
                 let (own_block, sends_pending) = self.writer.flush(own)?;
                 let pushed = if let Some(block) = own_block {
@@ -105,16 +104,24 @@ impl Processor for HashSendTransform {
                     return Ok(Event::NeedConsume);
                 }
             }
+
+            if !self.input.has_data() {
+                break;
+            }
+            let data_block = self.input.pull_data().unwrap()?;
+            self.writer.add_block(data_block)?;
         }
 
         if self.input.is_finished() {
             // Finish the direct output before flushing the tail through channels,
             // so the receive processor can drain it without waiting on this port.
             self.output.finish();
-            // `None` sends every partition through channels, so no block is returned.
-            let (_, sends_pending) = self.writer.flush(None)?;
-            if sends_pending {
-                return Ok(Event::NeedConsume);
+            while self.writer.has_queued() {
+                // `None` sends every partition through channels, so no block is returned.
+                let (_, sends_pending) = self.writer.flush(None)?;
+                if sends_pending {
+                    return Ok(Event::NeedConsume);
+                }
             }
 
             self.input.finish();

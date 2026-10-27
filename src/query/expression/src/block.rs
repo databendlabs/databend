@@ -438,6 +438,23 @@ pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     fn output_stats(&self) -> Option<BlockProfileStatistics> {
         None
     }
+
+    /// For meta-only blocks: split off the data beyond about `max_bytes`, as
+    /// measured by `output_stats`, into parts of about `max_bytes` each, which
+    /// travel as separate blocks to the same consumer. This meta keeps the first
+    /// part. Splitting is best effort: returns no parts if this meta does not
+    /// split.
+    fn split(&mut self, _max_bytes: usize) -> Result<Vec<BlockMetaInfoPtr>> {
+        Ok(vec![])
+    }
+
+    /// For meta-only blocks: merge `other`, the meta of a later block bound for
+    /// the same consumer, into this one, so that both travel as one block.
+    /// Merging is best effort: returns `other` back if this meta does not merge
+    /// with it.
+    fn merge(&mut self, other: BlockMetaInfoPtr) -> Result<Option<BlockMetaInfoPtr>> {
+        Ok(Some(other))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

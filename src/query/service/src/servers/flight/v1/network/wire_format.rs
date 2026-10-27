@@ -236,7 +236,12 @@ pub(crate) fn encode_block_for_thread(
     app_metadata.write_scalar_own(block.num_rows() as u32)?;
     bincode_serialize_into_buf(&mut app_metadata, &block.get_meta())?;
 
-    let batch = block.to_record_batch_with_arrow_schema(arrow_schema)?;
+    let batch = match block.num_rows() {
+        // The receiver restores a block without rows from its meta alone, so its
+        // columns need not follow the schema.
+        0 => RecordBatch::new_empty(arrow_schema.clone()),
+        _ => block.to_record_batch_with_arrow_schema(arrow_schema)?,
+    };
     let (dictionaries, mut data) = encode_batch(&batch, ipc_options)?;
     if !dictionaries.is_empty() {
         return Err(ErrorCode::Unimplemented(

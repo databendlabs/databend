@@ -34,6 +34,8 @@ use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::HashShuffleCodec;
+use crate::servers::flight::v1::scatter::GlobalScatterBuilder;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]
@@ -55,6 +57,9 @@ pub struct PipelineBuilder {
     pub join_state: Option<Arc<HashJoinBuildState>>,
 
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
+    /// Codec of the global hash shuffle that sends this fragment's output.
+    pub(crate) shuffle_scatter: Option<GlobalScatterBuilder>,
+    pub(crate) shuffle_codec: Option<Arc<dyn HashShuffleCodec>>,
 
     pub hash_join_states: HashMap<usize, HashJoinStateRef>,
 
@@ -75,6 +80,8 @@ impl PipelineBuilder {
             pipelines: vec![],
             main_pipeline: Pipeline::create(),
             exchange_injector: DefaultExchangeInjector::create(),
+            shuffle_scatter: None,
+            shuffle_codec: None,
             merge_into_probe_data_fields: None,
             join_state: None,
             hash_join_states: HashMap::new(),
@@ -117,6 +124,8 @@ impl PipelineBuilder {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
             exchange_injector: self.exchange_injector,
+            shuffle_scatter: self.shuffle_scatter,
+            shuffle_codec: self.shuffle_codec,
             builder_data: PipelineBuilderData {
                 input_join_state: self.join_state,
                 input_probe_schema: self.merge_into_probe_data_fields,

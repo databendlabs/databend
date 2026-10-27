@@ -47,6 +47,7 @@ use crate::servers::flight::v1::network::outbound::RoundRobinBlockSender;
 use crate::servers::flight::v1::network::outbound::create_local_block_senders;
 use crate::servers::flight::v1::network::outbound::exchange_send_buffer::ExchangeSendBuffer;
 use crate::servers::flight::v1::network::outbound::exchange_send_buffer::ExchangeSendBufferConfig;
+use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
@@ -175,9 +176,10 @@ impl ExchangeSink {
         let nodes = build_hash_shuffle_nodes(params, local_senders, compression, buffer_config)?;
         let num_partitions = nodes.last().map(|x| x.partitions.end).unwrap_or_default();
 
-        let scatter = Arc::new(HashFlightScatter::try_create(
-            ctx.get_function_context()?,
-            params.shuffle_keys.clone(),
+        let scatter = Arc::new(global_shuffle_scatter(
+            ctx,
+            params,
+            &nodes,
             num_partitions,
             local_pos,
         )?);
@@ -296,6 +298,32 @@ pub(super) fn build_broadcast_senders(
     Ok(senders)
 }
 
+/// The scatter of a hash exchange: the producer's own, built for the partitions
+/// of `nodes`, or else the hash of the shuffle keys.
+pub(super) fn global_shuffle_scatter(
+    ctx: &Arc<QueryContext>,
+    params: &GlobalExchangeParams,
+    nodes: &[ShuffleNode],
+    num_partitions: usize,
+    local_pos: usize,
+) -> Result<Box<dyn FlightScatter>> {
+    match &params.scatter {
+        Some(build) => {
+            let partitions = nodes
+                .iter()
+                .map(|x| x.partitions.clone())
+                .collect::<Vec<_>>();
+            build(&partitions)
+        }
+        None => HashFlightScatter::try_create(
+            ctx.get_function_context()?,
+            params.shuffle_keys.clone(),
+            num_partitions,
+            local_pos,
+        ),
+    }
+}
+
 /// Build the shuffle destinations of a hash exchange, one entry per node in
 /// `destination_channels` order. Each node owns a contiguous range of partitions,
 /// one per thread.
@@ -355,6 +383,7 @@ pub(super) fn build_hash_shuffle_nodes(
                     shared_buffer.clone(),
                     compression,
                     arrow_schema.clone(),
+                    params.codec.clone(),
                 )?;
                 remote_idx += 1;
                 dispatcher

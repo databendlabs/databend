@@ -45,6 +45,8 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::runtime_scan_filter::register_runtime_top_n_filter;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
+use crate::pipelines::processors::transforms::aggregator::AggregateShuffleCodec;
+use crate::pipelines::processors::transforms::aggregator::AggregateShuffleScatter;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
@@ -64,6 +66,10 @@ pub struct AggregatePartial {
     pub stat_info: Option<PlanStatsInfo>,
 
     pub shuffle_mode: AggregateShuffleMode,
+    /// Partitions of the global shuffle that sends the states to the final
+    /// aggregate threads of the cluster, one per thread; `None` when the states
+    /// are not sent through it.
+    pub shuffle_partitions: Option<usize>,
 }
 
 #[typetag::serde]
@@ -164,6 +170,7 @@ impl IPhysicalPlan for AggregatePartial {
             rank_limit: self.rank_limit.clone(),
             stat_info: self.stat_info.clone(),
             shuffle_mode: self.shuffle_mode.clone(),
+            shuffle_partitions: self.shuffle_partitions,
         })
     }
 
@@ -227,10 +234,11 @@ impl IPhysicalPlan for AggregatePartial {
         }
 
         let is_row_shuffle = matches!(self.shuffle_mode, AggregateShuffleMode::Row);
-        let bucket_num = if is_row_shuffle {
-            cluster.nodes.len()
-        } else {
-            2_usize.pow(partial_agg_config.initial_radix_bits as u32)
+        // Row shuffle spills states into the partitions they are shuffled to.
+        let bucket_num = match (is_row_shuffle, self.shuffle_partitions) {
+            (true, Some(partitions)) => partitions,
+            (true, None) => cluster.nodes.len(),
+            (false, _) => 2_usize.pow(partial_agg_config.initial_radix_bits as u32),
         };
         let shared_partition_streams = SharedPartitionStream::new(
             builder.main_pipeline.output_len(),
@@ -252,11 +260,17 @@ impl IPhysicalPlan for AggregatePartial {
             )?))
         })?;
 
-        builder.exchange_injector = AggregateInjector::create(
-            builder.ctx.clone(),
-            params.clone(),
-            self.shuffle_mode.clone(),
-        );
+        builder.exchange_injector = AggregateInjector::create(params.clone());
+        if let Some(partitions) = self.shuffle_partitions
+            && params.cluster_aggregator
+        {
+            builder.shuffle_scatter = Some(AggregateShuffleScatter::builder(
+                params.clone(),
+                self.shuffle_mode.clone(),
+                partitions,
+            ));
+            builder.shuffle_codec = Some(AggregateShuffleCodec::create(params.clone()));
+        }
         Ok(())
     }
 }

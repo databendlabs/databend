@@ -28,6 +28,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Aggregate;
@@ -68,6 +69,9 @@ pub struct AggregateFinal {
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
     pub shuffle_mode: AggregateShuffleMode,
+    /// See `AggregatePartial::shuffle_partitions`. When set, every final thread
+    /// already receives only its own groups.
+    pub shuffle_partitions: Option<usize>,
 }
 
 #[typetag::serde]
@@ -145,6 +149,7 @@ impl IPhysicalPlan for AggregateFinal {
             group_by_display: self.group_by_display.clone(),
             stat_info: self.stat_info.clone(),
             shuffle_mode: self.shuffle_mode.clone(),
+            shuffle_partitions: self.shuffle_partitions,
         })
     }
 
@@ -182,11 +187,7 @@ impl IPhysicalPlan for AggregateFinal {
         let old_inject = builder.exchange_injector.clone();
 
         if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector = AggregateInjector::create(
-                builder.ctx.clone(),
-                params.clone(),
-                self.shuffle_mode.clone(),
-            );
+            builder.exchange_injector = AggregateInjector::create(params.clone());
         }
 
         self.input.build_pipeline(builder)?;
@@ -205,6 +206,7 @@ impl IPhysicalPlan for AggregateFinal {
             after_group_parallel,
             builder.ctx.clone(),
             self.shuffle_mode.clone(),
+            is_cluster_aggregate && self.shuffle_partitions.is_some(),
         )
     }
 }
@@ -308,7 +310,7 @@ impl PhysicalPlanBuilder {
                     && let Some(exchange) = Exchange::from_physical_plan(&input)
                 {
                     let kind = exchange.kind.clone();
-                    let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
+                    let mut aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
                         let expand = PhysicalPlan::new(AggregateExpand {
                             grouping_sets,
                             input: exchange.input.clone(),
@@ -326,6 +328,7 @@ impl PhysicalPlanBuilder {
                             rank_limit: None,
                             meta: PhysicalPlanMeta::new("AggregatePartial"),
                             shuffle_mode: shuffle_mode.clone(),
+                            shuffle_partitions: None,
                         }
                     } else {
                         AggregatePartial {
@@ -337,6 +340,7 @@ impl PhysicalPlanBuilder {
                             stat_info: Some(stat_info),
                             meta: PhysicalPlanMeta::new("AggregatePartial"),
                             shuffle_mode: shuffle_mode.clone(),
+                            shuffle_partitions: None,
                         }
                     };
 
@@ -352,6 +356,20 @@ impl PhysicalPlanBuilder {
                                 display_name: (id - start).to_string(),
                             })
                             .collect()
+                    };
+
+                    // Partial states are shuffled by the global hash shuffle, whose codec
+                    // routes them to the final threads and serializes only the states
+                    // sent to other nodes. Its partitions follow the fragmenter: every
+                    // node receives on `max_threads` threads.
+                    let kind = match kind {
+                        FragmentKind::Normal if !aggregate_partial.group_by.is_empty() => {
+                            let nodes = self.ctx.get_cluster().nodes.len();
+                            let threads = settings.get_max_threads()? as usize;
+                            aggregate_partial.shuffle_partitions = Some(nodes * threads);
+                            FragmentKind::GlobalShuffle
+                        }
+                        kind => kind,
                     };
 
                     PhysicalPlan::new(Exchange {
@@ -380,6 +398,7 @@ impl PhysicalPlanBuilder {
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregatePartial"),
                         shuffle_mode: shuffle_mode.clone(),
+                        shuffle_partitions: None,
                     })
                 } else {
                     PhysicalPlan::new(AggregatePartial {
@@ -391,6 +410,7 @@ impl PhysicalPlanBuilder {
                         rank_limit,
                         meta: PhysicalPlanMeta::new("AggregatePartial"),
                         shuffle_mode: shuffle_mode.clone(),
+                        shuffle_partitions: None,
                     })
                 }
             }
@@ -435,6 +455,7 @@ impl PhysicalPlanBuilder {
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
                     let shuffle_mode = partial.shuffle_mode.clone();
+                    let shuffle_partitions = partial.shuffle_partitions;
 
                     PhysicalPlan::new(AggregateFinal {
                         input,
@@ -445,6 +466,7 @@ impl PhysicalPlanBuilder {
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
                         shuffle_mode,
+                        shuffle_partitions,
                     })
                 } else {
                     let Some(exchange) = Exchange::from_physical_plan(&input) else {
@@ -465,6 +487,7 @@ impl PhysicalPlanBuilder {
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
                     let shuffle_mode = partial.shuffle_mode.clone();
+                    let shuffle_partitions = partial.shuffle_partitions;
 
                     PhysicalPlan::new(AggregateFinal {
                         input,
@@ -475,6 +498,7 @@ impl PhysicalPlanBuilder {
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
                         shuffle_mode,
+                        shuffle_partitions,
                     })
                 }
             }

@@ -236,11 +236,13 @@ where
 }
 
 fn flush_writer(writer: &mut HashShuffleWriter) -> Result<()> {
-    let (own, mut pending) = writer.flush(None)?;
-    assert!(own.is_none());
-    while pending {
-        std::thread::park_timeout(Duration::from_millis(5));
-        pending = writer.poll_sending(true)?;
+    while writer.has_queued() {
+        let (own, mut pending) = writer.flush(None)?;
+        assert!(own.is_none());
+        while pending {
+            std::thread::park_timeout(Duration::from_millis(5));
+            pending = writer.poll_sending(true)?;
+        }
     }
     Ok(())
 }
@@ -342,6 +344,7 @@ where
                 buffer.clone(),
                 setup.compression,
                 arrow_schema.clone(),
+                None,
             )?,
         });
     }
@@ -1008,6 +1011,7 @@ fn check_node_memory(nodes: usize) -> Result<()> {
                 Arc::new(buffer),
                 compression,
                 arrow_schema.clone(),
+                None,
             )?,
         }]));
     }
@@ -1028,6 +1032,7 @@ fn check_node_memory(nodes: usize) -> Result<()> {
                 node0_buffer.clone(),
                 compression,
                 arrow_schema.clone(),
+                None,
             )?,
         });
     }

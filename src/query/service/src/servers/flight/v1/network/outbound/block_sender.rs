@@ -59,7 +59,12 @@ impl BlockSender for LocalBlockSender {
     }
 
     async fn send_block(&self, block: DataBlock) -> Result<()> {
-        let size = block.memory_size().min(self.max_bytes_local_channel);
+        // Meta-only blocks, such as aggregate states sent through a hash shuffle
+        // codec, report the size of the data they hold through their meta.
+        let size = block
+            .profile_statistics()
+            .bytes
+            .min(self.max_bytes_local_channel);
         let permit = self
             .semaphore
             .clone()

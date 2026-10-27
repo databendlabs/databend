@@ -21,6 +21,7 @@
 //! | --- | --- | --- |
 //! | Block delivery | [`BlockSender`](outbound::BlockSender), implemented by [`LocalBlockSender`](outbound::LocalBlockSender), [`RemoteBlockSender`](outbound::RemoteBlockSender), and [`RoundRobinBlockSender`](outbound::RoundRobinBlockSender) | One `DataBlock`; the round-robin implementation selects one thread sender. |
 //! | Hash shuffle delivery | [`HashShuffleDispatcher`](outbound::HashShuffleDispatcher) | Deliver one node's already-partitioned blocks locally or encode and enqueue them remotely. |
+//! | Producer codec | [`HashShuffleCodec`] | Optionally convert a producer's own block form to and from plain blocks, only for remote nodes. |
 //! | Send buffering | [`ExchangeSendBuffer`](outbound::ExchangeSendBuffer) | Encoded items for a remote node; shared byte quota, per-node FIFO queues, and frame batching. |
 //! | Transport | [`PingPongTransport`] | One Flight frame per request, with at most one request in flight per connection. |
 //! | Frame routing | [`ExchangeFrameRouter`](inbound::ExchangeFrameRouter) | Split incoming frames, acquire connection receive quota, and route items by thread ID. |
@@ -87,6 +88,7 @@
 //! earlier. The exchange processors must release completed destinations promptly;
 //! keeping their handles until the pipeline graph is dropped can delay EOF.
 
+mod hash_shuffle_codec;
 pub mod inbound;
 pub mod outbound;
 pub mod ping_pong_transport;
@@ -94,6 +96,7 @@ pub mod wire_format;
 
 pub use databend_common_pipeline::core::SyncTaskHandle;
 pub use databend_common_pipeline::core::SyncTaskSet;
+pub use hash_shuffle_codec::HashShuffleCodec;
 pub use ping_pong_transport::PingPongCallback;
 pub use ping_pong_transport::PingPongResponse;
 pub use ping_pong_transport::PingPongTransport;

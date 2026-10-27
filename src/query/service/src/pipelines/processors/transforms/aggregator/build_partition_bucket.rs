@@ -38,15 +38,57 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 
+/// Build the final aggregate threads. Unless `input_partitioned`, where each
+/// input already carries only the groups of its own thread, the input is first
+/// repartitioned among the threads.
 pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     after_worker: usize,
     ctx: Arc<QueryContext>,
     shuffle_mode: AggregateShuffleMode,
+    input_partitioned: bool,
 ) -> Result<()> {
-    let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
     let base_consumed_bits = shuffle_mode.determine_radix_bits();
+    let final_parallelism = match input_partitioned {
+        true => pipeline.output_len(),
+        false => repartition_input(pipeline, &params, &ctx, &shuffle_mode)?,
+    };
+
+    let mut builder = TransformPipeBuilder::create();
+    let (tx, rx) = async_channel::unbounded();
+    let next_task_id = Arc::new(AtomicU64::new(1));
+    for id in 0..final_parallelism {
+        let input_port = InputPort::create();
+        let output_port = OutputPort::create();
+        let processor = TransformFinalAggregate::try_create(
+            input_port.clone(),
+            output_port.clone(),
+            params.clone(),
+            id,
+            base_consumed_bits,
+            ctx.clone(),
+            tx.clone(),
+            rx.clone(),
+            next_task_id.clone(),
+        )?;
+        builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
+    }
+
+    pipeline.add_pipe(builder.finalize());
+
+    pipeline.resize(after_worker, true)?;
+
+    Ok(())
+}
+
+fn repartition_input(
+    pipeline: &mut Pipeline,
+    params: &Arc<AggregatorParams>,
+    ctx: &Arc<QueryContext>,
+    shuffle_mode: &AggregateShuffleMode,
+) -> Result<usize> {
+    let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
     match shuffle_mode {
         AggregateShuffleMode::Row => {
             let schema = params.spill_schema();
@@ -70,7 +112,7 @@ pub fn build_partition_bucket(
             })?;
         }
         AggregateShuffleMode::Bucket(hint) => {
-            let hint = hint as usize;
+            let hint = *hint as usize;
             final_parallelism = if params.cluster_aggregator {
                 let cluster = ctx.get_cluster();
                 let local_pos = cluster.ordered_index();
@@ -102,30 +144,5 @@ pub fn build_partition_bucket(
     pipeline.add_pipe(Pipe::create(input_len, final_parallelism, vec![
         PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
     ]));
-
-    let mut builder = TransformPipeBuilder::create();
-    let (tx, rx) = async_channel::unbounded();
-    let next_task_id = Arc::new(AtomicU64::new(1));
-    for id in 0..final_parallelism {
-        let input_port = InputPort::create();
-        let output_port = OutputPort::create();
-        let processor = TransformFinalAggregate::try_create(
-            input_port.clone(),
-            output_port.clone(),
-            params.clone(),
-            id,
-            base_consumed_bits,
-            ctx.clone(),
-            tx.clone(),
-            rx.clone(),
-            next_task_id.clone(),
-        )?;
-        builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
-    }
-
-    pipeline.add_pipe(builder.finalize());
-
-    pipeline.resize(after_worker, true)?;
-
-    Ok(())
+    Ok(final_parallelism)
 }

@@ -20,6 +20,16 @@ pub const BUCKET_TYPE: usize = 1;
 pub const SPILLED_TYPE: usize = 2;
 pub const PARTITIONED_AGGREGATE_TYPE: usize = 3;
 
+/// A spilled bucket sent by reference: the receiver reads it from the spill
+/// location itself.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SpilledRef {
+    pub bucket: isize,
+    pub location: String,
+    /// The parquet row group metadata of the spilled bucket.
+    pub row_group: Vec<u8>,
+}
+
 // Cannot change to enum, because bincode cannot deserialize custom enum.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateSerdeMeta {
@@ -31,6 +41,8 @@ pub struct AggregateSerdeMeta {
     // used for PARTITIONED_AGGREGATE_TYPE
     pub buckets: Vec<isize>,
     pub payload_row_counts: Vec<usize>,
+    // spilled buckets sent along with the payloads of PARTITIONED_AGGREGATE_TYPE
+    pub spilled: Vec<SpilledRef>,
 
     // used for row/bucket shuffle
     // -1 for row shuffle
@@ -50,6 +62,7 @@ impl AggregateSerdeMeta {
             is_empty,
             buckets: vec![],
             payload_row_counts: vec![],
+            spilled: vec![],
             shuffle_bucket: 0,
         })
     }
@@ -62,6 +75,7 @@ impl AggregateSerdeMeta {
             is_empty: false,
             buckets: vec![],
             payload_row_counts: vec![],
+            spilled: vec![],
             shuffle_bucket,
         })
     }
@@ -69,6 +83,7 @@ impl AggregateSerdeMeta {
     pub fn create_partitioned_payload(
         buckets: Vec<isize>,
         payload_row_counts: Vec<usize>,
+        spilled: Vec<SpilledRef>,
         is_empty: bool,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
@@ -78,6 +93,7 @@ impl AggregateSerdeMeta {
             is_empty,
             buckets,
             payload_row_counts,
+            spilled,
             shuffle_bucket: 0,
         })
     }

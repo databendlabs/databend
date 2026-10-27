@@ -23,6 +23,7 @@ use databend_common_expression::DataBlock;
 use databend_common_settings::FlightCompression;
 use futures::future::BoxFuture;
 
+use super::super::HashShuffleCodec;
 use super::super::wire_format::encode_block_for_thread;
 use super::super::wire_format::make_ipc_options;
 use super::block_sender::BlockSender;
@@ -43,6 +44,8 @@ pub enum HashShuffleDispatcher {
         ipc_options: IpcWriteOptions,
         compression: Option<FlightCompression>,
         arrow_schema: Arc<ArrowSchema>,
+        /// Converts producer blocks into plain blocks before the wire format.
+        codec: Option<Arc<dyn HashShuffleCodec>>,
     },
 }
 
@@ -58,6 +61,7 @@ impl HashShuffleDispatcher {
         buffer: Arc<ExchangeSendBuffer>,
         compression: Option<FlightCompression>,
         arrow_schema: Arc<ArrowSchema>,
+        codec: Option<Arc<dyn HashShuffleCodec>>,
     ) -> Result<Self> {
         Ok(Self::Remote {
             dest_idx,
@@ -65,6 +69,7 @@ impl HashShuffleDispatcher {
             ipc_options: make_ipc_options(None)?,
             compression,
             arrow_schema,
+            codec,
         })
     }
 
@@ -108,6 +113,7 @@ impl HashShuffleDispatcher {
                 ipc_options,
                 compression,
                 arrow_schema,
+                codec,
             } => {
                 let Some(buffer) = buffer else {
                     return Ok(());
@@ -119,7 +125,10 @@ impl HashShuffleDispatcher {
                 // Encode now, so that only compressed bytes wait for the network.
                 let mut items = Vec::with_capacity(blocks.len());
                 for (thread, block) in blocks.iter_mut().enumerate() {
-                    if let Some(block) = block.take() {
+                    if let Some(mut block) = block.take() {
+                        if let Some(codec) = codec {
+                            block = codec.encode(block)?;
+                        }
                         Profile::record_usize_profile(
                             ProfileStatisticsName::ExchangeRows,
                             block.num_rows(),

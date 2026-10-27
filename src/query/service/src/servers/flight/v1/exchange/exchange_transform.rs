@@ -38,10 +38,10 @@ use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_senders;
 use crate::servers::flight::v1::exchange::exchange_sink::build_hash_shuffle_nodes;
 use crate::servers::flight::v1::exchange::exchange_sink::exchange_send_buffer_config;
+use crate::servers::flight::v1::exchange::exchange_sink::global_shuffle_scatter;
 use crate::servers::flight::v1::exchange::hash_shuffle_writer::hash_shuffle_send_budget;
 use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
 use crate::servers::flight::v1::network::outbound::create_local_block_senders;
-use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
@@ -234,9 +234,10 @@ impl ExchangeTransform {
         let nodes = build_hash_shuffle_nodes(params, local_senders, compression, buffer_config)?;
         let num_partitions = nodes.last().map(|x| x.partitions.end).unwrap_or_default();
 
-        let scatter = Arc::new(HashFlightScatter::try_create(
-            ctx.get_function_context()?,
-            params.shuffle_keys.clone(),
+        let scatter = Arc::new(global_shuffle_scatter(
+            ctx,
+            params,
+            &nodes,
             num_partitions,
             local_pos,
         )?);
@@ -259,7 +260,11 @@ impl ExchangeTransform {
         for (idx, receiver) in receive_channels.receivers.iter().enumerate() {
             items.push(ExchangeRecvTransform::create_item(
                 idx,
-                ExchangeQueueReceiver::create(&params.schema, receiver.clone()),
+                ExchangeQueueReceiver::create_with_codec(
+                    &params.schema,
+                    receiver.clone(),
+                    params.codec.clone(),
+                ),
                 waker.clone(),
                 Some(coalesce),
             ));

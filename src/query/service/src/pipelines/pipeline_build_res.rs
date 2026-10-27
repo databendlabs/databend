@@ -26,6 +26,8 @@ use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::HashShuffleCodec;
+use crate::servers::flight::v1::scatter::GlobalScatterBuilder;
 
 #[derive(Clone)]
 pub struct PipelineBuilderData {
@@ -39,6 +41,8 @@ pub struct PipelineBuildResult {
     pub sources_pipelines: Vec<Pipeline>,
 
     pub exchange_injector: Arc<dyn ExchangeInjector>,
+    pub shuffle_scatter: Option<GlobalScatterBuilder>,
+    pub shuffle_codec: Option<Arc<dyn HashShuffleCodec>>,
     /// for local fragment data sharing
     pub builder_data: PipelineBuilderData,
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
@@ -50,6 +54,8 @@ impl PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
             exchange_injector: DefaultExchangeInjector::create(),
+            shuffle_scatter: None,
+            shuffle_codec: None,
             builder_data: PipelineBuilderData {
                 input_join_state: None,
                 input_probe_schema: None,
@@ -73,6 +79,8 @@ impl PipelineBuildResult {
             main_pipeline,
             sources_pipelines: vec![],
             exchange_injector: DefaultExchangeInjector::create(),
+            shuffle_scatter: None,
+            shuffle_codec: None,
             builder_data: PipelineBuilderData {
                 input_join_state: None,
                 input_probe_schema: None,

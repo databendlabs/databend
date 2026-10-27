@@ -493,6 +493,43 @@ impl Payload {
         self.pages.append(other.pages.as_mut());
     }
 
+    /// Split into payloads of whole pages, each of at most `max_bytes` unless it
+    /// holds a single page. Pages are moved, not copied. The payloads share the
+    /// arena holding the states and strings their rows point to, and each drops
+    /// the states of its own pages.
+    pub fn split_by_pages(mut self, max_bytes: usize) -> Vec<Payload> {
+        if self.memory_size() <= max_bytes || self.pages.len() <= 1 {
+            return vec![self];
+        }
+
+        let empty = |payload: &Payload| {
+            Payload::new(
+                payload.arena.clone(),
+                payload.group_types.clone(),
+                payload.aggrs.clone(),
+                payload.row_layout.states_layout.clone(),
+            )
+        };
+
+        let pages = std::mem::take(&mut self.pages);
+        self.total_rows = 0;
+        self.current_write_page = 0;
+
+        let mut parts = vec![];
+        let mut part = empty(&self);
+        for page in pages {
+            if part.total_rows != 0 && (part.total_rows + page.rows) * self.tuple_size > max_bytes
+            {
+                parts.push(std::mem::replace(&mut part, empty(&self)));
+            }
+            part.total_rows += page.rows;
+            part.pages.push(page);
+            part.current_write_page = part.pages.len();
+        }
+        parts.push(part);
+        parts
+    }
+
     pub(super) fn mark_min_cardinality(&mut self) {
         if self.min_cardinality.is_none() {
             self.min_cardinality = Some(self.total_rows);

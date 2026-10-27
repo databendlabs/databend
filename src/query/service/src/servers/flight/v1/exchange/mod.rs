@@ -41,6 +41,15 @@
 //! Broadcast also uses its output port directly when possible, falling back to
 //! the local node's round-robin sender under backpressure.
 //!
+//! A producer may also keep its own block form, with the data in the block meta,
+//! through the hash shuffle: its [`FlightScatter`](super::scatter::FlightScatter)
+//! routes such blocks whole, one per partition. The writer's send queue resizes
+//! them to its per-partition send size through the `split` and `merge` hooks
+//! of `BlockMetaInfo`, as it slices plain blocks. The local node receives them in
+//! the producer's form, and only blocks for remote nodes are converted by its
+//! [`HashShuffleCodec`](super::network::HashShuffleCodec) before the wire format
+//! and after arrival.
+//!
 //! # Preparation, progress, and ownership
 //!
 //! `HashShuffleDispatcher::prepare_send` encodes remote blocks synchronously,

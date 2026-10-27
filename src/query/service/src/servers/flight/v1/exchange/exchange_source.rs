@@ -128,7 +128,11 @@ pub fn via_hash_exchange_source(
     for (idx, receiver) in receive_channels.receivers.iter().enumerate() {
         items.push(HashSendSource::create_item(
             idx,
-            ExchangeQueueReceiver::create(&params.schema, receiver.clone()),
+            ExchangeQueueReceiver::create_with_codec(
+                &params.schema,
+                receiver.clone(),
+                params.codec.clone(),
+            ),
             waker.clone(),
         ));
     }
