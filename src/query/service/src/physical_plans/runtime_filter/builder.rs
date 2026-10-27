@@ -28,10 +28,12 @@ use databend_common_expression::conversion::common_super_type_with_conversion;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::ColumnEntry;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
@@ -74,6 +76,146 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
             | JoinType::RightAnti
             | JoinType::LeftMark
     )
+}
+
+/// Resolve statistics for the bloom selectivity estimate, not permission to push
+/// a probe predicate through an operator. Keep the existing single-base-column
+/// expression behavior; derived keys must be direct MIN/MAX results.
+pub(in crate::physical_plans) fn resolve_runtime_filter_build_table_index(
+    metadata: &MetadataRef,
+    build_side: &PExpr,
+    build_key: &ScalarExpr,
+) -> Option<IndexType> {
+    let columns = build_key.used_columns();
+    if columns.len() != 1 {
+        return None;
+    }
+    let column = *columns.iter().next()?;
+    if let ColumnEntry::BaseTableColumn(base) = metadata.read().column(column) {
+        return Some(base.table_index);
+    }
+    let ScalarExpr::BoundColumnRef(_) = build_key else {
+        return None;
+    };
+    min_max_output_table_index(metadata, build_side, column)
+}
+
+#[recursive::recursive]
+fn min_max_output_table_index(
+    metadata: &MetadataRef,
+    expr: &PExpr,
+    column: Symbol,
+) -> Option<IndexType> {
+    match expr.plan() {
+        PhysicalRelOperator::Aggregate(physical) => {
+            // A Partial output is an aggregate state, not a MIN/MAX value. Main
+            // clones the same logical arguments into Final and Partial; Final
+            // arguments still name pre-Partial columns, not state columns.
+            if physical.mode != AggregateMode::Final || physical.aggregate.grouping_sets.is_some() {
+                return None;
+            }
+            let item = physical
+                .aggregate
+                .aggregate_functions
+                .iter()
+                .find(|item| item.index == column)?;
+            let ScalarExpr::AggregateFunction(function) = &item.scalar else {
+                return None;
+            };
+            if !matches!(function.func_name.as_str(), "min" | "max")
+                || function.distinct
+                || !function.params.is_empty()
+                || !function.sort_descs.is_empty()
+                || function.args.len() != 1
+            {
+                return None;
+            }
+            let ScalarExpr::BoundColumnRef(source) = &function.args[0] else {
+                return None;
+            };
+            // MIN/MAX may add nullability (empty/all-NULL groups), but do not
+            // change the underlying value type. Do not mistake state types for
+            // value types or require nullable and non-nullable types to match.
+            if function.return_type.remove_nullable() != source.column.data_type.remove_nullable() {
+                return None;
+            }
+            let input = expr.unary_child();
+            let partial = match input.plan() {
+                PhysicalRelOperator::Exchange(_) => input.unary_child(),
+                _ => input,
+            };
+            let PhysicalRelOperator::Aggregate(partial_agg) = partial.plan() else {
+                return None;
+            };
+            if partial_agg.mode != AggregateMode::Partial
+                || partial_agg.aggregate.grouping_sets.is_some()
+                || !partial_agg
+                    .aggregate
+                    .aggregate_functions
+                    .iter()
+                    .any(|partial_item| partial_item == item)
+            {
+                return None;
+            }
+            direct_scan_table_index(metadata, partial.unary_child(), source.column.index)
+        }
+        PhysicalRelOperator::EvalScalar(eval) => {
+            let column = match eval.items.iter().find(|item| item.index == column) {
+                Some(item) => match &item.scalar {
+                    ScalarExpr::BoundColumnRef(source) => source.column.index,
+                    _ => return None,
+                },
+                None => column,
+            };
+            min_max_output_table_index(metadata, expr.unary_child(), column)
+        }
+        PhysicalRelOperator::Filter(_)
+        | PhysicalRelOperator::Sort(_)
+        | PhysicalRelOperator::Limit(_)
+        | PhysicalRelOperator::Exchange(_) => {
+            min_max_output_table_index(metadata, expr.unary_child(), column)
+        }
+        _ => None,
+    }
+}
+
+/// Require one actual scan and an unchanged column path to it. Metadata alone
+/// is insufficient: a derived/CTE output is not a base column, and even a base
+/// symbol must belong to this scan's table and output columns. Joins (including
+/// self joins), shared CTEs, nested aggregates and unknown operators are barriers.
+#[recursive::recursive]
+fn direct_scan_table_index(
+    metadata: &MetadataRef,
+    expr: &PExpr,
+    column: Symbol,
+) -> Option<IndexType> {
+    match expr.plan() {
+        PhysicalRelOperator::Scan(scan) => match metadata.read().column(column) {
+            ColumnEntry::BaseTableColumn(base)
+                if base.table_index == scan.table_index && scan.columns.contains(&column) =>
+            {
+                Some(scan.table_index)
+            }
+            _ => None,
+        },
+        PhysicalRelOperator::EvalScalar(eval) => {
+            let column = match eval.items.iter().find(|item| item.index == column) {
+                Some(item) => match &item.scalar {
+                    ScalarExpr::BoundColumnRef(source) => source.column.index,
+                    _ => return None,
+                },
+                None => column,
+            };
+            direct_scan_table_index(metadata, expr.unary_child(), column)
+        }
+        PhysicalRelOperator::Filter(_)
+        | PhysicalRelOperator::Sort(_)
+        | PhysicalRelOperator::Limit(_)
+        | PhysicalRelOperator::Exchange(_) => {
+            direct_scan_table_index(metadata, expr.unary_child(), column)
+        }
+        _ => None,
+    }
 }
 
 /// Build runtime filters for a join operation
