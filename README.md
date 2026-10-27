@@ -7,8 +7,8 @@
 
 <a href="https://databend.com/">☁️ Try Cloud</a> •
 <a href="#-quick-start">🚀 Quick Start</a> •
-<a href="https://docs.databend.com/">📖 Documentation</a> •
-<a href="https://link.databend.com/join-slack">💬 Slack</a>
+<a href="#-performance">📈 Performance</a> •
+<a href="https://docs.databend.com/">📖 Documentation</a>
 
 <br><br>
 
@@ -33,6 +33,19 @@ Databend is an open-source data warehouse built in Rust. Analytics, search, and 
 | **🏢 Enterprise Scale**<br>Fast vectorized engine, elastic compute on object storage: S3, Azure, GCS. | **🌿 Branching**<br>Git-like data versioning. Agents experiment safely on production snapshots. |
 
 ![Databend Architecture](https://github.com/user-attachments/assets/288dea8d-0243-4c45-8d18-d4d402b08075)
+
+## 📈 Performance
+
+Published results on Databend Cloud with default settings. Each page includes the SQL to reproduce it.
+
+| Benchmark | Result |
+| :--- | :--- |
+| [TPC-H SF100 vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch) | 1.25× faster, ~60% lower cost |
+| [Data ingestion vs. Snowflake](https://docs.databend.com/guides/benchmark/data-ingest) | 5.15× faster, 91% lower cost |
+| [Vector & full-text search](https://docs.databend.com/guides/benchmark/search-vector) | 10M docs: vector p50 41 ms, full-text p50 35 ms |
+| [TPC-H SF1000 (1 TB) scaling](https://docs.databend.com/guides/benchmark/tpch-sf1000) | 4.1× faster on Large vs. Small warehouse |
+
+See all [benchmarks](https://docs.databend.com/guides/benchmark).
 
 ## ⚡ Quick Start
 
