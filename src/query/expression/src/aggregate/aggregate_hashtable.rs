@@ -177,8 +177,16 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> Result<usize> {
         if row_count <= BATCH_SIZE {
-            self.add_groups_inner(state, group_columns, params, agg_states, row_count)
+            self.add_groups_inner(state, group_columns, params, agg_states, row_count, None)
         } else {
+            let dict_hashes = group_columns
+                .iter()
+                .any(BlockEntry::is_dict_encoded)
+                .then(|| {
+                    let mut hashes = vec![0; row_count];
+                    group_hash_entries(group_columns, &mut hashes);
+                    hashes
+                });
             let mut new_count = 0;
             for start in (0..row_count).step_by(BATCH_SIZE) {
                 let end = (start + BATCH_SIZE).min(row_count);
@@ -203,9 +211,25 @@ impl AggregateHashTable {
                     &step_params,
                     (&agg_states).into(),
                     end - start,
+                    dict_hashes.as_deref().map(|hashes| &hashes[start..end]),
                 )?;
             }
             Ok(new_count)
+        }
+    }
+
+    fn fill_group_hashes(
+        group_columns: ProjectedBlock,
+        hashes: &mut [u64],
+        dict_hashes: Option<&[u64]>,
+        rows: impl IntoIterator<Item = usize>,
+    ) {
+        if let Some(dict_hashes) = dict_hashes {
+            for (hash, row) in hashes.iter_mut().zip(rows) {
+                *hash = dict_hashes[row];
+            }
+        } else {
+            group_hash_entries(group_columns, hashes);
         }
     }
 
@@ -217,6 +241,7 @@ impl AggregateHashTable {
         params: &[ProjectedBlock],
         agg_states: ProjectedBlock,
         row_count: usize,
+        dict_hashes: Option<&[u64]>,
     ) -> Result<usize> {
         #[cfg(debug_assertions)]
         {
@@ -236,19 +261,29 @@ impl AggregateHashTable {
 
         let new_group_count = if self.direct_append {
             state.row_count = row_count;
-            group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
+            Self::fill_group_hashes(
+                group_columns,
+                &mut state.group_hashes[..row_count],
+                dict_hashes,
+                0..row_count,
+            );
             for (i, entry) in state.empty_vector[..row_count].iter_mut().enumerate() {
                 *entry = i.into();
             }
             self.payload.append_rows(state, row_count, group_columns);
             row_count
         } else if let Some(new_group_count) =
-            self.probe_and_create_by_codes(state, group_columns, row_count)
+            self.probe_and_create_by_codes(state, group_columns, row_count, dict_hashes)
         {
             new_group_count
         } else {
             state.row_count = row_count;
-            group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
+            Self::fill_group_hashes(
+                group_columns,
+                &mut state.group_hashes[..row_count],
+                dict_hashes,
+                0..row_count,
+            );
             self.probe_and_create(state, group_columns, row_count)
         };
 
@@ -327,6 +362,7 @@ impl AggregateHashTable {
         state: &mut ProbeState,
         group_columns: ProjectedBlock,
         row_count: usize,
+        dict_hashes: Option<&[u64]>,
     ) -> Option<usize> {
         // Check every key before allocating the row codes, so regular group columns cost
         // nothing here.
@@ -379,7 +415,12 @@ impl AggregateHashTable {
 
         let distinct = representatives.len();
         state.row_count = distinct;
-        group_hash_entries((&keys).into(), &mut state.group_hashes[..distinct]);
+        Self::fill_group_hashes(
+            (&keys).into(),
+            &mut state.group_hashes[..distinct],
+            dict_hashes,
+            representatives.iter().map(|row| *row as usize),
+        );
         let new_group_count = self.probe_and_create(state, (&keys).into(), distinct);
 
         // The addresses of the representatives are at the front, by rank. `rank <= row` (ranks

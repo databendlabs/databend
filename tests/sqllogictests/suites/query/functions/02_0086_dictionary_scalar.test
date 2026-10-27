@@ -41,5 +41,31 @@ DROP TABLE dictionary_scalar_expected;
 statement ok
 DROP TABLE dictionary_scalar;
 
+# Keep dictionary hashes consistent across 2048-row batches and the final short batch.
+statement ok
+SET max_threads = 1;
+
+statement ok
+CREATE OR REPLACE TABLE dictionary_group_hash (s STRING NOT NULL, v BIGINT NOT NULL) STORAGE_FORMAT = 'parquet';
+
+statement ok
+INSERT INTO dictionary_group_hash SELECT concat('key', to_string(number % 1025)), number FROM numbers(32769);
+
+statement ok
+UNSET max_threads;
+
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT s, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY s);
+----
+1025 32769 536887296
+
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT s, v % 3 AS k, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY s, k);
+----
+3075 32769 536887296
+
+statement ok
+DROP TABLE dictionary_group_hash;
+
 statement ok
 UNSET enable_encoded_columns;

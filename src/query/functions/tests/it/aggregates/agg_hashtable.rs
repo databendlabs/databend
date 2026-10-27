@@ -229,6 +229,55 @@ fn aggregate_into_block(
     DataBlock::concat(&blocks).unwrap()
 }
 
+#[test]
+fn test_agg_hashtable_dictionary_across_batches() {
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    let n = 8193;
+    let args = vec![vec![
+        Int64Type::from_data((0..n as i64).collect_vec()).into(),
+    ]];
+    let aggrs = vec![resolve_agg("sum", Int64Type::data_type())];
+    // Exercise representative-row hashes and dictionaries larger than a 2048-row batch.
+    for ndv in [4, 3001] {
+        let mut values = (0..=ndv).map(|i| format!("key{}", i % ndv)).collect_vec();
+        values.push("unused".to_string());
+        let keys = NarrowBuffer::pack((0..n).map(|i| (i % (ndv + 1)) as u64), (ndv + 1) as u64);
+        let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+            keys,
+            StringType::from_data(values),
+        ))));
+        for nullable in [false, true] {
+            let column = if nullable {
+                encoded
+                    .clone()
+                    .wrap_nullable(Some(Bitmap::from_iter((0..n).map(|i| i % 5 != 0))))
+            } else {
+                encoded.clone()
+            };
+            let plain = column.clone().decode_owned();
+            for mixed in [false, true] {
+                let mut encoded_keys = vec![column.clone().into()];
+                let mut plain_keys = vec![plain.clone().into()];
+                if mixed {
+                    let number: BlockEntry =
+                        Int64Type::from_data((0..n).map(|i| (i % 3) as i64).collect_vec()).into();
+                    encoded_keys.push(number.clone());
+                    plain_keys.push(number);
+                }
+                assert_block_value_sort_eq(
+                    &aggregate_into_block(&encoded_keys, &args, &aggrs, n),
+                    &aggregate_into_block(&plain_keys, &args, &aggrs, n),
+                );
+            }
+        }
+    }
+}
+
 /// Group keys that are dictionary encoded (and arguments that are frame of reference encoded)
 /// must aggregate exactly like their decoded columns.
 #[test]

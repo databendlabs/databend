@@ -1141,6 +1141,14 @@ impl<'a, T: AccessType> Iterator for EncodedViewIter<'a, T> {
 impl<T: AccessType> ExactSizeIterator for EncodedViewIter<'_, T> {}
 
 impl Column {
+    pub fn is_dict_encoded(&self) -> bool {
+        match self {
+            Column::Encoded(encoded) => encoded.as_dict().is_some(),
+            Column::Nullable(column) => column.column.is_dict_encoded(),
+            _ => false,
+        }
+    }
+
     /// Decodes an encoded column, also inside `Nullable`; other columns are returned unchanged.
     ///
     /// Row-at-a-time consumers (e.g. output formats) decode once per block instead of per row.
@@ -1194,6 +1202,10 @@ impl Value<AnyType> {
 }
 
 impl BlockEntry {
+    pub fn is_dict_encoded(&self) -> bool {
+        matches!(self, BlockEntry::Column(column) if column.is_dict_encoded())
+    }
+
     pub fn decoded_value(&self) -> Value<AnyType> {
         match self {
             BlockEntry::Column(Column::Encoded(encoded)) => Value::Column(encoded.decode()),
