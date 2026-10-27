@@ -1639,7 +1639,7 @@ impl Decimal for i256 {
                 let m: u256 = u256::ONE << 255;
                 match ret.cmp(&m) {
                     Ordering::Less => Some(-i256::try_from(ret).unwrap()),
-                    Ordering::Equal => Some(i256::DECIMAL_MIN),
+                    Ordering::Equal => Some(i256::from_words(i128::MIN, 0)),
                     Ordering::Greater => None,
                 }
             }
