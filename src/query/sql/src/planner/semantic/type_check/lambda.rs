@@ -573,7 +573,13 @@ where A: super::TypeCheckAdapter
                 if !self.arg_index.insert(index) {
                     return Ok(());
                 }
-                if self.bind_context.columns.iter().any(|c| c.index == index) {
+                // The output of a grouping key is a column of the scope too.
+                if self.bind_context.columns.iter().any(|c| c.index == index)
+                    || self
+                        .bind_context
+                        .aggregate_info
+                        .is_grouping_key_output(index)
+                {
                     self.args.push(ScalarExpr::BoundColumnRef(col.clone()));
                     self.fields.push(DataField::new(
                         &format!("{index}"),

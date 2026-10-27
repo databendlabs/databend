@@ -22,6 +22,7 @@ use super::Any;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
+use crate::binder::PreAggregateItemsMut;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::into_conjunctions;
 use crate::optimizer::ir::SExpr;
@@ -33,16 +34,19 @@ use crate::plans::VisitorMut as _;
 
 impl Binder {
     /// Analyze aggregates in having clause, this will rewrite aggregate functions.
-    /// See `AggregateRewriter` for more details.
-    pub fn analyze_aggregate_having(
+    /// See `AggregateRewriter` for more details. `pre_aggregate` holds the
+    /// pre-aggregate SELECT items of a GROUPING SETS query that `aliases` lists.
+    pub(crate) fn analyze_aggregate_having(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
+        pre_aggregate: Option<PreAggregateItemsMut<'_>>,
         having: &Expr,
     ) -> Result<ScalarExpr> {
         self.bind_and_rewrite_aggregate_expr(
             bind_context,
             aliases,
+            pre_aggregate,
             ExprContext::HavingClause,
             having,
         )
