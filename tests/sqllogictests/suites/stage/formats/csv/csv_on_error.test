@@ -44,6 +44,58 @@ select * from iti order by a
 statement ok
 truncate table iti
 
+# read the file in 20-byte batches: the column count mismatches (rows 2 and 6) are found by
+# the separator in non-final batches, and the final batch (row 7) is clean
+statement ok
+set input_read_buffer_size=20
+
+query ?????
+copy into iti from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=abort_5 force=true
+----
+csv/wrong_sample.csv 3 4 Number of columns in file (4) does not match that of the corresponding table (3) 2
+
+query ???
+select * from iti order by a
+----
+1 'Beijing' 100
+5 'Shenzhen' 70
+7 'Beijing' 99
+
+statement ok
+truncate table iti
+
+query ?????
+copy into iti from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=continue force=true
+----
+csv/wrong_sample.csv 3 4 Number of columns in file (4) does not match that of the corresponding table (3) 2
+
+# a skipped row spanning two batches must not leak into the next row
+statement ok
+create or replace table iti_str (a string, b string, c string)
+
+query ?????
+copy into iti_str from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=continue force=true
+----
+csv/wrong_sample.csv 5 2 Number of columns in file (4) does not match that of the corresponding table (3) 2
+
+query ???
+select * from iti_str order by a
+----
+1 'Beijing' 100
+3 'Guangzhou' b0
+4 'Fuzhou' b1
+5 'Shenzhen' 70
+7 'Beijing' 99
+
+statement ok
+drop table iti_str
+
+statement ok
+unset input_read_buffer_size
+
+statement ok
+truncate table iti
+
 # files with tolerated errors must still be returned with RETURN_FAILED_ONLY
 query ?????
 copy into iti from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=abort_5 force=true return_failed_only=true
