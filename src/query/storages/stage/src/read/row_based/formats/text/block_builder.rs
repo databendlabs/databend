@@ -30,6 +30,7 @@ use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::text::format::TextInputFormat;
 use crate::read::row_based::formats::text::parser::decode_tsv_field_with_trim;
+use crate::read::row_based::formats::text::parser::escape_delimiters;
 use crate::read::row_based::utils::get_decode_error_by_pos;
 
 pub struct TextDecoder {
@@ -43,6 +44,7 @@ pub struct TextDecoder {
 
     pub record_delimiter: u8,
     pub trim_cr: bool,
+    escape_delimiters: Vec<u8>,
 }
 
 impl TextDecoder {
@@ -64,6 +66,7 @@ impl TextDecoder {
             trim_space: fmt.params.trim_space,
             record_delimiter,
             trim_cr,
+            escape_delimiters: escape_delimiters(field_delimiter, record_delimiter),
         }
     }
 
@@ -90,19 +93,20 @@ impl TextDecoder {
         // `trim_space` must apply after escape decoding so escaped trailing
         // whitespace such as `\ ` is preserved until it becomes a real space.
         let mut data = vec![];
-        let delimiters = [
-            self.field_delimiter.unwrap_or(self.record_delimiter),
-            self.record_delimiter,
-        ];
-        let decoded = decode_tsv_field_with_trim(col_data, &mut data, &delimiters, self.trim_space)
-            .map_err(|e| {
-                get_decode_error_by_pos(
-                    column_index,
-                    &self.load_context.schema,
-                    &e.to_string(),
-                    col_data,
-                )
-            })?;
+        let decoded = decode_tsv_field_with_trim(
+            col_data,
+            &mut data,
+            &self.escape_delimiters,
+            self.trim_space,
+        )
+        .map_err(|e| {
+            get_decode_error_by_pos(
+                column_index,
+                &self.load_context.schema,
+                &e.to_string(),
+                col_data,
+            )
+        })?;
 
         if decoded.is_empty() {
             return self.read_empty_column(builder, column_index);
