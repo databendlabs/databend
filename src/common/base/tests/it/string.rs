@@ -76,35 +76,6 @@ fn test_unescape_string() {
 }
 
 #[test]
-fn test_mask_connection_info() {
-    let sql = r#"COPY INTO table1
-        FROM 's3://xx/yy
-        CONNECTION = (
-            ACCESS_KEY_ID = 'aaa' ,
-            SECRET_ACCESS_KEY = 'sss' ,
-            REGION = 'us-east-2'
-        )
-        PATTERN = '.*[.]csv'
-            FILE_FORMAT = (
-            TYPE = CSV,
-            FIELD_DELIMITER = '\t',
-            RECORD_DELIMITER = '\n',
-            SKIP_HEADER = 1
-        );"#;
-
-    let actual = mask_connection_info(sql);
-    // ACCESS_KEY_ID and SECRET_ACCESS_KEY are sensitive keys, their values get masked
-    // 'aaa' and 'sss' are <= 4 chars so fully masked
-    assert!(actual.contains("ACCESS_KEY_ID = '***'"));
-    assert!(actual.contains("SECRET_ACCESS_KEY = '***'"));
-    // REGION is not a sensitive key, should remain unchanged
-    assert!(actual.contains("REGION = 'us-east-2'"));
-    // Original secrets should not appear
-    assert!(!actual.contains("= 'aaa'"));
-    assert!(!actual.contains("= 'sss'"));
-}
-
-#[test]
 fn test_short_sql() {
     let max_length: u64 = 128;
     // Test case 1: SQL query shorter than 128 characters

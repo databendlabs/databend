@@ -22,6 +22,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
+use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
@@ -75,6 +76,7 @@ use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::SessionClaim;
 use crate::servers::login_history::LoginEventType;
 use crate::servers::login_history::LoginHandler;
@@ -403,7 +405,7 @@ impl<E> HTTPSessionEndpoint<E> {
             info!(
                 "got request without session, url={}, headers={:?}",
                 req.uri(),
-                req.headers()
+                sanitize_request_headers(req.headers())
             );
         }
 
@@ -543,9 +545,13 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
     Ok(poem_resp)
 }
 
-fn get_request_info(mut req: Request) -> String {
-    req.headers_mut().remove(AUTHORIZATION);
-    format!("{req:?}")
+fn get_request_info(req: Request) -> String {
+    format!(
+        "method={} uri={} headers={:?}",
+        req.method(),
+        req.uri(),
+        sanitize_request_headers(req.headers())
+    )
 }
 
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
@@ -712,13 +718,29 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 }
 
 pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<String, String> {
-    let sensitive_headers = ["authorization", "cookie", "x-clickhouse-key"];
+    let sensitive_headers = [
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "x-clickhouse-key",
+        // May contain a credential-bearing SQL statement, even when the
+        // endpoint eventually rejects it. Never log its original value.
+        "x-databend-sql",
+    ];
     headers
         .iter()
         .map(|(k, v)| {
             let k = k.as_str().to_lowercase();
             if sensitive_headers.contains(&k.as_str()) {
                 (k, "******".to_string())
+            } else if k.eq_ignore_ascii_case(HEADER_QUERY_CONTEXT) {
+                // Session state: keep its sanitized `Debug` for diagnosis.
+                let conf = v
+                    .to_str()
+                    .ok()
+                    .and_then(|v| serde_json::from_str::<HttpSessionConf>(v.trim()).ok());
+                let value = conf.map_or_else(|| "******".to_string(), |conf| format!("{conf:?}"));
+                (k, value)
             } else {
                 (k, v.to_str().unwrap_or_default().to_string())
             }
@@ -757,7 +779,28 @@ mod tests {
     use poem::http::HeaderMap;
 
     use crate::servers::http::middleware::session::get_client_ip;
+    use crate::servers::http::middleware::session::get_request_info;
     use crate::servers::http::middleware::session::sanitize_request_headers;
+
+    #[test]
+    fn test_request_info_does_not_expose_credentials_or_body() {
+        let req = poem::Request::builder()
+            .uri("/v1/query".parse().unwrap())
+            .header("authorization", "Basic dXNlcjpwYXNzd29yZA==")
+            .header("proxy-authorization", "Basic proxy-secret")
+            .header("cookie", "session=cookie-secret")
+            .header("x-databend-sql", "CREATE USER u IDENTIFIED BY 'sql-secret'")
+            .header(
+                "x-databend-query-context",
+                r#"{"database":"db1","settings":{"enterprise_license":"license-secret"}}"#,
+            )
+            .body("body-secret");
+        let logged = get_request_info(req);
+        assert!(logged.contains("/v1/query"));
+        assert!(logged.contains("db1"), "{logged}");
+        assert!(!logged.contains("secret"));
+        assert!(!logged.contains("dXNlcjpwYXNzd29yZA=="));
+    }
 
     #[test]
     fn test_parse_ip() {

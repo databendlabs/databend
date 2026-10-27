@@ -14,6 +14,10 @@ Nd = "Nd"
 typ = "typ"
 aranges = "aranges"
 pendings = "pendings"
+# Literal suffix preserved in masked credential test expectations.
+ue = "ue"
+# Intentionally misspelled credential option in masking regression tests.
+SECERT = "SECERT"
 
 [default.extend-identifiers]
 
