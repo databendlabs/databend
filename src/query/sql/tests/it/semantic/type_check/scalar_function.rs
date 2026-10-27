@@ -10,6 +10,12 @@ async fn test_type_check_scalar_function_rules() -> Result<()> {
             sql: "1::DECIMAL(38,0) / 0::DECIMAL(38,0)",
         },
         SqlTestCase {
+            name: "decimal_round_overflow_keeps_checked_argument_types",
+            description: "A rounding overflow remains a Decimal call rather than a stale Decimal return type on a Float64 overload.",
+            setup_sqls: &[],
+            sql: "round(99::DECIMAL(2,0), -2)",
+        },
+        SqlTestCase {
             name: "decimal_constant_argument_keeps_precision",
             description: "Folding a constant Decimal argument must not change the precision used to resolve a nonconstant division.",
             setup_sqls: &[],
@@ -103,6 +109,7 @@ async fn test_checked_decimal_constant_types_survive_partial_folding() -> Result
     init_testing_globals();
     for sql in [
         "1::DECIMAL(38,0) / 0::DECIMAL(38,0)",
+        "round(99::DECIMAL(2,0), -2)",
         "1::DECIMAL(38,0) / number::DECIMAL(38,0)",
         "1::UInt64 / 0::DECIMAL(38,0)",
         "1::Int64 / number::DECIMAL(38,0)",

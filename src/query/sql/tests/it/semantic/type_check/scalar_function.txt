@@ -5,6 +5,13 @@ status: ok
 scalar: divide(CAST(1 AS Decimal(38, 0)), CAST(0 AS Decimal(38, 0)))
 type: Decimal(38, 6)
 
+=== decimal_round_overflow_keeps_checked_argument_types ===
+description: A rounding overflow remains a Decimal call rather than a stale Decimal return type on a Float64 overload.
+sql: round(99::DECIMAL(2,0), -2)
+status: ok
+scalar: round(-2)(CAST(99 AS Decimal(2, 0)), -2)
+type: Decimal(2, 0)
+
 === decimal_constant_argument_keeps_precision ===
 description: Folding a constant Decimal argument must not change the precision used to resolve a nonconstant division.
 sql: 1::DECIMAL(38,0) / number::DECIMAL(38,0)

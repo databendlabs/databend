@@ -4830,7 +4830,9 @@ dependencies = [
  "databend-common-expression",
  "jsonb",
  "match-template",
+ "num-bigint",
  "num-traits",
+ "proptest",
  "uuid",
 ]
 
