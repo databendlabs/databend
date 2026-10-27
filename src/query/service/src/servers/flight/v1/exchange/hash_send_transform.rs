@@ -46,6 +46,7 @@ impl HashSendTransform {
         nodes: Vec<ShuffleNode>,
         waker: Arc<ExecutorWaker>,
         budget: usize,
+        min_piece_bytes: usize,
     ) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
@@ -53,7 +54,14 @@ impl HashSendTransform {
             input: input.clone(),
             output: output.clone(),
             local_pos,
-            writer: HashShuffleWriter::create(worker_id, waker, scatter, nodes, budget),
+            writer: HashShuffleWriter::create(
+                worker_id,
+                waker,
+                scatter,
+                nodes,
+                budget,
+                min_piece_bytes,
+            ),
         }));
         PipeItem::create(processor, vec![input], vec![output])
     }

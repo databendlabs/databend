@@ -254,7 +254,7 @@ fn send(
     budget: usize,
     blocks: impl Iterator<Item = DataBlock>,
 ) -> Result<()> {
-    let mut writer = HashShuffleWriter::create(thread, thread_waker(), scatter, nodes, budget);
+    let mut writer = HashShuffleWriter::create(thread, thread_waker(), scatter, nodes, budget, 0);
     for block in blocks {
         if writer.add_block(block)? {
             flush_writer(&mut writer)?;
@@ -437,9 +437,10 @@ fn test_hash_senders_flush_tail_and_release_channels_before_processor_drop() -> 
                 nodes,
                 ExecutorWaker::create(),
                 usize::MAX,
+                0,
             )
         } else {
-            HashSendSink::create_item(0, scatter, nodes, ExecutorWaker::create(), usize::MAX)
+            HashSendSink::create_item(0, scatter, nodes, ExecutorWaker::create(), usize::MAX, 0)
         };
         let upstream = OutputPort::create();
         // Ports are connected before use; this test alone drives the processor sequentially.
@@ -496,7 +497,7 @@ fn test_hash_transform_closed_output_keeps_sending_other_partitions() -> Result<
     }];
     drop(channels);
     let scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(KeyScatter { num_partitions: 2 }));
-    let item = HashSendTransform::create_item(0, 0, scatter, nodes, ExecutorWaker::create(), 1);
+    let item = HashSendTransform::create_item(0, 0, scatter, nodes, ExecutorWaker::create(), 1, 0);
     let upstream = OutputPort::create();
     let downstream = InputPort::create();
     // Ports are connected before use; this test alone drives the processor sequentially.

@@ -35,6 +35,7 @@ use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::hash_send_sink::HashSendSink;
 use super::hash_shuffle_writer::ShuffleNode;
+use super::hash_shuffle_writer::hash_shuffle_min_piece_bytes;
 use super::hash_shuffle_writer::hash_shuffle_send_budget;
 use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
@@ -160,6 +161,8 @@ impl ExchangeSink {
             local_threads,
             settings.get_hash_shuffle_send_buffer_bytes()?,
         );
+        let min_piece_bytes =
+            hash_shuffle_min_piece_bytes(settings.get_hash_shuffle_bytes_threshold()?);
         let waker = pipeline.get_waker();
 
         pipeline.resize(local_threads, false)?;
@@ -192,6 +195,7 @@ impl ExchangeSink {
                 nodes.clone(),
                 waker.clone(),
                 budget,
+                min_piece_bytes,
             ));
         }
 

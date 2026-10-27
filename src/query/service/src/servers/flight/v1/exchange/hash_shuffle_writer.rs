@@ -24,11 +24,12 @@
 //! frames.
 //!
 //! Blocks whose rows cannot be addressed (e.g. the states of a partial
-//! aggregate) are routed whole by the scatter, one block per partition, and wait
-//! in a per-partition send queue. The queue resizes them to about `budget / P`
-//! bytes: a large block is split into pieces sent over successive flushes, and
-//! small meta-only blocks are merged, through the hooks of their `BlockMetaInfo`.
-//! Each flush sends at most one piece per partition.
+//! aggregate) are routed whole by the scatter, one block per partition. They and
+//! the buffered partitions wait in a per-partition send queue, which resizes them
+//! to about `budget / P` bytes, but no less than `min_piece_bytes`: a large block
+//! is split into pieces sent over successive flushes, and small meta-only blocks
+//! are merged, through the hooks of their `BlockMetaInfo`. Each flush sends at
+//! most one piece per partition.
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -55,6 +56,17 @@ pub fn hash_shuffle_send_budget(local_threads: usize, node_budget: usize) -> usi
     (node_budget / local_threads.max(1)).max(1)
 }
 
+/// The smallest piece the send queue splits a partition into: the target size
+/// of the blocks a receiver outputs, since smaller pieces would only be
+/// concatenated again. A threshold of 0 sets no byte target, so partitions are
+/// never split.
+pub fn hash_shuffle_min_piece_bytes(bytes_threshold: usize) -> usize {
+    match bytes_threshold {
+        0 => usize::MAX,
+        bytes => bytes,
+    }
+}
+
 /// The threads of one node, which own partitions `partitions`.
 #[derive(Clone)]
 pub struct ShuffleNode {
@@ -77,7 +89,9 @@ pub struct HashShuffleWriter {
     buffered_rows: usize,
     buffered_bytes: usize,
     budget: usize,
-    /// The target size of what one flush sends to a partition.
+    /// The target size of what one flush sends to a partition. Each piece costs a
+    /// send, so pieces are not split below `min_piece_bytes` even when the budget
+    /// is small.
     piece_bytes: usize,
     /// The pieces waiting to be sent to each partition, with their sizes.
     queues: Vec<VecDeque<(usize, DataBlock)>>,
@@ -93,6 +107,7 @@ impl HashShuffleWriter {
         scatter: Arc<Box<dyn FlightScatter>>,
         nodes: Vec<ShuffleNode>,
         budget: usize,
+        min_piece_bytes: usize,
     ) -> HashShuffleWriter {
         let num_partitions = nodes.last().map(|x| x.partitions.end).unwrap_or_default();
 
@@ -107,7 +122,7 @@ impl HashShuffleWriter {
             buffered_rows: 0,
             buffered_bytes: 0,
             budget,
-            piece_bytes: (budget / num_partitions.max(1)).max(1),
+            piece_bytes: (budget / num_partitions.max(1)).max(min_piece_bytes).max(1),
             queues: (0..num_partitions).map(|_| VecDeque::new()).collect(),
             queued_bytes: 0,
             queued_pieces: 0,
@@ -575,7 +590,7 @@ mod tests {
         let num_partitions = nodes.last().unwrap().partitions.end;
         let scatter: Arc<Box<dyn FlightScatter>> =
             Arc::new(Box::new(ValuesScatter { num_partitions }));
-        HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, budget)
+        HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, budget, 0)
     }
 
     fn values_block(range: std::ops::Range<u64>) -> DataBlock {
@@ -649,7 +664,7 @@ mod tests {
         let num_partitions = nodes.last().unwrap().partitions.end as u64;
         let scatter: Arc<Box<dyn FlightScatter>> =
             Arc::new(Box::new(ModuloScatter { num_partitions }));
-        HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, budget)
+        HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, budget, 0)
     }
 
     /// Blocks without columns (e.g. under `count(*)`) or with only NULL columns
@@ -672,8 +687,14 @@ mod tests {
             let (nodes, receivers) = local_nodes(1, 4);
             let scatter: Arc<Box<dyn FlightScatter>> =
                 Arc::new(Box::new(RowScatter { num_partitions: 4 }));
-            let mut writer =
-                HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, usize::MAX);
+            let mut writer = HashShuffleWriter::create(
+                0,
+                ExecutorWaker::create(),
+                scatter,
+                nodes,
+                usize::MAX,
+                0,
+            );
 
             assert_eq!(make_block().memory_size(), 0);
             writer.add_block(make_block())?;
@@ -711,7 +732,7 @@ mod tests {
         let scatter: Arc<Box<dyn FlightScatter>> =
             Arc::new(Box::new(RowScatter { num_partitions: 4 }));
         let mut writer =
-            HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, expanded);
+            HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, expanded, 0);
 
         assert!(writer.add_block(block())?);
         assert_eq!(writer.buffered_bytes, expanded);
@@ -727,6 +748,28 @@ mod tests {
             .map(|block| block.num_rows())
             .sum::<usize>();
         assert_eq!(rows, 1000);
+        Ok(())
+    }
+
+    /// A tiny budget still sends each partition in one piece once it is below
+    /// `min_piece_bytes`, rather than in pieces that each cost a send.
+    #[test]
+    fn test_writer_does_not_split_below_min_piece_bytes() -> Result<()> {
+        let (nodes, receivers) = local_nodes(1, 4);
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(ModuloScatter { num_partitions: 4 }));
+        let mut writer =
+            HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, 1, usize::MAX);
+
+        assert!(writer.add_block(make_block(0..100))?);
+        assert!(!writer.flush(None)?.1);
+        assert!(!writer.has_queued());
+        for (partition, receiver) in receivers.iter().enumerate() {
+            let blocks = drain_blocks(receiver).collect::<Vec<_>>();
+            assert_eq!(blocks.len(), 1);
+            assert_eq!(blocks[0].num_rows(), 25);
+            check_rows(&blocks[0], partition as u64, 4);
+        }
         Ok(())
     }
 

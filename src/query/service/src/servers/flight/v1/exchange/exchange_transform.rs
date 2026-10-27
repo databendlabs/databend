@@ -39,6 +39,7 @@ use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_senders
 use crate::servers::flight::v1::exchange::exchange_sink::build_hash_shuffle_nodes;
 use crate::servers::flight::v1::exchange::exchange_sink::exchange_send_buffer_config;
 use crate::servers::flight::v1::exchange::exchange_sink::global_shuffle_scatter;
+use crate::servers::flight::v1::exchange::hash_shuffle_writer::hash_shuffle_min_piece_bytes;
 use crate::servers::flight::v1::exchange::hash_shuffle_writer::hash_shuffle_send_budget;
 use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
 use crate::servers::flight::v1::network::outbound::create_local_block_senders;
@@ -212,6 +213,8 @@ impl ExchangeTransform {
             local_threads,
             settings.get_hash_shuffle_send_buffer_bytes()?,
         );
+        let min_piece_bytes =
+            hash_shuffle_min_piece_bytes(settings.get_hash_shuffle_bytes_threshold()?);
         let coalesce = CoalesceThreshold::create(
             settings.get_hash_shuffle_rows_threshold()?,
             settings.get_hash_shuffle_bytes_threshold()?,
@@ -251,6 +254,7 @@ impl ExchangeTransform {
                 nodes.clone(),
                 waker.clone(),
                 budget,
+                min_piece_bytes,
             ));
         }
 
