@@ -177,38 +177,6 @@ impl Debug for HttpQueryRequest {
     }
 }
 
-#[cfg(test)]
-mod request_debug_tests {
-    use super::HttpQueryRequest;
-
-    #[test]
-    fn debug_masks_sql_and_hides_parameters() {
-        let request: HttpQueryRequest = serde_json::from_value(serde_json::json!({
-            "sql": "CREATE USER u IDENTIFIED BY 'request_secret'",
-            "params": ["parameter_secret"],
-        }))
-        .unwrap();
-        let logged = format!("{request:?}");
-        assert!(!logged.contains("request_secret"), "{logged}");
-        assert!(!logged.contains("parameter_secret"), "{logged}");
-
-        let internal = r#"{"variables":[["p","{\"String\":\"variable_secret\"}"]]}"#;
-        let request: HttpQueryRequest = serde_json::from_value(serde_json::json!({
-            "sql": "SELECT 1",
-            "session": {
-                "settings": {"enterprise_license": "license_secret", "max_threads": "8"},
-                "internal": internal,
-            },
-        }))
-        .unwrap();
-        let logged = format!("{request:?}");
-        assert!(!logged.contains("license_secret"), "{logged}");
-        assert!(!logged.contains("variable_secret"), "{logged}");
-        assert!(logged.contains(r#""max_threads": "8""#), "{logged}");
-        assert!(logged.contains(r#"variables: ["p"]"#), "{logged}");
-    }
-}
-
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
 const DEFAULT_MAX_ROWS_PER_PAGE: usize = 10000;
 const DEFAULT_WAIT_TIME_SECS: u32 = 10;
@@ -1113,5 +1081,37 @@ impl HttpQuery {
             ));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HttpQueryRequest;
+
+    #[test]
+    fn debug_masks_sql_and_hides_parameters() {
+        let request: HttpQueryRequest = serde_json::from_value(serde_json::json!({
+            "sql": "CREATE USER u IDENTIFIED BY 'request_secret'",
+            "params": ["parameter_secret"],
+        }))
+        .unwrap();
+        let logged = format!("{request:?}");
+        assert!(!logged.contains("request_secret"), "{logged}");
+        assert!(!logged.contains("parameter_secret"), "{logged}");
+
+        let internal = r#"{"variables":[["p","{\"String\":\"variable_secret\"}"]]}"#;
+        let request: HttpQueryRequest = serde_json::from_value(serde_json::json!({
+            "sql": "SELECT 1",
+            "session": {
+                "settings": {"enterprise_license": "license_secret", "max_threads": "8"},
+                "internal": internal,
+            },
+        }))
+        .unwrap();
+        let logged = format!("{request:?}");
+        assert!(!logged.contains("license_secret"), "{logged}");
+        assert!(!logged.contains("variable_secret"), "{logged}");
+        assert!(logged.contains(r#""max_threads": "8""#), "{logged}");
+        assert!(logged.contains(r#"variables: ["p"]"#), "{logged}");
     }
 }
