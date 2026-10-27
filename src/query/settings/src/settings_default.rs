@@ -1307,6 +1307,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_sonic_json_parser", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Use Sonic instead of Serde for direct NDJSON COPY parsing. Stage SELECT and SQL JSON functions are unchanged. Default: 0 (off).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_parse_json_variant_reparse", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Re-serialize and re-parse VARIANT inputs of parse_json/try_parse_json to repair legacy invalid JSONB values. Set to 0 to return the VARIANT value as is.",

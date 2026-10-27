@@ -1,0 +1,55 @@
+# Compatibility change independent of parser selection: distinct JSON keys
+# that convert to the same typed MAP key are rejected, like other decoders.
+# Use explicit session switches instead of run-with-settings: this test must
+# verify the default Serde path and live switching/rollback in the same session.
+# Default-off is not a rollback of this MAP validity fix.
+statement ok
+set enable_sonic_json_parser = 0
+
+statement ok
+create or replace table ndjson_map_typed_key_collision (m map(decimal(4,2),string))
+
+statement error map keys have to be unique
+copy into ndjson_map_typed_key_collision from @data/ndjson/map_typed_key_collision.ndjson file_format = (type = ndjson)
+
+query I
+select count(*) from ndjson_map_typed_key_collision
+----
+0
+
+# A skipped bad MAP must not leave entries in the following valid row.
+statement ok
+copy into ndjson_map_typed_key_collision from @data/ndjson/map_typed_key_collision.ndjson file_format = (type = ndjson) on_error = continue force = true
+
+query IT
+select length(map_keys(m)), m[2::decimal(4,2)] from ndjson_map_typed_key_collision
+----
+1 ok
+
+statement ok
+truncate table ndjson_map_typed_key_collision
+
+statement ok
+set enable_sonic_json_parser = 1
+
+statement error map keys have to be unique
+copy into ndjson_map_typed_key_collision from @data/ndjson/map_typed_key_collision.ndjson file_format = (type = ndjson) force = true
+
+query I
+select count(*) from ndjson_map_typed_key_collision
+----
+0
+
+statement ok
+copy into ndjson_map_typed_key_collision from @data/ndjson/map_typed_key_collision.ndjson file_format = (type = ndjson) on_error = continue force = true
+
+query IT
+select length(map_keys(m)), m[2::decimal(4,2)] from ndjson_map_typed_key_collision
+----
+1 ok
+
+statement ok
+drop table ndjson_map_typed_key_collision
+
+statement ok
+set enable_sonic_json_parser = 0

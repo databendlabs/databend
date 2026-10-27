@@ -23,6 +23,7 @@ mod delimiter;
 mod field_decoder;
 pub mod field_encoder;
 mod file_format_type;
+pub mod json;
 pub mod output_format;
 
 pub use delimiter::RecordDelimiter;
