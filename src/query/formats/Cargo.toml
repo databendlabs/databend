@@ -28,7 +28,12 @@ match-template = { workspace = true }
 micromarshal = { workspace = true }
 num-traits = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, features = ["raw_value"] }
+# `arbitrary_precision` keeps JSON number text so integers and decimals can be
+# parsed exactly (json_ast.rs relies on `Number::as_str`).
+serde_json = { workspace = true, features = [
+  "arbitrary_precision",
+  "raw_value",
+] }
 zmij = { workspace = true }
 
 [dev-dependencies]
