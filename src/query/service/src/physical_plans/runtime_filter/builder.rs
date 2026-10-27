@@ -342,9 +342,15 @@ fn propagate_probe_targets(
 /// *at* a join does not imply that another join's filter may cross it.
 fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
     match plan {
-        PhysicalRelOperator::EvalScalar(_)
-        | PhysicalRelOperator::Filter(_)
-        | PhysicalRelOperator::Exchange(_) => true,
+        // Check every item, not just the RF key: changing the input block can
+        // also change projected values or which rows a stateful filter keeps.
+        PhysicalRelOperator::EvalScalar(eval) => {
+            eval.items.iter().all(|item| item.scalar.is_deterministic())
+        }
+        PhysicalRelOperator::Filter(filter) => {
+            filter.predicates.iter().all(ScalarExpr::is_deterministic)
+        }
+        PhysicalRelOperator::Exchange(_) => true,
         PhysicalRelOperator::Sort(sort) => sort.limit.is_none() && sort.window_partition.is_none(),
         PhysicalRelOperator::Aggregate(aggregate) => {
             !aggregate.aggregate.group_items.is_empty()
@@ -419,7 +425,21 @@ fn probe_path_is_safe(s_expr: &PExpr, scan_id: usize, column: Symbol) -> bool {
                 safe && scan.columns.contains(&column)
                     && scan.limit.is_none()
                     && scan.sample.is_none()
-                    && scan.vector_index.is_none(),
+                    && scan.vector_index.is_none()
+                    && scan
+                        .push_down_predicates
+                        .iter()
+                        .flatten()
+                        .all(ScalarExpr::is_deterministic)
+                    && scan
+                        .prewhere
+                        .as_ref()
+                        .is_none_or(|p| p.predicates.iter().all(ScalarExpr::is_deterministic))
+                    && scan
+                        .secure_predicates
+                        .iter()
+                        .flatten()
+                        .all(ScalarExpr::is_deterministic),
             );
         }
         let mut result = None;
@@ -1004,6 +1024,106 @@ mod tests {
                         ));
                     }
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn test_stateful_scalars_block_paths_and_equalities() {
+        use databend_common_sql::ScalarExpr;
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::*;
+
+        use super::PhysicalRelOperator;
+
+        let value = path_column(1, NumberDataType::Int64);
+        let zero = ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Number(NumberScalar::Int64(0)),
+        });
+        let running = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "running_difference".into(),
+            params: vec![],
+            arguments: vec![value.clone()],
+            return_type: Box::new(DataType::Number(NumberDataType::Int64)),
+        });
+        let positive = |arg| {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "gt".into(),
+                params: vec![],
+                arguments: vec![arg, zero.clone()],
+                return_type: Box::new(DataType::Boolean),
+            })
+        };
+        let mut scan = path_scan(7, 0).plan().as_scan().unwrap().clone();
+        scan.columns.insert(Symbol::new(1));
+        let input = PExpr::create_leaf(scan.clone());
+        // The RF key is c0. A different projected/predicate column must still
+        // block it if evaluating that column depends on other input rows.
+        let row_local = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "plus".into(),
+            params: vec![],
+            arguments: vec![value, zero.clone()],
+            return_type: Box::new(DataType::Number(NumberDataType::Int64)),
+        });
+        for (expr, safe) in [(row_local, true), (running, false)] {
+            let eval = EvalScalar {
+                items: vec![ScalarItem {
+                    index: Symbol::new(2),
+                    scalar: expr.clone(),
+                }],
+            };
+            let predicate = positive(expr);
+            let filter = Filter {
+                predicates: vec![predicate.clone()],
+            };
+            for kind in 0..3 {
+                let mut leaf = scan.clone();
+                match kind {
+                    0 => leaf.push_down_predicates = Some(vec![predicate.clone()]),
+                    1 => leaf.secure_predicates = Some(vec![predicate.clone()]),
+                    _ => {
+                        leaf.prewhere = Some(Prewhere {
+                            predicates: vec![predicate.clone()],
+                            output_columns: leaf.columns.clone(),
+                            prewhere_columns: predicate.used_columns(),
+                        })
+                    }
+                }
+                assert_eq!(
+                    path_targets(&PExpr::create_leaf(leaf), true).is_empty(),
+                    !safe
+                );
+            }
+            for plan in [
+                PhysicalRelOperator::EvalScalar(eval),
+                PhysicalRelOperator::Filter(filter),
+            ] {
+                let tree = PExpr::create_unary(plan.clone(), input.clone());
+                for connector in [true, false] {
+                    assert_eq!(path_targets(&tree, connector).is_empty(), !safe);
+                }
+                let join = PExpr::create_binary(
+                    Join {
+                        join_type: JoinType::Inner,
+                        equi_conditions: vec![JoinEquiCondition::new(
+                            path_column(0, NumberDataType::Int32),
+                            path_column(3, NumberDataType::Int32),
+                            false,
+                        )],
+                        ..Default::default()
+                    },
+                    input.clone(),
+                    path_scan(8, 3),
+                );
+                let tree = PExpr::create_unary(plan, join);
+                assert_eq!(
+                    super::collect_equi_conditions(&tree).unwrap().len(),
+                    usize::from(safe)
+                );
             }
         }
     }
