@@ -164,7 +164,10 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             Ok(Plan::CopyIntoLocation(plan))
         }
         Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
-            plan.enable_distributed = opt_ctx.get_enable_distributed_optimization()
+            // A COPY that writes in cluster key order stays on one node: a
+            // distributed COPY runs on every node over its share of the files.
+            plan.enable_distributed = !plan.cluster_key_sort
+                && opt_ctx.get_enable_distributed_optimization()
                 && opt_ctx
                     .get_table_ctx()
                     .get_settings()

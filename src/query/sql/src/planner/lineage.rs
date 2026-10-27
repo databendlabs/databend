@@ -2077,6 +2077,7 @@ mod tests {
             query: None,
             is_transform: false,
             enable_distributed: false,
+            cluster_key_sort: false,
             files_collected: false,
             dedup_full_path: false,
             path_prefix: None,

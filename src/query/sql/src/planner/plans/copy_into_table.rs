@@ -143,6 +143,11 @@ pub struct CopyIntoTablePlan {
     // control by setting `enable_distributed_copy`
     // set in optimizer
     pub enable_distributed: bool,
+    // The COPY writes in the target's cluster key order (the binder sorted the
+    // query, or the hash write layout sorts each partition). The optimizer
+    // keeps it on one node: per-node sorting cannot give one order per
+    // partition, and distributed COPY does not route partitions across nodes.
+    pub cluster_key_sort: bool,
 
     pub files_collected: bool,
 

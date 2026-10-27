@@ -265,6 +265,7 @@ impl Binder {
             write_mode: CopyIntoTableMode::Copy,
             query: None,
             enable_distributed: false,
+            cluster_key_sort: false,
             files_collected: false,
         })
     }
@@ -496,6 +497,7 @@ impl Binder {
             validation_mode: ValidationMode::None,
 
             enable_distributed: false,
+            cluster_key_sort: false,
             is_transform: false,
             files_collected: true,
             enable_schema_evolution: false,
@@ -570,9 +572,11 @@ impl Binder {
             .get_settings()
             .get_enable_cluster_key_sort_on_write()?
         {
-            s_expr = self
+            let (sorted, cluster_key_sort) = self
                 .bind_copy_cluster_key_sort(&plan, &from_context, s_expr)
                 .await?;
+            s_expr = sorted;
+            plan.cluster_key_sort = cluster_key_sort;
         }
 
         let mut output_context = BindContext::new();
@@ -594,13 +598,15 @@ impl Binder {
 
     /// Sorts the projected COPY rows by the target table's linear cluster key,
     /// so that one load writes blocks whose cluster key ranges do not overlap.
-    /// The append pipeline only sorts within each block it cuts.
+    /// The append pipeline only sorts within each block it cuts. Returns
+    /// whether the COPY writes in cluster key order (sorted here, or by the
+    /// write layout of a hash-distributed partitioned table).
     async fn bind_copy_cluster_key_sort(
         &mut self,
         plan: &CopyIntoTablePlan,
         projected: &BindContext,
         child: SExpr,
-    ) -> Result<SExpr> {
+    ) -> Result<(SExpr, bool)> {
         let table = self
             .ctx
             .get_table(
@@ -615,20 +621,21 @@ impl Binder {
             .options
             .get(OPT_KEY_CLUSTER_TYPE)
             .is_some_and(|v| v.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE));
+        let Some(keys) = table.resolve_cluster_keys().filter(|_| !is_hilbert) else {
+            return Ok((child, false));
+        };
         // A hash-distributed partitioned table sorts each partition by the
         // cluster key in its write layout, after routing rows to partitions;
-        // a sort here would only be undone by that routing.
+        // a sort here would only be undone by that routing. The COPY still
+        // writes in cluster key order, so it must not be distributed either.
         let options = &table.get_table_info().meta.options;
-        let hash_partitioned = options.contains_key(OPT_KEY_PARTITION_BY)
+        if options.contains_key(OPT_KEY_PARTITION_BY)
             && options
                 .get(OPT_KEY_WRITE_DISTRIBUTION_MODE)
-                .is_some_and(|v| v.eq_ignore_ascii_case("hash"));
-        let Some(keys) = table
-            .resolve_cluster_keys()
-            .filter(|_| !is_hilbert && !hash_partitioned)
-        else {
-            return Ok(child);
-        };
+                .is_some_and(|v| v.eq_ignore_ascii_case("hash"))
+        {
+            return Ok((child, true));
+        }
 
         // The select list maps to the target columns by position, whatever
         // its aliases, so bind the keys against the projected columns renamed
@@ -661,7 +668,7 @@ impl Binder {
             let (scalar, data_type) = scalar_binder.bind(key)?;
             // A vector key orders blocks by a vector index, not by value.
             if matches!(data_type.remove_nullable(), DataType::Vector(_)) {
-                return Ok(child);
+                return Ok((child, false));
             }
             let index = match &scalar {
                 ScalarExpr::BoundColumnRef(column) => column.column.index,
@@ -696,7 +703,10 @@ impl Binder {
             pre_projection: None,
             window_partition: None,
         };
-        Ok(SExpr::create_unary(Arc::new(sort.into()), Arc::new(s_expr)))
+        Ok((
+            SExpr::create_unary(Arc::new(sort.into()), Arc::new(s_expr)),
+            true,
+        ))
     }
 
     pub(crate) async fn parse_values_str(&self, values_str: &str) -> Result<Vec<Expr>> {

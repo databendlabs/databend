@@ -13,6 +13,11 @@ set max_threads = 1
 statement ok
 create or replace stage s_09_0103
 
+# The suite runs this file once per handler, and replacing a stage keeps the
+# files a previous run unloaded into it.
+statement ok
+remove @s_09_0103
+
 # One file of 4000 rows whose keys k = 0..3 cycle row by row, in v order.
 statement ok
 copy into @s_09_0103/data/ from (select number % 4 as k, number as v from numbers(4000) order by v) file_format = (type = parquet) single = true
@@ -162,3 +167,9 @@ unset enable_cluster_key_sort_on_write
 
 statement ok
 drop database db_09_0103
+
+statement ok
+remove @s_09_0103
+
+statement ok
+drop stage s_09_0103
