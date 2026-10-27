@@ -31,7 +31,24 @@ truncate table iti
 query ?????
 copy into iti from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=abort_5 force=true
 ----
-csv/wrong_sample.csv 3 0 NULL NULL
+csv/wrong_sample.csv 3 4 Number of columns in file (4) does not match that of the corresponding table (3) 2
+
+
+query ???
+select * from iti order by a
+----
+1 'Beijing' 100
+5 'Shenzhen' 70
+7 'Beijing' 99
+
+statement ok
+truncate table iti
+
+# files with tolerated errors must still be returned with RETURN_FAILED_ONLY
+query ?????
+copy into iti from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=abort_5 force=true return_failed_only=true
+----
+csv/wrong_sample.csv 3 4 Number of columns in file (4) does not match that of the corresponding table (3) 2
 
 
 query ???
