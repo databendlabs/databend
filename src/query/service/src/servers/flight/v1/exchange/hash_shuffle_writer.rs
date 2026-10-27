@@ -947,7 +947,10 @@ mod tests {
         }
         assert!(!writer.has_queued());
         for (partition, values) in received.iter().enumerate() {
-            assert_eq!(values, &(partition as u64..160).step_by(4).collect::<Vec<_>>());
+            assert_eq!(
+                values,
+                &(partition as u64..160).step_by(4).collect::<Vec<_>>()
+            );
         }
         Ok(())
     }

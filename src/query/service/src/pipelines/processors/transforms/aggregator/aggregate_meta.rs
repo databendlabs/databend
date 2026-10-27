@@ -412,7 +412,9 @@ impl BlockMetaInfo for AggregateMeta {
         });
         // `parts` always holds at least one (possibly empty) part.
         *self = parts.next().unwrap();
-        Ok(parts.map(|meta| Box::new(meta) as BlockMetaInfoPtr).collect())
+        Ok(parts
+            .map(|meta| Box::new(meta) as BlockMetaInfoPtr)
+            .collect())
     }
 
     fn merge(&mut self, other: BlockMetaInfoPtr) -> Result<Option<BlockMetaInfoPtr>> {

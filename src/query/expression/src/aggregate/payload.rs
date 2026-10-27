@@ -518,8 +518,7 @@ impl Payload {
         let mut parts = vec![];
         let mut part = empty(&self);
         for page in pages {
-            if part.total_rows != 0 && (part.total_rows + page.rows) * self.tuple_size > max_bytes
-            {
+            if part.total_rows != 0 && (part.total_rows + page.rows) * self.tuple_size > max_bytes {
                 parts.push(std::mem::replace(&mut part, empty(&self)));
             }
             part.total_rows += page.rows;
