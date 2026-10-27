@@ -75,6 +75,24 @@ SELECT count(*), sum(n), sum(total) FROM (SELECT regexp_replace(s, '[0-9]+', '')
 ----
 2 32769 536887296
 
+# Rank-limit sorting must preserve group counts, including equal computed values
+# with different dictionary codes and multiple sorting keys.
+query I
+SELECT count(*) FROM ((SELECT s, t, count(*) AS n FROM dictionary_group_hash GROUP BY s, t LIMIT 10) EXCEPT (SELECT s, t, count(*) AS n FROM dictionary_group_hash GROUP BY s, t));
+----
+0
+
+query I
+SELECT count(*) FROM ((SELECT regexp_replace(s, '[0-9]+', '') AS k, t, count(*) AS n FROM dictionary_group_hash GROUP BY k, t LIMIT 1) EXCEPT (SELECT regexp_replace(s, '[0-9]+', '') AS k, t, count(*) AS n FROM dictionary_group_hash GROUP BY k, t));
+----
+0
+
+# A FOR key must retain numeric order in descending rank-limit sorting.
+query II
+SELECT sum(v), sum(n) FROM (SELECT v, count(*) AS n FROM dictionary_group_hash GROUP BY v ORDER BY v DESC LIMIT 10);
+----
+327635 10
+
 statement ok
 DROP TABLE dictionary_group_hash;
 
