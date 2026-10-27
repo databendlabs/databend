@@ -40,15 +40,18 @@ use crate::values::Scalar;
 
 pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
 /// SQL TIMESTAMP and TIMESTAMP_TZ bounds, in UTC microseconds since 1970-01-01.
-/// Validate the final UTC instant after timezone resolution, not intermediate
-/// calendar fields. A valid instant may display in local year 0 or 10000.
-/// Converting that local date to SQL DATE must separately validate DATE_MIN/MAX.
-/// INTERVAL arithmetic reports out-of-range results; other paths retain their
-/// existing overflow policies. Display conversion clamps to these bounds.
-/// 0001-01-01 00:00:00.000000 UTC
-pub const TIMESTAMP_MIN: i64 = -62_135_596_800_000_000;
-/// 9999-12-31 23:59:59.999999 UTC
-pub const TIMESTAMP_MAX: i64 = 253_402_300_799_999_999;
+/// Include UTC year 0 and one day beyond year 9999 so timezone resolution can
+/// represent both endpoints of local years 0001..=9999 in every named timezone
+/// (including historical offsets) and with every supported explicit offset.
+/// Validate the final UTC instant, not intermediate calendar fields. Calendar
+/// inputs still require years 0001..=9999, and SQL DATE keeps DATE_MIN/MAX.
+/// SQL conversions and arithmetic report out-of-range results instead of
+/// replacing them with the minimum. Display conversion defensively clamps
+/// invalid internal values to these bounds.
+/// 0000-01-01 00:00:00.000000 UTC
+pub const TIMESTAMP_MIN: i64 = -62_167_219_200_000_000;
+/// 10000-01-01 23:59:59.999999 UTC
+pub const TIMESTAMP_MAX: i64 = 253_402_387_199_999_999;
 
 pub const MICROS_PER_SEC: i64 = 1_000_000;
 pub const MICROS_PER_MILLI: i64 = 1_000;
@@ -68,21 +71,13 @@ pub const PRECISION_MICRO: u8 = 6;
 pub const PRECISION_MILLI: u8 = 3;
 pub const PRECISION_SEC: u8 = 0;
 
-/// Preserve the legacy conversion policy: either bound overflow maps to TIMESTAMP_MIN.
-#[inline]
-pub fn clamp_timestamp(micros: &mut i64) {
-    if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(micros) {
-        *micros = TIMESTAMP_MIN;
-    }
-}
-
 /// Validate the final SQL instant, not its local calendar year.
 #[inline]
 pub fn check_timestamp(micros: i64) -> Result<i64, String> {
     if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
         Ok(micros)
     } else {
-        Err("Invalid date: timestamp is out of range [0001-01-01, 9999-12-31] UTC".to_string())
+        Err("Invalid date: timestamp is out of range [0000-01-01, 10000-01-01] UTC".to_string())
     }
 }
 

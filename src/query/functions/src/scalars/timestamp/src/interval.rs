@@ -34,7 +34,6 @@ use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
 use databend_common_expression::types::timestamp::check_timestamp;
-use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
@@ -858,11 +857,8 @@ pub(crate) fn civil_date_from_days(days: i128) -> (i128, u8, u8) {
     (year, month as u8, day as u8)
 }
 
-pub(crate) fn ensure_timestamp_range(mut timestamp: i64) -> std::result::Result<i64, String> {
-    // Preserve clamping for add_years/add_months and time_slice. INTERVAL
-    // operators use check_timestamp on their completed UTC result instead.
-    clamp_timestamp(&mut timestamp);
-    Ok(timestamp)
+pub(crate) fn ensure_timestamp_range(timestamp: i64) -> std::result::Result<i64, String> {
+    check_timestamp(timestamp)
 }
 
 fn ensure_timestamp_tz_range(timestamp: i64) -> std::result::Result<i64, String> {

@@ -20,7 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::Number;
-use databend_common_expression::types::timestamp::clamp_timestamp;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::int64_to_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::parse_date_with_auto;
@@ -59,11 +59,11 @@ pub(crate) fn read_timestamp(
         // failure is an immediate error (no fallthrough to ISO).
         if !settings.settings.enable_auto_detect_datetime_format {
             let n: i64 = read_num_text_exact(data)?;
-            column.push(int64_to_timestamp(n));
+            column.push(int64_to_timestamp(n).map_err(ErrorCode::BadArguments)?);
             return Ok(());
         }
         if let Ok(n) = read_num_text_exact::<i64>(data) {
-            column.push(int64_to_timestamp(n));
+            column.push(int64_to_timestamp(n).map_err(ErrorCode::BadArguments)?);
             return Ok(());
         }
     }
@@ -82,9 +82,7 @@ pub(crate) fn read_timestamp(
                 );
                 return Err(ErrorCode::BadBytes(msg));
             }
-            let mut ts = t;
-            clamp_timestamp(&mut ts);
-            column.push(ts);
+            column.push(check_timestamp(t).map_err(ErrorCode::BadArguments)?);
             Ok(())
         }
         Ok(_) => unreachable!(),
