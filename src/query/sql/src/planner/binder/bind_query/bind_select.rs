@@ -189,6 +189,7 @@ impl Binder {
         order_by: &[OrderByExpr],
     ) -> Result<SelectPreparation<'a>> {
         let (s_expr, mut from_context) = self.bind_select_source(bind_context, stmt)?;
+        from_context.definition_scope = self.definition_scope.clone();
 
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
@@ -434,6 +435,7 @@ impl Binder {
         order_by: &[OrderByExpr],
         limit: Option<usize>,
     ) -> Result<(SExpr, BindContext)> {
+        self.debug_assert_definition_scope(bind_context);
         // whether allow rewrite virtual column and pushdown
         bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
 
@@ -510,6 +512,7 @@ impl Binder {
 
         let mut output_context = BindContext::new();
         output_context.binding_depth = from_context.depth();
+        output_context.definition_scope = from_context.definition_scope;
         output_context.binding_views = from_context.binding_views;
         output_context.parent = from_context.parent;
         output_context
