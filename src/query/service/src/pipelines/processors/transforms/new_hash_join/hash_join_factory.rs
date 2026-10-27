@@ -20,7 +20,6 @@ use databend_common_expression::HashMethodKind;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
-use super::grace::GraceHashJoinState;
 use super::grace::GraceMemoryJoin;
 use super::hybrid::HybridHashJoin;
 use super::hybrid::HybridHashJoinState;
@@ -29,7 +28,6 @@ use super::memory::NestedLoopJoin;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
-use crate::pipelines::processors::transforms::GraceHashJoin;
 use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::memory::AntiLeftHashJoin;
@@ -76,158 +74,7 @@ impl HashJoinFactory {
         typ: JoinType,
         states: HybridLevelStates,
     ) -> Result<Box<dyn Join>> {
-        // let settings = self.ctx.get_settings();
-        //
-        // if settings.get_force_join_data_spill()? {
-        //     return self.create_grace_join(typ, id);
-        // }
-
         Ok(Box::new(self.create_hybrid_join(typ, states)?))
-    }
-
-    pub fn create_grace_join(
-        self: &Arc<Self>,
-        typ: JoinType,
-        basic_state: Arc<BasicHashJoinState>,
-        grace_state: Arc<GraceHashJoinState>,
-    ) -> Result<Box<dyn Join>> {
-        match typ {
-            JoinType::Inner => {
-                let inner_hash_join = InnerHashJoin::create(
-                    &self.ctx.get_settings(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    basic_state,
-                    0,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    grace_state,
-                    inner_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::Left => {
-                let left_hash_join = OuterLeftHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    basic_state,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    grace_state,
-                    left_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::LeftAnti => {
-                let left_anti_hash_join = AntiLeftHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    basic_state,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    grace_state,
-                    left_anti_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::LeftSemi => {
-                let left_semi_hash_join = SemiLeftHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    basic_state,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    grace_state,
-                    left_semi_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::Right => {
-                let right_hash_join = OuterRightHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    basic_state,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    grace_state,
-                    right_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::RightSemi => {
-                let semi_right_hash_join = SemiRightHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    basic_state,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    grace_state,
-                    semi_right_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::RightAnti => {
-                let anti_right_hash_join = AntiRightHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    basic_state,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    grace_state,
-                    anti_right_hash_join,
-                    0,
-                )?))
-            }
-            _ => unreachable!(),
-        }
     }
 
     /// Create a basic memory join (used internally by HybridHashJoin)
