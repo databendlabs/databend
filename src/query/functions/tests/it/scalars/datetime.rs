@@ -98,6 +98,31 @@ fn test_to_timestamp(file: &mut impl Write) {
         "b",
         StringType::from_data(vec!["2020-01-01", "2020-01-02", "2020-01-03", "2029-01-01"]),
     )]);
+
+    // Both numeric overloads must reject overflow, while TRY returns NULL for
+    // only the failing rows. Include valid interior values to exercise domains.
+    let inputs = [(
+        "n",
+        Int64Type::from_data(vec![
+            i64::MIN,
+            timestamp::TIMESTAMP_MIN - 1,
+            timestamp::TIMESTAMP_MIN,
+            0,
+            timestamp::TIMESTAMP_MAX,
+            timestamp::TIMESTAMP_MAX + 1,
+            i64::MAX,
+        ]),
+    )];
+    for expression in [
+        "to_timestamp(n)",
+        "to_timestamp(n, 6)",
+        "to_timestamp(n, 0)",
+        "try_to_timestamp(n)",
+        "try_to_timestamp(n, 6)",
+        "try_to_timestamp(n, 0)",
+    ] {
+        run_ast(file, expression, &inputs);
+    }
 }
 
 #[test]

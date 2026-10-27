@@ -65,7 +65,6 @@ use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::timestamp::check_timezone_offset;
-use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
@@ -166,28 +165,14 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     };
     let min = domain.min.as_();
     let max = domain.max.as_();
+    let min_value = int64_to_timestamp(min).ok()?;
+    let max_value = int64_to_timestamp(max).ok()?;
     if unit(min) != unit(max) || (min < 0 && max > 0 && unit(min) != 0) {
-        // Clamping both endpoints to the minimum must not hide valid interior values.
-        // Supply the full domain explicitly instead of invoking the monotonic fallback.
+        // Different unit segments can have interior extrema. Both endpoints
+        // are valid, so all interior values fit the SQL range as well.
         return Some(SimpleDomain {
             min: TIMESTAMP_MIN,
             max: TIMESTAMP_MAX,
-        });
-    }
-    let min_value = int64_to_timestamp(min);
-    let max_value = int64_to_timestamp(max);
-    if unit(min) == 2 && (min < TIMESTAMP_MIN || max > TIMESTAMP_MAX) {
-        return Some(if max < TIMESTAMP_MIN || min > TIMESTAMP_MAX {
-            SimpleDomain {
-                min: TIMESTAMP_MIN,
-                max: TIMESTAMP_MIN,
-            }
-        } else {
-            // Overflow maps to the minimum, not to the nearest endpoint.
-            SimpleDomain {
-                min: TIMESTAMP_MIN,
-                max: max.min(TIMESTAMP_MAX),
-            }
         });
     }
     Some(SimpleDomain {
@@ -974,13 +959,15 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<Int64Type, UInt64Type, TimestampType, _, _>(
         "to_timestamp",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         eval_scaled_timestamp,
     );
-    registry.register_passthrough_nullable_2_arg::<Int64Type, UInt64Type, TimestampType, _, _>(
+    registry.register_combine_nullable_2_arg::<Int64Type, UInt64Type, TimestampType, _, _>(
         "try_to_timestamp",
         |_, _, _| FunctionDomain::Full,
-        eval_scaled_timestamp,
+        |val, scale, ctx| {
+            error_to_null(|val, ctx| eval_scaled_timestamp(val, scale.clone(), ctx))(val, ctx)
+        },
     );
 
     fn eval_scaled_timestamp(
@@ -989,10 +976,18 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_2_arg::<Int64Type, UInt64Type, TimestampType>(
-            |val, scale, output, _| {
-                let mut n = val.saturating_mul(10i64.pow(6 - scale.min(6) as u32));
-                clamp_timestamp(&mut n);
-                output.push(n);
+            |val, scale, output, ctx| {
+                let result = val
+                    .checked_mul(10i64.pow(6 - scale.min(6) as u32))
+                    .ok_or_else(|| "Invalid date: timestamp conversion overflow".to_string())
+                    .and_then(check_timestamp);
+                match result {
+                    Ok(n) => output.push(n),
+                    Err(err) => {
+                        ctx.set_error(output.len(), err);
+                        output.push(0);
+                    }
+                }
             },
         )(val, scale, ctx)
     }
@@ -1001,8 +996,14 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
         val: Value<Int64Type>,
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
-        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, _| {
-            output.push(int64_to_timestamp(val));
+        vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, ctx| {
+            match int64_to_timestamp(val) {
+                Ok(n) => output.push(n),
+                Err(err) => {
+                    ctx.set_error(output.len(), err);
+                    output.push(0);
+                }
+            }
         })(val, ctx)
     }
 }
