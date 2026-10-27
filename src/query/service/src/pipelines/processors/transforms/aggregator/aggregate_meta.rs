@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockMetaInfo;
