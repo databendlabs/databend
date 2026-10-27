@@ -1,3 +1,24 @@
+=== decimal_division_error_keeps_checked_argument_types ===
+description: Failed parent folding must not shrink its checked Decimal arguments into integers and select another overload.
+sql: 1::DECIMAL(38,0) / 0::DECIMAL(38,0)
+status: ok
+scalar: divide(CAST(1 AS Decimal(38, 0)), CAST(0 AS Decimal(38, 0)))
+type: Decimal(38, 6)
+
+=== decimal_constant_argument_keeps_precision ===
+description: Folding a constant Decimal argument must not change the precision used to resolve a nonconstant division.
+sql: 1::DECIMAL(38,0) / number::DECIMAL(38,0)
+status: ok
+scalar: divide(CAST(1 AS Decimal(38, 0)), CAST(number (#0) AS Decimal(38, 0) NULL))
+type: Decimal(38, 6) NULL
+
+=== mixed_numeric_decimal_error_keeps_checked_argument_types ===
+description: The integer argument of a Decimal-valued call also contributes to its inferred precision.
+sql: 1::UInt64 / 0::DECIMAL(38,0)
+status: ok
+scalar: divide(CAST(1 AS UInt64), CAST(0 AS Decimal(38, 0)))
+type: Decimal(26, 6)
+
 === unknown_function_keeps_suggestion ===
 description: Unknown scalar functions should keep the suggestion-oriented error.
 sql: abss(number)
