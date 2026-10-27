@@ -194,7 +194,11 @@ impl Join for HybridHashJoin {
             HybridJoinMode::Memory(memory_join) => {
                 memory_join.add_block(data)?;
 
+                // Grace partitions rows by join keys. Without keys every row lands in the same
+                // partition, so spilling cannot shrink the working set and would only round-trip
+                // both sides (possibly blocks without any columns) through storage.
                 if self.state.can_next_layer_join()
+                    && !self.desc.build_keys.is_empty()
                     && (self.memory_settings.check_spill() || self.state.check_spilled())
                 {
                     self.switch_to_grace_mode(finished)?;
