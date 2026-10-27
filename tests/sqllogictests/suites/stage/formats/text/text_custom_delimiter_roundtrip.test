@@ -15,10 +15,14 @@ statement ok
 create or replace file format text_hash_roundtrip type = TEXT field_delimiter = '#'
 
 statement ok
-create or replace table text_delimiter_source (id int, a string, b string)
+create or replace table text_delimiter_source (id int, a string, b string, v variant, arr array(string))
 
+# Nested values go through the same TEXT escaping as strings. Derive them from
+# the string cases to cover delimiters, literal backslashes and JSON escapes.
 statement ok
-insert into text_delimiter_source values
+insert into text_delimiter_source
+select id, a, b, object_construct('a', a, 'b', b), [a, b]
+from (values
     (1, 'a|b,c;d#e', 'tail|,;#'),
     (2, '|,;#', 'tail|,;#'),
     (3, '\\|\\,\\;\\#', 'tail|,;#'),
@@ -27,30 +31,43 @@ insert into text_delimiter_source values
     (6, 'literal\\x7c', 'tail|,;#'),
     (7, '\\\\|', 'tail|,;#'),
     (8, 'quotes\'"`/', 'tail|,;#')
+) as input(id, a, b)
 
 statement ok
 create or replace table text_delimiter_copy like text_delimiter_source
+
+# An empty field delimiter is allowed for loading whole lines, but the unload
+# binder must reject it before the output encoders index the delimiter bytes.
+statement error It is not supported to unload TEXT file when FIELD_DELIMITER is ''
+copy into @text_delimiter_roundtrip/empty/ from text_delimiter_source
+file_format = (type = TEXT field_delimiter = '')
+
+statement error It is not supported to unload TEXT file when FIELD_DELIMITER is ''
+copy into @text_delimiter_roundtrip/empty/ from text_delimiter_source
+file_format = (type = TSV field_delimiter = '')
 
 statement ok
 copy into @text_delimiter_roundtrip/pipe/ from text_delimiter_source
 file_format = (format_name = 'tsv_pipe_roundtrip')
 
-# Stage SELECT uses the projected-column decoding path.
-query TT
-select hex($2), hex($3) from @text_delimiter_roundtrip/pipe/
+# Stage SELECT uses the projected-column decoding path, including the JSON
+# representations of VARIANT and ARRAY(STRING).
+query TTTT
+select hex($2), hex($3), $4, $5 from @text_delimiter_roundtrip/pipe/
 (file_format => 'tsv_pipe_roundtrip') where $1 = '1'
 ----
-617c622c633b642365 7461696c7c2c3b23
+617c622c633b642365 7461696c7c2c3b23 {"a":"a|b,c;d#e","b":"tail|,;#"} ["a|b,c;d#e","tail|,;#"]
 
 statement ok
 copy into text_delimiter_copy from @text_delimiter_roundtrip/pipe/
 file_format = (format_name = 'tsv_pipe_roundtrip')
 
-query III
-select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+query IIIII
+select count(), count_if(s.a = c.a), count_if(s.b = c.b),
+       count_if(s.v = c.v), count_if(s.arr = c.arr)
 from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
 ----
-8 8 8
+8 8 8 8 8
 
 # A second unload/load cycle must not accumulate backslashes.
 statement ok
@@ -64,11 +81,12 @@ statement ok
 copy into text_delimiter_copy from @text_delimiter_roundtrip/pipe_again/
 file_format = (format_name = 'tsv_pipe_roundtrip')
 
-query III
-select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+query IIIII
+select count(), count_if(s.a = c.a), count_if(s.b = c.b),
+       count_if(s.v = c.v), count_if(s.arr = c.arr)
 from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
 ----
-8 8 8
+8 8 8 8 8
 
 statement ok
 copy into @text_delimiter_roundtrip/comma/ from text_delimiter_source
@@ -81,11 +99,12 @@ statement ok
 copy into text_delimiter_copy from @text_delimiter_roundtrip/comma/
 file_format = (format_name = 'text_comma_roundtrip')
 
-query III
-select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+query IIIII
+select count(), count_if(s.a = c.a), count_if(s.b = c.b),
+       count_if(s.v = c.v), count_if(s.arr = c.arr)
 from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
 ----
-8 8 8
+8 8 8 8 8
 
 statement ok
 copy into @text_delimiter_roundtrip/semicolon/ from text_delimiter_source
@@ -98,11 +117,12 @@ statement ok
 copy into text_delimiter_copy from @text_delimiter_roundtrip/semicolon/
 file_format = (format_name = 'text_semicolon_roundtrip')
 
-query III
-select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+query IIIII
+select count(), count_if(s.a = c.a), count_if(s.b = c.b),
+       count_if(s.v = c.v), count_if(s.arr = c.arr)
 from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
 ----
-8 8 8
+8 8 8 8 8
 
 statement ok
 copy into @text_delimiter_roundtrip/hash/ from text_delimiter_source
@@ -115,11 +135,12 @@ statement ok
 copy into text_delimiter_copy from @text_delimiter_roundtrip/hash/
 file_format = (format_name = 'text_hash_roundtrip')
 
-query III
-select count(), count_if(s.a = c.a), count_if(s.b = c.b)
+query IIIII
+select count(), count_if(s.a = c.a), count_if(s.b = c.b),
+       count_if(s.v = c.v), count_if(s.arr = c.arr)
 from text_delimiter_source s join text_delimiter_copy c on s.id = c.id
 ----
-8 8 8
+8 8 8 8 8
 
 statement ok
 drop table text_delimiter_source
