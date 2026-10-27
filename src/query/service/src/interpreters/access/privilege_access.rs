@@ -64,6 +64,8 @@ use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use fastrace::Span;
+use fastrace::future::FutureExt;
 
 use crate::history_tables::session::get_history_log_user;
 use crate::interpreters::access::AccessChecker;
@@ -578,6 +580,90 @@ impl PrivilegeAccess {
         Ok(())
     }
 
+    /// Ordinary SELECT queries can satisfy either legacy name grants or ID grants without consulting
+    /// ownership. Resolve IDs once and only use ownership as a fallback after both grant checks.
+    #[fastrace::trace(name = "Access.SelectTable")]
+    async fn validate_table_select_access(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        // Keep special databases, temporary tables and external catalogs on their existing path.
+        // Table functions are bound in `system`; a regular table with the same name is not one.
+        if catalog_name != CATALOG_DEFAULT
+            || matches!(db_name, "system" | "information_schema")
+            || self.ctx.is_temp_table(catalog_name, db_name, table_name)
+        {
+            return self
+                .validate_table_access(
+                    catalog_name,
+                    db_name,
+                    table_name,
+                    UserPrivilegeType::Select,
+                    false,
+                    false,
+                )
+                .await;
+        }
+
+        let session = self.ctx.get_current_session();
+        let privilege = UserPrivilegeType::Select;
+        let name_object = GrantObject::Table(
+            catalog_name.to_string(),
+            db_name.to_string(),
+            table_name.to_string(),
+        );
+        if session
+            .has_privilege(&name_object, privilege, false)
+            .in_span(Span::enter_with_local_parent("Access.NameGrant"))
+            .await?
+        {
+            return Ok(());
+        }
+
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let (db_id, table_id) = self
+            .resolve_table_ids(&tenant, &catalog, db_name, table_name, false)
+            .in_span(Span::enter_with_local_parent("Access.ResolveIdentity"))
+            .await
+            .map_err(|err| err.add_message("error on validating table access"))?;
+        let id_object = GrantObject::TableById(catalog_name.to_string(), db_id, table_id);
+        if session
+            .has_privilege(&id_object, privilege, false)
+            .in_span(Span::enter_with_local_parent("Access.IdGrant"))
+            .await?
+        {
+            return Ok(());
+        }
+
+        if self
+            .has_ownership(&session, &id_object, false, false)
+            .await?
+        {
+            return Ok(());
+        }
+
+        let current_user = self.ctx.get_current_user()?;
+        let roles_name = session
+            .get_all_effective_roles()
+            .await?
+            .iter()
+            .map(|role| role.name.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        Err(ErrorCode::PermissionDenied(format!(
+            "Permission denied: privilege [{:?}] is required on '{}'.'{}'.'{}' for user {} with roles [{}]",
+            privilege,
+            catalog_name,
+            db_name,
+            table_name,
+            current_user.identity().display(),
+            roles_name,
+        )))
+    }
+
     async fn validate_mv_source_access(&self, mv_table: &dyn Table) -> Result<()> {
         if !is_materialized_view_engine(mv_table.engine()) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
@@ -1087,9 +1173,11 @@ impl PrivilegeAccess {
                 // If Table ownership check fails, check for Database ownership
                 if session
                     .has_ownership(object, check_current_role_only)
+                    .in_span(Span::enter_with_local_parent("Access.TableOwnership"))
                     .await?
                     || session
                         .has_ownership(&database_owner, check_current_role_only)
+                        .in_span(Span::enter_with_local_parent("Access.DatabaseOwnership"))
                         .await?
                 {
                     return Ok(true);
@@ -1529,37 +1617,62 @@ impl PrivilegeAccess {
         table_name: Option<&str>,
         disable_table_info_refresh: bool,
     ) -> Result<ObjectId> {
-        let cat = catalog.clone();
-        let db_id = cat
+        if let Some(table_name) = table_name {
+            let (db_id, table_id) = self
+                .resolve_table_ids(
+                    tenant,
+                    catalog,
+                    database_name,
+                    table_name,
+                    disable_table_info_refresh,
+                )
+                .await?;
+            return Ok(ObjectId::Table(db_id, table_id));
+        }
+        let db_id = catalog
             .get_database(tenant, database_name)
             .await?
             .get_db_info()
             .database_id
             .db_id;
-        if let Some(table_name) = table_name {
-            let table_id = if !disable_table_info_refresh {
-                self.ctx
-                    .get_table(cat.name().as_str(), database_name, table_name)
-                    .await?
-                    .get_id()
-            } else {
-                match self
-                    .ctx
-                    .get_table(cat.name().as_str(), database_name, table_name)
-                    .await
-                {
-                    Ok(table) => table.get_id(),
-                    // attach table issue_16121 xx, then vacuum drop table from issue_16121 , then drop table
-                    // should disable catalog
-                    Err(_) => cat
-                        .get_table(tenant, database_name, table_name)
-                        .await?
-                        .get_id(),
-                }
-            };
-            return Ok(ObjectId::Table(db_id, table_id));
-        }
         Ok(ObjectId::Database(db_id))
+    }
+
+    async fn resolve_table_ids(
+        &self,
+        tenant: &Tenant,
+        catalog: &Arc<dyn Catalog>,
+        database_name: &str,
+        table_name: &str,
+        disable_table_info_refresh: bool,
+    ) -> Result<(u64, u64)> {
+        let db_id = catalog
+            .get_database(tenant, database_name)
+            .await?
+            .get_db_info()
+            .database_id
+            .db_id;
+        let table_id = if !disable_table_info_refresh {
+            self.ctx
+                .get_table(catalog.name().as_str(), database_name, table_name)
+                .await?
+                .get_id()
+        } else {
+            match self
+                .ctx
+                .get_table(catalog.name().as_str(), database_name, table_name)
+                .await
+            {
+                Ok(table) => table.get_id(),
+                // attach table issue_16121 xx, then vacuum drop table from issue_16121 , then drop table
+                // should disable catalog
+                Err(_) => catalog
+                    .get_table(tenant, database_name, table_name)
+                    .await?
+                    .get_id(),
+            }
+        };
+        Ok((db_id, table_id))
     }
 
     async fn validate_insert_source(
@@ -1761,7 +1874,7 @@ impl AccessChecker for PrivilegeAccess {
                         if is_materialized_view_engine(catalog_table.engine()) {
                             self.validate_mv_source_access(catalog_table.as_ref()).await?;
                         } else {
-                            self.validate_table_access(catalog_name, table.database(), table.name(), UserPrivilegeType::Select, false, false).await?
+                            self.validate_table_select_access(catalog_name, table.database(), table.name()).await?
                         }
                     }
                 }
@@ -2098,7 +2211,7 @@ impl AccessChecker for PrivilegeAccess {
                 .await?;
 
                 match &plan.action {
-                    ModifyColumnAction::SetMaskingPolicy(policy_name, _) => {
+                    ModifyColumnAction::SetMaskingPolicy(policy_name, _, _) => {
                         let policy_id = self
                             .resolve_masking_policy_id_by_name(policy_name)
                             .await?;

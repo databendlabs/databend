@@ -290,6 +290,34 @@ fn run_parser_with_dialect<P, O>(
 
 // UPDATE_GOLDENFILES=1 cargo test --package databend-common-ast --test it -- parser::test_statement
 #[test]
+fn test_masking_where_unmasked_value_option() {
+    for sql in [
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_unmasked_value = true)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (WHERE_USE_UNMASKED_VALUE = false)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask USING (v, role) OPTIONS (where_use_unmasked_value = true)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let formatted = stmt.to_string();
+        assert!(formatted.contains("OPTIONS (where_use_unmasked_value = "));
+        let tokens = tokenize_sql(&formatted).unwrap();
+        let (roundtrip, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(stmt, roundtrip, "{sql}");
+    }
+    for sql in [
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (unknown = true)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_unmasked_value = 'true')",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_unmasked_value = 1)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_unmasked_value = true, where_use_unmasked_value = false)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_original = true)",
+        "ALTER TABLE t MODIFY COLUMN v['a'] SET MASKING POLICY mask",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
+
+#[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("stmt.txt").unwrap();

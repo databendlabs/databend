@@ -308,7 +308,7 @@ async fn variant_cast_pushdown_and_non_column_fallback() -> Result<()> {
     Ok(())
 }
 
-fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindContext> {
+pub(super) fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindContext> {
     let table = NullTable::try_create(TableInfo {
         desc: "'default'.'t2'".into(),
         name: "t2".into(),

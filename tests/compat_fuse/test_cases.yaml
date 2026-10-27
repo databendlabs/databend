@@ -29,3 +29,11 @@
 - { writer: current, reader: "1.2.318", meta: [1.2.770], suite: rbac_v1_2_311 }
 - { writer: current, reader: "1.2.680", meta: [1.2.770], suite: udf }
 - { writer: current, reader: "1.2.833", meta: [1.2.833], suite: rbac_current }
+
+# --- Forward compat: masking WHERE authorization (TableMeta field 43) ---
+# Shared-data group: the current query enables the option, an older query keeps
+# masked WHERE semantics and stays able to read and rewrite the table, and the
+# current query observes that the older rewrite dropped the authorization.
+# Requires an enterprise license; reader must support masking policy bindings.
+- - { writer: current, reader: "1.2.954", meta: [1.2.833], suite: masking_where_forward }
+  - { writer: "1.2.954", reader: current, meta: [1.2.833], suite: masking_where_rewrite }

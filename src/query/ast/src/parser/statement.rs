@@ -5240,16 +5240,28 @@ pub fn modify_column_comment(i: Input) -> IResult<ColumnComment> {
 
 pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
     // Parse: <column> SET MASKING POLICY <policy_name> [USING (masked_col_name, cond_col_1, ...)]
-    let set_mask_policy = map(
+    let set_mask_policy = map_res(
         rule! {
             #ident ~ SET ~ MASKING ~ POLICY ~ #ident ~ (USING ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
+                ~ (OPTIONS ~ "(" ~ #ident ~ "=" ~ #literal_bool ~ ")")?
         },
-        |(column, _, _, _, mask_name, opt_using)| {
-            ModifyColumnAction::SetMaskingPolicy(
+        |(column, _, _, _, mask_name, opt_using, options)| {
+            let where_use_unmasked_value = if let Some((_, _, name, _, value, _)) = options {
+                if !name.name.eq_ignore_ascii_case("where_use_unmasked_value") {
+                    return Err(nom::Err::Error(ErrorKind::Other(
+                        "Unknown masking policy option".to_string(),
+                    )));
+                }
+                Some(value)
+            } else {
+                None
+            };
+            Ok(ModifyColumnAction::SetMaskingPolicy(
                 column,
                 mask_name.to_string(),
                 opt_using.map(|(_, _, using_columns, _)| using_columns),
-            )
+                where_use_unmasked_value,
+            ))
         },
     );
 
