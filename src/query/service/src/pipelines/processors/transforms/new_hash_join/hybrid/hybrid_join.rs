@@ -151,11 +151,14 @@ impl HybridHashJoin {
     }
 
     fn create_grace_join(&mut self) -> Result<GraceHashJoin<HybridHashJoin>> {
-        // 1. Get shared grace_state (all processors share the same state)
-        let grace_state = self.state.create_grace_state()?;
+        // 1. Get shared next-level states (all processors share the same states)
+        let next_level = self.state.next_level_states()?;
 
         // 2. Create new HybridHashJoin as the memory_hash_join for GraceHashJoin
-        let sub_hybrid = self.state.create_hybrid_join(self.join_type)?;
+        let sub_hybrid = self
+            .state
+            .factory
+            .create_hybrid_join(self.join_type, next_level.level)?;
 
         // 3. Create GraceHashJoin (each processor creates its own instance, but shares grace_state)
         GraceHashJoin::create(
@@ -163,7 +166,7 @@ impl HybridHashJoin {
             self.function_ctx.clone(),
             self.hash_method_kind.clone(),
             self.desc.clone(),
-            grace_state,
+            next_level.grace,
             sub_hybrid,
             self.state.level * 4,
         )
@@ -275,6 +278,10 @@ impl GraceMemoryJoin for HybridHashJoin {
             while self.state.transition_queue.pop().is_ok() {}
         }
 
+        // Release the shared handle so the next restore partition creates fresh next-level
+        // states; the old ones are freed once the last processor leaves grace mode below.
+        self.state.reset_next_level_states();
+
         // 2. Reset based on current mode
         match &mut self.mode {
             HybridJoinMode::Memory(join) => {
@@ -282,33 +289,26 @@ impl GraceMemoryJoin for HybridHashJoin {
                 join.reset_memory();
             }
             HybridJoinMode::Grace(_) => {
-                // Grace mode: need to reset back to Memory mode
-                // Get a fresh basic_state and memory_join from factory
-                let new_basic_state = self
-                    .state
-                    .factory
-                    .create_basic_state(self.state.level)
-                    .expect("Failed to create basic state");
+                // Grace mode: need to reset back to Memory mode on the same basic_state
 
                 // Ensure basic_state is clean
                 {
-                    let locked = new_basic_state.mutex.lock();
+                    let locked = self.basic_state.mutex.lock();
                     let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-                    new_basic_state.chunks.as_mut().clear();
-                    *new_basic_state.build_rows.as_mut() = 0;
-                    new_basic_state.build_queue.as_mut().clear();
-                    new_basic_state.scan_map.as_mut().clear();
-                    new_basic_state.scan_queue.as_mut().clear();
+                    self.basic_state.chunks.as_mut().clear();
+                    *self.basic_state.build_rows.as_mut() = 0;
+                    self.basic_state.build_queue.as_mut().clear();
+                    self.basic_state.scan_map.as_mut().clear();
+                    self.basic_state.scan_queue.as_mut().clear();
                 }
 
                 // Create new memory join
                 let new_memory_join = self
                     .state
                     .factory
-                    .create_memory_join(self.join_type, self.state.level)
+                    .create_memory_join(self.join_type, self.basic_state.clone())
                     .expect("Failed to create memory join");
 
-                self.basic_state = new_basic_state;
                 self.mode = HybridJoinMode::Memory(new_memory_join);
             }
         }
