@@ -28,12 +28,15 @@ use databend_common_expression::conversion::common_super_type_with_conversion;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
+use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::AggregateMode;
+use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
@@ -44,6 +47,7 @@ use databend_common_sql::plans::ScalarExpr;
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
 use super::types::RuntimeFilterProbeKey;
+use super::types::RuntimeFilterProbeKeys;
 use super::types::canonical_equivalence_connector;
 use super::types::resolve_runtime_filter_probe_expr;
 use crate::sessions::TableContext;
@@ -218,28 +222,250 @@ fn direct_scan_table_index(
     }
 }
 
-/// Build runtime filters for a join operation
-///
-/// Creates one runtime filter per eligible probe key and propagates it to
-/// equality-safe connector columns and their attached expression leaves.
-///
-/// # Arguments
-/// * `ctx` - Table context
-/// * `metadata` - Metadata reference
-/// * `join` - Join plan
-/// * `s_expr` - PExpr for the join
-/// * `build_keys` - Build side keys
-/// * `probe_keys` - Probe keys with their scan, source column, connector, and null-equality metadata
-///
-/// # Returns
-/// Collection of runtime filters to be applied
+// Count all occurrences, including those below barriers. A branch-local proof
+// cannot authorize filtering a scan shared with another consumer. CTE sharing
+// is intentionally outside this narrow derived-key extension.
+fn derived_probe_scan_counts(expr: &PExpr) -> Option<HashMap<usize, usize>> {
+    fn visit(expr: &PExpr, counts: &mut HashMap<usize, usize>) -> Option<()> {
+        match expr.plan() {
+            PhysicalRelOperator::MaterializedCTE(_)
+            | PhysicalRelOperator::MaterializedCTERef(_)
+            | PhysicalRelOperator::RecursiveCteScan(_) => return None,
+            PhysicalRelOperator::UnionAll(union)
+                if !union.cte_scan_names.is_empty() || union.logical_recursive_cte_id.is_some() =>
+            {
+                return None;
+            }
+            PhysicalRelOperator::Scan(scan) => *counts.entry(scan.scan_id).or_default() += 1,
+            _ => {}
+        }
+        for child in expr.children() {
+            visit(child, counts)?;
+        }
+        Some(())
+    }
+    let mut counts = HashMap::new();
+    visit(expr, &mut counts)?;
+    Some(counts)
+}
+
+fn nullability_only(source: &DataType, target: &DataType) -> bool {
+    source == target
+        || (!source.is_nullable() && target.is_nullable() && target.remove_nullable() == *source)
+}
+
+fn identity_probe_source(scalar: &ScalarExpr) -> Option<Symbol> {
+    match scalar {
+        ScalarExpr::BoundColumnRef(reference) => Some(reference.column.index),
+        ScalarExpr::CastExpr(cast)
+            if !cast.is_try
+                && nullability_only(cast.argument.data_type().as_ref(), &cast.target_type) =>
+        {
+            identity_probe_source(&cast.argument)
+        }
+        _ => None,
+    }
+}
+
+fn unchanged_probe_eval_key(plan: &PhysicalRelOperator, column: Symbol) -> bool {
+    match plan {
+        PhysicalRelOperator::EvalScalar(eval) => eval.items.iter().all(|item| {
+            item.index != column
+                || matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
+                if reference.column.index == column)
+        }),
+        _ => true,
+    }
+}
+
+fn unchanged_probe_group_key(plan: &PhysicalRelOperator, column: Symbol) -> bool {
+    match plan {
+        PhysicalRelOperator::Aggregate(aggregate) => {
+            aggregate.aggregate.group_items.iter().any(|item| {
+                item.index == column
+                    && matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
+                if reference.column.index == column)
+            })
+        }
+        _ => true,
+    }
+}
+
+/// Resolve a root UNION ALL (or its value-preserving wrappers) before the
+/// metadata-only resolver discards its derived output. Origins are alternatives,
+/// never edges in the join equality graph. Ordinary base keys retain their
+/// existing connector/leaf and conversion rules.
+pub(in crate::physical_plans) fn resolve_runtime_filter_probe_origins(
+    metadata: &MetadataRef,
+    probe_side: &PExpr,
+    scalar: &ScalarExpr,
+) -> Result<Option<RuntimeFilterProbeKeys<Expr<String>>>> {
+    fn key(
+        probe: super::types::ResolvedRuntimeFilterProbeExpr,
+    ) -> RuntimeFilterProbeKey<Expr<String>> {
+        let is_connector =
+            canonical_equivalence_connector(probe.probe_key.as_remote_expr()).is_ok();
+        RuntimeFilterProbeKey {
+            probe_key: probe.probe_key,
+            scan_id: probe.scan_id,
+            column_idx: probe.column_idx,
+            is_connector,
+            is_null_equal: false,
+        }
+    }
+    if let Some(probe) = resolve_runtime_filter_probe_expr(metadata, scalar)? {
+        return Ok(Some(RuntimeFilterProbeKeys {
+            keys: vec![key(probe)],
+            derived: false,
+        }));
+    }
+    let Some(counts) = derived_probe_scan_counts(probe_side) else {
+        return Ok(None);
+    };
+
+    fn rewrite(
+        metadata: &MetadataRef,
+        root: &ScalarExpr,
+        column: Symbol,
+        value: &ScalarExpr,
+    ) -> Result<Option<ScalarExpr>> {
+        if identity_probe_source(value).is_none() {
+            return Ok(None);
+        }
+        let target_type = metadata.read().column(column).data_type();
+        if !nullability_only(value.data_type().as_ref(), &target_type) {
+            return Ok(None);
+        }
+        let value = if value.data_type().as_ref() == &target_type {
+            value.clone()
+        } else {
+            value.clone().unify_to_data_type(&target_type)
+        };
+        let mut rewritten = root.clone();
+        rewritten.replace_column_with_scalar(column, &value)?;
+        Ok(Some(rewritten))
+    }
+    fn visit(
+        metadata: &MetadataRef,
+        expr: &PExpr,
+        scalar: &ScalarExpr,
+        counts: &HashMap<usize, usize>,
+        origins: &mut Vec<RuntimeFilterProbeKey<Expr<String>>>,
+    ) -> Result<()> {
+        let columns = scalar.used_columns();
+        if columns.len() != 1 {
+            return Ok(());
+        }
+        let column = *columns.iter().next().unwrap();
+        match expr.plan() {
+            PhysicalRelOperator::Scan(scan) => {
+                if counts.get(&scan.scan_id) == Some(&1)
+                    && probe_path_is_safe(expr, scan.scan_id, column)
+                {
+                    if let Some(probe) = resolve_runtime_filter_probe_expr(metadata, scalar)? {
+                        if probe.scan_id == scan.scan_id {
+                            origins.push(key(probe));
+                        }
+                    }
+                }
+            }
+            PhysicalRelOperator::UnionAll(union) => {
+                let Some(position) = union
+                    .output_indexes
+                    .iter()
+                    .position(|output| *output == column)
+                else {
+                    return Ok(());
+                };
+                for (child_index, outputs) in [&union.left_outputs, &union.right_outputs]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let Some((source, coercion)) = outputs.get(position) else {
+                        continue;
+                    };
+                    let value = match coercion {
+                        Some(value) if identity_probe_source(value) == Some(*source) => {
+                            value.clone()
+                        }
+                        Some(_) => continue,
+                        None => {
+                            let metadata = metadata.read();
+                            let entry = metadata.column(*source);
+                            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                span: None,
+                                column: ColumnBindingBuilder::new(
+                                    entry.name(),
+                                    *source,
+                                    Box::new(entry.data_type()),
+                                    Visibility::Visible,
+                                )
+                                .build(),
+                            })
+                        }
+                    };
+                    if let Some(rewritten) = rewrite(metadata, scalar, column, &value)? {
+                        visit(
+                            metadata,
+                            expr.child(child_index)?,
+                            &rewritten,
+                            counts,
+                            origins,
+                        )?;
+                    }
+                }
+            }
+            // No new traversal across joins: in particular, never invoke the
+            // global equality collector on an isolated union branch.
+            PhysicalRelOperator::Join(_) => {}
+            plan => {
+                if !unchanged_probe_group_key(plan, column) {
+                    return Ok(());
+                }
+                let mut rewritten = scalar.clone();
+                if let PhysicalRelOperator::EvalScalar(eval) = plan {
+                    if let Some(item) = eval.items.iter().find(|item| item.index == column) {
+                        let Some(value) = rewrite(metadata, scalar, column, &item.scalar)? else {
+                            return Ok(());
+                        };
+                        rewritten = value;
+                    }
+                }
+                // The source must really be available from the child, not
+                // another computed item in this same EvalScalar scope.
+                if !rewritten
+                    .used_columns()
+                    .iter()
+                    .all(|source| unchanged_probe_eval_key(plan, *source))
+                {
+                    return Ok(());
+                }
+                for (child_index, child) in expr.children().enumerate() {
+                    if probe_child_is_safe(plan, child_index) {
+                        visit(metadata, child, &rewritten, counts, origins)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    let mut keys = Vec::new();
+    visit(metadata, probe_side, scalar, &counts, &mut keys)?;
+    Ok((!keys.is_empty()).then_some(RuntimeFilterProbeKeys {
+        keys,
+        derived: true,
+    }))
+}
+
+/// Build one filter per join key. Direct keys retain equality propagation;
+/// derived union origins share that filter without connecting equality classes.
 pub async fn build_runtime_filter(
     ctx: Arc<dyn TableContext>,
     metadata: &MetadataRef,
     join: &Join,
     s_expr: &PExpr,
     build_keys: &[RemoteExpr],
-    probe_keys: Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
+    probe_keys: Vec<Option<RuntimeFilterProbeKeys<RemoteExpr<String>>>>,
     build_table_indexes: Vec<Option<IndexType>>,
 ) -> Result<PhysicalRuntimeFilters> {
     if !ctx.get_settings().get_enable_join_runtime_filter()? {
@@ -278,26 +504,38 @@ pub async fn build_runtime_filter(
             probe.map(|probe| (build_key, probe, table_index))
         })
     {
-        let RuntimeFilterProbeKey {
-            probe_key,
-            scan_id,
-            column_idx,
-            is_connector,
-            is_null_equal,
-        } = probe;
-        if !supported_probe_key_for_runtime_filter(&probe_key, &func_ctx) {
+        let derived = probe.derived;
+        let mut keys = probe.keys.into_iter();
+        let Some(root) = keys.next() else {
             continue;
-        }
-
-        let probe_targets = find_probe_targets(
-            metadata,
-            probe_side,
-            probe_key.clone(),
-            scan_id,
-            column_idx,
-            is_connector,
-            &func_ctx,
-        )?;
+        };
+        let is_null_equal = root.is_null_equal;
+        let probe_table_source =
+            (!derived).then(|| (root.probe_key.clone(), root.scan_id, root.column_idx));
+        let probe_targets = if derived {
+            // Revalidate every rewritten expression after common-key casting
+            // and folding. A rejected branch must not disable a safe sibling.
+            let mut targets = Vec::new();
+            for key in std::iter::once(root).chain(keys) {
+                if supported_probe_key_for_runtime_filter(&key.probe_key, &func_ctx) {
+                    push_unique_target(&mut targets, key.probe_key, key.scan_id);
+                }
+            }
+            targets
+        } else {
+            if !supported_probe_key_for_runtime_filter(&root.probe_key, &func_ctx) {
+                continue;
+            }
+            find_probe_targets(
+                metadata,
+                probe_side,
+                root.probe_key,
+                root.scan_id,
+                root.column_idx,
+                root.is_connector,
+                &func_ctx,
+            )?
+        };
 
         // A valid probe expression may have no safe scan target (e.g. a window
         // output). Skip filter creation and ID allocation when no targets remain.
@@ -307,14 +545,9 @@ pub async fn build_runtime_filter(
 
         let build_table_rows =
             get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
-        let probe_table_index = resolve_probe_table_index(
-            metadata,
-            probe_side,
-            &probe_targets,
-            &probe_key,
-            scan_id,
-            column_idx,
-        );
+        let probe_table_index = probe_table_source.and_then(|(key, scan_id, column)| {
+            resolve_probe_table_index(metadata, probe_side, &probe_targets, &key, scan_id, column)
+        });
         let probe_table_rows =
             get_build_table_rows(ctx.clone(), metadata, probe_table_index).await?;
 
@@ -594,22 +827,10 @@ fn probe_path_is_safe(s_expr: &PExpr, scan_id: usize, column: Symbol) -> bool {
     fn visit(s_expr: &PExpr, scan_id: usize, column: Symbol, safe: bool) -> Option<bool> {
         let plan = s_expr.plan();
         let mut safe = safe;
-        if let PhysicalRelOperator::Aggregate(aggregate) = plan {
-            safe &= aggregate.aggregate.group_items.iter().any(|item| {
-                item.index == column
-                    && matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
-                        if reference.column.index == column)
-            });
-        }
-        if let PhysicalRelOperator::EvalScalar(eval) = plan {
-            // EvalScalar normally introduces fresh symbols. Do not assume a
-            // redefinition preserves the base column used by the filter.
-            safe &= eval.items.iter().all(|item| {
-                item.index != column
-                    || matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
-                        if reference.column.index == column)
-            });
-        }
+        safe &= unchanged_probe_group_key(plan, column);
+        // EvalScalar normally introduces fresh symbols. Do not assume a
+        // redefinition preserves the base column used by the filter.
+        safe &= unchanged_probe_eval_key(plan, column);
         if let PhysicalRelOperator::Scan(scan) = plan {
             return (scan.scan_id == scan_id).then_some(
                 safe && scan.columns.contains(&column)

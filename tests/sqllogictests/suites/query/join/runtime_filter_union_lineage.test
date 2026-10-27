@@ -1,0 +1,143 @@
+# Independent synthetic execution control. Plan-field tests separately prove
+# target restoration; these queries verify duplicates, NULL and branch-local
+# row-sensitive/derived values are not changed. Fix join direction only.
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+create or replace table rf_union_result_a (a Int64 not null) engine=FUSE;
+
+statement ok
+create or replace table rf_union_result_b (b Int64 null) engine=FUSE;
+
+statement ok
+create or replace table rf_union_result_keep (k Int64 null) engine=FUSE;
+
+# Separate blocks make an incorrectly placed filter observable in the LIMIT
+# and window cases, rather than relying on filtering within one block.
+statement ok
+insert into rf_union_result_a values (0);
+
+statement ok
+insert into rf_union_result_a values (1);
+
+statement ok
+insert into rf_union_result_b values (1), (NULL);
+
+statement ok
+insert into rf_union_result_keep values (1);
+
+# A separate single-block input is required for running_difference. The
+# selective keep table spans key 0 as well as 1, so ordinary range reasoning
+# does not discard the first input row before this control is evaluated.
+statement ok
+create or replace table rf_union_stateful_input(k Int64 not null,v Int64 not null);
+
+statement ok
+create or replace table rf_union_stateful_keep(k Int64,flag Int64);
+
+statement ok
+insert into rf_union_stateful_input values (0,10),(1,20);
+
+statement ok
+insert into rf_union_stateful_keep values (1,1),(0,0);
+
+statement ok
+insert into rf_union_stateful_keep select number+2,0 from numbers(20);
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+query I rowsort
+select u.k from (select a as k from rf_union_result_a union all select b as k from rf_union_result_b) u left semi join rf_union_result_keep d on u.k=d.k;
+----
+1
+1
+
+query I rowsort
+select u.k from ((select a as k from rf_union_result_a order by a limit 1) union all select b as k from rf_union_result_b) u left semi join rf_union_result_keep d on u.k=d.k;
+----
+1
+
+query II rowsort
+select u.k,u.n from (select a as k,count(*) over () as n from rf_union_result_a union all select b as k,0 as n from rf_union_result_b) u left semi join rf_union_result_keep d on u.k=d.k;
+----
+1 0
+1 2
+
+query I rowsort
+select u.k from (select a+1 as k from rf_union_result_a union all select b as k from rf_union_result_b) u left semi join rf_union_result_keep d on u.k=d.k;
+----
+1
+1
+
+query I rowsort
+select u.k from (select a as k from rf_union_result_a union all select b as k from rf_union_result_b) u left semi join rf_union_result_keep d on u.k+1=d.k;
+----
+0
+
+# A stateful branch keeps its full ordered single-block input; the ordinary
+# branch remains eligible. Retain both matching rows, including difference 10.
+query II rowsort
+select u.k,u.d from (select k,running_difference(v) as d from (select k,v from rf_union_stateful_input order by k) x union all select b as k,0 as d from rf_union_result_b) u join rf_union_stateful_keep t on u.k=t.k where t.flag=1;
+----
+1 0
+1 10
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+query I rowsort
+select u.k from (select a as k from rf_union_result_a union all select b as k from rf_union_result_b) u left semi join rf_union_result_keep d on u.k=d.k;
+----
+1
+1
+
+query I rowsort
+select u.k from ((select a as k from rf_union_result_a order by a limit 1) union all select b as k from rf_union_result_b) u left semi join rf_union_result_keep d on u.k=d.k;
+----
+1
+
+query II rowsort
+select u.k,u.n from (select a as k,count(*) over () as n from rf_union_result_a union all select b as k,0 as n from rf_union_result_b) u left semi join rf_union_result_keep d on u.k=d.k;
+----
+1 0
+1 2
+
+query I rowsort
+select u.k from (select a+1 as k from rf_union_result_a union all select b as k from rf_union_result_b) u left semi join rf_union_result_keep d on u.k=d.k;
+----
+1
+1
+
+query I rowsort
+select u.k from (select a as k from rf_union_result_a union all select b as k from rf_union_result_b) u left semi join rf_union_result_keep d on u.k+1=d.k;
+----
+0
+
+query II rowsort
+select u.k,u.d from (select k,running_difference(v) as d from (select k,v from rf_union_stateful_input order by k) x union all select b as k,0 as d from rf_union_result_b) u join rf_union_stateful_keep t on u.k=t.k where t.flag=1;
+----
+1 0
+1 10
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop table rf_union_result_a;
+
+statement ok
+drop table rf_union_result_b;
+
+statement ok
+drop table rf_union_result_keep;
+
+statement ok
+drop table rf_union_stateful_input;
+
+statement ok
+drop table rf_union_stateful_keep;
