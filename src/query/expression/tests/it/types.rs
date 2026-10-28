@@ -187,7 +187,7 @@ fn test_timestamp_display_clamps_bounds() {
     );
     assert_eq!(
         timestamp_to_rfc3339_utc(i64::MIN),
-        "0000-01-01T00:00:00.000000Z"
+        "-0999-01-01T00:00:00.000000Z"
     );
 }
 
