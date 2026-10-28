@@ -20,6 +20,7 @@ use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
+use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
@@ -154,7 +155,9 @@ struct AdaptiveState {
     /// Bytes per group of the table, updated once the table holds enough groups that page
     /// preallocation does not dominate.
     bytes_per_group: usize,
-    group_hashes: Vec<u64>,
+    /// Buffers the raw rows of each bucket in bypass, so they leave in blocks of the hash
+    /// shuffle thresholds rather than as a slice of every input block per bucket.
+    raw_stream: BlockPartitionStream,
     output_rows: usize,
 }
 
@@ -191,7 +194,8 @@ impl TransformPartialAggregate {
             None => PartialStrategy::Legacy,
             Some(mode) => {
                 debug_assert!(config.partial_adaptive);
-                let concurrency = ctx.get_settings().get_max_threads()?.max(1) as usize;
+                let settings = ctx.get_settings();
+                let concurrency = settings.get_max_threads()?.max(1) as usize;
                 let partition_count = 1_usize << config.initial_radix_bits;
                 PartialStrategy::Adaptive(Box::new(AdaptiveState {
                     controller: PartialAggregateController::new(mode),
@@ -204,7 +208,11 @@ impl TransformPartialAggregate {
                     flush_bytes: params.max_block_bytes,
                     concurrency,
                     bytes_per_group: 64,
-                    group_hashes: vec![],
+                    raw_stream: BlockPartitionStream::create(
+                        settings.get_hash_shuffle_rows_threshold()?,
+                        settings.get_hash_shuffle_bytes_threshold()?,
+                        partition_count,
+                    ),
                     output_rows: 0,
                 }))
             }
@@ -296,11 +304,16 @@ impl TransformPartialAggregate {
 
         if adaptive.controller.state() == PartialState::Bypass {
             adaptive.output_rows += rows_num;
+            let mut buckets = vec![0; rows_num];
             if adaptive.partition_count > 1 {
-                adaptive.group_hashes.resize(rows_num, 0);
-                group_hash_entries(group_columns, &mut adaptive.group_hashes);
+                group_hash_entries(group_columns, &mut buckets);
+                let mask = adaptive.partition_mask;
+                for bucket in buckets.iter_mut() {
+                    *bucket = mask.index(*bucket) as u64;
+                }
             }
-            return Ok(vec![Self::raw_block(block, adaptive)?]);
+            let ready = adaptive.raw_stream.partition(buckets, block, true);
+            return Ok(Self::raw_block(ready).into_iter().collect());
         }
 
         let params_columns =
@@ -350,33 +363,22 @@ impl TransformPartialAggregate {
         Ok(blocks)
     }
 
-    /// The rows of `block`, split into the buckets of the table by their group hashes.
-    fn raw_block(block: DataBlock, adaptive: &AdaptiveState) -> Result<DataBlock> {
-        let payload = RawPayload {
-            bucket: 0,
-            data_block: block,
-        };
-
-        let payloads = if adaptive.partition_count == 1 {
-            vec![payload]
-        } else {
-            let mask = adaptive.partition_mask;
-            payload
-                .scatter(&adaptive.group_hashes, adaptive.partition_count, |hash| {
-                    mask.index(hash)
-                })?
-                .into_iter()
-                .enumerate()
-                .filter(|(_, payload)| payload.data_block.num_rows() != 0)
-                .map(|(bucket, payload)| RawPayload {
-                    bucket: bucket as isize,
-                    data_block: payload.data_block,
-                })
-                .collect()
-        };
-        Ok(DataBlock::empty_with_meta(
-            AggregateMeta::create_partitioned(None, PartitionedData::Raw(payloads)),
-        ))
+    /// Wrap the non-empty buckets of raw rows into a block for the final aggregate.
+    fn raw_block(buckets: Vec<(usize, DataBlock)>) -> Option<DataBlock> {
+        let payloads = buckets
+            .into_iter()
+            .filter(|(_, block)| !block.is_empty())
+            .map(|(bucket, data_block)| RawPayload {
+                bucket: bucket as isize,
+                data_block,
+            })
+            .collect::<Vec<_>>();
+        (!payloads.is_empty()).then(|| {
+            DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+                None,
+                PartitionedData::Raw(payloads),
+            ))
+        })
     }
 
     /// Wrap the non-empty buckets of `payload` into a block for the final aggregate.
@@ -444,6 +446,17 @@ impl AccumulatingTransform for TransformPartialAggregate {
             },
             HashTable::AggregateHashTable(hashtable) => {
                 let mut blocks = self.spillers.finish()?;
+
+                if let PartialStrategy::Adaptive(adaptive) = &mut self.strategy {
+                    let stream = &mut adaptive.raw_stream;
+                    let buckets = stream
+                        .partition_ids()
+                        .into_iter()
+                        .filter_map(|id| stream.finalize_partition(id).map(|block| (id, block)))
+                        .collect();
+                    stream.reset();
+                    blocks.extend(Self::raw_block(buckets));
+                }
 
                 match &self.strategy {
                     PartialStrategy::Legacy => self.statistics.log_finish_statistics(&hashtable),
