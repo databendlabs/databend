@@ -58,6 +58,8 @@ use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use log::info;
 use opendal::Operator;
 
@@ -86,6 +88,9 @@ use crate::operations::MutationGenerator;
 use crate::operations::MutationLogEntry;
 use crate::operations::MutationLogs;
 use crate::operations::TableMutationAggregator;
+
+/// Blocks of a segment checked at a time by REFRESH; a check may stat an object.
+const REFRESH_CHECK_CONCURRENCY: usize = 32;
 
 pub async fn do_refresh_table_index(
     fuse_table: &FuseTable,
@@ -173,22 +178,22 @@ pub async fn do_refresh_table_index(
             _ => None,
         };
 
-        for (block_idx, block_meta) in blocks.into_iter().enumerate() {
-            let Some(refresh_index_meta) = check_index_generated(
-                operator.clone(),
-                segment_idx,
-                block_idx,
-                block_meta,
-                stats.clone(),
-                &index_arg,
-            )
-            .await?
-            else {
-                continue;
-            };
-
-            index_metas.push_back(refresh_index_meta);
-        }
+        // Checks may stat index objects; run them concurrently, in block order.
+        let checks = futures::stream::iter(blocks.into_iter().enumerate())
+            .map(|(block_idx, block_meta)| {
+                check_index_generated(
+                    operator.clone(),
+                    segment_idx,
+                    block_idx,
+                    block_meta,
+                    stats.clone(),
+                    &index_arg,
+                )
+            })
+            .buffered(REFRESH_CHECK_CONCURRENCY)
+            .try_collect::<Vec<_>>()
+            .await?;
+        index_metas.extend(checks.into_iter().flatten());
     }
     if index_metas.is_empty() {
         info!(
@@ -396,6 +401,7 @@ async fn check_index_generated(
         }
         RefreshIndexArg::Vector(vector_index_arg) => {
             check_vector_index_generated(
+                operator.clone(),
                 segment_idx,
                 block_idx,
                 block_meta,
@@ -474,19 +480,27 @@ async fn check_ngram_index_generated(
 }
 
 async fn check_vector_index_generated(
+    operator: Operator,
     segment_idx: usize,
     block_idx: usize,
     block_meta: Arc<BlockMeta>,
     stats: Option<Arc<SegmentStatistics>>,
     vector_index_arg: &RefreshVectorIndexArg,
 ) -> Result<Option<RefreshIndexMeta>> {
-    // Up to date only with a bundle of the current version. Without one (no index,
-    // a stale version, or data only in the legacy combined file) a bundle is built.
-    if block_meta
+    // Up to date only with a bundle of the current version that exists. Without
+    // one (no index, a stale version, data only in the legacy combined file, or a
+    // lost or replaced bundle) a bundle is built.
+    if let Some(meta) = block_meta
         .vector_index_meta(&vector_index_arg.index_name)
-        .is_some_and(|meta| meta.index_version == vector_index_arg.index_version)
+        .filter(|meta| meta.index_version == vector_index_arg.index_version)
     {
-        return Ok(None);
+        if vector_index_file_present(&operator, meta).await? {
+            return Ok(None);
+        }
+        info!(
+            "Rebuild vector index {}: bundle {} is missing or its size differs",
+            vector_index_arg.index_name, meta.location.0
+        );
     }
     Ok(Some(RefreshIndexMeta {
         index: BlockMetaIndex {
@@ -501,6 +515,17 @@ async fn check_vector_index_generated(
         index_columns: None,
         index_meta: None,
     }))
+}
+
+/// Whether the bundle of `meta` exists with the recorded size. Other storage
+/// errors are returned rather than treated as missing, so that a transient failure
+/// does not rebuild the index of every block.
+async fn vector_index_file_present(operator: &Operator, meta: &BlockIndexMeta) -> Result<bool> {
+    match operator.stat(&meta.location.0).await {
+        Ok(stat) => Ok(stat.content_length() == meta.size),
+        Err(error) if error.kind() == opendal::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn check_spatial_index_generated(
@@ -1106,4 +1131,31 @@ struct RefreshSpatialIndexArg {
     index_version: String,
     existing_column_ids: Vec<ColumnId>,
     existing_names_prefix: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use opendal::services::Memory;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_vector_index_file_present() -> Result<()> {
+        let operator = Operator::new(Memory::default())?.finish();
+        let meta = |size| BlockIndexMeta {
+            index_name: "idx".to_owned(),
+            location: ("_i_v_v2/v1/a.index".to_owned(), 0),
+            size,
+            index_version: "v1".to_owned(),
+        };
+        // A lost bundle is rebuilt.
+        assert!(!vector_index_file_present(&operator, &meta(4)).await?);
+        operator
+            .write("_i_v_v2/v1/a.index", b"abcd".to_vec())
+            .await?;
+        assert!(vector_index_file_present(&operator, &meta(4)).await?);
+        // So is one replaced by an object of another size.
+        assert!(!vector_index_file_present(&operator, &meta(5)).await?);
+        Ok(())
+    }
 }

@@ -601,6 +601,8 @@ impl CacheManager {
             CacheManager::clear_cache(&me.inverted_index_full_payload_cache);
             CacheManager::clear_cache(&me.inverted_index_payload_cache);
             CacheManager::clear_cache(&me.vector_index_cache);
+            // Only the in-memory FP16 pages; the disk tier is kept.
+            CacheManager::clear_cache(&me.vector_refine_data_cache);
         }
 
         fn clear_extra_caches(me: &CacheManager) {
@@ -1676,6 +1678,28 @@ mod tests {
         assert!(cache.bytes_size() > 0);
         drop(reader);
         assert_eq!(cache.bytes_size(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_refine_cache_memory_clearance() -> Result<()> {
+        use crate::VectorIndexFile;
+
+        let manager =
+            CacheManager::try_new(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
+        let pages = manager.get_vector_refine_data_cache().unwrap();
+        for level in [CacheClearanceLevel::Basic, CacheClearanceLevel::Deep] {
+            pages.insert(
+                "a.index:0_fp16_data#bytes=0..9".to_string(),
+                VectorIndexFile::create(
+                    "0_fp16_data#bytes=0..9".to_string(),
+                    Bytes::from_static(b"fp16 page"),
+                ),
+            );
+            assert!(!pages.in_memory_cache().unwrap().is_empty());
+            manager.release_cache_memory(level);
+            assert!(pages.in_memory_cache().unwrap().is_empty());
+        }
         Ok(())
     }
 
