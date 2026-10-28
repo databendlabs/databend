@@ -163,8 +163,8 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     }
 
     #[inline]
-    fn from_for_raw(raw: i128) -> Option<Self::Scalar> {
-        Num::from_i128(raw)
+    fn from_for_raw(raw: i128) -> Self::Scalar {
+        Num::from_i128_uncheck(raw)
     }
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
