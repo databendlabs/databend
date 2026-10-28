@@ -22,6 +22,7 @@ use databend_common_expression::ColumnRef;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::RandomOptions;
 use databend_common_expression::Scalar;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
@@ -187,7 +188,7 @@ fn test_timestamp_display_clamps_bounds() {
     );
     assert_eq!(
         timestamp_to_rfc3339_utc(i64::MIN),
-        "-0999-01-01T00:00:00.000000Z"
+        "0000-01-01T00:00:00.000000Z"
     );
 }
 
@@ -220,6 +221,31 @@ fn test_timestamp_bounds_cover_local_calendar_endpoints() {
     assert_eq!(check_date(i64::from(DATE_MAX)).unwrap(), DATE_MAX);
     assert!(check_date(i64::from(DATE_MIN) - 1).is_err());
     assert!(check_date(i64::from(DATE_MAX) + 1).is_err());
+}
+
+#[test]
+fn test_random_timestamps_keep_nonnegative_utc_years() {
+    // Random tables feed tests with UInt32 calendar clustering keys. Pin the
+    // product requirement independently of TIMESTAMP_MIN so extending the
+    // storage range into negative years cannot silently change those fixtures.
+    let column = Column::random(
+        &DataType::Timestamp,
+        4096,
+        Some(RandomOptions {
+            seed: Some(42),
+            ..Default::default()
+        }),
+    );
+    let Column::Timestamp(values) = column else {
+        panic!("expected timestamp column");
+    };
+    assert_eq!(values.len(), 4096);
+    for &micros in values.iter() {
+        assert!(
+            (-62_167_219_200_000_000..=253_402_387_199_999_999).contains(&micros),
+            "random timestamp {micros} is outside UTC years 0000..=10000"
+        );
+    }
 }
 
 #[test]

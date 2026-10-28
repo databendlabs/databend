@@ -1,4 +1,4 @@
-# DATE keeps years 0001..=9999; TIMESTAMP starts at 1000 BC and has an extra upper day.
+# DATE keeps years 0001..=9999; TIMESTAMP includes UTC year 0 and an extra upper day.
 # TIMESTAMP overflow is an error for conversion and arithmetic; DATE is unchanged.
 # Use STRING output for boundary timestamps to avoid the client's narrower Jiff range.
 
@@ -133,7 +133,7 @@ SELECT to_date(2932896)::BIGINT = 2932896,
        to_date(2932897) = DATE '0001-01-01', to_date(-719163) = DATE '0001-01-01',
        to_timestamp(253402387199999999, 6)::BIGINT = 253402387199999999,
        try_to_timestamp(253402387200000000, 6) IS NULL,
-       try_to_timestamp(-93692592000000001, 6) IS NULL
+       try_to_timestamp(-62167219200000001, 6) IS NULL
 ----
 1 1 1 1 1 1
 
@@ -141,7 +141,7 @@ statement error 1006
 SELECT to_timestamp(253402387200000000, 6)
 
 statement error 1006
-SELECT to_timestamp(-93692592000000001, 6)
+SELECT to_timestamp(-62167219200000001, 6)
 
 statement ok
 CREATE OR REPLACE TABLE datetime_clamp_inputs(n BIGINT NOT NULL)
@@ -321,16 +321,16 @@ statement error 1006
 SELECT time_slice(ts, 1, 'second', 'end') FROM datetime_range_upper
 
 statement error 1006
-SELECT to_timestamp(-93692592000000000, 6) - INTERVAL 1 MICROSECOND
+SELECT to_timestamp(-62167219200000000, 6) - INTERVAL 1 MICROSECOND
 
 statement error 1006
-SELECT to_timestamp(-93692592000000000, 6) - INTERVAL 1 MINUTE
+SELECT to_timestamp(-62167219200000000, 6) - INTERVAL 1 MINUTE
 
 statement error 1006
-SELECT DATE '0001-01-01' - INTERVAL 365244 DAY
+SELECT DATE '0001-01-01' - INTERVAL 367 DAY
 
 statement error 1006
-SELECT to_timestamp_tz(to_timestamp(-93692592000000000, 6)) - INTERVAL 1 MICROSECOND
+SELECT to_timestamp_tz(to_timestamp(-62167219200000000, 6)) - INTERVAL 1 MICROSECOND
 
 query BBB
 SELECT TIMESTAMP '0001-01-01' + INTERVAL 0 SECOND = TIMESTAMP '0001-01-01',
@@ -438,10 +438,10 @@ statement error 1006
 SELECT ts + INTERVAL 1 MICROSECOND FROM datetime_range_upper
 
 statement error 1006
-SELECT to_timestamp(-93692592000000000, 6) - INTERVAL 1 MICROSECOND
+SELECT to_timestamp(-62167219200000000, 6) - INTERVAL 1 MICROSECOND
 
 query B
-SELECT to_timestamp(-93692592000000000, 6) + INTERVAL 0 SECOND = to_timestamp(-93692592000000000, 6)
+SELECT to_timestamp(-62167219200000000, 6) + INTERVAL 0 SECOND = to_timestamp(-62167219200000000, 6)
 ----
 1
 
