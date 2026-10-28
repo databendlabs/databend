@@ -33,10 +33,5 @@ an empty field representing NULL, or a literal `NULL_DISPLAY` string
 indistinguishable from NULL. Disabling input escaping does not resolve those
 collisions.
 
-Previously, setting a non-empty `ESCAPE` also caused minimal quoting to quote
-strings containing that character, even though the writer did not escape it.
-Such strings may now be unquoted. This changes output bytes and can affect how
-consumers distinguish a literal NULL marker such as `\N` from NULL.
-
 Outputting a backslash-escaped CSV dialect is not currently supported. Setting
 `ESCAPE` does not opt into such an output dialect.
