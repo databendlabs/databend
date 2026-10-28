@@ -685,7 +685,7 @@ mod tests {
                 )?;
                 assert_eq!(column, [expected]);
             }
-            for text in ["-0999-01-01", "0000-01-01", "0000-12-31", "+10000-01-01"] {
+            for text in ["0000-01-01", "0000-12-31", "+10000-01-01"] {
                 let mut column = vec![];
                 assert!(decoder.read_date(&mut column, &Value::from(text)).is_err());
                 assert!(column.is_empty());

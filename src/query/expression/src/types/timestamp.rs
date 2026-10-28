@@ -40,16 +40,16 @@ use crate::values::Scalar;
 
 pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
 /// SQL TIMESTAMP and TIMESTAMP_TZ bounds, in UTC microseconds since 1970-01-01.
-/// Start at 1000 BC (astronomical year -999) and include one day beyond year
-/// 9999. This also leaves room for timezone resolution of local years 0001..=9999
-/// in every named timezone, including historical and explicit offsets.
+/// Include UTC year 0 and one day beyond year 9999 so timezone resolution can
+/// represent both endpoints of local years 0001..=9999 in every named timezone
+/// (including historical offsets) and with every supported explicit offset.
 /// Validate the final UTC instant, not intermediate calendar fields. Calendar
 /// inputs still require years 0001..=9999, and SQL DATE keeps DATE_MIN/MAX.
 /// SQL conversions and arithmetic report out-of-range results instead of
 /// replacing them with the minimum. Display conversion defensively clamps
 /// invalid internal values to these bounds.
-/// -0999-01-01 00:00:00.000000 UTC (1000 BC)
-pub const TIMESTAMP_MIN: i64 = -93_692_592_000_000_000;
+/// 0000-01-01 00:00:00.000000 UTC
+pub const TIMESTAMP_MIN: i64 = -62_167_219_200_000_000;
 /// 10000-01-01 23:59:59.999999 UTC
 pub const TIMESTAMP_MAX: i64 = 253_402_387_199_999_999;
 
@@ -57,7 +57,7 @@ pub const MICROS_PER_SEC: i64 = 1_000_000;
 pub const MICROS_PER_MILLI: i64 = 1_000;
 
 /// Clamp to the SQL UTC bounds before converting for display.
-/// Chrono has room for timezone offsets beyond both UTC boundaries.
+/// Chrono has room for local year 0/10000 at these boundaries.
 pub fn timestamp_from_micros(micros: impl AsPrimitive<i64>, tz: &Tz) -> DateTime<Tz> {
     let micros = micros.as_().clamp(TIMESTAMP_MIN, TIMESTAMP_MAX);
     let seconds = micros.div_euclid(MICROS_PER_SEC);
@@ -77,7 +77,7 @@ pub fn check_timestamp(micros: i64) -> Result<i64, String> {
     if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
         Ok(micros)
     } else {
-        Err("Invalid date: timestamp is out of range [-0999-01-01, 10000-01-01] UTC".to_string())
+        Err("Invalid date: timestamp is out of range [0000-01-01, 10000-01-01] UTC".to_string())
     }
 }
 

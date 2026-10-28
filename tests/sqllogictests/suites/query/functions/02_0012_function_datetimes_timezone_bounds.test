@@ -1,6 +1,6 @@
-# TIMESTAMP starts at 1000 BC (-0999) UTC and ends one day beyond year 9999.
-# DATE still uses 0001-01-01..=9999-12-31. Most projections use STRING; native
-# endpoint results are also checked because clients may have narrower ranges.
+# TIMESTAMP includes UTC year 0 and one day beyond local year 9999.
+# DATE still uses 0001-01-01..=9999-12-31. Render timestamps as STRING because
+# client timestamp parsers can have a narrower range than the server.
 
 statement ok
 SET timezone = 'Asia/Shanghai'
@@ -152,29 +152,76 @@ FROM (SELECT to_timestamp_tz('0001-01-01 00:00:00 +1400') AS z, DATE '0001-01-01
 1 1 1 1 1 1
 1 1 1 1 1 1
 
+# Keep Random -> calendar clustering -> MERGE covered, not just scalar paths.
+# Enlarging TIMESTAMP_MIN to negative years used to make this fixture produce
+# values that the UInt32 to_yyyymmdd clustering key cannot represent.
+statement ok
+SET timezone = 'UTC'
+
+statement ok
+CREATE OR REPLACE TABLE timestamp_random_source(ts TIMESTAMP NOT NULL) ENGINE = Random seed = 42
+
+statement ok
+CREATE OR REPLACE TABLE timestamp_random_store AS SELECT ts FROM timestamp_random_source LIMIT 1024
+
+query II
+SELECT count(*), count_if(ts < to_timestamp(-62167219200000000, 6)) FROM timestamp_random_store
+----
+1024 0
+
+statement ok
+CREATE OR REPLACE TABLE timestamp_random_target(ts TIMESTAMP NOT NULL) CLUSTER BY(to_yyyymmdd(ts))
+
+statement ok
+MERGE INTO timestamp_random_target t USING timestamp_random_store s ON 1=2 WHEN NOT MATCHED THEN INSERT *
+
+query I
+SELECT count(*) FROM timestamp_random_target
+----
+1024
+
+# A fixed seed can repeat values across Random partitions. Avoid unrelated
+# multiple-source matches while exercising the matched-update path.
+statement ok
+MERGE INTO timestamp_random_target t USING (SELECT DISTINCT ts FROM timestamp_random_store) s ON t.ts=s.ts
+WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *
+
+query I
+SELECT count(*) FROM timestamp_random_target
+----
+1024
+
+statement ok
+DROP TABLE timestamp_random_source
+
+statement ok
+DROP TABLE timestamp_random_store
+
+statement ok
+DROP TABLE timestamp_random_target
+
 # The new UTC bounds themselves are valid, but one microsecond beyond is not.
 query TT
-SELECT to_string(to_timestamp(-93692592000000000, 6)),
+SELECT to_string(to_timestamp(-62167219200000000, 6)),
        to_string(to_timestamp(253402387199999999, 6))
 ----
--0999-01-01 00:00:00.000000 +10000-01-01 23:59:59.999999
+0000-01-01 00:00:00.000000 +10000-01-01 23:59:59.999999
 
-# Check the actual TIMESTAMP result, without hiding it behind STRING conversion.
 query TT
-SELECT to_timestamp(-93692592000000000, 6), to_timestamp(253402387199999999, 6)
+SELECT to_timestamp(-62167219200000000, 6), to_timestamp(253402387199999999, 6)
 ----
--0999-01-01 00:00:00.000000 +10000-01-01 23:59:59.999999
+0000-01-01 00:00:00.000000 +10000-01-01 23:59:59.999999
 
 query BBBB
-SELECT to_timestamp(-93692592000000000, 6) + INTERVAL 0 SECOND = to_timestamp(-93692592000000000, 6),
+SELECT to_timestamp(-62167219200000000, 6) + INTERVAL 0 SECOND = to_timestamp(-62167219200000000, 6),
        to_timestamp(253402387199999999, 6) + INTERVAL 0 SECOND = to_timestamp(253402387199999999, 6),
-       try_to_date(to_timestamp(-93692592000000000, 6)) IS NULL,
+       try_to_date(to_timestamp(-62167219200000000, 6)) IS NULL,
        try_to_date(to_timestamp(253402387199999999, 6)) IS NULL
 ----
 1 1 1 1
 
 statement error 1006
-SELECT to_timestamp(-93692592000000000, 6) - INTERVAL 1 MICROSECOND
+SELECT to_timestamp(-62167219200000000, 6) - INTERVAL 1 MICROSECOND
 
 statement error 1006
 SELECT to_timestamp(253402387199999999, 6) + INTERVAL 1 MICROSECOND
@@ -185,7 +232,7 @@ CREATE OR REPLACE TABLE timestamp_utc_bounds(ts TIMESTAMP)
 
 statement ok
 INSERT INTO timestamp_utc_bounds VALUES
-    (to_timestamp(-93692592000000000, 6)), (to_timestamp(253402387199999999, 6))
+    (to_timestamp(-62167219200000000, 6)), (to_timestamp(253402387199999999, 6))
 
 query BBBBBBBBBBBB
 SELECT ts + 0 = ts, ts - 0 = ts, add_days(ts, 0) = ts,
@@ -210,23 +257,6 @@ SELECT subtract_days(ts, 1) FROM timestamp_utc_bounds
 
 statement error 1006
 SELECT add_seconds(ts, 1) FROM timestamp_utc_bounds
-
-# BCE arithmetic preserves the instant and crosses year 0 without DATE casts.
-query TTB
-SELECT to_string(add_years(to_timestamp(-93692592000000000, 6), 999)),
-       to_string(add_months(to_timestamp(-93692592000000000, 6), 1)),
-       add_years(to_timestamp(-93692592000000000, 6), 1000) = TIMESTAMP '0001-01-01'
-----
-0000-01-01 00:00:00.000000 -0999-02-01 00:00:00.000000 1
-
-statement error 1006
-SELECT to_year(to_timestamp(-93692592000000000, 6))
-
-statement error 1006
-SELECT add_years(to_timestamp(-93692592000000000, 6), -1)
-
-statement error 1006
-SELECT subtract_months(to_timestamp(-93692592000000000, 6), 1)
 
 # Year 0 is representable, but its first days belong to ISO year -1.
 query III
@@ -255,7 +285,7 @@ SELECT to_last_of_month(to_timestamp(253402387199999999, 6))
 statement ok
 SET timezone = 'Etc/GMT+8'
 
-# UTC year 0 displays in local year -1. Unsigned year projections
+# A valid UTC minimum displays in local year -1. Unsigned year projections
 # must report BadArguments, never wrap to 65535 or panic during multiplication.
 statement error 1006
 SELECT to_year(to_timestamp(-62167219200000000, 6))
@@ -317,7 +347,7 @@ DROP TABLE timestamp_utc_bounds
 
 # Reject conversion overflow and integer overflow; TRY only nulls failing rows.
 statement error 1006
-SELECT to_timestamp(-93692592000000001, 6)
+SELECT to_timestamp(-62167219200000001, 6)
 
 statement error 1006
 SELECT to_timestamp(253402387200000000, 6)
@@ -335,7 +365,7 @@ statement error 1006
 SELECT subtract_seconds(TIMESTAMP '1970-01-01', -9223372036854775808)
 
 query BBBB
-SELECT try_to_timestamp(-93692592000000001, 6) IS NULL,
+SELECT try_to_timestamp(-62167219200000001, 6) IS NULL,
        try_to_timestamp(253402387200000000, 6) IS NULL,
        try_to_timestamp(9223372036854775807, 0) IS NULL,
        try_to_timestamp(0, 6) = TIMESTAMP '1970-01-01'
@@ -349,8 +379,8 @@ CREATE OR REPLACE TABLE timestamp_conversion_bounds(id INT, n BIGINT, scale BIGI
 
 statement ok
 INSERT INTO timestamp_conversion_bounds VALUES
-    (1, 0, 6), (2, 1, 0), (3, -93692592000000000, 6),
-    (4, -93692592000000001, 6), (5, 253402387199999999, 6),
+    (1, 0, 6), (2, 1, 0), (3, -62167219200000000, 6),
+    (4, -62167219200000001, 6), (5, 253402387199999999, 6),
     (6, 253402387200000000, 6), (7, 9223372036854775807, 0),
     (8, NULL, 6), (9, 0, NULL)
 
@@ -359,7 +389,7 @@ SELECT try_to_timestamp(n, scale)::BIGINT FROM timestamp_conversion_bounds ORDER
 ----
 0
 1000000
--93692592000000000
+-62167219200000000
 NULL
 253402387199999999
 NULL
@@ -373,7 +403,7 @@ FROM timestamp_conversion_bounds ORDER BY id
 ----
 1 0
 1000000 1
-1 -93692592000000000
+1 -62167219200000000
 1 NULL
 1 253402387199999999
 1 NULL
@@ -422,7 +452,7 @@ statement error 1006
 SELECT date_from_parts(10000, 1, 1)
 
 statement error 1006
-SELECT to_date(to_timestamp(-93692592000000000, 6))
+SELECT to_date(to_timestamp(-62167219200000000, 6))
 
 statement error 1006
 SELECT to_date(to_timestamp(253402387199999999, 6))
