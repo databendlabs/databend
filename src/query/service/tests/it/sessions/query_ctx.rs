@@ -23,17 +23,165 @@ use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_store::MetaStore;
+use databend_common_sql::Planner;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_runtime::DatabendRuntime;
+use databend_query::interpreters::interpreter_plan_sql;
+use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::execute_command;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_user_passwords_are_not_attached_to_query_history() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command(
+            "CREATE USER history_user IDENTIFIED WITH sha256_password BY 'old_password'",
+        )
+        .await?;
+    fixture
+        .execute_command(
+            "CREATE PROCEDURE history_p(password STRING) RETURNS STRING LANGUAGE SQL AS $$ BEGIN \
+             EXECUTE IMMEDIATE concat('ALTER USER history_user IDENTIFIED BY ''', :password, ''''); \
+             RETURN 'ok'; END; $$",
+        )
+        .await?;
+    // (SQL, succeeds, structure that must remain auditable)
+    for (sql, succeeds, kept) in [
+        (
+            "EXECUTE IMMEDIATE concat('ALTER USER history_user IDENTIFIED BY ', '''history_secret''')",
+            true,
+            "ALTER USER",
+        ),
+        // Arguments may be passed on to dynamic SQL.
+        (
+            "CALL PROCEDURE history_p('history_secret')",
+            true,
+            "CALL PROCEDURE history_p",
+        ),
+        // Failed planning must also attach masked history and retain diagnostics.
+        (
+            "CREATE USER history_user IDNETIFIED BY 'history_secret'",
+            false,
+            "IDNETIFIED",
+        ),
+        (
+            "EXECUTE IMMEDIATE $$CREATE CONNECTION c STORAGE_TYPE='s3 SECRET_ACCESS_KEY='history_secret'$$",
+            false,
+            "CREATE CONNECTION",
+        ),
+        // The binder's recorded values still scrub runtime errors after the
+        // interpreter's duplicate secret collection has been removed.
+        (
+            "EXECUTE IMMEDIATE $$BEGIN LET pw := 'history_secret'; THROW 'runtime failure'; END;$$",
+            false,
+            "THROW",
+        ),
+    ] {
+        let ctx = fixture.new_query_ctx().await?;
+        // Use the server planning entry point, which also attaches failed
+        // statements; the execution-only test helper does not do that.
+        let result = match interpreter_plan_sql(ctx.clone(), sql, false, None).await {
+            Ok(_) => execute_command(ctx.clone(), sql).await,
+            Err(err) => Err(err),
+        };
+        assert_eq!(result.is_ok(), succeeds, "{result:?}");
+        if let Err(err) = result {
+            // The log/history copy is scrubbed with the recorded values,
+            // but still locates the error. Client errors are left untouched.
+            let err = ctx
+                .query_secrets()
+                .scrub(&err.display_with_sql(sql).to_string());
+            assert!(!err.contains("history_secret"), "{err}");
+            assert!(err.contains(kept), "diagnostic must remain: {err}");
+        }
+        let logged = ctx.get_query_str();
+        assert!(!logged.contains("history_secret"), "{logged}");
+        assert!(logged.contains("***"), "{sql}: {logged}");
+        assert!(logged.contains(kept), "{sql}: {logged}");
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_execute_immediate_planner_history() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    // Both planner entry points must attach failed statements without relying
+    // on interpreter_plan_sql's error handler. Include SETTINGS wrappers.
+    for bind_only in [false, true] {
+        for (sql, kept) in [
+            (
+                "EXECUTE IMMEDIATE concat('ALTER USER history_user IDENTIFIED BY ', no_such_fn('history_secret'))",
+                "EXECUTE IMMEDIATE concat(",
+            ),
+            (
+                "EXECUTE IMMEDIATE length('history_secret')",
+                "EXECUTE IMMEDIATE length(",
+            ),
+            ("EXECUTE IMMEDIATE $missing_script", "EXECUTE IMMEDIATE"),
+            (
+                "SETTINGS (max_threads = 1) EXECUTE IMMEDIATE length('history_secret')",
+                "EXECUTE IMMEDIATE length(",
+            ),
+        ] {
+            let ctx = fixture.new_query_ctx().await?;
+            let mut planner = Planner::new(ctx.clone());
+            let result = if bind_only {
+                planner.bind_sql(sql).await
+            } else {
+                planner.plan_sql(sql).await.map(|(plan, _)| plan)
+            };
+            assert!(result.is_err(), "{sql}");
+            let logged = ctx.get_query_str();
+            assert!(!logged.contains("history_secret"), "{logged}");
+            assert!(logged.contains(kept), "{sql}: {logged}");
+            if sql.contains("history_secret") {
+                assert_eq!(ctx.query_secrets().scrub("history_secret"), "***", "{sql}");
+            }
+        }
+
+        // On success the evaluated SQL, rather than the pre-bind expression, must
+        // win. Also keep an already attached outer statement (e.g. CREATE VIEW).
+        for prefix in ["", "SETTINGS (max_threads = 1) "] {
+            for outer in [None, Some("outer statement")] {
+                let ctx = fixture.new_query_ctx().await?;
+                if let Some(outer) = outer {
+                    ctx.attach_query_str(
+                        databend_common_catalog::query_kind::QueryKind::Other,
+                        outer.to_string(),
+                    );
+                }
+                let sql = format!(
+                    "{prefix}EXECUTE IMMEDIATE concat('CREATE USER planned_user IDENTIFIED BY ', '''history_secret''')"
+                );
+                let mut planner = Planner::new(ctx.clone());
+                if bind_only {
+                    planner.bind_sql(&sql).await?;
+                } else {
+                    planner.plan_sql(&sql).await?;
+                }
+                let logged = ctx.get_query_str();
+                assert!(!logged.contains("history_secret"), "{logged}");
+                if let Some(outer) = outer {
+                    assert_eq!(logged, outer);
+                } else {
+                    assert!(logged.contains("CREATE USER"), "{logged}");
+                    assert!(!logged.contains("concat("), "{logged}");
+                }
+                assert_eq!(ctx.query_secrets().scrub("history_secret"), "***");
+            }
+        }
+    }
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_storage_accessor_s3() -> anyhow::Result<()> {

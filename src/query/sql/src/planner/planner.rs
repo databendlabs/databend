@@ -137,8 +137,10 @@ impl Planner {
         .with_definition_scope(self.definition_scope.clone());
         // Attach before bind for the same reason as `plan_stmt`: table sources such as
         // ParquetRSTable::create read the query string during binding.
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-        binder.bind(stmt).await
+        self.attach_masked_query_before_bind(query_kind, stmt);
+        let plan = binder.bind(stmt).await;
+        self.attach_masked_query(query_kind, stmt);
+        plan
     }
 
     #[fastrace::trace]
@@ -359,10 +361,11 @@ impl Planner {
         .with_definition_scope(self.definition_scope.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-        let plan = binder.bind(stmt).await?;
+        self.attach_masked_query_before_bind(query_kind, stmt);
+        let plan = binder.bind(stmt).await;
         // attach again to avoid the query kind is overwritten by the subquery
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        self.attach_masked_query(query_kind, stmt);
+        let plan = plan?;
 
         // Lineage describes what the user wrote, so capture it before the optimizer
         // rewrites the plan for execution.
@@ -437,6 +440,33 @@ impl Planner {
 
         self.add_max_rows_limit(stmt);
         Ok(())
+    }
+}
+
+impl Planner {
+    /// Dynamic SQL is attached by the binder after evaluating its script, and
+    /// the first attached query text wins: skip it here.
+    fn attach_masked_query_before_bind(&self, kind: QueryKind, stmt: &Statement) {
+        if !is_execute_immediate(stmt) {
+            self.attach_masked_query(kind, stmt);
+        }
+    }
+
+    /// Call after binding, also if it failed. The first attached query text
+    /// wins, so for dynamic SQL this only records the statement, with its
+    /// expression's literals hidden, if binding failed before evaluating it.
+    fn attach_masked_query(&self, kind: QueryKind, stmt: &Statement) {
+        let (sql, secrets) = stmt.to_mask_sql_with_secrets();
+        self.ctx.add_query_secrets(secrets);
+        self.ctx.attach_query_str(kind, sql);
+    }
+}
+
+fn is_execute_immediate(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::ExecuteImmediate(_) => true,
+        Statement::StatementWithSettings { stmt, .. } => is_execute_immediate(stmt),
+        _ => false,
     }
 }
 

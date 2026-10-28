@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -25,8 +26,11 @@ use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateOption::Create;
 use databend_common_meta_app::schema::CreateOption::CreateIfNotExists;
@@ -56,6 +60,7 @@ use databend_common_storages_system::FunctionsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::UsersTable;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_BUILD_PROFILE;
 use databend_common_version::DATABEND_CARGO_CFG_TARGET_FEATURE;
@@ -509,6 +514,92 @@ async fn test_users_table() -> anyhow::Result<()> {
     assert!(output.contains("test"));
     assert!(output.contains("test1"));
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_identity_tables_hide_other_users_and_roles() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let tenant = fixture.default_tenant();
+    let api = UserApiProvider::instance();
+    for role in ["visible_parent", "visible_child", "hidden_role"] {
+        let mut info = RoleInfo::new(role, None);
+        if role == "visible_parent" {
+            info.grants.grant_role("visible_child".to_string());
+        }
+        api.create_role(&tenant, info, &Create).await?;
+    }
+
+    let mut current_user = UserInfo::new("visible_user", "%", AuthInfo::None);
+    current_user.grants.grant_role("visible_parent".to_string());
+    current_user
+        .option
+        .set_default_role(Some("visible_parent".to_string()));
+    for user in [
+        current_user.clone(),
+        UserInfo::new("visible_user", "other-host", AuthInfo::None),
+        UserInfo::new("hidden_user", "%", AuthInfo::None),
+    ] {
+        api.create_user(&tenant, user, &Create).await?;
+    }
+    RoleCacheManager::instance().force_reload(&tenant).await?;
+    fixture
+        .default_session()
+        .set_authed_user(current_user.clone(), None)
+        .await?;
+
+    let blocks: Vec<_> = fixture
+        .execute_query("SELECT name, hostname FROM system.users")
+        .await?
+        .try_collect()
+        .await?;
+    assert_eq!(
+        blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        blocks[0].get_by_offset(0).value().index(0),
+        Some(ScalarRef::String("visible_user"))
+    );
+    assert_eq!(
+        blocks[0].get_by_offset(1).value().index(0),
+        Some(ScalarRef::String("%"))
+    );
+
+    let blocks: Vec<_> = fixture
+        .execute_query("SELECT name FROM system.roles")
+        .await?
+        .try_collect()
+        .await?;
+    assert_eq!(
+        blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+        3
+    );
+    let output = pretty_format_blocks(&blocks)?.to_string();
+    assert!(output.contains("visible_parent"));
+    assert!(output.contains("visible_child"));
+    assert!(output.contains("public"));
+    assert!(!output.contains("hidden_role"));
+    assert!(!output.contains("account_admin"));
+
+    // A global GRANT privilege exposes every user in the tenant.
+    let mut granted = current_user;
+    granted.grants.grant_privileges(
+        &GrantObject::Global,
+        UserPrivilegeSet::from(UserPrivilegeType::Grant),
+    );
+    fixture
+        .default_session()
+        .set_authed_user(granted, None)
+        .await?;
+    let blocks: Vec<_> = fixture
+        .execute_query("SELECT name, hostname FROM system.users")
+        .await?
+        .try_collect()
+        .await?;
+    let output = pretty_format_blocks(&blocks)?.to_string();
+    assert!(output.contains("hidden_user"));
+    assert!(output.contains("other-host"));
     Ok(())
 }
 
