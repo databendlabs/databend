@@ -493,6 +493,45 @@ impl Payload {
         self.pages.append(other.pages.as_mut());
     }
 
+    /// Move the pages into payloads of at most `max_rows` rows and `max_bytes` bytes each,
+    /// without copying rows; a page over a limit makes a payload of its own. The payloads share
+    /// the arena of the states, which is freed with the last of them.
+    pub fn split_pages(mut self, max_rows: usize, max_bytes: usize) -> Vec<Payload> {
+        if self.total_rows <= max_rows && self.memory_size() <= max_bytes {
+            return vec![self];
+        }
+
+        let mut payloads = vec![];
+        let mut current = self.empty_like();
+        for page in std::mem::take(&mut self.pages) {
+            if page.rows == 0 {
+                continue;
+            }
+            let rows = current.total_rows + page.rows;
+            if current.total_rows != 0 && (rows > max_rows || rows * self.tuple_size > max_bytes) {
+                payloads.push(std::mem::replace(&mut current, self.empty_like()));
+            }
+            current.total_rows += page.rows;
+            current.pages.push(page);
+            current.current_write_page = current.pages.len();
+        }
+        if current.total_rows != 0 {
+            payloads.push(current);
+        }
+        self.total_rows = 0;
+        self.current_write_page = 0;
+        payloads
+    }
+
+    fn empty_like(&self) -> Payload {
+        Payload::new(
+            self.arena.clone(),
+            self.group_types.clone(),
+            self.aggrs.clone(),
+            self.row_layout.states_layout.clone(),
+        )
+    }
+
     pub(super) fn mark_min_cardinality(&mut self) {
         if self.min_cardinality.is_none() {
             self.min_cardinality = Some(self.total_rows);
