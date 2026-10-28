@@ -24,8 +24,9 @@ use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::PartialAggregateController;
+use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
+use databend_common_expression::PartialDecision;
 use databend_common_expression::PartialEnvironment;
 use databend_common_expression::PartialState;
 use databend_common_expression::PartitionMask;
@@ -138,12 +139,12 @@ pub fn parse_partial_aggregate_mode(mode: &str) -> Result<Option<PartialAggregat
 enum PartialStrategy {
     /// Fixed cache-sized table that is cleared when full.
     Legacy,
-    /// Runtime-adaptive table, see `PartialAggregateController`.
+    /// Runtime-adaptive table, see `PartialState`.
     Adaptive(Box<AdaptiveState>),
 }
 
 struct AdaptiveState {
-    controller: PartialAggregateController,
+    state: PartialState,
     /// Routes raw rows to the same buckets as the payload of the table.
     partition_mask: PartitionMask,
     partition_count: usize,
@@ -159,13 +160,16 @@ struct AdaptiveState {
     /// shuffle thresholds rather than as a slice of every input block per bucket.
     raw_stream: BlockPartitionStream,
     output_rows: usize,
+    /// Stats of all calls to the table, and times the index grew.
+    total: PartialAddStats,
+    grows: usize,
 }
 
 /// TransformPartialAggregate combine partial aggregation and spilling logic
 /// When memory exceeds threshold, it will spill out current hash table into a buffer
 /// and real spill out will happen when the buffer is full.
 ///
-/// In adaptive mode, the table is emitted downstream whenever the controller asks for it, and
+/// In adaptive mode, the table is emitted downstream whenever `PartialState` asks for it, and
 /// rows that are not aggregated are forwarded as raw rows for the final aggregate to aggregate.
 pub struct TransformPartialAggregate {
     hash_table: HashTable,
@@ -198,7 +202,7 @@ impl TransformPartialAggregate {
                 let concurrency = settings.get_max_threads()?.max(1) as usize;
                 let partition_count = 1_usize << config.initial_radix_bits;
                 PartialStrategy::Adaptive(Box::new(AdaptiveState {
-                    controller: PartialAggregateController::new(mode),
+                    state: PartialState::new(mode),
                     partition_mask: PartitionMask::with_start_bit(
                         partition_count as u64,
                         config.partition_start_bit,
@@ -214,6 +218,8 @@ impl TransformPartialAggregate {
                         partition_count,
                     ),
                     output_rows: 0,
+                    total: PartialAddStats::default(),
+                    grows: 0,
                 }))
             }
         };
@@ -302,7 +308,7 @@ impl TransformPartialAggregate {
         };
         let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
 
-        if adaptive.controller.state() == PartialState::Bypass {
+        if matches!(adaptive.state, PartialState::Bypass) {
             adaptive.output_rows += rows_num;
             let mut buckets = vec![0; rows_num];
             if adaptive.partition_count > 1 {
@@ -318,16 +324,17 @@ impl TransformPartialAggregate {
 
         let params_columns =
             Self::aggregate_arguments(&block, &self.params.aggregate_functions_arguments);
-        let capacity = adaptive.controller.capacity();
+        let capacity = adaptive.state.capacity();
         let stats = hashtable.add_groups_partial(
             &mut self.probe_state,
             group_columns,
             &params_columns,
             rows_num,
             capacity,
-            adaptive.controller.sampler(),
+            adaptive.state.sampler(),
         )?;
         adaptive.windowed |= stats.windows > 0;
+        adaptive.total += stats;
 
         // An index entry costs a control byte and a row pointer at the index load factor.
         const INDEX_BYTES_PER_GROUP: usize = 13;
@@ -343,7 +350,8 @@ impl TransformPartialAggregate {
             bytes_per_group: adaptive.bytes_per_group,
             concurrency: adaptive.concurrency,
         };
-        let decision = adaptive.controller.observe(&stats, &env);
+        let decision = adaptive.state.observe(stats, &env);
+        adaptive.grows += matches!(decision, PartialDecision::Grow { .. }) as usize;
 
         let mut blocks = vec![];
         if self.settings.check_spill() {
@@ -351,8 +359,8 @@ impl TransformPartialAggregate {
             let hot = hashtable.take_partial_hot();
             adaptive.windowed = false;
             self.spillers.spill(hot, self.is_row_shuffle)?;
-            adaptive.controller.on_hot_spilled();
-        } else if decision.flush_hot
+            adaptive.state.on_hot_spilled();
+        } else if decision != PartialDecision::Continue
             || (adaptive.windowed && hashtable.partial_hot_bytes() >= adaptive.flush_bytes)
         {
             let hot = hashtable.take_partial_hot();
@@ -490,15 +498,14 @@ impl AccumulatingTransform for TransformPartialAggregate {
                             adaptive.output_rows + hashtable.len(),
                             hashtable.hash_index_resize_count(),
                         );
-                        let controller = &adaptive.controller;
-                        let total = controller.total();
+                        let total = &adaptive.total;
                         log::info!(
                             "[PartialAggregate] Adaptive: final_state={:?}, rows={}, new_groups={}, windows={}, grows={}",
-                            controller.state(),
+                            adaptive.state,
                             total.rows,
                             total.new_groups,
                             total.windows,
-                            controller.grows(),
+                            adaptive.grows,
                         );
                     }
                 }

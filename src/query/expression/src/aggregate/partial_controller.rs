@@ -22,12 +22,15 @@
 //!   bounded cost. At geometric row checkpoints, with `R` rows, `M` groups materialized and a
 //!   sampled estimate `D` of the distinct groups:
 //!   - `M / R` and `D / R` both close to 1: nothing to absorb, switch to `Bypass`.
-//!   - `M > 2 * D`: keys recur beyond a window, so grow the index at once to hold the `D` groups,
-//!     or as many as the memory headroom allows. A grown index that fills up restarts in place
-//!     like a window.
+//!   - `M > 2 * D`: keys recur beyond a window, so switch to `Grown`.
+//! * `Grown`: the index is grown at once to hold the `D` groups, or as many as the memory
+//!   headroom allows. When it fills up it restarts in place like a window.
 //! * `Bypass`: forward every row to the final aggregate as raw input, for the rest of the input.
 //!
 //! Memory pressure is handled by the caller spilling the table; learning restarts afterwards.
+
+use std::fmt;
+use std::ops::AddAssign;
 
 use simple_hll::HyperLogLog;
 
@@ -53,6 +56,14 @@ pub struct PartialAddStats {
     pub new_groups: usize,
     /// Times the index restarted in place.
     pub windows: usize,
+}
+
+impl AddAssign for PartialAddStats {
+    fn add_assign(&mut self, other: Self) {
+        self.rows += other.rows;
+        self.new_groups += other.new_groups;
+        self.windows += other.windows;
+    }
 }
 
 /// Estimates the distinct groups since learning started from their group hashes, which are
@@ -90,10 +101,6 @@ impl DistinctSampler {
         self.first_window_groups
             .map(|first| self.hll.count().max(first))
     }
-
-    fn reset(&mut self) {
-        *self = Self::default();
-    }
 }
 
 /// Requested behavior of the partial aggregate.
@@ -105,13 +112,7 @@ pub enum PartialAggregateMode {
     Bypass,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PartialState {
-    Learning,
-    Bypass,
-}
-
-/// Runtime facts the controller needs besides the stats of the last call.
+/// Runtime facts the decisions need besides the stats of the last call.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct PartialEnvironment {
     /// Memory left before the pressure threshold, if memory is limited.
@@ -122,95 +123,113 @@ pub struct PartialEnvironment {
     pub concurrency: usize,
 }
 
-/// What the caller must do after [`PartialAggregateController::observe`].
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct PartialDecision {
-    /// Emit the groups of the table and restart the index before the next block.
-    pub flush_hot: bool,
+/// The state change [`PartialState::observe`] made. `Grow` and `Bypass` require the caller to
+/// emit the groups of the table and restart the index before the next block: a grown index is
+/// rebuilt from the payload, which must hold one row per key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PartialDecision {
+    Continue,
+    Grow { capacity: usize },
+    Bypass,
 }
 
-pub struct PartialAggregateController {
-    state: PartialState,
-    /// Target index capacity; the initial capacity until the controller decides to grow.
-    capacity: usize,
-    grown: bool,
+/// The state of one partial aggregate, see the module documentation.
+#[derive(Debug)]
+pub enum PartialState {
+    Learning(Learning),
+    Grown {
+        /// Index capacity the table grows to at once when full.
+        capacity: usize,
+    },
+    Bypass,
+}
 
-    // Counters since learning started.
-    learn_rows: usize,
-    /// Groups created since learning started, across all windows.
-    learn_groups: usize,
+/// Counters of a learning period, which restarts after the table spills.
+pub struct Learning {
+    /// Stats since learning started; groups are counted across all windows.
+    seen: PartialAddStats,
     next_check_rows: usize,
     sampler: DistinctSampler,
-
-    total: PartialAddStats,
-    grows: usize,
 }
 
-impl PartialAggregateController {
-    pub fn new(mode: PartialAggregateMode) -> Self {
+impl Default for Learning {
+    fn default() -> Self {
         Self {
-            state: match mode {
-                PartialAggregateMode::Auto => PartialState::Learning,
-                PartialAggregateMode::Bypass => PartialState::Bypass,
-            },
-            capacity: AggregateHashTable::capacity_for_groups(0),
-            grown: false,
-            learn_rows: 0,
-            learn_groups: 0,
+            seen: PartialAddStats::default(),
             next_check_rows: FIRST_CHECK_ROWS,
             sampler: DistinctSampler::default(),
-            total: PartialAddStats::default(),
-            grows: 0,
+        }
+    }
+}
+
+impl fmt::Debug for Learning {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Learning")
+            .field("rows", &self.seen.rows)
+            .field("new_groups", &self.seen.new_groups)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PartialState {
+    pub fn new(mode: PartialAggregateMode) -> Self {
+        match mode {
+            PartialAggregateMode::Auto => PartialState::Learning(Learning::default()),
+            PartialAggregateMode::Bypass => PartialState::Bypass,
         }
     }
 
-    pub fn state(&self) -> PartialState {
-        self.state
-    }
-
-    /// Index capacity the table grows to at once when full; beyond it the index restarts.
+    /// Index capacity of the table, which restarts in place when full.
     pub fn capacity(&self) -> usize {
-        self.capacity
+        match self {
+            PartialState::Grown { capacity } => *capacity,
+            _ => AggregateHashTable::capacity_for_groups(0),
+        }
     }
 
-    /// The distinct sampler for the next call while deciding whether to grow. The table starts
-    /// it at the first window and feeds it from then on.
+    /// The distinct sampler for the next call while learning. The table starts it at the first
+    /// window and feeds it from then on.
     pub fn sampler(&mut self) -> Option<&mut DistinctSampler> {
-        (self.state == PartialState::Learning && !self.grown).then_some(&mut self.sampler)
-    }
-
-    pub fn total(&self) -> &PartialAddStats {
-        &self.total
-    }
-
-    pub fn grows(&self) -> usize {
-        self.grows
-    }
-
-    /// Feed the stats of one `add_groups_partial` call and get the resulting action.
-    pub fn observe(
-        &mut self,
-        stats: &PartialAddStats,
-        env: &PartialEnvironment,
-    ) -> PartialDecision {
-        self.total.rows += stats.rows;
-        self.total.new_groups += stats.new_groups;
-        self.total.windows += stats.windows;
-        if self.state != PartialState::Learning || self.grown {
-            return PartialDecision::default();
+        match self {
+            PartialState::Learning(learning) => Some(&mut learning.sampler),
+            _ => None,
         }
+    }
 
-        self.learn_rows += stats.rows;
-        self.learn_groups += stats.new_groups;
-        if self.learn_rows < self.next_check_rows {
-            return PartialDecision::default();
+    /// Feed the stats of one `add_groups_partial` call and move to the next state.
+    pub fn observe(&mut self, stats: PartialAddStats, env: &PartialEnvironment) -> PartialDecision {
+        let PartialState::Learning(learning) = self else {
+            return PartialDecision::Continue;
+        };
+        let decision = learning.observe(stats, env);
+        match decision {
+            PartialDecision::Continue => {}
+            PartialDecision::Grow { capacity } => *self = PartialState::Grown { capacity },
+            PartialDecision::Bypass => *self = PartialState::Bypass,
         }
-        while self.next_check_rows <= self.learn_rows {
+        decision
+    }
+
+    /// The caller spilled the table under memory pressure: learn again from windows.
+    pub fn on_hot_spilled(&mut self) {
+        if !matches!(self, PartialState::Bypass) {
+            *self = PartialState::Learning(Learning::default());
+        }
+    }
+}
+
+impl Learning {
+    fn observe(&mut self, stats: PartialAddStats, env: &PartialEnvironment) -> PartialDecision {
+        self.seen += stats;
+        if self.seen.rows < self.next_check_rows {
+            return PartialDecision::Continue;
+        }
+        while self.next_check_rows <= self.seen.rows {
             self.next_check_rows *= CHECK_GROWTH;
         }
 
-        let rows = self.learn_rows as f64;
-        let materialized = self.learn_groups as f64;
+        let rows = self.seen.rows as f64;
+        let materialized = self.seen.new_groups as f64;
         // Materialized groups are an upper bound of the distinct groups.
         let distinct = match self.sampler.distinct() {
             None => materialized,
@@ -219,8 +238,7 @@ impl PartialAggregateController {
 
         if materialized / rows >= BYPASS_DISTINCT_RATIO && distinct / rows >= BYPASS_DISTINCT_RATIO
         {
-            self.state = PartialState::Bypass;
-            return PartialDecision { flush_hot: true };
+            return PartialDecision::Bypass;
         }
         if materialized > distinct * GROW_DEDUP_RATIO {
             let fit_groups = match env.headroom_bytes {
@@ -232,27 +250,10 @@ impl PartialAggregateController {
                 }
             };
             let capacity = AggregateHashTable::capacity_for_groups(fit_groups);
-            if capacity > self.capacity {
-                self.grown = true;
-                self.grows += 1;
-                self.capacity = capacity;
-                // The grown index is rebuilt from the payload, which must hold one row per
-                // key: start from an empty table.
-                return PartialDecision { flush_hot: true };
+            if capacity > AggregateHashTable::capacity_for_groups(0) {
+                return PartialDecision::Grow { capacity };
             }
         }
-        PartialDecision::default()
-    }
-
-    /// The caller spilled the table under memory pressure: learn again from windows.
-    pub fn on_hot_spilled(&mut self) {
-        if self.state == PartialState::Learning {
-            self.capacity = AggregateHashTable::capacity_for_groups(0);
-            self.grown = false;
-            self.learn_rows = 0;
-            self.learn_groups = 0;
-            self.next_check_rows = FIRST_CHECK_ROWS;
-            self.sampler.reset();
-        }
+        PartialDecision::Continue
     }
 }
