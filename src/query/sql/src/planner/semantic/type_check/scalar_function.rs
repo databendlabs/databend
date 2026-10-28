@@ -639,9 +639,20 @@ where A: TypeCheckAdapter
                     if !arg.evaluable() || is_generic {
                         return arg;
                     }
+                    // Decimal-valued calls derive their return precision from
+                    // their arguments. If the parent cannot fold (e.g. divide
+                    // by zero), shrinking a checked argument would select an
+                    // overload inconsistent with its stored return type. Keep
+                    // existing literal normalization for other scalar calls,
+                    // such as comparisons whose return type does not depend on p/s.
+                    let is_decimal = expr.data_type().remove_nullable().is_decimal();
                     match self.try_fold_constant(checked_arg.clone()) {
-                        Ok(deref!((constant, _))) => constant,
-                        Err(_) => arg,
+                        Ok(deref!((constant, data_type)))
+                            if !is_decimal || &data_type == checked_arg.data_type() =>
+                        {
+                            constant
+                        }
+                        _ => arg,
                     }
                 })
                 .collect(),

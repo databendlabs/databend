@@ -301,6 +301,10 @@ impl<T: SimpleType> ReturnType for SimpleValueType<T> {
     fn column_from_vec(vec: Vec<Self::Scalar>, _: &GenericMap) -> Self::Column {
         vec.into()
     }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.collect::<Vec<_>>().into()
+    }
 }
 
 impl<T: SimpleType> SimpleValueType<T> {

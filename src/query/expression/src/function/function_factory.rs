@@ -277,11 +277,18 @@ where T: ScalarFunction
             None => Bitmap::new_trued(len),
         };
         if bitmap.null_count() > 0 {
-            ctx.validity = ctx.validity.as_ref().map(|validity| validity & &bitmap);
+            ctx.validity = Some(match ctx.validity.as_ref() {
+                Some(validity) => validity & &bitmap,
+                None => bitmap.clone(),
+            });
         }
         let results = self.0.eval(&nonull_args, ctx);
-        if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
-            // If the original value is NULL, we can ignore the error.
+        if let Some((error_bitmap, _)) = ctx.errors.as_mut()
+            && bitmap.null_count() != 0
+        {
+            // If the original value is NULL, we can ignore the error. Fully
+            // valid inputs need no merge: scalar inputs have a one-bit bitmap,
+            // while a broadcast error can refer to any row in the batch.
             let res = error_bitmap.clone().bitor(&bitmap.not());
             if res.null_count() == 0 {
                 ctx.errors = None;
@@ -350,5 +357,36 @@ impl FunctionFactoryHelper {
                 _ => None,
             }),
         })
+    }
+}
+
+#[cfg(test)]
+mod scalar_broadcast_tests {
+    use super::*;
+    use crate::types::NumberScalar;
+
+    #[test]
+    fn nullable_scalar_preserves_partial_batch_error_rows() {
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 3,
+            func_ctx: &func_ctx,
+            validity: Some([false, true, false].into_iter().collect()),
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+        let function = PassthroughNullable(|_: &[Value<AnyType>], ctx: &mut EvalContext| {
+            ctx.set_error(1, "active scalar error");
+            Value::Scalar(Scalar::Number(NumberScalar::Int64(1)))
+        });
+        function.eval(
+            &[Value::Scalar(Scalar::Number(NumberScalar::Int64(10)))],
+            &mut ctx,
+        );
+        let (valid, message) = ctx.errors.unwrap();
+        assert_eq!(message, "active scalar error");
+        assert_eq!(valid.iter().collect::<Vec<_>>(), vec![true, false, true]);
     }
 }

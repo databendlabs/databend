@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::hint::unlikely;
 use std::marker::PhantomData;
-use std::ops::*;
 use std::sync::Arc;
 
 use databend_common_expression::Domain;
@@ -49,6 +48,8 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_cmp_2_arg;
 use databend_common_expression::with_decimal_mapped_type;
+
+use crate::decimal::DecimalExt;
 
 #[inline]
 fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u8, u8) {
@@ -390,7 +391,7 @@ fn compare_decimal<A, B, F, T>(
     ctx: &mut EvalContext,
 ) -> Value<AnyType>
 where
-    T: Decimal,
+    T: DecimalExt,
     A: for<'a> AccessType<ScalarRef<'a> = T>,
     B: for<'a> AccessType<ScalarRef<'a> = T>,
     F: Fn(T, T, &mut EvalContext) -> bool + Copy + Send + Sync,
@@ -405,7 +406,7 @@ trait CmpOp: 'static + Default + Send + Sync + Clone {
     fn is(o: Ordering) -> bool;
     fn domain_op<T: SimpleDomainCmp>(a: &T, b: &T) -> FunctionDomain<BooleanType>;
     fn compare<D>(a: D, b: D, f_a: D, f_b: D) -> bool
-    where D: Decimal + std::ops::Mul<Output = D> {
+    where D: DecimalExt {
         if unlikely(a.signum() != b.signum()) {
             return Self::is(a.cmp(&b));
         }
