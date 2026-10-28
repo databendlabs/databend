@@ -105,12 +105,8 @@ pub struct VectorBundleEntry {
     /// Decoded size; equals `length` for plain components.
     pub raw_length: u64,
     pub codec: VectorBundleCodec,
-    /// CRC32 of the decoded bytes. Not verified on FP16 page reads.
+    /// CRC32 of the decoded bytes. Not verified on FP16 row reads.
     pub checksum: u32,
-    /// Only for FP16: plain fixed-width rows of `dimension * 2` bytes, read in pages
-    /// of this many rows. The dimension follows from `raw_length` and the row count.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rows_per_page: Option<u32>,
 }
 
 impl VectorBundleEntry {
@@ -123,7 +119,6 @@ impl VectorBundleEntry {
             raw_length: raw.len() as u64,
             codec,
             checksum: crc32fast::hash(raw),
-            rows_per_page: None,
         }
     }
 
@@ -146,14 +141,6 @@ impl VectorBundleEntry {
         }
     }
 
-    /// Rows per page of a paged (plain FP16) component. Page reads rely on this:
-    /// they compute positions from it and read the bytes as plain FP16.
-    pub fn rows_per_page(&self) -> Result<u32> {
-        self.rows_per_page
-            .filter(|rows| *rows != 0 && self.codec == VectorBundleCodec::Plain)
-            .ok_or_else(|| invalid("Vector component is not plain paged FP16 data"))
-    }
-
     /// FP16 dimension: `raw_length / (row_count * 2)`. Not defined for an empty block.
     pub fn dimension(&self, row_count: u64) -> Result<u32> {
         let row_bytes = row_count
@@ -169,30 +156,31 @@ impl VectorBundleEntry {
             .ok_or_else(|| invalid("Invalid FP16 dimension"))
     }
 
-    pub fn page_row_range(&self, page: usize, total_rows: u64) -> Result<Range<u64>> {
-        let rows_per_page = u64::from(self.rows_per_page()?);
-        let start = (page as u64)
-            .checked_mul(rows_per_page)
-            .filter(|start| *start < total_rows)
-            .ok_or_else(|| invalid("FP16 page ordinal out of bounds"))?;
-        Ok(start..start.saturating_add(rows_per_page).min(total_rows))
-    }
-
-    /// Read descriptor for one page: `offset + row_start * row_bytes`, with the
-    /// length of its rows. Plain bytes, no per-page checksum.
-    pub fn page_read(&self, page: usize, total_rows: u64) -> Result<VectorBundlePageRead> {
-        let rows = self.page_row_range(page, total_rows)?;
+    /// Read descriptor for FP16 `rows` of a block of `total_rows` rows: the rows
+    /// are plain and fixed-width, so they lie at `offset + rows.start * row_bytes`.
+    /// Readers choose the rows (pages); there is no per-row-range checksum.
+    pub fn row_range_read(
+        &self,
+        rows: Range<u64>,
+        total_rows: u64,
+    ) -> Result<VectorBundlePageRead> {
+        if self.codec != VectorBundleCodec::Plain {
+            return Err(invalid("Vector component is not plain FP16 data"));
+        }
+        if rows.start >= rows.end || rows.end > total_rows {
+            return Err(invalid("FP16 rows out of bounds"));
+        }
         let row_bytes = u64::from(self.dimension(total_rows)?) * 2;
         let start = rows.start * row_bytes;
         let length = (rows.end - rows.start) * row_bytes;
         if start + length > self.length {
-            return Err(invalid("FP16 page range outside component"));
+            return Err(invalid("FP16 rows outside component"));
         }
         Ok(VectorBundlePageRead {
             offset: self
                 .offset
                 .checked_add(start)
-                .ok_or_else(|| invalid("FP16 page offset overflow"))?,
+                .ok_or_else(|| invalid("FP16 row offset overflow"))?,
             length,
             raw_length: length,
             codec: VectorBundleCodec::Plain,
@@ -432,13 +420,8 @@ impl VectorBundleBuilder {
     /// The rows of a `Vector(Float32)` column (nullable or not) as plain
     /// fixed-width little-endian FP16. NULL slots are converted like any other row;
     /// they are never scored. Values beyond the FP16 range become +-Inf and score
-    /// as the sentinel. `rows_per_page` is only the read granularity.
-    pub fn add_fp16_data(
-        &mut self,
-        column_id: u32,
-        column: &Column,
-        rows_per_page: usize,
-    ) -> Result<()> {
+    /// as the sentinel. Readers choose the pages to read.
+    pub fn add_fp16_data(&mut self, column_id: u32, column: &Column) -> Result<()> {
         let column = column
             .as_nullable()
             .map_or(column, |nullable| &nullable.column);
@@ -446,13 +429,7 @@ impl VectorBundleBuilder {
             .as_vector()
             .and_then(|vector| vector.as_float32())
             .ok_or_else(|| invalid("FP16 refine requires Vector(Float32)"))?;
-        // Page size limits are validated with the index options; the format only
-        // needs a nonzero `u32` page size.
-        if *dimension == 0
-            || column.len() as u64 != self.footer.row_count
-            || rows_per_page == 0
-            || rows_per_page > u32::MAX as usize
-        {
+        if *dimension == 0 || column.len() as u64 != self.footer.row_count {
             return Err(invalid("Invalid FP16 component"));
         }
         let name = vector_fp16_data_name(column_id);
@@ -476,10 +453,7 @@ impl VectorBundleBuilder {
             self.bytes.extend_from_slice(bytemuck::cast_slice(bits));
         }
         let raw = &self.bytes[start..];
-        let entry = VectorBundleEntry {
-            rows_per_page: Some(rows_per_page as u32),
-            ..VectorBundleEntry::new(start, raw.len(), raw, VectorBundleCodec::Plain)
-        };
+        let entry = VectorBundleEntry::new(start, raw.len(), raw, VectorBundleCodec::Plain);
         self.footer.components.insert(name, entry);
         Ok(())
     }
@@ -567,7 +541,7 @@ mod tests {
         builder.add_hnsw("0-l2_graph_links".to_owned(), b"links")?;
         builder.add_hnsw("0-l2_encoded_u8_data".to_owned(), &sq8)?;
         builder.add_validity(0, &column.as_nullable().unwrap().validity)?;
-        builder.add_fp16_data(0, &column, 64)?;
+        builder.add_fp16_data(0, &column)?;
         let bytes = builder.finish()?;
 
         let footer = VectorBundleFooter::from_bundle(&bytes)?;
@@ -591,16 +565,17 @@ mod tests {
         // Row 0 is NULL, row 1 is valid.
         assert_eq!(validity[0] & 0b11, 0b10);
 
-        // Plain fixed-width FP16 rows; pages are located by row number.
+        // Plain fixed-width FP16 rows; any row range is located by row number.
         let fp16 = &footer.components[&vector_fp16_data_name(0)];
         assert!(!footer.components.contains_key(&vector_fp16_data_name(1)));
         assert_eq!(fp16.dimension(ROWS as u64)?, DIM as u32);
-        assert_eq!(fp16.page_row_range(1, ROWS as u64)?, 64..100);
-        let page = read(&bytes, fp16.page_read(1, ROWS as u64)?)?;
+        let page = read(&bytes, fp16.row_range_read(64..100, ROWS as u64)?)?;
         assert_eq!(page.len(), 36 * DIM * 2);
         let first = f16::from_le_bytes([page[0], page[1]]).to_f32();
         assert_eq!(first, (64 * DIM) as f32 * 0.25);
-        assert!(fp16.page_read(2, ROWS as u64).is_err());
+        assert!(fp16.row_range_read(64..101, ROWS as u64).is_err());
+        assert!(fp16.row_range_read(64..64, ROWS as u64).is_err());
+        assert!(data.row_range_read(0..1, ROWS as u64).is_err());
 
         // The disk-tier codec of the meta cache keeps a bundle footer a bundle.
         let meta = VectorIndexMeta::Bundle(Arc::new(footer));
@@ -638,9 +613,9 @@ mod tests {
         *corrupted.last_mut().unwrap() ^= 1;
         assert!(VectorBundleFooter::from_bundle(&corrupted).is_err());
 
-        // Pages need at least one row (limits are validated with the index options).
-        let mut builder = VectorBundleBuilder::new("vi".to_owned(), "v1".to_owned(), ROWS as u64);
-        assert!(builder.add_fp16_data(0, &column, 0).is_err());
+        // FP16 data must cover the rows of the block.
+        let mut builder = VectorBundleBuilder::new("vi".to_owned(), "v1".to_owned(), 1);
+        assert!(builder.add_fp16_data(0, &column).is_err());
 
         // A component past the footer is rejected when the footer is read.
         let mut footer = VectorBundleFooter::new("vi".to_owned(), "v1".to_owned(), 1);

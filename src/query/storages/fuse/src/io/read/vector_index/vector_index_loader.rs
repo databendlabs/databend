@@ -32,12 +32,14 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::VectorRefineDataCache;
 use databend_storages_common_index::VectorBundleEntry;
 use databend_storages_common_index::VectorBundleFooter;
+use databend_storages_common_index::VectorBundlePageRead;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_index::vector_fp16_data_name;
 use databend_storages_common_index::vector_validity_name;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::IndexFileLocation;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS;
 use opendal::Operator;
 
 use super::vector_index_bundle_loader::load_bundle_components;
@@ -209,6 +211,7 @@ pub(super) struct RefineData {
     name: String,
     entry: VectorBundleEntry,
     row_count: u64,
+    /// Read granularity, chosen by the reader: FP16 rows are plain and fixed-width.
     pub rows_per_page: usize,
     pub dimension: usize,
 }
@@ -236,13 +239,18 @@ impl RefineData {
             entry: entry.clone(),
             name,
             row_count: row_count as u64,
-            rows_per_page: entry.rows_per_page()? as usize,
+            rows_per_page: VECTOR_REFINE_PAGE_ROWS,
             dimension: entry.dimension(row_count as u64)? as usize,
         })
     }
 
     pub fn page_row_range(&self, page: usize) -> Result<Range<u64>> {
-        self.entry.page_row_range(page, self.row_count)
+        let rows_per_page = self.rows_per_page as u64;
+        let start = (page as u64)
+            .checked_mul(rows_per_page)
+            .filter(|start| *start < self.row_count)
+            .ok_or_else(|| ErrorCode::StorageOther("FP16 page ordinal out of bounds"))?;
+        Ok(start..start.saturating_add(rows_per_page).min(self.row_count))
     }
 
     /// Reads the whole FP16 data in one request, checked against its checksum and
@@ -255,14 +263,26 @@ impl RefineData {
             .ok_or_else(|| ErrorCode::Internal("Missing FP16 component read"))
     }
 
+    /// The read of `page`, named for the cache by its byte range in the file, so
+    /// pages cached under another page size are not reused.
+    pub(super) fn page_request(&self, page: usize) -> Result<(String, VectorBundlePageRead)> {
+        let read = self
+            .entry
+            .row_range_read(self.page_row_range(page)?, self.row_count)?;
+        let name = format!(
+            "{}#bytes={}..{}",
+            self.name,
+            read.offset,
+            read.offset + read.length
+        );
+        Ok((name, read))
+    }
+
     /// Reads `pages` through the refine data cache.
     pub async fn read_pages(&self, settings: &ReadSettings, pages: &[usize]) -> Result<Vec<Bytes>> {
         let requests = pages
             .iter()
-            .map(|&page| {
-                let read = self.entry.page_read(page, self.row_count)?;
-                Ok((format!("{}#page={page}", self.name), read))
-            })
+            .map(|&page| self.page_request(page))
             .collect::<Result<Vec<_>>>()?;
         let cache = CacheManager::instance().get_vector_refine_data_cache();
         load_bundle_reads(self.operator.clone(), settings, &self.path, requests, cache).await

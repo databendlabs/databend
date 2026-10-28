@@ -243,7 +243,7 @@ mod tests {
             builder.add_hnsw(field.name().clone(), bytes)?;
         }
         builder.add_validity(COLUMN_ID, &column.as_nullable().unwrap().validity)?;
-        builder.add_fp16_data(COLUMN_ID, &column, 64)?;
+        builder.add_fp16_data(COLUMN_ID, &column)?;
         let data = builder.finish()?;
         let path = "test_vector_index_reader/_i_v_v2/v1/h0.index".to_owned();
         let size = data.len() as u64;
@@ -287,6 +287,37 @@ mod tests {
             assert!((score.score - expected).abs() < 1e-2);
         }
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_refine_pages_follow_reader_page_size() -> Result<()> {
+        crate::test_utils::init_test_globals()?;
+        let operator = Operator::new(Memory::default())?.finish();
+        let location = write_bundle(&operator).await?;
+        let identity = VectorIndexIdentity {
+            name: "vi".to_owned(),
+            version: "v1".to_owned(),
+            column_id: COLUMN_ID,
+        };
+        let settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 1024 * 1024,
+            parquet_fast_read_bytes: 0,
+        };
+        let mut refine = RefineData::open(&operator, &location, &identity, ROWS).await?;
+        let whole = refine.read_pages(&settings, &[0]).await?.remove(0);
+        assert_eq!(whole.len(), ROWS * DIM * 2);
+
+        // Another page size reads the same rows, cached under other names.
+        refine.rows_per_page = 64;
+        assert_eq!(refine.page_row_range(1)?, 64..100);
+        assert!(refine.page_row_range(2).is_err());
+        let pages = refine.read_pages(&settings, &[0, 1]).await?;
+        assert_eq!([&pages[0][..], &pages[1][..]].concat(), whole);
+        let small = refine.page_request(0)?.0;
+        refine.rows_per_page = ROWS;
+        assert_ne!(small, refine.page_request(0)?.0);
         Ok(())
     }
 }

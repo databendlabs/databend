@@ -3348,7 +3348,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-vector-index-refine-size",
         value_name = "VALUE",
-        default_value = "4294967296"
+        default_value = "34359738368"
     )]
     pub vector_index_refine_size: u64,
 
@@ -3550,7 +3550,7 @@ impl Default for CacheConfig {
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,
             vector_index_filter_size: 64424509440,
-            vector_index_refine_size: 4294967296,
+            vector_index_refine_size: 34359738368,
             disk_cache_vector_index_data_size: 0,
             vector_index_filter_memory_ratio: 0,
             spatial_index_meta_count: 30000,

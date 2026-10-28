@@ -39,7 +39,6 @@ use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_EF_CONSTRUCT;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_M;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE;
-use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS;
 use databend_storages_common_table_meta::table::parse_vector_index_refine;
 use log::debug;
 use log::info;
@@ -323,7 +322,7 @@ impl VectorIndexBuilder {
                     }
                 }
                 if param.refine {
-                    bundle.add_fp16_data(column_id, column, VECTOR_REFINE_PAGE_ROWS)?;
+                    bundle.add_fp16_data(column_id, column)?;
                 }
             }
             let file = PendingIndexFile {

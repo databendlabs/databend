@@ -1727,11 +1727,14 @@ mod tests {
         let pages = manager.get_vector_refine_data_cache().unwrap();
         let data = Bytes::from_static(b"fp16 page");
         pages.insert(
-            "a.index:0_fp16_data#page=0".to_string(),
-            VectorIndexFile::create("0_fp16_data#page=0".to_string(), data.clone()),
+            "a.index:0_fp16_data#bytes=0..9".to_string(),
+            VectorIndexFile::create("0_fp16_data#bytes=0..9".to_string(), data.clone()),
         );
         manager.set_cache_capacity(MEMORY_CACHE_VECTOR_INDEX, 0)?;
-        assert_eq!(pages.get("a.index:0_fp16_data#page=0").unwrap().data, data);
+        assert_eq!(
+            pages.get("a.index:0_fp16_data#bytes=0..9").unwrap().data,
+            data
+        );
         Ok(())
     }
 

@@ -56,9 +56,12 @@ pub const VECTOR_INDEX_OPT_DISTANCE: &str = "distance";
 /// `refine = true` stores FP16 vectors with the index, so queries can refine SQ8
 /// candidates. The candidate multiplier is the `vector_refine_factor` setting.
 pub const VECTOR_INDEX_OPT_REFINE: &str = "refine";
-/// Rows per FP16 page (192 KiB at 768D, 256 KiB at 1024D). Readers use the
-/// value persisted in each bundle, so it can change without affecting old files.
-pub const VECTOR_REFINE_PAGE_ROWS: usize = 128;
+/// Rows per FP16 page read by refinement (3 MiB at 768D, 4 MiB at 1024D). Large
+/// pages make few object storage requests when the refine cache loads, and few
+/// cache entries; they suit a refine cache that holds the FP16 data. Bundles store
+/// plain fixed-width rows, so this is only the read granularity: it applies to
+/// existing files, and cache keys hold the byte range of a page.
+pub const VECTOR_REFINE_PAGE_ROWS: usize = 2048;
 
 /// Parses the `refine` option value (`true` or `false`, case-insensitive).
 pub fn parse_vector_index_refine(value: &str) -> Option<bool> {
