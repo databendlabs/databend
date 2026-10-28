@@ -173,6 +173,36 @@ impl UDFValidator {
         }
     }
 
+    pub fn is_udaf_script_allowed(lang: &UDFLanguage) -> Result<()> {
+        Self::is_udaf_script_allowed_with_config(
+            lang,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    /// Aggregate script UDFs have no sandbox path: Python aggregates execute
+    /// inside the query process, so they are rejected whenever the node is
+    /// configured to isolate Python (`enable_udf_sandbox`).
+    pub fn is_udaf_script_allowed_with_config(
+        lang: &UDFLanguage,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
+        match lang {
+            UDFLanguage::JavaScript if config.enable_udf_js_script => Ok(()),
+            UDFLanguage::Python if config.enable_udf_sandbox => Err(ErrorCode::Unimplemented(
+                "Python aggregate UDF is not supported when 'enable_udf_sandbox' is enabled: it would run outside the sandbox",
+            )),
+            UDFLanguage::Python if config.enable_udf_python_script => Ok(()),
+            UDFLanguage::WebAssembly => Err(ErrorCode::Unimplemented(
+                "WebAssembly aggregate UDF is not supported",
+            )),
+            other => Err(ErrorCode::Unimplemented(format!(
+                "UDF {} script is not enabled in config",
+                other
+            ))),
+        }
+    }
+
     pub fn is_udf_cloud_script_allowed(lang: &UDFLanguage) -> Result<()> {
         Self::is_udf_cloud_script_allowed_with_config(
             lang,

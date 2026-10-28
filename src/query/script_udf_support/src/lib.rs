@@ -24,6 +24,9 @@ mod script_udf {
     mod runtime_pool {
         include!("runtime_pool.rs");
     }
+    mod script_udf_limits {
+        include!("script_udf_limits.rs");
+    }
     mod transform_udf_script {
         include!("transform_udf_script.rs");
     }
