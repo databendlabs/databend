@@ -253,14 +253,6 @@ fn test_timestamp_bounds_and_text_roundtrip() {
         assert_eq!(parsed, value, "{text}");
     }
 
-    for tz in [Tz::Asia__Shanghai, Tz::America__New_York] {
-        let value = string_to_timestamp_tz(b"0001-01-01 00:00:00", || &tz).unwrap();
-        let text = value.to_string();
-        let parsed = string_to_timestamp_tz(text.as_bytes(), || &tz).unwrap();
-        assert_eq!(parsed.timestamp(), value.timestamp(), "{text}");
-        assert_eq!(parsed.seconds_offset(), value.seconds_offset(), "{text}");
-    }
-
     assert_eq!(check_timestamp(TIMESTAMP_MIN).unwrap(), TIMESTAMP_MIN);
     assert_eq!(check_timestamp(TIMESTAMP_MAX).unwrap(), TIMESTAMP_MAX);
     assert!(check_timestamp(TIMESTAMP_MIN - 1).is_err());

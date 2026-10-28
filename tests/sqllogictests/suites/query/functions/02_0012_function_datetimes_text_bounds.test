@@ -1,0 +1,321 @@
+# New calendar years are allowed only to preserve valid UTC boundary instants.
+# They must not widen main's set of text inputs eligible for silent clamping.
+# This suite intentionally does not change TIMESTAMP_TZ's minute-offset format.
+
+statement ok
+SET timezone = 'UTC'
+
+statement ok
+CREATE OR REPLACE TABLE timestamp_text_year_target(ts TIMESTAMP)
+
+statement ok
+CREATE OR REPLACE STAGE timestamp_text_year_stage
+
+statement ok
+COPY INTO @timestamp_text_year_stage/csv/year_zero/
+FROM (SELECT '0000-01-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE)
+
+statement ok
+COPY INTO @timestamp_text_year_stage/csv/bce/
+FROM (SELECT '-0500-01-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE)
+
+statement ok
+COPY INTO @timestamp_text_year_stage/csv/year_10000/
+FROM (SELECT '+10000-06-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE)
+
+statement ok
+SET enable_auto_detect_datetime_format = 0
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/csv/year_zero/
+FILE_FORMAT = (TYPE = CSV) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/csv/bce/
+FILE_FORMAT = (TYPE = CSV) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/csv/year_10000/
+FILE_FORMAT = (TYPE = CSV) FORCE = TRUE
+
+query I
+SELECT count(*) FROM timestamp_text_year_target
+----
+0
+
+statement ok
+SET enable_auto_detect_datetime_format = 1
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/csv/year_zero/
+FILE_FORMAT = (TYPE = CSV) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/csv/bce/
+FILE_FORMAT = (TYPE = CSV) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/csv/year_10000/
+FILE_FORMAT = (TYPE = CSV) FORCE = TRUE
+
+query I
+SELECT count(*) FROM timestamp_text_year_target
+----
+0
+
+statement ok
+COPY INTO @timestamp_text_year_stage/csv/legacy/
+FROM (SELECT '9999-12-31 23:59:59.999999 -00:01' AS ts)
+FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE)
+
+statement ok
+SET enable_auto_detect_datetime_format = 0
+
+# CSV/TSV keep main's clamp for accepted calendar years after UTC conversion.
+statement ok
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/csv/legacy/
+FILE_FORMAT = (TYPE = CSV)
+
+query I
+SELECT ts::BIGINT FROM timestamp_text_year_target
+----
+-62135683200000000
+
+statement ok
+TRUNCATE TABLE timestamp_text_year_target
+
+statement ok
+COPY INTO @timestamp_text_year_stage/tsv/year_zero/
+FROM (SELECT '0000-01-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = TSV COMPRESSION = NONE)
+
+statement ok
+COPY INTO @timestamp_text_year_stage/tsv/bce/
+FROM (SELECT '-0500-01-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = TSV COMPRESSION = NONE)
+
+statement ok
+COPY INTO @timestamp_text_year_stage/tsv/year_10000/
+FROM (SELECT '+10000-06-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = TSV COMPRESSION = NONE)
+
+statement ok
+SET enable_auto_detect_datetime_format = 0
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/tsv/year_zero/
+FILE_FORMAT = (TYPE = TSV) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/tsv/bce/
+FILE_FORMAT = (TYPE = TSV) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/tsv/year_10000/
+FILE_FORMAT = (TYPE = TSV) FORCE = TRUE
+
+query I
+SELECT count(*) FROM timestamp_text_year_target
+----
+0
+
+statement ok
+SET enable_auto_detect_datetime_format = 1
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/tsv/year_zero/
+FILE_FORMAT = (TYPE = TSV) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/tsv/bce/
+FILE_FORMAT = (TYPE = TSV) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/tsv/year_10000/
+FILE_FORMAT = (TYPE = TSV) FORCE = TRUE
+
+query I
+SELECT count(*) FROM timestamp_text_year_target
+----
+0
+
+statement ok
+COPY INTO @timestamp_text_year_stage/tsv/legacy/
+FROM (SELECT '9999-12-31 23:59:59.999999 -00:01' AS ts)
+FILE_FORMAT = (TYPE = TSV COMPRESSION = NONE)
+
+statement ok
+SET enable_auto_detect_datetime_format = 0
+
+# CSV/TSV keep main's clamp for accepted calendar years after UTC conversion.
+statement ok
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/tsv/legacy/
+FILE_FORMAT = (TYPE = TSV)
+
+query I
+SELECT ts::BIGINT FROM timestamp_text_year_target
+----
+-62135683200000000
+
+statement ok
+TRUNCATE TABLE timestamp_text_year_target
+
+statement ok
+COPY INTO @timestamp_text_year_stage/ndjson/year_zero/
+FROM (SELECT '0000-01-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = NDJSON COMPRESSION = NONE)
+
+statement ok
+COPY INTO @timestamp_text_year_stage/ndjson/bce/
+FROM (SELECT '-0500-01-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = NDJSON COMPRESSION = NONE)
+
+statement ok
+COPY INTO @timestamp_text_year_stage/ndjson/year_10000/
+FROM (SELECT '+10000-06-01 00:00:00' AS ts)
+FILE_FORMAT = (TYPE = NDJSON COMPRESSION = NONE)
+
+statement ok
+SET enable_auto_detect_datetime_format = 0
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/ndjson/year_zero/
+FILE_FORMAT = (TYPE = NDJSON) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/ndjson/bce/
+FILE_FORMAT = (TYPE = NDJSON) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/ndjson/year_10000/
+FILE_FORMAT = (TYPE = NDJSON) FORCE = TRUE
+
+query I
+SELECT count(*) FROM timestamp_text_year_target
+----
+0
+
+statement ok
+SET enable_auto_detect_datetime_format = 1
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/ndjson/year_zero/
+FILE_FORMAT = (TYPE = NDJSON) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/ndjson/bce/
+FILE_FORMAT = (TYPE = NDJSON) FORCE = TRUE
+
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/ndjson/year_10000/
+FILE_FORMAT = (TYPE = NDJSON) FORCE = TRUE
+
+query I
+SELECT count(*) FROM timestamp_text_year_target
+----
+0
+
+statement ok
+COPY INTO @timestamp_text_year_stage/ndjson/legacy/
+FROM (SELECT '9999-12-31 23:59:59.999999 -00:01' AS ts)
+FILE_FORMAT = (TYPE = NDJSON COMPRESSION = NONE)
+
+statement ok
+SET enable_auto_detect_datetime_format = 0
+
+# NDJSON already uses the strict string conversion, unlike CSV/TSV.
+statement error timestamp is out of range
+COPY INTO timestamp_text_year_target FROM @timestamp_text_year_stage/ndjson/legacy/
+FILE_FORMAT = (TYPE = NDJSON)
+
+# TRY must still null formerly rejected extended-year input, with and without AUTO.
+statement ok
+CREATE OR REPLACE TABLE timestamp_text_year_inputs(s STRING)
+
+statement ok
+INSERT INTO timestamp_text_year_inputs VALUES
+    ('0000-01-01 00:00:00'), ('-0500-01-01 00:00:00'),
+    ('+10000-06-01 00:00:00'), ('01-JAN-0000 00:00:00'),
+    ('01-JAN--0500 00:00:00'), ('01-JUN-+10000 00:00:00'), (NULL)
+
+query III
+settings(enable_auto_detect_datetime_format=0)
+SELECT count(*), count_if(try_to_timestamp(s) IS NULL), count_if(try_to_timestamp_tz(s) IS NULL)
+FROM timestamp_text_year_inputs
+----
+7 7 7
+
+query III
+settings(enable_auto_detect_datetime_format=1)
+SELECT count(*), count_if(try_to_timestamp(s) IS NULL), count_if(try_to_timestamp_tz(s) IS NULL)
+FROM timestamp_text_year_inputs
+----
+7 7 7
+
+# Strict conversions must not silently succeed, including column evaluation.
+statement error
+settings(enable_auto_detect_datetime_format=1)
+SELECT to_timestamp(s) FROM timestamp_text_year_inputs
+
+statement error
+settings(enable_auto_detect_datetime_format=1)
+SELECT to_timestamp_tz(s) FROM timestamp_text_year_inputs
+
+query BBB
+settings(enable_auto_detect_datetime_format=1)
+SELECT to_timestamp('31-DEC-0000 00:00:00')::BIGINT = -62135683200000000,
+       to_timestamp(to_timestamp_tz('31-DEC-0000 00:00:00'))::BIGINT = -62135683200000000,
+       try_to_timestamp('01-JAN-+10000 00:00:00') IS NULL
+----
+1 1 1
+
+# Date text and numeric epoch clamping remain untouched.
+query BBB
+settings(enable_auto_detect_datetime_format=1)
+SELECT try_to_date('31-DEC-0000') IS NULL,
+       to_timestamp('9223372036854775807')::BIGINT = -62135683200000000,
+       try_to_timestamp('9223372036854775807')::BIGINT = -62135683200000000
+----
+1 1 1
+
+statement ok
+SET timezone = 'Asia/Shanghai'
+
+query BB
+settings(enable_auto_detect_datetime_format=1)
+SELECT to_timestamp('01-JAN-+10000 07:59:59.999999')::BIGINT = 253402300799999999,
+       to_timestamp(to_timestamp_tz('01-JAN-+10000 07:59:59.999999'))::BIGINT = 253402300799999999
+----
+1 1
+
+# No new second-bearing TIMESTAMP_TZ output format is introduced here.
+query T
+SELECT to_string(to_timestamp_tz('1800-01-01 00:00:00'))
+----
+1800-01-01 00:00:00.000000 +0806
+
+statement ok
+SET timezone = 'America/New_York'
+
+query T
+SELECT to_string(to_timestamp_tz('1800-01-01 00:00:00'))
+----
+1800-01-01 00:00:00.000000 -0456
+
+statement ok
+SET timezone = 'UTC'
+
+statement ok
+SET enable_auto_detect_datetime_format = 0
+
+statement ok
+DROP TABLE timestamp_text_year_inputs
+
+statement ok
+DROP TABLE timestamp_text_year_target
+
+statement ok
+DROP STAGE timestamp_text_year_stage

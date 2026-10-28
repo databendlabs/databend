@@ -536,15 +536,11 @@ impl Display for timestamp_tz {
             return Err(std::fmt::Error);
         };
 
-        // Historical named offsets can include seconds (Shanghai: +08:05:43).
-        // Keep the existing minute-only format for ordinary offsets, but never
-        // round away seconds that are needed to recover the stored instant.
-        let format = if self.seconds_offset() % 60 == 0 {
-            TIMESTAMP_TIMEZONE_FORMAT
-        } else {
-            "%Y-%m-%d %H:%M:%S%.6f %::z"
-        };
-        write!(f, "{}", utc.with_timezone(&offset).format(format))
+        write!(
+            f,
+            "{}",
+            utc.with_timezone(&offset).format(TIMESTAMP_TIMEZONE_FORMAT)
+        )
     }
 }
 

@@ -53,12 +53,12 @@ SELECT try_to_date('+10000-01-01', '%Y-%m-%d') IS NULL,
 ----
 1 1 1 1 1
 
-# AUTO can now recognize the extended year and retains its clamp-to-MIN policy.
+# AUTO must not clamp formerly rejected extended-year text into the new MIN.
 query BBB
 settings(enable_auto_detect_datetime_format=1)
 SELECT try_to_date('01-JAN-+10000') IS NULL,
-       try_to_timestamp('01-JAN-+10000 00:00:00')::BIGINT = -62135683200000000,
-       to_timestamp(try_to_timestamp_tz('01-JAN-+10000 00:00:00'))::BIGINT = -62135683200000000
+       try_to_timestamp('01-JAN-+10000 00:00:00') IS NULL,
+       try_to_timestamp_tz('01-JAN-+10000 00:00:00') IS NULL
 ----
 1 1 1
 

@@ -125,11 +125,8 @@ fn parse_standard_timestamp(
     tz: &Tz,
     need_date: bool,
 ) -> Option<Result<(usize, DateTimeResType)>> {
-    // Keep DATE's four-digit years and minute-only explicit offset grammar.
-    if need_date
-        && (matches!(input.first(), Some(b'+' | b'-'))
-            || input.iter().filter(|&&byte| byte == b':').count() > 3)
-    {
+    // Preserve DATE's existing unsigned, four-digit input grammar.
+    if need_date && matches!(input.first(), Some(b'+' | b'-')) {
         return None;
     }
     parse_iso_timestamp(input).map(|parsed_result| {

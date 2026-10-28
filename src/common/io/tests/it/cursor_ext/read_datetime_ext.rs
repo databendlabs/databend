@@ -171,7 +171,6 @@ fn test_extended_timestamp_text_and_unchanged_date_years() -> anyhow::Result<()>
             "+10000-01-01 07:59:59.999999 +08:00",
             253_402_300_799_999_999,
         ),
-        ("0001-01-01 00:00:00 +08:05:43", -62_135_625_943_000_000),
         ("0000-12-30 10:00:00 -14:00", -62_135_683_200_000_000),
     ] {
         let mut reader = Cursor::new(text.as_bytes());
@@ -194,13 +193,7 @@ fn test_extended_timestamp_text_and_unchanged_date_years() -> anyhow::Result<()>
             "{text}"
         );
     }
-    for text in [
-        "0001-01-01 00:00:00 +08:05:60",
-        "0001-01-01 00:00:00 +08:05:",
-        "0001-01-01 00:00:00 +14:00:01",
-        "+9999999-01-01 00:00:00",
-        "+10000-01-01 00:00:00 +08:60",
-    ] {
+    for text in ["+9999999-01-01 00:00:00", "+10000-01-01 00:00:00 +08:60"] {
         assert!(
             Cursor::new(text.as_bytes())
                 .read_timestamp_text(&Tz::UTC)

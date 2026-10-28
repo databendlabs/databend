@@ -219,20 +219,7 @@ pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>>
                         "Timezone offset minute must be in [00, 59]",
                     )));
                 }
-                let mut second_offset = 0_i32;
-                if idx < input.len() && input[idx] == b':' {
-                    idx += 1;
-                    second_offset = match input.get(idx..idx + 2).and_then(parse_two_digits) {
-                        Some(second) if second < 60 => i32::from(second),
-                        _ => {
-                            return Some(Err(ErrorCode::InvalidTimezone(
-                                "Timezone offset second must be in [00, 59]",
-                            )));
-                        }
-                    };
-                    idx += 2;
-                }
-                let offset = sign * (hour_offset * 3600 + minute_offset * 60 + second_offset);
+                let offset = sign * (hour_offset * 3600 + minute_offset * 60);
                 if let Err(err) = check_timezone_offset(offset) {
                     return Some(Err(err));
                 }
