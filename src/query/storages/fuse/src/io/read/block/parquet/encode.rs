@@ -27,9 +27,6 @@ use databend_common_expression::types::EncodedColumn;
 use databend_common_expression::types::ForColumn;
 use databend_common_expression::types::NarrowBuffer;
 
-/// Most distinct values a block-level dictionary is built for (keys fit `u16`).
-const MAX_DICTIONARY_NDV: usize = 1 << 16;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ColumnEncoding {
     /// Dictionary encoding, for types without an order-preserving integer form (e.g. `String`,
@@ -76,15 +73,20 @@ impl ColumnEncoding {
 
     /// Converts the Arrow array read from Parquet into the narrowest in-memory form: the
     /// encoded column, or the regular column if no encoding makes the block smaller.
-    pub fn encode(self, array: ArrayRef, data_type: &DataType) -> Result<Column> {
+     pub fn encode(
+        self,
+        array: ArrayRef,
+        data_type: &DataType,
+        max_ndv_ratio: u64,
+    ) -> Result<Column> {
         let inner_type = data_type.remove_nullable();
         if let Some(dict) = array.as_any().downcast_ref::<DictionaryArray<UInt32Type>>()
             && dict.values().null_count() == 0
             && (dict.null_count() == 0 || data_type.is_nullable())
         {
-            // Same NDV-to-row ratio as the writer enabling dictionary encoding
-            // (`HIGH_CARDINALITY_RATIO_THRESHOLD`).
-            if dict.values().is_empty() || dict.values().len() * 10 > dict.len() {
+            if dict.values().is_empty()
+                || dict.values().len() as u64 * 100 > dict.len() as u64 * max_ndv_ratio
+            {
                 return Column::from_arrow_rs(array, data_type);
             }
             // The Parquet dictionary, as is.
@@ -111,21 +113,16 @@ impl ColumnEncoding {
             });
         }
 
-        // A string column chunk without a dictionary page was written without dictionary
-        // encoding because of its cardinality: keep it.
-        if self.reuses_parquet_dictionary(data_type) {
-            return Column::from_arrow_rs(array, data_type);
-        }
         let column = Column::from_arrow_rs(array, data_type)?;
         Ok(match column {
             Column::Nullable(column) => self
-                .encode_column(column.column)
+                .encode_column(column.column, max_ndv_ratio)
                 .wrap_nullable(Some(column.validity)),
-            column => self.encode_column(column),
+            column => self.encode_column(column, max_ndv_ratio),
         })
     }
 
-    fn encode_column(self, column: Column) -> Column {
+    fn encode_column(self, column: Column, max_ndv_ratio: u64) -> Column {
         let mut best = None;
         if self == ColumnEncoding::FrameOfReference
             && let Some(for_column) = ForColumn::try_encode(&column)
@@ -136,7 +133,7 @@ impl ColumnEncoding {
             }
             best = Some(EncodedColumn::For(for_column));
         }
-        let max_ndv = (column.len() / 10).min(MAX_DICTIONARY_NDV);
+        let max_ndv = (column.len() as u64 * max_ndv_ratio / 100) as usize;
         if let Some(dict) = DictColumn::try_encode(&column, max_ndv) {
             let dict = EncodedColumn::Dict(dict);
             if best
@@ -174,10 +171,20 @@ mod tests {
 
     use super::*;
 
-    /// Encodes `array`, checks that the result decodes to the regular column and returns it.
+    /// Encodes `array` with the default dictionary NDV ratio, see [`encode_checked_with`].
     fn encode_checked(encoding: ColumnEncoding, array: ArrayRef, data_type: &DataType) -> Column {
+        encode_checked_with(encoding, array, data_type, 100)
+    }
+
+    /// Encodes `array`, checks that the result decodes to the regular column and returns it.
+    fn encode_checked_with(
+        encoding: ColumnEncoding,
+        array: ArrayRef,
+        data_type: &DataType,
+        max_ndv_ratio: u64,
+    ) -> Column {
         let plain = Column::from_arrow_rs(array.clone(), data_type).unwrap();
-        let column = encoding.encode(array, data_type).unwrap();
+        let column = encoding.encode(array, data_type, max_ndv_ratio).unwrap();
         let decoded = BlockEntry::Column(column.clone()).decoded_value();
         // The inner value of a NULL row is unspecified (encoded rows use an in-bounds
         // dictionary key), so compare logical values rather than placeholder bytes.
@@ -233,7 +240,7 @@ mod tests {
                 if all_valid { 0 } else { 198 }
             );
         }
-        // Without a Parquet dictionary, the strings stay a regular column with the validity.
+        // Without a Parquet dictionary, the strings are dictionary encoded inside the validity.
         let array = StringArray::from(
             (0..1000)
                 .map(|i| (i % 5 != 0).then_some("xxx/long/repeated/url"))
@@ -241,7 +248,7 @@ mod tests {
         );
         let column = encode_checked(ColumnEncoding::Dictionary, Arc::new(array), &data_type);
         let nullable = column.as_nullable().unwrap();
-        assert!(!nullable.column.is_encoded());
+        assert!(nullable.column.is_encoded());
         assert_eq!(nullable.validity.null_count(), 200);
 
         // Nullable dictionary entries contribute logical nulls even when all keys are valid.
@@ -279,42 +286,35 @@ mod tests {
         assert_eq!(dict.values.len(), 4);
         assert_eq!(dict.keys.byte_width(), 1);
 
-        // More dictionary values than half the rows: the regular column is kept.
+        // More dictionary values than the ratio allows: the regular column is kept.
         let values = StringArray::from((0..600).map(|i| i.to_string()).collect::<Vec<_>>());
         let keys = UInt32Array::from((0..1000).map(|i| i % 600).collect::<Vec<u32>>());
         let array = DictionaryArray::<UInt32Type>::try_new(keys, Arc::new(values)).unwrap();
-        let column = encode_checked(
+        let column = encode_checked_with(
             ColumnEncoding::Dictionary,
             Arc::new(array),
             &DataType::String,
+            50,
         );
         assert!(matches!(column, Column::String(_)));
     }
 
     #[test]
     fn test_encode_string_without_parquet_dictionary() {
-        // The writer disables dictionary encoding for high-NDV strings, so a string column chunk
-        // without a dictionary page is kept as is, even with few distinct values.
-        let array = StringArray::from((0..1000).map(|i| ["x", "y"][i % 2]).collect::<Vec<_>>());
-        let column = encode_checked(
-            ColumnEncoding::Dictionary,
-            Arc::new(array),
-            &DataType::String,
-        );
-        assert!(matches!(column, Column::String(_)));
+        // A string column chunk without a dictionary page gets a dictionary built from it,
+        // within the ratio.
+        for (ratio, encoded) in [(100, true), (1, true), (0, false)] {
+            let array = StringArray::from((0..1000).map(|i| ["x", "y"][i % 2]).collect::<Vec<_>>());
+            let column = encode_checked_with(
+                ColumnEncoding::Dictionary,
+                Arc::new(array),
+                &DataType::String,
+                ratio,
+            );
+            assert_eq!(column.is_encoded(), encoded, "ratio {ratio}");
+        }
 
-        // A Parquet dictionary with more values than a tenth of the rows is not kept either.
-        let values = StringArray::from((0..200).map(|i| i.to_string()).collect::<Vec<_>>());
-        let keys = UInt32Array::from((0..1000).map(|i| i % 200).collect::<Vec<_>>());
-        let array = DictionaryArray::<UInt32Type>::try_new(keys, Arc::new(values)).unwrap();
-        let column = encode_checked(
-            ColumnEncoding::Dictionary,
-            Arc::new(array),
-            &DataType::String,
-        );
-        assert!(matches!(column, Column::String(_)));
-
-        // All values distinct: the regular column is kept.
+        // All values distinct: the dictionary would be larger, so the regular column is kept.
         let array = StringArray::from((0..1000).map(|i| i.to_string()).collect::<Vec<_>>());
         let column = encode_checked(
             ColumnEncoding::Dictionary,
