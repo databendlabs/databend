@@ -153,6 +153,8 @@ impl Interpreter for ExecuteImmediateInterpreter {
                 }
             };
 
+            // The binder recorded the script's secrets for scrubbing the
+            // error's excerpt in query history and logs.
             res.map_err(|err| err.display_with_sql(&self.plan.script))
         })
     }

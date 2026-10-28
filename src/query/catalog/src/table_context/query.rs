@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_ast::parser::SqlSecrets;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
@@ -39,6 +40,10 @@ pub trait TableContextQueryIdentity: Send + Sync {
     fn get_id(&self) -> String;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
+
+    /// Records credential values hidden from the query text, so that error
+    /// messages of this query can be scrubbed instead of discarded.
+    fn add_query_secrets(&self, _secrets: SqlSecrets) {}
 
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
 
