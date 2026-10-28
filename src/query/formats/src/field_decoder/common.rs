@@ -146,12 +146,16 @@ pub(crate) fn read_int_from_decimal_text<T: Number>(data: &[u8], rounding_mode: 
     })?;
     // The decimal precision only bounds the number of digits, so the value must
     // still be checked against the exact range of `T`.
-    num_traits::cast::cast(n).ok_or_else(|| {
-        ErrorCode::BadBytes(format!(
-            "number {} is overflowed for {data_type}",
-            String::from_utf8_lossy(data)
-        ))
-    })
+    num_traits::cast::cast(n).ok_or_else(|| number_overflow_error::<T>(data))
+}
+
+/// Error for numeric text whose value does not fit the integer type `T`.
+pub(crate) fn number_overflow_error<T: Number>(data: &[u8]) -> ErrorCode {
+    ErrorCode::BadBytes(format!(
+        "number {} is overflowed for {}",
+        String::from_utf8_lossy(data),
+        T::data_type()
+    ))
 }
 
 #[cfg(test)]

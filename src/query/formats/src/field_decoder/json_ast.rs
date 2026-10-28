@@ -53,6 +53,7 @@ use num_traits::NumCast;
 use serde_json::Value;
 
 use crate::FieldDecoder;
+use crate::field_decoder::common::number_overflow_error;
 use crate::field_decoder::common::read_int_from_decimal_text;
 
 pub struct FieldJsonAstDecoder {
@@ -172,59 +173,48 @@ impl FieldJsonAstDecoder {
     fn read_int<T>(&self, column: &mut Vec<T>, value: &Value) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical + NumCast,
+        T::Native: NumCast,
     {
-        match value {
-            Value::Number(v) => {
-                let new_val = match v.as_i64() {
-                    Some(n) => num_traits::cast::cast::<_, T::Native>(n)
-                        .map(<T as From<T::Native>>::from)
-                        .ok_or_else(|| {
-                            ErrorCode::BadBytes(format!("Incorrect json number {}", v))
-                        })?,
-                    // Not a plain integer (e.g. 1.5, 1.76e18 or out of range). With
-                    // serde_json `arbitrary_precision`, `Number` keeps the original
-                    // text, so parse it as an exact decimal instead of going through
-                    // f64, which loses precision beyond 2^53 and clamps out-of-range
-                    // values into range.
-                    None => {
-                        read_int_from_decimal_text(v.as_str().as_bytes(), self.is_rounding_mode)?
-                    }
-                };
-                column.push(new_val);
-                Ok(())
-            }
-            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
-        }
+        self.read_integer(column, value, serde_json::Number::as_i64)
     }
 
     fn read_uint<T>(&self, column: &mut Vec<T>, value: &Value) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical + NumCast,
+        T::Native: NumCast,
     {
-        match value {
-            Value::Number(v) => {
-                let new_val = match v.as_u64() {
-                    Some(n) => num_traits::cast::cast::<_, T::Native>(n)
-                        .map(<T as From<T::Native>>::from)
-                        .ok_or_else(|| {
-                            ErrorCode::BadBytes(format!("Incorrect json number {}", v))
-                        })?,
-                    // Not a plain integer (e.g. 1.5, 1.76e18 or out of range). With
-                    // serde_json `arbitrary_precision`, `Number` keeps the original
-                    // text, so parse it as an exact decimal instead of going through
-                    // f64, which loses precision beyond 2^53 and clamps out-of-range
-                    // values into range.
-                    None => {
-                        read_int_from_decimal_text(v.as_str().as_bytes(), self.is_rounding_mode)?
-                    }
-                };
-                column.push(new_val);
-                Ok(())
-            }
-            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be number")),
-        }
+        self.read_integer(column, value, serde_json::Number::as_u64)
+    }
+
+    /// Reads a JSON number into the integer type `T`. `as_plain` extracts plain
+    /// integer literals (`as_i64` for signed types, `as_u64` for unsigned ones).
+    fn read_integer<T, N>(
+        &self,
+        column: &mut Vec<T>,
+        value: &Value,
+        as_plain: fn(&serde_json::Number) -> Option<N>,
+    ) -> Result<()>
+    where
+        T: Number + From<T::Native>,
+        T::Native: NumCast,
+        N: NumCast,
+    {
+        let Value::Number(v) = value else {
+            return Err(ErrorCode::BadBytes("Incorrect json value, must be number"));
+        };
+        let text = v.as_str();
+        let new_val = match as_plain(v) {
+            Some(n) => num_traits::cast::cast::<_, T::Native>(n)
+                .map(<T as From<T::Native>>::from)
+                .ok_or_else(|| number_overflow_error::<T>(text.as_bytes()))?,
+            // Not a plain integer (e.g. 1.5, 1.76e18 or out of range). With
+            // serde_json `arbitrary_precision`, `Number` keeps the original text,
+            // so parse it as an exact decimal instead of going through f64, which
+            // loses precision beyond 2^53 and clamps out-of-range values into range.
+            None => read_int_from_decimal_text(text.as_bytes(), self.is_rounding_mode)?,
+        };
+        column.push(new_val);
+        Ok(())
     }
 
     fn read_float<T>(&self, column: &mut Vec<T>, value: &Value) -> Result<()>
