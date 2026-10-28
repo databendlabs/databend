@@ -31,6 +31,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_catalog::table_context::TableContextQueryState;
@@ -731,6 +732,9 @@ impl RowsTypeVisitor for ReclusterMergeFactory {
 pub struct HorizontalReclusterSource {
     merge_execution: Box<dyn ReclusterMergeExecution>,
     metrics: Arc<ReclusterGroupMetrics>,
+    /// Cluster-local id of the node running this source, for log correlation across
+    /// nodes in a distributed round.
+    node: String,
     group: usize,
     input_blocks: usize,
     /// Wall-clock from the first `generate()` to the finishing one. Compared with the
@@ -1003,6 +1007,7 @@ impl HorizontalReclusterSource {
         Self {
             merge_execution,
             metrics: factory.merge_config.metrics.clone(),
+            node: factory.merge_config.ctx.get_cluster().local_id.clone(),
             group: factory.merge_config.group,
             input_blocks: factory.input_blocks.len(),
             started: None,
@@ -1042,6 +1047,7 @@ impl HorizontalReclusterSource {
         };
         log::info!(
             event = "recluster.profile.group_source",
+            node = self.node.as_str(),
             group = self.group,
             input_blocks = self.input_blocks,
             input_rows = m.input_rows.load(Ordering::Relaxed),

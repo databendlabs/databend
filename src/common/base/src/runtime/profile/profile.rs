@@ -51,6 +51,12 @@ pub struct Profile {
     pub title: Arc<String>,
 
     pub statistics: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
+    /// Sum of every value that `drain_statistics` has moved out of `statistics`.
+    /// `statistics` is reset to zero on each drain so that incremental reports
+    /// (e.g. `system.query_profile`, cross-node statistics exchange) never double count;
+    /// `statistics + drained_total` is therefore the processor's lifetime total at any
+    /// instant, which is what post-execution per-processor summaries need.
+    pub drained_total: [AtomicUsize; std::mem::variant_count::<ProfileStatisticsName>()],
     pub metrics_registry: Option<Arc<ScopedRegistry>>,
     pub errors: Arc<Mutex<Vec<NodeErrorType>>>,
     /// Hardware/software perf counter results, only populated during EXPLAIN PERF.
@@ -70,6 +76,9 @@ impl Clone for Profile {
             metrics_registry: self.metrics_registry.clone(),
             statistics: std::array::from_fn(|idx| {
                 AtomicUsize::new(self.statistics[idx].load(Ordering::SeqCst))
+            }),
+            drained_total: std::array::from_fn(|idx| {
+                AtomicUsize::new(self.drained_total[idx].load(Ordering::SeqCst))
             }),
             errors: self.errors.clone(),
             perf_counters: Mutex::new(self.perf_counters.lock().clone()),
@@ -100,6 +109,7 @@ impl Profile {
             title,
             labels,
             statistics: Self::create_items(),
+            drained_total: Self::create_items(),
             metrics_registry,
             errors: Arc::new(Mutex::new(vec![])),
             perf_counters: Mutex::new(HashMap::new()),
@@ -133,5 +143,108 @@ impl Profile {
 
     pub fn load_profile(&self, name: ProfileStatisticsName) -> usize {
         self.statistics[name as usize].load(Ordering::SeqCst)
+    }
+
+    /// Atomically move the current value of `statistics[index]` into `drained_total`
+    /// and return it. After this call `statistics[index]` is zero.
+    ///
+    /// Incremental reporters (plan-level profiles, cross-node exchange) must use this
+    /// instead of `fetch_min(0, ..)` directly so the lifetime total is preserved.
+    #[inline]
+    pub fn drain_statistic(&self, index: usize) -> usize {
+        let v = self.statistics[index].fetch_min(0, Ordering::SeqCst);
+        if v != 0 {
+            self.drained_total[index].fetch_add(v, Ordering::SeqCst);
+        }
+        v
+    }
+
+    /// Lifetime value of a statistic: what has been drained plus what has not.
+    #[inline]
+    pub fn load_total(&self, name: ProfileStatisticsName) -> usize {
+        let i = name as usize;
+        self.statistics[i].load(Ordering::SeqCst) + self.drained_total[i].load(Ordering::SeqCst)
+    }
+
+    /// A detached copy whose `statistics` hold lifetime totals and whose `drained_total`
+    /// is zero. `load_profile` on the result returns the same as `load_total` on `self`.
+    pub fn snapshot_total(&self) -> Profile {
+        let p = self.clone();
+        for i in 0..std::mem::variant_count::<ProfileStatisticsName>() {
+            let total = p.statistics[i].load(Ordering::SeqCst)
+                + p.drained_total[i].swap(0, Ordering::SeqCst);
+            p.statistics[i].store(total, Ordering::SeqCst);
+        }
+        p
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    use super::Profile;
+    use crate::runtime::profile::ProfileStatisticsName;
+
+    fn profile() -> Profile {
+        Profile::create(
+            0,
+            "p".to_string(),
+            Some(1),
+            Some("plan".to_string()),
+            None,
+            Arc::new(String::new()),
+            Arc::new(vec![]),
+            None,
+        )
+    }
+
+    const CPU: usize = ProfileStatisticsName::CpuTime as usize;
+
+    #[test]
+    fn drain_moves_value_and_preserves_total() {
+        let p = profile();
+        p.statistics[CPU].fetch_add(100, Ordering::SeqCst);
+
+        // Drain returns the live value and zeroes it, but the lifetime total is kept.
+        assert_eq!(p.drain_statistic(CPU), 100);
+        assert_eq!(p.statistics[CPU].load(Ordering::SeqCst), 0);
+        assert_eq!(p.load_profile(ProfileStatisticsName::CpuTime), 0);
+        assert_eq!(p.load_total(ProfileStatisticsName::CpuTime), 100);
+
+        // A second drain of nothing is a no-op on the total.
+        assert_eq!(p.drain_statistic(CPU), 0);
+        assert_eq!(p.load_total(ProfileStatisticsName::CpuTime), 100);
+
+        // Accumulate more, drain again: total is the sum across drains.
+        p.statistics[CPU].fetch_add(25, Ordering::SeqCst);
+        assert_eq!(p.drain_statistic(CPU), 25);
+        assert_eq!(p.load_total(ProfileStatisticsName::CpuTime), 125);
+    }
+
+    #[test]
+    fn snapshot_total_folds_drained_into_statistics() {
+        let p = profile();
+        p.statistics[CPU].fetch_add(100, Ordering::SeqCst);
+        p.drain_statistic(CPU);
+        p.statistics[CPU].fetch_add(7, Ordering::SeqCst); // live, not yet drained
+
+        let snap = p.snapshot_total();
+        // The snapshot reads the full total through the ordinary accessor...
+        assert_eq!(snap.load_profile(ProfileStatisticsName::CpuTime), 107);
+        assert_eq!(snap.drained_total[CPU].load(Ordering::SeqCst), 0);
+        // ...and taking it does not disturb the live profile.
+        assert_eq!(p.load_profile(ProfileStatisticsName::CpuTime), 7);
+        assert_eq!(p.load_total(ProfileStatisticsName::CpuTime), 107);
+    }
+
+    #[test]
+    fn clone_carries_drained_total() {
+        let p = profile();
+        p.statistics[CPU].fetch_add(42, Ordering::SeqCst);
+        p.drain_statistic(CPU);
+        let c = p.clone();
+        assert_eq!(c.load_total(ProfileStatisticsName::CpuTime), 42);
     }
 }

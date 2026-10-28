@@ -293,7 +293,7 @@ impl PipelineExecutor {
     /// still be broken down by stage.
     pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
         match self {
-            PipelineExecutor::QueryPipelineExecutor(executor) => executor.graph.get_proc_profiles(),
+            PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_proc_profiles(),
             PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.get_proc_profiles(),
         }
     }
