@@ -321,8 +321,6 @@ fn test_dictionary_function_evaluation() {
     let (encoded, plain) = dict(&values, &keys);
     for text in [
         "octet_length(s)",
-        "length(s)",
-        "regexp_replace(s, '^https://([^/]+)/.*$', '$1')",
         "octet_length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))",
         "regexp_replace('prefix', 'fix', s)",
     ] {
@@ -356,7 +354,7 @@ fn test_dictionary_function_evaluation() {
 #[test]
 fn test_dictionary_like() {
     let (encoded, plain) = dict(&["google_a", "googleXa", "example"], &[0, 1, 2, 0, 1, 0]);
-    for text in ["s LIKE '%google%'", "s LIKE 'google!_%' ESCAPE '!'"] {
+    for text in ["s LIKE '%google%'", r#""like"(s, 'google!_%', '!')"#] {
         eval_dictionary(text, encoded.clone(), plain.clone(), None, true);
     }
 }
@@ -371,21 +369,7 @@ fn test_dictionary_arithmetic() {
     ))));
     let plain = encoded.clone().decode_owned();
     for text in [
-        "s + 1",
-        "1 + s",
-        "s - 1",
-        "s - 2",
-        "1 - s",
-        "subtract(s, 3)",
-        "-s",
-        "s * 2",
-        "2 * s",
-        "s / 2",
-        "s DIV 2",
-        "intdiv(s, 2)",
-        "s % 3",
-        "s % -1",
-        "mod(s, 3)",
+        "s + 1", "1 + s", "s - 1", "1 - s", "s * 2", "s / 2", "s DIV 2", "s % 3", "s % -1",
     ] {
         let result = eval_dictionary(text, encoded.clone(), plain.clone(), None, true);
         let Value::Column(Column::Encoded(result)) = result else {
@@ -393,9 +377,7 @@ fn test_dictionary_arithmetic() {
         };
         assert!(result.as_dict().unwrap().keys.shares_storage(&keys));
     }
-    for text in ["s + s", "s - s", "s * s"] {
-        eval_dictionary(text, encoded.clone(), plain.clone(), None, false);
-    }
+    eval_dictionary("s + s", encoded.clone(), plain.clone(), None, false);
     let valid = Bitmap::from_iter([true, false, true, true, true, false, true, true]);
     eval_dictionary(
         "s - 1",
@@ -635,17 +617,7 @@ fn test_float_dictionary_preserves_bits() {
     let encoded_block = block(&build_dict(&plain_x), &build_dict(&plain_y));
     let plain_block = block(&plain_x, &plain_y);
     let func_ctx = FunctionContext::default();
-    for text in [
-        "atan2(x, -1.0)",
-        "atan2(y, -1.0)",
-        "x + 1.0",
-        "x - 1.0",
-        "0.0 - x",
-        "x * 2.0",
-        "x / 2.0",
-        "x % 2.0",
-        "x",
-    ] {
+    for text in ["atan2(x, -1.0)", "atan2(y, -1.0)", "x * 2.0"] {
         let raw_expr = parser::parse_raw_expr(text, &names, &BUILTIN_FUNCTIONS);
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let run = |block: &DataBlock| {

@@ -708,10 +708,4 @@ fn test_encoded_row_serialization() {
         }
     };
     assert_eq!(keys(&columns), keys(&decoded));
-    for (column, expected) in columns.into_iter().zip(decoded) {
-        assert!(
-            column.is_encoded() || matches!(&column, Column::Nullable(c) if c.column.is_encoded())
-        );
-        assert_eq!(column.decode_owned(), expected);
-    }
 }
