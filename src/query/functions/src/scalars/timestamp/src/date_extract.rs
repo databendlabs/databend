@@ -40,7 +40,6 @@ use databend_common_expression::types::number::UInt16Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
-use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_timezone::DateTimeComponents;
@@ -129,10 +128,11 @@ fn timestamp_to_u32_domain<T: ToNumber<Output = u32>>(
         return FunctionDomain::MayThrow;
     };
     if !tz_wall_clock_single_segment(&ctx.tz, domain.min, domain.max) {
-        // Outside the first UTC day of year 0, no supported timezone can
-        // project into a negative year. Preserve Full for ordinary DST ranges;
-        // only boundary ranges may throw even when both endpoints are valid.
-        return if domain.min >= TIMESTAMP_MIN + 86_400 * MICROS_PER_SEC {
+        // After the first UTC day of year 0, no supported timezone can project
+        // into a negative year. This cutoff is independent of TIMESTAMP_MIN:
+        // year 0 is a leap year, starting 366 days before DATE_MIN (0001-01-01).
+        let nonnegative_year_min = (i64::from(DATE_MIN) - 365) * 86_400 * MICROS_PER_SEC;
+        return if domain.min >= nonnegative_year_min {
             FunctionDomain::Full
         } else {
             FunctionDomain::MayThrow
@@ -694,17 +694,21 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+    use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 
     use super::*;
 
     #[test]
     fn test_extended_timestamp_year_projections() {
+        assert!(ToNumberImpl::try_eval_timestamp::<ToYear>(TIMESTAMP_MIN, &Tz::UTC).is_err());
+        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYMMDD>(TIMESTAMP_MIN, &Tz::UTC).is_err());
+        let year_zero = -62_167_219_200_000_000;
         assert_eq!(
-            ToNumberImpl::try_eval_timestamp::<ToYear>(TIMESTAMP_MIN, &Tz::UTC),
+            ToNumberImpl::try_eval_timestamp::<ToYear>(year_zero, &Tz::UTC),
             Ok(0)
         );
         assert_eq!(
-            ToNumberImpl::try_eval_timestamp::<ToYYYYMMDD>(TIMESTAMP_MIN, &Tz::UTC),
+            ToNumberImpl::try_eval_timestamp::<ToYYYYMMDD>(year_zero, &Tz::UTC),
             Ok(101)
         );
         assert_eq!(
@@ -712,8 +716,8 @@ mod tests {
             Ok(10000)
         );
         // 0000-01-01 belongs to ISO year -1, even in UTC.
-        assert!(ToNumberImpl::try_eval_timestamp::<ToISOYear>(TIMESTAMP_MIN, &Tz::UTC).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYWW>(TIMESTAMP_MIN, &Tz::UTC).is_err());
+        assert!(ToNumberImpl::try_eval_timestamp::<ToISOYear>(year_zero, &Tz::UTC).is_err());
+        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYWW>(year_zero, &Tz::UTC).is_err());
 
         let tz = "Etc/GMT+8".parse().unwrap();
         assert!(ToNumberImpl::try_eval_timestamp::<ToYear>(TIMESTAMP_MIN, &tz).is_err());
