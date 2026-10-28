@@ -22,3 +22,124 @@ SELECT try_to_decimal(72, 70)(a) FROM test;
 statement ok
 DROP TABLE test
 
+# Regression for #20860: TRY_CAST(VARIANT AS DECIMAL) must not nest nullable columns.
+statement ok
+DROP TABLE IF EXISTS try_decimal_src
+
+statement ok
+DROP TABLE IF EXISTS try_decimal_dst
+
+statement ok
+DROP TABLE IF EXISTS try_decimal_values
+
+statement ok
+CREATE TABLE try_decimal_src (id INT, v VARIANT NULL)
+
+statement ok
+INSERT INTO try_decimal_src VALUES
+    (1, parse_json('{"p": 14.33}')),
+    (2, parse_json('{"p": 1.5}')),
+    (3, parse_json('{"p": "2.75"}')),
+    (4, parse_json('{"p": null}')),
+    (5, parse_json('{}')),
+    (6, parse_json('{"p": "invalid"}')),
+    (7, parse_json('{"p": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"}')),
+    (8, parse_json('{"p": [1, 2]}')),
+    (9, NULL)
+
+statement ok
+CREATE TABLE try_decimal_dst (id INT, p64 DECIMAL(18, 4) NULL, p128 DECIMAL(38, 9) NULL, p256 DECIMAL(76, 9) NULL)
+
+# Check Decimal64, Decimal128, and Decimal256 column outputs through the write path.
+statement ok
+INSERT INTO try_decimal_dst
+SELECT id,
+       TRY_CAST(v['p'] AS DECIMAL(18, 4)),
+       TRY_CAST(v['p'] AS DECIMAL(38, 9)),
+       TRY_CAST(v['p'] AS DECIMAL(76, 9))
+FROM try_decimal_src
+
+query IRRR
+SELECT id, p64, p128, p256 FROM try_decimal_dst ORDER BY id
+----
+1 14.3300 14.330000000 14.330000000
+2 1.5000 1.500000000 1.500000000
+3 2.7500 2.750000000 2.750000000
+4 NULL NULL NULL
+5 NULL NULL NULL
+6 NULL NULL NULL
+7 NULL NULL NULL
+8 NULL NULL NULL
+9 NULL NULL NULL
+
+statement ok
+TRUNCATE TABLE try_decimal_dst
+
+# Exercise both matched UPDATE and unmatched INSERT in MERGE.
+statement ok
+INSERT INTO try_decimal_dst VALUES (1, 0, 0, 0), (6, 0, 0, 0)
+
+statement ok
+MERGE INTO try_decimal_dst t
+USING (
+    SELECT id,
+           TRY_CAST(v['p'] AS DECIMAL(18, 4)) AS p64,
+           TRY_CAST(v['p'] AS DECIMAL(38, 9)) AS p128,
+           TRY_CAST(v['p'] AS DECIMAL(76, 9)) AS p256
+    FROM try_decimal_src
+) s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET p64 = s.p64, p128 = s.p128, p256 = s.p256
+WHEN NOT MATCHED THEN INSERT (id, p64, p128, p256) VALUES (s.id, s.p64, s.p128, s.p256)
+
+query IRRR
+SELECT id, p64, p128, p256 FROM try_decimal_dst ORDER BY id
+----
+1 14.3300 14.330000000 14.330000000
+2 1.5000 1.500000000 1.500000000
+3 2.7500 2.750000000 2.750000000
+4 NULL NULL NULL
+5 NULL NULL NULL
+6 NULL NULL NULL
+7 NULL NULL NULL
+8 NULL NULL NULL
+9 NULL NULL NULL
+
+# Non-nullable VARIANT input with no conversion errors must also stay singly nullable.
+statement ok
+CREATE TABLE try_decimal_values (v VARIANT NOT NULL)
+
+statement ok
+INSERT INTO try_decimal_values VALUES (parse_json('14.33')), (parse_json('1.5')), (parse_json('null'))
+
+statement ok
+INSERT INTO try_decimal_dst
+SELECT 10,
+       TRY_CAST(v AS DECIMAL(18, 4)),
+       TRY_CAST(v AS DECIMAL(38, 9)),
+       TRY_CAST(v AS DECIMAL(76, 9))
+FROM try_decimal_values
+
+query RRRI rowsort
+SELECT p64, p128, p256, count(*) FROM try_decimal_dst WHERE id = 10 GROUP BY p64, p128, p256
+----
+1.5000 1.500000000 1.500000000 1
+14.3300 14.330000000 14.330000000 1
+NULL NULL NULL 1
+
+# Constant folding and scalar evaluation, including invalid and JSON null inputs.
+query RRR
+SELECT TRY_CAST(parse_json('14.33') AS DECIMAL(38, 9)),
+       TRY_CAST(parse_json('"invalid"') AS DECIMAL(38, 9)),
+       TRY_CAST(parse_json('null') AS DECIMAL(38, 9))
+----
+14.330000000 NULL NULL
+
+statement ok
+DROP TABLE try_decimal_values
+
+statement ok
+DROP TABLE try_decimal_dst
+
+statement ok
+DROP TABLE try_decimal_src
+

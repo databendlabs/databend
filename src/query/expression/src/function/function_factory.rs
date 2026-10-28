@@ -144,9 +144,8 @@ impl Function {
         }
     }
 
+    /// Convert evaluation errors to NULL, preserving any NULLs in the original result.
     pub fn error_to_null(self) -> Self {
-        debug_assert!(!self.signature.return_type.is_nullable_or_null());
-
         let mut signature = self.signature;
         let return_type = signature.return_type.wrap_nullable();
         signature.return_type = return_type.clone();
@@ -156,6 +155,9 @@ impl Function {
         let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
             let domain = calc_domain.domain_eval(ctx, domains);
             match domain {
+                FunctionDomain::Domain(domain @ Domain::Nullable(_)) => {
+                    FunctionDomain::Domain(domain)
+                }
                 FunctionDomain::Domain(domain) => {
                     let new_domain = NullableDomain {
                         has_null: false,
@@ -170,23 +172,16 @@ impl Function {
             }
         });
         let new_eval = Box::new(move |val: &[Value<AnyType>], ctx: &mut EvalContext| {
-            let num_rows = ctx.num_rows;
             let output = eval.eval(val, ctx);
             if let Some((validity, _)) = ctx.errors.take() {
                 match output {
                     Value::Scalar(_) => Value::Scalar(Scalar::Null),
                     Value::Column(column) => {
-                        Value::Column(NullableColumn::new_column(column, validity.into()))
+                        Value::Column(column.wrap_nullable(Some(validity.into())))
                     }
                 }
             } else {
-                match output {
-                    Value::Scalar(scalar) => Value::Scalar(scalar),
-                    Value::Column(column) => Value::Column(NullableColumn::new_column(
-                        column,
-                        Bitmap::new_constant(true, num_rows),
-                    )),
-                }
+                output.wrap_nullable(None)
             }
         });
 
