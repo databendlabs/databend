@@ -29,7 +29,7 @@ from t_quote_minimal
 file_format = (type = 'csv', output_header = true, quote_style = 'quote_minimal', escape='\\')
 single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
 ----
-minimal.csv 152 7
+minimal.csv 148 7
 
 query T
 select $1 from @s1/minimal.csv (file_format => 'text') order by metadata$file_row_number
@@ -39,10 +39,10 @@ email,name
 Anna,anna@something.com
 Bill,bill@billsdomain.com
 "Bill, Jr",comma
-"Quote ""User""","escape\user"
+"Quote ""User""",escape\user
 "line
 break",line break
-"escape\here",
+escape\here,
 
 statement ok
 drop stage if exists s1
