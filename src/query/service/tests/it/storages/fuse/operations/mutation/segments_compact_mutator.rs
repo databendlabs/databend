@@ -558,6 +558,11 @@ async fn test_compact_segment_resolvable_conflict() -> anyhow::Result<()> {
         .unwrap();
 
     assert_eq!(table_statistics.num_rows.unwrap() as usize, num_inserts * 2);
+    super::super::segment_block_counts::assert_segment_block_counts(latest_fuse_table).await?;
+    let snapshot = latest_fuse_table.read_table_snapshot().await?.unwrap();
+    let mut expected = vec![Some(1); num_inserts];
+    expected.push(Some(num_inserts as u64));
+    assert_eq!(snapshot.segment_block_counts, expected);
 
     Ok(())
 }

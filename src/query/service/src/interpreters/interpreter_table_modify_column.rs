@@ -1198,6 +1198,7 @@ async fn rewrite_decimal_stats_and_commit(
     let operator = fuse_table.get_operator_ref();
     let segments_io = SegmentsIO::create(ctx.clone(), operator.clone(), fuse_table.schema());
     let mut new_segment_locations = Vec::with_capacity(base_snapshot.segments.len());
+    let mut segment_block_counts = Vec::with_capacity(base_snapshot.segments.len());
 
     for chunk in base_snapshot.segments.chunks(SEGMENT_READ_CHUNK_SIZE) {
         let segments = segments_io
@@ -1236,6 +1237,7 @@ async fn rewrite_decimal_stats_and_commit(
             segment
                 .write_meta_through_cache(operator, &segment_location)
                 .await?;
+            segment_block_counts.push(Some(segment.summary.block_count));
             new_segment_locations.push((segment_location, SegmentInfo::VERSION));
         }
     }
@@ -1248,6 +1250,7 @@ async fn rewrite_decimal_stats_and_commit(
     )?;
     new_snapshot.schema = new_schema.as_ref().clone();
     new_snapshot.segments = new_segment_locations;
+    new_snapshot.segment_block_counts = segment_block_counts;
     for rewrite in column_rewrites {
         new_snapshot
             .summary

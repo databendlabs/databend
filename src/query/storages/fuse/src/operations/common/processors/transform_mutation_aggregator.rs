@@ -96,6 +96,7 @@ pub struct TableMutationAggregator {
     mutations: HashMap<SegmentIndex, BlockMutations>,
     extended_mutations: HashMap<SegmentIndex, ExtendedBlockMutations>,
     appended_segments: Vec<Location>,
+    segment_block_counts: HashMap<String, u64>,
     appended_statistics: Statistics,
     removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
@@ -163,6 +164,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
                 SnapshotMerged {
                     merged_segments: std::mem::take(&mut self.appended_segments),
                     merged_statistics: std::mem::take(&mut self.appended_statistics),
+                    segment_block_counts: std::mem::take(&mut self.segment_block_counts),
                 },
                 self.write_segment_ctx.schema.clone(),
             )),
@@ -191,6 +193,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
                     replaced_segments,
                     removed_statistics: self.removed_statistics.clone(),
                     merged_statistics: std::mem::take(&mut self.appended_statistics),
+                    segment_block_counts: std::mem::take(&mut self.segment_block_counts),
                 })
             }
             _ => self.apply_mutation(&mut new_segment_locs).await?,
@@ -249,6 +252,7 @@ impl TableMutationAggregator {
             mutations: HashMap::new(),
             extended_mutations: HashMap::new(),
             appended_segments: vec![],
+            segment_block_counts: HashMap::new(),
             base_segments,
             merged_blocks,
             output_level_stats: BTreeMap::new(),
@@ -360,6 +364,8 @@ impl TableMutationAggregator {
                 }
                 self.accumulate_top_n(Some(top_n))?;
 
+                self.segment_block_counts
+                    .insert(segment_location.clone(), summary.block_count);
                 self.appended_segments
                     .push((segment_location, format_version));
             }
@@ -498,6 +504,8 @@ impl TableMutationAggregator {
                 &stats,
                 self.write_segment_ctx.cluster_key_info.as_ref(),
             );
+            self.segment_block_counts
+                .insert(location.clone(), stats.block_count);
             self.appended_segments
                 .push((location, SegmentInfo::VERSION));
         }
@@ -533,6 +541,8 @@ impl TableMutationAggregator {
                         &summary,
                         self.write_segment_ctx.cluster_key_info.as_ref(),
                     );
+                    self.segment_block_counts
+                        .insert(new_segment_loc.0.clone(), summary.block_count);
                     replaced_segments.insert(result.index, new_segment_loc);
                 } else {
                     self.removed_segment_indexes.push(result.index);
@@ -580,6 +590,7 @@ impl TableMutationAggregator {
                 removed_segment_indexes: std::mem::take(&mut self.removed_segment_indexes),
                 merged_statistics,
                 removed_statistics: std::mem::take(&mut self.removed_statistics),
+                segment_block_counts: std::mem::take(&mut self.segment_block_counts),
             },
         ))
     }
