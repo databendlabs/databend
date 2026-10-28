@@ -193,9 +193,9 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
 }
 
 #[async_trait::async_trait]
-impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
+impl Loader<SpatialIndexMeta> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<VectorIndexMeta> {
+    async fn load(&self, params: &LoadParams) -> Result<SpatialIndexMeta> {
         // read the ThriftFileMetaData, omit unnecessary conversions
         let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
             .await
@@ -206,7 +206,18 @@ impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
                 ))
             })?;
 
-        VectorIndexMeta::try_from(meta)
+        SpatialIndexMeta::try_from(meta)
+    }
+}
+
+/// Only legacy Parquet index files go through this reader; bundle footers are
+/// loaded by the bundle loader and put into the same cache.
+#[async_trait::async_trait]
+impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<VectorIndexMeta> {
+        let meta = <Self as Loader<SpatialIndexMeta>>::load(self, params).await?;
+        Ok(VectorIndexMeta::Legacy(meta))
     }
 }
 

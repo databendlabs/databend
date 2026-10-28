@@ -44,6 +44,7 @@ use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_table_meta::meta::BlockHLLState;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -62,11 +63,11 @@ use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::write::JsonPathStatisticsBuilder;
 use crate::io::write::SpatialIndexState;
-use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
 use crate::io::write::block_index::collect_inverted_index_metas;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
@@ -300,13 +301,16 @@ impl BlockBuilder {
             vector_index_size: block_indexes
                 .vector
                 .as_ref()
-                .and_then(|v| v.file.as_ref())
-                .map(|file| file.size()),
-            vector_index_location: block_indexes
-                .vector
-                .as_ref()
-                .and_then(|v| v.file.as_ref())
-                .map(|file| file.location.clone()),
+                .filter(|v| !v.files.is_empty())
+                .map(|v| v.files.iter().map(|(_, file)| file.size()).sum()),
+            vector_index_location: None,
+            vector_index_metas: Some(collect_inverted_index_metas(
+                block_indexes
+                    .vector
+                    .as_ref()
+                    .into_iter()
+                    .flat_map(|v| v.files.iter().map(|(meta, _)| meta.clone())),
+            )),
             spatial_index_size: block_indexes
                 .spatial
                 .as_ref()
@@ -399,12 +403,8 @@ impl BlockWriter {
             metrics_inc_block_index_write_nums(size);
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
-        if let Some(file) = block_indexes.vector.and_then(|vector| vector.file) {
-            let start = Instant::now();
-            let size = file.write(dal).await?;
-            metrics_inc_block_vector_index_write_nums(1);
-            metrics_inc_block_vector_index_write_bytes(size);
-            metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        if let Some(vector) = block_indexes.vector {
+            Self::write_down_vector_index_files(dal, vector.files).await?;
         }
         if let Some(file) = block_indexes.spatial.and_then(|spatial| spatial.file) {
             let start = Instant::now();
@@ -450,19 +450,15 @@ impl BlockWriter {
         Ok(())
     }
 
-    pub async fn write_down_vector_index_state(
+    pub(crate) async fn write_down_vector_index_files(
         dal: &Operator,
-        vector_index_state: Option<VectorIndexState>,
+        files: Vec<(BlockIndexMeta, PendingIndexFile)>,
     ) -> Result<()> {
-        if let Some(vector_index_state) = vector_index_state {
+        for (_, file) in files {
             let start = Instant::now();
-
-            let location = &vector_index_state.location.0;
-            let index_size = vector_index_state.size;
-            write_data(vector_index_state.data, dal, location).await?;
-
+            let size = file.write(dal).await?;
             metrics_inc_block_vector_index_write_nums(1);
-            metrics_inc_block_vector_index_write_bytes(index_size);
+            metrics_inc_block_vector_index_write_bytes(size);
             metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(())

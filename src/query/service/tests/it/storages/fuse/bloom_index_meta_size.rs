@@ -341,6 +341,7 @@ fn build_test_segment_info(
         ngram_filter_index_size: None,
         vector_index_size: None,
         vector_index_location: None,
+        vector_index_metas: None,
         spatial_index_size: None,
         spatial_index_location: None,
         spatial_stats: None,

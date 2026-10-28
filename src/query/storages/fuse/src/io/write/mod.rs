@@ -51,7 +51,7 @@ pub(crate) use spatial_index_writer::SpatialIndexState;
 pub(crate) use stream::StreamBlockBuilder;
 pub(crate) use stream::StreamBlockProperties;
 pub use vector_index_writer::VectorIndexBuilder;
-pub(crate) use vector_index_writer::VectorIndexState;
+pub use vector_index_writer::VectorIndexSearchOptions;
 pub use virtual_column_builder::VirtualColumnBuildMode;
 pub use virtual_column_builder::VirtualColumnBuilder;
 pub use virtual_column_layout::VirtualColumnLayoutPlanner;

@@ -1612,6 +1612,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("vector_refine_factor", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2),
+                    desc: "Refines limit * factor vector index candidates with the FP16 data of indexes created with refine = true. 0 disables refinement; 1 only reorders the results.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=16)),
+                }),
+                ("vector_search_ef", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "HNSW search candidate list size of vector index queries; never smaller than the candidate count. 0 uses 4 * candidate count.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("copy_dedup_full_path_by_default", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The default value if table option `copy_dedup_full_path` is not set when creating table.",
