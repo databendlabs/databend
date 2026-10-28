@@ -37,6 +37,7 @@ mod encoded;
 mod evaluator;
 mod fill_field_default_value;
 mod filter_executor;
+mod function_factory;
 mod group_by;
 mod hilbert;
 mod kernel;
