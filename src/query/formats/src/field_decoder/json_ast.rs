@@ -608,6 +608,174 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_timestamp_bounds_and_clamping() -> Result<()> {
+        use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+        use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
+
+        for auto_detect in [false, true] {
+            let settings = InputFormatSettings {
+                timezone: Tz::Asia__Shanghai,
+                enable_auto_detect_datetime_format: auto_detect,
+                ..Default::default()
+            };
+            let decoder = FieldJsonAstDecoder::create(&settings, false);
+            let common_settings = crate::InputCommonSettings {
+                null_if: vec![],
+                binary_format: Default::default(),
+                settings,
+            };
+            for value in [TIMESTAMP_MIN, 0, TIMESTAMP_MAX] {
+                let mut column = vec![];
+                decoder.read_timestamp(&mut column, &Value::from(value))?;
+                assert_eq!(column, [value]);
+            }
+            for value in [i64::MIN, TIMESTAMP_MIN - 1, TIMESTAMP_MAX + 1, i64::MAX] {
+                let mut column = vec![];
+                decoder.read_timestamp(&mut column, &Value::from(value))?;
+                assert_eq!(column, [TIMESTAMP_MIN]);
+                column.clear();
+                let result = crate::field_decoder::common::read_timestamp(
+                    &mut column,
+                    value.to_string().as_bytes(),
+                    &common_settings,
+                );
+                // Negative numeric text needs AUTO in the existing text decoder.
+                if value < 0 && !auto_detect {
+                    assert!(result.is_err());
+                    assert!(column.is_empty());
+                } else {
+                    result?;
+                    assert_eq!(column, [TIMESTAMP_MIN]);
+                }
+            }
+            let mut column = vec![];
+            crate::field_decoder::common::read_timestamp(
+                &mut column,
+                b"0001-01-01 00:00:00",
+                &common_settings,
+            )?;
+            assert_eq!(column, [-62_135_625_943_000_000]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_extended_timestamp_text_does_not_gain_clamping() -> Result<()> {
+        use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+        use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
+
+        use crate::field_decoder::common;
+
+        for auto_detect in [false, true] {
+            let settings = InputFormatSettings {
+                timezone: Tz::UTC,
+                enable_auto_detect_datetime_format: auto_detect,
+                ..Default::default()
+            };
+            let decoder = FieldJsonAstDecoder::create(&settings, false);
+            let common_settings = crate::InputCommonSettings {
+                null_if: vec![],
+                binary_format: Default::default(),
+                settings,
+            };
+            for text in [
+                "0000-01-01 00:00:00",
+                "-0500-01-01 00:00:00",
+                "+10000-06-01 00:00:00",
+                "0000-12-30 23:59:59.999999",
+                "+10000-01-01 00:00:00",
+            ] {
+                let mut column = vec![];
+                assert!(
+                    common::read_timestamp(&mut column, text.as_bytes(), &common_settings).is_err(),
+                    "{text}, AUTO={auto_detect}"
+                );
+                assert!(column.is_empty());
+                assert!(
+                    decoder
+                        .read_timestamp(&mut column, &Value::from(text))
+                        .is_err(),
+                    "{text}, AUTO={auto_detect}"
+                );
+                assert!(column.is_empty());
+            }
+            for (text, expected) in [
+                ("0000-12-31 00:00:00", TIMESTAMP_MIN),
+                ("0000-12-31 15:54:17", -62_135_625_943_000_000),
+                ("0000-12-30 16:00:00 -08:00", TIMESTAMP_MIN),
+                ("+10000-01-01 07:59:59.999999 +08:00", TIMESTAMP_MAX),
+            ] {
+                let mut column = vec![];
+                common::read_timestamp(&mut column, text.as_bytes(), &common_settings)?;
+                assert_eq!(column, [expected], "{text}, AUTO={auto_detect}");
+                column.clear();
+                decoder.read_timestamp(&mut column, &Value::from(text))?;
+                assert_eq!(column, [expected], "{text}, AUTO={auto_detect}");
+            }
+            // This calendar year was already accepted by main. Only its UTC
+            // conversion overflows, so the existing COPY clamp must remain.
+            let mut column = vec![];
+            common::read_timestamp(
+                &mut column,
+                b"9999-12-31 23:59:59.999999 -00:01",
+                &common_settings,
+            )?;
+            assert_eq!(column, [TIMESTAMP_MIN]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_date_bounds_unchanged() -> Result<()> {
+        for auto_detect in [false, true] {
+            let settings = InputFormatSettings {
+                timezone: Tz::Asia__Shanghai,
+                enable_auto_detect_datetime_format: auto_detect,
+                ..Default::default()
+            };
+            let decoder = FieldJsonAstDecoder::create(&settings, false);
+            let common_settings = crate::InputCommonSettings {
+                null_if: vec![],
+                binary_format: Default::default(),
+                settings,
+            };
+            // The wider TIMESTAMP range must not leak into either DATE decoder.
+            for (text, expected) in [("0001-01-01", -719_162), ("9999-12-31", 2_932_896)] {
+                let mut column = vec![];
+                decoder.read_date(&mut column, &Value::from(text))?;
+                assert_eq!(column, [expected]);
+                column.clear();
+                crate::field_decoder::common::read_date(
+                    &mut column,
+                    text.as_bytes(),
+                    &common_settings,
+                )?;
+                assert_eq!(column, [expected]);
+            }
+            for text in ["0000-01-01", "0000-12-31", "+10000-01-01"] {
+                let mut column = vec![];
+                assert!(decoder.read_date(&mut column, &Value::from(text)).is_err());
+                assert!(column.is_empty());
+                assert!(
+                    crate::field_decoder::common::read_date(
+                        &mut column,
+                        text.as_bytes(),
+                        &common_settings,
+                    )
+                    .is_err()
+                );
+                assert!(column.is_empty());
+            }
+            for value in [-719_163_i64, 2_932_897, i64::MIN, i64::MAX] {
+                let mut column = vec![];
+                decoder.read_date(&mut column, &Value::from(value))?;
+                assert_eq!(column, [-719_162]);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_read_float64() -> Result<()> {
         let decoder = FieldJsonAstDecoder::create(&InputFormatSettings::default(), false);
         let data_type = TableDataType::Number(NumberDataType::Float64);

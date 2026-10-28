@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::Number;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
 use databend_common_expression::utils::auto_detect_datetime::int64_to_timestamp;
@@ -30,6 +31,8 @@ use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::read_num_text_exact;
+use databend_common_io::datetime::check_input_year;
+use databend_common_io::datetime::parse_date_prefix;
 
 use crate::InputCommonSettings;
 
@@ -83,7 +86,15 @@ pub(crate) fn read_timestamp(
                 return Err(ErrorCode::BadBytes(msg));
             }
             let mut ts = t;
-            clamp_timestamp(&mut ts);
+            if let Some((year, _, _, _)) = parse_date_prefix(data)
+                && check_input_year(year).is_err()
+            {
+                // Extended years are accepted only for valid UTC round trips.
+                // Do not turn formerly rejected text into a clamped timestamp.
+                check_timestamp(ts).map_err(ErrorCode::BadArguments)?;
+            } else {
+                clamp_timestamp(&mut ts);
+            }
             column.push(ts);
             Ok(())
         }
