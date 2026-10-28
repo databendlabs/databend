@@ -35,6 +35,12 @@ SELECT count(*) FROM (SELECT domain, n, bytes FROM dictionary_scalar_expected EX
 ----
 0
 
+# Scan-pushed LIKE uses Evaluator rather than the Selector's dictionary fast path.
+query I
+SELECT count(*) FROM dictionary_scalar WHERE s LIKE '%a.com%';
+----
+3072
+
 statement ok
 DROP TABLE dictionary_scalar_expected;
 

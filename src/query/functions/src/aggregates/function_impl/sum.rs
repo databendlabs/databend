@@ -428,21 +428,15 @@ where
                     self.value += value;
                 }
             }
-            ColumnView::Column(buffer) => {
-                self.value += sum_selected(
-                    buffer.iter().copied(),
-                    // SAFETY: called with the indices of `validity`, which has the length of the column.
-                    |i| unsafe { *buffer.get_unchecked(i) },
-                    validity,
-                );
-            }
-            ColumnView::Encoded(view) => {
-                self.value += sum_selected(
-                    view.iter(),
-                    // SAFETY: as above.
-                    |i| unsafe { view.index_unchecked(i) },
-                    validity,
-                );
+            column => {
+                with_column_view_iter!(NumberType<T>, &column, |values| {
+                    self.value += sum_selected(
+                        values,
+                        // SAFETY: validity indices are in bounds of the column.
+                        |i| unsafe { column.index_unchecked(i) },
+                        validity,
+                    );
+                });
             }
         }
         Ok(())

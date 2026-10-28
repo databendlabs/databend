@@ -354,6 +354,14 @@ fn test_dictionary_function_evaluation() {
 }
 
 #[test]
+fn test_dictionary_like() {
+    let (encoded, plain) = dict(&["google_a", "googleXa", "example"], &[0, 1, 2, 0, 1, 0]);
+    for text in ["s LIKE '%google%'", "s LIKE 'google!_%' ESCAPE '!'"] {
+        eval_dictionary(text, encoded.clone(), plain.clone(), None, true);
+    }
+}
+
+#[test]
 fn test_dictionary_arithmetic() {
     let values = Int32Type::from_data(vec![i32::MIN, 0, 1, i32::MAX]);
     let keys = NarrowBuffer::pack([0, 1, 2, 3, 1, 0, 2, 3].into_iter(), 3);
