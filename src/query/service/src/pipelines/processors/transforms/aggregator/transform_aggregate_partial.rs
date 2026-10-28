@@ -358,7 +358,7 @@ impl TransformPartialAggregate {
             let hot = hashtable.take_partial_hot();
             adaptive.windowed = false;
             adaptive.output_rows += hot.len();
-            blocks.extend(Self::partitioned_block(hot));
+            blocks.extend(Self::partitioned_blocks(hot, &self.params));
         }
         Ok(blocks)
     }
@@ -381,22 +381,47 @@ impl TransformPartialAggregate {
         })
     }
 
-    /// Wrap the non-empty buckets of `payload` into a block for the final aggregate.
-    fn partitioned_block(payload: PartitionedPayload) -> Option<DataBlock> {
-        let payloads = payload
-            .into_non_empty_bucket_payloads()
-            .map(|(bucket, payload)| AggregatePayload {
-                bucket: bucket as isize,
-                payload,
-                max_partition_count: 0,
-            })
-            .collect::<Vec<_>>();
-        (!payloads.is_empty()).then(|| {
-            DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
-                None,
-                PartitionedData::AggregatePayload(payloads),
-            ))
-        })
+    /// Wrap the non-empty buckets of `payload` into blocks for the final aggregate, each of at
+    /// most about `max_block_rows` rows and `max_block_bytes` bytes. Buckets are split at page
+    /// boundaries without copying rows, so the final aggregate checks memory and the exchange
+    /// sends messages at block granularity whatever the size of the table.
+    fn partitioned_blocks(
+        payload: PartitionedPayload,
+        params: &AggregatorParams,
+    ) -> Vec<DataBlock> {
+        let (max_rows, max_bytes) = (params.max_block_rows, params.max_block_bytes);
+        let mut blocks = vec![];
+        let mut payloads = vec![];
+        let (mut rows, mut bytes) = (0, 0);
+        for (bucket, payload) in payload.into_non_empty_bucket_payloads() {
+            for payload in payload.split_pages(max_rows, max_bytes) {
+                if !payloads.is_empty()
+                    && (rows + payload.len() > max_rows
+                        || bytes + payload.memory_size() > max_bytes)
+                {
+                    blocks.push(Self::payload_block(std::mem::take(&mut payloads)));
+                    (rows, bytes) = (0, 0);
+                }
+                rows += payload.len();
+                bytes += payload.memory_size();
+                payloads.push(AggregatePayload {
+                    bucket: bucket as isize,
+                    payload,
+                    max_partition_count: 0,
+                });
+            }
+        }
+        if !payloads.is_empty() {
+            blocks.push(Self::payload_block(payloads));
+        }
+        blocks
+    }
+
+    fn payload_block(payloads: Vec<AggregatePayload>) -> DataBlock {
+        DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+            None,
+            PartitionedData::AggregatePayload(payloads),
+        ))
     }
 
     fn spill_out(&mut self) -> Result<()> {
@@ -478,21 +503,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     }
                 }
 
-                let payloads = hashtable
-                    .payload
-                    .into_bucket_payloads()
-                    .map(|(bucket, payload)| AggregatePayload {
-                        bucket: bucket as isize,
-                        payload,
-                        max_partition_count: 0,
-                    })
-                    .collect::<Vec<_>>();
-                blocks.push(DataBlock::empty_with_meta(
-                    AggregateMeta::create_partitioned(
-                        None,
-                        PartitionedData::AggregatePayload(payloads),
-                    ),
-                ));
+                blocks.extend(Self::partitioned_blocks(hashtable.payload, &self.params));
                 blocks
             }
         })

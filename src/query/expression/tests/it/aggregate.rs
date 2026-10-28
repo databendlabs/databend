@@ -865,6 +865,69 @@ fn test_combined_payload_bucket_extraction_keeps_states_valid() {
     fixture.assert_all_states_dropped();
 }
 
+#[test]
+fn test_payload_split_pages_keeps_rows_and_states() -> Result<()> {
+    // Distinct keys in one partition, so the payload spans several pages.
+    const KEYS: usize = 40_000;
+    let fixture = TrackedHeapFixture::new();
+
+    {
+        let config = HashTableConfig::default().with_initial_radix_bits(0);
+        let mut source = fixture.empty_table(config.clone());
+        let group_columns: Vec<BlockEntry> =
+            vec![Int64Type::from_data((0..KEYS as i64).collect::<Vec<_>>()).into()];
+        let params = [vec![UInt64Type::from_data(vec![0_u64; KEYS]).into()]];
+        let params: Vec<ProjectedBlock> = params.iter().map(|v| v.into()).collect();
+        source.add_groups(
+            &mut ProbeState::default(),
+            (&group_columns).into(),
+            &params,
+            (&[]).into(),
+            KEYS,
+        )?;
+
+        let (_, payload) = source
+            .payload
+            .into_non_empty_bucket_payloads()
+            .next()
+            .unwrap();
+        let bytes = payload.memory_size();
+
+        // Within the limits: kept whole.
+        let mut whole = payload.split_pages(KEYS, bytes);
+        assert_eq!(whole.len(), 1);
+
+        // Byte limit: whole pages up to half of the payload.
+        let halves = whole.pop().unwrap().split_pages(usize::MAX, bytes / 2);
+        assert!(halves.len() >= 2);
+        assert!(halves.iter().all(|p| p.memory_size() <= bytes / 2));
+
+        // A page over the row limit makes a payload of its own.
+        let mut pieces = vec![];
+        for half in halves {
+            pieces.extend(half.split_pages(1, usize::MAX));
+        }
+        assert!(pieces.len() >= 2);
+        assert_eq!(pieces.iter().map(|p| p.len()).sum::<usize>(), KEYS);
+
+        // Merge some pieces and drop the others unmerged: the states of each must be dropped
+        // exactly once, although the pieces share one arena.
+        let unmerged = pieces.split_off(pieces.len() / 2);
+        let mut merged = fixture.empty_table(config);
+        let mut flush_state = PayloadFlushState::default();
+        for piece in &pieces {
+            merged.combine_payload(piece, &mut flush_state)?;
+        }
+        assert_eq!(merged.len(), pieces.iter().map(|p| p.len()).sum::<usize>());
+        drop(unmerged);
+        drop(pieces);
+        assert!(fixture.live_bytes() > 0);
+    }
+
+    fixture.assert_all_states_dropped();
+    Ok(())
+}
+
 /// `accepts_arity` is a pruning aid, so it must never reject an argument list
 /// that `matches_types` would accept. Both are derived from the same pattern,
 /// and this pins the two together for the shapes used by real functions.
