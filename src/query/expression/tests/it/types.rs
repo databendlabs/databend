@@ -39,10 +39,12 @@ use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp::check_timestamp;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp::timestamp_from_micros;
 use databend_common_expression::types::timestamp::timestamp_to_rfc3339_utc;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
 
 use crate::DataTypeFilter;
 use crate::get_all_test_data_types;
@@ -184,29 +186,79 @@ fn test_timestamp_display_clamps_bounds() {
     );
     assert_eq!(
         timestamp_to_rfc3339_utc(i64::MAX),
-        "+10000-01-01T23:59:59.999999Z"
+        "9999-12-31T23:59:59.999999Z"
     );
     assert_eq!(
         timestamp_to_rfc3339_utc(i64::MIN),
-        "0000-01-01T00:00:00.000000Z"
+        "0000-12-31T00:00:00.000000Z"
     );
 }
 
 #[test]
-fn test_timestamp_bounds_cover_local_calendar_endpoints() {
+fn test_timestamp_bounds_and_text_roundtrip() {
+    assert_eq!(TIMESTAMP_MIN, -62_135_683_200_000_000);
+    assert_eq!(TIMESTAMP_MAX, 253_402_300_799_999_999);
     for tz in chrono_tz::TZ_VARIANTS {
-        for input in ["0001-01-01 00:00:00.000000", "9999-12-31 23:59:59.999999"] {
-            let micros = string_to_timestamp(input, &tz).unwrap();
-            assert_eq!(check_timestamp(micros).unwrap(), micros);
-            assert_eq!(timestamp_to_string(micros, &tz).to_string(), input, "{tz}");
+        let input = "0001-01-01 00:00:00.000000";
+        let micros = string_to_timestamp(input, &tz).unwrap();
+        assert_eq!(timestamp_to_string(micros, &tz).to_string(), input, "{tz}");
+        for micros in [
+            TIMESTAMP_MIN,
+            TIMESTAMP_MIN + 1,
+            -1,
+            0,
+            TIMESTAMP_MAX - 1,
+            TIMESTAMP_MAX,
+        ] {
+            let text = timestamp_to_string(micros, &tz).to_string();
+            assert_eq!(
+                string_to_timestamp(&text, &tz).unwrap(),
+                micros,
+                "{text} in {tz}"
+            );
         }
     }
-    for input in [
+    assert_eq!(
+        string_to_timestamp("0001-01-01 00:00:00", &Tz::Asia__Shanghai).unwrap(),
+        -62_135_625_943_000_000,
+    );
+    for text in [
+        "0000-12-31",
+        "0000-12-31 00:00:00.000001Z",
         "0001-01-01 00:00:00 +14:00",
-        "9999-12-31 23:59:59.999999 -14:00",
+        "+10000-01-01 13:59:59.999999 +14:00",
     ] {
-        let micros = string_to_timestamp(input, &Tz::UTC).unwrap();
+        let micros = string_to_timestamp(text, &Tz::UTC).unwrap();
         assert_eq!(check_timestamp(micros).unwrap(), micros);
+    }
+    for text in [
+        "0000-12-30 23:59:59.999999Z",
+        "+10000-01-01",
+        "-0001-12-31",
+        "9999-12-31 23:59:59.999999 -00:01",
+    ] {
+        assert!(string_to_timestamp(text, &Tz::UTC).is_err(), "{text}");
+        assert!(
+            string_to_timestamp_tz(text.as_bytes(), || &Tz::UTC).is_err(),
+            "{text}"
+        );
+    }
+    for text in [
+        "0000-12-31 00:00:00.000000 +0000",
+        "0000-12-30 10:00:00.000000 -1400",
+        "+10000-01-01 13:59:59.999999 +1400",
+    ] {
+        let value = string_to_timestamp_tz(text.as_bytes(), || &Tz::UTC).unwrap();
+        let parsed = string_to_timestamp_tz(value.to_string().as_bytes(), || &Tz::UTC).unwrap();
+        assert_eq!(parsed, value, "{text}");
+    }
+
+    for tz in [Tz::Asia__Shanghai, Tz::America__New_York] {
+        let value = string_to_timestamp_tz(b"0001-01-01 00:00:00", || &tz).unwrap();
+        let text = value.to_string();
+        let parsed = string_to_timestamp_tz(text.as_bytes(), || &tz).unwrap();
+        assert_eq!(parsed.timestamp(), value.timestamp(), "{text}");
+        assert_eq!(parsed.seconds_offset(), value.seconds_offset(), "{text}");
     }
 
     assert_eq!(check_timestamp(TIMESTAMP_MIN).unwrap(), TIMESTAMP_MIN);
@@ -242,14 +294,14 @@ fn test_random_timestamps_keep_nonnegative_utc_years() {
     assert_eq!(values.len(), 4096);
     for &micros in values.iter() {
         assert!(
-            (-62_167_219_200_000_000..=253_402_387_199_999_999).contains(&micros),
-            "random timestamp {micros} is outside UTC years 0000..=10000"
+            (-62_135_683_200_000_000..=253_402_300_799_999_999).contains(&micros),
+            "random timestamp {micros} is outside the SQL UTC bounds"
         );
     }
 }
 
 #[test]
-fn test_date_clamp_to_minimum_and_timestamp_overflow() {
+fn test_date_and_timestamp_clamp_to_minimum() {
     for value in [
         i64::MIN,
         DATE_MIN as i64 - 1,
@@ -278,27 +330,26 @@ fn test_date_clamp_to_minimum_and_timestamp_overflow() {
         TIMESTAMP_MAX + 1,
         i64::MAX,
     ] {
-        let valid = (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&value);
+        let expected = if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&value) {
+            value
+        } else {
+            TIMESTAMP_MIN
+        };
+        let mut clamped = value;
+        clamp_timestamp(&mut clamped);
+        assert_eq!(clamped, expected);
         let encoded = value.to_le_bytes();
         let mut scalar_builder = ColumnBuilder::with_capacity(&DataType::Timestamp, 1);
         let mut batch_builder = ColumnBuilder::with_capacity(&DataType::Timestamp, 1);
-        assert_eq!(
-            scalar_builder.push_binary(&mut encoded.as_slice()).is_ok(),
-            valid,
-        );
-        assert_eq!(
-            batch_builder
-                .push_fix_len_binaries(&encoded, size_of::<i64>(), 1)
-                .is_ok(),
-            valid,
-        );
-        if valid {
-            for column in [scalar_builder.build(), batch_builder.build()] {
-                let Column::Timestamp(values) = column else {
-                    panic!("expected timestamp column");
-                };
-                assert_eq!(values.as_slice(), &[value]);
-            }
+        scalar_builder.push_binary(&mut encoded.as_slice()).unwrap();
+        batch_builder
+            .push_fix_len_binaries(&encoded, size_of::<i64>(), 1)
+            .unwrap();
+        for column in [scalar_builder.build(), batch_builder.build()] {
+            let Column::Timestamp(values) = column else {
+                panic!("expected timestamp column");
+            };
+            assert_eq!(values.as_slice(), &[expected]);
         }
     }
 }

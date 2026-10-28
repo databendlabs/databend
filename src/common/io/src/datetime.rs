@@ -58,9 +58,9 @@ pub fn parse_four_digits(bytes: &[u8]) -> Option<i32> {
     }
 }
 
-/// Calendar text and explicit date-part constructors keep the four-digit year
-/// contract. Intermediate arithmetic and timezone conversion may use wider
-/// calendar years, with the final result checked against the SQL type bounds.
+/// DATE text and explicit date-part constructors keep the four-digit year
+/// contract. TIMESTAMP text may use extended calendar years; its caller checks
+/// the final UTC instant against the SQL timestamp bounds.
 pub fn check_input_year(year: i32) -> Result<()> {
     if (1..=9999).contains(&year) {
         Ok(())
@@ -85,40 +85,52 @@ pub fn check_timezone_offset(offset_seconds: i32) -> Result<()> {
     }
 }
 
-/// Parse ISO-8601-like timestamps: `YYYY-MM-DD HH:MM:SS[.ffffff][Z|(+|-)hh[:mm]]`.
+/// Parse a calendar date prefix, including Chrono's signed extended years.
+/// This only parses fields; DATE callers still validate `check_input_year`.
+#[inline]
+pub fn parse_date_prefix(input: &[u8]) -> Option<(i32, u8, u8, usize)> {
+    let year_len = if matches!(input.first(), Some(b'+' | b'-')) {
+        let digits = input[1..].iter().take_while(|b| b.is_ascii_digit()).count();
+        if !(4..=6).contains(&digits) {
+            return None;
+        }
+        digits + 1
+    } else {
+        4
+    };
+    let date_len = year_len + 6;
+    let date = input.get(..date_len)?;
+    if date[year_len] != b'-' || date[year_len + 3] != b'-' {
+        return None;
+    }
+    let year = if year_len == 4 {
+        parse_four_digits(&date[..4])?
+    } else {
+        std::str::from_utf8(&date[..year_len]).ok()?.parse().ok()?
+    };
+    Some((
+        year,
+        parse_two_digits(&date[year_len + 1..year_len + 3])?,
+        parse_two_digits(&date[year_len + 4..date_len])?,
+        date_len,
+    ))
+}
+
+/// Parse ISO-like timestamps, including `0000` and signed extended years.
+/// The clock is `HH:MM:SS[.ffffff][Z|(+|-)hh[:mm]]`.
 /// Returning `None` indicates that the input is not in the supported format.
 #[inline(always)]
 pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>> {
-    if input.len() < 19 {
+    let (year, month, day, date_len) = parse_date_prefix(input)?;
+    let clock = input.get(date_len..date_len + 9)?;
+    if !matches!(clock[0], b' ' | b'T') || clock[3] != b':' || clock[6] != b':' {
         return None;
     }
+    let hour = parse_two_digits(&clock[1..3])?;
+    let minute = parse_two_digits(&clock[4..6])?;
+    let second = parse_two_digits(&clock[7..9])?;
 
-    if !(input[0..4].iter().all(|b| b.is_ascii_digit())
-        && input[4] == b'-'
-        && input[7] == b'-'
-        && input[5..7].iter().all(|b| b.is_ascii_digit())
-        && input[8..10].iter().all(|b| b.is_ascii_digit()))
-    {
-        return None;
-    }
-
-    let separator = input[10];
-    if separator != b' ' && separator != b'T' {
-        return None;
-    }
-
-    if input.len() < 19 || input[13] != b':' || input[16] != b':' {
-        return None;
-    }
-
-    let year = parse_four_digits(&input[0..4])?;
-    let month = parse_two_digits(&input[5..7])?;
-    let day = parse_two_digits(&input[8..10])?;
-    let hour = parse_two_digits(&input[11..13])?;
-    let minute = parse_two_digits(&input[14..16])?;
-    let second = parse_two_digits(&input[17..19])?;
-
-    let mut idx = 19;
+    let mut idx = date_len + 9;
     let mut micro = 0_u32;
     if idx < input.len() && input[idx] == b'.' {
         idx += 1;
@@ -207,7 +219,20 @@ pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>>
                         "Timezone offset minute must be in [00, 59]",
                     )));
                 }
-                let offset = sign * (hour_offset * 3600 + minute_offset * 60);
+                let mut second_offset = 0_i32;
+                if idx < input.len() && input[idx] == b':' {
+                    idx += 1;
+                    second_offset = match input.get(idx..idx + 2).and_then(parse_two_digits) {
+                        Some(second) if second < 60 => i32::from(second),
+                        _ => {
+                            return Some(Err(ErrorCode::InvalidTimezone(
+                                "Timezone offset second must be in [00, 59]",
+                            )));
+                        }
+                    };
+                    idx += 2;
+                }
+                let offset = sign * (hour_offset * 3600 + minute_offset * 60 + second_offset);
                 if let Err(err) = check_timezone_offset(offset) {
                     return Some(Err(err));
                 }

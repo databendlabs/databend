@@ -16,7 +16,6 @@ use chrono::Datelike;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use databend_common_expression::Domain;
-use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
@@ -28,21 +27,17 @@ use databend_common_expression::types::F64;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::date::DATE_MIN;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::UInt16Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
-use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::vectorize_1_arg;
-use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_timezone::DateTimeComponents;
 use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::wall_clock_is_monotonic;
@@ -54,12 +49,6 @@ pub(super) trait ToNumber {
     type Output;
 
     fn from_components(components: &DateTimeComponents) -> Self::Output;
-
-    /// Year encoded by an unsigned projection, if any. Calendar and ISO years
-    /// can be negative at the expanded TIMESTAMP boundary.
-    fn unsigned_year(_components: &DateTimeComponents) -> Option<i32> {
-        None
-    }
 }
 
 /// Projections that also apply to a bare date, with no timezone involved.
@@ -74,32 +63,9 @@ impl ToNumberImpl {
         T::from_components(&components_from_timestamp(us, tz))
     }
 
-    fn try_eval_timestamp<T: ToNumber>(us: i64, tz: &Tz) -> Result<T::Output, String> {
-        let components = components_from_timestamp(us, tz);
-        if T::unsigned_year(&components).is_some_and(|year| year < 0) {
-            return Err("Invalid date: negative year cannot be represented by an unsigned calendar projection".to_string());
-        }
-        Ok(T::from_components(&components))
-    }
-
     fn eval_date<T: DateToNumber>(days: i32) -> T::Output {
         T::to_number_from_date(&date_from_days(days as i64))
     }
-}
-
-fn eval_timestamp_projection<T: ToNumber<Output = N>, N: Number>(
-    val: Value<TimestampType>,
-    ctx: &mut EvalContext,
-) -> Value<NumberType<N>> {
-    vectorize_with_builder_1_arg::<TimestampType, NumberType<N>>(|val, output, ctx| {
-        match ToNumberImpl::try_eval_timestamp::<T>(val, &ctx.func_ctx.tz) {
-            Ok(value) => output.push(value),
-            Err(err) => {
-                ctx.set_error(output.len(), err);
-                output.push(N::default());
-            }
-        }
-    })(val, ctx)
 }
 
 /// Date -> calendar-number projection is unconditionally safe for end-point domain
@@ -122,23 +88,13 @@ fn timestamp_to_u32_domain<T: ToNumber<Output = u32>>(
     ctx: &FunctionContext,
     domain: &SimpleDomain<i64>,
 ) -> FunctionDomain<UInt32Type> {
-    let (Ok(min), Ok(max)) = (
-        ToNumberImpl::try_eval_timestamp::<T>(domain.min, &ctx.tz),
-        ToNumberImpl::try_eval_timestamp::<T>(domain.max, &ctx.tz),
-    ) else {
-        return FunctionDomain::MayThrow;
-    };
     if !tz_wall_clock_single_segment(&ctx.tz, domain.min, domain.max) {
-        // Outside the first UTC day of year 0, no supported timezone can
-        // project into a negative year. Preserve Full for ordinary DST ranges;
-        // only boundary ranges may throw even when both endpoints are valid.
-        return if domain.min >= TIMESTAMP_MIN + 86_400 * MICROS_PER_SEC {
-            FunctionDomain::Full
-        } else {
-            FunctionDomain::MayThrow
-        };
+        return FunctionDomain::Full;
     }
-    FunctionDomain::Domain(SimpleDomain { min, max })
+    FunctionDomain::Domain(SimpleDomain {
+        min: ToNumberImpl::eval_timestamp::<T>(domain.min, &ctx.tz),
+        max: ToNumberImpl::eval_timestamp::<T>(domain.max, &ctx.tz),
+    })
 }
 
 /// Whether `[min_us, max_us]` contains no time-zone transition. Within one offset
@@ -192,10 +148,6 @@ struct ToWeekOfYear;
 impl ToNumber for ToYYYYMM {
     type Output = u32;
 
-    fn unsigned_year(c: &DateTimeComponents) -> Option<i32> {
-        Some(c.year)
-    }
-
     fn from_components(c: &DateTimeComponents) -> Self::Output {
         c.year as u32 * 100 + c.month as u32
     }
@@ -209,10 +161,6 @@ impl DateToNumber for ToYYYYMM {
 
 impl ToNumber for ToMillennium {
     type Output = u16;
-
-    fn unsigned_year(c: &DateTimeComponents) -> Option<i32> {
-        Some(c.year)
-    }
 
     fn from_components(c: &DateTimeComponents) -> Self::Output {
         (c.year as u16).div_ceil(1000)
@@ -242,10 +190,6 @@ impl DateToNumber for ToWeekOfYear {
 impl ToNumber for ToYYYYMMDD {
     type Output = u32;
 
-    fn unsigned_year(c: &DateTimeComponents) -> Option<i32> {
-        Some(c.year)
-    }
-
     fn from_components(c: &DateTimeComponents) -> Self::Output {
         c.year as u32 * 10_000 + c.month as u32 * 100 + c.day as u32
     }
@@ -260,10 +204,6 @@ impl DateToNumber for ToYYYYMMDD {
 impl ToNumber for ToYYYYMMDDHH {
     type Output = u64;
 
-    fn unsigned_year(c: &DateTimeComponents) -> Option<i32> {
-        Some(c.year)
-    }
-
     fn from_components(c: &DateTimeComponents) -> Self::Output {
         c.year as u64 * 1_000_000 + c.month as u64 * 10_000 + c.day as u64 * 100 + c.hour as u64
     }
@@ -271,10 +211,6 @@ impl ToNumber for ToYYYYMMDDHH {
 
 impl ToNumber for ToYYYYMMDDHHMMSS {
     type Output = u64;
-
-    fn unsigned_year(c: &DateTimeComponents) -> Option<i32> {
-        Some(c.year)
-    }
 
     fn from_components(c: &DateTimeComponents) -> Self::Output {
         c.year as u64 * 10_000_000_000
@@ -288,10 +224,6 @@ impl ToNumber for ToYYYYMMDDHHMMSS {
 
 impl ToNumber for ToYear {
     type Output = u16;
-
-    fn unsigned_year(c: &DateTimeComponents) -> Option<i32> {
-        Some(c.year)
-    }
 
     fn from_components(c: &DateTimeComponents) -> Self::Output {
         c.year as u16
@@ -307,10 +239,6 @@ impl DateToNumber for ToYear {
 impl ToNumber for ToISOYear {
     type Output = u16;
 
-    fn unsigned_year(c: &DateTimeComponents) -> Option<i32> {
-        Some(c.iso_year_week().0)
-    }
-
     fn from_components(c: &DateTimeComponents) -> Self::Output {
         c.iso_year_week().0 as u16
     }
@@ -324,10 +252,6 @@ impl DateToNumber for ToISOYear {
 
 impl ToNumber for ToYYYYWW {
     type Output = u32;
-
-    fn unsigned_year(c: &DateTimeComponents) -> Option<i32> {
-        Some(c.iso_year_week().0)
-    }
 
     fn from_components(c: &DateTimeComponents) -> Self::Output {
         let (iso_year, iso_week) = c.iso_year_week();
@@ -568,10 +492,10 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         }),
     );
     // timestamp
-    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt32Type, _>(
+    registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymm",
         timestamp_to_u32_domain::<ToYYYYMM>,
-        eval_timestamp_projection::<ToYYYYMM, u32>,
+        |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMM>(val, &ctx.func_ctx.tz),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymmdd",
@@ -579,9 +503,6 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         |val, ctx| {
             if let Value::Column(col) = &val
                 && let Some(days) = local_dates(col, ctx.validity.as_ref(), &ctx.func_ctx.tz)
-                // Year 0 is a leap year. The date fast path casts years to u32,
-                // so negative local years must use checked per-row evaluation.
-                && days.iter().all(|&day| day >= DATE_MIN - 366)
             {
                 return Value::Column(
                     days.iter()
@@ -589,28 +510,30 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
                         .collect(),
                 );
             }
-            eval_timestamp_projection::<ToYYYYMMDD, u32>(val, ctx)
+            vectorize_1_arg::<TimestampType, UInt32Type>(|val, ctx| {
+                ToNumberImpl::eval_timestamp::<ToYYYYMMDD>(val, &ctx.func_ctx.tz)
+            })(val, ctx)
         },
     );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt64Type, _>(
+    registry.register_1_arg::<TimestampType, UInt64Type, _>(
         "to_yyyymmddhh",
-        |_, _| FunctionDomain::MayThrow,
-        eval_timestamp_projection::<ToYYYYMMDDHH, u64>,
+        |_, _| FunctionDomain::Full,
+        |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMMDDHH>(val, &ctx.func_ctx.tz),
     );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt64Type, _>(
+    registry.register_1_arg::<TimestampType, UInt64Type, _>(
         "to_yyyymmddhhmmss",
-        |_, _| FunctionDomain::MayThrow,
-        eval_timestamp_projection::<ToYYYYMMDDHHMMSS, u64>,
+        |_, _| FunctionDomain::Full,
+        |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMMDDHHMMSS>(val, &ctx.func_ctx.tz),
     );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt16Type, _>(
+    registry.register_1_arg::<TimestampType, UInt16Type, _>(
         "to_year",
-        |_, _| FunctionDomain::MayThrow,
-        eval_timestamp_projection::<ToYear, u16>,
+        |_, _| FunctionDomain::Full,
+        |val, ctx| ToNumberImpl::eval_timestamp::<ToYear>(val, &ctx.func_ctx.tz),
     );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt16Type, _>(
+    registry.register_1_arg::<TimestampType, UInt16Type, _>(
         "to_iso_year",
-        |_, _| FunctionDomain::MayThrow,
-        eval_timestamp_projection::<ToISOYear, u16>,
+        |_, _| FunctionDomain::Full,
+        |val, ctx| ToNumberImpl::eval_timestamp::<ToISOYear>(val, &ctx.func_ctx.tz),
     );
     registry.register_1_arg::<TimestampType, UInt8Type, _>(
         "to_quarter",
@@ -642,15 +565,15 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |val, ctx| ToNumberImpl::eval_timestamp::<DayOfWeek>(val, &ctx.func_ctx.tz),
     );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt32Type, _>(
+    registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "yearweek",
-        |_, _| FunctionDomain::MayThrow,
-        eval_timestamp_projection::<ToYYYYWW, u32>,
+        |_, _| FunctionDomain::Full,
+        |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYWW>(val, &ctx.func_ctx.tz),
     );
-    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt16Type, _>(
+    registry.register_1_arg::<TimestampType, UInt16Type, _>(
         "millennium",
-        |_, _| FunctionDomain::MayThrow,
-        eval_timestamp_projection::<ToMillennium, u16>,
+        |_, _| FunctionDomain::Full,
+        |val, ctx| ToNumberImpl::eval_timestamp::<ToMillennium>(val, &ctx.func_ctx.tz),
     );
     registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_week_of_year",
@@ -689,80 +612,4 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |val, ctx| components_from_timestamp(val, &ctx.func_ctx.tz).second,
     );
-}
-
-#[cfg(test)]
-mod tests {
-    use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
-
-    use super::*;
-
-    #[test]
-    fn test_extended_timestamp_year_projections() {
-        assert_eq!(
-            ToNumberImpl::try_eval_timestamp::<ToYear>(TIMESTAMP_MIN, &Tz::UTC),
-            Ok(0)
-        );
-        assert_eq!(
-            ToNumberImpl::try_eval_timestamp::<ToYYYYMMDD>(TIMESTAMP_MIN, &Tz::UTC),
-            Ok(101)
-        );
-        assert_eq!(
-            ToNumberImpl::try_eval_timestamp::<ToYear>(TIMESTAMP_MAX, &Tz::UTC),
-            Ok(10000)
-        );
-        // 0000-01-01 belongs to ISO year -1, even in UTC.
-        assert!(ToNumberImpl::try_eval_timestamp::<ToISOYear>(TIMESTAMP_MIN, &Tz::UTC).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYWW>(TIMESTAMP_MIN, &Tz::UTC).is_err());
-
-        let tz = "Etc/GMT+8".parse().unwrap();
-        assert!(ToNumberImpl::try_eval_timestamp::<ToYear>(TIMESTAMP_MIN, &tz).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToISOYear>(TIMESTAMP_MIN, &tz).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToMillennium>(TIMESTAMP_MIN, &tz).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYMM>(TIMESTAMP_MIN, &tz).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYMMDD>(TIMESTAMP_MIN, &tz).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYMMDDHH>(TIMESTAMP_MIN, &tz).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYMMDDHHMMSS>(TIMESTAMP_MIN, &tz).is_err());
-        assert!(ToNumberImpl::try_eval_timestamp::<ToYYYYWW>(TIMESTAMP_MIN, &tz).is_err());
-        // Projections without a year remain valid in the preceding local year.
-        assert_eq!(
-            ToNumberImpl::try_eval_timestamp::<ToMonth>(TIMESTAMP_MIN, &tz),
-            Ok(12)
-        );
-        assert_eq!(
-            ToNumberImpl::try_eval_timestamp::<ToDayOfMonth>(TIMESTAMP_MIN, &tz),
-            Ok(31)
-        );
-    }
-
-    #[test]
-    fn test_negative_year_projection_domain_may_throw() {
-        let ctx = FunctionContext {
-            tz: "Etc/GMT+8".parse().unwrap(),
-            ..Default::default()
-        };
-        // Valid interior values must not hide the overflowing first row.
-        let domain = SimpleDomain {
-            min: TIMESTAMP_MIN,
-            max: 0,
-        };
-        assert!(matches!(
-            timestamp_to_u32_domain::<ToYYYYMM>(&ctx, &domain),
-            FunctionDomain::MayThrow
-        ));
-        assert!(matches!(
-            timestamp_to_u32_domain::<ToYYYYMMDD>(&ctx, &domain),
-            FunctionDomain::MayThrow
-        ));
-    }
-
-    #[test]
-    fn test_date_projection_endpoints_unchanged() {
-        assert_eq!(ToNumberImpl::eval_date::<ToYear>(DATE_MIN), 1);
-        assert_eq!(ToNumberImpl::eval_date::<ToISOYear>(DATE_MIN), 1);
-        assert_eq!(ToNumberImpl::eval_date::<ToYYYYMMDD>(DATE_MIN), 10101);
-        let max = databend_common_expression::types::date::DATE_MAX;
-        assert_eq!(ToNumberImpl::eval_date::<ToYear>(max), 9999);
-        assert_eq!(ToNumberImpl::eval_date::<ToYYYYMMDD>(max), 99991231);
-    }
 }

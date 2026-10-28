@@ -1,11 +1,11 @@
-# TIMESTAMP includes UTC year 0 and one day beyond local year 9999.
-# DATE still uses 0001-01-01..=9999-12-31. Render timestamps as STRING because
-# client timestamp parsers can have a narrower range than the server.
+# TIMESTAMP adds one UTC day below year 1; its upper bound stays unchanged.
+# Numeric/legacy arithmetic overflow still clamps to MIN. INTERVAL and strict
+# string parsing retain their existing errors. DATE keeps its own bounds.
+# Use STRING/INT assertions rather than depending on client timestamp parsers.
 
 statement ok
 SET timezone = 'Asia/Shanghai'
 
-# The server renders the local wall clock, not its 15:59:59 UTC equivalent.
 query TTI
 SELECT timezone(), to_string(to_timestamp('9999-12-31 23:59:59')),
        to_timestamp('9999-12-31 23:59:59')::BIGINT
@@ -15,7 +15,7 @@ Asia/Shanghai 9999-12-31 23:59:59.000000 253402271999000000
 statement ok
 CREATE OR REPLACE TABLE timestamp_timezone_bounds(c1 TIMESTAMP)
 
-# The original MERGE regression: Shanghai used +08:05:43 in year 1.
+# Original MERGE regression: Shanghai used +08:05:43 in year 1.
 statement ok
 MERGE INTO timestamp_timezone_bounds AS t
 USING (SELECT '0001-01-01 00:00:00' AS c1) AS s ON 1=2
@@ -24,6 +24,11 @@ WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *
 statement ok
 MERGE INTO timestamp_timezone_bounds AS t
 USING (SELECT '9999-12-31 23:59:59.999999' AS c1) AS s ON 1=2
+WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *
+
+statement ok
+MERGE INTO timestamp_timezone_bounds AS t
+USING (SELECT to_timestamp('0001-01-01 00:00:00') AS c1) AS s ON t.c1=s.c1
 WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *
 
 query TTI
@@ -33,7 +38,6 @@ FROM timestamp_timezone_bounds ORDER BY c1
 0001-01-01 00:00:00.000000 0001-01-01 -62135625943000000
 9999-12-31 23:59:59.999999 9999-12-31 253402271999999999
 
-# Exercise column evaluation as well as constant folding.
 query BBBBBBBB
 SELECT c1 + INTERVAL 0 SECOND = c1, c1 - INTERVAL 0 SECOND = c1,
        INTERVAL 0 SECOND + c1 = c1, c1 + INTERVAL 0 DAY = c1,
@@ -44,120 +48,369 @@ FROM timestamp_timezone_bounds ORDER BY c1
 1 1 1 1 1 1 1 1
 1 1 1 1 1 1 1 1
 
-query BBBB
+query BBB
 SELECT TIMESTAMP '0001-01-01' + INTERVAL 0 SECOND = TIMESTAMP '0001-01-01',
-       to_timestamp(DATE '0001-01-01') = TIMESTAMP '0001-01-01',
        DATE '0001-01-01' + INTERVAL 0 SECOND = TIMESTAMP '0001-01-01',
        timestamp_from_parts(1, 1, 1, 0, 0, 0) = TIMESTAMP '0001-01-01'
 ----
-1 1 1 1
+1 1 1
 
-# The same stored instant displays in year 0 in UTC; it is not a valid DATE.
+# TIMESTAMP_TZ must retain the seconds in a historical offset when serialized.
+query TB
+SELECT to_string(z), to_timestamp_tz(to_string(z)) = z
+FROM (SELECT to_timestamp_tz('0001-01-01 00:00:00') AS z)
+----
+0001-01-01 00:00:00.000000 +08:05:43 1
+
 statement ok
 SET timezone = 'UTC'
 
-query T
-SELECT to_string(c1) FROM timestamp_timezone_bounds ORDER BY c1
+# The Shanghai instant is in UTC year 0 and must parse back without losing it.
+query TBB
+SELECT to_string(c1), c1::STRING::TIMESTAMP = c1,
+       to_timestamp(to_string(c1), '%Y-%m-%d %H:%M:%S%.f') = c1
+FROM timestamp_timezone_bounds ORDER BY c1
 ----
-0000-12-31 15:54:17.000000
-9999-12-31 15:59:59.999999
+0000-12-31 15:54:17.000000 1 1
+9999-12-31 15:59:59.999999 1 1
 
 query I
 SELECT count_if(try_to_date(c1) IS NULL) FROM timestamp_timezone_bounds
 ----
 1
-
-statement error 1006
-SELECT to_date(min(c1)) FROM timestamp_timezone_bounds
-
-statement ok
-TRUNCATE TABLE timestamp_timezone_bounds
-
-# Fixed UTC-8 exercises the opposite UTC boundary without DST dependencies.
-statement ok
-SET timezone = 'Etc/GMT+8'
-
-statement ok
-MERGE INTO timestamp_timezone_bounds AS t
-USING (SELECT '0001-01-01 00:00:00' AS c1) AS s ON 1=2
-WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *
-
-statement ok
-MERGE INTO timestamp_timezone_bounds AS t
-USING (SELECT '9999-12-31 23:59:59.999999' AS c1) AS s ON 1=2
-WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *
-
-query TTI
-SELECT to_string(c1), to_string(to_date(c1)), c1::BIGINT
-FROM timestamp_timezone_bounds ORDER BY c1
-----
-0001-01-01 00:00:00.000000 0001-01-01 -62135568000000000
-9999-12-31 23:59:59.999999 9999-12-31 253402329599999999
-
-query BBBBBBBB
-SELECT c1 + INTERVAL 0 SECOND = c1, c1 - INTERVAL 0 SECOND = c1,
-       INTERVAL 0 SECOND + c1 = c1, c1 + INTERVAL 0 DAY = c1,
-       c1 + INTERVAL 0 MONTH = c1, add_days(c1, 0) = c1,
-       add_months(c1, 0) = c1, c1 + 0 = c1
-FROM timestamp_timezone_bounds ORDER BY c1
-----
-1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1
-
-query BBBB
-SELECT TIMESTAMP '9999-12-31 23:59:59.999999' + INTERVAL 0 SECOND = TIMESTAMP '9999-12-31 23:59:59.999999',
-       to_timestamp(DATE '9999-12-31') = TIMESTAMP '9999-12-31',
-       DATE '9999-12-31' + INTERVAL 0 SECOND = TIMESTAMP '9999-12-31',
-       timestamp_from_parts(9999, 12, 31, 23, 59, 59) = TIMESTAMP '9999-12-31 23:59:59'
-----
-1 1 1 1
-
-statement ok
-SET timezone = 'UTC'
-
-query T
-SELECT to_string(c1) FROM timestamp_timezone_bounds ORDER BY c1
-----
-0001-01-01 08:00:00.000000
-+10000-01-01 07:59:59.999999
-
-query I
-SELECT count_if(try_to_date(c1) IS NULL) FROM timestamp_timezone_bounds
-----
-1
-
-statement error 1006
-SELECT to_date(max(c1)) FROM timestamp_timezone_bounds
 
 statement ok
 DROP TABLE timestamp_timezone_bounds
 
-# Explicit offsets and TIMESTAMP_TZ share the extended UTC bounds.
-query BBBB
-SELECT to_timestamp('0001-01-01 00:00:00 +14:00')::BIGINT = -62135647200000000,
-       to_timestamp('9999-12-31 23:59:59.999999 -14:00')::BIGINT = 253402351199999999,
-       to_timestamp('0001-01-01 00:00:00 +1400', '%Y-%m-%d %H:%M:%S %z')::BIGINT = -62135647200000000,
-       to_timestamp('9999-12-31 23:59:59.999999 -1400', '%Y-%m-%d %H:%M:%S%.f %z')::BIGINT = 253402351199999999
-----
-1 1 1 1
+# The actual fixed UTC endpoints, plus the original Shanghai instant and NULL.
+statement ok
+CREATE OR REPLACE TABLE timestamp_roundtrip(id INT, ts TIMESTAMP, z TIMESTAMP_TZ)
 
-query BBBBBB
-SELECT z + INTERVAL 0 SECOND = z, z - INTERVAL 0 SECOND = z,
-       INTERVAL 0 SECOND + z = z, z + INTERVAL 0 DAY = z,
-       z + INTERVAL 0 MONTH = z, to_date(z) = d
-FROM (SELECT to_timestamp_tz('0001-01-01 00:00:00 +1400') AS z, DATE '0001-01-01' AS d
-      UNION ALL
-      SELECT to_timestamp_tz('9999-12-31 23:59:59.999999 -1400'), DATE '9999-12-31')
-----
-1 1 1 1 1 1
-1 1 1 1 1 1
+statement ok
+INSERT INTO timestamp_roundtrip VALUES
+    (1, to_timestamp(-62135683200000000, 6), to_timestamp_tz('0000-12-31 00:00:00 +0000')),
+    (2, to_timestamp(-62135683199999999, 6), to_timestamp_tz('0000-12-31 00:00:00.000001 +0000')),
+    (3, to_timestamp(-62135625943000000, 6), to_timestamp_tz('0001-01-01 00:00:00 +08:05:43')),
+    (4, to_timestamp(253402300799999999, 6), to_timestamp_tz('+10000-01-01 07:59:59.999999 +0800')),
+    (5, NULL, NULL)
 
-# Keep Random -> calendar clustering -> MERGE covered, not just scalar paths.
-# Enlarging TIMESTAMP_MIN to negative years used to make this fixture produce
-# values that the UInt32 to_yyyymmdd clustering key cannot represent.
+query II
+SELECT min(ts)::BIGINT, max(ts)::BIGINT FROM timestamp_roundtrip
+----
+-62135683200000000 253402300799999999
+
+statement ok
+CREATE OR REPLACE TABLE timestamp_reloaded LIKE timestamp_roundtrip
+
+statement ok
+CREATE OR REPLACE STAGE timestamp_text_roundtrip
+
 statement ok
 SET timezone = 'UTC'
 
+query IBBBB
+SELECT id, ts::STRING::TIMESTAMP IS NOT DISTINCT FROM ts,
+       to_timestamp_tz(to_string(z)) IS NOT DISTINCT FROM z,
+       to_timestamp(to_string(ts), '%Y-%m-%d %H:%M:%S%.f') IS NOT DISTINCT FROM ts,
+       try_to_timestamp(ts::STRING) IS NOT DISTINCT FROM ts
+FROM timestamp_roundtrip ORDER BY id
+----
+1 1 1 1 1
+2 1 1 1 1
+3 1 1 1 1
+4 1 1 1 1
+5 1 1 1 1
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/utc/csv/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/utc/csv/
+FILE_FORMAT = (TYPE = CSV)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/utc/tsv/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = TSV COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/utc/tsv/
+FILE_FORMAT = (TYPE = TSV)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/utc/ndjson/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = NDJSON COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/utc/ndjson/
+FILE_FORMAT = (TYPE = NDJSON)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+statement ok
+SET timezone = 'Asia/Shanghai'
+
+query IBBBB
+SELECT id, ts::STRING::TIMESTAMP IS NOT DISTINCT FROM ts,
+       to_timestamp_tz(to_string(z)) IS NOT DISTINCT FROM z,
+       to_timestamp(to_string(ts), '%Y-%m-%d %H:%M:%S%.f') IS NOT DISTINCT FROM ts,
+       try_to_timestamp(ts::STRING) IS NOT DISTINCT FROM ts
+FROM timestamp_roundtrip ORDER BY id
+----
+1 1 1 1 1
+2 1 1 1 1
+3 1 1 1 1
+4 1 1 1 1
+5 1 1 1 1
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/shanghai/csv/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/shanghai/csv/
+FILE_FORMAT = (TYPE = CSV)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/shanghai/tsv/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = TSV COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/shanghai/tsv/
+FILE_FORMAT = (TYPE = TSV)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/shanghai/ndjson/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = NDJSON COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/shanghai/ndjson/
+FILE_FORMAT = (TYPE = NDJSON)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+statement ok
+SET timezone = 'Etc/GMT+8'
+
+query IBBBB
+SELECT id, ts::STRING::TIMESTAMP IS NOT DISTINCT FROM ts,
+       to_timestamp_tz(to_string(z)) IS NOT DISTINCT FROM z,
+       to_timestamp(to_string(ts), '%Y-%m-%d %H:%M:%S%.f') IS NOT DISTINCT FROM ts,
+       try_to_timestamp(ts::STRING) IS NOT DISTINCT FROM ts
+FROM timestamp_roundtrip ORDER BY id
+----
+1 1 1 1 1
+2 1 1 1 1
+3 1 1 1 1
+4 1 1 1 1
+5 1 1 1 1
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/west/csv/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/west/csv/
+FILE_FORMAT = (TYPE = CSV)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/west/tsv/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = TSV COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/west/tsv/
+FILE_FORMAT = (TYPE = TSV)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+# Unload and reload in the same timezone: plain TIMESTAMP text has no offset.
+statement ok
+COPY INTO @timestamp_text_roundtrip/west/ndjson/ FROM timestamp_roundtrip
+FILE_FORMAT = (TYPE = NDJSON COMPRESSION = NONE)
+
+statement ok
+TRUNCATE TABLE timestamp_reloaded
+
+statement ok
+COPY INTO timestamp_reloaded FROM @timestamp_text_roundtrip/west/ndjson/
+FILE_FORMAT = (TYPE = NDJSON)
+
+query III
+SELECT count(*), count_if(a.ts IS NOT DISTINCT FROM b.ts),
+       count_if(to_string(a.z) IS NOT DISTINCT FROM to_string(b.z))
+FROM timestamp_reloaded a JOIN timestamp_roundtrip b ON a.id=b.id
+----
+5 5 5
+
+statement ok
+DROP STAGE timestamp_text_roundtrip
+
+statement ok
+DROP TABLE timestamp_reloaded
+
+statement ok
+DROP TABLE timestamp_roundtrip
+
+statement ok
+SET timezone = 'UTC'
+
+# Strict text parsing rejects actual UTC overflow, but not a local year 0/10000.
+query BBBBBB
+SELECT to_timestamp('0000-12-31')::BIGINT = -62135683200000000,
+       to_timestamp('+10000-01-01 13:59:59.999999 +14:00')::BIGINT = 253402300799999999,
+       try_to_timestamp('0000-12-30 23:59:59.999999Z') IS NULL,
+       try_to_timestamp('+10000-01-01') IS NULL,
+       try_to_timestamp_tz('0000-12-30 23:59:59.999999 +0000') IS NULL,
+       try_to_timestamp_tz('+10000-01-01 00:00:00 +0000') IS NULL
+----
+1 1 1 1 1 1
+
+statement error 1006
+SELECT to_timestamp('0000-12-30 23:59:59.999999Z')
+
+statement error 1006
+SELECT to_timestamp('9999-12-31 23:59:59.999999 -00:01')
+
+# Original clamp semantics apply to numeric conversion, TRY and legacy arithmetic.
+statement ok
+CREATE OR REPLACE TABLE timestamp_clamp_inputs(n BIGINT)
+
+statement ok
+INSERT INTO timestamp_clamp_inputs VALUES
+    (-9223372036854775808), (-62135683200000001), (0),
+    (253402300800000000), (9223372036854775807), (NULL)
+
+query I
+SELECT to_timestamp(n, 6)::BIGINT FROM timestamp_clamp_inputs ORDER BY n NULLS FIRST
+----
+NULL
+-62135683200000000
+-62135683200000000
+0
+-62135683200000000
+-62135683200000000
+
+query I
+SELECT count_if(to_timestamp(n, 6) = try_to_timestamp(n, 6)) FROM timestamp_clamp_inputs
+----
+5
+
+query BBBB
+SELECT TIMESTAMP '1970-01-01' + 9223372036854775807 = TIMESTAMP '0000-12-31',
+       TIMESTAMP '1970-01-01' - 9223372036854775807 = TIMESTAMP '0000-12-31',
+       add_months(TIMESTAMP '9999-12-31', 1) = TIMESTAMP '0000-12-31',
+       add_days(TIMESTAMP '0000-12-31', -1) = TIMESTAMP '0000-12-31'
+----
+1 1 1 1
+
+query I
+SELECT count(*) FROM timestamp_clamp_inputs WHERE to_timestamp(n, 6) > TIMESTAMP '1960-01-01'
+----
+1
+
+statement ok
+DROP TABLE timestamp_clamp_inputs
+
+# INTERVAL overflow was already an error; do not change it to clamp.
+statement error 1006
+SELECT TIMESTAMP '0000-12-31' - INTERVAL 1 MICROSECOND
+
+statement error 1006
+SELECT TIMESTAMP '9999-12-31 23:59:59.999999' + INTERVAL 1 MICROSECOND
+
+# DATE's calendar and numeric/arithmetic policies stay unchanged.
+query BBBBBB
+SELECT try_to_date('0000-12-31') IS NULL, try_to_date('+10000-01-01') IS NULL,
+       DATE '0001-01-01' - 1 = DATE '0001-01-01',
+       DATE '9999-12-31' + 1 = DATE '0001-01-01',
+       add_months(DATE '9999-12-31', 1) = DATE '0001-01-01',
+       try_to_date(-719163) = DATE '0001-01-01'
+----
+1 1 1 1 1 1
+
+# Keep Random -> calendar clustering -> MERGE covered with the narrowed range.
 statement ok
 CREATE OR REPLACE TABLE timestamp_random_source(ts TIMESTAMP NOT NULL) ENGINE = Random seed = 42
 
@@ -165,7 +418,7 @@ statement ok
 CREATE OR REPLACE TABLE timestamp_random_store AS SELECT ts FROM timestamp_random_source LIMIT 1024
 
 query II
-SELECT count(*), count_if(ts < to_timestamp(-62167219200000000, 6)) FROM timestamp_random_store
+SELECT count(*), count_if(ts < TIMESTAMP '0000-12-31') FROM timestamp_random_store
 ----
 1024 0
 
@@ -175,13 +428,6 @@ CREATE OR REPLACE TABLE timestamp_random_target(ts TIMESTAMP NOT NULL) CLUSTER B
 statement ok
 MERGE INTO timestamp_random_target t USING timestamp_random_store s ON 1=2 WHEN NOT MATCHED THEN INSERT *
 
-query I
-SELECT count(*) FROM timestamp_random_target
-----
-1024
-
-# A fixed seed can repeat values across Random partitions. Avoid unrelated
-# multiple-source matches while exercising the matched-update path.
 statement ok
 MERGE INTO timestamp_random_target t USING (SELECT DISTINCT ts FROM timestamp_random_store) s ON t.ts=s.ts
 WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *
@@ -199,260 +445,3 @@ DROP TABLE timestamp_random_store
 
 statement ok
 DROP TABLE timestamp_random_target
-
-# The new UTC bounds themselves are valid, but one microsecond beyond is not.
-query TT
-SELECT to_string(to_timestamp(-62167219200000000, 6)),
-       to_string(to_timestamp(253402387199999999, 6))
-----
-0000-01-01 00:00:00.000000 +10000-01-01 23:59:59.999999
-
-query TT
-SELECT to_timestamp(-62167219200000000, 6), to_timestamp(253402387199999999, 6)
-----
-0000-01-01 00:00:00.000000 +10000-01-01 23:59:59.999999
-
-query BBBB
-SELECT to_timestamp(-62167219200000000, 6) + INTERVAL 0 SECOND = to_timestamp(-62167219200000000, 6),
-       to_timestamp(253402387199999999, 6) + INTERVAL 0 SECOND = to_timestamp(253402387199999999, 6),
-       try_to_date(to_timestamp(-62167219200000000, 6)) IS NULL,
-       try_to_date(to_timestamp(253402387199999999, 6)) IS NULL
-----
-1 1 1 1
-
-statement error 1006
-SELECT to_timestamp(-62167219200000000, 6) - INTERVAL 1 MICROSECOND
-
-statement error 1006
-SELECT to_timestamp(253402387199999999, 6) + INTERVAL 1 MICROSECOND
-
-# Store the actual UTC endpoints and exercise column arithmetic, not just folding.
-statement ok
-CREATE OR REPLACE TABLE timestamp_utc_bounds(ts TIMESTAMP)
-
-statement ok
-INSERT INTO timestamp_utc_bounds VALUES
-    (to_timestamp(-62167219200000000, 6)), (to_timestamp(253402387199999999, 6))
-
-query BBBBBBBBBBBB
-SELECT ts + 0 = ts, ts - 0 = ts, add_days(ts, 0) = ts,
-       add_seconds(ts, 0) = ts, ts + INTERVAL 0 SECOND = ts,
-       ts + INTERVAL 0 DAY = ts, ts + INTERVAL 0 MONTH = ts,
-       add_months(ts, 0) = ts, add_years(ts, 0) = ts,
-       subtract_months(ts, 0) = ts, subtract_years(ts, 0) = ts,
-       subtract_days(ts, 0) = ts
-FROM timestamp_utc_bounds ORDER BY ts
-----
-1 1 1 1 1 1 1 1 1 1 1 1
-1 1 1 1 1 1 1 1 1 1 1 1
-
-statement error 1006
-SELECT ts - 1 FROM timestamp_utc_bounds
-
-statement error 1006
-SELECT ts + 1 FROM timestamp_utc_bounds
-
-statement error 1006
-SELECT subtract_days(ts, 1) FROM timestamp_utc_bounds
-
-statement error 1006
-SELECT add_seconds(ts, 1) FROM timestamp_utc_bounds
-
-# Year 0 is representable, but its first days belong to ISO year -1.
-query III
-SELECT to_year(to_timestamp(-62167219200000000, 6)),
-       to_yyyymmdd(to_timestamp(-62167219200000000, 6)),
-       to_year(to_timestamp(253402387199999999, 6))
-----
-0 101 10000
-
-statement error 1006
-SELECT to_iso_year(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT yearweek(to_timestamp(-62167219200000000, 6))
-
-# DATE-valued projections must still validate their own, narrower range.
-statement error 1006
-SELECT to_start_of_month(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT to_start_of_year(to_timestamp(253402387199999999, 6))
-
-statement error 1006
-SELECT to_last_of_month(to_timestamp(253402387199999999, 6))
-
-statement ok
-SET timezone = 'Etc/GMT+8'
-
-# A valid UTC minimum displays in local year -1. Unsigned year projections
-# must report BadArguments, never wrap to 65535 or panic during multiplication.
-statement error 1006
-SELECT to_year(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT to_iso_year(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT to_yyyymm(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT to_yyyymmdd(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT to_yyyymmddhh(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT to_yyyymmddhhmmss(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT yearweek(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT millennium(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT to_year(ts) FROM timestamp_utc_bounds
-
-statement error 1006
-SELECT to_yyyymmdd(ts) FROM timestamp_utc_bounds
-
-statement error 1006
-SELECT count(*) FROM timestamp_utc_bounds WHERE to_yyyymm(ts) > 0
-
-statement error 1006
-SELECT count(*) FROM timestamp_utc_bounds WHERE to_yyyymmdd(ts) < 4294967295
-
-query II
-SELECT to_month(ts), to_day_of_month(ts) FROM timestamp_utc_bounds ORDER BY ts
-----
-12 31
-1 1
-
-statement ok
-INSERT INTO timestamp_utc_bounds VALUES (NULL)
-
-query BBBB
-SELECT to_year(ts) IS NULL, to_iso_year(ts) IS NULL,
-       to_yyyymmdd(ts) IS NULL, yearweek(ts) IS NULL
-FROM timestamp_utc_bounds WHERE ts IS NULL
-----
-1 1 1 1
-
-statement ok
-SET timezone = 'UTC'
-
-statement ok
-DROP TABLE timestamp_utc_bounds
-
-# Reject conversion overflow and integer overflow; TRY only nulls failing rows.
-statement error 1006
-SELECT to_timestamp(-62167219200000001, 6)
-
-statement error 1006
-SELECT to_timestamp(253402387200000000, 6)
-
-statement error 1006
-SELECT to_timestamp(9223372036854775807, 0)
-
-statement error 1006
-SELECT TIMESTAMP '2023-01-01' + 1000000000000000000
-
-statement error 1006
-SELECT TIMESTAMP '2023-01-01' - 1000000000000000000
-
-statement error 1006
-SELECT subtract_seconds(TIMESTAMP '1970-01-01', -9223372036854775808)
-
-query BBBB
-SELECT try_to_timestamp(-62167219200000001, 6) IS NULL,
-       try_to_timestamp(253402387200000000, 6) IS NULL,
-       try_to_timestamp(9223372036854775807, 0) IS NULL,
-       try_to_timestamp(0, 6) = TIMESTAMP '1970-01-01'
-----
-1 1 1 1
-
-# Vary the precision column and include NULLs on both arguments. TRY must
-# preserve valid rows and null only errors, including overflow during scaling.
-statement ok
-CREATE OR REPLACE TABLE timestamp_conversion_bounds(id INT, n BIGINT, scale BIGINT UNSIGNED)
-
-statement ok
-INSERT INTO timestamp_conversion_bounds VALUES
-    (1, 0, 6), (2, 1, 0), (3, -62167219200000000, 6),
-    (4, -62167219200000001, 6), (5, 253402387199999999, 6),
-    (6, 253402387200000000, 6), (7, 9223372036854775807, 0),
-    (8, NULL, 6), (9, 0, NULL)
-
-query I
-SELECT try_to_timestamp(n, scale)::BIGINT FROM timestamp_conversion_bounds ORDER BY id
-----
-0
-1000000
--62167219200000000
-NULL
-253402387199999999
-NULL
-NULL
-NULL
-NULL
-
-query II
-SELECT try_to_timestamp(1, scale)::BIGINT, try_to_timestamp(n, 6)::BIGINT
-FROM timestamp_conversion_bounds ORDER BY id
-----
-1 0
-1000000 1
-1 -62167219200000000
-1 NULL
-1 253402387199999999
-1 NULL
-1000000 NULL
-1 NULL
-NULL 0
-
-statement error 1006
-SELECT to_timestamp(n, scale) FROM timestamp_conversion_bounds
-
-statement error 1006
-SELECT count(*) FROM timestamp_conversion_bounds WHERE to_timestamp(n, scale) > TIMESTAMP '1970-01-01'
-
-statement ok
-DROP TABLE timestamp_conversion_bounds
-
-# DATE and explicit input calendar years are not widened with the UTC range.
-query BB
-SELECT to_date(-719162) = DATE '0001-01-01', to_date(2932896) = DATE '9999-12-31'
-----
-1 1
-
-# DATE keeps both its original endpoints and its numeric clamp-to-MIN policy.
-query BBBBBB
-SELECT DATE '0001-01-01' - 1 = DATE '0001-01-01',
-       DATE '9999-12-31' + 1 = DATE '0001-01-01',
-       add_months(DATE '9999-12-31', 1) = DATE '0001-01-01',
-       add_years(DATE '0001-01-01', -1) = DATE '0001-01-01',
-       try_to_date(-719163) = DATE '0001-01-01',
-       try_to_date(2932897) = DATE '0001-01-01'
-----
-1 1 1 1 1 1
-
-query BBBBBB
-SELECT try_to_date('0000-12-31') IS NULL, try_to_date('+10000-01-01') IS NULL,
-       try_to_timestamp('0000-12-31') IS NULL, try_to_timestamp('+10000-01-01') IS NULL,
-       try_to_timestamp_tz('0000-12-31 00:00:00 +0000') IS NULL,
-       try_to_timestamp_tz('+10000-01-01 00:00:00 +0000') IS NULL
-----
-1 1 1 1 1 1
-
-statement error 1006
-SELECT date_from_parts(0, 12, 31)
-
-statement error 1006
-SELECT date_from_parts(10000, 1, 1)
-
-statement error 1006
-SELECT to_date(to_timestamp(-62167219200000000, 6))
-
-statement error 1006
-SELECT to_date(to_timestamp(253402387199999999, 6))

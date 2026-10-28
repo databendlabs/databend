@@ -309,7 +309,7 @@ impl FieldJsonAstDecoder {
             }
             Value::Number(number) => match number.as_i64() {
                 Some(n) => {
-                    let n = int64_to_timestamp(n).map_err(ErrorCode::BadArguments)?;
+                    let n = int64_to_timestamp(n);
                     column.push(n);
                     Ok(())
                 }
@@ -608,7 +608,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_timestamp_bounds_and_overflow() -> Result<()> {
+    fn test_timestamp_bounds_and_clamping() -> Result<()> {
         use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
         use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 
@@ -631,21 +631,22 @@ mod tests {
             }
             for value in [i64::MIN, TIMESTAMP_MIN - 1, TIMESTAMP_MAX + 1, i64::MAX] {
                 let mut column = vec![];
-                assert!(
-                    decoder
-                        .read_timestamp(&mut column, &Value::from(value))
-                        .is_err()
+                decoder.read_timestamp(&mut column, &Value::from(value))?;
+                assert_eq!(column, [TIMESTAMP_MIN]);
+                column.clear();
+                let result = crate::field_decoder::common::read_timestamp(
+                    &mut column,
+                    value.to_string().as_bytes(),
+                    &common_settings,
                 );
-                assert!(column.is_empty());
-                assert!(
-                    crate::field_decoder::common::read_timestamp(
-                        &mut column,
-                        value.to_string().as_bytes(),
-                        &common_settings,
-                    )
-                    .is_err()
-                );
-                assert!(column.is_empty());
+                // Negative numeric text needs AUTO in the existing text decoder.
+                if value < 0 && !auto_detect {
+                    assert!(result.is_err());
+                    assert!(column.is_empty());
+                } else {
+                    result?;
+                    assert_eq!(column, [TIMESTAMP_MIN]);
+                }
             }
             let mut column = vec![];
             crate::field_decoder::common::read_timestamp(

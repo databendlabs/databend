@@ -28,7 +28,7 @@ use crate::types::date::clamp_date;
 use crate::types::date::string_to_date;
 use crate::types::timestamp::MICROS_PER_MILLI;
 use crate::types::timestamp::MICROS_PER_SEC;
-use crate::types::timestamp::check_timestamp;
+use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::string_to_timestamp;
 use crate::types::timestamp_tz::string_to_timestamp_tz;
 
@@ -65,21 +65,23 @@ const AUTO_TS_FORMATS: &[&str] = &[
     "%a %b %d %H:%M:%S %z %Y",
 ];
 
-/// Convert numeric seconds/milliseconds/microseconds and validate the UTC instant.
+/// Convert numeric seconds/milliseconds/microseconds, mapping out-of-range
+/// values to TIMESTAMP_MIN as in the legacy conversion.
 #[inline]
-pub fn int64_to_timestamp(n: i64) -> Result<i64, String> {
-    let micros = if -31536000000 < n && n < 31536000000 {
+pub fn int64_to_timestamp(n: i64) -> i64 {
+    let mut micros = if -31536000000 < n && n < 31536000000 {
         n * MICROS_PER_SEC
     } else if -31536000000000 < n && n < 31536000000000 {
         n * MICROS_PER_MILLI
     } else {
         n
     };
-    check_timestamp(micros)
+    clamp_timestamp(&mut micros);
+    micros
 }
 
 pub fn parse_epoch_str(val: &str) -> Option<i64> {
-    int64_to_timestamp(val.parse().ok()?).ok()
+    Some(int64_to_timestamp(val.parse().ok()?))
 }
 
 /// Parsed fields; omitted clock fields default to midnight and a missing offset
@@ -104,7 +106,6 @@ impl ParsedDateTime {
         }
 
         let date = parsed.to_naive_date().ok()?;
-        check_input_year(chrono::Datelike::year(&date)).ok()?;
         let hour = match (parsed.hour_div_12(), parsed.hour_mod_12()) {
             (Some(half), Some(hour)) => half * 12 + hour,
             _ => 0,
@@ -128,7 +129,7 @@ impl ParsedDateTime {
 }
 
 // A matched format with an invalid explicit offset is an error, not a signal
-// to try a more permissive parser. The caller validates the final UTC instant.
+// to try a more permissive parser. UTC range clamping remains the caller's policy.
 #[allow(clippy::result_large_err)]
 fn try_parse_formats(
     val: &str,
@@ -186,12 +187,11 @@ pub fn fast_timestamp_from_parsed(parsed: &ParsedDateTime, tz: &Tz) -> Option<i6
 
 #[allow(clippy::result_large_err)]
 pub fn auto_detect_timestamp(val: &str, tz: &Tz) -> Result<Option<i64>, ErrorCode> {
-    let Some((micros, _)) = try_parse_formats(val, tz, AUTO_TS_FORMATS)? else {
+    let Some((mut micros, _)) = try_parse_formats(val, tz, AUTO_TS_FORMATS)? else {
         return Ok(None);
     };
-    check_timestamp(micros)
-        .map(Some)
-        .map_err(ErrorCode::BadArguments)
+    clamp_timestamp(&mut micros);
+    Ok(Some(micros))
 }
 
 pub fn auto_detect_date(val: &str) -> Option<i32> {
@@ -202,6 +202,9 @@ pub fn auto_detect_date(val: &str) -> Option<i32> {
         let Some(date) = parsed.naive_date() else {
             continue;
         };
+        if check_input_year(chrono::Datelike::year(&date)).is_err() {
+            continue;
+        }
         return Some(clamp_date(i64::from(crate::serialize::uniform_date(date))));
     }
     None
@@ -209,10 +212,10 @@ pub fn auto_detect_date(val: &str) -> Option<i32> {
 
 #[allow(clippy::result_large_err)]
 pub fn auto_detect_timestamp_tz(val: &str, tz: &Tz) -> Result<Option<timestamp_tz>, ErrorCode> {
-    let Some((micros, offset)) = try_parse_formats(val, tz, AUTO_TS_FORMATS)? else {
+    let Some((mut micros, offset)) = try_parse_formats(val, tz, AUTO_TS_FORMATS)? else {
         return Ok(None);
     };
-    let micros = check_timestamp(micros).map_err(ErrorCode::BadArguments)?;
+    clamp_timestamp(&mut micros);
     Ok(Some(timestamp_tz::new(micros, offset)))
 }
 
