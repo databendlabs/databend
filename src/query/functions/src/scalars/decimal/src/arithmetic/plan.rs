@@ -19,6 +19,8 @@ use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
 
 use super::ArithmeticOp;
+use super::encoded::EncodedFastPath;
+use super::encoded::Op as EncodedOp;
 use super::kernel::*;
 use super::row::Scale128;
 use super::row::Scale256;
@@ -329,7 +331,7 @@ fn bind_add_subtract<const SUBTRACT: bool>(
             "an i64 result precision is unclamped, so the carry always fits",
         )
     };
-    match plan {
+    let bound = match plan {
         AddSubtractPlan::Native => with_storage!(kind, |T| {
             AddSubtractNative::<SUBTRACT, T>::new(size).bind(inputs)
         }),
@@ -350,6 +352,19 @@ fn bind_add_subtract<const SUBTRACT: bool>(
             },
             narrow => narrow()
         ),
+    };
+    match plan {
+        AddSubtractPlan::Native | AddSubtractPlan::Checked => EncodedFastPath::bind(
+            if SUBTRACT {
+                EncodedOp::Minus
+            } else {
+                EncodedOp::Plus
+            },
+            &binding,
+            inputs,
+            bound,
+        ),
+        AddSubtractPlan::Aligned(_) => bound,
     }
 }
 
@@ -357,7 +372,7 @@ fn bind_multiply(binding: BinaryBinding, inputs: [InputPlan; 2]) -> Box<dyn Scal
     let size = binding.result;
     let kind = size.data_kind();
     let plan = MultiplyPlan::new(&binding);
-    match plan {
+    let bound = match plan {
         MultiplyPlan::Integral => {
             with_storage!(kind, |T| MultiplyIntegral::<T>::new(size).bind(inputs))
         }
@@ -376,6 +391,12 @@ fn bind_multiply(binding: BinaryBinding, inputs: [InputPlan; 2]) -> Box<dyn Scal
         MultiplyPlan::CheckedRounded(shift) => with_storage!(kind, |T| {
             MultiplyCheckedRounded::<T>::new(size, shift).bind(inputs)
         }),
+    };
+    match plan {
+        MultiplyPlan::Integral | MultiplyPlan::CheckedIntegral => {
+            EncodedFastPath::bind(EncodedOp::Multiply, &binding, inputs, bound)
+        }
+        MultiplyPlan::Rounded(_) | MultiplyPlan::CheckedRounded(_) => bound,
     }
 }
 
@@ -491,7 +512,18 @@ mod tests {
                     );
                     input
                 });
-                bind(op, binding, inputs);
+                let eval = bind(op, binding, inputs);
+                let accepts_encoded = match op {
+                    ArithmeticOp::Plus | ArithmeticOp::Minus => {
+                        !matches!(AddSubtractPlan::new(&binding), AddSubtractPlan::Aligned(_))
+                    }
+                    ArithmeticOp::Multiply => matches!(
+                        MultiplyPlan::new(&binding),
+                        MultiplyPlan::Integral | MultiplyPlan::CheckedIntegral
+                    ),
+                    ArithmeticOp::Divide | ArithmeticOp::Modulo => false,
+                };
+                assert_eq!(eval.accepts_encoded_args(), accepts_encoded, "{context}");
             }
         }
     }

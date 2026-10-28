@@ -27,6 +27,7 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::type_check;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::DecimalColumn;
@@ -102,6 +103,34 @@ fn test_eval_on_encoded_columns() {
         ("tax", decimal(&tax, 15, 2)),
         ("quantity", decimal(&quantity, 15, 2)),
         ("narrow", decimal(&narrow, 6, 3)),
+        // Clamped arithmetic binds these at scales 0/20, not 20/20.
+        // Small coefficients still admit FOR encoding despite Decimal128's
+        // wide logical precision, which is essential to exercise the bug.
+        ("whole", {
+            let plain = Column::Decimal(DecimalColumn::Decimal128(
+                (0..n).map(|i| i as i128 + 1).collect(),
+                DecimalSize::new(38, 0).unwrap(),
+            ));
+            (encode(&plain), plain)
+        }),
+        ("tiny", {
+            let plain = Column::Decimal(DecimalColumn::Decimal128(
+                (0..n).map(|i| i as i128 + 1).collect(),
+                DecimalSize::new(38, 20).unwrap(),
+            ));
+            (encode(&plain), plain)
+        }),
+        ("nullable_whole", {
+            let plain = Column::Decimal(DecimalColumn::Decimal128(
+                (0..n).map(|i| i as i128 + 1).collect(),
+                DecimalSize::new(38, 0).unwrap(),
+            ));
+            let validity = (0..n).map(|i| i % 3 != 0).collect::<Bitmap>();
+            (
+                encode(&plain).wrap_nullable(Some(validity.clone())),
+                plain.wrap_nullable(Some(validity)),
+            )
+        }),
         ("flag", dict(&["A", "N", "R"], &flags)),
         ("ship", {
             let plain = DateType::from_data(dates);
@@ -145,6 +174,22 @@ fn test_eval_on_encoded_columns() {
         ("narrow * narrow", true),
         ("price + 1.5", true),
         ("price * 2", true),
+        // Aligned plans must decode instead of combining raw coefficients.
+        ("whole + 0.00000000000000000001::DECIMAL(38,20)", false),
+        ("whole - 0.00000000000000000001::DECIMAL(38,20)", false),
+        ("0.00000000000000000001::DECIMAL(38,20) - whole", false),
+        ("whole + tiny", false),
+        ("tiny + whole", false),
+        ("whole - tiny", false),
+        ("tiny - whole", false),
+        ("nullable_whole + tiny", false),
+        ("nullable_whole - tiny", false),
+        ("(whole + whole) - tiny", false),
+        // Checked same-scale/integral plans still have the FOR backend.
+        ("whole + whole", true),
+        ("whole - whole", true),
+        ("whole * whole", true),
+        ("whole * 0.00000000000000000001::DECIMAL(38,20)", true),
         ("price > quantity", false),
         ("price::DECIMAL(20, 4)", false),
         ("floor(price * discount)", false),

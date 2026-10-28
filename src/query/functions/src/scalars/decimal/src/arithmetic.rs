@@ -193,11 +193,7 @@ fn bind_function(
         args_type: args_type.to_vec(),
         return_type: DataType::Decimal(binding.result),
     };
-    let bound = plan::bind(op, binding, inputs);
-    let eval = match encoded::EncodedFastPath::new(op, &binding, inputs, bound) {
-        Ok(fast) => Box::new(fast),
-        Err(bound) => bound,
-    };
+    let eval = plan::bind(op, binding, inputs);
     Arc::new(Function::with_passthrough_nullable(
         signature, domain, eval, None, nullable,
     ))
@@ -480,6 +476,245 @@ mod tests {
                     self.op, self.types[0], self.types[1], self.result, a[row], self.op, b[row]
                 )
             });
+        }
+    }
+
+    /// FOR input with canonical logical metadata, including wide Decimal sizes
+    /// that `try_encode` does not produce directly. Empty inputs still have a
+    /// valid frame, and the full u64 delta span is allowed.
+    fn for_value(ty: &DataType, values: &[BigInt]) -> Value<AnyType> {
+        let raw = values
+            .iter()
+            .map(|v| i128::try_from(v).unwrap())
+            .collect::<Vec<_>>();
+        let min = raw.iter().copied().min().unwrap_or(0);
+        let max = raw.iter().copied().max().unwrap_or(min);
+        let max_delta = u64::try_from(max - min).unwrap();
+        let deltas = NarrowBuffer::pack(raw.iter().map(|v| (v - min) as u64), max_delta);
+        Value::Column(databend_common_expression::Column::Encoded(Box::new(
+            EncodedColumn::For(ForColumn::new(ty.clone(), min, max_delta, deltas)),
+        )))
+    }
+
+    impl Bound<'_> {
+        /// Compare the selected backend with decoded execution and the exact
+        /// arithmetic oracle. Encoding is checked separately so an accidental
+        /// unconditional fallback cannot make the tests pass.
+        fn check_for(
+            &self,
+            a: &[BigInt],
+            b: &[BigInt],
+            scalar: [bool; 2],
+            visible: Option<&[bool]>,
+            stays_encoded: bool,
+        ) {
+            assert_eq!(a.len(), b.len());
+            let num_rows = a.len();
+            let args = [a, b];
+            let args = std::array::from_fn::<_, 2, _>(|side| {
+                if scalar[side] {
+                    Value::Scalar(scalar_value(self.types[side], &args[side][0]))
+                } else {
+                    for_value(self.types[side], args[side])
+                }
+            });
+            let plain = args.each_ref().map(|arg| arg.decoded().into_owned());
+            let FunctionEval::Scalar { eval, .. } = &self.function.eval else {
+                unreachable!("scalar function")
+            };
+            let func_ctx = FunctionContext::default();
+            let mut ctx = context(
+                &func_ctx,
+                num_rows,
+                visible.map(|v| v.iter().copied().collect()),
+            );
+            let mut plain_ctx = ctx.clone();
+            // The expression evaluator decodes arguments before calling a
+            // kernel that does not accept encoded input.
+            let value = eval.eval(
+                if eval.accepts_encoded_args() {
+                    &args
+                } else {
+                    &plain
+                },
+                &mut ctx,
+            );
+            let plain_value = eval.eval(&plain, &mut plain_ctx);
+            let describe = || {
+                format!(
+                    "{:?}({:?}) -> {:?}, scalar={scalar:?}, visible={visible:?}",
+                    self.op, self.types, self.result
+                )
+            };
+            assert_eq!(value.is_encoded(), stays_encoded, "{}", describe());
+            assert_eq!(
+                value.as_column().unwrap().data_type(),
+                DataType::Decimal(self.result),
+                "{}",
+                describe()
+            );
+            assert_eq!(ctx.errors, plain_ctx.errors, "{}", describe());
+            let errors = error_rows(&ctx);
+            let actual = rows(&value.decoded(), num_rows);
+            let decoded = rows(&plain_value, num_rows);
+            for row in 0..num_rows {
+                if visible.is_some_and(|v| !v[row]) {
+                    assert!(!errors[row], "hidden row {row}: {}", describe());
+                    continue;
+                }
+                let a = &a[if scalar[0] { 0 } else { row }];
+                let b = &b[if scalar[1] { 0 } else { row }];
+                match self.expected(a, b) {
+                    Some(expected) => {
+                        assert!(!errors[row], "row {row}: {}", describe());
+                        assert_eq!(actual[row], expected, "row {row}: {}", describe());
+                        assert_eq!(actual[row], decoded[row], "row {row}: {}", describe());
+                    }
+                    None => assert!(errors[row], "row {row}: {}", describe()),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn for_clamped_add_subtract_aligns_scales() {
+        let registry = registry();
+        // The first pair is the regression: coefficient 1 at scale 0 must
+        // become 10^20, not 1, before adding/subtracting a scale-20 unit.
+        for (precision, scale) in [(38, 20), (76, 40), (76, 76)] {
+            let types = [decimal_type(precision, 0), decimal_type(precision, scale)];
+            let a = [1, 2, -1, -2].map(BigInt::from);
+            let b = [1, -1, 1, -1].map(BigInt::from);
+            for op in [ArithmeticOp::Plus, ArithmeticOp::Minus] {
+                for reverse in [false, true] {
+                    let (types, a, b) = if reverse {
+                        ([&types[1], &types[0]], &b, &a)
+                    } else {
+                        ([&types[0], &types[1]], &a, &b)
+                    };
+                    let bound = Bound::new(&registry, op, types);
+                    for scalar in [[false, false], [false, true], [true, false]] {
+                        bound.check_for(a, b, scalar, None, false);
+                        bound.check_for(a, b, scalar, Some(&[false, true, false, true]), false);
+                        bound.check_for(a, b, scalar, Some(&[false; 4]), false);
+                    }
+                    bound.check_for(&[], &[], [false; 2], Some(&[]), false);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn for_raw_plans_preserve_encoding() {
+        let registry = registry();
+        let a = [1, 2, -1, -2].map(BigInt::from);
+        let b = [2, -1, 2, -1].map(BigInt::from);
+        // Both native and checked plans retain the runtime i64 optimization,
+        // independent of the result's canonical Decimal storage width.
+        for precision in [17, 18, 38, 39, 76] {
+            for scale in [0, 2] {
+                let ty = decimal_type(precision, scale);
+                for op in [
+                    ArithmeticOp::Plus,
+                    ArithmeticOp::Minus,
+                    ArithmeticOp::Multiply,
+                ] {
+                    let bound = Bound::new(&registry, op, [&ty, &ty]);
+                    for scalar in [[false, false], [false, true], [true, false]] {
+                        bound.check_for(&a, &b, scalar, None, true);
+                        bound.check_for(&a, &b, scalar, Some(&[false, true, false, true]), true);
+                        bound.check_for(&a, &b, scalar, Some(&[false; 4]), true);
+                    }
+                    bound.check_for(&[], &[], [false; 2], Some(&[]), true);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn for_runtime_rejections_fall_back() {
+        let registry = registry();
+        for (op, sizes, a, b) in [
+            // Result fits Decimal128 but not i64.
+            (ArithmeticOp::Plus, [(38, 0); 2], i64::MAX as i128, 1),
+            (ArithmeticOp::Minus, [(38, 0); 2], i64::MIN as i128, 1),
+            (ArithmeticOp::Multiply, [(38, 0); 2], i64::MAX as i128, 2),
+            // An operand itself does not fit i64.
+            (ArithmeticOp::Plus, [(38, 0); 2], i64::MAX as i128 + 1, 1),
+            (ArithmeticOp::Minus, [(38, 0); 2], 1, i64::MIN as i128 - 1),
+            // Checked rounded multiplication must also use its normal kernel.
+            (
+                ArithmeticOp::Multiply,
+                [(18, 18); 2],
+                1_000_000_000,
+                1_000_000_000,
+            ),
+            // Rounded multiplication is not raw-coefficient multiplication.
+            (ArithmeticOp::Multiply, [(7, 7); 2], 5, 10),
+            // An encoded column needs input rescaling; a scalar could convert,
+            // but the column must fall back instead of adding raw coefficients.
+            (ArithmeticOp::Plus, [(10, 2), (10, 5)], 1, 2),
+            (ArithmeticOp::Minus, [(10, 5), (10, 2)], 1, 2),
+        ] {
+            let types = sizes.map(|(p, s)| decimal_type(p, s));
+            let bound = Bound::new(&registry, op, types.each_ref());
+            let a = [BigInt::from(a); 1];
+            let b = [BigInt::from(b); 1];
+            bound.check_for(&a, &b, [false; 2], None, false);
+        }
+
+        // Bounds include hidden rows. An i64-unsafe result rejects the entire
+        // FOR attempt rather than using only the visible rows as its proof.
+        let ty = decimal_type(38, 0);
+        let a = [BigInt::from(i64::MAX), BigInt::from(1)];
+        let bound = Bound::new(&registry, ArithmeticOp::Multiply, [&ty, &ty]);
+        bound.check_for(&a, &a, [false; 2], Some(&[false, true]), false);
+        bound.check_for(&a, &a, [false; 2], Some(&[false; 2]), false);
+        // After rejecting a wide scalar, the normal kernel must skip hidden
+        // rows whose products would overflow even the Decimal precision.
+        let b = [pow10(20), pow10(20)];
+        bound.check_for(&a, &b, [false, true], Some(&[false, true]), false);
+        bound.check_for(&a, &b, [false, true], Some(&[false; 2]), false);
+    }
+
+    #[test]
+    fn for_chunks_and_full_width_deltas() {
+        let registry = registry();
+        let ty = decimal_type(38, 0);
+        // Cross two chunk boundaries and exercise wrapping delta arithmetic
+        // across the entire i64 range, including a u64::MAX output delta.
+        let a = (0..2051)
+            .map(|row| BigInt::from([i64::MIN, i64::MAX, 0, 1][row % 4]))
+            .collect::<Vec<_>>();
+        for op in [
+            ArithmeticOp::Plus,
+            ArithmeticOp::Minus,
+            ArithmeticOp::Multiply,
+        ] {
+            let b = vec![BigInt::from(u8::from(op == ArithmeticOp::Multiply)); a.len()];
+            let bound = Bound::new(&registry, op, [&ty, &ty]);
+            bound.check_for(&a, &b, [false; 2], None, true);
+            bound.check_for(&a, &b, [false, true], None, true);
+        }
+    }
+
+    #[test]
+    fn for_scalar_conversion_keeps_fast_path() {
+        let registry = registry();
+        let decimal = decimal_type(15, 2);
+        let a = [100, 200].map(BigInt::from);
+        let b = [15, 15].map(BigInt::from);
+        for scalar_ty in [decimal_type(2, 1), DataType::Number(NumberDataType::Int8)] {
+            for op in [
+                ArithmeticOp::Plus,
+                ArithmeticOp::Minus,
+                ArithmeticOp::Multiply,
+            ] {
+                let bound = Bound::new(&registry, op, [&decimal, &scalar_ty]);
+                bound.check_for(&a, &b, [false, true], None, true);
+                let bound = Bound::new(&registry, op, [&scalar_ty, &decimal]);
+                bound.check_for(&b, &a, [true, false], None, true);
+            }
         }
     }
 

@@ -14,8 +14,9 @@
 
 //! Plus, minus and multiply over frame of reference encoded operands.
 //!
-//! Raw encoded values are unscaled, so the path applies only when no operand
-//! column needs rescaling; the binder decides that from the bound sizes. At
+//! The arithmetic plan attaches this backend only to same-scale addition and
+//! subtraction or integral multiplication. An encoded column must already have
+//! its bound operand scale; scalar conversion remains deferred until runtime. At
 //! run time the bounds of the operands must prove that every result, hidden
 //! rows included, fits both `i64` and the result precision. The result is then
 //! computed in `i64` and returned frame of reference encoded, whatever storage
@@ -37,12 +38,11 @@ use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_narrow_buffer;
 
-use super::ArithmeticOp;
 use super::InputPlan;
 use super::plan::BinaryBinding;
 
 #[derive(Clone, Copy, Debug)]
-enum Op {
+pub(super) enum Op {
     Plus,
     Minus,
     Multiply,
@@ -59,24 +59,25 @@ pub(super) struct EncodedFastPath {
 }
 
 impl EncodedFastPath {
-    /// `None` when the operation never computes on unscaled raw values.
-    pub(super) fn new(
-        op: ArithmeticOp,
+    /// Attaches the raw-coefficient backend selected by the arithmetic plan.
+    /// These invariants must hold independently of the runtime range proof.
+    pub(super) fn bind(
+        op: Op,
         binding: &BinaryBinding,
         inputs: [InputPlan; 2],
         bound: Box<dyn ScalarFunction>,
-    ) -> Result<Self, Box<dyn ScalarFunction>> {
-        let op = match op {
-            ArithmeticOp::Plus => Op::Plus,
-            ArithmeticOp::Minus => Op::Minus,
-            ArithmeticOp::Multiply
-                if binding.left.scale() + binding.right.scale() == binding.result.scale() =>
-            {
-                Op::Multiply
+    ) -> Box<dyn ScalarFunction> {
+        match op {
+            Op::Plus | Op::Minus => {
+                assert_eq!(binding.left.scale(), binding.result.scale());
+                assert_eq!(binding.right.scale(), binding.result.scale());
             }
-            _ => return Err(bound),
-        };
-        Ok(Self {
+            Op::Multiply => assert_eq!(
+                binding.left.scale() + binding.right.scale(),
+                binding.result.scale()
+            ),
+        }
+        Box::new(Self {
             op,
             inputs,
             operands: [binding.left, binding.right],
@@ -85,11 +86,7 @@ impl EncodedFastPath {
         })
     }
 
-    fn eval_encoded(
-        &self,
-        args: &[Value<AnyType>],
-        ctx: &mut EvalContext,
-    ) -> Option<Value<AnyType>> {
+    fn eval_encoded(&self, args: &[Value<AnyType>], ctx: &EvalContext) -> Option<Value<AnyType>> {
         let lhs = Operand::new(&args[0], &self.inputs[0], self.operands[0], ctx)?;
         let rhs = Operand::new(&args[1], &self.inputs[1], self.operands[1], ctx)?;
         let len = lhs.len().or(rhs.len())?;
@@ -153,7 +150,7 @@ impl<'a> Operand<'a> {
         value: &'a Value<AnyType>,
         input: &InputPlan,
         size: DecimalSize,
-        ctx: &mut EvalContext,
+        ctx: &EvalContext,
     ) -> Option<Self> {
         match value {
             Value::Column(Column::Encoded(encoded)) => {
@@ -171,9 +168,24 @@ impl<'a> Operand<'a> {
                 })
             }
             Value::Scalar(_) => {
-                let Value::Scalar(Scalar::Decimal(scalar)) = input.convert(value, ctx) else {
+                // A speculative conversion must not change the caller's error
+                // state: on rejection the ordinary kernel converts again.
+                let mut convert_ctx = EvalContext {
+                    generics: ctx.generics,
+                    num_rows: ctx.num_rows,
+                    func_ctx: ctx.func_ctx,
+                    validity: ctx.validity.clone(),
+                    errors: None,
+                    suppress_error: ctx.suppress_error,
+                    strict_eval: ctx.strict_eval,
+                };
+                let Value::Scalar(Scalar::Decimal(scalar)) = input.convert(value, &mut convert_ctx)
+                else {
                     return None;
                 };
+                if convert_ctx.errors.is_some() {
+                    return None;
+                }
                 let raw = match scalar {
                     DecimalScalar::Decimal64(v, _) => v as i128,
                     DecimalScalar::Decimal128(v, _) => v,
@@ -257,5 +269,35 @@ fn compute_deltas(
         2 => compute!(u16, U16),
         4 => compute!(u32, U32),
         _ => compute!(u64, U64),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FunctionContext;
+    use num_bigint::BigInt;
+
+    use super::*;
+    use crate::testing::*;
+
+    #[test]
+    fn speculative_scalar_conversion_preserves_errors() {
+        let func_ctx = FunctionContext::default();
+        let mut ctx = context(&func_ctx, 2, None);
+        ctx.set_error(1, "existing error");
+        let original = ctx.clone();
+        let from = DecimalSize::new(38, 0).unwrap();
+        let to = DecimalSize::new(38, 1).unwrap();
+        let input = InputPlan::prepare(&DataType::Decimal(from), to);
+        let scalar = |raw: BigInt| Value::Scalar(scalar_value(&DataType::Decimal(from), &raw));
+        // Conversion succeeds, but the result is too wide for the FOR backend.
+        assert!(Operand::new(&scalar(pow10(20)), &input, to, &ctx).is_none());
+        assert_eq!(ctx, original);
+        // A failed conversion's fallback coefficient must not be accepted as
+        // an actual operand, and its error must not leak into the caller.
+        assert!(Operand::new(&scalar(pow10(37)), &input, to, &ctx).is_none());
+        assert_eq!(ctx, original);
+        assert!(Operand::new(&scalar(BigInt::from(1)), &input, to, &ctx).is_some());
+        assert_eq!(ctx, original);
     }
 }
