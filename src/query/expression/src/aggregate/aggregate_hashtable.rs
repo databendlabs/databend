@@ -19,6 +19,7 @@ use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
+use smallvec::SmallVec;
 
 use super::BATCH_SIZE;
 use super::HashIndex;
@@ -46,13 +47,51 @@ const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 #[derive(Default)]
 struct GroupKeyState {
     dict_hashes: Option<Vec<u64>>,
+    // Independent code dimensions: (group column index, mixed-radix stride).
+    code_columns: SmallVec<[(usize, usize); 4]>,
     rank_of_code: Vec<u32>,
     code_addresses: Vec<RowPtr>,
-    row_count: usize,
     row_offset: usize,
 }
 
 impl GroupKeyState {
+    fn init_codes(&mut self, group_columns: ProjectedBlock, row_count: usize) {
+        let mut code_space = 1usize;
+        for (index, entry) in group_columns.iter().enumerate() {
+            let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
+                return;
+            };
+            let (codes, count) = encoded.codes();
+            // Dictionary projections retain their input keys. Check sharing once per block.
+            if self.code_columns.iter().any(|(column, _)| {
+                matches!(
+                    &group_columns[*column],
+                    BlockEntry::Column(Column::Encoded(other))
+                        if codes.shares_storage(other.codes().0)
+                )
+            }) {
+                continue;
+            }
+            let stride = code_space;
+            let Ok(count) = usize::try_from(count) else {
+                return;
+            };
+            let Some(next_space) = code_space.checked_mul(count) else {
+                return;
+            };
+            code_space = next_space;
+            if code_space.saturating_mul(4) > row_count {
+                return;
+            }
+            self.code_columns.push((index, stride));
+        }
+        if u32::try_from(code_space).is_err() {
+            return;
+        }
+        self.rank_of_code.resize(code_space, u32::MAX);
+        self.code_addresses.resize(code_space, RowPtr::null());
+    }
+
     fn dict_hashes(&self, row_count: usize) -> Option<&[u64]> {
         self.dict_hashes
             .as_deref()
@@ -199,10 +238,10 @@ impl AggregateHashTable {
         agg_states: ProjectedBlock,
         row_count: usize,
     ) -> Result<usize> {
-        let mut group_state = GroupKeyState {
-            row_count,
-            ..Default::default()
-        };
+        let mut group_state = GroupKeyState::default();
+        if !self.direct_append {
+            group_state.init_codes(group_columns, row_count);
+        }
         if row_count <= BATCH_SIZE {
             self.add_groups_inner(
                 state,
@@ -396,35 +435,17 @@ impl AggregateHashTable {
         row_count: usize,
         group_state: &mut GroupKeyState,
     ) -> Option<usize> {
-        // Check every key before allocating the row codes, so regular group columns cost
-        // nothing here. The shared tables are sized against the block, not each batch.
-        let mut code_space = 1usize;
-        for entry in group_columns.iter() {
-            let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
-                return None;
-            };
-            let (_, count) = encoded.codes();
-            code_space = code_space.checked_mul(usize::try_from(count).ok()?)?;
-            if code_space.saturating_mul(4) > group_state.row_count {
-                return None;
-            }
+        if group_state.code_addresses.is_empty() {
+            return None;
         }
-        u32::try_from(code_space).ok()?;
-        group_state.rank_of_code.resize(code_space, u32::MAX);
-        group_state.code_addresses.resize(code_space, RowPtr::null());
 
-        // Code of a row = mixed radix number of the codes of its keys.
+        // Code of a row = mixed radix number of its independent keys' codes.
         let mut row_codes = vec![0u32; row_count];
-        let mut stride = 1usize;
-        for entry in group_columns.iter() {
-            let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
-                return None;
-            };
-            let (codes, count) = encoded.codes();
+        for &(column, stride) in &group_state.code_columns {
+            let (codes, _) = group_columns[column].as_column()?.as_encoded()?.codes();
             for (row_code, code) in row_codes.iter_mut().zip(codes.iter()) {
                 *row_code += (code as usize * stride) as u32;
             }
-            stride *= count as usize;
         }
 
         // Only codes without a cached address need a representative in this batch.

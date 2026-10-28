@@ -213,10 +213,10 @@ fn test_eval_on_encoded_columns() {
         ("price * discount > 1000", false),
         ("ship <= '1998-09-02'::DATE and qty < 25", false),
         ("code", true),
-        ("code + 1", false),
+        ("code + 1", true),
         ("code = 7", false),
         ("code > 0 and ratio < 1", false),
-        ("ratio * 2", false),
+        ("ratio * 2", true),
         ("amount * (1 - discount)", false),
         ("amount + price", false),
         ("amount > 1000", false),
@@ -354,6 +354,98 @@ fn test_dictionary_function_evaluation() {
 }
 
 #[test]
+fn test_dictionary_arithmetic() {
+    let values = Int32Type::from_data(vec![i32::MIN, 0, 1, i32::MAX]);
+    let keys = NarrowBuffer::pack([0, 1, 2, 3, 1, 0, 2, 3].into_iter(), 3);
+    let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+        keys.clone(),
+        values,
+    ))));
+    let plain = encoded.clone().decode_owned();
+    for text in [
+        "s + 1",
+        "1 + s",
+        "s - 1",
+        "s - 2",
+        "1 - s",
+        "subtract(s, 3)",
+        "-s",
+        "s * 2",
+        "2 * s",
+        "s / 2",
+        "s DIV 2",
+        "intdiv(s, 2)",
+        "s % 3",
+        "s % -1",
+        "mod(s, 3)",
+    ] {
+        let result = eval_dictionary(text, encoded.clone(), plain.clone(), None, true);
+        let Value::Column(Column::Encoded(result)) = result else {
+            panic!("{text}")
+        };
+        assert!(result.as_dict().unwrap().keys.shares_storage(&keys));
+    }
+    for text in ["s + s", "s - s", "s * s"] {
+        eval_dictionary(text, encoded.clone(), plain.clone(), None, false);
+    }
+    let valid = Bitmap::from_iter([true, false, true, true, true, false, true, true]);
+    eval_dictionary(
+        "s - 1",
+        encoded.wrap_nullable(Some(valid.clone())),
+        plain.wrap_nullable(Some(valid)),
+        None,
+        false,
+    );
+}
+
+#[test]
+fn test_dictionary_arithmetic_errors() {
+    let values = Int32Type::from_data(vec![0, 2, 4]);
+    for text in ["8 / s", "8 DIV s", "8 % s"] {
+        for keys in [[1, 2, 1, 2], [1, 0, 2, 1]] {
+            let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+                NarrowBuffer::pack(keys.into_iter(), 2),
+                values.clone(),
+            ))));
+            let plain = encoded.clone().decode_owned();
+            if !keys.contains(&0) {
+                eval_dictionary(text, encoded, plain, None, true);
+                continue;
+            }
+            eval_dictionary(
+                text,
+                encoded.clone(),
+                plain.clone(),
+                Some(Bitmap::from_iter(keys.iter().map(|key| *key != 0))),
+                false,
+            );
+            let raw_expr =
+                parser::parse_raw_expr(text, &[("s", plain.data_type())], &BUILTIN_FUNCTIONS);
+            let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+            let func_ctx = FunctionContext::default();
+            let evaluate = |column: Column| {
+                let block = DataBlock::new(vec![BlockEntry::from(column)], keys.len());
+                Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+                    .run(&expr)
+                    .unwrap_err()
+            };
+            let expected = evaluate(plain);
+            let actual = evaluate(encoded);
+            assert_eq!(actual.code(), expected.code());
+            assert!(
+                actual.message().starts_with(
+                    expected
+                        .message()
+                        .split(" while evaluating function")
+                        .next()
+                        .unwrap(),
+                )
+            );
+        }
+    }
+}
+
+#[test]
 fn test_dictionary_function_fallbacks() {
     let (encoded, plain) = dict(&["a", "b"], &[0, 1, 0, 1]);
     // Two column arguments, including the same dictionary passed twice, are not lifted.
@@ -412,15 +504,14 @@ fn test_dictionary_function_error_diagnostics() {
     // Dictionary positions need not match logical rows. The first error message can
     // also belong to an unused entry with a different error from the referenced one.
     for (text, values, keys) in [
-        (
-            "regexp_replace(s, '[', 'x')",
-            ["", "offending source"],
-            [0, 0, 1, 0],
-        ),
+        ("regexp_replace(s, '[', 'x')", ["", "offending source"], [
+            0, 0, 1, 0,
+        ]),
         ("regexp_replace('abc', s, 'x')", ["(", "["], [1, 1, 1, 1]),
     ] {
         let (encoded, plain) = dict(&values, &keys);
-        let raw_expr = parser::parse_raw_expr(text, &[("s", plain.data_type())], &BUILTIN_FUNCTIONS);
+        let raw_expr =
+            parser::parse_raw_expr(text, &[("s", plain.data_type())], &BUILTIN_FUNCTIONS);
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let func_ctx = FunctionContext::default();
         let evaluate = |column: Column| {
@@ -433,13 +524,15 @@ fn test_dictionary_function_error_diagnostics() {
         let dictionary_error = evaluate(StringType::from_data(values.to_vec()));
         let actual = evaluate(encoded);
         assert_eq!(actual.code(), expected.code());
-        assert_eq!(
-            actual.message(),
-            dictionary_error
-                .message()
-                .split(" while evaluating function")
-                .next()
-                .unwrap(),
+        // Compare the first kernel error, not the outer expression-rendering context.
+        assert!(
+            actual.message().starts_with(
+                dictionary_error
+                    .message()
+                    .split(" while evaluating function")
+                    .next()
+                    .unwrap(),
+            )
         );
     }
 }
@@ -534,7 +627,17 @@ fn test_float_dictionary_preserves_bits() {
     let encoded_block = block(&build_dict(&plain_x), &build_dict(&plain_y));
     let plain_block = block(&plain_x, &plain_y);
     let func_ctx = FunctionContext::default();
-    for text in ["atan2(x, -1.0)", "atan2(y, -1.0)", "x"] {
+    for text in [
+        "atan2(x, -1.0)",
+        "atan2(y, -1.0)",
+        "x + 1.0",
+        "x - 1.0",
+        "0.0 - x",
+        "x * 2.0",
+        "x / 2.0",
+        "x % 2.0",
+        "x",
+    ] {
         let raw_expr = parser::parse_raw_expr(text, &names, &BUILTIN_FUNCTIONS);
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
         let run = |block: &DataBlock| {

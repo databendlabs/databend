@@ -47,10 +47,10 @@ statement ok
 SET max_threads = 1;
 
 statement ok
-CREATE OR REPLACE TABLE dictionary_group_hash (s STRING NOT NULL, t TINYINT NOT NULL, v BIGINT NOT NULL) STORAGE_FORMAT = 'parquet';
+CREATE OR REPLACE TABLE dictionary_group_hash (s STRING NOT NULL, t TINYINT NOT NULL, v BIGINT NOT NULL, x INTEGER NOT NULL) STORAGE_FORMAT = 'parquet';
 
 statement ok
-INSERT INTO dictionary_group_hash SELECT concat('key', to_string(number % 1025)), number % 2, number FROM numbers(32769);
+INSERT INTO dictionary_group_hash SELECT concat('key', to_string(number % 1025)), number % 2, number, (number % 1025) * 1000000 FROM numbers(32769);
 
 statement ok
 UNSET max_threads;
@@ -74,6 +74,18 @@ query III
 SELECT count(*), sum(n), sum(total) FROM (SELECT regexp_replace(s, '[0-9]+', '') AS k, t, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY k, t);
 ----
 2 32769 536887296
+
+# Numeric projections retain the input keys; count that shared code dimension once.
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT x, x - 1, x - 2, x - 3, x + 1, x * 2, x / 2, x DIV 1000000, x % 3, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY x, x - 1, x - 2, x - 3, x + 1, x * 2, x / 2, x DIV 1000000, x % 3);
+----
+1025 32769 536887296
+
+# Different codes may map to equal computed values and must still merge normally.
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT length(s) AS k, length(s) - 1 AS m, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY k, m);
+----
+4 32769 536887296
 
 # Rank-limit sorting must preserve group counts, including equal computed values
 # with different dictionary codes and multiple sorting keys.

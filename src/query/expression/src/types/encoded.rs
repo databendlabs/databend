@@ -141,6 +141,16 @@ impl NarrowBuffer {
         self.len() * self.byte_width()
     }
 
+    /// Same immutable code slice, including width and offset; does not compare values.
+    pub fn shares_storage(&self, other: &Self) -> bool {
+        self.byte_width() == other.byte_width()
+            && self.len() == other.len()
+            && std::ptr::eq(
+                with_narrow_buffer!(self, |b| b.as_slice().as_ptr().cast::<u8>()),
+                with_narrow_buffer!(other, |b| b.as_slice().as_ptr().cast::<u8>()),
+            )
+    }
+
     #[inline]
     pub fn get(&self, index: usize) -> Option<u64> {
         with_narrow_buffer!(self, |b| b.get(index).map(|v| widen(*v)))

@@ -79,6 +79,18 @@ fn build_dict(column: &Column) -> Column {
     Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
 }
 
+#[test]
+fn test_narrow_buffer_shared_storage() {
+    for max in [u8::MAX as u64, u16::MAX as u64, u32::MAX as u64, u64::MAX] {
+        let keys = NarrowBuffer::pack((0..8usize).map(|i| i as u64), max);
+        assert!(keys.shares_storage(&keys.clone()));
+        assert!(!keys.shares_storage(&NarrowBuffer::pack((0..8usize).map(|i| i as u64), max)));
+        assert!(keys.slice(1..7).shares_storage(&keys.clone().slice(1..7)));
+        assert!(!keys.slice(0..6).shares_storage(&keys.slice(1..7)));
+        assert!(!keys.slice(0..6).shares_storage(&keys.slice(0..7)));
+    }
+}
+
 /// Block-level dictionaries keep first-seen order and give up beyond `max_ndv`.
 #[test]
 fn test_dict_column_try_encode() {

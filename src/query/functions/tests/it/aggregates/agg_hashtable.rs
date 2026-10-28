@@ -285,6 +285,72 @@ fn test_agg_hashtable_dictionary_across_batches() {
     }
 }
 
+#[test]
+fn test_agg_hashtable_shared_dictionary_keys() {
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::ForColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    let n = 8193;
+    let args = vec![vec![
+        Int64Type::from_data((0..n as i64).collect_vec()).into(),
+    ]];
+    let aggrs = vec![resolve_agg("sum", Int64Type::data_type())];
+    let dict = |keys, values| {
+        Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(keys, values))))
+    };
+    for ndv in [64, 1021] {
+        let all_keys =
+            NarrowBuffer::pack((0..n + 1).map(|i| (i / 2 % ndv) as u64), (ndv - 1) as u64);
+        let keys = all_keys.slice(0..n);
+        let values = |delta| Int64Type::from_data((0..ndv).map(|i| i as i64 - delta).collect_vec());
+        let raw = dict(keys.clone(), values(0));
+        let mod2 = dict(
+            keys.clone(),
+            Int64Type::from_data((0..ndv).map(|i| (i % 2) as i64).collect_vec()),
+        );
+        let mod3 = dict(
+            keys.clone(),
+            Int64Type::from_data((0..ndv).map(|i| (i % 3) as i64).collect_vec()),
+        );
+        let independent = Column::Encoded(Box::new(EncodedColumn::For(
+            ForColumn::try_encode(&Int64Type::from_data(
+                (0..n).map(|i| (i % 2) as i64).collect_vec(),
+            ))
+            .unwrap(),
+        )));
+        for columns in [
+            vec![
+                raw.clone(),
+                dict(keys.clone(), values(1)),
+                dict(keys.clone(), values(2)),
+                dict(keys.clone(), values(3)),
+            ],
+            vec![mod2.clone(), mod3.clone()],
+            vec![mod2, mod3, independent],
+            // Equal keys in independent storage are not proof of shared identity.
+            vec![
+                raw.clone(),
+                dict(NarrowBuffer::pack(keys.iter(), (ndv - 1) as u64), values(1)),
+            ],
+            // The same allocation at a different offset is a different code dimension.
+            vec![raw, dict(all_keys.slice(1..n + 1), values(0))],
+        ] {
+            let encoded = columns.iter().cloned().map(BlockEntry::from).collect_vec();
+            let plain = columns
+                .into_iter()
+                .map(|c| BlockEntry::from(c.decode_owned()))
+                .collect_vec();
+            assert_block_value_sort_eq(
+                &aggregate_into_block(&encoded, &args, &aggrs, n),
+                &aggregate_into_block(&plain, &args, &aggrs, n),
+            );
+        }
+    }
+}
+
 /// Group keys that are dictionary encoded (and arguments that are frame of reference encoded)
 /// must aggregate exactly like their decoded columns.
 #[test]
