@@ -13,9 +13,14 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::any::Any;
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
+use argminmax::ArgMinMax;
+use argminmax::ArgMinMaxMasked;
+use argminmax::NaNArgMinMax;
+use argminmax::NaNArgMinMaxMasked;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
@@ -24,6 +29,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnView;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyNumberType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
@@ -34,6 +40,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::EmptyMapType;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::NullType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
@@ -41,6 +49,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
+use num_traits::Float;
 
 use super::AggregateRegistration;
 use super::adaptors::*;
@@ -162,26 +171,29 @@ where
     }
 
     fn add_batch(&mut self, args: ColumnView<A>, values: ColumnView<V>, validity: Option<&Bitmap>) {
-        let candidate = match validity {
-            Some(validity) => values
-                .iter()
-                .enumerate()
-                .zip(validity.iter())
-                .filter_map(|(item, valid)| valid.then_some(item))
-                .reduce(|current, (row, value)| {
+        let candidate = match simd_extreme_row::<V, CMP_TYPE>(&values, validity) {
+            Some(row) => Some((row, values.index(row).unwrap())),
+            None => match validity {
+                Some(validity) => values
+                    .iter()
+                    .enumerate()
+                    .zip(validity.iter())
+                    .filter_map(|(item, valid)| valid.then_some(item))
+                    .reduce(|current, (row, value)| {
+                        if should_change::<V, CMP_TYPE>(&current.1, &value) {
+                            (row, value)
+                        } else {
+                            current
+                        }
+                    }),
+                None => values.iter().enumerate().reduce(|current, (row, value)| {
                     if should_change::<V, CMP_TYPE>(&current.1, &value) {
                         (row, value)
                     } else {
                         current
                     }
                 }),
-            None => values.iter().enumerate().reduce(|current, (row, value)| {
-                if should_change::<V, CMP_TYPE>(&current.1, &value) {
-                    (row, value)
-                } else {
-                    current
-                }
-            }),
+            },
         };
         // Read and copy the argument only for the batch winner, and retain the
         // existing argument on ties, just as in the row and merge paths.
@@ -231,6 +243,94 @@ where
         TYPE_MAX => matches!(current.partial_cmp(value), Some(Ordering::Less)),
         _ => unreachable!(),
     }
+}
+
+/// The row of the first minimum (`TYPE_MIN`) or maximum of a number, date or
+/// timestamp column, found with SIMD by `argminmax`. `None` leaves the batch to
+/// the generic loop of `add_batch`.
+fn simd_extreme_row<V: AccessType, const CMP_TYPE: u8>(
+    values: &ColumnView<V>,
+    validity: Option<&Bitmap>,
+) -> Option<usize> {
+    let values: &dyn Any = values;
+    let max = CMP_TYPE == TYPE_MAX;
+    macro_rules! int_row {
+        ($($t:ty),*) => {$(
+            if let Some(ColumnView::Column(col)) = values.downcast_ref::<ColumnView<$t>>() {
+                return int_extreme_row(col.as_slice(), validity, max);
+            }
+        )*};
+    }
+    int_row!(
+        NumberType<i8>,
+        NumberType<i16>,
+        NumberType<i32>,
+        NumberType<i64>,
+        NumberType<u8>,
+        NumberType<u16>,
+        NumberType<u32>,
+        NumberType<u64>,
+        DateType,
+        TimestampType
+    );
+    if let Some(ColumnView::Column(col)) = values.downcast_ref::<ColumnView<NumberType<F32>>>() {
+        // Safety: OrderedFloat is #[repr(transparent)].
+        let col = unsafe { std::mem::transmute::<&[F32], &[f32]>(col.as_slice()) };
+        return float_extreme_row(col, validity, max);
+    }
+    if let Some(ColumnView::Column(col)) = values.downcast_ref::<ColumnView<NumberType<F64>>>() {
+        // Safety: OrderedFloat is #[repr(transparent)].
+        let col = unsafe { std::mem::transmute::<&[F64], &[f64]>(col.as_slice()) };
+        return float_extreme_row(col, validity, max);
+    }
+    None
+}
+
+fn int_extreme_row<T>(values: &[T], validity: Option<&Bitmap>, max: bool) -> Option<usize>
+where for<'a> &'a [T]: ArgMinMax + ArgMinMaxMasked {
+    if values.is_empty() {
+        return None;
+    }
+    match validity {
+        None if max => Some(values.argmax()),
+        None => Some(values.argmin()),
+        Some(validity) => {
+            let (bytes, offset, _) = validity.as_slice();
+            match max {
+                true => values.argmax_masked(bytes, offset),
+                false => values.argmin_masked(bytes, offset),
+            }
+        }
+    }
+}
+
+/// F32 and F64 order NaN above every number and -0.0 equal to 0.0, as
+/// argminmax does. So the maximum takes the first NaN (`nanargmax`) and the
+/// minimum skips NaN (`argmin`). A NaN result goes to the generic loop:
+/// argminmax does not promise the first of NaNs with different bits.
+fn float_extreme_row<T: Float>(
+    values: &[T],
+    validity: Option<&Bitmap>,
+    max: bool,
+) -> Option<usize>
+where
+    for<'a> &'a [T]: ArgMinMax + ArgMinMaxMasked + NaNArgMinMax + NaNArgMinMaxMasked,
+{
+    if values.is_empty() {
+        return None;
+    }
+    let row = match validity {
+        None if max => values.nanargmax(),
+        None => values.argmin(),
+        Some(validity) => {
+            let (bytes, offset, _) = validity.as_slice();
+            match max {
+                true => values.nanargmax_masked(bytes, offset)?,
+                false => values.argmin_masked(bytes, offset)?,
+            }
+        }
+    };
+    (!values[row].is_nan()).then_some(row)
 }
 
 impl ArgMinMaxBuilder {
@@ -473,6 +573,7 @@ where
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::Number;
     use databend_common_expression::types::ReturnType;
 
     use super::*;
@@ -517,5 +618,91 @@ mod tests {
     fn batch_winner_and_ties() {
         check_batch::<TYPE_MIN>(vec![-100, 1, 1, 2]);
         check_batch::<TYPE_MAX>(vec![100, 2, 2, 1]);
+    }
+
+    /// The row that the generic loop of `add_batch` picks.
+    fn generic_extreme_row<T: Number, const CMP: u8>(
+        values: &[T],
+        validity: Option<&Bitmap>,
+    ) -> Option<usize> {
+        (0..values.len())
+            .filter(|&row| validity.is_none_or(|v| v.get_bit(row)))
+            .reduce(|best, row| {
+                match should_change::<NumberType<T>, CMP>(&values[best], &values[row]) {
+                    true => row,
+                    false => best,
+                }
+            })
+    }
+
+    /// `always`: the fast path must take every batch with a valid row.
+    fn check_simd_extreme_row<T: Number, const CMP: u8>(
+        values: Vec<T>,
+        validity: Option<&Bitmap>,
+        always: bool,
+    ) {
+        let expected = generic_extreme_row::<T, CMP>(&values, validity);
+        let view = ColumnView::<NumberType<T>>::Column(values.clone().into());
+        let got = simd_extreme_row::<NumberType<T>, CMP>(&view, validity);
+        if always && expected.is_some() {
+            assert!(got.is_some(), "{values:?} {validity:?}");
+        }
+        if let Some(got) = got {
+            assert_eq!(Some(got), expected, "CMP {CMP} {values:?} {validity:?}");
+        }
+    }
+
+    #[test]
+    fn fuzz_simd_extreme_row_matches_generic_loop() {
+        use rand::Rng;
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+
+        let mut rng = StdRng::seed_from_u64(0x5EED);
+        let specials = [
+            f64::NAN,
+            -f64::NAN,
+            f64::from_bits(f64::NAN.to_bits() | 1),
+            0.0,
+            -0.0,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        ];
+        for case in 0..3000 {
+            let len = rng.gen_range(1..300);
+            // Only values <= 0 or >= 0 in two of three cases: then -0.0 and 0.0 are
+            // often the maximum or minimum.
+            let (low, high) = [(-3, 4), (-3, 1), (0, 4)][case % 3];
+            let ints: Vec<i64> = (0..len).map(|_| rng.gen_range(low..high)).collect();
+            let mut floats: Vec<f64> = ints
+                .iter()
+                .map(|&v| match v {
+                    0 if rng.gen_bool(0.5) => -0.0,
+                    v => v as f64,
+                })
+                .collect();
+            if case % 2 == 0 {
+                for _ in 0..rng.gen_range(1..4) {
+                    floats[rng.gen_range(0..len)] = specials[rng.gen_range(0..specials.len())];
+                }
+            }
+            let offset = rng.gen_range(0..9);
+            let validity: Option<Bitmap> = rng.gen_bool(0.4).then(|| {
+                let bits: Bitmap = (0..offset + len).map(|_| rng.gen_bool(0.7)).collect();
+                bits.sliced(offset, len)
+            });
+            let validity = validity.as_ref();
+            let bytes: Vec<u8> = ints.iter().map(|&v| (v + 3) as u8).collect();
+            let floats32: Vec<F32> = floats.iter().map(|&v| F32::from(v as f32)).collect();
+            let floats: Vec<F64> = floats.into_iter().map(F64::from).collect();
+            check_simd_extreme_row::<i64, TYPE_MIN>(ints.clone(), validity, true);
+            check_simd_extreme_row::<i64, TYPE_MAX>(ints, validity, true);
+            check_simd_extreme_row::<u8, TYPE_MIN>(bytes.clone(), validity, true);
+            check_simd_extreme_row::<u8, TYPE_MAX>(bytes, validity, true);
+            check_simd_extreme_row::<F64, TYPE_MIN>(floats.clone(), validity, false);
+            check_simd_extreme_row::<F64, TYPE_MAX>(floats, validity, false);
+            check_simd_extreme_row::<F32, TYPE_MIN>(floats32.clone(), validity, false);
+            check_simd_extreme_row::<F32, TYPE_MAX>(floats32, validity, false);
+        }
     }
 }
