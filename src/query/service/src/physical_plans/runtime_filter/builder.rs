@@ -359,7 +359,18 @@ fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
         }
         PhysicalRelOperator::Join(join) => {
             // Rewritten scalar joins still enforce single-row cardinality.
-            if join.single_to_inner.is_some() {
+            // Join conditions can be evaluated directly by hash/range joins,
+            // without an intervening EvalScalar. A parent's RF must not change
+            // the input block seen by any such condition, even on another key.
+            if join.single_to_inner.is_some()
+                || !join.equi_conditions.iter().all(|condition| {
+                    condition.left.is_deterministic() && condition.right.is_deterministic()
+                })
+                || !join
+                    .non_equi_conditions
+                    .iter()
+                    .all(ScalarExpr::is_deterministic)
+            {
                 return false;
             }
             match join.join_type {
@@ -1076,10 +1087,94 @@ mod tests {
                     scalar: expr.clone(),
                 }],
             };
-            let predicate = positive(expr);
+            let predicate = positive(expr.clone());
             let filter = Filter {
                 predicates: vec![predicate.clone()],
             };
+            // Direct join conditions need the same barrier even if their
+            // columns are unrelated to the parent RF key c0. Check both equi
+            // sides and a residual, including harvesting ordinary equalities.
+            let mut right_expr = expr.clone();
+            let ScalarExpr::FunctionCall(function) = &mut right_expr else {
+                unreachable!()
+            };
+            function.arguments[0] = path_column(3, NumberDataType::Int64);
+            let residual = positive(ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "plus".into(),
+                params: vec![],
+                arguments: vec![expr.clone(), path_column(3, NumberDataType::Int64)],
+                return_type: Box::new(DataType::Number(NumberDataType::Int64)),
+            }));
+            let mut right_scan = path_scan(8, 2).plan().as_scan().unwrap().clone();
+            right_scan.columns.insert(Symbol::new(3));
+            for kind in 0..3 {
+                let mut join = Join {
+                    join_type: JoinType::Inner,
+                    equi_conditions: vec![JoinEquiCondition::new(
+                        path_column(0, NumberDataType::Int32),
+                        path_column(2, NumberDataType::Int32),
+                        false,
+                    )],
+                    ..Default::default()
+                };
+                match kind {
+                    0 => join.equi_conditions.push(JoinEquiCondition::new(
+                        expr.clone(),
+                        path_column(3, NumberDataType::Int64),
+                        false,
+                    )),
+                    1 => join.equi_conditions.push(JoinEquiCondition::new(
+                        path_column(1, NumberDataType::Int64),
+                        right_expr.clone(),
+                        false,
+                    )),
+                    _ => join.non_equi_conditions.push(residual.clone()),
+                }
+                // Preserve every existing join-side rule, but apply the
+                // expression barrier before any otherwise-permitted side.
+                for join_type in [
+                    JoinType::Inner,
+                    JoinType::Cross,
+                    JoinType::Left,
+                    JoinType::Right,
+                    JoinType::LeftSemi,
+                    JoinType::RightSemi,
+                    JoinType::LeftAnti,
+                    JoinType::RightAnti,
+                    JoinType::LeftMark,
+                    JoinType::RightMark,
+                    JoinType::Asof,
+                    JoinType::LeftAsof,
+                    JoinType::RightAsof,
+                ] {
+                    let mut condition_join = join.clone();
+                    condition_join.join_type = join_type;
+                    let plain_join = Join {
+                        join_type,
+                        ..Default::default()
+                    };
+                    let condition_join = PhysicalRelOperator::Join(condition_join);
+                    let plain_join = PhysicalRelOperator::Join(plain_join);
+                    for child in 0..2 {
+                        assert_eq!(
+                            super::probe_child_is_safe(&condition_join, child),
+                            safe && super::probe_child_is_safe(&plain_join, child)
+                        );
+                    }
+                }
+                let conditions = join.equi_conditions.len();
+                let tree = PExpr::create_binary(
+                    join,
+                    input.clone(),
+                    PExpr::create_leaf(right_scan.clone()),
+                );
+                assert_eq!(path_targets(&tree, false).is_empty(), !safe);
+                assert_eq!(
+                    super::collect_equi_conditions(&tree).unwrap().len(),
+                    if safe { conditions } else { 0 }
+                );
+            }
             for kind in 0..3 {
                 let mut leaf = scan.clone();
                 match kind {
