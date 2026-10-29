@@ -182,3 +182,24 @@ SELECT (
 ----
 3
 4
+
+# An aggregate without GROUP BY returns one row even for an empty input. The
+# outer value (0,2) has no inner rows: max() is NULL there and the alias filter
+# rejects it, but count() would be 0, which the decorrelated plan cannot keep.
+query I
+SELECT count(*) FROM (VALUES (0,2),(1,1)) t1(a,b)
+WHERE EXISTS (
+    SELECT 1 FROM (
+        SELECT max(t2.a) AS a FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b
+    ) s WHERE s.a=t1.a
+);
+----
+1
+
+statement error 1002
+SELECT count(*) FROM (VALUES (0,2),(1,1)) t1(a,b)
+WHERE EXISTS (
+    SELECT 1 FROM (
+        SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b
+    ) s WHERE s.n=t1.a
+);

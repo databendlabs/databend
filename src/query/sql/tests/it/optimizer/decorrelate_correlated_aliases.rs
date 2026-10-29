@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
@@ -381,5 +382,28 @@ async fn test_scalar_subquery_comparison_refreshes_return_type() -> Result<()> {
     let ctx = setup_context(&case).await?;
     let plan = ctx.bind_sql(case.sql).await?;
     ctx.optimize_plan(plan).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_count_alias_without_group_by_is_rejected() -> Result<()> {
+    // `count(*)` over an empty input is 0, but materializing the outer input would drop the
+    // empty-input row. Reject the query instead of returning wrong results.
+    let case = SqlTestCase {
+        name: "count_alias_without_group_by_is_rejected",
+        description: "",
+        setup_sqls: &[],
+        sql: "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n=t1.a)",
+    };
+    let ctx = setup_context(&case).await?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let Err(err) = ctx.optimize_plan(plan).await else {
+        panic!("case {} should be rejected", case.name);
+    };
+    assert_eq!(
+        err.code(),
+        ErrorCode::UNIMPLEMENTED,
+        "unexpected error: {err:?}"
+    );
     Ok(())
 }

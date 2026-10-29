@@ -110,25 +110,67 @@ impl SubqueryDecorrelatorOptimizer {
         if aliases.is_empty() || subquery.arity() == 0 {
             return Ok(false);
         }
-        match subquery.plan() {
-            RelOperator::Limit(limit) if limit.limit.is_some() || limit.offset != 0 => {
-                return Ok(true);
+        let invalid = match subquery.plan() {
+            RelOperator::Limit(limit) if limit.limit.is_some() || limit.offset != 0 => true,
+            RelOperator::Window(_) | RelOperator::WindowGroup(_) => true,
+            _ => {
+                let rel_expr = RelExpr::with_s_expr(subquery);
+                let mut input_columns = ColumnSet::new();
+                for index in 0..subquery.arity() {
+                    input_columns.extend(
+                        rel_expr
+                            .derive_relational_prop_child(index)?
+                            .output_columns
+                            .iter()
+                            .copied(),
+                    );
+                }
+                !aliases.is_subset(&input_columns)
             }
-            RelOperator::Window(_) | RelOperator::WindowGroup(_) => return Ok(true),
-            _ => {}
+        };
+        if invalid {
+            Self::check_scalar_aggregate_alias(subquery, &aliases)?;
         }
-        let rel_expr = RelExpr::with_s_expr(subquery);
-        let mut input_columns = ColumnSet::new();
-        for index in 0..subquery.arity() {
-            input_columns.extend(
-                rel_expr
-                    .derive_relational_prop_child(index)?
-                    .output_columns
-                    .iter()
-                    .copied(),
-            );
+        Ok(invalid)
+    }
+
+    /// Materializing the outer input groups a correlated aggregate without GROUP BY by the
+    /// outer columns, so an outer row without input rows gets no aggregate row instead of
+    /// one computed over an empty input. That is only equivalent when the alias filter would
+    /// reject the empty-input row anyway: the alias is the aggregate output itself and the
+    /// aggregate returns NULL for an empty input. Otherwise, e.g. for `count` or for a value
+    /// computed from the aggregate, the empty-input row would be silently lost, so reject
+    /// the query instead of returning wrong results.
+    fn check_scalar_aggregate_alias(subquery: &SExpr, aliases: &ColumnSet) -> Result<()> {
+        let mut expr = subquery;
+        loop {
+            match expr.plan() {
+                RelOperator::EvalScalar(_)
+                | RelOperator::Filter(_)
+                | RelOperator::Sort(_)
+                | RelOperator::Limit(_) => expr = expr.unary_child(),
+                RelOperator::Aggregate(aggregate) => {
+                    if !aggregate.group_items.is_empty()
+                        || expr.derive_relational_prop()?.outer_columns.is_empty()
+                    {
+                        return Ok(());
+                    }
+                    let aliases_null_on_empty_input = std::ptr::eq(expr, subquery)
+                        && aggregate
+                            .aggregate_functions
+                            .iter()
+                            .filter(|item| aliases.contains(&item.index))
+                            .all(|item| item.scalar.data_type().is_nullable_or_null());
+                    if aliases_null_on_empty_input {
+                        return Ok(());
+                    }
+                    return Err(ErrorCode::Unimplemented(
+                        "Unsupported correlated subquery: an outer column is compared with a value computed by a correlated aggregate without GROUP BY",
+                    ));
+                }
+                _ => return Ok(()),
+            }
         }
-        Ok(!aliases.is_subset(&input_columns))
     }
 
     #[recursive::recursive]
