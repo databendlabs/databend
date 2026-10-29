@@ -140,23 +140,28 @@ impl TransformRankLimitSort {
         }
     }
 
-    /// Returns whether `num_rows` more rows should be forwarded unsorted.
-    fn should_bypass(&mut self, num_rows: usize) -> bool {
+    /// Returns how many of the next `num_rows` rows should be forwarded unsorted.
+    ///
+    /// The result is capped by the rows left before the next probe, so an oversized
+    /// block is split and the probe still runs within the same block.
+    fn bypass_rows(&mut self, num_rows: usize) -> usize {
         let Mode::Bypass { passed_rows } = &mut self.mode else {
-            return false;
+            return 0;
         };
 
-        if *passed_rows >= self.probe_interval_batches * self.batch_rows {
+        let budget = (self.probe_interval_batches * self.batch_rows).saturating_sub(*passed_rows);
+        if budget == 0 {
             // Time to probe again: sort the next batch and grow the interval so a
             // stable low-cardinality stream pays less and less for probing.
             self.probe_interval_batches =
                 (self.probe_interval_batches * 2).min(MAX_PROBE_INTERVAL_BATCHES);
             self.mode = Mode::Sort;
-            return false;
+            return 0;
         }
 
-        *passed_rows += num_rows;
-        true
+        let rows = num_rows.min(budget);
+        *passed_rows += rows;
+        rows
     }
 }
 
@@ -169,9 +174,15 @@ impl AccumulatingTransform for TransformRankLimitSort {
             if data.is_empty() {
                 return Ok(output);
             }
-            if self.should_bypass(data.num_rows()) {
+            let bypass_rows = self.bypass_rows(data.num_rows());
+            if bypass_rows == data.num_rows() {
                 output.push(data);
                 return Ok(output);
+            }
+            if bypass_rows > 0 {
+                output.push(data.slice(0..bypass_rows));
+                data = data.slice(bypass_rows..data.num_rows());
+                continue;
             }
 
             // Sort in batches of at most `batch_rows` so that a probe on a large
@@ -378,6 +389,25 @@ mod tests {
         assert_eq!(t.rows, BATCH_ROWS - 2);
         let out = t.on_finish(true).unwrap();
         assert_eq!(keys(&out[0]), vec![2, 3]);
+    }
+
+    #[test]
+    fn oversized_bypassed_block_is_split_at_the_probe_budget() {
+        let mut t = transform();
+        feed(&mut t, low_cardinality_batch());
+        assert!(matches!(t.mode, Mode::Bypass { .. }));
+
+        // One block spans the whole bypass budget plus a high-cardinality tail. The
+        // budget is forwarded untouched and the tail is probed within the same block.
+        let budget = INITIAL_PROBE_INTERVAL_BATCHES * BATCH_ROWS;
+        let mut data = vec![7; budget];
+        data.extend((0..BATCH_ROWS as i32).rev());
+        let out = feed(&mut t, block(data));
+        assert_eq!(out.len(), 2);
+        assert_eq!(keys(&out[0]), vec![7; budget]);
+        assert_eq!(keys(&out[1]), vec![0, 1]);
+        assert!(matches!(t.mode, Mode::Sort));
+        assert_eq!(t.probe_interval_batches, INITIAL_PROBE_INTERVAL_BATCHES);
     }
 
     #[test]
