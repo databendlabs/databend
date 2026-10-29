@@ -52,6 +52,7 @@ use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::IndexFileLocation;
+use databend_storages_common_table_meta::meta::VectorColumnStatistics;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use futures_util::future;
 use log::info;
@@ -113,6 +114,7 @@ impl VectorIndexPruner {
             &vector_index.index_options,
             query_settings.get_vector_refine_factor()?,
             query_settings.get_vector_search_ef()?,
+            query_settings.get_vector_probe_block_percent()?,
         )?;
         let vector_reader = VectorIndexReader::create(
             pruning_ctx.dal.clone(),
@@ -242,17 +244,24 @@ impl VectorIndexPruner {
         }
         let refine = self.refine_options.refine_factor.is_some();
         let candidates = self.vector_prune_candidates(metas)?;
-        // Statistics bound the original Float32 vectors, not the FP16 scores used by
-        // refinement, so blocks are only pruned by them without refinement.
-        let candidates = if refine {
-            candidates
-        } else {
-            let (candidates, skipped_blocks) =
-                self.filter_candidates_by_topn_stats(candidates, limit);
-            if skipped_blocks > 0 {
-                info!("Vector stat pruned {skipped_blocks} blocks before hnsw topn");
+        // Safe pruning: the bounds hold for the exact scores of the rows, so a pruned
+        // block holds no row of the exact TopN. This does not depend on the SQ8 or
+        // FP16 scores used to rank the searched rows, so it also applies with
+        // refinement.
+        let (candidates, skipped_blocks) = self.filter_candidates_by_topn_stats(candidates, limit);
+        if skipped_blocks > 0 {
+            info!("Vector stat pruned {skipped_blocks} blocks before hnsw topn");
+        }
+        let candidates = match self.refine_options.probe_block_percent {
+            Some(percent) => {
+                let (candidates, skipped_blocks) =
+                    probe_nearest_blocks(candidates, percent, candidate_limit);
+                if skipped_blocks > 0 {
+                    info!("Vector probe skipped {skipped_blocks} blocks before hnsw topn");
+                }
+                candidates
             }
-            candidates
+            None => candidates,
         };
         let metas = candidates
             .into_iter()
@@ -263,6 +272,8 @@ impl VectorIndexPruner {
             .score_blocks(metas, move |reader, row_count, location| async move {
                 reader.prune(candidate_limit, row_count, &location).await
             })
+            .await?;
+        self.search_deep_blocks(&mut results, candidate_limit)
             .await?;
         if refine {
             let candidates = select_refine_candidates(
@@ -293,6 +304,56 @@ impl VectorIndexPruner {
                 Some(result.into_block_meta(scores))
             })
             .collect())
+    }
+
+    /// Searches again, with a larger ef, the blocks that supply many of the global
+    /// candidates (see `deep_blocks`). Their new results replace the first ones.
+    async fn search_deep_blocks(
+        &self,
+        results: &mut [VectorPruneResult],
+        candidate_limit: usize,
+    ) -> Result<()> {
+        // The ef of the first search, as `HNSWIndex::search_with_ef` derives it.
+        let base_ef = self
+            .refine_options
+            .search_ef
+            .unwrap_or_else(|| candidate_limit.saturating_mul(4))
+            .max(candidate_limit);
+        let block_scores: Vec<&[VectorScore]> = results
+            .iter()
+            .map(|result| result.scores.as_slice())
+            .collect();
+        let Some((deep, ef)) = deep_blocks(&block_scores, candidate_limit, base_ef) else {
+            return Ok(());
+        };
+        let metas = deep
+            .iter()
+            .map(|&i| {
+                (
+                    results[i].block_meta_index.clone(),
+                    results[i].block_meta.clone(),
+                )
+            })
+            .collect();
+        let searched = self
+            .score_blocks(metas, move |reader, row_count, location| async move {
+                reader
+                    .search(candidate_limit, Some(ef), row_count, &location)
+                    .await
+            })
+            .await?;
+        for (i, result) in deep.into_iter().zip(searched) {
+            let block_idx = results[i].block_idx;
+            results[i].scores = result
+                .scores
+                .into_iter()
+                .map(|score| VectorScore {
+                    index: block_idx,
+                    ..score
+                })
+                .collect();
+        }
+        Ok(())
     }
 
     /// TopN with a score filter or in descending order: every row is scored. A
@@ -516,12 +577,23 @@ impl VectorIndexPruner {
         metas
             .into_iter()
             .map(|(block_meta_index, block_meta)| {
-                let vector_stat = self.vector_stat_score_domain(block_meta.as_ref())?;
+                // Compute from the statistics before `block_meta` moves into the
+                // candidate; they borrow from it.
+                let vector_stat = self.vector_stat(block_meta.as_ref());
+                let score_domain = vector_stat.and_then(|stat| {
+                    conservative_score_domain(stat, &self.query_values, self.vector_distance_type)
+                });
+                let centroid_distance = vector_stat.and_then(|stat| {
+                    centroid_distance(stat, &self.query_values, self.vector_distance_type)
+                        .map(|distance| distance as f32)
+                });
+                let vector_stat_row_count = vector_stat.map(|stat| stat.row_count);
                 Ok(VectorPruneCandidate {
                     block_meta_index,
                     block_meta,
-                    score_domain: vector_stat.map(|(score_domain, _)| score_domain),
-                    vector_stat_row_count: vector_stat.map(|(_, row_count)| row_count),
+                    score_domain,
+                    centroid_distance,
+                    vector_stat_row_count,
                 })
             })
             .collect()
@@ -602,23 +674,148 @@ impl VectorIndexPruner {
         (keep_candidates, skipped_blocks)
     }
 
-    fn vector_stat_score_domain(
-        &self,
-        block_meta: &BlockMeta,
-    ) -> Result<Option<((f32, f32), u64)>> {
-        let Some(vector_stats) = block_meta.vector_stats.as_ref() else {
-            return Ok(None);
-        };
-        let Some(vector_stat) =
-            vector_stats.get(&(self.vector_index.column_id, self.vector_distance_type))
-        else {
-            return Ok(None);
-        };
-
-        let score_domain =
-            vector_stat.distance_domain(&self.query_values, self.vector_distance_type)?;
-        Ok(Some((score_domain, vector_stat.row_count)))
+    /// Vector statistics of the indexed column of a block, for its distance type.
+    fn vector_stat<'a>(&self, block_meta: &'a BlockMeta) -> Option<&'a VectorColumnStatistics> {
+        block_meta
+            .vector_stats
+            .as_ref()?
+            .get(&(self.vector_index.column_id, self.vector_distance_type))
     }
+}
+
+/// Bounds `[lower, upper]` of the scores of all rows of a block, from its vector
+/// statistics, widened for floating point error so that pruning by them never
+/// removes a row that could rank higher:
+///
+/// - the statistics radius and the row scores are computed in f32 over `dim` terms,
+///   so each may be off by about `dim * f32::EPSILON` relative to the exact value;
+/// - for cosine, an error `e` of a cosine changes its angle by up to `acos(1 - e)`,
+///   which is large near 0 and PI, where `acos` is steep.
+///
+/// The distance between the query and the centroid is computed in f64. Returns
+/// `None`, so the block is kept, when the statistics cannot bound the scores: a
+/// dimension mismatch, non-finite values, or a zero query or centroid for cosine.
+fn conservative_score_domain(
+    stat: &VectorColumnStatistics,
+    query: &[f32],
+    distance: VectorDistanceType,
+) -> Option<(f32, f32)> {
+    let radius = f64::from(stat.radius.0);
+    if !radius.is_finite() || radius < 0.0 {
+        return None;
+    }
+    let d = centroid_distance(stat, query, distance)?;
+    let relative = (query.len() as f64 * f64::from(f32::EPSILON)).min(1.0);
+    let (lower, upper) = match distance {
+        VectorDistanceType::L1 | VectorDistanceType::L2 => {
+            let slack = relative * (d + radius) + f64::from(f32::MIN_POSITIVE);
+            ((d - radius - slack).max(0.0), d + radius + slack)
+        }
+        VectorDistanceType::Dot => {
+            let angle = d;
+            // Covers the error of the radius, an angle computed from an f32 cosine.
+            let slack = (1.0 - relative).acos();
+            let lower = (angle - radius - slack).max(0.0);
+            let upper = (angle + radius + slack).min(std::f64::consts::PI);
+            // Covers the f32 error of the cosine distance of each row.
+            (
+                (1.0 - lower.cos() - relative).max(0.0),
+                1.0 - upper.cos() + relative,
+            )
+        }
+    };
+    (lower.is_finite() && upper.is_finite()).then_some((lower as f32, upper as f32))
+}
+
+/// Distance between the query and the centroid of a block, in f64, in the units of
+/// the statistics radius: L1 or L2 distance, or the angle for cosine. `None` for a
+/// dimension mismatch, non-finite values, or a zero query or centroid for cosine.
+fn centroid_distance(
+    stat: &VectorColumnStatistics,
+    query: &[f32],
+    distance: VectorDistanceType,
+) -> Option<f64> {
+    if query.is_empty() || stat.centroid.len() != query.len() {
+        return None;
+    }
+    let pairs = || {
+        query
+            .iter()
+            .zip(&stat.centroid)
+            .map(|(q, c)| (f64::from(*q), f64::from(c.0)))
+    };
+    let d = match distance {
+        VectorDistanceType::L1 => pairs().map(|(q, c)| (q - c).abs()).sum::<f64>(),
+        VectorDistanceType::L2 => pairs().map(|(q, c)| (q - c).powi(2)).sum::<f64>().sqrt(),
+        VectorDistanceType::Dot => {
+            let (dot, qq, cc) = pairs().fold((0.0, 0.0, 0.0), |(dot, qq, cc), (q, c)| {
+                (dot + q * c, qq + q * q, cc + c * c)
+            });
+            if qq == 0.0 || cc == 0.0 {
+                return None;
+            }
+            (dot / (qq.sqrt() * cc.sqrt())).clamp(-1.0, 1.0).acos()
+        }
+    };
+    d.is_finite().then_some(d)
+}
+
+/// Approximate block pruning: keeps the `percent` of the blocks with vector
+/// statistics whose centroids are nearest to the query, and more while they hold
+/// fewer than `min_rows` rows, so that the search can produce the requested
+/// candidates. Blocks without usable statistics are always kept. The score bounds
+/// are only for safe pruning: in high dimensions block radii are as large as the
+/// spread of centroid distances, so ranking by the lower bound ranks by radius
+/// rather than by direction, and keeps wide blocks far from the query.
+/// Returns the kept blocks and the number skipped.
+fn probe_nearest_blocks(
+    candidates: Vec<VectorPruneCandidate>,
+    percent: usize,
+    min_rows: usize,
+) -> (Vec<VectorPruneCandidate>, usize) {
+    let distances = candidates
+        .iter()
+        .map(|candidate| {
+            Some((
+                candidate.centroid_distance?,
+                candidate.vector_stat_row_count?,
+            ))
+        })
+        .collect::<Vec<_>>();
+    let keep = probe_block_mask(&distances, percent, min_rows);
+    let skipped = keep.iter().filter(|keep| !**keep).count();
+    let candidates = candidates
+        .into_iter()
+        .zip(keep)
+        .filter_map(|(candidate, keep)| keep.then_some(candidate))
+        .collect();
+    (candidates, skipped)
+}
+
+/// The blocks kept by `probe_nearest_blocks`, given their centroid distances and row
+/// counts. Equal distances keep the block order.
+fn probe_block_mask(
+    distances: &[Option<(f32, u64)>],
+    percent: usize,
+    min_rows: usize,
+) -> Vec<bool> {
+    let mut keep = distances.iter().map(Option::is_none).collect::<Vec<_>>();
+    let mut ranked = distances
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, distance)| distance.map(|distance| (idx, distance)))
+        .collect::<Vec<_>>();
+    ranked.sort_by(|(_, (d1, _)), (_, (d2, _))| d1.total_cmp(d2));
+    let quota = ranked.len().saturating_mul(percent).div_ceil(100);
+    let mut rows = 0u64;
+    for (rank, (idx, (_, row_count))) in ranked.into_iter().enumerate() {
+        if rank >= quota && rows >= min_rows as u64 {
+            break;
+        }
+        keep[idx] = true;
+        rows = rows.saturating_add(row_count);
+    }
+    keep
 }
 
 /// Scores that pass the score filter, ranked so that the best is the lowest
@@ -647,6 +844,52 @@ fn ranked_scores<'a>(
         })
 }
 
+/// A block supplying more than `1 / DEEP_BLOCK_SHARE` of the global candidates is
+/// searched again.
+const DEEP_BLOCK_SHARE: usize = 4;
+
+/// Blocks to search again after the first HNSW search of every block, and the ef
+/// to search them with. Each block was searched for its `candidate_limit` nearest
+/// rows with the same `base_ef`, but HNSW finds the first rows of its results more
+/// reliably than the last ones. A block that supplies `d` of the global candidates
+/// (the `candidate_limit` lowest scores) needs its first `d` rows right; when the
+/// candidates concentrate in few blocks, as in vector-clustered tables, `d` gets
+/// close to `candidate_limit` and those rows are missed more often. The blocks
+/// supplying more than `candidate_limit / DEEP_BLOCK_SHARE` candidates are searched
+/// again with `base_ef` scaled by `d * DEEP_BLOCK_SHARE / candidate_limit` (at most
+/// `DEEP_BLOCK_SHARE` times) for the largest `d`. `block_scores[i]` are the scores of
+/// block `i`; returns the block positions, or `None` when no block is deep.
+fn deep_blocks(
+    block_scores: &[&[VectorScore]],
+    candidate_limit: usize,
+    base_ef: usize,
+) -> Option<(Vec<usize>, usize)> {
+    if candidate_limit == 0 {
+        return None;
+    }
+    let mut queue = FixedLengthPriorityQueue::new(candidate_limit);
+    for (block, scores) in block_scores.iter().enumerate() {
+        for score in scores.iter() {
+            queue.push(VectorScore {
+                index: block,
+                ..score.clone()
+            });
+        }
+    }
+    let mut supplied = vec![0usize; block_scores.len()];
+    for score in queue.into_sorted_vec() {
+        supplied[score.index] += 1;
+    }
+    let deep: Vec<usize> = (0..supplied.len())
+        .filter(|&block| supplied[block] * DEEP_BLOCK_SHARE > candidate_limit)
+        .collect();
+    let max_supplied = deep.iter().map(|&block| supplied[block]).max()?;
+    let ef = base_ef
+        .saturating_mul(max_supplied * DEEP_BLOCK_SHARE)
+        .div_ceil(candidate_limit);
+    Some((deep, ef))
+}
+
 /// Keeps the `candidate_limit` lowest scores (callers negate scores for descending
 /// order) and groups their row ids by block.
 fn select_refine_candidates(
@@ -670,7 +913,10 @@ fn select_refine_candidates(
 struct VectorPruneCandidate {
     block_meta_index: BlockMetaIndex,
     block_meta: Arc<BlockMeta>,
+    /// Conservative bounds of the row scores, for safe pruning.
     score_domain: Option<(f32, f32)>,
+    /// Distance between the query and the block centroid, for approximate pruning.
+    centroid_distance: Option<f32>,
     vector_stat_row_count: Option<u64>,
 }
 
@@ -743,6 +989,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_deep_blocks() {
+        let scores = |block: usize, values: &[f32]| {
+            values
+                .iter()
+                .enumerate()
+                .map(|(row, value)| VectorScore {
+                    index: block,
+                    row_idx: row as u32,
+                    score: F32::from(*value),
+                })
+                .collect::<Vec<_>>()
+        };
+        // 8 candidates: block 0 supplies 6, block 1 supplies 2, block 2 none.
+        let near = scores(0, &[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.9, 0.95]);
+        let mid = scores(1, &[0.15, 0.25, 0.7, 0.8, 0.85, 0.9, 0.95, 0.99]);
+        let far = scores(2, &[0.8, 0.9, 0.95, 0.99, 1.0, 1.1, 1.2, 1.3]);
+        let blocks = [near.as_slice(), mid.as_slice(), far.as_slice()];
+        // Only block 0 supplies more than a quarter; ef 32 scaled by 6 * 4 / 8.
+        assert_eq!(deep_blocks(&blocks, 8, 32), Some((vec![0], 96)));
+        // Spread candidates search no block again.
+        let spread = [&near[..2], &mid[..2], &far[..2], &near[2..4], &mid[2..4]];
+        assert_eq!(deep_blocks(&spread, 8, 32), None);
+        // A single block supplies every candidate: at most 4 times the ef.
+        assert_eq!(deep_blocks(&[near.as_slice()], 8, 32), Some((vec![0], 128)));
+        assert_eq!(deep_blocks(&blocks, 0, 32), None);
+    }
+
+    #[test]
     fn test_refine_candidate_budget_is_global() {
         let scores = [(0, 91, 0.5_f32), (0, 17, 0.2), (1, 42, 0.1), (2, 99, 0.9)]
             .into_iter()
@@ -755,5 +1029,156 @@ mod tests {
             select_refine_candidates(scores, 2),
             HashMap::from([(0, vec![17]), (1, vec![42])])
         );
+    }
+
+    #[test]
+    fn test_conservative_score_domain_bounds_row_scores() -> Result<()> {
+        use databend_storages_common_index::normalize_vector;
+        use databend_storages_common_index::vector_stat_distance;
+
+        // Deterministic points spread around a direction, and queries far and near.
+        let dim = 16;
+        let point = |seed: usize| -> Vec<f32> {
+            (0..dim)
+                .map(|d| 1.0 + (((seed * 31 + d * 17) % 97) as f32 / 97.0 - 0.5))
+                .collect()
+        };
+        let points: Vec<Vec<f32>> = (0..50).map(point).collect();
+        let queries = [point(1000), vec![-1.0; dim], points[0].clone()];
+        // The row scores, as computed by the SQL distance functions (in f32).
+        let score = |q: &[f32], x: &[f32], distance| match distance {
+            VectorDistanceType::Dot => {
+                let dot: f32 = q.iter().zip(x).map(|(a, b)| a * b).sum();
+                let qq: f32 = q.iter().map(|a| a * a).sum();
+                let xx: f32 = x.iter().map(|a| a * a).sum();
+                1.0 - dot / (qq.sqrt() * xx.sqrt())
+            }
+            _ => vector_stat_distance(q, x, distance).unwrap(),
+        };
+        for distance in [
+            VectorDistanceType::L1,
+            VectorDistanceType::L2,
+            VectorDistanceType::Dot,
+        ] {
+            // Statistics as written by the vector index writer.
+            let rows: Vec<Vec<f32>> = points
+                .iter()
+                .map(|x| {
+                    let mut x = x.clone();
+                    if matches!(distance, VectorDistanceType::Dot) {
+                        normalize_vector(&mut x);
+                    }
+                    x
+                })
+                .collect();
+            let mut centroid = vec![0.0_f32; dim];
+            for row in &rows {
+                for (c, v) in centroid.iter_mut().zip(row) {
+                    *c += v / rows.len() as f32;
+                }
+            }
+            if matches!(distance, VectorDistanceType::Dot) {
+                normalize_vector(&mut centroid);
+            }
+            let radius = rows
+                .iter()
+                .map(|row| vector_stat_distance(row, &centroid, distance).unwrap())
+                .fold(0.0_f32, f32::max);
+            let stat = VectorColumnStatistics {
+                centroid: centroid.iter().copied().map(F32::from).collect(),
+                radius: F32::from(radius),
+                row_count: rows.len() as u64,
+            };
+            for query in &queries {
+                let (lower, upper) = conservative_score_domain(&stat, query, distance).unwrap();
+                for x in &points {
+                    let score = score(query, x, distance);
+                    assert!(
+                        lower <= score && score <= upper,
+                        "{distance:?} {score} not in [{lower}, {upper}]"
+                    );
+                }
+            }
+            // Statistics that cannot bound the scores keep the block.
+            let mismatch = VectorColumnStatistics {
+                centroid: vec![F32::from(1.0)],
+                ..stat.clone()
+            };
+            assert_eq!(
+                conservative_score_domain(&mismatch, &queries[0], distance),
+                None
+            );
+            let nan = VectorColumnStatistics {
+                radius: F32::from(f32::NAN),
+                ..stat.clone()
+            };
+            assert_eq!(conservative_score_domain(&nan, &queries[0], distance), None);
+        }
+        let stat = VectorColumnStatistics {
+            centroid: vec![F32::from(1.0); dim],
+            radius: F32::from(0.1),
+            row_count: 1,
+        };
+        assert_eq!(
+            conservative_score_domain(&stat, &vec![0.0; dim], VectorDistanceType::Dot),
+            None
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_probe_block_mask() {
+        let distances = [
+            Some((0.5, 10)),
+            None,
+            Some((0.1, 10)),
+            Some((0.3, 10)),
+            Some((0.2, 10)),
+        ];
+        // Half of the four blocks with statistics, nearest centroids first; the block
+        // without statistics is always kept.
+        assert_eq!(probe_block_mask(&distances, 50, 10), [
+            false, true, true, false, true
+        ]);
+        // More blocks are kept until they hold the requested candidates.
+        assert_eq!(probe_block_mask(&distances, 50, 25), [
+            false, true, true, true, true
+        ]);
+        assert_eq!(probe_block_mask(&distances, 50, 1000), [true; 5]);
+        // At least one block.
+        assert_eq!(probe_block_mask(&distances, 1, 0), [
+            false, true, true, false, false
+        ]);
+    }
+
+    #[test]
+    fn test_probe_ranks_by_centroid_not_lower_bound() {
+        // A near, tight block and a far, wide one; the wide block has the smaller
+        // lower bound, so ranking by it would probe the far block.
+        let stat = |x: f32, radius: f32| VectorColumnStatistics {
+            centroid: vec![F32::from(x), F32::from(0.0)],
+            radius: F32::from(radius),
+            row_count: 10,
+        };
+        let (near, far) = (stat(1.0, 0.1), stat(5.0, 5.0));
+        let query = [0.0, 0.0];
+        let distance = VectorDistanceType::L2;
+        let lower = |stat| conservative_score_domain(stat, &query, distance).unwrap().0;
+        assert!(lower(&far) < lower(&near));
+        let distances = [&near, &far].map(|stat| {
+            Some((
+                centroid_distance(stat, &query, distance).unwrap() as f32,
+                10,
+            ))
+        });
+        assert_eq!(probe_block_mask(&distances, 50, 0), [true, false]);
+        // Cosine ranks by angle; statistics without a usable centroid keep the block.
+        let angle = centroid_distance(&stat(1.0, 0.1), &[0.0, 1.0], VectorDistanceType::Dot);
+        assert!((angle.unwrap() - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
+        assert_eq!(
+            centroid_distance(&near, &[0.0; 2], VectorDistanceType::Dot),
+            None
+        );
+        assert_eq!(centroid_distance(&near, &[0.0; 3], distance), None);
     }
 }

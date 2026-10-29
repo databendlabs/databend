@@ -1491,6 +1491,7 @@ mod tests {
             input_level_stats: vec![],
             kind: ReclusterTaskKind::MergeBlocks,
             virtual_column_layout: None,
+            vector_seeds: vec![],
             inverted_index_sources: blocks
                 .iter()
                 .map(|(_, block)| block.inverted_index_metas.clone().unwrap_or_default())

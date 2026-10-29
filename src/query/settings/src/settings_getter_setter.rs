@@ -1103,6 +1103,10 @@ impl Settings {
         self.try_get_u64("vector_search_ef")
     }
 
+    pub fn get_vector_probe_block_percent(&self) -> Result<u64> {
+        self.try_get_u64("vector_probe_block_percent")
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
