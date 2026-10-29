@@ -172,10 +172,13 @@ pub async fn load_bloom_filter_by_columns<'a>(
 /// in-memory tier of the bloom filter cache, `None` otherwise (including when
 /// the cache is disabled).
 ///
-/// Only the in-memory tier is probed: this runs on the caller's thread, and a
-/// hit in the on-disk tier needs a synchronous file read and decode. Such
-/// filters are left to the full load path, which reads them on the I/O
-/// runtime, concurrently across columns.
+/// Only the in-memory tier is probed, because this runs on the caller's
+/// thread. A hit in the on-disk tier needs a synchronous file read and
+/// decode, so such filters are left to the full load path, which reads them on
+/// the I/O runtime, concurrently across columns. For the same reason a memory
+/// hit here does not re-populate the on-disk tier (that serializes the
+/// filter); the full load path re-populates it once the filter is loaded
+/// again.
 ///
 /// The returned filters keep the order of `column_needed` with duplicates
 /// removed, so callers that rewrite the index (e.g. ngram index refresh) get
@@ -191,23 +194,15 @@ fn load_cached_bloom_filters(index_path: &str, column_needed: &[String]) -> Opti
     let cache = FilterImpl::cache()?;
     let memory_cache = cache.in_memory_cache()?;
     let mut seen = HashSet::with_capacity(column_needed.len());
-    let mut cache_keys = Vec::with_capacity(column_needed.len());
     let mut fields = Vec::with_capacity(column_needed.len());
     let mut filters = Vec::with_capacity(column_needed.len());
     for name in column_needed {
         if !seen.insert(name) {
             continue;
         }
-        let cache_key = BloomColumnFilterReader::cache_key(index_path, name);
-        let filter = memory_cache.get(&cache_key)?;
-        cache_keys.push(cache_key);
+        let filter = memory_cache.get(BloomColumnFilterReader::cache_key(index_path, name))?;
         fields.push(TableField::new(name, TableDataType::Binary));
         filters.push(filter);
-    }
-    // Same as a memory hit of `HybridCache::get`: re-populate the on-disk
-    // tier if needed (this only enqueues the item, no disk I/O here).
-    for (cache_key, filter) in cache_keys.iter().zip(&filters) {
-        cache.insert_to_disk_cache_if_necessary(cache_key, filter);
     }
     Some(BlockFilter {
         filter_schema: Arc::new(TableSchema::new(fields)),
