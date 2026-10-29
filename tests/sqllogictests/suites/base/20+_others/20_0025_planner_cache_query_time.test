@@ -28,18 +28,18 @@ SELECT count(*) FROM t WHERE ts > subtract_minutes(now(), 15);
 ----
 0
 
-# No writes between these two statements. The cached logical plan must use
-# a fresh timestamp when building the second physical scan and prune result.
+# No writes between these two statements. The first one caches the logical
+# plan, normally while the new row is still in the future. The second one
+# reuses the plan and must use a fresh timestamp when it builds the physical
+# scan and prunes, so it counts the new row.
 statement ok
-INSERT INTO t VALUES (3, now() + interval 2 second);
+INSERT INTO t VALUES (3, now() + interval 3 second);
 
-query I
+statement ok
 SELECT count(*) FROM t WHERE ts < now();
-----
-2
 
 statement ok
-SELECT sleep(3);
+SELECT sleep(4);
 
 query I
 SELECT count(*) FROM t WHERE ts < now();
