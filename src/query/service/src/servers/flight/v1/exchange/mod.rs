@@ -12,6 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Exchange planning, pipeline processors, and destination routing.
+//!
+//! This module decides which node and thread receives each block. The
+//! [`network`](super::network) module provides block senders, byte-limited queues,
+//! wire encoding, and Flight transport.
+//!
+//! # Broadcast and global hash shuffle
+//!
+//! These paths share the network machinery but have different delivery policies:
+//!
+//! | Component | Responsibility |
+//! | --- | --- |
+//! | [`HashSendSink`] / [`HashSendTransform`] | Drive hash shuffle from pipeline events; the sink sends all partitions through channels, while the transform can output its own partition directly. |
+//! | `HashShuffleWriter` | Partition rows, account for buffered data, flush all partitions at the budget, and poll the resulting send tasks. |
+//! | [`HashShuffleDispatcher`](super::network::outbound::HashShuffleDispatcher) | Deliver one node's partitions: local blocks go to their assigned threads; remote blocks are encoded with their thread IDs and enqueued together. |
+//! | [`BroadcastSendTransform`] | Deliver one copy of each block to every node, using a round-robin block sender to choose a thread within each node. |
+//! | [`ExchangeRecvTransform`] | Combine the processor's own output path with queued incoming data, optionally coalescing small blocks for downstream operators. |
+//!
+//! Hash shuffle fixes the destination thread when it partitions the input. It
+//! therefore bypasses the broadcast round-robin policy. Its remote dispatcher
+//! calls wire encoding and the shared send buffer directly; there is no
+//! intermediate remote sender object for each thread.
+//!
+//! The writer takes its own output block by global partition index before passing
+//! the remaining partitions to the outbound dispatcher. That block is returned
+//! to the processor for its output port instead of entering a local queue.
+//! Broadcast also uses its output port directly when possible, falling back to
+//! the local node's round-robin sender under backpressure.
+//!
+//! # Preparation, progress, and ownership
+//!
+//! `HashShuffleDispatcher::prepare_send` encodes remote blocks synchronously,
+//! before returning futures that wait for send-buffer capacity. This keeps
+//! unencoded partition blocks out of the network wait. The writer owns polling
+//! and executor wakeups; the dispatcher owns delivery policy, not scheduling.
+//! See [`network`](super::network) for the queue and acknowledgement boundaries.
+//!
+//! Dispatcher copies share their block senders or send buffers across processor instances.
+//! `stop_sending` releases the current writer's references; broadcast similarly
+//! removes its sender references when a destination ends or its input finishes.
+//! Neither operation forcibly closes a connection used by another processor.
+//! Prepared send futures retain their own references until they complete or are
+//! dropped. Releasing producer references promptly lets receivers observe EOF
+//! without waiting for the entire pipeline graph to be destroyed.
+
+mod block_coalescer;
 mod broadcast_recv_transform;
 mod broadcast_send_transform;
 mod data_exchange;
@@ -30,7 +76,9 @@ mod fuse_part_exchange;
 mod hash_send_sink;
 mod hash_send_source;
 mod hash_send_transform;
-mod outbound_send_channels;
+#[cfg(test)]
+mod hash_shuffle_tests;
+mod hash_shuffle_writer;
 mod statistics_receiver;
 mod statistics_sender;
 
