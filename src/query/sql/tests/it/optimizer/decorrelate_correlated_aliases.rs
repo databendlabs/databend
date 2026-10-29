@@ -387,23 +387,39 @@ async fn test_scalar_subquery_comparison_refreshes_return_type() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_count_alias_without_group_by_is_rejected() -> Result<()> {
-    // `count(*)` over an empty input is 0, but materializing the outer input would drop the
-    // empty-input row. Reject the query instead of returning wrong results.
-    let case = SqlTestCase {
-        name: "count_alias_without_group_by_is_rejected",
-        description: "",
-        setup_sqls: &[],
-        sql: "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n=t1.a)",
-    };
-    let ctx = setup_context(&case).await?;
-    let plan = ctx.bind_sql(case.sql).await?;
-    let Err(err) = ctx.optimize_plan(plan).await else {
-        panic!("case {} should be rejected", case.name);
-    };
-    assert_eq!(
-        err.code(),
-        ErrorCode::UNIMPLEMENTED,
-        "unexpected error: {err:?}"
-    );
+    // These aggregates return a row for an empty input (`count(*)` is 0), but materializing
+    // the outer input would drop that row. Reject the query instead of returning wrong results.
+    let statements = [
+        (
+            "count_alias",
+            "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n=t1.a)",
+        ),
+        (
+            "count_alias_under_window",
+            "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n, row_number() OVER () AS r FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n=t1.a)",
+        ),
+        (
+            "count_alias_with_empty_grouping_set",
+            "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b GROUP BY GROUPING SETS ((), (t2.a))) s WHERE s.n=t1.a)",
+        ),
+    ];
+    for (name, sql) in statements {
+        let case = SqlTestCase {
+            name,
+            description: "",
+            setup_sqls: &[],
+            sql,
+        };
+        let ctx = setup_context(&case).await?;
+        let plan = ctx.bind_sql(case.sql).await?;
+        let Err(err) = ctx.optimize_plan(plan).await else {
+            panic!("case {name} should be rejected");
+        };
+        assert_eq!(
+            err.code(),
+            ErrorCode::UNIMPLEMENTED,
+            "case {name}: unexpected error: {err:?}"
+        );
+    }
     Ok(())
 }

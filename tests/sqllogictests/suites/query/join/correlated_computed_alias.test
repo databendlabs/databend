@@ -203,3 +203,21 @@ WHERE EXISTS (
         SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b
     ) s WHERE s.n=t1.a
 );
+
+statement error 1002
+SELECT count(*) FROM (VALUES (0,2),(1,1)) t1(a,b)
+WHERE EXISTS (
+    SELECT 1 FROM (
+        SELECT count(*) AS n, row_number() OVER () AS r
+        FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b
+    ) s WHERE s.n=t1.a
+);
+
+statement error 1002
+SELECT count(*) FROM (VALUES (0,2),(1,1)) t1(a,b)
+WHERE EXISTS (
+    SELECT 1 FROM (
+        SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b
+        GROUP BY GROUPING SETS ((), (t2.a))
+    ) s WHERE s.n=t1.a
+);

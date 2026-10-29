@@ -134,43 +134,44 @@ impl SubqueryDecorrelatorOptimizer {
         Ok(invalid)
     }
 
-    /// Materializing the outer input groups a correlated aggregate without GROUP BY by the
-    /// outer columns, so an outer row without input rows gets no aggregate row instead of
-    /// one computed over an empty input. That is only equivalent when the alias filter would
-    /// reject the empty-input row anyway: the alias is the aggregate output itself and the
-    /// aggregate returns NULL for an empty input. Otherwise, e.g. for `count` or for a value
-    /// computed from the aggregate, the empty-input row would be silently lost, so reject
-    /// the query instead of returning wrong results.
+    /// Materializing the outer input groups correlated aggregates by the outer columns. An
+    /// aggregate that returns a row for an empty input (no GROUP BY, or an empty grouping
+    /// set) then returns nothing for an outer row without input rows. That is only
+    /// equivalent when the alias filter would reject the empty-input row anyway: the alias
+    /// is the output of a plain aggregate without GROUP BY at this operator, and every
+    /// aliased aggregate returns NULL for an empty input. Otherwise, e.g. for `count`, for
+    /// a value computed from the aggregate, or for such an aggregate under a window or a
+    /// join, the empty-input row would be silently lost, so reject the query instead of
+    /// returning wrong results.
     fn check_scalar_aggregate_alias(subquery: &SExpr, aliases: &ColumnSet) -> Result<()> {
-        let mut expr = subquery;
-        loop {
-            match expr.plan() {
-                RelOperator::EvalScalar(_)
-                | RelOperator::Filter(_)
-                | RelOperator::Sort(_)
-                | RelOperator::Limit(_) => expr = expr.unary_child(),
-                RelOperator::Aggregate(aggregate) => {
-                    if !aggregate.group_items.is_empty()
-                        || expr.derive_relational_prop()?.outer_columns.is_empty()
-                    {
-                        return Ok(());
-                    }
-                    let aliases_null_on_empty_input = std::ptr::eq(expr, subquery)
-                        && aggregate
-                            .aggregate_functions
-                            .iter()
-                            .filter(|item| aliases.contains(&item.index))
-                            .all(|item| item.scalar.data_type().is_nullable_or_null());
-                    if aliases_null_on_empty_input {
-                        return Ok(());
-                    }
+        let mut stack = vec![subquery];
+        while let Some(expr) = stack.pop() {
+            if expr.derive_relational_prop()?.outer_columns.is_empty() {
+                continue;
+            }
+            if let RelOperator::Aggregate(aggregate) = expr.plan() {
+                let returns_row_for_empty_input = aggregate.group_items.is_empty()
+                    || aggregate
+                        .grouping_sets
+                        .as_ref()
+                        .is_some_and(|grouping_sets| grouping_sets.sets.iter().any(Vec::is_empty));
+                let aliases_null_on_empty_input = std::ptr::eq(expr, subquery)
+                    && aggregate.group_items.is_empty()
+                    && aggregate.grouping_sets.is_none()
+                    && aggregate
+                        .aggregate_functions
+                        .iter()
+                        .filter(|item| aliases.contains(&item.index))
+                        .all(|item| item.scalar.data_type().is_nullable_or_null());
+                if returns_row_for_empty_input && !aliases_null_on_empty_input {
                     return Err(ErrorCode::Unimplemented(
-                        "Unsupported correlated subquery: an outer column is compared with a value computed by a correlated aggregate without GROUP BY",
+                        "Unsupported correlated subquery: an outer column is compared with a value derived from a correlated aggregate that returns a row for empty input",
                     ));
                 }
-                _ => return Ok(()),
             }
+            stack.extend(expr.children());
         }
+        Ok(())
     }
 
     #[recursive::recursive]
