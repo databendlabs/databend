@@ -1052,7 +1052,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_recluster_multiway_merge", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enable streaming multiway merge for horizontal recluster MergeBlocks tasks.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
