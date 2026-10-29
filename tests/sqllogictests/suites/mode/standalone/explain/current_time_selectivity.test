@@ -41,10 +41,12 @@ Aggregate(Final)
         ├── build keys: [customers.segment_id (#3)]
         ├── probe keys: [segments.segment_id (#4)]
         ├── other filters: []
+        ├── runtime filters: [#0: customers.segment_id (#3) -> segments.segment_id (#4)]
         ├── Join(Inner)
         │   ├── build keys: [fact_events.customer_id (#0)]
         │   ├── probe keys: [customers.customer_id (#2)]
         │   ├── other filters: []
+        │   ├── runtime filters: [#1: fact_events.customer_id (#0) -> customers.customer_id (#2)]
         │   ├── Scan
         │   │   ├── table: current_time_selectivity.fact_events (#0)
         │   │   ├── filters: [gte(fact_events.event_time (#1), subtract_hours(now(), 24))]
@@ -54,12 +56,14 @@ Aggregate(Final)
         │       ├── table: current_time_selectivity.customers (#1)
         │       ├── filters: []
         │       ├── order by: []
-        │       └── limit: NONE
+        │       ├── limit: NONE
+        │       └── runtime filters: [#1: customers.customer_id (#2)]
         └── Scan
             ├── table: current_time_selectivity.segments (#2)
             ├── filters: []
             ├── order by: []
-            └── limit: NONE
+            ├── limit: NONE
+            └── runtime filters: [#0: segments.segment_id (#4)]
 
 statement ok
 DROP DATABASE current_time_selectivity

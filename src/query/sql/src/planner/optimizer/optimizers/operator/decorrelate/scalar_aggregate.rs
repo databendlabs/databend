@@ -341,6 +341,7 @@ impl SubqueryDecorrelatorOptimizer {
             single_to_inner: None,
             build_side_cache_info: None,
             spatial_join: None,
+            runtime_filters: vec![],
         };
         let mut s_expr = SExpr::create_binary(
             Arc::new(join.into()),

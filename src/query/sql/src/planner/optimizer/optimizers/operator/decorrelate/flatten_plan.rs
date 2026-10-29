@@ -555,6 +555,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 },
                 left_flatten_plan,
                 right_flatten_plan,

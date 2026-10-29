@@ -106,6 +106,8 @@ HashJoin
 ├── probe keys: [t1.b (#3), number (#4)]
 ├── keys is null equal: [false, false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:1, build key:CAST(number (#0) AS UInt64 NULL), probe targets:[CAST(t1.a (#1) AS UInt64 NULL)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 333.33
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
@@ -163,7 +165,7 @@ HashJoin
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── push downs: [filters: [], limit: NONE]
-                ├── apply join filters: [#0]
+                ├── apply join filters: [#1, #0]
                 └── estimated rows: 10.00
 
 statement ok
@@ -190,8 +192,6 @@ HashJoin
 ├── probe keys: [k (#1)]
 ├── keys is null equal: [true]
 ├── filters: []
-├── build join filters:
-│   └── filter id:0, build key:k (#2), probe targets:[k (#1)@scan0], filter type:
 ├── estimated rows: 0.60
 ├── Filter(Build)
 │   ├── output columns: [i.k (#2), i.v (#3)]
@@ -218,7 +218,6 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
     └── estimated rows: 3.00
 
 # A scalar aggregate is LEFT joined back to keep outer rows without input. `count` never
@@ -291,8 +290,6 @@ HashJoin
 ├── probe keys: [k (#1)]
 ├── keys is null equal: [true]
 ├── filters: []
-├── build join filters:
-│   └── filter id:0, build key:k (#2), probe targets:[k (#1)@scan0], filter type:
 ├── estimated rows: 0.60
 ├── AggregateFinal(Build)
 │   ├── output columns: [COUNT(*) (#5), i.k (#2)]
@@ -337,7 +334,6 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
     └── estimated rows: 3.00
 
 # LEFT JOIN LATERAL with HAVING and an ON condition: HAVING and ON are evaluated into
@@ -422,8 +418,6 @@ HashJoin
 ├── probe keys: [k (#1)]
 ├── keys is null equal: [true]
 ├── filters: []
-├── build join filters:
-│   └── filter id:1, build key:k (#7), probe targets:[k (#1)@scan0], filter type:
 ├── estimated rows: 3.00
 ├── Window(Build)
 │   ├── output columns: [COUNT(*) (#4), k (#7), row_number() OVER () (#5)]
@@ -492,7 +486,6 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#1]
     └── estimated rows: 3.00
 
 statement ok

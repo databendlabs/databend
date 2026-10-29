@@ -561,6 +561,7 @@ impl Binder {
             single_to_inner: None,
             build_side_cache_info,
             spatial_join: None,
+            runtime_filters: vec![],
         };
 
         let s_expr = if logical_join.join_type.is_asof_join() {

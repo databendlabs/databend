@@ -505,6 +505,7 @@ EvalScalar
     ├── build keys: [CAST(infer_right.x (#7) AS Float64 NULL)]
     ├── probe keys: [CAST(infer_bounds.x (#0) AS Float64 NULL)]
     ├── other filters: []
+    ├── runtime filters: [#0: CAST(infer_right.x (#7) AS Float64 NULL) -> CAST(infer_bounds.x (#0) AS Float64 NULL)]
     ├── Scan
     │   ├── table: default.infer_right (#1)
     │   ├── filters: [eq(infer_right.x (#7), 9007199254740992)]
@@ -514,7 +515,8 @@ EvalScalar
         ├── table: default.infer_bounds (#0)
         ├── filters: [eq(infer_bounds.x (#0), 9007199254740993)]
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: CAST(infer_bounds.x (#0) AS Float64 NULL)]
 
 
 === float32_narrowing ===

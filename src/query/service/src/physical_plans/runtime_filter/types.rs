@@ -17,20 +17,16 @@ use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::MetadataRef;
-use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::plans::ScalarExpr;
 
-pub(crate) struct ResolvedRuntimeFilterProbeExpr {
-    pub probe_key: Expr<String>,
-    pub scan_id: usize,
-    pub column_idx: Symbol,
-}
-
+/// Type a probe key that reached a scan and name its column as the scan reads it.
+///
+/// The key must reference exactly one physical base column.
 pub(crate) fn resolve_runtime_filter_probe_expr(
     metadata: &MetadataRef,
     scalar: &ScalarExpr,
-) -> Result<Option<ResolvedRuntimeFilterProbeExpr>> {
+) -> Result<Option<Expr<String>>> {
     let used_columns = scalar.used_columns();
     if used_columns.len() != 1 {
         return Ok(None);
@@ -43,9 +39,6 @@ pub(crate) fn resolve_runtime_filter_probe_expr(
     ) {
         return Ok(None);
     }
-    let Some(scan_id) = metadata.read().base_column_scan_id(column_idx) else {
-        return Ok(None);
-    };
 
     let metadata = metadata.read();
     let probe_key = scalar
@@ -66,75 +59,7 @@ pub(crate) fn resolve_runtime_filter_probe_expr(
             Ok(column.column_name.clone())
         })?;
 
-    Ok(Some(ResolvedRuntimeFilterProbeExpr {
-        probe_key,
-        scan_id,
-        column_idx,
-    }))
-}
-
-/// Probe-side information retained while a join condition is converted into a
-/// physical runtime filter.
-pub(crate) struct RuntimeFilterProbeKey<T> {
-    pub probe_key: T,
-    pub scan_id: usize,
-    pub column_idx: Symbol,
-    pub is_connector: bool,
-    pub is_null_equal: bool,
-}
-
-impl<T> RuntimeFilterProbeKey<T> {
-    pub fn map_probe_key<U>(self, map: impl FnOnce(T) -> U) -> RuntimeFilterProbeKey<U> {
-        RuntimeFilterProbeKey {
-            probe_key: map(self.probe_key),
-            scan_id: self.scan_id,
-            column_idx: self.column_idx,
-            is_connector: self.is_connector,
-            is_null_equal: self.is_null_equal,
-        }
-    }
-
-    pub fn try_map_probe_key<U, E>(
-        self,
-        map: impl FnOnce(T) -> Result<U, E>,
-    ) -> Result<RuntimeFilterProbeKey<U>, E> {
-        Ok(RuntimeFilterProbeKey {
-            probe_key: map(self.probe_key)?,
-            scan_id: self.scan_id,
-            column_idx: self.column_idx,
-            is_connector: self.is_connector,
-            is_null_equal: self.is_null_equal,
-        })
-    }
-}
-
-/// Only a direct column, optionally wrapped in a nullability-only cast, can
-/// connect equivalence classes. Every value-changing expression is a leaf.
-pub(crate) fn canonical_equivalence_connector(
-    probe_key: RemoteExpr<String>,
-) -> std::result::Result<RemoteExpr<String>, RemoteExpr<String>> {
-    match probe_key {
-        probe_key @ RemoteExpr::ColumnRef { .. } => Ok(probe_key),
-        RemoteExpr::Cast {
-            expr,
-            dest_type,
-            is_try: false,
-            span,
-        } => match expr.as_ref() {
-            RemoteExpr::ColumnRef { data_type, .. }
-                if dest_type.remove_nullable() == *data_type =>
-            {
-                Ok(*expr)
-            }
-            _ => Err(RemoteExpr::Cast {
-                span,
-                is_try: false,
-                expr,
-                dest_type,
-            }),
-        },
-        probe_key => Err(probe_key),
-    }
+    Ok(Some(probe_key))
 }
 
 /// Collection of runtime filters for a join operation
@@ -159,9 +84,8 @@ pub struct PhysicalRuntimeFilter {
     pub build_key: RemoteExpr,
 
     /// List of (probe_key, scan_id) pairs that this filter should be applied to
-    /// A single filter is built once and then pushed down to multiple scans
-    /// Targets are equality-safe connector members or complete expression
-    /// leaves attached to one of those members.
+    /// A single filter is built once and then pushed down to multiple scans.
+    /// The optimizer moves the filter to the scans with the filter push-down rules.
     pub probe_targets: Vec<(RemoteExpr<String>, usize)>,
 
     pub build_table_rows: Option<u64>,

@@ -1,0 +1,732 @@
+=== inner_join_column_key ===
+description: The join records one runtime filter and the probe-side scan receives it.
+sql: SELECT f.v FROM rf_fact f JOIN rf_dim d ON f.k = d.k WHERE d.name = 'a'
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1)]
+└── Filter
+    ├── filters: [eq(rf_dim.name (#4), 'a')]
+    └── Join(Inner)
+        ├── build keys: [rf_dim.k (#3)]
+        ├── probe keys: [rf_fact.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.rf_dim (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.rf_fact (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1), rf_fact.k (#0) AS (#5), rf_dim.k (#3) AS (#6), rf_dim.name (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#3)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#3) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: [eq(rf_dim.name (#4), 'a')]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.rf_fact (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        └── runtime filters: [#0: rf_fact.k (#0)]
+
+
+=== expression_probe_key ===
+description: A single-column expression probe key reaches the scan unchanged.
+sql: SELECT f.v FROM rf_fact f JOIN rf_dim d ON f.k + 1 = d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#3)]
+    ├── probe keys: [plus(rf_fact.k (#0), 1)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.rf_fact (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1), rf_fact.k (#0) AS (#5), rf_dim.k (#3) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#3)]
+    ├── probe keys: [plus(rf_fact.k (#0), 1)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#3) -> plus(rf_fact.k (#0), 1)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.rf_fact (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        └── runtime filters: [#0: plus(rf_fact.k (#0), 1)]
+
+
+=== derived_column_probe_key ===
+description: A probe key computed by a projection is rewritten to its definition at the scan.
+sql: SELECT f.v FROM (SELECT k + 1 AS k1, v FROM rf_fact) f JOIN rf_dim d ON f.k1 = d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [k1 (#3)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.v (#1) AS (#1), plus(rf_fact.k (#0), 1) AS (#3)]
+        └── Scan
+            ├── table: default.rf_fact (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1), k1 (#3) AS (#6), rf_dim.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [k1 (#3)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#4) -> k1 (#3)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.v (#1) AS (#1), plus(rf_fact.k (#0), 1) AS (#3)]
+        └── Scan
+            ├── table: default.rf_fact (#0)
+            ├── filters: []
+            ├── order by: []
+            ├── limit: NONE
+            └── runtime filters: [#0: plus(rf_fact.k (#0), 1)]
+
+
+=== union_all_probe_side ===
+description: The runtime filter is copied to both inputs of UNION ALL.
+sql: SELECT f.v FROM (SELECT k, v FROM rf_fact UNION ALL SELECT k, v FROM rf_fact2) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [v (#6) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#7)]
+    ├── probe keys: [k (#5)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── UnionAll
+        ├── output: [k (#5), v (#6)]
+        ├── left: [rf_fact.k (#0), rf_fact.v (#1)]
+        ├── right: [rf_fact2.k (#3), rf_fact2.v (#4)]
+        ├── cte_scan_names: []
+        ├── logical_recursive_cte_id: None
+        ├── EvalScalar
+        │   ├── scalars: [rf_fact.k (#0) AS (#0), rf_fact.v (#1) AS (#1)]
+        │   └── Scan
+        │       ├── table: default.rf_fact (#0)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [rf_fact2.k (#3) AS (#3), rf_fact2.v (#4) AS (#4)]
+            └── Scan
+                ├── table: default.rf_fact2 (#1)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [v (#6) AS (#6), k (#5) AS (#9), rf_dim.k (#7) AS (#10)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#7)]
+    ├── probe keys: [k (#5)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#7) -> k (#5)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── UnionAll
+        ├── output: [k (#5), v (#6)]
+        ├── left: [rf_fact.k (#0), rf_fact.v (#1)]
+        ├── right: [rf_fact2.k (#3), rf_fact2.v (#4)]
+        ├── cte_scan_names: []
+        ├── logical_recursive_cte_id: None
+        ├── Scan
+        │   ├── table: default.rf_fact (#0)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   ├── limit: NONE
+        │   └── runtime filters: [#0: rf_fact.k (#0)]
+        └── Scan
+            ├── table: default.rf_fact2 (#1)
+            ├── filters: []
+            ├── order by: []
+            ├── limit: NONE
+            └── runtime filters: [#0: rf_fact2.k (#3)]
+
+
+=== aggregate_group_key ===
+description: A runtime filter on a group key passes the aggregate.
+sql: SELECT f.s FROM (SELECT k, sum(v) AS s FROM rf_fact GROUP BY k) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [sum(v) (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), sum(v) (#3) AS (#3)]
+        └── Aggregate(Initial)
+            ├── group items: [rf_fact.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(rf_fact.v (#1)) AS (#3)]
+            └── EvalScalar
+                ├── scalars: [rf_fact.k (#0) AS (#0), rf_fact.v (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.rf_fact (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [sum(v) (#3) AS (#3), rf_fact.k (#0) AS (#6), rf_dim.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#4) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Aggregate(Final)
+        ├── group items: [rf_fact.k (#0) AS (#0)]
+        ├── aggregate functions: [sum(rf_fact.v (#1)) AS (#3)]
+        └── Aggregate(Partial)
+            ├── group items: [rf_fact.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(rf_fact.v (#1)) AS (#3)]
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: []
+                ├── limit: NONE
+                └── runtime filters: [#0: rf_fact.k (#0)]
+
+
+=== aggregate_result_is_not_pushed ===
+description: A runtime filter on an aggregate result stops at the aggregate and is removed.
+sql: SELECT f.k FROM (SELECT k, sum(v) AS s FROM rf_fact GROUP BY k) f
+JOIN rf_dim d ON f.s = d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.k (#0) AS (#0)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [sum(v) (#3)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), sum(v) (#3) AS (#3)]
+        └── Aggregate(Initial)
+            ├── group items: [rf_fact.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(rf_fact.v (#1)) AS (#3)]
+            └── EvalScalar
+                ├── scalars: [rf_fact.k (#0) AS (#0), rf_fact.v (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.rf_fact (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.k (#0) AS (#0), sum(v) (#3) AS (#6), rf_dim.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [sum(v) (#3)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#4) -> sum(v) (#3)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Aggregate(Final)
+        ├── group items: [rf_fact.k (#0) AS (#0)]
+        ├── aggregate functions: [sum(rf_fact.v (#1)) AS (#3)]
+        └── Aggregate(Partial)
+            ├── group items: [rf_fact.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(rf_fact.v (#1)) AS (#3)]
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== window_partition_key ===
+description: A runtime filter on a window partition key passes the window.
+sql: SELECT f.rn FROM (SELECT k, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY k ORDER BY v) (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), row_number() OVER (PARTITION BY k ORDER BY v) (#3) AS (#3)]
+        └── Window
+            ├── aggregate function: row_number
+            ├── partition items: [rf_fact.k (#0) AS (#0)]
+            ├── order by items: [rf_fact.v (#1) AS (#1)]
+            ├── frame: [Range: Preceding(None) ~ CurrentRow]
+            └── Sort
+                ├── sort keys: [rf_fact.k (#0) ASC NULLS LAST, rf_fact.v (#1) ASC NULLS LAST]
+                ├── limit: [NONE]
+                ├── window top: NONE
+                ├── window function: RowNumber
+                └── EvalScalar
+                    ├── scalars: [rf_fact.k (#0) AS (#0), rf_fact.v (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.rf_fact (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY k ORDER BY v) (#3) AS (#3), rf_fact.k (#0) AS (#6), rf_dim.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#4) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: [rf_fact.k (#0) AS (#0)]
+        ├── order by items: [rf_fact.v (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [rf_fact.k (#0) ASC NULLS LAST, rf_fact.v (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            ├── window top: NONE
+            ├── window function: RowNumber
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: [rf_fact.k (#0) ASC, rf_fact.v (#1) ASC]
+                ├── limit: NONE
+                └── runtime filters: [#0: rf_fact.k (#0)]
+
+
+=== window_without_partition_is_not_pushed ===
+description: Removing rows below a window without that partition key changes the window results, so the filter is removed.
+sql: SELECT f.rn FROM (SELECT k, row_number() OVER (ORDER BY v) AS rn FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY v) (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), row_number() OVER (ORDER BY v) (#3) AS (#3)]
+        └── Window
+            ├── aggregate function: row_number
+            ├── partition items: []
+            ├── order by items: [rf_fact.v (#1) AS (#1)]
+            ├── frame: [Range: Preceding(None) ~ CurrentRow]
+            └── Sort
+                ├── sort keys: [rf_fact.v (#1) ASC NULLS LAST]
+                ├── limit: [NONE]
+                └── EvalScalar
+                    ├── scalars: [rf_fact.v (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.rf_fact (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY v) (#3) AS (#3), rf_fact.k (#0) AS (#6), rf_dim.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#4) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [rf_fact.v (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [rf_fact.v (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: [rf_fact.v (#1) ASC]
+                └── limit: NONE
+
+
+=== limit_is_not_pushed ===
+description: Removing rows below ORDER BY ... LIMIT changes which rows the limit keeps, so the filter is removed.
+sql: SELECT f.v FROM (SELECT k, v FROM rf_fact ORDER BY v LIMIT 1000000) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#3)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Limit
+        ├── limit: [1000000]
+        ├── offset: [0]
+        └── Sort
+            ├── sort keys: [rf_fact.v (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [rf_fact.k (#0) AS (#0), rf_fact.v (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.rf_fact (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1), rf_fact.k (#0) AS (#5), rf_dim.k (#3) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#3)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#3) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Limit
+        ├── limit: [1000000]
+        ├── offset: [0]
+        └── Sort
+            ├── sort keys: [rf_fact.v (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: [rf_fact.v (#1) ASC]
+                └── limit: NONE
+
+
+=== equivalence_across_inner_joins ===
+description: Join equivalences carry the runtime filter of the top join to every scan with an equal key.
+sql: SELECT f.v FROM rf_fact f JOIN rf_mid m ON f.k = m.k JOIN rf_dim d ON m.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#5)]
+    ├── probe keys: [rf_mid.k (#3)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Inner)
+        ├── build keys: [rf_mid.k (#3)]
+        ├── probe keys: [rf_fact.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.rf_mid (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.rf_fact (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1), rf_fact.k (#0) AS (#7), rf_mid.k (#3) AS (#8), rf_dim.k (#5) AS (#9)]
+└── Join(Inner)
+    ├── build keys: [rf_fact.k (#0)]
+    ├── probe keys: [rf_dim.k (#5)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_fact.k (#0) -> rf_dim.k (#5)]
+    ├── Scan
+    │   ├── table: default.rf_fact (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Inner)
+        ├── build keys: [rf_dim.k (#5)]
+        ├── probe keys: [rf_mid.k (#3)]
+        ├── other filters: []
+        ├── runtime filters: [#1: rf_dim.k (#5) -> rf_mid.k (#3)]
+        ├── Scan
+        │   ├── table: default.rf_dim (#2)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   ├── limit: NONE
+        │   └── runtime filters: [#0: rf_dim.k (#5)]
+        └── Scan
+            ├── table: default.rf_mid (#1)
+            ├── filters: []
+            ├── order by: []
+            ├── limit: NONE
+            └── runtime filters: [#0: rf_mid.k (#3), #1: rf_mid.k (#3)]
+
+
+=== null_supplying_side_of_left_join ===
+description: A NULL-rejecting key passes into the null-supplying side of a lower LEFT JOIN.
+sql: SELECT m.j FROM rf_mid m LEFT JOIN rf_fact f ON m.j = f.v JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_mid.j (#1) AS (#1)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#8)]
+    ├── probe keys: [k (#5)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Left)
+        ├── build keys: [v (#6)]
+        ├── probe keys: [rf_mid.j (#1)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [CAST(rf_fact.k (#2) AS Int32 NULL) AS (#5), CAST(rf_fact.v (#3) AS Int32 NULL) AS (#6), CAST(rf_fact.s (#4) AS String NULL) AS (#7)]
+        │   └── Scan
+        │       ├── table: default.rf_fact (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.rf_mid (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_mid.j (#1) AS (#1), k (#5) AS (#10), rf_dim.k (#8) AS (#11)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#8)]
+    ├── probe keys: [k (#5)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#8) -> k (#5)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Right)
+        ├── build keys: [rf_mid.j (#1)]
+        ├── probe keys: [v (#6)]
+        ├── other filters: []
+        ├── runtime filters: [#1: rf_mid.j (#1) -> v (#6)]
+        ├── Scan
+        │   ├── table: default.rf_mid (#0)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [CAST(rf_fact.k (#2) AS Int32 NULL) AS (#5), CAST(rf_fact.v (#3) AS Int32 NULL) AS (#6), CAST(rf_fact.s (#4) AS String NULL) AS (#7)]
+            └── Scan
+                ├── table: default.rf_fact (#1)
+                ├── filters: []
+                ├── order by: []
+                ├── limit: NONE
+                └── runtime filters: [#0: CAST(rf_fact.k (#2) AS Int32 NULL), #1: CAST(rf_fact.v (#3) AS Int32 NULL)]
+
+
+=== null_accepting_key_stays_above_left_join ===
+description: COALESCE maps the NULL-extended rows to a matchable key, so the filter must not enter the null-supplying side.
+sql: SELECT m.j FROM rf_mid m LEFT JOIN rf_fact f ON m.j = f.v JOIN rf_dim d ON coalesce(f.k, 0) = d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_mid.j (#1) AS (#1)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#8)]
+    ├── probe keys: [if(is_not_null(k (#5)), assume_not_null(k (#5)), true, 0, NULL)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Left)
+        ├── build keys: [v (#6)]
+        ├── probe keys: [rf_mid.j (#1)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [CAST(rf_fact.k (#2) AS Int32 NULL) AS (#5), CAST(rf_fact.v (#3) AS Int32 NULL) AS (#6), CAST(rf_fact.s (#4) AS String NULL) AS (#7)]
+        │   └── Scan
+        │       ├── table: default.rf_fact (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.rf_mid (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_mid.j (#1) AS (#1), k (#5) AS (#10), rf_dim.k (#8) AS (#11)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#8)]
+    ├── probe keys: [if(is_not_null(k (#5)), assume_not_null(k (#5)), true, 0, NULL)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#8) -> if(is_not_null(k (#5)), assume_not_null(k (#5)), true, 0, NULL)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Right)
+        ├── build keys: [rf_mid.j (#1)]
+        ├── probe keys: [v (#6)]
+        ├── other filters: []
+        ├── runtime filters: [#1: rf_mid.j (#1) -> v (#6)]
+        ├── Scan
+        │   ├── table: default.rf_mid (#0)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [CAST(rf_fact.k (#2) AS Int32 NULL) AS (#5), CAST(rf_fact.v (#3) AS Int32 NULL) AS (#6), CAST(rf_fact.s (#4) AS String NULL) AS (#7)]
+            └── Scan
+                ├── table: default.rf_fact (#1)
+                ├── filters: []
+                ├── order by: []
+                ├── limit: NONE
+                └── runtime filters: [#1: CAST(rf_fact.v (#3) AS Int32 NULL)]
+
+
+=== null_safe_equality_has_no_runtime_filter ===
+description: A null-safe equality matches NULL keys, which a runtime filter would remove.
+sql: SELECT f.v FROM rf_fact f JOIN rf_dim d ON f.k IS NOT DISTINCT FROM d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1)]
+└── Join(Inner)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: [assume_not_null(if(false, true, false, false, eq(rf_fact.k (#0), rf_dim.k (#3))))]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.rf_fact (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1), rf_fact.k (#0) AS (#5), rf_dim.k (#3) AS (#6)]
+└── Filter
+    ├── filters: [assume_not_null(if(false, true, false, false, eq(rf_fact.k (#0), rf_dim.k (#3))))]
+    └── Join(Cross)
+        ├── build keys: []
+        ├── probe keys: []
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.rf_dim (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.rf_fact (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+

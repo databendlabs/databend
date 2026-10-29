@@ -34,6 +34,7 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::Side;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
+use crate::plans::JoinRuntimeFilter;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
@@ -344,6 +345,9 @@ pub struct Join {
     // Derived annotation. The canonical join condition remains
     // `non_equi_conditions`; this is finalized after logical rewrites.
     pub spatial_join: Option<Box<SpatialJoinCandidate>>,
+    // Runtime filters built from the build side and applied to scans of the probe side.
+    // A join rewrite that changes the build/probe sides must clear them.
+    pub runtime_filters: Vec<JoinRuntimeFilter>,
 }
 
 impl Default for Join {
@@ -359,6 +363,7 @@ impl Default for Join {
             single_to_inner: None,
             build_side_cache_info: None,
             spatial_join: None,
+            runtime_filters: Vec::new(),
         }
     }
 }
