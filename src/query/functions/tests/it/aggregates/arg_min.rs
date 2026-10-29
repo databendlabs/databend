@@ -28,7 +28,10 @@ fn run_arg_min_cases(file: &mut impl Write, simulator: impl AggregationSimulator
         ("date_col", DateType::from_data(vec![1, 2, 3, 4]).into()),
         ("ts", TimestampType::from_data(vec![10, 20, 30, 40]).into()),
         // 0.0 ties the later -0.0 and comes first, so a = 2 is the min (not 1).
-        ("f", Float64Type::from_data(vec![1.0, f64::NAN, 0.0, -0.0]).into()),
+        (
+            "f",
+            Float64Type::from_data(vec![1.0, f64::NAN, 0.0, -0.0]).into(),
+        ),
         (
             "json",
             StringType::from_data(vec![r#"{"k":4}"#, r#"{"k":3}"#, r#"{"k":2}"#, r#"{"k":1}"#])
