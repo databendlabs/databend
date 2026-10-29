@@ -382,7 +382,7 @@ Exchange
     │                                               │       │       ├── keys is null equal: [false]
     │                                               │       │       ├── filters: []
     │                                               │       │       ├── build join filters(distributed):
-    │                                               │       │       │   └── filter id:2, build key:item.i_item_sk (#317), probe targets:[cs_ui.cs_item_sk (#58)@scan2, catalog_returns.cr_item_sk (#79)@scan3], filter type:bloom,inlist,min_max
+    │                                               │       │       │   └── filter id:2, build key:item.i_item_sk (#317), probe targets:[cs_ui.cs_item_sk (#58)@scan2], filter type:bloom,inlist,min_max
     │                                               │       │       ├── estimated rows: 18150.03
     │                                               │       │       ├── Exchange(Build)
     │                                               │       │       │   ├── output columns: [item.i_item_sk (#317), item.i_product_name (#338)]
@@ -443,7 +443,6 @@ Exchange
     │                                               │       │                                   │       ├── partitions total: 0
     │                                               │       │                                   │       ├── partitions scanned: 0
     │                                               │       │                                   │       ├── push downs: [filters: [], limit: NONE]
-    │                                               │       │                                   │       ├── apply join filters: [#2]
     │                                               │       │                                   │       └── estimated rows: 14404374.00
     │                                               │       │                                   └── TableScan(Probe)
     │                                               │       │                                       ├── table: default.default.catalog_sales
@@ -485,10 +484,6 @@ Exchange
         ├── probe keys: [cs1.item_sk (#660), cs1.store_name (#539), cs1.store_zip (#559)]
         ├── keys is null equal: [false, false, false]
         ├── filters: []
-        ├── build join filters(distributed):
-        │   ├── filter id:20, build key:cs2.item_sk (#1003), probe targets:[cs1.item_sk (#660)@scan37], filter type:bloom,inlist,min_max
-        │   ├── filter id:21, build key:cs2.store_name (#882), probe targets:[cs1.store_name (#539)@scan26], filter type:bloom,inlist,min_max
-        │   └── filter id:22, build key:cs2.store_zip (#902), probe targets:[cs1.store_zip (#559)@scan26], filter type:bloom,inlist,min_max
         ├── estimated rows: 90932943580.15
         ├── Exchange(Build)
         │   ├── output columns: [store.s_store_name (#882), store.s_zip (#902), item.i_item_sk (#1003)]
