@@ -19,9 +19,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::spawn;
 use databend_common_catalog::plan::Projection;
-use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::plan::block_idx_in_segment;
-use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_catalog::plan::split_prefix;
 use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::table::Table;
@@ -29,10 +27,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
@@ -90,8 +86,6 @@ impl<T> Drop for AbortOnDropTasks<T> {
 pub struct RowsFetchMetadataImpl {
     // Average bytes per row
     pub row_bytes: usize,
-    // block_bytes after projection
-    pub block_bytes: usize,
 
     pub location: String,
     pub nums_rows: usize,
@@ -109,7 +103,8 @@ pub(super) struct ParquetRowsFetcher {
     snapshot: Option<Arc<TableSnapshot>>,
     table: Arc<FuseTable>,
     projection: Projection,
-    schema: TableSchemaRef,
+    // Column nodes of the table schema, to project the block metas.
+    column_nodes: ColumnNodes,
     settings: ReadSettings,
 
     reader: Arc<BlockReader>,
@@ -126,7 +121,10 @@ pub(super) struct ParquetRowsFetcher {
     io_semaphore: Arc<Semaphore>,
 
     segment_reader: CompactSegmentInfoReader,
-    block_meta_lru_cache: InMemoryLruCache<RowsFetchMetadataImpl>,
+    // Decoded block metas of the segments this fetcher has read rows of. The
+    // per-block metadata is built from them on each call: it is cheap next to
+    // reading the block, and a block is looked up once per batch.
+    segment_cache: RowFetchSegmentCache,
 }
 
 #[async_trait::async_trait]
@@ -139,45 +137,24 @@ impl RowsFetcher for ParquetRowsFetcher {
         Ok(())
     }
     async fn fetch_metadata(&mut self, block_id: u64) -> Result<Self::Metadata> {
-        if let Some(v) = self.block_meta_lru_cache.get(block_id.to_string()) {
-            return Ok(v.clone());
-        }
-
-        // load metadata
         let (segment, block) = split_prefix(block_id);
-        let snapshot = self.snapshot.as_ref().unwrap();
-
-        let (location, ver) = snapshot.segments[segment as usize].clone();
-        let segment_load_params = LoadParams {
-            ver,
-            location,
-            len_hint: None,
-            put_cache: true,
-        };
-        let compact_segment_info = self.segment_reader.read(&segment_load_params).await?;
-
-        let blocks = compact_segment_info.block_metas()?;
+        let blocks = self
+            .segment_cache
+            .get_or_load(segment, || async {
+                let snapshot = self.snapshot.as_ref().unwrap();
+                let (location, ver) = snapshot.segments[segment as usize].clone();
+                let segment_load_params = LoadParams {
+                    ver,
+                    location,
+                    len_hint: None,
+                    put_cache: true,
+                };
+                let compact_segment_info = self.segment_reader.read(&segment_load_params).await?;
+                compact_segment_info.block_metas()
+            })
+            .await?;
         let block_idx = block_idx_in_segment(blocks.len(), block as usize);
-
-        static PREFETCH_SIZE: usize = 10;
-        let cache_start = block_idx / PREFETCH_SIZE * PREFETCH_SIZE;
-        let mut cache_end = block_idx / PREFETCH_SIZE * PREFETCH_SIZE + PREFETCH_SIZE;
-
-        cache_end = std::cmp::min(cache_end, blocks.len());
-        let metadata = self.build_metadata(&blocks[cache_start..cache_end])?;
-
-        for (block_index, metadata) in (cache_start..cache_end).zip(metadata) {
-            let block_id = block_id_in_segment(blocks.len(), block_index);
-            let block_id = compute_row_id_prefix(segment, block_id as u64);
-            self.block_meta_lru_cache
-                .insert(block_id.to_string(), metadata);
-        }
-
-        Ok(self
-            .block_meta_lru_cache
-            .get(block_id.to_string())
-            .clone()
-            .unwrap())
+        Ok(Arc::new(self.build_metadata(&blocks[block_idx])?))
     }
 
     #[async_backtrace::framed]
@@ -292,20 +269,18 @@ impl ParquetRowsFetcher {
         let schema = table.schema();
         let operator = table.operator.clone();
         let segment_reader = MetaReaders::segment_info_reader(operator, schema.clone());
+        let column_nodes = ColumnNodes::new_from_schema(&schema.as_ref().into(), Some(&schema));
         ParquetRowsFetcher {
             table,
             snapshot: None,
             segment_reader,
             projection,
-            schema,
+            column_nodes,
             reader,
             settings,
             max_threads: max_threads.max(1),
             io_semaphore,
-            block_meta_lru_cache: InMemoryLruCache::with_items_capacity(
-                String::from("RowFetchBlockMetaCache"),
-                128,
-            ),
+            segment_cache: RowFetchSegmentCache::new(SEGMENT_CACHE_CAPACITY),
         }
     }
 
@@ -344,52 +319,40 @@ impl ParquetRowsFetcher {
         }
     }
 
-    fn build_metadata(&self, meta: &[Arc<BlockMeta>]) -> Result<Vec<RowsFetchMetadataImpl>> {
-        let arrow_schema = self.schema.as_ref().into();
-        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
+    fn build_metadata(&self, block_meta: &BlockMeta) -> Result<RowsFetchMetadataImpl> {
+        let part_info = FuseTable::projection_part(
+            block_meta,
+            &None,
+            &self.column_nodes,
+            None,
+            &self.projection,
+        );
 
-        let mut metadata = Vec::with_capacity(meta.len());
-        for block_meta in meta {
-            let part_info = FuseTable::projection_part(
-                block_meta,
-                &None,
-                &column_nodes,
-                None,
-                &self.projection,
-            );
+        let fuse_part = FuseBlockPartInfo::from_part(&part_info)?;
 
-            let fuse_part = FuseBlockPartInfo::from_part(&part_info)?;
+        let compression_ratio = block_meta.block_size as f64 / block_meta.file_size as f64;
+        let mut average_bytes = 0;
+        for (column_id, column_meta) in &fuse_part.columns_meta {
+            if let Some(columns_stat) = &fuse_part.columns_stat {
+                if let Some(column_stat) = columns_stat.get(column_id) {
+                    average_bytes += column_stat.in_memory_size as usize / fuse_part.nums_rows;
 
-            let compression_ratio = block_meta.block_size as f64 / block_meta.file_size as f64;
-            let mut block_bytes = 0;
-            let mut average_bytes = 0;
-            for (column_id, column_meta) in &fuse_part.columns_meta {
-                if let Some(columns_stat) = &fuse_part.columns_stat {
-                    if let Some(column_stat) = columns_stat.get(column_id) {
-                        average_bytes += column_stat.in_memory_size as usize / fuse_part.nums_rows;
-                        block_bytes += column_stat.in_memory_size as usize;
-
-                        continue;
-                    }
+                    continue;
                 }
-
-                let compressed_size = column_meta.read_bytes(&None);
-                let estimate_memory_size = (compressed_size as f64 * compression_ratio) as usize;
-                block_bytes += estimate_memory_size;
-                average_bytes += estimate_memory_size / fuse_part.nums_rows;
             }
 
-            metadata.push(RowsFetchMetadataImpl {
-                row_bytes: average_bytes,
-                block_bytes,
-                nums_rows: fuse_part.nums_rows,
-                compression: fuse_part.compression,
-                location: fuse_part.location.clone(),
-                columns_meta: fuse_part.columns_meta.clone(),
-            });
+            let compressed_size = column_meta.read_bytes(&None);
+            let estimate_memory_size = (compressed_size as f64 * compression_ratio) as usize;
+            average_bytes += estimate_memory_size / fuse_part.nums_rows;
         }
 
-        Ok(metadata)
+        Ok(RowsFetchMetadataImpl {
+            row_bytes: average_bytes,
+            nums_rows: fuse_part.nums_rows,
+            compression: fuse_part.compression,
+            location: fuse_part.location.clone(),
+            columns_meta: fuse_part.columns_meta.clone(),
+        })
     }
 
     fn build_block(
@@ -409,9 +372,37 @@ impl ParquetRowsFetcher {
     }
 }
 
-impl From<RowsFetchMetadataImpl> for CacheValue<RowsFetchMetadataImpl> {
-    fn from(value: RowsFetchMetadataImpl) -> Self {
-        CacheValue::new(value, 0)
+/// Segments whose decoded block metas a fetcher keeps.
+const SEGMENT_CACHE_CAPACITY: usize = 16;
+
+/// Decoded block metas of segments, by segment index in the snapshot. Decoding
+/// decompresses and deserializes the metas of every block of the segment, so rows
+/// of many blocks of one segment decode it once rather than once per block.
+struct RowFetchSegmentCache {
+    cache: InMemoryLruCache<Vec<Arc<BlockMeta>>>,
+}
+
+impl RowFetchSegmentCache {
+    fn new(capacity: usize) -> Self {
+        Self {
+            cache: InMemoryLruCache::with_items_capacity(
+                String::from("RowFetchSegmentCache"),
+                capacity,
+            ),
+        }
+    }
+
+    /// The block metas of `segment`, decoded by `load` if not cached.
+    async fn get_or_load<F, Fut>(&self, segment: u64, load: F) -> Result<Arc<Vec<Arc<BlockMeta>>>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<Vec<Arc<BlockMeta>>>>,
+    {
+        let key = segment.to_string();
+        if let Some(blocks) = self.cache.get(&key) {
+            return Ok(blocks);
+        }
+        Ok(self.cache.insert(key, load().await?))
     }
 }
 
@@ -433,6 +424,33 @@ mod tests {
                 let _ = sender.send(());
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_segment_cache_decode_once() -> Result<()> {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+
+        let loads = AtomicUsize::new(0);
+        let cache = RowFetchSegmentCache::new(2);
+        let get = |segment| {
+            cache.get_or_load(segment, || async {
+                loads.fetch_add(1, Ordering::Relaxed);
+                Ok(Vec::new())
+            })
+        };
+        // Rows of any number of blocks of one segment load it once.
+        for _ in 0..5 {
+            get(0).await?;
+        }
+        assert_eq!(loads.load(Ordering::Relaxed), 1);
+        // Beyond the capacity, the least recently used segment is loaded again.
+        get(1).await?;
+        get(2).await?;
+        assert_eq!(loads.load(Ordering::Relaxed), 3);
+        get(0).await?;
+        assert_eq!(loads.load(Ordering::Relaxed), 4);
+        Ok(())
     }
 
     #[tokio::test]
