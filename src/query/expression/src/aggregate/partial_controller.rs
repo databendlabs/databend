@@ -47,6 +47,10 @@ const BYPASS_DISTINCT_RATIO: f64 = 0.9;
 const GROW_DEDUP_RATIO: f64 = 2.0;
 /// Leave this many times the growth of all instances as headroom before memory pressure.
 const HEADROOM_FACTOR: usize = 2;
+/// Grow to hold this many times the estimated distinct groups. An index short of a few keys
+/// absorbs nothing when the keys come in a cyclic order, as each restarts the index before it
+/// repeats, so the margin covers the estimate error.
+const GROW_MARGIN: f64 = 1.1;
 /// 4096 registers (4KB), about 1.6% standard error: far below the factors the decisions use.
 const HLL_PRECISION: usize = 12;
 
@@ -67,8 +71,8 @@ impl AddAssign for PartialAddStats {
     }
 }
 
-/// Estimates the distinct groups since learning started from their group hashes, which are
-/// already well mixed, with a HyperLogLog.
+/// Estimates the distinct groups since learning started from their group hashes, with a
+/// HyperLogLog.
 ///
 /// Sampling starts at the first window of a learning period: before it, the index was never
 /// restarted and its groups are exactly the distinct groups, recorded as a lower bound.
@@ -93,7 +97,7 @@ impl DistinctSampler {
     #[inline]
     pub fn observe(&mut self, hashes: &[u64]) {
         for &hash in hashes {
-            self.hll.add_hash(hash);
+            self.hll.add_hash(mix_hash(hash));
         }
     }
 
@@ -102,6 +106,18 @@ impl DistinctSampler {
         self.first_window_groups
             .map(|first| self.hll.count().max(first))
     }
+}
+
+/// The MurmurHash3 finalizer. The group hashes of some types, short strings among them, are poorly
+/// mixed in the low bits that select the HyperLogLog register, which biases the estimate low by
+/// up to about 20%; the finalizer mixes every bit into every other.
+#[inline]
+fn mix_hash(mut hash: u64) -> u64 {
+    hash ^= hash >> 33;
+    hash = hash.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    hash ^= hash >> 33;
+    hash = hash.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+    hash ^ (hash >> 33)
 }
 
 /// Requested behavior of the partial aggregate.
@@ -235,12 +251,13 @@ impl Learning {
             return PartialDecision::Bypass;
         }
         if materialized > distinct * GROW_DEDUP_RATIO {
+            let groups = (distinct * GROW_MARGIN) as usize;
             let fit_groups = match env.headroom_bytes {
-                None => distinct as usize,
+                None => groups,
                 Some(headroom) => {
                     let per_group =
                         env.bytes_per_group.max(1) * env.concurrency.max(1) * HEADROOM_FACTOR;
-                    (distinct as usize).min(headroom / per_group)
+                    groups.min(headroom / per_group)
                 }
             };
             let capacity = AggregateHashTable::capacity_for_groups(fit_groups);
