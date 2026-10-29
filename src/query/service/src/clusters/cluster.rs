@@ -62,6 +62,7 @@ use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
 use futures::future::select;
+use futures::future::try_join_all;
 use log::error;
 use log::info;
 use log::warn;
@@ -181,7 +182,7 @@ impl ClusterHelper for Cluster {
             )))
         }
 
-        let mut response = HashMap::with_capacity(message.len());
+        let mut actions = Vec::with_capacity(message.len());
         for (id, message) in message {
             let node = get_node(&self.nodes, &id)?;
 
@@ -234,7 +235,7 @@ impl ClusterHelper for Cluster {
                         };
 
                         match result {
-                            Ok(result) => return Ok(result),
+                            Ok(result) => return Ok((id, result)),
                             Err(e)
                                 if e.code() == ErrorCode::CANNOT_CONNECT_NODE
                                     && attempt < flight_params.retry_times =>
@@ -250,7 +251,22 @@ impl ClusterHelper for Cluster {
                 }
             };
 
-            response.insert(id, do_action_with_retry.await?);
+            actions.push(do_action_with_retry);
+        }
+
+        let mut response = HashMap::with_capacity(actions.len());
+        if flight_params.concurrent {
+            // Each node only handles its own share of the request, so the calls are
+            // independent and can be in flight at the same time. The first error wins
+            // and drops the remaining in-flight requests.
+            for (id, result) in try_join_all(actions).await? {
+                response.insert(id, result);
+            }
+        } else {
+            for action in actions {
+                let (id, result) = action.await?;
+                response.insert(id, result);
+            }
         }
 
         Ok(response)
@@ -1074,6 +1090,9 @@ pub struct FlightParams {
     pub keep_alive: FlightKeepAliveParams,
     /// Send the requests over a cached channel per node instead of a new connection.
     pub reuse_control_channel: bool,
+    /// Send the per-node requests of one `do_action` call concurrently instead of one
+    /// node after another. Only worth enabling for fan-out steps on the query hot path.
+    pub concurrent: bool,
 }
 
 #[derive(Clone)]

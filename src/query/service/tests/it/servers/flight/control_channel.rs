@@ -171,6 +171,7 @@ impl Peer {
             retry_interval: 0,
             keep_alive: FlightKeepAliveParams::default(),
             reuse_control_channel,
+            concurrent: false,
         };
         let message = HashMap::from([(self.node_id.clone(), "no-such-query".to_string())]);
         let mut response: HashMap<String, String> = self

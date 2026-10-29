@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod finish_query;
 mod flight_actions;
 mod get_running_query_dump;
 mod init_query_env;
@@ -29,6 +30,9 @@ use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_settings::Settings;
+pub use finish_query::FINISH_QUERY;
+pub use finish_query::FinishQueryPacket;
+pub use finish_query::finish_query_on_nodes;
 pub use flight_actions::FlightActions;
 pub use flight_actions::flight_actions;
 pub use get_running_query_dump::GET_RUNNING_QUERY_DUMP;
