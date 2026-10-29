@@ -1726,8 +1726,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_parallel_union_all", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enable parallel UNION ALL, default is 0, 1 for enable",
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Executes the branches of UNION ALL concurrently (1, default) instead of one after another (0). Serial execution lowers peak memory for wide unions but serializes the work of independent branches.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

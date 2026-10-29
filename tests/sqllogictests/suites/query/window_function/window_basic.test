@@ -63,6 +63,11 @@ SELECT sum(salary) OVER (PARTITION BY depname ORDER BY salary) ss FROM empsalary
 9600
 14600
 
+# These frames aggregate in input order; keep the UNION ALL branches serial so the
+# order of the unioned rows is deterministic.
+statement ok
+SET enable_parallel_union_all = 0
+
 query T
 SELECT array_agg(v) OVER (PARTITION BY k) FROM (SELECT 1 AS k, ['a'] AS v UNION ALL SELECT 1, ['b'] UNION ALL SELECT 1, ['c'])
 ----
@@ -90,6 +95,9 @@ SELECT m FROM (SELECT markov_train(1, 0, 0, 1, 0)(v) OVER (PARTITION BY k) AS m 
 [(0,6,4,{97:4,98:2,99:2,100:2})]
 [(0,6,4,{97:4,98:2,99:2,100:2})]
 [(0,6,4,{97:4,98:2,99:2,100:2})]
+
+statement ok
+UNSET enable_parallel_union_all
 
 # row_number
 query I
