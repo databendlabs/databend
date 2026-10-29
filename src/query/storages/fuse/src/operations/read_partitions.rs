@@ -825,7 +825,10 @@ impl FuseTable {
         // of re-pruning every segment on every execution. A runtime TopN
         // boundary is different: `RuntimeTopNSegmentReorder` drops whole
         // segments before the sink sees them, so that result is never cached.
-        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?
+        // Without a deterministic key nothing can be cached, so the sink must
+        // not retain the produced parts either.
+        let enable_prune_cache = derterministic_cache_key.is_some()
+            && enable_prune_cache_for_query(&ctx)?
             && runtime_filter_prune_context.is_none()
             && runtime_scan_filters.preferred_filter().is_none();
         let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
