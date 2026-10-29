@@ -145,7 +145,9 @@ async fn test_do_action_unknown_node_fails_before_dispatch() -> anyhow::Result<(
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+// The flight server runs on the test runtime, and test globals are only set on the test
+// thread, so a server-side handler must not run on another worker thread.
+#[tokio::test(flavor = "current_thread")]
 async fn test_finish_query_reaches_live_nodes_despite_failed_ones() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let config = GlobalConfig::instance();
