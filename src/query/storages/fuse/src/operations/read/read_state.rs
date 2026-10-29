@@ -25,7 +25,10 @@ use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::EvaluateOptions;
@@ -36,8 +39,6 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::SelectExpr;
 use databend_common_expression::SelectExprBuilder;
-use databend_common_expression::SelectOp;
-use databend_common_expression::Value;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
@@ -60,8 +61,8 @@ pub struct BloomRuntimeFilterRef {
 /// Selector executor for a prewhere predicate that compares a string column with a constant.
 struct PrewhereSelector {
     executor: FilterExecutor,
-    /// The predicate when it is a single comparison.
-    single_comparison: Option<(SelectOp, Vec<Expr>)>,
+    /// Columns compared by the predicate when it is a single comparison.
+    single_comparison_columns: Option<Vec<usize>>,
 }
 
 impl PrewhereSelector {
@@ -82,8 +83,15 @@ impl PrewhereSelector {
         if !select_expr.contains_string_column_eq_constant() {
             return None;
         }
-        let single_comparison = match select_expr {
-            SelectExpr::Compare((op, args, _)) => Some((op, args)),
+        let single_comparison_columns = match &select_expr {
+            SelectExpr::Compare((_, args, _)) => Some(
+                args.iter()
+                    .filter_map(|arg| match arg {
+                        Expr::ColumnRef(ColumnRef { id, .. }) => Some(*id),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
             _ => None,
         };
         Some(Self {
@@ -95,29 +103,27 @@ impl PrewhereSelector {
                 &BUILTIN_FUNCTIONS,
                 false,
             ),
-            single_comparison,
+            single_comparison_columns,
         })
     }
 
-    fn filter(
-        &mut self,
-        block: &DataBlock,
-        num_rows: usize,
-        func_ctx: &FunctionContext,
-    ) -> Result<MutableBitmap> {
-        // A lone comparison over an encoded column is evaluated on the encoding into a bitmap,
-        // as the evaluator does. With no other predicate to short-circuit, the selector would
-        // only convert that bitmap to row indexes and back.
-        if let Some((op, args)) = &self.single_comparison
-            && let Some(bitmap) =
-                Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS).try_compare_encoded(op, args)
-        {
-            return Ok(FilterHelpers::filter_to_bitmap(
-                Value::Column(bitmap),
-                num_rows,
-            ));
-        }
-        filter_with_selector(&mut self.executor, block, num_rows)
+    /// Whether to evaluate `block` with the selector rather than the evaluator.
+    ///
+    /// A single comparison has no other predicate to short-circuit. When it reads a constant
+    /// or encoded column, the evaluator computes the result once per block or per dictionary
+    /// value, and the selector would only turn that result into row indexes and back.
+    fn applies_to(&self, block: &DataBlock) -> bool {
+        let Some(columns) = &self.single_comparison_columns else {
+            return true;
+        };
+        columns.iter().all(|id| match block.get_by_offset(*id) {
+            BlockEntry::Const(..) => false,
+            BlockEntry::Column(Column::Encoded(_)) => false,
+            BlockEntry::Column(Column::Nullable(column)) => {
+                !matches!(column.column, Column::Encoded(_))
+            }
+            BlockEntry::Column(_) => true,
+        })
     }
 }
 
@@ -278,8 +284,14 @@ impl ReadState {
 
     pub fn filter(&mut self, block: &DataBlock, num_rows: usize) -> Result<Option<MutableBitmap>> {
         if let Some(ref f) = self.filters {
-            if let Some(selector) = self.prewhere_selector.as_mut() {
-                return Ok(Some(selector.filter(block, num_rows, &self.func_ctx)?));
+            if let Some(selector) = self.prewhere_selector.as_mut()
+                && selector.applies_to(block)
+            {
+                return Ok(Some(filter_with_selector(
+                    &mut selector.executor,
+                    block,
+                    num_rows,
+                )?));
             }
 
             let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
@@ -562,9 +574,6 @@ fn apply_selection(bitmap: &mut MutableBitmap, selection: &[u32], offset: usize)
 mod tests {
     use std::borrow::Cow;
 
-    use databend_common_expression::BlockEntry;
-    use databend_common_expression::Column;
-    use databend_common_expression::ColumnRef;
     use databend_common_expression::ConstantFolder;
     use databend_common_expression::FromData;
     use databend_common_expression::RawExpr;
@@ -841,7 +850,7 @@ mod tests {
 
     /// Fuse scans may keep string columns dictionary encoded. Chunking slices the encoded
     /// column, and the selector must still match the evaluator over the decoded column. A lone
-    /// comparison takes the encoded bitmap directly.
+    /// comparison over an encoded column is left to the evaluator.
     #[test]
     fn test_prewhere_selector_over_dictionary_column() {
         let keys = [1u64, 0, 1, 2, 1, 0, 2, 1];
@@ -893,23 +902,65 @@ mod tests {
                 for max_block_size in [3, num_rows] {
                     let mut selector =
                         PrewhereSelector::try_create(&expr, &func_ctx, max_block_size).unwrap();
-                    assert_eq!(
-                        selector.single_comparison.is_some(),
-                        single_comparison,
-                        "{}",
-                        expr.sql_display()
-                    );
                     let message = format!(
                         "{}, nullable {nullable}, max_block_size {max_block_size}",
                         expr.sql_display()
                     );
-                    let actual = selector.filter(&block, num_rows, &func_ctx).unwrap();
-                    assert_eq!(actual.iter().collect::<Vec<_>>(), expected, "{message}");
+                    assert_eq!(selector.applies_to(&block), !single_comparison, "{message}");
+                    assert!(selector.applies_to(&decoded), "{message}");
                     let actual =
                         filter_with_selector(&mut selector.executor, &block, num_rows).unwrap();
                     assert_eq!(actual.iter().collect::<Vec<_>>(), expected, "{message}");
                 }
             }
+        }
+    }
+
+    /// Blocks written before ADD COLUMN read the new column as a constant. A lone comparison
+    /// over it is left to the evaluator; a compound predicate still uses the selector.
+    #[test]
+    fn test_prewhere_selector_over_constant_column() {
+        let num_rows = 5;
+        let func_ctx = FunctionContext::default();
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::new_const_column(
+                    DataType::String,
+                    Scalar::String("match".to_string()),
+                    num_rows,
+                ),
+                Int32Type::from_data((0..num_rows as i32).collect()).into(),
+            ],
+            num_rows,
+        );
+        let eq = call("eq", vec![
+            column(0, DataType::String),
+            string_constant("match"),
+        ]);
+        let compound = call("and", vec![
+            eq.clone(),
+            call("gt", vec![
+                column(1, DataType::Number(NumberDataType::Int32)),
+                int_constant(2),
+            ]),
+        ]);
+
+        for (raw_expr, uses_selector) in [(eq, false), (compound, true)] {
+            let expr = prewhere_expr(&raw_expr, &func_ctx);
+            let mut selector = PrewhereSelector::try_create(&expr, &func_ctx, 2).unwrap();
+            assert_eq!(
+                selector.applies_to(&block),
+                uses_selector,
+                "{}",
+                expr.sql_display()
+            );
+            let actual = filter_with_selector(&mut selector.executor, &block, num_rows).unwrap();
+            assert_eq!(
+                actual.iter().collect::<Vec<_>>(),
+                evaluator_bitmap(&expr, &block, &func_ctx),
+                "{}",
+                expr.sql_display()
+            );
         }
     }
 
