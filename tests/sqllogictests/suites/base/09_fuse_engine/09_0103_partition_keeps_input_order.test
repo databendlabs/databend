@@ -1,0 +1,110 @@
+statement ok
+create or replace database db_09_0103
+
+statement ok
+use db_09_0103
+
+statement ok
+set enable_compact_after_write = 0
+
+statement ok
+create or replace stage s_09_0103
+
+# The suite runs this file once per handler, and replacing a stage keeps the
+# files a previous run unloaded into it.
+statement ok
+remove @s_09_0103
+
+# 2M rows sorted by the cluster key k (40 keys of 50000 rows), one file per
+# format, and an unsorted control with the same keys cycling row by row.
+statement ok
+copy into @s_09_0103/csv/ from (select number // 50000 as k, number as v from numbers(2000000) order by v) file_format = (type = csv) single = true max_file_size = 10000000000
+
+statement ok
+copy into @s_09_0103/parquet/ from (select number // 50000 as k, number as v from numbers(2000000) order by v) file_format = (type = parquet) single = true max_file_size = 10000000000
+
+statement ok
+copy into @s_09_0103/unsorted/ from (select number % 40 as k, number as v from numbers(2000000) order by v) file_format = (type = parquet) single = true max_file_size = 10000000000
+
+# Partition p = v % 2 holds every k. Loading an input sorted by k must leave
+# each partition's blocks contiguous in k: no two blocks of one partition
+# overlap beyond a shared endpoint (the block that straddles a key change).
+statement ok
+create table t_csv_1(k int not null, v int not null) partition by (v % 2) cluster by (k) row_per_block = 100000 write_distribution_mode = 'hash'
+
+statement ok
+create table t_csv_8(k int not null, v int not null) partition by (v % 2) cluster by (k) row_per_block = 100000 write_distribution_mode = 'hash'
+
+statement ok
+create table t_parquet_1(k int not null, v int not null) partition by (v % 2) cluster by (k) row_per_block = 100000 write_distribution_mode = 'hash'
+
+statement ok
+create table t_parquet_8(k int not null, v int not null) partition by (v % 2) cluster by (k) row_per_block = 100000 write_distribution_mode = 'hash'
+
+statement ok
+create table t_unsorted(k int not null, v int not null) partition by (v % 2) cluster by (k) row_per_block = 100000 write_distribution_mode = 'hash'
+
+statement ok
+set max_threads = 1
+
+statement ok
+copy into t_csv_1 from @s_09_0103/csv/ file_format = (type = csv)
+
+statement ok
+copy into t_parquet_1 from @s_09_0103/parquet/ file_format = (type = parquet)
+
+statement ok
+set max_threads = 8
+
+statement ok
+copy into t_csv_8 from @s_09_0103/csv/ file_format = (type = csv)
+
+statement ok
+copy into t_parquet_8 from @s_09_0103/parquet/ file_format = (type = parquet)
+
+statement ok
+copy into t_unsorted from @s_09_0103/unsorted/ file_format = (type = parquet)
+
+query I
+with b as (select _block_name n, min(v % 2) p, min(k) lo, max(k) hi from t_unsorted group by _block_name)
+select (count(*) > 0)::int from b x, b y where x.n < y.n and x.p = y.p and x.lo < y.hi and y.lo < x.hi
+----
+1
+
+query I
+with b as (select _block_name n, min(v % 2) p, min(k) lo, max(k) hi from t_csv_1 group by _block_name)
+select count(*) from b x, b y where x.n < y.n and x.p = y.p and x.lo < y.hi and y.lo < x.hi
+----
+0
+
+query I
+with b as (select _block_name n, min(v % 2) p, min(k) lo, max(k) hi from t_csv_8 group by _block_name)
+select count(*) from b x, b y where x.n < y.n and x.p = y.p and x.lo < y.hi and y.lo < x.hi
+----
+0
+
+query I
+with b as (select _block_name n, min(v % 2) p, min(k) lo, max(k) hi from t_parquet_1 group by _block_name)
+select count(*) from b x, b y where x.n < y.n and x.p = y.p and x.lo < y.hi and y.lo < x.hi
+----
+0
+
+query I
+with b as (select _block_name n, min(v % 2) p, min(k) lo, max(k) hi from t_parquet_8 group by _block_name)
+select count(*) from b x, b y where x.n < y.n and x.p = y.p and x.lo < y.hi and y.lo < x.hi
+----
+0
+
+query II
+select count(*), count(distinct v) from t_parquet_8
+----
+2000000 2000000
+
+statement ok
+drop database db_09_0103
+
+statement ok
+remove @s_09_0103
+
+statement ok
+drop stage s_09_0103
