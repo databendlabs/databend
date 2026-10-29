@@ -234,6 +234,10 @@ fn project_serialized_fields(state: &BlockEntry, start: usize, end: usize) -> Bl
 }
 
 pub(crate) fn serialized_scalar_at(state: &BlockEntry, row: usize, field: usize) -> ScalarRef<'_> {
+    // Index the field column alone: indexing the tuple builds a scalar of every field.
+    if let BlockEntry::Column(Column::Tuple(fields)) = state {
+        return fields[field].index(row).unwrap();
+    }
     let scalar = state.index(row).unwrap();
     match scalar {
         ScalarRef::Tuple(fields) => fields[field].clone(),
