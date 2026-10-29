@@ -55,7 +55,25 @@ select count(), sum(s) from (select number k, sum(number) s from numbers(2000000
 ----
 2000000	1999999000000
 
-# Memory pressure spills the partial table like any other operator.
+# Large input blocks: the partial state changes within a block, growing the table for string keys
+# in a cyclic order, and forwarding the rest of a block once the keys are mostly unique.
+statement ok
+set max_block_size = 1000000
+
+query II
+select count(), sum(c) from (select to_string(number % 50000) as k, count() c from numbers(2000000) group by k)
+----
+50000	2000000
+
+query II
+select count(), sum(s) from (select number k, sum(number) s from numbers(2000000) group by k)
+----
+2000000	1999999000000
+
+statement ok
+unset max_block_size
+
+# The final aggregate spills without changing the results.
 statement ok
 set force_aggregate_data_spill = 1
 
