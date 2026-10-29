@@ -267,3 +267,47 @@ fn test_select_like_over_constant_null() {
         }
     }
 }
+
+/// Fuse prewhere switches to the selector executor only for predicates that contain a
+/// `<string column> = <string constant>` comparison, at any depth of AND/OR.
+#[test]
+fn test_contains_string_column_eq_constant() {
+    let columns = [
+        ("s", DataType::String),
+        ("t", DataType::String),
+        ("ns", DataType::Nullable(Box::new(DataType::String))),
+        ("k", DataType::Number(NumberDataType::Int32)),
+    ];
+    let func_ctx = FunctionContext::default();
+    for (text, expected) in [
+        ("s = 'v'", true),
+        ("'v' = s", true),
+        // Folding turns the cast of the literal into a constant, as the planner does.
+        ("ns = 'v'", true),
+        ("'v' = ns", true),
+        ("k > 1 AND s = 'v'", true),
+        ("k > 1 OR (k < 0 AND ns = 'v')", true),
+        ("s <> 'v'", false),
+        ("s = t", false),
+        ("k = 1", false),
+        ("s LIKE 'v%'", false),
+        ("k > 1 OR s > 'v'", false),
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let (select_expr, _): (SelectExpr, bool) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+            .build(&expr)
+            .into();
+        assert_eq!(
+            select_expr.contains_string_column_eq_constant(),
+            expected,
+            "{text}: {select_expr:?}"
+        );
+    }
+}

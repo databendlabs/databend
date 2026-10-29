@@ -1,0 +1,96 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0064
+
+statement ok
+CREATE DATABASE db_09_0064
+
+statement ok
+USE db_09_0064
+
+# ---------------------------------------------------------------------------
+# Prewhere predicates that compare a string column with a constant are
+# evaluated with the selector executor, which yields row indexes instead of a
+# boolean column. A fuse block can hold more rows than `max_block_size`, so the
+# block is evaluated in chunks. The selected rows must match the evaluator
+# path (`enable_selector_executor = 0`) for AND/OR predicates and nullable
+# columns. `payload` is not referenced by the filters, so they run as prewhere.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t(id INT, s STRING, ns STRING NULL, payload STRING)
+
+# A single insert writes one block of 20 rows.
+statement ok
+INSERT INTO t SELECT number, if(number % 3 = 0, 'match', 'other'), if(number % 5 = 0, NULL, if(number % 2 = 0, 'match', 'other')), concat('p', number::STRING) FROM numbers(20)
+
+statement ok
+SET max_block_size = 3
+
+query IT
+SELECT id, payload FROM t WHERE s = 'match' ORDER BY id
+----
+0 p0
+3 p3
+6 p6
+9 p9
+12 p12
+15 p15
+18 p18
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' OR id > 15
+----
+p0,p3,p6,p9,p12,p15,p16,p17,p18,p19
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE ns = 'match' AND id > 4
+----
+p6,p8,p12,p14,p16,p18
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE 'match' = ns OR id < 2
+----
+p0,p1,p2,p4,p6,p8,p12,p14,p16,p18
+
+query I
+SELECT count(payload) FROM t WHERE s = 'nothing'
+----
+0
+
+statement ok
+SET enable_selector_executor = 0
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' OR id > 15
+----
+p0,p3,p6,p9,p12,p15,p16,p17,p18,p19
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE ns = 'match' AND id > 4
+----
+p6,p8,p12,p14,p16,p18
+
+statement ok
+UNSET enable_selector_executor
+
+statement ok
+SET enable_encoded_columns = 1
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' OR id > 15
+----
+p0,p3,p6,p9,p12,p15,p16,p17,p18,p19
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE ns = 'match' AND id > 4
+----
+p6,p8,p12,p14,p16,p18
+
+statement ok
+UNSET enable_encoded_columns
+
+statement ok
+UNSET max_block_size
+
+statement ok
+DROP DATABASE db_09_0064
