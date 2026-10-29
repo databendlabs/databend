@@ -106,7 +106,7 @@ async fn can_skip_probe_covers_join_types_emptied_by_empty_build() -> anyhow::Re
             method.clone(),
             desc,
         );
-        let join = factory.create_hybrid_join(join_type, 0)?;
+        let join = factory.create_hybrid_join(join_type, factory.create_level_states(0)?)?;
         assert_eq!(
             join.can_skip_probe(),
             expected,
