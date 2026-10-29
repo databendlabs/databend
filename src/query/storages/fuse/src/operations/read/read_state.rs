@@ -739,10 +739,18 @@ mod tests {
         }
     }
 
-    /// Check and fold the predicate as the planner does, so that the cast of a string
-    /// literal compared with a nullable column becomes a constant.
+    /// Check, wrap and fold the predicate as `PhysicalTableScan` builds the prewhere filter
+    /// (`cast_expr_to_non_null_boolean`), so that a nullable predicate becomes `is_true(..)`
+    /// and the cast of a string literal compared with a nullable column becomes a constant.
     fn prewhere_expr(raw_expr: &RawExpr, func_ctx: &FunctionContext) -> Expr {
-        let expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let mut expr = type_check::check(raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        if expr.data_type() != &DataType::Boolean {
+            let cast =
+                type_check::check_cast(None, true, expr, &DataType::Boolean, &BUILTIN_FUNCTIONS)
+                    .unwrap();
+            expr = type_check::check_function(None, "is_true", &[], &[cast], &BUILTIN_FUNCTIONS)
+                .unwrap();
+        }
         ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS)
             .0
             .into_owned()
