@@ -189,6 +189,14 @@ async fn test_filter_alias_scope_variants() -> Result<()> {
             "SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a AS a FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b UNION ALL SELECT t3.a FROM (VALUES (5,1)) t3(a,b) WHERE t3.b=t1.b) s WHERE s.a=t1.a)",
         ),
         (
+            "computed_alias_above_join_with_correlated_right",
+            "SELECT * FROM (VALUES (2,1),(100,2)) o(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT x.v+y.v AS a FROM (VALUES (1)) x(v) JOIN (SELECT r.v+o.b*0 AS v FROM (VALUES (1,2)) r(v,k) WHERE r.k=o.b LIMIT 1) y ON true) s WHERE s.a=o.a)",
+        ),
+        (
+            "computed_alias_above_left_join",
+            "SELECT * FROM (VALUES (2,1),(100,2)) o(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT x.v+1 AS a FROM (VALUES (1)) x(v) LEFT JOIN (SELECT * FROM (VALUES (1,2)) r(v,k) WHERE r.k=o.b) y ON true) s WHERE s.a=o.a)",
+        ),
+        (
             "computed_alias_above_join_without_outer_reference",
             "SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT x.a+1 AS a FROM (SELECT * FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b) x JOIN (VALUES (1)) t3(c) ON true) s WHERE s.a=t1.a)",
         ),
@@ -197,7 +205,7 @@ async fn test_filter_alias_scope_variants() -> Result<()> {
     for (name, sql) in statements {
         let case = SqlTestCase {
             name,
-            description: "A filter alias for an outer column must not be used below its definition or below a LIMIT.",
+            description: "A filter alias for an outer column must not be used below its definition or below a LIMIT, and the outer input is materialized once.",
             setup_sqls: &[],
             sql,
         };
@@ -389,8 +397,8 @@ async fn test_scalar_subquery_comparison_refreshes_return_type() -> Result<()> {
 async fn test_unsupported_alias_materialization_is_rejected() -> Result<()> {
     // An aggregate that returns a non-NULL row for an empty input (`count(*)` is 0, a UDAF may
     // return anything) would lose that row once the outer input is materialized below it, and
-    // a full join cannot carry the outer columns for every row. Reject these queries instead
-    // of returning wrong results.
+    // a join whose kept rows come from an uncorrelated input cannot carry the outer columns for
+    // every row. Reject these queries instead of returning wrong results.
     let statements: [(&str, &[&str], &str); 5] = [
         (
             "count_alias",

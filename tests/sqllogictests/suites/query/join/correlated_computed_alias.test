@@ -234,3 +234,32 @@ WHERE EXISTS (
         ORDER BY x.a DESC LIMIT 1
     ) s WHERE s.a=t1.a
 );
+
+# The correlated input below the join already materializes the outer columns
+# (its LIMIT needs them); the uncorrelated input must not get a second copy.
+query I
+SELECT count(*) FROM (VALUES (2,1),(100,2)) o(a,b)
+WHERE EXISTS (
+    SELECT 1 FROM (
+        SELECT x.v + y.v AS a FROM (VALUES (1)) x(v)
+        JOIN (
+            SELECT r.v + o.b * 0 AS v FROM (VALUES (1,2)) r(v,k)
+            WHERE r.k=o.b LIMIT 1
+        ) y ON true
+    ) s WHERE s.a=o.a
+);
+----
+0
+
+# A computed alias above a join that needs no outer column below it keeps
+# using the computed value as the correlation key.
+query I
+SELECT count(*) FROM (VALUES (2,1),(100,2)) o(a,b)
+WHERE EXISTS (
+    SELECT 1 FROM (
+        SELECT x.v + 1 AS a FROM (VALUES (1)) x(v)
+        LEFT JOIN (SELECT * FROM (VALUES (1,2)) r(v,k) WHERE r.k=o.b) y ON true
+    ) s WHERE s.a=o.a
+);
+----
+1

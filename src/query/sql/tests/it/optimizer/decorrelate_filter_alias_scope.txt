@@ -1,5 +1,5 @@
 === identity_alias_above_ordered_limit ===
-description: A filter alias for an outer column must not be used below its definition or below a LIMIT.
+description: A filter alias for an outer column must not be used below its definition or below a LIMIT, and the outer input is materialized once.
 sql: SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a AS a FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b ORDER BY t2.a DESC LIMIT 1) s WHERE s.a=t1.a)
 raw_plan:
 EvalScalar
@@ -84,7 +84,7 @@ Exchange(Merge)
 
 
 === computed_alias_above_ordered_limit ===
-description: A filter alias for an outer column must not be used below its definition or below a LIMIT.
+description: A filter alias for an outer column must not be used below its definition or below a LIMIT, and the outer input is materialized once.
 sql: SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a+1 AS a FROM (VALUES (0,1),(1,1)) t2(a,b) WHERE t2.b=t1.b ORDER BY t2.a DESC LIMIT 1) s WHERE s.a=t1.a)
 raw_plan:
 EvalScalar
@@ -169,7 +169,7 @@ Exchange(Merge)
 
 
 === aggregate_output_alias ===
-description: A filter alias for an outer column must not be used below its definition or below a LIMIT.
+description: A filter alias for an outer column must not be used below its definition or below a LIMIT, and the outer input is materialized once.
 sql: SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT max(t2.a) AS a FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.a=t1.a)
 raw_plan:
 EvalScalar
@@ -249,7 +249,7 @@ Exchange(Merge)
 
 
 === union_output_alias ===
-description: A filter alias for an outer column must not be used below its definition or below a LIMIT.
+description: A filter alias for an outer column must not be used below its definition or below a LIMIT, and the outer input is materialized once.
 sql: SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a AS a FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b UNION ALL SELECT t3.a FROM (VALUES (5,1)) t3(a,b) WHERE t3.b=t1.b) s WHERE s.a=t1.a)
 raw_plan:
 EvalScalar
@@ -353,8 +353,212 @@ Exchange(Merge)
                 └── num_rows: [2]
 
 
+=== computed_alias_above_join_with_correlated_right ===
+description: A filter alias for an outer column must not be used below its definition or below a LIMIT, and the outer input is materialized once.
+sql: SELECT * FROM (VALUES (2,1),(100,2)) o(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT x.v+y.v AS a FROM (VALUES (1)) x(v) JOIN (SELECT r.v+o.b*0 AS v FROM (VALUES (1,2)) r(v,k) WHERE r.k=o.b LIMIT 1) y ON true) s WHERE s.a=o.a)
+raw_plan:
+EvalScalar
+├── scalars: [a (#0) AS (#0), b (#1) AS (#1)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#8)]
+    ├── subquerys
+    │   └── Subquery (Exists)
+    │       ├── output_column: 1 (#8)
+    │       └── EvalScalar
+    │           ├── scalars: [1 AS (#8)]
+    │           └── Filter
+    │               ├── filters: [eq(a (#7), a (#0))]
+    │               └── EvalScalar
+    │                   ├── scalars: [plus(v (#2), v (#5)) AS (#7)]
+    │                   └── Join(Inner)
+    │                       ├── build keys: [k (#4)]
+    │                       ├── probe keys: [b (#1)]
+    │                       ├── other filters: []
+    │                       ├── Filter
+    │                       │   ├── filters: [true]
+    │                       │   └── Filter
+    │                       │       ├── filters: [lte(correlated_limit_row_number (#6), 1)]
+    │                       │       └── Window
+    │                       │           ├── aggregate function: row_number
+    │                       │           ├── partition items: [k (#4) AS (#4)]
+    │                       │           ├── order by items: []
+    │                       │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+    │                       │           └── Sort
+    │                       │               ├── sort keys: [k (#4) ASC NULLS LAST]
+    │                       │               ├── limit: [NONE]
+    │                       │               ├── window top: NONE
+    │                       │               ├── window function: RowNumber
+    │                       │               └── EvalScalar
+    │                       │                   ├── scalars: [k (#4) AS (#4), plus(v (#3), 0) AS (#5)]
+    │                       │                   └── Filter
+    │                       │                       ├── filters: [eq(k (#4), k (#4))]
+    │                       │                       └── ConstantTableScan
+    │                       │                           ├── columns: [v (#3), k (#4)]
+    │                       │                           └── num_rows: [1]
+    │                       └── Filter
+    │                           ├── filters: [true]
+    │                           └── ConstantTableScan
+    │                               ├── columns: [v (#2)]
+    │                               └── num_rows: [1]
+    └── ConstantTableScan
+        ├── columns: [a (#0), b (#1)]
+        └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#11) AS (#17)]
+    └── Filter
+        ├── filters: [is_true(marker (#11))]
+        └── Join(RightMark)
+            ├── build keys: [a (#9), b (#10)]
+            ├── probe keys: [a (#0), b (#1)]
+            ├── other filters: []
+            ├── Exchange(Broadcast)
+            │   └── EvalScalar
+            │       ├── scalars: [1 AS (#8), a (#9) AS (#9), b (#10) AS (#10), correlated_limit_row_number (#12) AS (#14), k (#13) AS (#15), a (#7) AS (#16)]
+            │       └── EvalScalar
+            │           ├── scalars: [plus(v (#2), v (#5)) AS (#7), a (#9) AS (#9), b (#10) AS (#10), correlated_limit_row_number (#6) AS (#12), k (#4) AS (#13)]
+            │           └── Filter
+            │               ├── filters: [eq(plus(v (#2), v (#5)), a (#9))]
+            │               └── Join(Inner)
+            │                   ├── build keys: [k (#4)]
+            │                   ├── probe keys: [b (#10)]
+            │                   ├── other filters: []
+            │                   ├── Exchange(Broadcast)
+            │                   │   └── Filter
+            │                   │       ├── filters: [lte(correlated_limit_row_number (#6), 1)]
+            │                   │       └── Window
+            │                   │           ├── aggregate function: row_number
+            │                   │           ├── partition items: [k (#4) AS (#4)]
+            │                   │           ├── order by items: []
+            │                   │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+            │                   │           └── Sort
+            │                   │               ├── sort keys: [k (#4) ASC NULLS LAST]
+            │                   │               ├── limit: [NONE]
+            │                   │               ├── window top: 1
+            │                   │               ├── window function: RowNumber
+            │                   │               └── Exchange(Hash)
+            │                   │                   ├── Exchange(Hash): keys: [k (#4)]
+            │                   │                   └── EvalScalar
+            │                   │                       ├── scalars: [k (#4) AS (#4), plus(v (#3), 0) AS (#5)]
+            │                   │                       └── ConstantTableScan
+            │                   │                           ├── columns: [v (#3), k (#4)]
+            │                   │                           └── num_rows: [1]
+            │                   └── Join(Cross)
+            │                       ├── build keys: []
+            │                       ├── probe keys: []
+            │                       ├── other filters: []
+            │                       ├── Exchange(Broadcast)
+            │                       │   └── ConstantTableScan
+            │                       │       ├── columns: [v (#2)]
+            │                       │       └── num_rows: [1]
+            │                       └── Aggregate(Final)
+            │                           ├── group items: [a (#9) AS (#9), b (#10) AS (#10)]
+            │                           ├── aggregate functions: []
+            │                           └── Aggregate(Partial)
+            │                               ├── group items: [a (#9) AS (#9), b (#10) AS (#10)]
+            │                               ├── aggregate functions: []
+            │                               └── Exchange(Hash)
+            │                                   ├── Exchange(Hash): keys: [a (#9)]
+            │                                   └── ConstantTableScan
+            │                                       ├── columns: [a (#9), b (#10)]
+            │                                       └── num_rows: [2]
+            └── ConstantTableScan
+                ├── columns: [a (#0), b (#1)]
+                └── num_rows: [2]
+
+
+=== computed_alias_above_left_join ===
+description: A filter alias for an outer column must not be used below its definition or below a LIMIT, and the outer input is materialized once.
+sql: SELECT * FROM (VALUES (2,1),(100,2)) o(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT x.v+1 AS a FROM (VALUES (1)) x(v) LEFT JOIN (SELECT * FROM (VALUES (1,2)) r(v,k) WHERE r.k=o.b) y ON true) s WHERE s.a=o.a)
+raw_plan:
+EvalScalar
+├── scalars: [a (#0) AS (#0), b (#1) AS (#1)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#8)]
+    ├── subquerys
+    │   └── Subquery (Exists)
+    │       ├── output_column: 1 (#8)
+    │       └── EvalScalar
+    │           ├── scalars: [1 AS (#8)]
+    │           └── Filter
+    │               ├── filters: [eq(a (#7), a (#0))]
+    │               └── EvalScalar
+    │                   ├── scalars: [plus(v (#2), 1) AS (#7)]
+    │                   └── Join(Left)
+    │                       ├── build keys: [k (#4)]
+    │                       ├── probe keys: [b (#1)]
+    │                       ├── other filters: []
+    │                       ├── Filter
+    │                       │   ├── filters: [true]
+    │                       │   └── EvalScalar
+    │                       │       ├── scalars: [k (#4) AS (#4), CAST(v (#3) AS UInt8 NULL) AS (#5), CAST(k (#4) AS UInt8 NULL) AS (#6)]
+    │                       │       └── EvalScalar
+    │                       │           ├── scalars: [v (#3) AS (#3), k (#4) AS (#4)]
+    │                       │           └── Filter
+    │                       │               ├── filters: [eq(k (#4), k (#4))]
+    │                       │               └── ConstantTableScan
+    │                       │                   ├── columns: [v (#3), k (#4)]
+    │                       │                   └── num_rows: [1]
+    │                       └── ConstantTableScan
+    │                           ├── columns: [v (#2)]
+    │                           └── num_rows: [1]
+    └── ConstantTableScan
+        ├── columns: [a (#0), b (#1)]
+        └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#11) AS (#13)]
+    └── Filter
+        ├── filters: [is_true(marker (#11))]
+        └── Join(RightMark)
+            ├── build keys: [a (#9), b (#10)]
+            ├── probe keys: [a (#0), b (#1)]
+            ├── other filters: []
+            ├── Exchange(Broadcast)
+            │   └── EvalScalar
+            │       ├── scalars: [1 AS (#8), a (#9) AS (#9), b (#10) AS (#10), a (#7) AS (#12)]
+            │       └── EvalScalar
+            │           ├── scalars: [plus(v (#2), 1) AS (#7), a (#9) AS (#9), b (#10) AS (#10)]
+            │           └── Join(Left)
+            │               ├── build keys: [k (#4)]
+            │               ├── probe keys: [b (#10)]
+            │               ├── other filters: []
+            │               ├── Exchange(Broadcast)
+            │               │   └── EvalScalar
+            │               │       ├── scalars: [v (#3) AS (#3), k (#4) AS (#4), CAST(v (#3) AS UInt8 NULL) AS (#5), CAST(k (#4) AS UInt8 NULL) AS (#6)]
+            │               │       └── ConstantTableScan
+            │               │           ├── columns: [v (#3), k (#4)]
+            │               │           └── num_rows: [1]
+            │               └── Join(Inner)
+            │                   ├── build keys: [plus(v (#2), 1)]
+            │                   ├── probe keys: [a (#9)]
+            │                   ├── other filters: []
+            │                   ├── Exchange(Broadcast)
+            │                   │   └── ConstantTableScan
+            │                   │       ├── columns: [v (#2)]
+            │                   │       └── num_rows: [1]
+            │                   └── Aggregate(Final)
+            │                       ├── group items: [a (#9) AS (#9), b (#10) AS (#10)]
+            │                       ├── aggregate functions: []
+            │                       └── Aggregate(Partial)
+            │                           ├── group items: [a (#9) AS (#9), b (#10) AS (#10)]
+            │                           ├── aggregate functions: []
+            │                           └── Exchange(Hash)
+            │                               ├── Exchange(Hash): keys: [a (#9)]
+            │                               └── ConstantTableScan
+            │                                   ├── columns: [a (#9), b (#10)]
+            │                                   └── num_rows: [2]
+            └── ConstantTableScan
+                ├── columns: [a (#0), b (#1)]
+                └── num_rows: [2]
+
+
 === computed_alias_above_join_without_outer_reference ===
-description: A filter alias for an outer column must not be used below its definition or below a LIMIT.
+description: A filter alias for an outer column must not be used below its definition or below a LIMIT, and the outer input is materialized once.
 sql: SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT x.a+1 AS a FROM (SELECT * FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b) x JOIN (VALUES (1)) t3(c) ON true) s WHERE s.a=t1.a)
 raw_plan:
 EvalScalar
@@ -395,45 +599,27 @@ EvalScalar
 optimized_plan:
 Exchange(Merge)
 └── EvalScalar
-    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#9) AS (#13)]
+    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#7) AS (#8)]
     └── Filter
-        ├── filters: [is_true(marker (#9))]
+        ├── filters: [is_true(marker (#7))]
         └── Join(RightMark)
-            ├── build keys: [a (#7), b (#8)]
+            ├── build keys: [a (#5), b (#3)]
             ├── probe keys: [a (#0), b (#1)]
             ├── other filters: []
             ├── Exchange(Broadcast)
             │   └── EvalScalar
-            │       ├── scalars: [1 AS (#6), a (#7) AS (#7), b (#8) AS (#8), b (#10) AS (#11), a (#5) AS (#12)]
-            │       └── EvalScalar
-            │           ├── scalars: [plus(a (#2), 1) AS (#5), a (#7) AS (#7), b (#8) AS (#8), b (#3) AS (#10)]
-            │           └── Join(Cross)
-            │               ├── build keys: []
-            │               ├── probe keys: []
-            │               ├── other filters: []
-            │               ├── Exchange(Broadcast)
-            │               │   └── ConstantTableScan
-            │               │       ├── columns: [c (#4)]
-            │               │       └── num_rows: [1]
-            │               └── Join(Inner)
-            │                   ├── build keys: [b (#3), plus(a (#2), 1)]
-            │                   ├── probe keys: [b (#8), a (#7)]
-            │                   ├── other filters: []
-            │                   ├── Exchange(Broadcast)
-            │                   │   └── ConstantTableScan
-            │                   │       ├── columns: [a (#2), b (#3)]
-            │                   │       └── num_rows: [2]
-            │                   └── Aggregate(Final)
-            │                       ├── group items: [a (#7) AS (#7), b (#8) AS (#8)]
-            │                       ├── aggregate functions: []
-            │                       └── Aggregate(Partial)
-            │                           ├── group items: [a (#7) AS (#7), b (#8) AS (#8)]
-            │                           ├── aggregate functions: []
-            │                           └── Exchange(Hash)
-            │                               ├── Exchange(Hash): keys: [a (#7)]
-            │                               └── ConstantTableScan
-            │                                   ├── columns: [a (#7), b (#8)]
-            │                                   └── num_rows: [2]
+            │       ├── scalars: [b (#3) AS (#3), plus(a (#2), 1) AS (#5), 1 AS (#6)]
+            │       └── Join(Cross)
+            │           ├── build keys: []
+            │           ├── probe keys: []
+            │           ├── other filters: []
+            │           ├── Exchange(Broadcast)
+            │           │   └── ConstantTableScan
+            │           │       ├── columns: [c (#4)]
+            │           │       └── num_rows: [1]
+            │           └── ConstantTableScan
+            │               ├── columns: [a (#2), b (#3)]
+            │               └── num_rows: [2]
             └── ConstantTableScan
                 ├── columns: [a (#0), b (#1)]
                 └── num_rows: [2]
