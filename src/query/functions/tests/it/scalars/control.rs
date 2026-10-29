@@ -35,6 +35,69 @@ fn test_control() {
     test_is_not_error(file);
 }
 
+#[test]
+fn test_if_accepts_non_strict_decimal_columns() {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::Expr;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    // Decimal(10, 2) carried by a Decimal128 column is a non-strict
+    // representation: the typed `if` selection cannot downcast it and must fall
+    // back to the generic selection, which normalizes it to Decimal64.
+    let size = DecimalSize::new(10, 2).unwrap();
+    for nullable in [false, true] {
+        for legacy_then in [false, true] {
+            let legacy =
+                Column::Decimal(DecimalColumn::Decimal128(vec![123_i128, 456].into(), size));
+            let column = if nullable {
+                NullableColumn::new_column(legacy, vec![true, false].into())
+            } else {
+                legacy
+            };
+            let data_type = column.data_type();
+            let block = DataBlock::new_from_columns(vec![
+                BooleanType::from_data(vec![legacy_then, !legacy_then]),
+                column,
+            ]);
+            let condition = Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: DataType::Boolean,
+                display_name: "condition".into(),
+            });
+            let value = Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 1,
+                data_type: data_type.clone(),
+                display_name: "value".into(),
+            });
+            let zero = Expr::constant(Scalar::default_value(&data_type), Some(data_type));
+            let args = if legacy_then {
+                vec![condition, value, zero]
+            } else {
+                vec![condition, zero, value]
+            };
+            let expr = check_function(None, "if", &[], &args, &BUILTIN_FUNCTIONS).unwrap();
+            let ctx = FunctionContext::default();
+            let result = Evaluator::new(&block, &ctx, &BUILTIN_FUNCTIONS)
+                .run(&expr)
+                .unwrap();
+            let expected_first = Scalar::Decimal(DecimalScalar::Decimal64(123, size));
+            let expected_second = if nullable {
+                Scalar::Null
+            } else {
+                Scalar::Decimal(DecimalScalar::Decimal64(0, size))
+            };
+            assert_eq!(result.index(0).unwrap(), expected_first.as_ref());
+            assert_eq!(result.index(1).unwrap(), expected_second.as_ref());
+        }
+    }
+}
+
 fn test_if(file: &mut impl Write) {
     run_ast(file, "if(false, 1, false, 2, NULL)", &[]);
     run_ast(file, "if(true, 1, NULL, 2, NULL)", &[]);
@@ -66,6 +129,34 @@ fn test_if(file: &mut impl Write) {
         (
             "expr_else",
             Int64Type::from_data_with_validity(vec![5i64, 6, 7, 8], vec![true, true, false, false]),
+        ),
+    ]);
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        ("expr_true", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+        ("expr_else", Int64Type::from_data(vec![5i64, 6, 7, 8])),
+    ]);
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        (
+            "expr_true",
+            Decimal64Type::from_data_with_size(
+                [100i64, 200, 300, 400],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+        ),
+        (
+            "expr_else",
+            Decimal64Type::from_data_with_size(
+                [500i64, 600, 700, 800],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
         ),
     ]);
     run_ast(file, "if(cond_a, expr_a, cond_b, expr_b, expr_else)", &[
