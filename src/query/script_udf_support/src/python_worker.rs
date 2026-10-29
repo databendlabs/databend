@@ -45,6 +45,8 @@ fn udf_error(error: impl std::fmt::Display) -> ErrorCode {
 
 #[derive(Clone, Debug)]
 pub struct PythonWorkerConfig {
+    /// Node administrator policy, never taken from SQL or UDF metadata.
+    pub allow_network: bool,
     pub max_workers: usize,
     pub max_workers_per_tenant: usize,
     pub max_workers_per_query: usize,
@@ -57,6 +59,7 @@ pub struct PythonWorkerConfig {
 impl Default for PythonWorkerConfig {
     fn default() -> Self {
         Self {
+            allow_network: false,
             max_workers: 0,
             max_workers_per_tenant: 0,
             max_workers_per_query: 0,
@@ -117,6 +120,11 @@ impl PythonWorkerManager {
         if !PYTHON_SANDBOX_ENFORCED {
             log::warn!(
                 "Python UDF workers run WITHOUT the OS sandbox on this platform (local development only): user code can access files, network and processes of the query service user"
+            );
+        }
+        if config.allow_network {
+            log::warn!(
+                "python_udf_allow_network is enabled: all Python UDFs on this node can access IPv4/IPv6 destinations, including internal services; use only as a temporary exception on dedicated warehouses"
             );
         }
         Ok(Arc::new(Self {
@@ -487,6 +495,7 @@ impl Worker {
         reservation: Arc<Reservation>,
         directory: Option<TempDir>,
         function: &PythonFunction,
+        allow_network: bool,
         runtime: tokio::runtime::Handle,
     ) -> Result<Self> {
         let directory = match directory {
@@ -504,8 +513,9 @@ impl Worker {
             }
             None => TempDir::new().map_err(udf_error)?,
         };
-        let command = arrow_udf_python_worker::WorkerCommand::current_exe([PYTHON_WORKER_ARG])
+        let mut command = arrow_udf_python_worker::WorkerCommand::current_exe([PYTHON_WORKER_ARG])
             .map_err(udf_error)?;
+        command.allow_network = allow_network;
         let working_dir = directory.path().to_path_buf();
         let process = arrow_udf_python_worker::WorkerProcess::spawn(
             &command,

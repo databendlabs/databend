@@ -77,6 +77,7 @@ python_udf_max_queued_queries = 128
 python_udf_queue_timeout_secs = 60
 python_udf_execution_timeout_secs = 300
 python_udf_worker_idle_timeout_secs = 300
+python_udf_allow_network = false
 ```
 
 Zero selects automatic sizing:
@@ -126,8 +127,8 @@ through a shared interpreter into another query.
 
 Every Python worker enters an unprivileged OS sandbox (implemented by
 `arrow-udf-python-worker`) after the interpreter has started and before any user
-code runs. There is no
-switch: if the sandbox cannot be entered, the worker reports
+code runs. The sandbox itself cannot be disabled: if it cannot be entered, the
+worker reports
 `Python UDF sandbox is unavailable, refusing to run user code: ...` and the
 query fails. Requirements: Linux 5.13+ with `landlock` in the active LSM list
 (`/sys/kernel/security/lsm`), seccomp, x86_64 or aarch64, and a container
@@ -139,7 +140,42 @@ directory and `RLIMIT_CORE=0` still apply) and the query node logs a warning
 when the worker manager starts. Do not serve untrusted UDFs from macOS. Other
 non-Linux platforms refuse to run Python UDFs.
 
-Landlock (filesystem):
+### Temporary network compatibility exception
+
+`[query].python_udf_allow_network = true` is a node administrator configuration,
+not a SQL setting or a UDF option. It allows outbound IPv4/IPv6 clients for **all
+Python scalar and aggregate UDFs on that node**. The default is `false`. Configure
+all nodes consistently and restart them when enabling or revoking it. Existing
+UDF definitions follow the node policy; recreating a function is not required.
+The equivalent command-line option is `--python-udf-allow-network=true`.
+
+Enable the exception before deploying the default-deny worker to existing
+network-dependent customers. Give advance notice and at least one month for
+migration before revoking an existing customer's exception, honoring any longer
+promised window. Do not treat a successful INSERT as proof of a successful
+external download when customer code catches exceptions.
+
+Use this only on a dedicated warehouse for a time-limited, audited migration.
+The flag does not implement a destination allowlist: internal and loopback
+services are reachable too, subject to the deployment's egress policy. It does
+not add bandwidth or connection limits. Document the owner and expiry outside
+the engine configuration and revoke the exception after migration to external
+jobs or UDF servers. A warning is logged when the exception is enabled.
+
+Landlock filesystem restrictions and seccomp process restrictions remain
+mandatory. Network-enabled workers may read resolver configuration and public
+CA certificate paths (including configured `SSL_CERT_FILE`/`SSL_CERT_DIR`), and
+create IPv4/IPv6 stream/datagram sockets, but cannot bind/listen, create raw
+sockets or create Unix sockets to local services. Dependency installation remains
+a separate host-side operation.
+
+Uncaught Python exceptions, including network permission errors, fail SQL
+execution; they must not be treated as successful NULL results. Python code
+that catches an exception and deliberately returns NULL or an `{"error": ...}`
+JSON value still returns a normal value. To fail an ingestion task, let the
+exception propagate or explicitly validate the returned business status.
+
+Landlock (filesystem; default policy):
 
 - read only: the stdlib, `lib-dynload` and site-packages of the environment and
   its base installation, every `sys.path` and `LD_LIBRARY_PATH` entry (except
@@ -152,13 +188,16 @@ Landlock (filesystem):
 - everything else is denied, including query configuration and data
   directories, `/proc/<query pid>/environ` and other processes' `/proc` entries.
   Path lookup is not restricted: `stat` still reveals whether a path exists.
-- on ABI 4+ TCP bind/connect and on ABI 6+ signals and abstract Unix sockets
-  outside the worker are denied by Landlock as well.
+- on ABI 4+ TCP bind/connect (connect only under the default deny-network policy)
+  and on ABI 6+ signals and abstract Unix sockets outside the worker are denied
+  by Landlock as well.
 
 seccomp (deny list, EPERM unless noted):
 
-- `socket` (EACCES): no network and no Unix sockets of other local services. The
-  IPC connection is created before the filter;
+- `socket` (EACCES by default): no network and no Unix sockets of other local
+  services. With the administrator exception, only IPv4/IPv6 stream/datagram
+  sockets are allowed; `bind`/`listen` remain denied. The IPC connection is created
+  before the filter;
 - `execve`/`execveat`: `subprocess`/`os.system` cannot start programs;
 - `fork`/`vfork` and `clone` without `CLONE_THREAD`: no child processes, so
   user code cannot escape the per-worker process accounting or fork-bomb;

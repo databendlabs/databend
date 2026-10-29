@@ -325,6 +325,122 @@ async fn pids(transforms: &mut [TransformUdfScript]) -> BTreeSet<String> {
         .collect()
 }
 
+// No external network or packages: a local HTTP service exercises the same
+// socket/DNS path as requests, and denied calls must become SQL-layer errors.
+#[cfg(target_os = "linux")]
+async fn network_policy_tests() {
+    use tokio::io::AsyncBufReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    fn nullable_transform(
+        query: Arc<PythonQueryWorkers>,
+        name: &str,
+        code: &str,
+    ) -> TransformUdfScript {
+        let mut descriptor = function(name, code);
+        descriptor.data_type = Box::new(descriptor.data_type.wrap_nullable());
+        let functions = vec![descriptor];
+        let runtimes = TransformUdfScript::init_runtime_for_query(&functions, query).unwrap();
+        TransformUdfScript::new(FunctionContext::default(), functions, runtimes)
+    }
+
+    assert!(!PythonWorkerConfig::default().allow_network);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let code = format!(
+        r#"
+import urllib.request
+
+def handler(x):
+    with urllib.request.urlopen('http://localhost:{port}/snapshot', timeout=2) as response:
+        assert response.read() == b'7'
+    return x
+"#
+    );
+    let denied = PythonWorkerManager::new(PythonWorkerConfig::default())
+        .unwrap()
+        .query("denied", 1);
+    let mut udf = nullable_transform(
+        denied.clone(),
+        "network_denied",
+        &code.replace("localhost", "127.0.0.1"),
+    );
+    let error = udf
+        .transform(input(7))
+        .await
+        .expect_err("network denial must not return NULL");
+    assert!(error.message().contains("execution failed"), "{error}");
+    assert!(error.message().contains("Permission denied"), "{error}");
+    denied.finish();
+
+    let server = databend_common_base::runtime::spawn(async move {
+        loop {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = tokio::io::BufReader::new(stream);
+            let mut line = String::new();
+            stream.read_line(&mut line).await.unwrap();
+            // Local service probes must not consume the UDF's one response.
+            if !line.starts_with("GET /snapshot ") {
+                continue;
+            }
+            loop {
+                line.clear();
+                if stream.read_line(&mut line).await.unwrap() == 0 || line == "\r\n" {
+                    break;
+                }
+            }
+            stream
+                .get_mut()
+                .write_all(b"HTTP/1.0 200 OK\r\nContent-Length: 1\r\n\r\n7")
+                .await
+                .unwrap();
+            break;
+        }
+    });
+    let manager = PythonWorkerManager::new(PythonWorkerConfig {
+        allow_network: true,
+        ..Default::default()
+    })
+    .unwrap();
+    let allowed = manager.query("allowed", 1);
+    let mut udf = nullable_transform(allowed.clone(), "network_allowed", &code);
+    let result = tokio::time::timeout(Duration::from_secs(10), udf.transform(input(7)))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(result.get_by_offset(1).index(0).unwrap().to_string(), "7");
+    server.await.unwrap();
+    allowed.finish();
+
+    // Enabling clients must not disable filesystem, local-service or process isolation.
+    let restricted_query = manager.query("restricted", 1);
+    let mut restricted = nullable_transform(
+        restricted_query.clone(),
+        "network_still_sandboxed",
+        r#"
+import os, socket, ssl, subprocess
+
+def handler(x):
+    ssl.create_default_context()
+    assert socket.getaddrinfo('localhost', 443)
+    actions = [lambda: open('/etc/passwd').read(),
+               lambda: socket.socket(socket.AF_UNIX),
+               lambda: subprocess.run(['/bin/true']),
+               lambda: socket.socket().bind(('127.0.0.1', 0))]
+    for action in actions:
+        try:
+            action()
+        except PermissionError:
+            continue
+        raise AssertionError('network exception disabled another sandbox restriction')
+    return x
+"#,
+    );
+    let result = restricted.transform(input(7)).await.unwrap();
+    assert_eq!(result.get_by_offset(1).index(0).unwrap().to_string(), "7");
+    restricted_query.finish();
+}
+
 async fn parallel_pool_tests() {
     let manager = PythonWorkerManager::new(PythonWorkerConfig {
         max_workers: 8,
@@ -597,6 +713,8 @@ def handler(x):
     hardening_tests().await;
     #[cfg(target_os = "linux")]
     sandbox_tests().await;
+    #[cfg(target_os = "linux")]
+    network_policy_tests().await;
     udaf_tests().await;
     parallel_pool_tests().await;
     idle_pool_tests().await;

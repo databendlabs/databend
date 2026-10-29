@@ -287,6 +287,7 @@ impl WorkerLease {
                     self.reservation.as_ref().unwrap().clone(),
                     runtime.directory.clone(),
                     &runtime.function,
+                    runtime.query.manager.config.allow_network,
                     runtime
                         .query
                         .manager

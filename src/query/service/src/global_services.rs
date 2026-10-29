@@ -92,6 +92,7 @@ impl GlobalServices {
         #[cfg(feature = "python-udf")]
         databend_query_script_udf_support::PythonWorkerManager::init(
             databend_query_script_udf_support::PythonWorkerConfig {
+                allow_network: config.query.common.python_udf_allow_network,
                 max_workers: config.query.common.python_udf_max_workers,
                 max_workers_per_tenant: config.query.common.python_udf_max_workers_per_tenant,
                 max_workers_per_query: config.query.common.python_udf_max_workers_per_query,
