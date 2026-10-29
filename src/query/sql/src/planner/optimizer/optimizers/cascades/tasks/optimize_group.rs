@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -26,6 +28,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::tasks::ExploreGroupTask;
+use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupWaiters;
 use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::plans::Operator;
@@ -60,6 +63,20 @@ pub struct OptimizeGroupTask {
 
     pub ref_count: SharedCounter,
     pub parent: Option<SharedCounter>,
+
+    /// Tasks that requested the same `(group_index, required_prop)` while this task was
+    /// in flight, see `TaskManager::attach_optimize_group_waiter`. Released when this
+    /// task is dropped.
+    #[educe(Debug(ignore))]
+    pub waiters: OptimizeGroupWaiters,
+}
+
+impl Drop for OptimizeGroupTask {
+    fn drop(&mut self) {
+        // The scheduler may still hold a handle to the list, so release the waiters
+        // explicitly instead of relying on the last `Rc` going away.
+        self.waiters.borrow_mut().clear();
+    }
 }
 
 impl OptimizeGroupTask {
@@ -78,6 +95,7 @@ impl OptimizeGroupTask {
             ref_count: SharedCounter::new(),
             parent: None,
             owner_expr,
+            waiters: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
@@ -120,6 +138,11 @@ impl OptimizeGroupTask {
             (OptimizeGroupState::Explored, OptimizeGroupEvent::Optimizing) => {}
             (OptimizeGroupState::Explored, OptimizeGroupEvent::Optimized) => {
                 self.state = OptimizeGroupState::Optimized;
+                scheduler.unregister_optimize_group(
+                    self.group_index,
+                    &self.required_prop,
+                    &self.waiters,
+                );
             }
             _ => Err(ErrorCode::Internal(format!(
                 "Invalid transition from {:?} with {:?}",

@@ -20,6 +20,7 @@ use databend_common_sql_test_support::ColumnStats;
 use databend_common_sql_test_support::HistogramStats;
 use databend_common_statistics::Histogram;
 
+mod cascades_task_dedup;
 mod collect_statistics;
 mod column_scope;
 mod decorrelate_correlated_aliases;
