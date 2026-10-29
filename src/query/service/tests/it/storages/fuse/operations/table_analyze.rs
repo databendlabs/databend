@@ -58,6 +58,107 @@ use databend_storages_common_table_meta::meta::testing::TableSnapshotStatisticsV
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_exact_ndv_bounds_without_analyze() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("set enable_auto_analyze = 0")
+        .await?;
+    fixture
+        .execute_command(
+            "create table ndv_exact_fixture(k bigint, f double, d decimal(10, 2), u bigint) \
+             approx_distinct_columns = ''",
+        )
+        .await?;
+    fixture
+        .execute_command(
+            "insert into ndv_exact_fixture \
+             select number % 3, number / 100.0, (number / 100.0)::decimal(10, 2), \
+             9007199254740992 + number % 2 from numbers(250)",
+        )
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let table = latest_fuse_table(&ctx, "ndv_exact_fixture").await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    assert!(snapshot.table_statistics_location.is_none());
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    assert_eq!(provider.stats_num_rows(), Some(0));
+    for (column_id, expected) in [(0, 3), (1, 250), (2, 250), (3, 2)] {
+        assert_eq!(
+            provider.column_statistics(column_id).unwrap().ndv,
+            Some(expected),
+            "column {column_id}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unknown_legacy_sample_ndv_after_sql_append() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("set enable_auto_analyze = 0")
+        .await?;
+    fixture
+        .execute_command("create table ndv_legacy_fixture(k bigint) approx_distinct_columns = ''")
+        .await?;
+    fixture
+        .execute_command("insert into ndv_legacy_fixture select number from numbers(3)")
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let table = latest_fuse_table(&ctx, "ndv_legacy_fixture").await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+
+    // Construct a converted v3 HLL entirely from synthetic values. Its zero
+    // row count represents unknown coverage, not a fresh unsampled summary.
+    let mut hll = MetaHLL12::new();
+    for value in 0_u64..3 {
+        hll.add_object(&value);
+    }
+    let legacy = TableSnapshotStatistics::from(TableSnapshotStatisticsV3::new(
+        HashMap::from([(0, hll)]),
+        HashMap::new(),
+        snapshot.snapshot_id,
+    ));
+    assert_eq!(legacy.row_count, 0);
+    assert!(legacy.column_distinct_values()[&0] < 100);
+    let generator = table.meta_location_generator();
+    let location = generator
+        .snapshot_statistics_location_from_uuid(&legacy.snapshot_id, legacy.format_version())?;
+    let mut updated = TableSnapshot::try_from_previous(
+        snapshot,
+        table.cluster_key_info(),
+        None,
+        TestFixture::default_table_meta_timestamps(),
+    )?;
+    updated.summary.additional_stats_meta = None;
+    updated.table_statistics_location = Some(location.clone());
+    table
+        .commit_to_meta_server(
+            ctx.as_ref(),
+            table.get_table_info(),
+            generator,
+            updated,
+            Some(legacy),
+            &None,
+            &table.get_operator(),
+        )
+        .await?;
+
+    fixture
+        .execute_command("insert into ndv_legacy_fixture select number + 3 from numbers(97)")
+        .await?;
+    let table = latest_fuse_table(&ctx, "ndv_legacy_fixture").await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    assert_eq!(snapshot.table_statistics_location.as_ref(), Some(&location));
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    assert_eq!(provider.stats_num_rows(), Some(0));
+    assert_eq!(provider.num_rows(), Some(100));
+    assert_eq!(provider.column_statistics(0).unwrap().ndv, Some(100));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
