@@ -52,4 +52,161 @@ statement ok
 unset force_join_data_spill;
 
 statement ok
+set enable_experimental_new_join = 1;
+
+# Every join type whose output is empty once the build side is empty must skip the
+# probe input. With `explain analyze partial`, a skipped probe TableScan reports no
+# `output rows` line.
+query T
+explain analyze partial select n.number from numbers(1000000) n left semi join hash_join_empty_build e on n.number = e.a;
+----
+HashJoin: LEFT SEMI
+├── estimated rows: 0.00
+├── TableScan
+│   ├── table: default.default.hash_join_empty_build
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    └── estimated rows: 1000000.00
+
+query T
+explain analyze partial select n.number from numbers(1000000) n right join hash_join_empty_build e on n.number = e.a;
+----
+HashJoin: RIGHT OUTER
+├── estimated rows: 0.00
+├── TableScan
+│   ├── table: default.default.hash_join_empty_build
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    └── estimated rows: 1000000.00
+
+query T
+explain analyze partial select e.a from numbers(1000000) n right semi join hash_join_empty_build e on n.number = e.a;
+----
+HashJoin: RIGHT SEMI
+├── estimated rows: 0.00
+├── TableScan
+│   ├── table: default.default.hash_join_empty_build
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    └── estimated rows: 1000000.00
+
+query T
+explain analyze partial select e.a from numbers(1000000) n right anti join hash_join_empty_build e on n.number = e.a;
+----
+HashJoin: RIGHT ANTI
+├── estimated rows: 0.00
+├── TableScan
+│   ├── table: default.default.hash_join_empty_build
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    └── estimated rows: 1000000.00
+
+# Controls: LEFT ANTI and LEFT OUTER preserve unmatched probe rows, so they must keep
+# scanning the probe input. Their probe TableScan reports `output rows`, which shows the
+# assertions above are not an artifact of how an empty join is rendered.
+query T
+explain analyze partial select n.number from numbers(1000000) n left anti join hash_join_empty_build e on n.number = e.a;
+----
+HashJoin: LEFT ANTI
+├── estimated rows: 1000000.00
+├── output rows: 1 million
+├── TableScan
+│   ├── table: default.default.hash_join_empty_build
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── estimated rows: 1000000.00
+    └── output rows: 1 million
+
+query T
+explain analyze partial select n.number from numbers(1000000) n left join hash_join_empty_build e on n.number = e.a;
+----
+HashJoin: LEFT OUTER
+├── estimated rows: 1000000.00
+├── output rows: 1 million
+├── TableScan
+│   ├── table: default.default.hash_join_empty_build
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── estimated rows: 1000000.00
+    └── output rows: 1 million
+
+# Emptiness must be detected without runtime filters, when no runtime-filter builder
+# exists to report the build row count.
+statement ok
+set enable_join_runtime_filter = 0;
+
+query T
+explain analyze partial select n.number from numbers(1000000) n left semi join hash_join_empty_build e on n.number = e.a;
+----
+HashJoin: LEFT SEMI
+├── estimated rows: 0.00
+├── TableScan
+│   ├── table: default.default.hash_join_empty_build
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    └── estimated rows: 1000000.00
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+set force_join_data_spill = 1;
+
+query T
+explain analyze partial select n.number from numbers(1000000) n left semi join hash_join_empty_build e on n.number = e.a;
+----
+HashJoin: LEFT SEMI
+├── estimated rows: 0.00
+├── TableScan
+│   ├── table: default.default.hash_join_empty_build
+│   └── estimated rows: 0.00
+└── TableScan
+    ├── table: default.system.numbers
+    └── estimated rows: 1000000.00
+
+statement ok
+unset force_join_data_spill;
+
+# A skipped probe never evaluates the probe keys, so a key that fails to evaluate does
+# not raise an error while the build side is empty.
+statement ok
+create or replace table hash_join_empty_build_probe(a int);
+
+statement ok
+insert into hash_join_empty_build_probe values (7), (3), (5);
+
+statement ok
+create or replace table hash_join_empty_build_guard(a int);
+
+query I
+select p.a from hash_join_empty_build_probe p right join hash_join_empty_build_guard b
+on to_int64(concat('invalid-', to_string(p.a))) = b.a;
+----
+
+# The same key fails once the build side is non-empty, which shows the expression above
+# is not harmless.
+statement ok
+insert into hash_join_empty_build_guard values (1);
+
+statement error 1006
+select p.a from hash_join_empty_build_probe p right join hash_join_empty_build_guard b
+on to_int64(concat('invalid-', to_string(p.a))) = b.a;
+
+statement ok
+drop table hash_join_empty_build_probe;
+
+statement ok
+drop table hash_join_empty_build_guard;
+
+statement ok
+unset enable_experimental_new_join;
+
+statement ok
 drop table hash_join_empty_build;

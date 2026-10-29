@@ -29,6 +29,57 @@ query IIII
 select * from t2 left join t1 on t1.a = t2.a order by t1.a, t2.a
 ----
 
+# The right/build side is preserved, so an empty build makes the result empty.
+query IIII
+select * from t1 right join t2 on t1.a = t2.a order by t1.a, t2.a
+----
+
+# Build side is empty, so every join type whose output derives from a build match is empty.
+# The probe-skip execution assertions live in
+# mode/standalone/explain/hash_join_empty_build.test.
+query II
+select * from t1 left semi join t2 on t1.a = t2.a order by t1.a
+----
+
+query II
+select * from t1 right semi join t2 on t1.a = t2.a order by t2.a
+----
+
+query II
+select * from t1 right anti join t2 on t1.a = t2.a order by t2.a
+----
+
+# LeftAnti preserves unmatched probe rows, so an empty build must NOT skip the probe.
+query II
+select * from t1 left anti join t2 on t1.a = t2.a order by t1.a
+----
+3 4
+5 6
+7 8
+
+# Emptiness must be detected without runtime filters: with none configured there is no
+# runtime-filter builder, so the build row count cannot come from one.
+statement ok
+set enable_join_runtime_filter = 0;
+
+query IIII
+select * from t1 inner join t2 on t1.a = t2.a order by t1.a, t2.a
+----
+
+query II
+select * from t1 left semi join t2 on t1.a = t2.a order by t1.a
+----
+
+query II
+select * from t1 left anti join t2 on t1.a = t2.a order by t1.a
+----
+3 4
+5 6
+7 8
+
+statement ok
+unset enable_join_runtime_filter;
+
 statement ok
 set force_join_data_spill = 1;
 
@@ -46,6 +97,17 @@ select * from t1 left join t2 on t1.a = t2.a order by t1.a, t2.a
 query IIII
 select * from t2 left join t1 on t1.a = t2.a order by t1.a, t2.a
 ----
+
+query II
+select * from t1 left semi join t2 on t1.a = t2.a order by t1.a
+----
+
+query II
+select * from t1 left anti join t2 on t1.a = t2.a order by t1.a
+----
+3 4
+5 6
+7 8
 
 statement ok
 unset force_join_data_spill;
