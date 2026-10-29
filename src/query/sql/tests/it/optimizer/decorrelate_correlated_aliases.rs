@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_exception::Result;
+use databend_common_sql::plans::PhysicalRelOperator;
+use databend_common_sql::plans::Plan;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
@@ -53,6 +57,8 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     let raw_plan = ctx.bind_sql(case.sql).await?;
     let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
 
+    assert_unique_eval_scalar_indexes(&optimized_plan, case.name);
+
     write_case_header(file, case)?;
     writeln!(file, "raw_plan:")?;
     writeln!(
@@ -68,6 +74,134 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     )?;
     writeln!(file)?;
 
+    Ok(())
+}
+
+/// An `EvalScalar` defines exactly one value per output index and may only reference columns
+/// produced by its input. Check both invariants directly on the optimized plan tree, so the test
+/// does not depend on the golden text alone.
+fn assert_unique_eval_scalar_indexes(plan: &Plan, case_name: &str) {
+    let Plan::Query { s_expr, .. } = plan else {
+        panic!("case {case_name} should optimize into a query plan");
+    };
+
+    let mut stack = vec![
+        s_expr
+            .planned()
+            .expect("optimized query should be physically planned")
+            .expr(),
+    ];
+    let mut eval_scalars_seen = 0usize;
+    while let Some(expr) = stack.pop() {
+        if let PhysicalRelOperator::EvalScalar(eval_scalar) = expr.plan() {
+            eval_scalars_seen += 1;
+            let input_columns = expr
+                .unary_child()
+                .derive_relational_prop()
+                .unwrap()
+                .output_columns
+                .clone();
+            let mut indexes = HashSet::with_capacity(eval_scalar.items.len());
+            for item in &eval_scalar.items {
+                assert!(
+                    item.scalar.used_columns().is_subset(&input_columns),
+                    "case {case_name}: EvalScalar references columns outside its input: {:?}",
+                    item
+                );
+                assert!(
+                    indexes.insert(item.index),
+                    "case {}: EvalScalar defines output index {} more than once, in items {:?}",
+                    case_name,
+                    item.index,
+                    eval_scalar
+                        .items
+                        .iter()
+                        .map(|item| item.index)
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
+        stack.extend(expr.children());
+    }
+
+    // Guard against the walk silently passing because it never reached an EvalScalar.
+    assert!(
+        eval_scalars_seen > 0,
+        "case {case_name} should contain at least one EvalScalar"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_computed_correlated_alias_variants() -> Result<()> {
+    let statements = [
+        (
+            "arithmetic_alias_in_nested_join",
+            "SELECT * FROM (VALUES (1,1),(2,2)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a+1 AS a FROM (VALUES (1,1),(2,2)) t2(a,b) JOIN (VALUES (1)) t3(c) ON t2.a=t1.a WHERE t2.b=t1.b) s WHERE s.a=t1.a)",
+        ),
+        (
+            "computed_second_alias",
+            "SELECT * FROM (VALUES (1,1),(2,2)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a AS a, t2.b+1 AS b FROM (VALUES (1,1),(2,2)) t2(a,b) JOIN (VALUES (1)) t3(c) ON t2.a=t1.a WHERE t2.b=t1.b) s WHERE s.a=t1.a AND s.b=t1.b)",
+        ),
+        (
+            "two_correlations_share_one_inner_column",
+            "SELECT * FROM (VALUES (1,1),(2,2)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a AS a FROM (VALUES (1,1),(2,2)) t2(a,b) WHERE t2.a=t1.a AND t2.a=t1.b) s WHERE s.a=t1.a)",
+        ),
+        (
+            "computed_alias_under_limit",
+            "SELECT * FROM (VALUES (1,1),(2,2)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a+1 AS a FROM (VALUES (1,1),(2,2)) t2(a,b) WHERE t2.b=t1.b LIMIT 1) s WHERE s.a=t1.a)",
+        ),
+        (
+            "correlation_in_outer_join_on",
+            "SELECT * FROM (VALUES (1,1),(2,2)) t1(a,b) WHERE NOT EXISTS (SELECT 1 FROM (SELECT t2.a AS a FROM (VALUES (1,1),(2,2)) t2(a,b) LEFT JOIN (VALUES (1)) t3(c) ON t2.a=t1.a WHERE t2.b=t1.b) s WHERE s.a=t1.a)",
+        ),
+    ];
+    let mut file = open_golden_file("optimizer", "decorrelate_computed_aliases.txt")?;
+    for (name, sql) in statements {
+        let case = SqlTestCase {
+            name,
+            description: "Preserve definitions while resolving correlated aliases.",
+            setup_sqls: &[],
+            sql,
+        };
+        write_optimized_case(&mut file, &case).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_filter_alias_scope_variants() -> Result<()> {
+    let statements = [
+        (
+            "identity_alias_above_ordered_limit",
+            "SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a AS a FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b ORDER BY t2.a DESC LIMIT 1) s WHERE s.a=t1.a)",
+        ),
+        (
+            "computed_alias_above_ordered_limit",
+            "SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a+1 AS a FROM (VALUES (0,1),(1,1)) t2(a,b) WHERE t2.b=t1.b ORDER BY t2.a DESC LIMIT 1) s WHERE s.a=t1.a)",
+        ),
+        (
+            "aggregate_output_alias",
+            "SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT max(t2.a) AS a FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.a=t1.a)",
+        ),
+        (
+            "union_output_alias",
+            "SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT t2.a AS a FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b UNION ALL SELECT t3.a FROM (VALUES (5,1)) t3(a,b) WHERE t3.b=t1.b) s WHERE s.a=t1.a)",
+        ),
+        (
+            "computed_alias_above_join_without_outer_reference",
+            "SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT x.a+1 AS a FROM (SELECT * FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b) x JOIN (VALUES (1)) t3(c) ON true) s WHERE s.a=t1.a)",
+        ),
+    ];
+    let mut file = open_golden_file("optimizer", "decorrelate_filter_alias_scope.txt")?;
+    for (name, sql) in statements {
+        let case = SqlTestCase {
+            name,
+            description: "A filter alias for an outer column must not be used below its definition or below a LIMIT.",
+            setup_sqls: &[],
+            sql,
+        };
+        write_optimized_case(&mut file, &case).await?;
+    }
     Ok(())
 }
 
@@ -217,6 +351,15 @@ async fn test_decorrelate_correlated_alias_regressions() -> Result<()> {
         ) AS s
         WHERE ref1 > 0
     "#,
+        },
+        SqlTestCase {
+            name: "identity_projection_keeps_table_binding",
+            description: "When a correlated column resolves to an index the subquery already projects as an identity, keep that item so the remaining filter still carries a table binding and is absorbed into the scan instead of staying as a redundant Filter.",
+            setup_sqls: &[
+                "CREATE TABLE a(id INT, c1 INT NULL)",
+                "CREATE TABLE b(id INT, c1 INT NULL)",
+            ],
+            sql: "SELECT * FROM a WHERE a.id = (SELECT id FROM b WHERE a.id = b.id)",
         },
     ];
 

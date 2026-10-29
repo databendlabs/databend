@@ -47,6 +47,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
+use crate::plans::JoinType;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::ProjectSet;
@@ -88,6 +89,48 @@ impl SubqueryDecorrelatorOptimizer {
         Ok(())
     }
 
+    /// A filter above this operator may have resolved a correlated column to an
+    /// inner alias (`s.a = t1.a` lets `s.a` stand for `t1.a`). The alias is only
+    /// valid where that filter could be pushed down unchanged:
+    /// - the alias must already be produced by this operator's inputs, not computed
+    ///   here (`t2.a + 1 AS a`, an aggregate or a set-returning function output);
+    /// - the operator must not depend on which inner rows reach it per outer row,
+    ///   which rules out an effective LIMIT/OFFSET and window functions.
+    ///
+    /// Otherwise the outer input has to be materialized below this operator.
+    fn filter_alias_needs_outer_input(
+        subquery: &SExpr,
+        correlated_columns: &ColumnSet,
+        derived_columns: &DerivedColumnScope,
+    ) -> Result<bool> {
+        let aliases = correlated_columns
+            .iter()
+            .filter_map(|old| derived_columns.resolve(*old))
+            .collect::<ColumnSet>();
+        if aliases.is_empty() || subquery.arity() == 0 {
+            return Ok(false);
+        }
+        match subquery.plan() {
+            RelOperator::Limit(limit) if limit.limit.is_some() || limit.offset != 0 => {
+                return Ok(true);
+            }
+            RelOperator::Window(_) | RelOperator::WindowGroup(_) => return Ok(true),
+            _ => {}
+        }
+        let rel_expr = RelExpr::with_s_expr(subquery);
+        let mut input_columns = ColumnSet::new();
+        for index in 0..subquery.arity() {
+            input_columns.extend(
+                rel_expr
+                    .derive_relational_prop_child(index)?
+                    .output_columns
+                    .iter()
+                    .copied(),
+            );
+        }
+        Ok(!aliases.is_subset(&input_columns))
+    }
+
     #[recursive::recursive]
     pub(crate) fn flatten_plan(
         &mut self,
@@ -126,6 +169,19 @@ impl SubqueryDecorrelatorOptimizer {
             };
         }
 
+        // Aliases recorded by filters above are not valid below this operator. Drop them
+        // and materialize the outer input instead, as `flatten_sub_filter` does for
+        // predicates that cannot reuse inner columns.
+        let outer_input_scope;
+        let (need_cross_join, derived_columns) =
+            if Self::filter_alias_needs_outer_input(subquery, correlated_columns, derived_columns)?
+            {
+                outer_input_scope = DerivedColumnScope::default();
+                (true, &outer_input_scope)
+            } else {
+                (need_cross_join, derived_columns)
+            };
+
         match subquery.plan() {
             RelOperator::EvalScalar(eval_scalar) => self.flatten_sub_eval_scalar(
                 outer,
@@ -160,6 +216,7 @@ impl SubqueryDecorrelatorOptimizer {
                 join,
                 correlated_columns,
                 flatten_info,
+                need_cross_join,
                 derived_columns,
             ),
             RelOperator::Aggregate(aggregate) => self.flatten_sub_aggregate(
@@ -417,6 +474,7 @@ impl SubqueryDecorrelatorOptimizer {
         join: &Join,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
+        need_cross_join: bool,
         derived_columns: &DerivedColumnScope,
     ) -> Result<FlattenPlanResult> {
         // Helper function to check if conditions need a cross join
@@ -486,6 +544,43 @@ impl SubqueryDecorrelatorOptimizer {
                         left_need_cross_join = true;
                     }
                 }
+            }
+        }
+
+        // An operator above needs every correlated column, but a column that is neither
+        // resolved yet nor referenced by either input would never be materialized. Put
+        // the outer input on the side whose rows the join keeps. Full joins keep rows from
+        // both sides and asof joins match rows by range, so they are left unchanged.
+        if need_cross_join
+            && !left_need_cross_join
+            && !right_need_cross_join
+            && correlated_columns.iter().any(|col| {
+                derived_columns.resolve(*col).is_none()
+                    && !left_prop.outer_columns.contains(col)
+                    && !right_prop.outer_columns.contains(col)
+            })
+        {
+            match join.join_type {
+                JoinType::Cross
+                | JoinType::Inner
+                | JoinType::InnerAny
+                | JoinType::Left
+                | JoinType::LeftAny
+                | JoinType::LeftSemi
+                | JoinType::LeftAnti
+                | JoinType::LeftSingle
+                | JoinType::RightMark => left_need_cross_join = true,
+                JoinType::Right
+                | JoinType::RightAny
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+                | JoinType::RightSingle
+                | JoinType::LeftMark => right_need_cross_join = true,
+                JoinType::Full
+                | JoinType::Asof
+                | JoinType::LeftAsof
+                | JoinType::RightAsof
+                | JoinType::FullAsof => {}
             }
         }
 
