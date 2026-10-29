@@ -30,7 +30,6 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 use log::debug;
 use log::info;
-use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -266,74 +265,7 @@ impl PartitionStream for LocalPartitionStream {
     }
 }
 
-struct SharedPartitionStreamInner {
-    partition_stream: BlockPartitionStream,
-    worker_count: usize,
-    finish_count: usize,
-}
-#[derive(Clone)]
-pub struct SharedPartitionStream {
-    inner: Arc<Mutex<SharedPartitionStreamInner>>,
-}
-
-impl SharedPartitionStream {
-    pub fn new(
-        worker_count: usize,
-        max_rows: usize,
-        max_bytes: usize,
-        partition_count: usize,
-    ) -> Self {
-        let partition_stream = BlockPartitionStream::create(max_rows, max_bytes, partition_count);
-        SharedPartitionStream {
-            inner: Arc::new(Mutex::new(SharedPartitionStreamInner {
-                partition_stream,
-                worker_count,
-                finish_count: 0,
-            })),
-        }
-    }
-
-    pub fn do_finish(&self) -> Vec<(usize, DataBlock)> {
-        let mut inner = self.inner.lock();
-        inner.finish_count += 1;
-
-        if inner.finish_count == inner.worker_count {
-            inner.finish_count = 0;
-
-            let ids = inner.partition_stream.partition_ids();
-
-            let mut pending_blocks = Vec::with_capacity(ids.len());
-
-            for id in ids {
-                if let Some(block) = inner.partition_stream.finalize_partition(id) {
-                    pending_blocks.push((id, block));
-                }
-            }
-            // The stream is shared by all workers and kept until the query ends.
-            inner.partition_stream.reset();
-            return pending_blocks;
-        }
-        vec![]
-    }
-
-    pub fn do_partition(&self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)> {
-        let mut inner = self.inner.lock();
-        let indices = vec![partition_id as u64; block.num_rows()];
-        inner.partition_stream.partition(indices, block, true)
-    }
-}
-
-impl PartitionStream for SharedPartitionStream {
-    fn finish(&mut self) -> Vec<(usize, DataBlock)> {
-        self.do_finish()
-    }
-
-    fn partition(&mut self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)> {
-        self.do_partition(partition_id, block)
-    }
-}
-
-pub struct AggregateSpiller<P: PartitionStream = SharedPartitionStream> {
+pub struct AggregateSpiller<P: PartitionStream> {
     pub memory_settings: MemorySettings,
     read_setting: ReadSettings,
     partition_stream: P,
@@ -396,26 +328,6 @@ impl<P: PartitionStream> AggregateSpiller<P> {
             payloads.len()
         );
         Ok(payloads)
-    }
-
-    pub fn restore(&self, payload: SpilledPayload) -> Result<SerializedPayload> {
-        restore_payload(self.read_setting, payload, &self.data_schema)
-    }
-}
-
-pub struct AggregateSpillReader {
-    read_setting: ReadSettings,
-    data_schema: DataSchemaRef,
-}
-
-impl AggregateSpillReader {
-    pub fn try_create(ctx: Arc<QueryContext>, schema: DataSchemaRef) -> Result<Self> {
-        let table_ctx: Arc<dyn TableContext> = ctx;
-        let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
-        Ok(Self {
-            read_setting,
-            data_schema: schema,
-        })
     }
 
     pub fn restore(&self, payload: SpilledPayload) -> Result<SerializedPayload> {
@@ -502,41 +414,7 @@ mod tests {
 
     use crate::pipelines::processors::transforms::aggregator::AggregateSpiller;
     use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
-    use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
     use crate::test_kits::TestFixture;
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_aggregate_payload_writers_lazy_init() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
-
-        let partition_count = 4;
-        let partition_stream = SharedPartitionStream::new(1, 1024, 1024 * 1024, partition_count);
-        let mut spiller = AggregateSpiller::try_create(
-            ctx.clone(),
-            partition_count,
-            Arc::new(DataSchema::empty()),
-            partition_stream,
-        )?;
-
-        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
-
-        spiller.spill(0, block.clone())?;
-        spiller.spill(2, block)?;
-
-        let payloads = spiller.spill_finish()?;
-
-        assert_eq!(payloads.len(), 2);
-
-        let spilled_files = ctx.get_spilled_files();
-        assert_eq!(spilled_files.len(), 2);
-
-        let buckets: HashSet<_> = payloads.iter().map(|p| p.bucket).collect();
-        assert!(buckets.contains(&0));
-        assert!(buckets.contains(&2));
-
-        Ok(())
-    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_aggregate_payload_writers_local_stream() -> Result<()> {

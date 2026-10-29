@@ -19,7 +19,6 @@ use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use log::info;
-use strength_reduce::StrengthReducedU64;
 
 use super::AggrState;
 use super::BATCH_SIZE;
@@ -29,6 +28,7 @@ use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
+use super::group_hash_route_index;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
@@ -607,12 +607,11 @@ impl Payload {
                 let state = &mut *flush_state.probe_state;
                 state.reset_partitions(partition_count);
 
-                let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
-
                 for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
                     *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
                     let hash = row_ptr.hash(&self.row_layout);
-                    let partition_idx = (hash % mods) as usize;
+                    let partition_idx =
+                        group_hash_route_index(hash, partition_count as u64) as usize;
 
                     let (count, sel) = &mut state.partition_entries[partition_idx];
                     sel[*count as usize] = idx.into();
@@ -625,6 +624,8 @@ impl Payload {
         }
     }
 
+    /// Split the rows into `buckets` payloads by `group_hash_route_index` of their group hash, the
+    /// routing of raw rows with the same group keys.
     pub fn scatter_into_buckets(mut self, buckets: usize) -> Vec<Payload> {
         if buckets == 0 {
             return vec![];

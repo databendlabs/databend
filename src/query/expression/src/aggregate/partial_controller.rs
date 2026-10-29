@@ -27,7 +27,8 @@
 //!   headroom allows. When it fills up it restarts in place like a window.
 //! * `Bypass`: forward every row to the final aggregate as raw input, for the rest of the input.
 //!
-//! Memory pressure is handled by the caller spilling the table; learning restarts afterwards.
+//! The partial aggregate never spills: under memory pressure the headroom leaves no room to grow,
+//! and the final aggregate spills.
 
 use std::fmt;
 use std::ops::AddAssign;
@@ -144,7 +145,7 @@ pub enum PartialState {
     Bypass,
 }
 
-/// Counters of a learning period, which restarts after the table spills.
+/// Counters of the learning state.
 pub struct Learning {
     /// Stats since learning started; groups are counted across all windows.
     seen: PartialAddStats,
@@ -208,13 +209,6 @@ impl PartialState {
             PartialDecision::Bypass => *self = PartialState::Bypass,
         }
         decision
-    }
-
-    /// The caller spilled the table under memory pressure: learn again from windows.
-    pub fn on_hot_spilled(&mut self) {
-        if !matches!(self, PartialState::Bypass) {
-            *self = PartialState::Learning(Learning::default());
-        }
     }
 }
 

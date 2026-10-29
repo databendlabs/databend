@@ -1,12 +1,8 @@
-# run-with-settings: partial_aggregate_mode=legacy
 # run-with-settings: partial_aggregate_mode=bypass
-# run-with-settings: partial_aggregate_mode=bypass, force_aggregate_shuffle_mode=row
-# run-with-settings: partial_aggregate_mode=bypass, hash_shuffle_rows_threshold=0, hash_shuffle_bytes_threshold=0
 
 # Partial aggregation strategies must not change results. The default pass runs the adaptive
-# strategy; the passes above run the legacy strategy and forward every row as raw input, also
-# through the row shuffle, and with raw rows buffered until the end of the input. Two threads
-# and small blocks make the partial table fill up.
+# strategy; the pass above forwards every row as raw input. Two threads and small blocks make the
+# partial table fill up.
 
 statement ok
 set max_block_size = 4096

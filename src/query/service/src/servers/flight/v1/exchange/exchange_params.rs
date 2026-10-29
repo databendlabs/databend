@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::RemoteExpr;
 
 use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
@@ -65,8 +64,8 @@ pub struct GlobalExchangeParams {
     pub executor_id: String,
     pub schema: DataSchemaRef,
     pub exchange_id: String,
-    pub shuffle_keys: Vec<RemoteExpr>,
     pub destination_channels: Vec<(String, Vec<String>)>,
+    pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
 }
 
 #[allow(clippy::enum_variant_names)]

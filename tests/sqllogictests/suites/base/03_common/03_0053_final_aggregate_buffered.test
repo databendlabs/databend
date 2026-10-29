@@ -8,9 +8,6 @@ statement ok
 SET max_block_bytes = 2097152;
 
 statement ok
-SET force_aggregate_shuffle_mode = 'row';
-
-statement ok
 SET max_aggregate_spill_level = 3;
 
 statement ok
@@ -64,9 +61,6 @@ UNSET force_aggregate_data_spill;
 
 statement ok
 UNSET max_aggregate_spill_level;
-
-statement ok
-UNSET force_aggregate_shuffle_mode;
 
 statement ok
 UNSET max_block_bytes;

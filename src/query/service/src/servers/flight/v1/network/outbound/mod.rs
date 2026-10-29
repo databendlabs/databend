@@ -46,6 +46,7 @@ pub use block_sender::LOCAL_CHANNEL_MAX_BYTES;
 pub use block_sender::LocalBlockSender;
 pub use block_sender::RemoteBlockSender;
 pub use block_sender::RoundRobinBlockSender;
+pub use block_sender::block_owned_bytes;
 pub use block_sender::create_local_block_senders;
 pub use exchange_send_buffer::ExchangeSendBuffer;
 pub use exchange_send_buffer::ExchangeSendBufferConfig;

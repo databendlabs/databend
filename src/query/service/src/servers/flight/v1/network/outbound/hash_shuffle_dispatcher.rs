@@ -69,20 +69,21 @@ impl HashShuffleDispatcher {
     }
 
     /// Prepare delivery tasks now; the writer schedules and polls them.
-    /// Blocks are indexed by destination thread; absent blocks are skipped.
+    /// Blocks are indexed by destination thread and taken.
     pub fn prepare_send(
         &self,
         node: usize,
-        blocks: &mut [Option<DataBlock>],
+        blocks: &mut [Vec<DataBlock>],
         futures: &mut Vec<ShuffleSendFuture>,
     ) -> Result<()> {
         match self {
             Self::Local { senders } => {
                 debug_assert_eq!(blocks.len(), senders.len());
-                for (thread, block) in blocks.iter_mut().enumerate() {
-                    let Some(block) = block.take() else {
+                for (thread, blocks) in blocks.iter_mut().enumerate() {
+                    let blocks = std::mem::take(blocks);
+                    if blocks.is_empty() {
                         continue;
-                    };
+                    }
 
                     let Some(sender) = &senders[thread] else {
                         continue;
@@ -91,14 +92,16 @@ impl HashShuffleDispatcher {
                         continue;
                     }
 
-                    let sender = sender.clone();
                     let address = ShuffleSendAddress {
                         node,
                         thread: Some(thread),
                     };
-                    futures.push(Box::pin(async move {
-                        (address, sender.send_block(block).await)
-                    }));
+                    for block in blocks {
+                        let sender = sender.clone();
+                        futures.push(Box::pin(async move {
+                            (address, sender.send_block(block).await)
+                        }));
+                    }
                 }
                 Ok(())
             }
@@ -118,8 +121,8 @@ impl HashShuffleDispatcher {
 
                 // Encode now, so that only compressed bytes wait for the network.
                 let mut items = Vec::with_capacity(blocks.len());
-                for (thread, block) in blocks.iter_mut().enumerate() {
-                    if let Some(block) = block.take() {
+                for (thread, blocks) in blocks.iter_mut().enumerate() {
+                    for block in std::mem::take(blocks) {
                         Profile::record_usize_profile(
                             ProfileStatisticsName::ExchangeRows,
                             block.num_rows(),
