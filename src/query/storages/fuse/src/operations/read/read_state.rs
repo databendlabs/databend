@@ -529,44 +529,28 @@ fn should_push_down_row_selection(bitmap: &Bitmap, threshold: u64) -> bool {
 }
 
 /// Evaluate the prewhere predicate with the selector executor and convert the selected
-/// row indexes into a bitmap. A fuse block may hold more rows than the executor's
-/// selection buffers, so the block is evaluated in chunks of `max_block_size` rows.
+/// row indexes into a bitmap.
+///
+/// The whole block is evaluated at once, growing the selection buffers when a fuse block
+/// holds more rows than `max_block_size`: block-sensitive functions such as
+/// `running_difference` would give different results on slices of the block.
 fn filter_with_selector(
     filter_executor: &mut FilterExecutor,
     block: &DataBlock,
     num_rows: usize,
 ) -> Result<MutableBitmap> {
     debug_assert_eq!(block.num_rows(), num_rows);
+    filter_executor.reserve(num_rows);
+    let selected = filter_executor.select(block)?;
     let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
-    let chunk_size = filter_executor.max_block_size().max(1);
-
-    if num_rows <= chunk_size {
-        let selected = filter_executor.select(block)?;
-        apply_selection(
-            &mut bitmap,
-            &filter_executor.true_selection()[..selected],
-            0,
-        );
-        return Ok(bitmap);
-    }
-
-    for offset in (0..num_rows).step_by(chunk_size) {
-        let end = (offset + chunk_size).min(num_rows);
-        let block = block.slice(offset..end);
-        let selected = filter_executor.select(&block)?;
-        apply_selection(
-            &mut bitmap,
-            &filter_executor.true_selection()[..selected],
-            offset,
-        );
-    }
+    apply_selection(&mut bitmap, &filter_executor.true_selection()[..selected]);
     Ok(bitmap)
 }
 
 /// Selected indexes are not sorted when the predicate contains OR.
-fn apply_selection(bitmap: &mut MutableBitmap, selection: &[u32], offset: usize) {
+fn apply_selection(bitmap: &mut MutableBitmap, selection: &[u32]) {
     for index in selection {
-        bitmap.set(offset + *index as usize, true);
+        bitmap.set(*index as usize, true);
     }
 }
 
@@ -697,9 +681,9 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_selection_accepts_unordered_indices_and_offset() {
+    fn test_apply_selection_accepts_unordered_indices() {
         let mut bitmap = MutableBitmap::from_len_zeroed(8);
-        apply_selection(&mut bitmap, &[4, 1, 3], 2);
+        apply_selection(&mut bitmap, &[6, 3, 5]);
         assert_eq!(bitmap.iter().collect::<Vec<_>>(), vec![
             false, false, false, true, false, true, true, false
         ]);
@@ -768,10 +752,10 @@ mod tests {
     }
 
     /// The selector bitmap must match the evaluator bitmap for blocks smaller and larger
-    /// than the selection buffers, including OR predicates whose selected indexes are not
-    /// sorted and nullable string columns.
+    /// than the initial selection buffers, including OR predicates whose selected indexes are
+    /// not sorted, nullable string columns, and block-sensitive functions.
     #[test]
-    fn test_chunked_selector_bitmap_matches_evaluator() {
+    fn test_selector_bitmap_matches_evaluator() {
         let string_type = DataType::String;
         let nullable_string_type = DataType::Nullable(Box::new(DataType::String));
         let int_type = DataType::Number(NumberDataType::Int32);
@@ -820,6 +804,18 @@ mod tests {
                 ]),
                 call("lt", vec![column(2, int_type.clone()), int_constant(2)]),
             ]),
+            // `running_difference` restarts at zero on every evaluated column, so evaluating
+            // slices of the block would reject the first row of each slice.
+            call("and", vec![
+                call("eq", vec![
+                    column(0, string_type.clone()),
+                    string_constant("match"),
+                ]),
+                call("gt", vec![
+                    call("running_difference", vec![column(2, int_type.clone())]),
+                    int_constant(0),
+                ]),
+            ]),
         ] {
             let expr = prewhere_expr(&raw_expr, &func_ctx);
             let (select_expr, _) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
@@ -856,9 +852,9 @@ mod tests {
         }
     }
 
-    /// Fuse scans may keep string columns dictionary encoded. Chunking slices the encoded
-    /// column, and the selector must still match the evaluator over the decoded column. A lone
-    /// comparison over an encoded column is left to the evaluator.
+    /// Fuse scans may keep string columns dictionary encoded. The selector must match the
+    /// evaluator over the decoded column. A lone comparison over an encoded column is left to
+    /// the evaluator.
     #[test]
     fn test_prewhere_selector_over_dictionary_column() {
         let keys = [1u64, 0, 1, 2, 1, 0, 2, 1];
