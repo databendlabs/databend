@@ -532,12 +532,26 @@ async fn test_multi_table_select_access_counts() -> anyhow::Result<()> {
     }
     let tenant = fixture.default_tenant();
     let api = UserApiProvider::instance();
-    let t3_id = fixture
-        .new_query_ctx()
+    let ctx = fixture.new_query_ctx().await?;
+    let t2_id = ctx
+        .get_table("default", "select_access", "t2")
         .await?
+        .get_id();
+    let t3_id = ctx
         .get_table("default", "select_access", "t3")
         .await?
         .get_id();
+    // Like `setup_table`, keep the fixture's creating role from owning `t2` for every user.
+    api.grant_ownership_to_role(
+        &tenant,
+        &OwnershipObject::Table {
+            catalog_name: "default".into(),
+            db_id,
+            table_id: t2_id,
+        },
+        BUILTIN_ROLE_ACCOUNT_ADMIN,
+    )
+    .await?;
     for (role, object) in [
         ("database_owner", OwnershipObject::Database {
             catalog_name: "default".into(),
