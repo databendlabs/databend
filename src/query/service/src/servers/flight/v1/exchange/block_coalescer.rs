@@ -17,6 +17,8 @@
 use std::collections::VecDeque;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 
 /// Target size of the blocks a receiver outputs.
@@ -109,7 +111,7 @@ impl BlockCoalescer {
 
         self.ready.push_back(match blocks.len() {
             1 => blocks.into_iter().next().unwrap(),
-            _ => DataBlock::concat(&blocks)?,
+            _ => concat_keep_const(&blocks)?,
         });
         Ok(true)
     }
@@ -119,10 +121,44 @@ impl BlockCoalescer {
     }
 }
 
+/// Concatenate `blocks`, keeping a column constant when it is the same constant
+/// in every block. `DataBlock::concat` keeps it only when the blocks also have
+/// the same number of rows, which blocks from many senders rarely do.
+fn concat_keep_const(blocks: &[DataBlock]) -> Result<DataBlock> {
+    let num_rows = blocks.iter().map(DataBlock::num_rows).sum();
+    let columns = (0..blocks[0].num_columns())
+        .map(|i| {
+            if let BlockEntry::Const(scalar, data_type, _) = blocks[0].get_by_offset(i)
+                && blocks.iter().all(|block| {
+                    matches!(block.get_by_offset(i), BlockEntry::Const(s, t, _) if s == scalar && t == data_type)
+                })
+            {
+                return Ok(BlockEntry::new_const_column(
+                    data_type.clone(),
+                    scalar.clone(),
+                    num_rows,
+                ));
+            }
+
+            let columns = blocks
+                .iter()
+                .map(|block| block.get_by_offset(i).to_column())
+                .collect();
+            Ok(Column::concat_columns(columns)?.into())
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(DataBlock::new(columns, num_rows))
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
 
     use super::*;
 
@@ -149,6 +185,51 @@ mod tests {
         assert!(coalescer.flush()?);
         assert_eq!(drain(&mut coalescer), vec![90]);
         assert!(!coalescer.flush()?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_coalescer_keeps_constants() -> Result<()> {
+        let constant = |scalar: Scalar, rows: usize| {
+            DataBlock::new(
+                vec![
+                    Int32Type::from_data(vec![1i32; rows]).into(),
+                    BlockEntry::new_const_column(
+                        DataType::Number(NumberDataType::Int64).wrap_nullable(),
+                        scalar,
+                        rows,
+                    ),
+                ],
+                rows,
+            )
+        };
+
+        let mut coalescer =
+            BlockCoalescer::create(Some(CoalesceThreshold::create(100, usize::MAX)));
+        coalescer.push(constant(Scalar::Null, 10))?;
+        coalescer.push(constant(Scalar::Null, 20))?;
+        coalescer.flush()?;
+        let block = coalescer.pop().unwrap();
+        assert_eq!(block.num_rows(), 30);
+        assert_eq!(
+            block.get_by_offset(1),
+            &BlockEntry::new_const_column(
+                DataType::Number(NumberDataType::Int64).wrap_nullable(),
+                Scalar::Null,
+                30
+            )
+        );
+
+        // Different constants are expanded.
+        let one = Scalar::Number(NumberScalar::Int64(1));
+        coalescer.push(constant(Scalar::Null, 10))?;
+        coalescer.push(constant(one.clone(), 20))?;
+        coalescer.flush()?;
+        let block = coalescer.pop().unwrap();
+        let column = block.get_by_offset(1).as_column().unwrap();
+        assert_eq!(column.len(), 30);
+        assert_eq!(column.index(0), Some(ScalarRef::Null));
+        assert_eq!(column.index(29), Some(one.as_ref()));
         Ok(())
     }
 

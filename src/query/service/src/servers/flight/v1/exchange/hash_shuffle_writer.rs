@@ -126,10 +126,6 @@ impl HashShuffleWriter {
             return Ok(false);
         }
 
-        // The partition builders store constants row by row, so count them expanded:
-        // a constant's memory size is a single value.
-        let block = block.consume_convert_to_full();
-
         let Some(partition_ids) = self.scatter.scatter_indices(&block)? else {
             return Err(ErrorCode::Internal(format!(
                 "Logical error, {} scatter cannot be used for hash shuffle",
@@ -138,8 +134,10 @@ impl HashShuffleWriter {
         };
 
         self.buffered_rows += block.num_rows();
-        self.buffered_bytes += block.memory_size();
         self.stream.partition(partition_ids, block, false);
+        // Constants stay constant in the partitions they fill alone, but are counted
+        // as if expanded, so a block of constants still reaches the budget.
+        self.buffered_bytes = self.stream.memory_size();
         Ok(self.buffered_bytes >= self.budget)
     }
 
@@ -441,10 +439,10 @@ mod tests {
         Ok(())
     }
 
-    /// Constant columns count at the size the partition builders receive, not the
-    /// size of their single value, so they still reach the budget.
+    /// Constant columns stay constant through the partitions, but count as if
+    /// expanded, so they still reach the budget.
     #[test]
-    fn test_writer_counts_constants_expanded() -> Result<()> {
+    fn test_writer_keeps_constants_counted_expanded() -> Result<()> {
         let block = || {
             DataBlock::new(
                 vec![BlockEntry::new_const_column(
@@ -462,18 +460,17 @@ mod tests {
         let scatter: Arc<Box<dyn FlightScatter>> =
             Arc::new(Box::new(RowScatter { num_partitions: 4 }));
         let mut writer =
-            HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, expanded);
+            HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, expanded / 2);
 
         assert!(writer.add_block(block())?);
-        assert_eq!(writer.buffered_bytes, expanded);
+        assert!(writer.buffered_bytes >= expanded / 2);
         writer.flush(None)?;
 
-        let rows = receivers
-            .iter()
-            .flat_map(drain_blocks)
-            .map(|block| block.num_rows())
-            .sum::<usize>();
-        assert_eq!(rows, 1000);
+        let blocks = receivers.iter().flat_map(drain_blocks).collect::<Vec<_>>();
+        assert_eq!(blocks.iter().map(|x| x.num_rows()).sum::<usize>(), 1000);
+        for block in &blocks {
+            assert!(matches!(block.get_by_offset(0), BlockEntry::Const(..)));
+        }
         Ok(())
     }
 

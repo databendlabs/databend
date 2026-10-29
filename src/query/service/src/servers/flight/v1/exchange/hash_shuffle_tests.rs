@@ -539,6 +539,65 @@ fn test_hash_transform_closed_output_keeps_sending_other_partitions() -> Result<
     Ok(())
 }
 
+/// A NULL constant column, such as the padding of a UNION ALL branch, stays
+/// constant through local channels, the network and the receiver's coalescing.
+#[test]
+fn test_hash_shuffle_keeps_null_constants() -> Result<()> {
+    let threads = 2;
+    let setup = ShuffleSetup {
+        nodes: 3,
+        threads,
+        node_budget: MIB,
+        buffer: ExchangeSendBufferConfig::default(),
+        recv_quota: 4 * MIB,
+        compression: Some(FlightCompression::Lz4),
+        coalesce: Some(CoalesceThreshold::create(8192, 4 * MIB)),
+        link: Link {
+            rtt: Duration::ZERO,
+            bytes_per_sec: None,
+        },
+    };
+    let padding = DataType::Number(NumberDataType::Int64).wrap_nullable();
+    let block = |seed: u64| {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let rows = 1000;
+        DataBlock::new(
+            vec![
+                UInt64Type::from_data((0..rows).map(|_| rng.r#gen::<u64>()).collect::<Vec<_>>())
+                    .into(),
+                BlockEntry::new_const_column(padding.clone(), Scalar::Null, rows),
+            ],
+            rows,
+        )
+    };
+    let schema = Arc::new(block(0).infer_schema());
+
+    let received = Mutex::new(vec![]);
+    run_shuffle(
+        &setup,
+        &schema,
+        Box::new(KeyScatter {
+            num_partitions: (setup.nodes * threads) as u64,
+        }),
+        |t| (0..20).map(move |i| block((t * 20 + i) as u64)),
+        |_, block| received.lock().push(block),
+    )?;
+
+    let received = received.into_inner();
+    assert_eq!(
+        received.iter().map(DataBlock::num_rows).sum::<usize>(),
+        threads * 20 * 1000
+    );
+    for block in &received {
+        assert!(
+            matches!(block.get_by_offset(1), BlockEntry::Const(Scalar::Null, t, _) if *t == padding),
+            "the NULL padding of a block with {} rows was expanded",
+            block.num_rows()
+        );
+    }
+    Ok(())
+}
+
 /// Spreads the rows of blocks without columns over the partitions.
 struct SpreadScatter {
     num_partitions: u64,
