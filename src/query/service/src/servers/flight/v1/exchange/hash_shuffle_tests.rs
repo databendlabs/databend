@@ -483,59 +483,74 @@ fn test_hash_senders_flush_tail_and_release_channels_before_processor_drop() -> 
     Ok(())
 }
 
+/// The receiver may finish the direct output after it asked for data, which
+/// leaves `can_push` true. The sender must keep pulling its input and sending the
+/// other partitions instead of waiting on a block pushed to the finished port.
 #[test]
 fn test_hash_transform_closed_output_keeps_sending_other_partitions() -> Result<()> {
-    let channels = ExchangeReceiveChannels::new(2);
-    let receivers = channels.receivers.clone();
-    let nodes = vec![ShuffleNode {
-        partitions: 0..2,
-        dispatcher: HashShuffleDispatcher::local(create_local_block_senders(&channels)),
-    }];
-    drop(channels);
-    let scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(KeyScatter { num_partitions: 2 }));
-    let item = HashSendTransform::create_item(0, 0, scatter, nodes, ExecutorWaker::create(), 1);
-    let upstream = OutputPort::create();
-    let downstream = InputPort::create();
-    // Ports are connected before use; this test alone drives the processor sequentially.
-    unsafe {
-        connect(&item.inputs_port[0], &upstream);
-        connect(&downstream, &item.outputs_port[0]);
+    for need_data_before_finish in [false, true] {
+        let channels = ExchangeReceiveChannels::new(2);
+        let receivers = channels.receivers.clone();
+        let nodes = vec![ShuffleNode {
+            partitions: 0..2,
+            dispatcher: HashShuffleDispatcher::local(create_local_block_senders(&channels)),
+        }];
+        drop(channels);
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(KeyScatter { num_partitions: 2 }));
+        let item = HashSendTransform::create_item(0, 0, scatter, nodes, ExecutorWaker::create(), 1);
+        let upstream = OutputPort::create();
+        let downstream = InputPort::create();
+        // Ports are connected before use; this test alone drives the processor sequentially.
+        unsafe {
+            connect(&item.inputs_port[0], &upstream);
+            connect(&downstream, &item.outputs_port[0]);
+        }
+        if need_data_before_finish {
+            downstream.set_need_data();
+        }
+        downstream.finish();
+        assert!(matches!(
+            unsafe { item.processor.event(EventCause::Output(0))? },
+            Event::NeedData
+        ));
+        assert!(receivers[0].is_closed());
+        assert!(!receivers[1].is_closed());
+
+        for keys in [vec![0, 1, 2, 3], vec![4, 5, 6, 7]] {
+            upstream.push_data(Ok(DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(keys.clone()),
+            ])));
+            assert!(matches!(
+                unsafe { item.processor.event(EventCause::Input(0))? },
+                Event::NeedData
+            ));
+            assert!(!item.outputs_port[0].has_data());
+            let QueueItem::LocalData(data) = receivers[1].try_recv().unwrap() else {
+                panic!("expected local data");
+            };
+            let column = data.into_data().get_by_offset(0).to_column();
+            let received = UInt64Type::try_downcast_column(&column).unwrap();
+            assert_eq!(
+                received.iter().copied().collect::<Vec<_>>(),
+                keys.into_iter().filter(|x| x % 2 == 1).collect::<Vec<_>>()
+            );
+        }
+        assert!(matches!(
+            receivers[0].try_recv(),
+            Err(async_channel::TryRecvError::Closed)
+        ));
+
+        upstream.finish();
+        assert!(matches!(
+            unsafe { item.processor.event(EventCause::Input(0))? },
+            Event::Finished
+        ));
+        assert!(matches!(
+            receivers[1].try_recv(),
+            Err(async_channel::TryRecvError::Closed)
+        ));
     }
-    downstream.finish();
-    assert!(matches!(
-        unsafe { item.processor.event(EventCause::Output(0))? },
-        Event::NeedData
-    ));
-    assert!(receivers[0].is_closed());
-    assert!(!receivers[1].is_closed());
-
-    upstream.push_data(Ok(DataBlock::new_from_columns(vec![
-        UInt64Type::from_data(vec![0, 1, 2, 3]),
-    ])));
-    assert!(matches!(
-        unsafe { item.processor.event(EventCause::Input(0))? },
-        Event::NeedData
-    ));
-    let QueueItem::LocalData(data) = receivers[1].try_recv().unwrap() else {
-        panic!("expected local data");
-    };
-    let column = data.into_data().get_by_offset(0).to_column();
-    let keys = UInt64Type::try_downcast_column(&column).unwrap();
-    assert_eq!(keys.iter().copied().collect::<Vec<_>>(), vec![1, 3]);
-    assert!(matches!(
-        receivers[0].try_recv(),
-        Err(async_channel::TryRecvError::Closed)
-    ));
-
-    upstream.finish();
-    assert!(matches!(
-        unsafe { item.processor.event(EventCause::Input(0))? },
-        Event::Finished
-    ));
-    assert!(matches!(
-        receivers[1].try_recv(),
-        Err(async_channel::TryRecvError::Closed)
-    ));
     Ok(())
 }
 
