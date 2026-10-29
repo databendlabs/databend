@@ -99,6 +99,7 @@ use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::NdvEstimate;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -1443,7 +1444,7 @@ impl LiteTableContext {
                                         BasicColumnStatistics {
                                             min: Some(Datum::UInt(0)),
                                             max: Some(Datum::UInt(num_rows.saturating_sub(1))),
-                                            ndv: Some(num_rows),
+                                            ndv: Some(NdvEstimate::exact(num_rows as f64)),
                                             null_count: 0,
                                             in_memory_size: num_rows.saturating_mul(8),
                                         },

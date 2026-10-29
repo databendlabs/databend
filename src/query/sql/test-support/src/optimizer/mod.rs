@@ -45,6 +45,7 @@ use databend_common_sql::plans::Statistics;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 use databend_common_statistics::HistogramBucket;
+use databend_common_statistics::NdvEstimate;
 use goldenfile::Mint;
 use serde::Deserialize;
 use serde::Serialize;
@@ -91,6 +92,7 @@ pub struct TableStats {
 pub struct ColumnStats {
     pub min: Option<serde_json::Value>,
     pub max: Option<serde_json::Value>,
+    /// Exact NDV supplied by a replay fixture, not a storage-side estimate.
     pub ndv: Option<u64>,
     pub null_count: Option<u64>,
 }
@@ -100,7 +102,7 @@ impl ColumnStats {
         BasicColumnStatistics {
             min: to_datum(&self.min),
             max: to_datum(&self.max),
-            ndv: self.ndv,
+            ndv: self.ndv.map(|ndv| NdvEstimate::exact(ndv as f64)),
             null_count: self.null_count.unwrap_or(0),
             in_memory_size: 0,
         }

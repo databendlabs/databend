@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::FullParquetMeta;
 use databend_common_catalog::statistics::BasicColumnStatistics;
+use databend_common_catalog::statistics::basic_statistics::from_chunk_column_statistics;
 use databend_common_catalog::table::ParquetTableColumnStatisticsProvider;
 
 // let's just read the first parquet meta and predict the whole stats
@@ -38,10 +39,13 @@ pub fn create_stats_provider(
 
         if total_files == sample_metas.len() {
             if let Some(stats) = &meta.row_group_level_stats {
-                for rg_stat in stats {
+                for (rg_stat, row_group) in stats.iter().zip(meta.meta.row_groups()) {
                     for (column_id, col_stat) in rg_stat {
                         let column_id = *column_id as usize;
-                        let col_stat = col_stat.clone().into();
+                        let col_stat = from_chunk_column_statistics(
+                            col_stat.clone(),
+                            row_group.num_rows() as u64,
+                        );
                         basic_column_stats[column_id].merge(col_stat);
                     }
                 }

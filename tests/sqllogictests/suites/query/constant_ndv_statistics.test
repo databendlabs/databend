@@ -1,0 +1,22 @@
+# ConstantTableScan uses the shared base-statistics construction rules.
+# NDV excludes NULL and duplicate rows; histogram row mass must exclude NULL.
+query IIIII
+select count(*), count(k), count(distinct k), min(k), max(k)
+from (values (1), (1), (2), (null::bigint)) as t(k);
+----
+4 3 2 1 2
+
+# An all-NULL constant column has no value bounds or non-NULL distribution.
+query III
+select count(*), count(k), count(distinct k)
+from (values (null::bigint), (null::bigint)) as t(k);
+----
+2 0 0
+
+# Fractional endpoints do not bound NDV by their integer-width difference.
+query III
+select count(*), count(k), count(distinct k)
+from (values (1.00::decimal(10,2)), (1.01::decimal(10,2)),
+             (1.01::decimal(10,2)), (null::decimal(10,2))) as t(k);
+----
+4 3 2

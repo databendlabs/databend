@@ -94,7 +94,8 @@ fn write_sql_join_table_stats(
         writeln!(
             file,
             "input stat    : {side}.{name} {bounds}, ndv={:?}, null={}",
-            stat.ndv, stat.null_count
+            stat.ndv.and_then(|ndv| ndv.expected).map(|ndv| ndv as u64),
+            stat.null_count
         )?;
     }
     let mut histogram_columns = table.histograms.keys().collect::<Vec<_>>();

@@ -1,0 +1,80 @@
+=== nullable_duplicates ===
+description: Constant inputs use the same base-statistics rules as Scan.
+raw_plan:
+EvalScalar
+├── scalars: [k (#0) AS (#0)]
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [4]
+
+optimized_plan:
+Exchange(Merge)
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [4]
+
+row_count: 4
+ndv: 2.0
+null_count: 1
+histogram_rows: Some(3.0)
+
+=== all_null ===
+description: Constant inputs use the same base-statistics rules as Scan.
+raw_plan:
+EvalScalar
+├── scalars: [k (#0) AS (#0)]
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [2]
+
+row_count: 2
+ndv: 0.0
+null_count: 2
+histogram_rows: None
+
+=== fractional ===
+description: Constant inputs use the same base-statistics rules as Scan.
+raw_plan:
+EvalScalar
+├── scalars: [k (#0) AS (#0)]
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [4]
+
+optimized_plan:
+Exchange(Merge)
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [4]
+
+row_count: 4
+ndv: 2.0
+null_count: 1
+histogram_rows: Some(3.0)
+
+=== many_distinct ===
+description: Constant inputs use the same base-statistics rules as Scan.
+raw_plan:
+EvalScalar
+├── scalars: [k (#0) AS (#0)]
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [1000]
+
+optimized_plan:
+Exchange(Merge)
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [1000]
+
+row_count: 1000
+ndv: 1000.0
+null_count: 0
+histogram_rows: Some(1000.0)
+

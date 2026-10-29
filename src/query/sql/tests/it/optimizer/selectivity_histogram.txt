@@ -316,7 +316,7 @@ estimated     : 50
 in stats      :
 0 ColumnStat { min: Float(0.0), max: Float(20.0), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10.0, num_values: 100.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10.0, upper_bound: 20.0, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Float(15.0), max: Float(20.0), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 15.0, upper_bound: 20.0, num_values: 50.0, num_distinct: 5.0 }] }) }
+0 ColumnStat { min: Float(15.0), max: Float(20.0), ndv: ~5.0[..20.0], null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 15.0, upper_bound: 20.0, num_values: 50.0, num_distinct: 5.0 }] }) }
 
 expr          : f >= Float64(15), f <= Float64(19)
 cardinality   : 200
@@ -324,7 +324,7 @@ estimated     : 40
 in stats      :
 0 ColumnStat { min: Float(0.0), max: Float(20.0), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10.0, num_values: 100.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10.0, upper_bound: 20.0, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Float(15.0), max: Float(19.0), ndv: 4.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 15.0, upper_bound: 19.0, num_values: 40.0, num_distinct: 4.0 }] }) }
+0 ColumnStat { min: Float(15.0), max: Float(19.0), ndv: ~4.0[..20.0], null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 15.0, upper_bound: 19.0, num_values: 40.0, num_distinct: 4.0 }] }) }
 
 === histogram_row_count_mismatch ===
 description: Histograms with row counts above the non-null cardinality should scale output row mass without trusting bucket distincts as exact.
@@ -518,7 +518,7 @@ estimated     : 40
 in stats      :
 0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: 26.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 60.0, num_distinct: 6.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }] }) }
 out stats     :
-0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }] }) }
+0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: ~20.0[..26.0], null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }] }) }
 
 expr          : s >= 'm'
 cardinality   : 50
@@ -526,7 +526,7 @@ estimated     : 20
 in stats      :
 0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: ~13.0[..26.0], null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 30.0, num_distinct: 3.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }] }) }
+0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: ~10.0[..20.0], null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }] }) }
 
 expr          : s > 'p'
 cardinality   : 100

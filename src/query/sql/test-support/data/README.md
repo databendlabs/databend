@@ -68,7 +68,7 @@ column_statistics:              # Inline column statistics (can be combined with
   table_name.column_name:
     min: 1990                   # Min value (can be number or string)
     max: 2000                   # Max value (can be number or string)
-    ndv: 10                     # Number of distinct values
+    ndv: 10                     # Exact NDV asserted by this fixture (not an HLL estimate)
     null_count: 0               # Number of null values
 
 histogram_statistics:           # Optional inline histograms keyed by table.column
@@ -83,6 +83,27 @@ histogram_statistics:           # Optional inline histograms keyed by table.colu
 good_plan: |                    # Optional expected good plan
   ...
 ```
+
+## Statistics Trace NDV
+
+Trace JSON is a wire format owned by the SQL trace/replay boundary, not a serde
+encoding of runtime catalog or optimizer structures. Its column `statistics.ndv`
+is either `null` (no NDV statistics) or an object with `expected` and `upper`:
+
+```json
+"ndv": { "expected": 17.0, "upper": 3000.0 }
+```
+
+`expected: null` means that only the upper bound is known. For HLL-backed NDV,
+`upper` is the concrete numeric upper from the nominal 95% model, not a
+separate confidence-interval hint that replay or later operators must interpret.
+Replay validates the bounds before constructing runtime statistics. Traces
+captured by older versions store a scalar (`"ndv": 25`); replay still accepts it
+as an exact NDV, which is how the planner of that time used it. New traces are
+always written in the object form. `customer_self_join.json` is kept in the
+legacy scalar form so replay of old traces stays covered.
+YAML `column_statistics.ndv` above is a separate test-fixture assertion of an
+exact NDV and is explicitly converted when registering the fixture.
 
 ## External Statistics Files
 

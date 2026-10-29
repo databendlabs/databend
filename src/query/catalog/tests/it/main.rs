@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+mod basic_statistics;
 mod partitions;
 mod projection;
 mod pushdown;

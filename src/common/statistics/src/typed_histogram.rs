@@ -82,6 +82,9 @@ impl<T> TypedHistogram<T> {
             * self.row_scale
     }
 
+    /// Bucket distinct counts are estimates for synthesized and sampled
+    /// histograms alike, so their sum is only the expected NDV. Row mass is the
+    /// histogram's only hard NDV bound; the column carries its own upper.
     pub fn ndv(&self) -> NdvEstimate {
         let possible_distinct = self
             .buckets
@@ -96,7 +99,7 @@ impl<T> TypedHistogram<T> {
         let num_values = self.num_values();
         NdvEstimate::new(
             expected_distinct.min(possible_distinct).min(num_values),
-            possible_distinct.min(num_values),
+            num_values,
         )
     }
 
@@ -1088,7 +1091,7 @@ mod tests {
 
         assert_eq!(histogram.num_values(), 25.0);
         assert_eq!(histogram.buckets[0].num_distinct, 10.0);
-        assert_eq!(histogram.ndv(), NdvEstimate::new(9.436864852905273, 10.0));
+        assert_eq!(histogram.ndv(), NdvEstimate::new(9.436864852905273, 25.0));
     }
 
     #[test]
@@ -1104,7 +1107,7 @@ mod tests {
 
         assert_eq!(sequential.num_values(), combined.num_values());
         assert_eq!(sequential.ndv(), combined.ndv());
-        assert_eq!(sequential.ndv(), NdvEstimate::new(9.436864852905273, 10.0));
+        assert_eq!(sequential.ndv(), NdvEstimate::new(9.436864852905273, 25.0));
     }
 
     #[test]

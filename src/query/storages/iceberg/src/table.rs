@@ -199,7 +199,8 @@ impl IcebergTable {
             .unwrap_or_default();
         let metadata = serde_json::to_string(table.metadata())?;
         let identifier = serde_json::to_string(table.identifier())?;
-        let statistics = serde_json::to_string(statistics)?;
+        let statistics =
+            serde_json::to_string(&statistics::IcebergStatisticsWire::try_from(statistics)?)?;
 
         Ok(BTreeMap::from_iter([
             ("iceberg.file_io.scheme".to_string(), file_io_scheme),
@@ -249,7 +250,7 @@ impl IcebergTable {
                 )
             })?)?;
 
-        let statistics: statistics::IcebergStatistics =
+        let statistics: statistics::IcebergStatisticsWire =
             serde_json::from_str(options.get("iceberg.statistics").ok_or_else(|| {
                 ErrorCode::ReadTableDataError(
                     "Rebuild iceberg table failed: Missing iceberg.statistics",
@@ -275,7 +276,7 @@ impl IcebergTable {
                 ErrorCode::ReadTableDataError(format!("Rebuild iceberg table failed: {err:?}"))
             })?;
 
-        Ok((table, statistics))
+        Ok((table, statistics.into()))
     }
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&Self> {

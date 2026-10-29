@@ -1,0 +1,126 @@
+=== exact_ndv ===
+description: Exact fixture NDV may synthesize a histogram.
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+scan_ndv: 12.0
+histogram: true
+
+=== extrapolated_ndv ===
+description: Sample extrapolation preserves an upper bound distinct from its point estimate.
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+scan_ndv: ~17.0[..2912.0]
+histogram: true
+
+=== approximate_full_coverage ===
+description: Full statistics coverage does not make an approximate NDV exact.
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+scan_ndv: ~12.0[..15.0]
+histogram: true
+
+=== supplied_histogram ===
+description: A separately supplied histogram is retained without replacing the column NDV upper bound.
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+scan_ndv: ~12.0[..2980.0]
+histogram: true
+
+=== missing_ndv ===
+description: Missing NDV stays upper-only and must not synthesize a histogram.
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+scan_ndv: ?[..2980.0]
+histogram: false
+
+=== missing_sample ===
+description: An NDV without sample coverage must not invent an expected value.
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+scan_ndv: ?[..2980.0]
+histogram: false
+
