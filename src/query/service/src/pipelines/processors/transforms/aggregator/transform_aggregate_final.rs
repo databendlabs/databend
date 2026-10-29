@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use bumpalo::Bump;
 use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -232,17 +231,21 @@ impl TransformFinalAggregate {
         self.check_spill(need_check_spill)
     }
 
+    /// Merge the serialized states straight into the hash table: a serialized block holds the
+    /// states, then the group keys.
     fn merge_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
-        let partitioned_payload = payload.convert_to_partitioned_payload(
-            self.params.group_data_types.clone(),
-            self.params.aggregate_functions.clone(),
-            self.params.num_states(),
-            0,
-            Arc::new(Bump::new()),
-        )?;
-
         if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
-            ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
+            let block = &payload.data_block;
+            let num_states = self.params.num_states();
+            let states = (0..num_states).collect::<Vec<_>>();
+            let groups =
+                (num_states..num_states + self.params.group_data_types.len()).collect::<Vec<_>>();
+            ht.add_serialized_groups(
+                &mut self.flush_state,
+                ProjectedBlock::project(&groups, block),
+                ProjectedBlock::project(&states, block),
+                block.num_rows(),
+            )?;
         }
 
         Ok(())

@@ -680,6 +680,57 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
 }
 
 #[test]
+fn test_add_serialized_groups_matches_combine_and_drops_states() {
+    let fixture = TrackedHeapFixture::new();
+
+    {
+        let hashtable =
+            fixture.build_from_rows(0, HashTableConfig::default().with_initial_radix_bits(0));
+        let serialized = hashtable.payload.aggregate_flush_all().unwrap();
+        let rows = serialized.num_rows();
+        let states = ProjectedBlock::project(&[0], &serialized);
+        let groups = ProjectedBlock::project(&[1], &serialized);
+
+        let mut direct = fixture.empty_table(HashTableConfig::default());
+        let mut flush_state = PayloadFlushState::default();
+        direct
+            .add_serialized_groups(&mut flush_state, groups, states, rows)
+            .unwrap();
+        fixture.assert_result(&mut direct);
+
+        // Merged again into existing groups, like through a temporary table.
+        direct
+            .add_serialized_groups(&mut flush_state, groups, states, rows)
+            .unwrap();
+        let mut combined = fixture.empty_table(HashTableConfig::default());
+        for _ in 0..2 {
+            let partitioned = SerializedPayload {
+                bucket: 0,
+                data_block: serialized.clone(),
+                max_partition_count: 1,
+            }
+            .convert_to_partitioned_payload(
+                vec![Int64Type::data_type()],
+                fixture.aggrs(),
+                1,
+                0,
+                Arc::new(Bump::new()),
+            )
+            .unwrap();
+            combined
+                .combine_payloads(&partitioned, &mut PayloadFlushState::default())
+                .unwrap();
+        }
+        assert_block_value_sort_eq(
+            &fixture.merge_result_block(&mut direct),
+            &fixture.merge_result_block(&mut combined),
+        );
+    }
+
+    fixture.assert_all_states_dropped();
+}
+
+#[test]
 fn test_tracked_heap_accumulate_failure_drops_states() {
     let fixture = TrackedHeapFixture::new();
 

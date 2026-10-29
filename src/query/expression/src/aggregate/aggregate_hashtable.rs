@@ -289,6 +289,24 @@ impl AggregateHashTable {
         )
     }
 
+    /// Merge serialized aggregate states into their groups, reusing the probe state of
+    /// `flush_state`.
+    pub fn add_serialized_groups(
+        &mut self,
+        flush_state: &mut PayloadFlushState,
+        group_columns: ProjectedBlock,
+        agg_states: ProjectedBlock,
+        row_count: usize,
+    ) -> Result<usize> {
+        self.add_groups(
+            &mut flush_state.probe_state,
+            group_columns,
+            &[],
+            agg_states,
+            row_count,
+        )
+    }
+
     /// Adaptive partial aggregation entry point. When the index is full it grows at once to
     /// `capacity`, or restarts in place once it is that large; the group hashes are fed to
     /// `sampler` once it has started.
