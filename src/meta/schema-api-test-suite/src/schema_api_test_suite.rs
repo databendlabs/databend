@@ -2415,24 +2415,33 @@ impl SchemaApiTestSuite {
             )
         };
 
-        // A missing source rejects CREATE.
+        // A missing MV source must not reuse an option update for a different source.
         {
             let missing_source_id = u64::MAX;
             let invalid_definition = new_definition("missing_source");
-            let err = mt
-                .create_table(new_mv_req(
+            let source_before = util.get_table().await?;
+            for source_table_option in [
+                None,
+                Some(enable_change_tracking(
+                    source_table_id,
+                    source_before.ident.seq,
+                )),
+            ] {
+                let mut req = new_mv_req(
                     "mv_missing_source",
                     CreateOption::Create,
                     missing_source_id,
                     0,
                     &invalid_definition,
-                ))
-                .await
-                .unwrap_err();
-            assert!(matches!(
-                err,
-                KVAppError::AppError(AppError::InvalidMaterializedView(_))
-            ));
+                );
+                req.source_table_option = source_table_option;
+                let err = mt.create_table(req).await.unwrap_err();
+                assert!(matches!(
+                    err,
+                    KVAppError::AppError(AppError::InvalidMaterializedView(_))
+                ));
+                assert_eq!(util.get_table().await?, source_before);
+            }
         }
 
         // The legacy hidden-table CREATE path is not valid for an MV.
@@ -2862,6 +2871,27 @@ impl SchemaApiTestSuite {
                 Some(replacement_source_name)
             );
             assert!(!dropped.source.is_active);
+
+            // Reusing the source-option read must still reject a dropped MV source.
+            let source_ident = TableId::new(replacement_source_table_id);
+            let source_before = mt.get_pb(&source_ident).await?.unwrap();
+            let mut req = new_mv_req(
+                "mv_dropped_source",
+                CreateOption::Create,
+                replacement_source_table_id,
+                0,
+                &replacement_definition,
+            );
+            req.source_table_option = Some(enable_change_tracking(
+                replacement_source_table_id,
+                source_before.seq,
+            ));
+            let err = mt.create_table(req).await.unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::InvalidMaterializedView(_))
+            ));
+            assert_eq!(mt.get_pb(&source_ident).await?.unwrap(), source_before);
 
             mt.gc_drop_tables(GcDroppedTableReq {
                 tenant: tenant.clone(),
@@ -4586,6 +4616,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 action: SetSecurityPolicyAction::Set(mask1_id, vec![column_id]),
+                where_use_unmasked_value: true,
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -4646,6 +4677,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 action: SetSecurityPolicyAction::Set(mask1_id, vec![column_id]),
+                where_use_unmasked_value: false,
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -4703,6 +4735,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 action: SetSecurityPolicyAction::Set(mask2_id, vec![column_id]),
+                where_use_unmasked_value: false,
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -4714,6 +4747,7 @@ impl SchemaApiTestSuite {
                 },
             };
             let res = mt.get_table(req).await?;
+            assert_eq!(res.meta.masking_where_use_unmasked_value, [0].into());
             assert_eq!(res.meta.column_mask_policy_columns_ids, {
                 let mut map = BTreeMap::new();
                 map.insert(1, SecurityPolicyColumnMap {
@@ -4753,7 +4787,8 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
-                action: SetSecurityPolicyAction::Unset(mask2_id),
+                action: SetSecurityPolicyAction::Unset(1),
+                where_use_unmasked_value: false,
             };
             mt.set_table_column_mask_policy(req).await?;
 
@@ -4798,6 +4833,76 @@ impl SchemaApiTestSuite {
             assert!(res.is_none());
         }
 
+        // Two independent bindings of one policy must not share WHERE authorization
+        // or be removed together. Replacing the last binding cleans reverse references.
+        for action in [
+            SetSecurityPolicyAction::Set(mask1_id, vec![1]),
+            SetSecurityPolicyAction::Unset(0),
+        ] {
+            let table = mt
+                .get_pb(&TableId {
+                    table_id: table_id_1,
+                })
+                .await?
+                .unwrap();
+            mt.set_table_column_mask_policy(SetTableColumnMaskPolicyReq {
+                tenant: tenant.clone(),
+                table_id: table_id_1,
+                seq: MatchSeq::Exact(table.seq),
+                action,
+                where_use_unmasked_value: true,
+            })
+            .await?;
+        }
+        let table = mt
+            .get_pb(&TableId {
+                table_id: table_id_1,
+            })
+            .await?
+            .unwrap();
+        assert_eq!(table.data.masking_where_use_unmasked_value, [1].into());
+        assert_eq!(table.data.column_mask_policy_columns_ids.len(), 1);
+        let reference = |policy_id| {
+            MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                policy_id,
+                table_id: table_id_1,
+            })
+        };
+        assert!(mt.get_pb(&reference(mask1_id)).await?.is_some());
+        mt.set_table_column_mask_policy(SetTableColumnMaskPolicyReq {
+            tenant: tenant.clone(),
+            table_id: table_id_1,
+            seq: MatchSeq::Exact(table.seq),
+            action: SetSecurityPolicyAction::Set(mask2_id, vec![1]),
+            where_use_unmasked_value: false,
+        })
+        .await?;
+        let table = mt
+            .get_pb(&TableId {
+                table_id: table_id_1,
+            })
+            .await?
+            .unwrap();
+        assert!(table.data.masking_where_use_unmasked_value.is_empty());
+        assert!(mt.get_pb(&reference(mask1_id)).await?.is_none());
+        assert!(mt.get_pb(&reference(mask2_id)).await?.is_some());
+        mt.set_table_column_mask_policy(SetTableColumnMaskPolicyReq {
+            tenant: tenant.clone(),
+            table_id: table_id_1,
+            seq: MatchSeq::Exact(table.seq),
+            action: SetSecurityPolicyAction::Unset(1),
+            where_use_unmasked_value: false,
+        })
+        .await?;
+        let table = mt
+            .get_pb(&TableId {
+                table_id: table_id_1,
+            })
+            .await?
+            .unwrap();
+        assert!(table.data.column_mask_policy_columns_ids.is_empty());
+        assert!(table.data.masking_where_use_unmasked_value.is_empty());
+        assert!(mt.get_pb(&reference(mask2_id)).await?.is_none());
         Ok(())
     }
 
@@ -5190,6 +5295,7 @@ impl SchemaApiTestSuite {
             seq: MatchSeq::Exact(table_info.ident.seq),
             table_id,
             action: SetSecurityPolicyAction::Set(mask_cleanup_id, vec![number_column_id]),
+            where_use_unmasked_value: true,
         };
         mt.set_table_column_mask_policy(set_req).await?;
         table_info = util.get_table().await?;
@@ -5255,6 +5361,7 @@ impl SchemaApiTestSuite {
             seq: MatchSeq::Exact(table_info.ident.seq),
             table_id,
             action: SetSecurityPolicyAction::Set(mask_guard_id, vec![number_column_id]),
+            where_use_unmasked_value: false,
         };
         mt.set_table_column_mask_policy(set_req).await?;
         table_info = util.get_table().await?;

@@ -26,7 +26,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::infer_table_schema;
-use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_store::MetaStore;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::InputPort;
@@ -47,7 +46,7 @@ use log::error;
 use log::info;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::common::query_build_update_stream_req;
+use crate::interpreters::common::build_update_stream_reqs;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -58,6 +57,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextResultCache;
+use crate::sessions::TableContextSession;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTelemetry;
@@ -153,30 +153,34 @@ impl SelectInterpreter {
         .await?;
 
         // consume stream
-        let update_stream_metas = query_build_update_stream_req(&self.ctx).await?;
+        let update_stream_metas = build_update_stream_reqs(&self.ctx, true).await?;
 
         let catalog = self.ctx.get_default_catalog()?;
         let tenant = self.ctx.get_tenant();
+        let txn_mgr = self.ctx.txn_mgr();
         build_res
             .main_pipeline
-            .set_on_finished(move |info: &ExecutionInfo| match &info.res {
-                Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                    match update_stream_metas {
-                        Some(streams) => {
-                            let r = UpdateMultiTableMetaReq {
-                                update_table_metas: streams.update_table_metas,
-                                ..Default::default()
-                            };
-                            info!("Updating stream metadata to consume data");
-                            catalog
-                                .update_multi_table_meta(&tenant, r)
-                                .await
-                                .map(|_| ())
-                        }
-                        None => Ok(()),
-                    }
-                }),
-                Err(error_code) => Err(error_code.clone()),
+            .set_on_finished(move |info: &ExecutionInfo| {
+                if let Err(error) = &info.res {
+                    return Err(error.clone());
+                }
+                if update_stream_metas.is_empty() {
+                    return Ok(());
+                }
+                info!("Updating stream metadata to consume data");
+                let buffered = txn_mgr
+                    .lock()
+                    .buffer_query_stream_updates(&tenant, &update_stream_metas)?;
+                if buffered {
+                    return Ok(());
+                }
+                // Preserve existing stream-update error semantics: post-read CAS
+                // races may return UnresolvableConflict; never refresh the seq to retry.
+                GlobalIORuntime::instance().block_on(async move {
+                    catalog
+                        .update_stream_metas(&tenant, update_stream_metas)
+                        .await
+                })
             });
         Ok(build_res)
     }

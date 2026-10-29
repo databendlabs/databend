@@ -18230,6 +18230,7 @@ AlterTable(
                 },
                 "mask",
                 None,
+                None,
             ),
         },
     },
@@ -18299,6 +18300,7 @@ AlterTable(
                         },
                     ],
                 ),
+                None,
             ),
         },
     },
@@ -34939,6 +34941,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -34973,6 +34976,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: NameWithTypes(
                 [
                     (
@@ -35017,6 +35021,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -35092,6 +35097,7 @@ AlterUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -35126,6 +35132,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,

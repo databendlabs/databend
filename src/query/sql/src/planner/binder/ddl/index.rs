@@ -47,7 +47,9 @@ use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_HASH_ALGORITHM;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_EF_CONSTRUCT;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_M;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE;
 use databend_storages_common_table_meta::table::is_internal_table_index_option;
+use databend_storages_common_table_meta::table::parse_vector_index_refine;
 use itertools::Itertools;
 
 use crate::BindContext;
@@ -660,6 +662,14 @@ impl Binder {
                         VECTOR_INDEX_OPT_DISTANCE.to_string(),
                         distances.into_iter().join(",").to_string(),
                     );
+                }
+                VECTOR_INDEX_OPT_REFINE => {
+                    if parse_vector_index_refine(&value).is_none() {
+                        return Err(ErrorCode::IndexOptionInvalid(
+                            "`refine` must be `true` or `false`",
+                        ));
+                    }
+                    options.insert(key, value);
                 }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(

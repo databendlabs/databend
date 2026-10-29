@@ -46,8 +46,10 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::FilterImpl;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -56,6 +58,8 @@ use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use log::info;
 use opendal::Operator;
 
@@ -84,6 +88,9 @@ use crate::operations::MutationGenerator;
 use crate::operations::MutationLogEntry;
 use crate::operations::MutationLogs;
 use crate::operations::TableMutationAggregator;
+
+/// Blocks of a segment checked at a time by REFRESH; a check may stat an object.
+const REFRESH_CHECK_CONCURRENCY: usize = 32;
 
 pub async fn do_refresh_table_index(
     fuse_table: &FuseTable,
@@ -171,22 +178,22 @@ pub async fn do_refresh_table_index(
             _ => None,
         };
 
-        for (block_idx, block_meta) in blocks.into_iter().enumerate() {
-            let Some(refresh_index_meta) = check_index_generated(
-                operator.clone(),
-                segment_idx,
-                block_idx,
-                block_meta,
-                stats.clone(),
-                &index_arg,
-            )
-            .await?
-            else {
-                continue;
-            };
-
-            index_metas.push_back(refresh_index_meta);
-        }
+        // Checks may stat index objects; run them concurrently, in block order.
+        let checks = futures::stream::iter(blocks.into_iter().enumerate())
+            .map(|(block_idx, block_meta)| {
+                check_index_generated(
+                    operator.clone(),
+                    segment_idx,
+                    block_idx,
+                    block_meta,
+                    stats.clone(),
+                    &index_arg,
+                )
+            })
+            .buffered(REFRESH_CHECK_CONCURRENCY)
+            .try_collect::<Vec<_>>()
+            .await?;
+        index_metas.extend(checks.into_iter().flatten());
     }
     if index_metas.is_empty() {
         info!(
@@ -233,12 +240,18 @@ pub async fn do_refresh_table_index(
             });
         }
         RefreshIndexArg::Vector(_) => {
+            let active_versions: BTreeMap<_, _> = table_meta
+                .indexes
+                .iter()
+                .filter(|(_, index)| index.index_type == TableIndexType::Vector)
+                .map(|(name, index)| (name.clone(), index.version.clone()))
+                .collect();
             let mut table_indexes = BTreeMap::new();
             table_indexes.insert(index_name.clone(), table_index.clone());
             pipeline.add_async_transformer(|| {
                 VectorIndexTransform::new(
                     operator.clone(),
-                    settings,
+                    active_versions.clone(),
                     table_indexes.clone(),
                     index_schema.clone(),
                     meta_locations.clone(),
@@ -339,19 +352,10 @@ fn build_refresh_index_arg(
         }
         TableIndexType::Vector => {
             let index = table_meta.indexes.get(index_name).unwrap();
-
-            let existing_names_prefix = index
-                .column_ids
-                .iter()
-                .map(|id| format!("{id}"))
-                .collect::<Vec<_>>();
-
-            let vector_arg = RefreshVectorIndexArg {
+            Ok(RefreshIndexArg::Vector(RefreshVectorIndexArg {
                 index_name: index_name.clone(),
                 index_version: index.version.clone(),
-                existing_names_prefix,
-            };
-            Ok(RefreshIndexArg::Vector(vector_arg))
+            }))
         }
         TableIndexType::Spatial => {
             let index = table_meta.indexes.get(index_name).unwrap();
@@ -483,54 +487,22 @@ async fn check_vector_index_generated(
     stats: Option<Arc<SegmentStatistics>>,
     vector_index_arg: &RefreshVectorIndexArg,
 ) -> Result<Option<RefreshIndexMeta>> {
-    // only generate vector index if it is not exist.
-    let mut index_columns = None;
-    let mut index_meta = None;
-    if let Some(vector_index_location) = &block_meta.vector_index_location {
-        let index_location = &vector_index_location.0;
-        if let Ok(_content_length) = operator
-            .stat(index_location)
-            .await
-            .map(|meta| meta.content_length())
-        {
-            let vector_index_meta =
-                load_vector_index_meta(operator.clone(), index_location).await?;
-
-            if let Some(index_version) =
-                vector_index_meta.metadata.get(&vector_index_arg.index_name)
-            {
-                // if metadata has index version, it means the index has generated
-                if vector_index_arg.index_version == *index_version {
-                    return Ok(None);
-                }
-            }
-
-            // collect index meta generated by other indexes
-            let mut metadata = vector_index_meta.metadata.clone();
-            metadata.remove(&vector_index_arg.index_name);
-            if !metadata.is_empty() {
-                index_meta = Some(metadata);
-            }
-
-            // collect index columns generated by other indexes
-            let mut vector_index_columns = Vec::with_capacity(vector_index_meta.columns.len());
-            for column in &vector_index_meta.columns {
-                let name = column.0.to_string();
-                if vector_index_arg
-                    .existing_names_prefix
-                    .iter()
-                    .any(|name_prefix| name.starts_with(name_prefix))
-                {
-                    continue;
-                }
-                vector_index_columns.push(column.clone());
-            }
-            if !vector_index_columns.is_empty() {
-                index_columns = Some(vector_index_columns)
-            }
+    // Up to date only with a bundle of the current version that exists. Without
+    // one (no index, a stale version, data only in the legacy combined file, or a
+    // lost or replaced bundle) a bundle is built.
+    if let Some(meta) = block_meta
+        .vector_index_meta(&vector_index_arg.index_name)
+        .filter(|meta| meta.index_version == vector_index_arg.index_version)
+    {
+        if vector_index_file_present(&operator, meta).await? {
+            return Ok(None);
         }
+        info!(
+            "Rebuild vector index {}: bundle {} is missing or its size differs",
+            vector_index_arg.index_name, meta.location.0
+        );
     }
-    let vector_index_meta = RefreshIndexMeta {
+    Ok(Some(RefreshIndexMeta {
         index: BlockMetaIndex {
             segment_idx,
             block_idx,
@@ -540,10 +512,20 @@ async fn check_vector_index_generated(
             .as_ref()
             .and_then(|v| v.block_hlls.get(block_idx))
             .cloned(),
-        index_columns,
-        index_meta,
-    };
-    Ok(Some(vector_index_meta))
+        index_columns: None,
+        index_meta: None,
+    }))
+}
+
+/// Whether the bundle of `meta` exists with the recorded size. Other storage
+/// errors are returned rather than treated as missing, so that a transient failure
+/// does not rebuild the index of every block.
+async fn vector_index_file_present(operator: &Operator, meta: &BlockIndexMeta) -> Result<bool> {
+    match operator.stat(&meta.location.0).await {
+        Ok(stat) => Ok(stat.content_length() == meta.size),
+        Err(error) if error.kind() == opendal::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn check_spatial_index_generated(
@@ -843,7 +825,7 @@ impl AsyncTransform for NgramIndexTransform {
 
 pub struct VectorIndexTransform {
     operator: Operator,
-    settings: ReadSettings,
+    active_versions: BTreeMap<String, String>,
     table_indexes: BTreeMap<String, TableIndex>,
     index_schema: TableSchemaRef,
     meta_locations: TableMetaLocationGenerator,
@@ -852,14 +834,14 @@ pub struct VectorIndexTransform {
 impl VectorIndexTransform {
     pub fn new(
         operator: Operator,
-        settings: ReadSettings,
+        active_versions: BTreeMap<String, String>,
         table_indexes: BTreeMap<String, TableIndex>,
         index_schema: TableSchemaRef,
         meta_locations: TableMetaLocationGenerator,
     ) -> Self {
         Self {
             operator,
-            settings,
+            active_versions,
             table_indexes,
             index_schema,
             meta_locations,
@@ -877,8 +859,8 @@ impl AsyncTransform for VectorIndexTransform {
             index,
             block_meta,
             column_hlls,
-            index_columns,
-            index_meta,
+            index_columns: _,
+            index_meta: _,
         } = data_block
             .get_meta()
             .and_then(RefreshIndexMeta::downcast_ref_from)
@@ -887,34 +869,64 @@ impl AsyncTransform for VectorIndexTransform {
         let mut new_block_meta = Arc::unwrap_or_clone(block_meta.clone());
 
         let mut builder =
-            VectorIndexBuilder::try_create(&self.table_indexes, self.index_schema.clone(), false)
-                .unwrap();
+            VectorIndexBuilder::try_create(&self.table_indexes, self.index_schema.clone(), false)?
+                .ok_or_else(|| ErrorCode::Internal("No vector index available to refresh"))?;
         builder.add_block(&data_block)?;
 
-        let vector_index_location = self.meta_locations.block_vector_index_location();
-        let existing_location = &block_meta.vector_index_location;
-        let vector_result = builder
-            .finalize_with_existing(
-                self.operator.clone(),
-                &self.settings,
-                &vector_index_location,
-                existing_location.as_ref(),
-                index_columns.clone(),
-                index_meta.clone(),
-            )
-            .await?;
-        let Some(state) = vector_result.index_state else {
+        let result = builder.finalize_block(&self.meta_locations)?;
+        if result.files.is_empty() {
             return Err(ErrorCode::Internal("Failed to build vector index"));
+        }
+        let old_named_size: u64 = block_meta
+            .vector_index_metas
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|meta| meta.size)
+            .sum();
+        let legacy_size = if block_meta.vector_index_location.is_some() {
+            block_meta
+                .vector_index_size
+                .unwrap_or(0)
+                .checked_sub(old_named_size)
+                .ok_or_else(|| ErrorCode::StorageOther("Invalid vector index size accounting"))?
+        } else {
+            0
         };
-
-        new_block_meta.vector_index_size = Some(state.size);
-        new_block_meta.vector_index_location = Some(vector_index_location);
+        let mut metas = block_meta.vector_index_metas.clone().unwrap_or_default();
+        // Old snapshots still own replaced/dropped files; GC handles them after retention.
+        metas
+            .retain(|meta| self.active_versions.get(&meta.index_name) == Some(&meta.index_version));
+        for (meta, _) in &result.files {
+            metas.retain(|old| old.index_name != meta.index_name);
+            metas.push(meta.clone());
+        }
+        BlockWriter::write_down_vector_index_files(&self.operator, result.files).await?;
+        metas.sort_unstable_by(|a, b| a.index_name.cmp(&b.index_name));
+        let keep_legacy = match &block_meta.vector_index_location {
+            Some(location) => {
+                legacy_serves_other_index(
+                    &self.operator,
+                    &location.0,
+                    &self.active_versions,
+                    &metas,
+                )
+                .await?
+            }
+            None => false,
+        };
+        if !keep_legacy {
+            new_block_meta.vector_index_location = None;
+        }
+        let total: u64 = metas.iter().map(|meta| meta.size).sum::<u64>()
+            + if keep_legacy { legacy_size } else { 0 };
+        new_block_meta.vector_index_size = (total != 0).then_some(total);
+        new_block_meta.vector_index_metas = Some(metas);
         let mut vector_stats = block_meta.vector_stats.clone().unwrap_or_default();
-        if let Some(new_vector_stats) = vector_result.vector_stats {
-            vector_stats.extend(new_vector_stats);
+        if let Some(statistics) = result.statistics {
+            vector_stats.extend(statistics);
         }
         new_block_meta.vector_stats = (!vector_stats.is_empty()).then_some(vector_stats);
-        BlockWriter::write_down_vector_index_state(&self.operator, Some(state)).await?;
 
         let extended_block_meta = ExtendedBlockMeta {
             block_meta: new_block_meta,
@@ -1060,6 +1072,40 @@ impl Debug for RefreshIndexMeta {
 
 local_block_meta_serde!(RefreshIndexMeta);
 
+/// Whether the legacy combined file at `path` still holds the current data of an
+/// active vector index without a current bundle. Fully migrated blocks need no I/O.
+async fn legacy_serves_other_index(
+    operator: &Operator,
+    path: &str,
+    active_versions: &BTreeMap<String, String>,
+    metas: &[BlockIndexMeta],
+) -> Result<bool> {
+    // Keep borrowed iterator state out of the framed async future. Only the few
+    // missing indexes' owned names/versions cross the metadata-read await.
+    let unmigrated = {
+        let mut indexes = Vec::new();
+        for (name, version) in active_versions {
+            if !metas
+                .iter()
+                .any(|meta| &meta.index_name == name && &meta.index_version == version)
+            {
+                indexes.push((name.clone(), version.clone()));
+            }
+        }
+        indexes
+    };
+    if unmigrated.is_empty() {
+        return Ok(false);
+    }
+    let meta = load_vector_index_meta(operator.clone(), path).await?;
+    let VectorIndexMeta::Legacy(meta) = meta.as_ref() else {
+        return Ok(false);
+    };
+    Ok(unmigrated
+        .into_iter()
+        .any(|(name, version)| meta.metadata.get(&name) == Some(&version)))
+}
+
 #[typetag::serde(name = "refresh_index")]
 impl BlockMetaInfo for RefreshIndexMeta {}
 
@@ -1078,7 +1124,6 @@ struct RefreshNgramIndexArg {
 struct RefreshVectorIndexArg {
     index_name: String,
     index_version: String,
-    existing_names_prefix: Vec<String>,
 }
 
 struct RefreshSpatialIndexArg {
@@ -1086,4 +1131,31 @@ struct RefreshSpatialIndexArg {
     index_version: String,
     existing_column_ids: Vec<ColumnId>,
     existing_names_prefix: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use opendal::services::Memory;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_vector_index_file_present() -> Result<()> {
+        let operator = Operator::new(Memory::default())?.finish();
+        let meta = |size| BlockIndexMeta {
+            index_name: "idx".to_owned(),
+            location: ("_i_v_v2/v1/a.index".to_owned(), 0),
+            size,
+            index_version: "v1".to_owned(),
+        };
+        // A lost bundle is rebuilt.
+        assert!(!vector_index_file_present(&operator, &meta(4)).await?);
+        operator
+            .write("_i_v_v2/v1/a.index", b"abcd".to_vec())
+            .await?;
+        assert!(vector_index_file_present(&operator, &meta(4)).await?);
+        // So is one replaced by an object of another size.
+        assert!(!vector_index_file_present(&operator, &meta(5)).await?);
+        Ok(())
+    }
 }

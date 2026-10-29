@@ -47,10 +47,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -194,24 +196,78 @@ pub enum PruneCacheScope {
     Lazy,
 }
 
+/// Settings that change vector index pruning results; part of the prune cache key
+/// of vector index queries.
+fn vector_prune_settings(
+    ctx: &Arc<dyn TableContext>,
+    push_downs: &PushDownInfo,
+) -> Result<Option<(u64, u64)>> {
+    if push_downs.vector_index.is_none() {
+        return Ok(None);
+    }
+    let settings = ctx.get_settings();
+    Ok(Some((
+        settings.get_vector_refine_factor()?,
+        settings.get_vector_search_ef()?,
+    )))
+}
+
+/// Builds the key of the global prune cache for a deterministic push-down.
+///
+/// The key must identify everything that decides which blocks survive pruning:
+/// - the segments, by `Debug` (indexes and location strings only);
+/// - the push-down, by bincode. `Debug` is not exact here: it prints float
+///   constants rounded to 10 fractional digits, so `f >= 0` and `f >= 1e-11`
+///   would share a key;
+/// - the function context, because pruning evaluates the filter with it (for
+///   example, `to_date(ts)` depends on the session time zone). `now` is left
+///   out: it differs per query, and functions that read it are
+///   non-deterministic, so their push-downs are not cached;
+/// - the settings that change vector index pruning (`vector_prune_settings`);
+/// - the pruning path (`PruneCacheScope`): lazy entries have no meaningful
+///   `partitions_total` and must not be served to an eager run.
+///
+/// Returns `None` (do not cache) for a non-deterministic push-down, or if the
+/// push-down cannot be serialized.
 fn deterministic_prune_cache_key(
+    func_ctx: &FunctionContext,
     segments_location: &[SegmentLocation],
-    push_downs: &Option<PushDownInfo>,
-    pruning_mode: ReadPartitionsPruningMode,
+    push_downs: &PushDownInfo,
+    vector_settings: Option<(u64, u64)>,
     scope: PruneCacheScope,
 ) -> Option<String> {
-    let mut push_downs = push_downs.as_ref()?.clone();
     if !push_downs.is_deterministic {
         return None;
     }
-    push_downs.read_partitions_pruning_mode = pruning_mode;
-    Some(format!(
-        "{:x}",
-        Sha256::digest(format!(
-            "{:?}_{:?}_{:?}",
-            scope, segments_location, push_downs
-        ))
-    ))
+
+    let mut push_downs_bytes = Vec::new();
+    if let Err(cause) = bincode_serialize_into_buf(&mut push_downs_bytes, push_downs) {
+        log::warn!("Skip prune cache, cannot serialize push downs: {}", cause);
+        return None;
+    }
+
+    let func_ctx = FunctionContext {
+        now: Default::default(),
+        ..func_ctx.clone()
+    };
+    let segments = format!("{:?}", segments_location);
+    let func_ctx = format!("{:?}", func_ctx);
+    let vector_settings = format!("{:?}", vector_settings);
+    let scope = format!("{:?}", scope);
+
+    // Prefix each part with its length, so that parts cannot run into each other.
+    let mut hasher = Sha256::new();
+    for part in [
+        segments.as_bytes(),
+        &push_downs_bytes,
+        func_ctx.as_bytes(),
+        vector_settings.as_bytes(),
+        scope.as_bytes(),
+    ] {
+        hasher.update((part.len() as u64).to_le_bytes());
+        hasher.update(part);
+    }
+    Some(format!("{:x}", hasher.finalize()))
 }
 
 impl FuseTable {
@@ -391,14 +447,19 @@ impl FuseTable {
         }
 
         // If we can get the pruning result from cache, we don't need to prune again, but need sent
-        // the parts to the next pipeline.
-        let derterministic_cache_key = deterministic_prune_cache_key(
-            &lazy_init_segments,
-            &push_downs,
-            read_partitions_pruning_mode(&push_downs),
-            PruneCacheScope::Lazy,
-        );
+        // the parts to the next pipeline
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        let derterministic_cache_key = match &push_downs {
+            Some(push_downs) if enable_prune_cache => deterministic_prune_cache_key(
+                &ctx.get_function_context()?,
+                &lazy_init_segments,
+                push_downs,
+                vector_prune_settings(&ctx, push_downs)?,
+                PruneCacheScope::Lazy,
+            ),
+            _ => None,
+        };
+
         if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
                 ctx.publish_pruned_partitions(plan_id, stat);
@@ -517,13 +578,21 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key = deterministic_prune_cache_key(
-            &segments_location,
-            &push_downs,
-            pruning_mode,
-            cache_scope,
-        );
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        let derterministic_cache_key = match &push_downs {
+            Some(push_downs) if enable_prune_cache => {
+                let mut push_downs = push_downs.clone();
+                push_downs.read_partitions_pruning_mode = pruning_mode;
+                deterministic_prune_cache_key(
+                    &ctx.get_function_context()?,
+                    &segments_location,
+                    &push_downs,
+                    vector_prune_settings(&ctx, &push_downs)?,
+                    cache_scope,
+                )
+            }
+            _ => None,
+        };
         if enable_prune_cache
             && let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key)
         {
@@ -1665,5 +1734,137 @@ mod tests {
         let mut changed_segment = original.clone();
         changed_segment[1].location = ("segment-c".to_string(), 1);
         assert!(!same_segment_locations(&original, &changed_segment));
+    }
+
+    /// Push-down with the filter `f >= value`.
+    fn float_filter_push_downs(value: f64) -> PushDownInfo {
+        use databend_common_catalog::plan::Filters;
+        use databend_common_expression::FunctionID;
+        use databend_common_expression::RemoteExpr;
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::NumberScalar;
+
+        let float_type = DataType::Number(NumberDataType::Float64);
+        let filter = |func: &str| RemoteExpr::FunctionCall {
+            span: None,
+            id: Box::new(FunctionID::Builtin {
+                name: func.to_string(),
+                id: 0,
+            }),
+            generics: vec![],
+            args: vec![
+                RemoteExpr::ColumnRef {
+                    span: None,
+                    id: "f".to_string(),
+                    data_type: float_type.clone(),
+                    display_name: "f".to_string(),
+                },
+                RemoteExpr::Constant {
+                    span: None,
+                    scalar: Scalar::Number(NumberScalar::Float64(value.into())),
+                    data_type: float_type.clone(),
+                },
+            ],
+            return_type: DataType::Boolean,
+        };
+        PushDownInfo {
+            filters: Some(Filters {
+                filter: filter("gte"),
+                inverted_filter: filter("lt"),
+            }),
+            is_deterministic: true,
+            ..Default::default()
+        }
+    }
+
+    fn cache_key(func_ctx: &FunctionContext, push_downs: &PushDownInfo) -> String {
+        let segments = vec![segment_location(0, "segment-a", "snapshot-a")];
+        deterministic_prune_cache_key(
+            func_ctx,
+            &segments,
+            push_downs,
+            None,
+            PruneCacheScope::Eager,
+        )
+        .unwrap()
+    }
+
+    // Eager pruning caches the real `partitions_total`; lazy pruning caches
+    // a node's share with no meaningful total. The two must not share keys.
+    #[test]
+    fn test_prune_cache_key_distinguishes_pruning_scope() {
+        let segments = vec![segment_location(0, "segment-a", "snapshot-a")];
+        let push_downs = float_filter_push_downs(0.0);
+        let key = |scope| {
+            deterministic_prune_cache_key(
+                &FunctionContext::default(),
+                &segments,
+                &push_downs,
+                None,
+                scope,
+            )
+            .unwrap()
+        };
+        assert_ne!(key(PruneCacheScope::Eager), key(PruneCacheScope::Lazy));
+    }
+
+    // Regression test for https://github.com/databendlabs/databend/issues/20774:
+    // `Debug` prints float constants with 10 fractional digits, so these
+    // filters used to share one prune cache key.
+    #[test]
+    fn test_prune_cache_key_distinguishes_float_constants() {
+        let func_ctx = FunctionContext::default();
+        let values = [0.0, 1e-11, 1e-300, 10.12345678901, 10.123456789055];
+        let keys = values
+            .iter()
+            .map(|value| cache_key(&func_ctx, &float_filter_push_downs(*value)))
+            .collect::<HashSet<_>>();
+        assert_eq!(values.len(), keys.len());
+
+        assert_eq!(
+            cache_key(&func_ctx, &float_filter_push_downs(1e-11)),
+            cache_key(&func_ctx, &float_filter_push_downs(1e-11)),
+        );
+    }
+
+    #[test]
+    fn test_prune_cache_key_depends_on_function_context() {
+        let push_downs = float_filter_push_downs(0.0);
+        let utc = FunctionContext::default();
+        let los_angeles = FunctionContext {
+            tz: "America/Los_Angeles".parse().unwrap(),
+            ..FunctionContext::default()
+        };
+        assert_ne!(
+            cache_key(&utc, &push_downs),
+            cache_key(&los_angeles, &push_downs)
+        );
+
+        // The query start time differs per query; it must not prevent cache hits.
+        let later = FunctionContext {
+            now: chrono::Utc::now(),
+            ..FunctionContext::default()
+        };
+        assert_eq!(cache_key(&utc, &push_downs), cache_key(&later, &push_downs));
+    }
+
+    #[test]
+    fn test_prune_cache_key_skips_non_deterministic_push_downs() {
+        let push_downs = PushDownInfo {
+            is_deterministic: false,
+            ..float_filter_push_downs(0.0)
+        };
+        let segments = vec![segment_location(0, "segment-a", "snapshot-a")];
+        assert!(
+            deterministic_prune_cache_key(
+                &FunctionContext::default(),
+                &segments,
+                &push_downs,
+                None,
+                PruneCacheScope::Eager,
+            )
+            .is_none()
+        );
     }
 }

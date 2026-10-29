@@ -109,6 +109,7 @@ use crate::interpreters::common::table_option_validation::is_valid_option_of_typ
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_s3_storage_class;
 use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
@@ -1059,6 +1060,11 @@ impl CreateTableInterpreter {
             FuseSegmentFormat::from_str(segment_format)?;
         }
 
+        is_valid_s3_storage_class(
+            &table_meta.options,
+            table_meta.storage_params.as_ref(),
+            table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX),
+        )?;
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
         is_valid_recluster_depth(&table_meta.options)?;

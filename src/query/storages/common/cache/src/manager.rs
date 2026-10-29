@@ -52,8 +52,8 @@ use crate::caches::SpatialIndexFileCache;
 use crate::caches::SpatialIndexMetaCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
-use crate::caches::VectorIndexFileCache;
 use crate::caches::VectorIndexMetaCache;
+use crate::caches::VectorRefineDataCache;
 use crate::caches::VirtualColumnMetaCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
@@ -124,7 +124,7 @@ pub struct CacheManager {
     inverted_index_payload_cache: CacheSlot<InvertedIndexPayloadCache>,
     inverted_index_full_payload_cache: CacheSlot<InvertedIndexFullPayloadCache>,
     vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
-    vector_index_file_cache: CacheSlot<VectorIndexFileCache>,
+    vector_refine_data_cache: CacheSlot<VectorRefineDataCache>,
     vector_index_cache: CacheSlot<VectorIndexCache>,
     spatial_index_meta_cache: CacheSlot<SpatialIndexMetaCache>,
     spatial_index_file_cache: CacheSlot<SpatialIndexFileCache>,
@@ -251,7 +251,7 @@ impl CacheManager {
                 inverted_index_payload_cache: CacheSlot::new(None),
                 inverted_index_full_payload_cache: CacheSlot::new(None),
                 vector_index_meta_cache: CacheSlot::new(None),
-                vector_index_file_cache: CacheSlot::new(None),
+                vector_refine_data_cache: CacheSlot::new(None),
                 vector_index_cache: CacheSlot::new(None),
                 spatial_index_meta_cache: CacheSlot::new(None),
                 spatial_index_file_cache: CacheSlot::new(None),
@@ -420,8 +420,7 @@ impl CacheManager {
                 )?
             };
 
-            // Reuse the existing vector-index memory budget for decoded, directly searchable
-            // objects. Keep only the disk tier for serialized files to avoid double budgeting.
+            // Memory budget of the decoded HNSW object cache (`vector_index_cache` below).
             let vector_index_size = if config.vector_index_filter_memory_ratio != 0 {
                 (*max_server_memory_usage as usize)
                     * config.vector_index_filter_memory_ratio as usize
@@ -429,14 +428,16 @@ impl CacheManager {
             } else {
                 config.vector_index_filter_size as usize
             };
-            let vector_index_file_cache = {
+            // FP16 refine pages read per query. HNSW components and the validity
+            // are not cached here: they are kept decoded in `vector_index_cache`.
+            let vector_refine_data_cache = {
                 let vector_index_file_on_disk_cache_path =
                     PathBuf::from(&config.disk_cache_config.path)
                         .join(tenant_id.clone())
                         .join("vector_index_file_v1");
                 Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_VECTOR_INDEX_FILE,
-                    0,
+                    HYBRID_CACHE_VECTOR_INDEX_REFINE,
+                    config.vector_index_refine_size as usize,
                     Unit::Bytes,
                     &vector_index_file_on_disk_cache_path,
                     on_disk_cache_queue_size,
@@ -549,7 +550,7 @@ impl CacheManager {
                 inverted_index_payload_cache,
                 inverted_index_full_payload_cache,
                 vector_index_meta_cache,
-                vector_index_file_cache,
+                vector_refine_data_cache,
                 vector_index_cache,
                 spatial_index_meta_cache,
                 spatial_index_file_cache,
@@ -600,6 +601,8 @@ impl CacheManager {
             CacheManager::clear_cache(&me.inverted_index_full_payload_cache);
             CacheManager::clear_cache(&me.inverted_index_payload_cache);
             CacheManager::clear_cache(&me.vector_index_cache);
+            // Only the in-memory FP16 pages; the disk tier is kept.
+            CacheManager::clear_cache(&me.vector_refine_data_cache);
         }
 
         fn clear_extra_caches(me: &CacheManager) {
@@ -691,6 +694,15 @@ impl CacheManager {
                     name,
                 );
             }
+            HYBRID_CACHE_VECTOR_INDEX_REFINE | IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_REFINE => {
+                Self::set_hybrid_cache_bytes_capacity(
+                    &self.vector_refine_data_cache,
+                    new_capacity,
+                    HYBRID_CACHE_VECTOR_INDEX_REFINE,
+                );
+            }
+            // The decoded HNSW object cache. It is named `memory_cache_vector_index_file`;
+            // `cache_vector_index_file` is accepted as well.
             HYBRID_CACHE_VECTOR_INDEX_FILE | MEMORY_CACHE_VECTOR_INDEX => {
                 let capacity = usize::try_from(new_capacity).map_err(|_| {
                     ErrorCode::BadArguments("decoded vector-index cache size exceeds this platform")
@@ -902,8 +914,8 @@ impl CacheManager {
         self.get_hybrid_cache(self.vector_index_meta_cache.get())
     }
 
-    pub fn get_vector_index_file_cache(&self) -> Option<VectorIndexFileCache> {
-        self.get_hybrid_cache(self.vector_index_file_cache.get())
+    pub fn get_vector_refine_data_cache(&self) -> Option<VectorRefineDataCache> {
+        self.get_hybrid_cache(self.vector_refine_data_cache.get())
     }
 
     pub fn get_vector_index_cache(&self) -> Option<VectorIndexCache> {
@@ -1069,7 +1081,12 @@ const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_PAYLOAD: &str = "memory_cache_invert
 const HYBRID_CACHE_INVERTED_INDEX_META: &str = "cache_inverted_index_meta_data";
 const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_META: &str = "memory_cache_inverted_index_meta_data";
 
+// Accepted by `set_cache_capacity` for the decoded HNSW object cache, whose own
+// name is `MEMORY_CACHE_VECTOR_INDEX`.
 const HYBRID_CACHE_VECTOR_INDEX_FILE: &str = "cache_vector_index_file";
+// Cache of FP16 refine pages.
+const HYBRID_CACHE_VECTOR_INDEX_REFINE: &str = "cache_vector_index_refine";
+const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_REFINE: &str = "memory_cache_vector_index_refine";
 const HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str = "cache_vector_index_file_meta_data";
 const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str =
     "memory_cache_vector_index_file_meta_data";
@@ -1192,7 +1209,7 @@ mod tests {
                 .on_disk_cache()
                 .is_some()
             && cache_manager
-                .get_vector_index_file_cache()
+                .get_vector_refine_data_cache()
                 .on_disk_cache()
                 .is_some()
             && cache_manager
@@ -1239,7 +1256,7 @@ mod tests {
                 .on_disk_cache()
                 .is_none()
             && cache_manager
-                .get_vector_index_file_cache()
+                .get_vector_refine_data_cache()
                 .on_disk_cache()
                 .is_none()
             && cache_manager
@@ -1371,7 +1388,7 @@ mod tests {
         // 1. Populate in-memory table data cache
         let in_memory_table_data_cache = cache_manager.get_table_data_array_cache().unwrap();
         let array: ArrayRef = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5]));
-        in_memory_table_data_cache.insert("not matter".to_string(), (array, 1));
+        in_memory_table_data_cache.insert("not matter".to_string(), (array.into(), 1));
 
         // 2. Populate segment block metas cache
         let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache().unwrap();
@@ -1416,6 +1433,7 @@ mod tests {
             inverted_index_metas: None,
             ngram_filter_index_size: None,
             vector_index_location: None,
+            vector_index_metas: None,
             vector_index_size: None,
             spatial_index_location: None,
             spatial_index_size: None,
@@ -1534,7 +1552,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_index_cache_reuses_existing_memory_budget() -> Result<()> {
+    fn test_vector_index_cache_budgets() -> Result<()> {
         let max_server_memory_usage = 4 * 1024 * 1024;
         let default_config = CacheConfig::default();
         let default_capacity = default_config.vector_index_filter_size;
@@ -1583,19 +1601,16 @@ mod tests {
             let cache = manager.get_vector_index_cache();
             assert_eq!(cache.is_some(), capacity.is_some());
             assert_eq!(cache.bytes_capacity(), capacity.unwrap_or_default());
-            // The same budget must not also be allocated to serialized files in memory.
-            assert!(
-                manager
-                    .get_vector_index_file_cache()
-                    .in_memory_cache()
-                    .is_none()
+            // The refine cache has its own memory budget, independent of the HNSW
+            // cache. Non-EE mode: no disk tier (see `test_vector_refine_cache_tiers`).
+            let refine = manager.get_vector_refine_data_cache();
+            assert_eq!(
+                refine.in_memory_cache().map(|c| c.bytes_capacity()),
+                config
+                    .enable_table_meta_cache
+                    .then_some(config.vector_index_refine_size)
             );
-            assert!(
-                manager
-                    .get_vector_index_file_cache()
-                    .on_disk_cache()
-                    .is_none()
-            );
+            assert!(refine.on_disk_cache().is_none());
             if config.enable_table_meta_cache {
                 assert_eq!(
                     manager.get_vector_index_meta_cache().items_capacity(),
@@ -1618,12 +1633,6 @@ mod tests {
             manager.set_cache_capacity(name, 12345)?;
             let cache = manager.get_vector_index_cache().unwrap();
             assert_eq!(cache.bytes_capacity(), 12345);
-            assert!(
-                manager
-                    .get_vector_index_file_cache()
-                    .in_memory_cache()
-                    .is_none()
-            );
             manager.set_cache_capacity(name, 0)?;
             assert_eq!(cache.bytes_capacity(), 0);
             assert_eq!(manager.get_vector_index_cache().bytes_capacity(), 0);
@@ -1652,11 +1661,20 @@ mod tests {
             .collect::<Vec<_>>();
         let column = Column::Vector(VectorColumn::Float32((values.into(), 8)));
         let (_, entries) = HNSWIndex::build(4, 8, 0, column, DistanceType::L2)?;
-        let columns = entries.iter().map(|entry| entry.to_column()).collect();
-        let index = HNSWIndex::open(DistanceType::L2, 8, 8, columns)?;
+        // Each component is a single-row binary column.
+        let columns = entries
+            .iter()
+            .map(|entry| entry.to_column())
+            .collect::<Vec<_>>();
+        let components = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect::<Vec<_>>();
+        let index = HNSWIndex::open(DistanceType::L2, 8, 8, &components, None)?;
         let reader = cache.insert("index".to_string(), CachedVectorIndex::new(index));
         manager.release_cache_memory(CacheClearanceLevel::Basic);
         assert!(cache.is_empty());
+        // Still held by the reader, so still accounted for.
         assert!(cache.bytes_size() > 0);
         drop(reader);
         assert_eq!(cache.bytes_size(), 0);
@@ -1664,64 +1682,81 @@ mod tests {
     }
 
     #[test]
-    fn test_vector_index_files_remain_disk_only_when_memory_budget_changes() -> Result<()> {
+    fn test_vector_refine_cache_memory_clearance() -> Result<()> {
+        use crate::VectorIndexFile;
+
+        let manager =
+            CacheManager::try_new(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
+        let pages = manager.get_vector_refine_data_cache().unwrap();
+        for level in [CacheClearanceLevel::Basic, CacheClearanceLevel::Deep] {
+            pages.insert(
+                "a.index:0_fp16_data#bytes=0..9".to_string(),
+                VectorIndexFile::create(
+                    "0_fp16_data#bytes=0..9".to_string(),
+                    Bytes::from_static(b"fp16 page"),
+                ),
+            );
+            assert!(!pages.in_memory_cache().unwrap().is_empty());
+            manager.release_cache_memory(level);
+            assert!(pages.in_memory_cache().unwrap().is_empty());
+        }
+        Ok(())
+    }
+
+    /// The refine cache always has a memory tier (`cache-vector-index-refine-size`,
+    /// 0 disables it). Like other disk tiers, its disk tier
+    /// (`disk-cache-vector-index-data-size`, 0 by default) exists only in EE mode
+    /// and above `TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD`.
+    #[test]
+    fn test_vector_refine_cache_tiers() -> Result<()> {
         use crate::VectorIndexFile;
 
         let temp_dir = TempDir::new()?;
         let cache_path = temp_dir.path().to_string_lossy();
-        let mut config = config_with_disk_cache_enabled(&cache_path);
-        config.vector_index_filter_size = 12345;
-        let manager = CacheManager::try_new(&config, &(1024 * 1024), "test", true)?;
-        let files = manager.get_vector_index_file_cache().unwrap();
-        assert!(files.in_memory_cache().is_none());
-        let disk_capacity = config.disk_cache_vector_index_data_size;
-        assert_eq!(
-            files.on_disk_cache().unwrap().bytes_capacity(),
-            disk_capacity
+        let config = config_with_disk_cache_enabled(&cache_path);
+        assert!(
+            config.disk_cache_vector_index_data_size as usize
+                > TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD
         );
-        let data = Bytes::from_static(b"persisted vector index");
-        files.insert(
-            "index".to_string(),
-            VectorIndexFile::create("graph_links".to_string(), data.clone()),
-        );
-        // Once the padding item leaves the single-worker queue, the first write has completed.
-        files.insert(
-            "padding".to_string(),
-            VectorIndexFile::create("padding".to_string(), Bytes::new()),
-        );
-        files
-            .on_disk_cache()
-            .unwrap()
-            .till_no_pending_items_in_queue();
-        for name in [HYBRID_CACHE_VECTOR_INDEX_FILE, MEMORY_CACHE_VECTOR_INDEX] {
-            for capacity in [54321, 0] {
-                manager.set_cache_capacity(name, capacity)?;
-                assert_eq!(manager.get_vector_index_cache().bytes_capacity(), capacity);
-                let files = manager.get_vector_index_file_cache().unwrap();
-                assert!(files.in_memory_cache().is_none());
-                assert_eq!(
-                    files.on_disk_cache().unwrap().bytes_capacity(),
-                    disk_capacity
-                );
-                assert_eq!(files.get("index").unwrap().data, data);
-            }
+        assert_eq!(CacheConfig::default().disk_cache_vector_index_data_size, 0);
+
+        for ee_mode in [true, false] {
+            let manager = CacheManager::try_new(&config, &(1024 * 1024), "test", ee_mode)?;
+            let pages = manager.get_vector_refine_data_cache().unwrap();
+            assert_eq!(
+                pages.in_memory_cache().unwrap().bytes_capacity(),
+                config.vector_index_refine_size
+            );
+            assert_eq!(
+                pages.on_disk_cache().map(|c| c.bytes_capacity()),
+                ee_mode.then_some(config.disk_cache_vector_index_data_size)
+            );
         }
-        manager.release_cache_memory(CacheClearanceLevel::Basic);
-        assert_eq!(files.get("index").unwrap().data, data);
-        manager.set_allows_disk_cache(false);
+
+        let no_memory = CacheConfig {
+            vector_index_refine_size: 0,
+            ..CacheConfig::default()
+        };
+        let manager = CacheManager::try_new(&no_memory, &(1024 * 1024), "test", false)?;
         assert!(
             manager
-                .get_vector_index_file_cache()
-                .on_disk_cache()
+                .get_vector_refine_data_cache()
+                .in_memory_cache()
                 .is_none()
         );
-        manager.set_allows_disk_cache(true);
+
+        // Resizing the HNSW object cache leaves cached pages alone.
+        let manager =
+            CacheManager::try_new(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
+        let pages = manager.get_vector_refine_data_cache().unwrap();
+        let data = Bytes::from_static(b"fp16 page");
+        pages.insert(
+            "a.index:0_fp16_data#bytes=0..9".to_string(),
+            VectorIndexFile::create("0_fp16_data#bytes=0..9".to_string(), data.clone()),
+        );
+        manager.set_cache_capacity(MEMORY_CACHE_VECTOR_INDEX, 0)?;
         assert_eq!(
-            manager
-                .get_vector_index_file_cache()
-                .get("index")
-                .unwrap()
-                .data,
+            pages.get("a.index:0_fp16_data#bytes=0..9").unwrap().data,
             data
         );
         Ok(())

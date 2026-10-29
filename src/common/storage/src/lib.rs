@@ -98,6 +98,9 @@ pub use retry_stats::RetryStats;
 
 mod runtime_layer;
 
+mod s3_region;
+pub use s3_region::auto_detect_storage_params;
+
 mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;

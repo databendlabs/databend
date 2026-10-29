@@ -23,7 +23,7 @@ use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
 
 pub trait BufferReadStringExt {
     fn read_quoted_text(&mut self, buf: &mut Vec<u8>, quota: u8) -> Result<()>;
-    fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()>;
+    fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>, delimiters: &[u8]) -> Result<()>;
     fn fast_read_quoted_text(
         &mut self,
         buf: &mut Vec<u8>,
@@ -85,7 +85,7 @@ where T: AsRef<[u8]>
         ))
     }
 
-    fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>) -> Result<()> {
+    fn read_escaped_string_text(&mut self, buf: &mut Vec<u8>, delimiters: &[u8]) -> Result<()> {
         loop {
             self.keep_read(buf, |f| f != b'\\');
             if self.ignore_byte(b'\\') {
@@ -107,7 +107,9 @@ where T: AsRef<[u8]>
                     }
                     _ => {
                         let e = unescape(c);
-                        if !is_control_ascii(e) {
+                        // TEXT escapes configured delimiters as `\<delimiter>`.
+                        // Preserve unknown escapes that are not delimiters.
+                        if !is_control_ascii(e) && !delimiters.contains(&c) {
                             buf.push(b'\\');
                         }
                         buf.push(e);

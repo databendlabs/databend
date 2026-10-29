@@ -45,6 +45,7 @@ use databend_common_expression::variant_transform::contains_variant;
 use databend_common_expression::variant_transform::transform_variant;
 #[cfg_attr(not(feature = "python-udf"), allow(unused_imports))]
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
@@ -52,22 +53,37 @@ use databend_common_sql::plans::UDFType;
 use databend_common_storage::init_stage_operator;
 
 use self::venv::TempDir;
+#[cfg(feature = "python-udf")]
+use super::python_worker::python_function;
+#[cfg(feature = "python-udf")]
+use super::python_worker::PythonQueryWorkers;
+#[cfg(feature = "python-udf")]
+use super::python_worker::PythonRuntime;
+#[cfg(feature = "python-udf")]
+use super::python_worker::PythonWorkerManager;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
+use super::script_udf_limits::ScriptUdfLimits;
+use super::script_udf_limits::new_js_runtime;
+use super::script_udf_limits::wasm_runtime_config;
 use crate::ScriptUdfFunctionDesc;
 
 pub enum ScriptRuntime {
     JavaScript(JsRuntimePool),
     WebAssembly(arrow_udf_runtime::wasm::Runtime),
     #[cfg(feature = "python-udf")]
-    Python(python_pool::PyRuntimePool),
+    Python(Arc<PythonRuntime>),
 }
 
 static PY_VERSION: LazyLock<String> =
     LazyLock::new(|| venv::detect_python_version().unwrap_or("3.12".to_string()));
 
 impl ScriptRuntime {
-    pub fn try_create(func: &ScriptUdfFunctionDesc, _temp_dir: Option<TempDir>) -> Result<Self> {
+    pub fn try_create(
+        func: &ScriptUdfFunctionDesc,
+        _temp_dir: Option<TempDir>,
+        #[cfg(feature = "python-udf")] query: &Arc<PythonQueryWorkers>,
+    ) -> Result<Self> {
         let UDFType::Script(deref!(UDFScriptCode { language, code, .. })) = &func.udf_type else {
             unreachable!()
         };
@@ -84,7 +100,9 @@ impl ScriptRuntime {
             }
             UDFLanguage::WebAssembly => {
                 let start = std::time::Instant::now();
-                let runtime = arrow_udf_runtime::wasm::Runtime::new(code).map_err(|err| {
+                let config = wasm_runtime_config(&ScriptUdfLimits::current());
+                let runtime = arrow_udf_runtime::wasm::Runtime::with_config(code, config)
+                    .map_err(|err| {
                     ErrorCode::UDFRuntimeError(format!(
                         "Failed to create WASM runtime for module: {err}"
                     ))
@@ -100,26 +118,31 @@ impl ScriptRuntime {
             UDFLanguage::Python => {
                 let user_code = String::from_utf8(code.to_vec())?;
                 let code = if let Some(temp_dir) = &_temp_dir {
-                    let import_dir = temp_dir.path().display();
-                    let mut script = String::from("import sys\n");
-                    script.push_str(&format!(
-                        r#"sys._xoptions['databend_import_directory'] = '{dir}'
-if '{dir}' not in sys.path:
-    sys.path.append('{dir}')
-"#,
-                        dir = import_dir,
-                    ));
+                    // Each worker executes in its own dependency copy. Do not
+                    // bake the parent's template directory into sys.path.
+                    let mut script = String::from(
+                        "import os, sys\n\
+                         _databend_import_dir = os.getcwd()\n\
+                         sys._xoptions['databend_import_directory'] = _databend_import_dir\n\
+                         if _databend_import_dir not in sys.path:\n    sys.path.append(_databend_import_dir)\n",
+                    );
 
                     let stage_paths = Self::collect_stage_sys_paths(func, temp_dir);
                     if !stage_paths.is_empty() {
-                        script.push_str("for _databend_zip in (");
+                        script.push_str("for _databend_zip in [");
                         for (idx, path) in stage_paths.iter().enumerate() {
                             if idx > 0 {
                                 script.push_str(", ");
                             }
-                            script.push_str(&format!("{path:?}"));
+                            let relative = std::path::Path::new(path)
+                                .strip_prefix(temp_dir.path())
+                                .map_err(|err| ErrorCode::UDFRuntimeError(err.to_string()))?;
+                            script.push_str(&format!(
+                                "os.path.join(_databend_import_dir, {:?})",
+                                relative.to_string_lossy(),
+                            ));
                         }
-                        script.push_str("):\n    if _databend_zip not in sys.path:\n        sys.path.append(_databend_zip)\ndel _databend_zip\n");
+                        script.push_str("]:\n    if _databend_zip not in sys.path:\n        sys.path.append(_databend_zip)\ndel _databend_zip\n");
                     }
 
                     script.push_str(&user_code);
@@ -139,14 +162,18 @@ if '{dir}' not in sys.path:
                     }
                 }
 
-                let builder = PyRuntimeBuilder {
-                    name: func.name.clone(),
-                    handler: func.func_name.clone(),
+                let function = python_function(
+                    func.name.clone(),
+                    func.func_name.clone(),
                     code,
-                    output_type: func.data_type.as_ref().clone(),
-                    counter: Default::default(),
-                };
-                Ok(Self::Python(python_pool::PyRuntimePool::new(builder)))
+                    arrow_field_from_data_type(&func.name, *func.data_type.clone()),
+                    None,
+                );
+                Ok(Self::Python(PythonRuntime::new(
+                    function,
+                    query.clone(),
+                    _temp_dir,
+                )?))
             }
             #[cfg(not(feature = "python-udf"))]
             UDFLanguage::Python => Err(ErrorCode::EnterpriseFeatureNotEnable(
@@ -172,22 +199,10 @@ if '{dir}' not in sys.path:
                 })
             })?,
             #[cfg(feature = "python-udf")]
-            ScriptRuntime::Python(pool) => {
-                let batch = pool
-                    .call(|runtime| runtime.call(&func.name, input_batch))
-                    .map_err(|err| {
-                        ErrorCode::UDFRuntimeError(format!(
-                            "Python UDF {:?} execution failed: {err}",
-                            func.name
-                        ))
-                    })?;
-                if let Some(message) = Self::python_error_from_batch(func, &batch)? {
-                    return Err(ErrorCode::UDFRuntimeError(format!(
-                        "Python UDF {:?} execution failed: {}",
-                        func.name, message
-                    )));
-                }
-                batch
+            ScriptRuntime::Python(_) => {
+                return Err(ErrorCode::Internal(
+                    "Python UDF requires an async transform",
+                ));
             }
             ScriptRuntime::WebAssembly(runtime) => {
                 let return_type = func.data_type.as_ref().clone();
@@ -492,8 +507,9 @@ impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder
 
     fn build(&self) -> Result<arrow_udf_runtime::javascript::Runtime> {
         let start = std::time::Instant::now();
+        let limits = ScriptUdfLimits::current();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            arrow_udf_runtime::javascript::Runtime::new()
+            new_js_runtime(&limits)
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
@@ -539,20 +555,8 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
 type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
 
 #[cfg(feature = "python-udf")]
-pub struct PyRuntimeBuilder {
-    name: String,
-    handler: String,
-    code: String,
-    output_type: DataType,
-
-    counter: AtomicUsize,
-}
-
-#[cfg(feature = "python-udf")]
-mod python_pool {
-    use super::*;
-
-    const RESTRICTED_PYTHON_CODE: &str = r#"
+pub(super) mod python_pool {
+    pub(crate) const RESTRICTED_PYTHON_CODE: &str = r#"
 import os
 import sys
 import sysconfig
@@ -690,36 +694,6 @@ if "DATABEND_RESTRICTED_PYTHON" not in sys._xoptions:
         module.copy_context = copy_context
         sys.modules["_contextvars"] = module
 "#;
-
-    impl RuntimeBuilder<arrow_udf_runtime::python::Runtime> for PyRuntimeBuilder {
-        type Error = ErrorCode;
-
-        fn build(&self) -> Result<arrow_udf_runtime::python::Runtime> {
-            let start = std::time::Instant::now();
-            let mut runtime = arrow_udf_runtime::python::Builder::default()
-                .safe_codes(RESTRICTED_PYTHON_CODE.to_string())
-                .build()?;
-            runtime.add_function_with_handler(
-                &self.name,
-                arrow_field_from_data_type(&self.name, self.output_type.clone()),
-                arrow_udf_runtime::CallMode::CalledOnNullInput,
-                &self.code,
-                &self.handler,
-            )?;
-
-            log::info!(
-                "Init Python UDF runtime for {:?} #{} took: {:?}",
-                self.name,
-                self.counter
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-                start.elapsed()
-            );
-
-            Ok(runtime)
-        }
-    }
-
-    pub type PyRuntimePool = Pool<arrow_udf_runtime::python::Runtime, PyRuntimeBuilder>;
 }
 
 pub struct TransformUdfScript {
@@ -762,10 +736,61 @@ impl Transform for TransformUdfScript {
     }
 }
 
+#[async_trait::async_trait]
+impl AsyncTransform for TransformUdfScript {
+    const NAME: &'static str = "AsyncUDFScriptTransform";
+
+    async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        if data_block.is_empty() {
+            return Ok(data_block);
+        }
+        for func in &self.funcs {
+            let entries = self.prepare_block_entries(func, &data_block)?;
+            let input = self.create_input_batch(entries, data_block.num_rows())?;
+            let (runtime, _) = self.script_runtimes.get(&func.name).unwrap();
+            let result = match runtime.as_ref() {
+                #[cfg(feature = "python-udf")]
+                ScriptRuntime::Python(runtime) => {
+                    let batch = runtime.call(&input).await?;
+                    if let Some(message) = ScriptRuntime::python_error_from_batch(func, &batch)? {
+                        return Err(ErrorCode::UDFRuntimeError(format!(
+                            "Python UDF {:?} execution failed: {message}",
+                            func.name,
+                        )));
+                    }
+                    batch
+                }
+                _ => tokio::task::block_in_place(|| runtime.handle_execution(func, &input))?,
+            };
+            self.update_datablock(func, result, &mut data_block)?;
+        }
+        Ok(data_block)
+    }
+}
+
 type RuntimeTimeRes = BTreeMap<String, (Arc<ScriptRuntime>, Option<TempDir>)>;
 
 impl TransformUdfScript {
     pub fn init_runtime(funcs: &[ScriptUdfFunctionDesc]) -> Result<RuntimeTimeRes> {
+        Self::init_runtime_inner(
+            funcs,
+            #[cfg(feature = "python-udf")]
+            PythonWorkerManager::instance().query("default", 1),
+        )
+    }
+
+    #[cfg(feature = "python-udf")]
+    pub fn init_runtime_for_query(
+        funcs: &[ScriptUdfFunctionDesc],
+        query: Arc<PythonQueryWorkers>,
+    ) -> Result<RuntimeTimeRes> {
+        Self::init_runtime_inner(funcs, query)
+    }
+
+    fn init_runtime_inner(
+        funcs: &[ScriptUdfFunctionDesc],
+        #[cfg(feature = "python-udf")] query: Arc<PythonQueryWorkers>,
+    ) -> Result<RuntimeTimeRes> {
         let mut script_runtimes = BTreeMap::new();
         for func in funcs {
             let code = match &func.udf_type {
@@ -795,9 +820,13 @@ impl TransformUdfScript {
                         let entry = venv::cache_entry(key);
                         // Only this environment is serialized. Never hold the global
                         // cache lock across install, stage reads, or archive restoration.
-                        Ok(Some(entry.get_or_init(|| {
+                        Ok(Some(entry.get_private(|| {
                             let temp_dir = venv::create_venv(PY_VERSION.as_str())?;
-                            venv::install_deps(temp_dir.path(), &dependencies)?;
+                            venv::install_deps(
+                                temp_dir.path(),
+                                &dependencies,
+                                ScriptUdfLimits::current().pip_only_binary,
+                            )?;
 
                             if !imports_stage_info.is_empty() {
                                 let imports_stage_info = imports_stage_info.clone();
@@ -835,7 +864,13 @@ impl TransformUdfScript {
             };
 
             if let Entry::Vacant(entry) = script_runtimes.entry(func.name.clone()) {
-                let runtime = ScriptRuntime::try_create(func, temp_dir.clone()).map_err(|err| {
+                let runtime = ScriptRuntime::try_create(
+                    func,
+                    temp_dir.clone(),
+                    #[cfg(feature = "python-udf")]
+                    &query,
+                )
+                .map_err(|err| {
                     ErrorCode::UDFDataError(format!(
                         "Failed to create UDF runtime for language {:?} with error: {err}",
                         code.language
@@ -1034,7 +1069,8 @@ impl TransformUdfScript {
     }
 }
 
-mod venv {
+pub(super) mod venv {
+    use std::ffi::OsString;
     use std::fs;
     use std::fs::File;
     use std::io;
@@ -1115,6 +1151,32 @@ mod venv {
             &self.inner.path
         }
 
+        /// Copy executable dependencies, never writable hardlinks or live
+        /// directories. Archive extraction already materializes regular files.
+        #[cfg(any(feature = "python-udf", test))]
+        pub fn private_copy(&self) -> Result<Self, String> {
+            let copy = Self::new()?;
+            for entry in WalkDir::new(self.path()).min_depth(1) {
+                let entry = entry.map_err(|err| err.to_string())?;
+                let relative = entry
+                    .path()
+                    .strip_prefix(self.path())
+                    .map_err(|err| err.to_string())?;
+                let target = copy.path().join(relative);
+                if entry.file_type().is_dir() {
+                    fs::create_dir_all(target).map_err(|err| err.to_string())?;
+                } else if entry.file_type().is_file() {
+                    fs::copy(entry.path(), target).map_err(|err| err.to_string())?;
+                } else {
+                    return Err(format!(
+                        "Unexpected Python dependency file: {:?}",
+                        entry.path()
+                    ));
+                }
+            }
+            Ok(copy)
+        }
+
         fn downgrade(&self) -> WeakTempDir {
             WeakTempDir {
                 inner: Arc::downgrade(&self.inner),
@@ -1146,16 +1208,137 @@ mod venv {
         }
     }
 
-    pub fn install_deps(temp_dir_path: &Path, deps: &[String]) -> Result<(), String> {
+    /// Environment variables a child process may inherit from the query node.
+    /// Everything else (cloud credentials, tokens, service configuration) is
+    /// withheld. `prefixes` match variable families such as `LC_*`.
+    pub fn allowed_env(names: &[&str], prefixes: &[&str]) -> Vec<(OsString, OsString)> {
+        std::env::vars_os()
+            .filter(|(key, _)| {
+                key.to_str().is_some_and(|key| {
+                    names.contains(&key) || prefixes.iter().any(|prefix| key.starts_with(prefix))
+                })
+            })
+            .collect()
+    }
+
+    /// Variables any Python child needs to locate itself and its locale.
+    pub const PYTHON_ENV: &[&str] = &[
+        "PATH",
+        "HOME",
+        "LANG",
+        "LANGUAGE",
+        "TZ",
+        "TMPDIR",
+        "LD_LIBRARY_PATH",
+        "DYLD_LIBRARY_PATH",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+    ];
+
+    /// Operator-provided pip configuration: index mirrors, proxies and CAs.
+    const PIP_ENV: &[&str] = &[
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy",
+        "all_proxy",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    ];
+
+    /// Accept only `name[extras] <version specifiers>` requirements. Direct
+    /// references (`pkg @ url`), URLs, local paths, environment markers and
+    /// anything that pip could parse as an option are rejected: they would let
+    /// a UDF author fetch code from arbitrary or internal network locations
+    /// or read local files on the query node.
+    pub fn validate_requirement(requirement: &str) -> Result<(), String> {
+        let invalid = || {
+            Err(format!(
+                "Invalid Python UDF dependency {requirement:?}: only 'name[extras]<version specifiers>' from the configured package index is allowed"
+            ))
+        };
+        let requirement = requirement.trim();
+        if requirement.is_empty() || requirement.len() > 256 {
+            return invalid();
+        }
+        let name_len = requirement
+            .find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')))
+            .unwrap_or(requirement.len());
+        let (name, mut rest) = requirement.split_at(name_len);
+        if !name.starts_with(|c: char| c.is_ascii_alphanumeric())
+            || !name.ends_with(|c: char| c.is_ascii_alphanumeric())
+        {
+            return invalid();
+        }
+        rest = rest.trim_start();
+        if let Some(extras) = rest.strip_prefix('[') {
+            let Some((extras, tail)) = extras.split_once(']') else {
+                return invalid();
+            };
+            if !extras.chars().all(|c| {
+                c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ',' | ' ')
+            }) {
+                return invalid();
+            }
+            rest = tail.trim_start();
+        }
+        if !rest.is_empty() && !rest.starts_with(['<', '>', '=', '!', '~']) {
+            return invalid();
+        }
+        // Defense in depth on top of `--`: no token may look like an option.
+        if requirement
+            .split(|c: char| c.is_whitespace() || matches!(c, '[' | ','))
+            .any(|token| token.starts_with('-'))
+        {
+            return invalid();
+        }
+        if !rest.chars().all(|c| {
+            c.is_ascii_alphanumeric()
+                || matches!(
+                    c,
+                    '<' | '>' | '=' | '!' | '~' | ',' | '.' | '*' | '+' | '-' | '_' | ' '
+                )
+        }) {
+            return invalid();
+        }
+        Ok(())
+    }
+
+    pub fn install_deps(
+        temp_dir_path: &Path,
+        deps: &[String],
+        only_binary: bool,
+    ) -> Result<(), String> {
         if deps.is_empty() {
             return Ok(());
         }
+        for dep in deps {
+            validate_requirement(dep)?;
+        }
 
-        let target_path = temp_dir_path.display().to_string();
-        let status = Command::new("python")
+        let mut command = Command::new("python");
+        command
             .args(["-m", "pip", "install"])
-            .args(deps)
-            .args(["--target", &target_path])
+            .args(["--no-input", "--disable-pip-version-check", "--target"])
+            .arg(temp_dir_path);
+        if only_binary {
+            // Source distributions execute build scripts on the query node.
+            command.arg("--only-binary=:all:");
+        }
+        // `--` ends option parsing: a requirement can never become a pip option.
+        command.arg("--").args(deps.iter().map(|dep| dep.trim()));
+        let status = command
+            .env_clear()
+            .envs(allowed_env(&[PYTHON_ENV, PIP_ENV].concat(), &["LC_", "PIP_"]))
+            .current_dir(temp_dir_path)
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
@@ -1164,6 +1347,8 @@ mod venv {
         if status.success() {
             log::info!("Dependency installation success {}", deps.join(", "));
             Ok(())
+        } else if only_binary {
+            Err("Dependency installation failed (only wheels are allowed: 'python_udf_pip_only_binary' is enabled)".into())
         } else {
             Err("Dependency installation failed".into())
         }
@@ -1325,6 +1510,19 @@ mod venv {
                     archive_path,
                 }))),
             }
+        }
+
+        // Only immutable archives are shared with executable UDFs. Every
+        // runtime receives an extracted private directory, never writable links.
+        pub fn get_private(
+            &self,
+            init: impl FnOnce() -> databend_common_exception::Result<(TempDir, PathBuf)>,
+        ) -> databend_common_exception::Result<TempDir> {
+            let _cached = self.get_or_init(init)?;
+            let env = self.env.lock();
+            let dir = TempDir::new()?;
+            restore_env_into(&env.as_ref().unwrap().archive_path, dir.path())?;
+            Ok(dir)
         }
 
         pub fn get_or_init(
@@ -1688,6 +1886,50 @@ mod tests {
             assert_eq!(restored.column(0).data_type(), &ArrowDataType::LargeBinary);
             assert!(restored.column(0).is_null(1));
         }
+    }
+
+    #[test]
+    fn test_validate_python_requirement() {
+        for accepted in [
+            "numpy",
+            "numpy==1.26.4",
+            " pandas>=2,<3 ",
+            "requests[socks]>=2.0",
+            "requests [socks, security] ~= 2.31",
+            "scikit-learn!=1.4.0",
+            "Foo.Bar_baz-1==1.0.post1+local",
+        ] {
+            venv::validate_requirement(accepted)
+                .unwrap_or_else(|err| panic!("{accepted:?} must be accepted: {err}"));
+        }
+        for rejected in [
+            "",
+            "   ",
+            "--index-url=http://127.0.0.1/simple",
+            "-r/etc/passwd",
+            "-e.",
+            "pkg==1.0 --index-url http://127.0.0.1/simple",
+            "pkg[--pre]",
+            "pkg @ https://example.com/pkg.whl",
+            "pkg@https://example.com/pkg.whl",
+            "git+https://example.com/repo.git",
+            "https://example.com/pkg.whl",
+            "file:///etc/passwd",
+            "./local_dir",
+            "/etc/passwd",
+            "..\\pkg",
+            "pkg; os_name == 'posix'",
+            "pkg[extra",
+            "pkg-",
+            "pkg 1.0",
+            "pkg==1.0\nother",
+        ] {
+            assert!(
+                venv::validate_requirement(rejected).is_err(),
+                "{rejected:?} must be rejected"
+            );
+        }
+        assert!(venv::validate_requirement(&"a".repeat(257)).is_err());
     }
 
     #[test]

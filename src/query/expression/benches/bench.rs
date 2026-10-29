@@ -293,7 +293,9 @@ mod escaped_like {
 fn concat_string_offset(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
     let (_s, b) = generate_random_string_data(&mut rng, length);
-    let bin_col = (0..5).map(|_| BinaryType::from_data(b.clone()));
+    let bin_col = (0..5)
+        .map(|_| BinaryType::from_data(b.clone()))
+        .collect::<Vec<_>>();
 
     bencher.bench(|| {
         Column::concat_columns(bin_col.clone()).unwrap();
@@ -304,7 +306,9 @@ fn concat_string_offset(bencher: divan::Bencher, length: usize) {
 fn concat_string_view(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
     let (s, _b) = generate_random_string_data(&mut rng, length);
-    let str_col = (0..5).map(|_| StringType::from_data(s.clone()));
+    let str_col = (0..5)
+        .map(|_| StringType::from_data(s.clone()))
+        .collect::<Vec<_>>();
     bencher.bench(|| {
         Column::concat_columns(str_col.clone()).unwrap();
     });

@@ -48,6 +48,7 @@ use crate::BindContext;
 use crate::MetadataRef;
 use crate::binder::AliasLookup;
 use crate::optimizer::ir::SExpr;
+use crate::planner::expression::UDFValidator;
 use crate::planner::expression::UdfValidationConfig;
 use crate::plans::DictGetFunctionArgument;
 
@@ -373,6 +374,18 @@ pub trait UdfAdapter: Clone {
         Err(missing_type_check_adapter_dependency("udf server folding"))
     }
 
+    fn validate_udf_server(&self, definition: &UDFServer) -> Result<()> {
+        if !definition.external_access_integrations.is_empty() {
+            return Err(missing_type_check_adapter_dependency(
+                "external access validation",
+            ));
+        }
+        UDFValidator::is_udf_server_allowed_with_config(
+            &definition.address,
+            &self.validation_config()?,
+        )
+    }
+
     fn validation_config(&self) -> Result<UdfValidationConfig> {
         Err(missing_type_check_adapter_dependency(
             "udf validation config",
@@ -509,8 +522,15 @@ pub struct TypeChecker<'a, A> {
     // This prevents infinite recursion when a masking policy references the masked column itself.
     in_masking_policy: bool,
     apply_masking_policy: bool,
+    /// Only the ScalarBinder for a SELECT WHERE enables this. New binders used by
+    /// subqueries, JOIN, HAVING, and policy expressions do not inherit it.
+    masking_where_aliases: Option<&'a [(String, Expr)]>,
+    resolving_masking_where_aliases: Vec<String>,
     forbid_virtual_computed_column: bool,
 }
+
+#[cfg(test)]
+mod masking_where_tests;
 
 #[cfg(test)]
 mod diagnostic_tests {

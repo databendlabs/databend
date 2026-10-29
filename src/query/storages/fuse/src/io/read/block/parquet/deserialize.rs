@@ -13,11 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use arrow_array::RecordBatchReader;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::FieldRef;
+use arrow_schema::Fields;
 use arrow_schema::Schema;
 use databend_common_expression::ColumnId;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::Compression;
 use parquet::arrow::ArrowSchemaConverter;
@@ -30,16 +35,55 @@ use parquet::basic::Compression as ParquetCompression;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 
+/// Arrow fields of `original_schema` with the top-level string fields in `dictionary_columns`
+/// typed `Dictionary(UInt32, Utf8)`. Passed as the hint of [`column_chunks_to_record_batch`],
+/// it makes the Parquet reader preserve the dictionary encoding of these column chunks instead
+/// of expanding it. `None` if there is no such field.
+pub fn dictionary_hint_fields(
+    original_schema: &TableSchema,
+    dictionary_columns: impl IntoIterator<Item = ColumnId>,
+) -> Option<Fields> {
+    let mut fields: Option<Vec<FieldRef>> = None;
+    for column_id in dictionary_columns {
+        // The type check guards against a nested field sharing the column id of its leaf.
+        let Some(index) = original_schema.fields().iter().position(|field| {
+            field.column_id() == column_id && *field.data_type() == TableDataType::String
+        }) else {
+            continue;
+        };
+        let fields = fields.get_or_insert_with(|| {
+            Schema::from(original_schema)
+                .fields()
+                .iter()
+                .cloned()
+                .collect()
+        });
+        let dictionary = ArrowDataType::Dictionary(
+            Box::new(ArrowDataType::UInt32),
+            Box::new(ArrowDataType::Utf8),
+        );
+        fields[index] = Arc::new(fields[index].as_ref().clone().with_data_type(dictionary));
+    }
+    fields.map(Fields::from)
+}
+
 /// The returned record batch contains all deserialized columns in the same nested structure as the original schema.
+///
+/// `hint_fields` overrides the Arrow fields the columns are read as, see
+/// [`dictionary_hint_fields`]; by default they are the fields of `original_schema`. A dictionary
+/// hint only applies to column chunks that are dictionary encoded: the others are read as their
+/// regular type, as the reader would otherwise rebuild a dictionary row by row.
 pub fn column_chunks_to_record_batch(
     original_schema: &TableSchema,
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
     selection: Option<RowSelection>,
+    hint_fields: Option<&Fields>,
 ) -> databend_common_exception::Result<RecordBatch> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
+    let hint_fields = hint_fields.unwrap_or(arrow_schema.fields());
 
     let column_id_to_dfs_id = original_schema
         .to_leaf_column_ids()
@@ -64,11 +108,31 @@ pub fn column_chunks_to_record_batch(
         }
     }
     projection_mask.sort_unstable();
+
+    let mut adjusted_fields: Option<Vec<FieldRef>> = None;
+    for (index, field) in hint_fields.iter().enumerate() {
+        let column_id = original_schema.fields()[index].column_id();
+        if matches!(field.data_type(), ArrowDataType::Dictionary(..))
+            && column_id_to_dfs_id
+                .get(&column_id)
+                // Whether a column chunk is dictionary encoded was decided when writing it, from
+                // its distinct values (dictionary disabled for high NDV, or the arrow-rs writer
+                // falling back to plain once the dictionary page is too large), and shows as a
+                // leading dictionary page. Its header tells whether reading as a dictionary pays.
+                .is_some_and(|dfs_id| !builder.starts_with_dictionary_page(*dfs_id))
+        {
+            adjusted_fields.get_or_insert_with(|| hint_fields.to_vec())[index] =
+                arrow_schema.fields()[index].clone();
+        }
+    }
+    let adjusted_fields = adjusted_fields.map(Fields::from);
+    let hint_fields = adjusted_fields.as_ref().unwrap_or(hint_fields);
+
     let row_group = Box::new(builder.build());
     let field_levels = parquet_to_arrow_field_levels(
         &parquet_schema,
         ProjectionMask::leaves(&parquet_schema, projection_mask),
-        Some(arrow_schema.fields()),
+        Some(hint_fields),
     )?;
     // The reader uses batch_size to preallocate column buffers retained by the output.
     let batch_size = selection.as_ref().map_or(num_rows, RowSelection::row_count);
@@ -92,8 +156,6 @@ pub fn column_chunks_to_record_batch(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use arrow_array::Int64Array;
     use bytes::Bytes;
     use databend_common_expression::TableDataType;
@@ -157,6 +219,7 @@ mod tests {
                 &column_chunks,
                 &Compression::None,
                 selection,
+                None,
             )?;
             let values = record
                 .column(0)
@@ -170,6 +233,66 @@ mod tests {
                 capacity <= expected.len().max(8) * size_of::<i64>(),
                 "{} selected rows retained {capacity} bytes",
                 expected.len(),
+            );
+        }
+        Ok(())
+    }
+
+    /// A dictionary hint keeps the dictionary of a dictionary encoded column chunk, and reads a
+    /// column chunk without a dictionary page as its regular type.
+    #[test]
+    fn test_dictionary_hint_follows_column_chunk() -> databend_common_exception::Result<()> {
+        let num_rows = 1000;
+        let schema = TableSchema::new(vec![TableField::new("s", TableDataType::String)]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let values = (0..num_rows)
+            .map(|i| format!("v{}", i % 3))
+            .collect::<Vec<_>>();
+        let batch = RecordBatch::try_new(arrow_schema.clone(), vec![Arc::new(
+            arrow_array::StringViewArray::from(values.clone()),
+        )])?;
+        let column_id = schema.field(0).column_id();
+        let hint = dictionary_hint_fields(&schema, [column_id]).unwrap();
+
+        for dictionary_enabled in [true, false] {
+            let properties = WriterProperties::builder()
+                .set_dictionary_enabled(dictionary_enabled)
+                .build();
+            let mut bytes = Vec::new();
+            let mut writer =
+                ArrowWriter::try_new(&mut bytes, arrow_schema.clone(), Some(properties))?;
+            writer.write(&batch)?;
+            let metadata = writer.close()?;
+            let (offset, length) = metadata.row_group(0).column(0).byte_range();
+            let bytes = Bytes::from(bytes);
+            let column_chunks = HashMap::from([(
+                column_id,
+                DataItem::RawData(Buffer::from(
+                    bytes.slice(offset as usize..(offset + length) as usize),
+                )),
+            )]);
+
+            let record = column_chunks_to_record_batch(
+                &schema,
+                num_rows,
+                &column_chunks,
+                &Compression::None,
+                None,
+                Some(&hint),
+            )?;
+            let column = record.column(0);
+            assert_eq!(
+                matches!(column.data_type(), ArrowDataType::Dictionary(..)),
+                dictionary_enabled,
+                "dictionary_enabled: {dictionary_enabled}"
+            );
+            let decoded = databend_common_expression::Column::from_arrow_rs(
+                column.clone(),
+                &databend_common_expression::types::DataType::String,
+            )?;
+            assert_eq!(
+                decoded,
+                <databend_common_expression::types::StringType as databend_common_expression::FromData<_>>::from_data(values.clone())
             );
         }
         Ok(())

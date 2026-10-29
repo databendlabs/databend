@@ -269,3 +269,450 @@ select v from t where cast(v as int32) <= 10 group by v order by v;
 
 statement ok
 drop table t;
+
+# Low-cardinality Parquet strings exercise dictionary LIKE when encoded columns and the
+# deserialized column cache are enabled. The expression tests also force Dict input directly.
+statement ok
+CREATE OR REPLACE TABLE encoded_like(k UINT64 NOT NULL, url STRING NOT NULL, nullable_url STRING NULL) STORAGE_FORMAT = 'parquet' ENABLE_PARQUET_DICTIONARY = true;
+
+statement ok
+INSERT INTO encoded_like SELECT number, url, IF(number % 8 IN (2, 4), NULL, url) FROM (SELECT number, ['xxx/a', 'yyy/b', 'xxx/a', 'xxx/c', '', 'xxx_100%', 'yyy/b', 'xxx/c'][number % 8 + 1]::STRING AS url FROM numbers(8000));
+
+statement ok
+SET enable_selector_executor = 1;
+
+statement ok
+SET enable_encoded_columns = 0;
+
+statement ok
+CREATE OR REPLACE TABLE encoded_like_expected AS SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2);
+
+query I
+SELECT count(*) FROM encoded_like_expected;
+----
+5000
+
+statement ok
+SET enable_encoded_columns = 1;
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE 'xxx%';
+----
+5000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url NOT LIKE 'xxx%';
+----
+3000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE 'xxx/a';
+----
+2000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE 'xxx!_%' ESCAPE '!';
+----
+1000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE 'xxx/_';
+----
+4000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE '%';
+----
+8000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url NOT LIKE '%';
+----
+0
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE '';
+----
+1000
+
+query I
+SELECT count(*) FROM encoded_like WHERE nullable_url LIKE 'xxx%';
+----
+4000
+
+query I
+SELECT count(*) FROM encoded_like WHERE nullable_url NOT LIKE 'xxx%';
+----
+2000
+
+query I
+SELECT count(*) FROM encoded_like WHERE nullable_url LIKE 'xxx%' OR k % 8 = 2;
+----
+5000
+
+# Consumers after the scan must still see the original NULL semantics.
+query TI
+SELECT nullable_url, count(*) FROM encoded_like GROUP BY nullable_url ORDER BY nullable_url NULLS FIRST;
+----
+NULL 2000
+xxx/a 1000
+xxx/c 2000
+xxx_100% 1000
+yyy/b 2000
+
+query I
+SELECT count(*) FROM encoded_like l JOIN encoded_like r ON l.k = r.k AND l.nullable_url = r.nullable_url WHERE l.url LIKE 'xxx%';
+----
+4000
+
+# `k` is unique, so set difference compares the rows exactly (`EXCEPT ALL` is not supported).
+query I
+SELECT count(*) FROM (SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2) EXCEPT SELECT k, url FROM encoded_like_expected);
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT k, url FROM encoded_like_expected EXCEPT SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2));
+----
+0
+
+statement ok
+UNSET enable_encoded_columns;
+
+statement ok
+UNSET enable_selector_executor;
+
+statement ok
+DROP TABLE encoded_like_expected;
+
+statement ok
+DROP TABLE encoded_like;
+
+# Other encoded column paths: frame of reference comparisons, decimal arithmetic, grouping by
+# codes, nullable columns, joins and output. Every query runs with the setting off and on, and both
+# runs expect the same results.
+statement ok
+CREATE OR REPLACE TABLE encoded_columns(k UINT64 NOT NULL, i INT64 NOT NULL, d DATE NOT NULL, ts TIMESTAMP NOT NULL,
+    p DECIMAL(15, 2) NOT NULL, q DECIMAL(15, 2) NOT NULL, disc DECIMAL(15, 2) NOT NULL, s STRING NOT NULL,
+    g INT32 NOT NULL, f DOUBLE NOT NULL, ni INT64 NULL, np DECIMAL(15, 2) NULL, ns STRING NULL, hs STRING NOT NULL)
+    STORAGE_FORMAT = 'parquet' ENABLE_PARQUET_DICTIONARY = true;
+
+statement ok
+INSERT INTO encoded_columns SELECT number, 1000000 + number % 3000, '2024-01-01'::DATE + (number % 90)::INT,
+    '2024-01-01 00:00:00'::TIMESTAMP + (number % 500) * 60000000, 900 + (number % 5000)::DECIMAL(15, 2) / 100,
+    (number % 50 + 1)::DECIMAL(15, 2), (number % 11)::DECIMAL(15, 2) / 100, ['AIR', 'MAIL', 'SHIP', 'RAIL', 'TRUCK'][number % 5 + 1],
+    number % 7, IF(number % 3 = 0, -(0.0::DOUBLE), IF(number % 3 = 1, 0.0::DOUBLE, 1.5::DOUBLE)),
+    IF(number % 6 = 0, NULL, 5000 + number % 300), IF(number % 4 = 1, NULL, (number % 900)::DECIMAL(15, 2) / 10),
+    IF(number % 5 = 2, NULL, ['a', 'b', 'c'][number % 3 + 1]), 'u' || (number % 9000)::STRING
+FROM numbers(20000);
+
+statement ok
+INSERT INTO encoded_columns SELECT number + 50000, 1000000 + number % 3000 + 50000, '2024-01-01'::DATE + (number % 90)::INT,
+    '2024-01-01 00:00:00'::TIMESTAMP + (number % 500) * 60000000, 900 + (number % 5000)::DECIMAL(15, 2) / 100,
+    (number % 50 + 1)::DECIMAL(15, 2), (number % 11)::DECIMAL(15, 2) / 100, ['AIR', 'MAIL', 'SHIP', 'RAIL', 'TRUCK'][number % 5 + 1],
+    number % 7, IF(number % 3 = 0, -(0.0::DOUBLE), IF(number % 3 = 1, 0.0::DOUBLE, 1.5::DOUBLE)),
+    IF(number % 6 = 0, NULL, 5000 + number % 300), IF(number % 4 = 1, NULL, (number % 900)::DECIMAL(15, 2) / 10),
+    IF(number % 5 = 2, NULL, ['a', 'b', 'c'][number % 3 + 1]), 'u' || (number % 9000)::STRING
+FROM numbers(10000);
+
+statement ok
+SET enable_encoded_columns = 0;
+
+# Frame of reference comparisons: integer, date, timestamp, decimal (with a constant of a smaller scale).
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE i >= 1001000 AND i < 1002000;
+----
+7000 73496500
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE d BETWEEN '2024-02-01' AND '2024-02-10' OR ts > '2024-01-01 08:00:00';
+----
+4336 108441145
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE q >= 25 AND p < 925.5 AND p <> 910.01;
+----
+7956 189245394
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE i IN (1000005, 1000007, 1050009) OR g = 3;
+----
+4301 107424671
+
+# Comparisons and arithmetic between encoded columns.
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE p > q * 30 AND q - disc > 10;
+----
+12240 306295200
+
+# Decimal arithmetic and aggregation over encoded operands, grouped by low-cardinality keys (codes).
+
+query TIRRRRRRRI
+SELECT s, g, sum(q), sum(p), sum(p * (1 - disc)), sum(p * (1 - disc) * (1 + disc)), avg(q), avg(p), avg(disc), count(*)
+FROM encoded_columns WHERE d <= '2024-03-15' GROUP BY s, g ORDER BY s, g;
+----
+AIR 0 16715.00 661225.50 628222.1860 658922.705210 23.37762238 924.79090909 0.04990210 715
+AIR 1 16588.00 659533.25 626658.4910 657235.896010 23.26507714 925.01157083 0.04985975 713
+AIR 2 16639.00 660441.25 627528.5660 658137.440050 23.30392157 924.98774510 0.04984594 714
+AIR 3 16695.00 661397.80 628351.3930 659081.324900 23.34965035 925.03188811 0.04995804 715
+AIR 4 16629.00 660455.15 627293.7030 658129.761990 23.28991597 925.00721289 0.05019608 714
+AIR 5 16730.00 661311.65 628193.4915 658990.119735 23.39860140 924.91139860 0.05008392 715
+AIR 6 16665.00 661369.00 628228.5525 659049.578125 23.30769231 924.99160839 0.05011189 715
+MAIL 0 17380.00 661376.15 628132.6576 659043.967552 24.30769231 925.00160839 0.05026573 715
+MAIL 1 17430.00 661232.65 628129.3501 658920.030349 24.37762238 924.80090909 0.05005594 715
+MAIL 2 17301.00 659540.38 626682.4787 657246.932711 24.26507714 925.02157083 0.04983170 713
+MAIL 3 17353.00 660448.39 627539.1217 658147.157605 24.30392157 924.99774510 0.04983193 714
+MAIL 4 17410.00 661404.95 628448.7584 659098.882512 24.34965035 925.04188811 0.04980420 715
+MAIL 5 17343.00 660462.29 627318.6977 658136.106485 24.28991597 925.01721289 0.05018207 714
+MAIL 6 17445.00 661318.80 628305.3300 659007.748226 24.39860140 924.92139860 0.04993007 715
+RAIL 0 18771.00 660476.57 627560.7048 658172.794648 26.28991597 925.03721289 0.04984594 714
+RAIL 1 18875.00 661333.10 628215.0307 659010.527729 26.39860140 924.94139860 0.05008392 715
+RAIL 2 18810.00 661390.45 628335.3344 659073.853170 26.30769231 925.02160839 0.04995804 715
+RAIL 3 18860.00 661246.95 627942.1152 658908.658932 26.37762238 924.82090909 0.05036364 715
+RAIL 4 18727.00 659554.64 626532.3002 657246.404174 26.26507714 925.04157083 0.05008415 713
+RAIL 5 18781.00 660462.67 627571.5252 658168.328586 26.30392157 925.01774510 0.04980392 714
+RAIL 6 18840.00 661419.25 628376.3729 659108.302161 26.34965035 925.06188811 0.04995804 715
+SHIP 0 18160.00 661325.95 628205.0258 659004.141950 25.39860140 924.93139860 0.05008392 715
+SHIP 1 18095.00 661383.30 628230.6014 659057.625450 25.30769231 925.01160839 0.05011189 715
+SHIP 2 18145.00 661239.80 628042.9140 658916.066890 25.37762238 924.81090909 0.05020979 715
+SHIP 3 18014.00 659547.51 626614.5706 657248.205182 25.26507714 925.03157083 0.04995792 713
+SHIP 4 18067.00 660455.53 627563.0426 658158.420810 25.30392157 925.00774510 0.04981793 714
+SHIP 5 18125.00 661412.10 628458.7618 659108.641790 25.34965035 925.05188811 0.04980420 715
+SHIP 6 18057.00 660469.43 627432.9213 658152.630367 25.28991597 925.02721289 0.05001401 714
+TRUCK 0 19555.00 661426.40 628384.3017 659116.113857 27.34965035 925.07188811 0.04995804 715
+TRUCK 1 19485.00 660483.71 627573.6903 658182.751181 27.28991597 925.04721289 0.04983193 714
+TRUCK 2 19590.00 661340.25 628314.1675 659026.782253 27.39860140 924.95139860 0.04993007 715
+TRUCK 3 19525.00 661397.60 628349.1172 659082.035184 27.30769231 925.03160839 0.04995804 715
+TRUCK 4 19575.00 661254.10 628056.9945 658922.823687 27.37762238 924.83090909 0.05020979 715
+TRUCK 5 19440.00 659561.77 626456.4300 657243.526298 27.26507714 925.05157083 0.05021038 713
+TRUCK 6 19495.00 660469.81 627488.2086 658168.172470 27.30392157 925.02774510 0.04994398 714
+
+query R
+SELECT sum(p * disc) FROM encoded_columns WHERE disc BETWEEN 0.05 AND 0.07 AND q < 24;
+----
+208934.1634
+
+query IIRR
+SELECT count(*), sum(c), sum(mx), sum(mn) FROM (SELECT d, s, count(*) c, max(p) mx, min(p) mn FROM encoded_columns GROUP BY d, s);
+----
+90 30000 85486.05 81013.05
+
+# High-cardinality keys fall back from codes to hashing rows.
+
+query III
+SELECT count(*), sum(c), max(c) FROM (SELECT i, count(*) c FROM encoded_columns GROUP BY i);
+----
+6000 30000 7
+
+query III
+SELECT count(*), sum(c), max(c) FROM (SELECT hs, g, count(*) c FROM encoded_columns GROUP BY hs, g);
+----
+20000 30000 2
+
+query IIII
+SELECT count(DISTINCT s), count(DISTINCT i), count(DISTINCT d), count(DISTINCT hs) FROM encoded_columns;
+----
+5 6000 90 9000
+
+# Nullable encoded columns.
+
+query TIRII
+SELECT ns, count(*), sum(np), count(ni), sum(ni) FROM encoded_columns GROUP BY ns ORDER BY ns NULLS FIRST;
+----
+NULL 6000 199500.00 5000 25746630
+a 8002 266028.90 4001 20590471
+b 8000 268990.70 8000 41190732
+c 7998 268980.40 7998 41200335
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE ni > 5100 AND np < 50;
+----
+5766 142434078
+
+# Joins, sorting and output of encoded columns.
+
+query IR
+SELECT count(*), sum(a.q) FROM encoded_columns a JOIN encoded_columns b ON a.k = b.k AND a.d = b.d AND a.s = b.s WHERE b.s = 'MAIL' AND b.p > 940;
+----
+1200 29400.00
+
+query TRI
+SELECT d, p, k FROM encoded_columns ORDER BY p DESC, d, k LIMIT 3;
+----
+2024-01-10 949.99 9999
+2024-01-10 949.99 59999
+2024-01-20 949.99 19999
+
+query IITTRRRTIIRTT rowsort
+SELECT k, i, d, ts, p, q, disc, s, g, ni, np, ns, hs FROM encoded_columns WHERE k % 4999 = 3;
+----
+10001 1001001 2024-01-12 2024-01-01 00:01:00.000000 900.01 2.00 0.02 MAIL 5 5101 NULL c u1001
+15000 1000000 2024-03-01 2024-01-01 00:00:00.000000 900.00 1.00 0.07 AIR 6 NULL 60.00 a u6000
+19999 1001999 2024-01-20 2024-01-01 08:19:00.000000 949.99 50.00 0.01 TRUCK 0 5199 19.90 b u1999
+3 1000003 2024-01-04 2024-01-01 00:03:00.000000 900.03 4.00 0.03 RAIL 3 5003 0.30 a u3
+5002 1002002 2024-02-22 2024-01-01 00:02:00.000000 900.02 3.00 0.08 SHIP 4 5202 50.20 NULL u5002
+54992 1051992 2024-02-12 2024-01-01 08:12:00.000000 949.92 43.00 0.09 SHIP 1 NULL 49.20 NULL u4992
+59991 1050991 2024-01-02 2024-01-01 08:11:00.000000 949.91 42.00 0.03 MAIL 2 5091 9.10 b u991
+
+# Signed zeros survive the dictionary: atan2(-0.0, -1.0) = -pi, atan2(0.0, -1.0) = pi.
+
+query III
+SELECT count(*), sum(IF(atan2(f, -1.0) < 0, 1, 0)), sum(IF(atan2(f, -1.0) > 3, 1, 0)) FROM encoded_columns WHERE f = 0;
+----
+20001 10001 10000
+
+statement ok
+SET enable_encoded_columns = 1;
+
+# Frame of reference comparisons: integer, date, timestamp, decimal (with a constant of a smaller scale).
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE i >= 1001000 AND i < 1002000;
+----
+7000 73496500
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE d BETWEEN '2024-02-01' AND '2024-02-10' OR ts > '2024-01-01 08:00:00';
+----
+4336 108441145
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE q >= 25 AND p < 925.5 AND p <> 910.01;
+----
+7956 189245394
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE i IN (1000005, 1000007, 1050009) OR g = 3;
+----
+4301 107424671
+
+# Comparisons and arithmetic between encoded columns.
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE p > q * 30 AND q - disc > 10;
+----
+12240 306295200
+
+# Decimal arithmetic and aggregation over encoded operands, grouped by low-cardinality keys (codes).
+
+query TIRRRRRRRI
+SELECT s, g, sum(q), sum(p), sum(p * (1 - disc)), sum(p * (1 - disc) * (1 + disc)), avg(q), avg(p), avg(disc), count(*)
+FROM encoded_columns WHERE d <= '2024-03-15' GROUP BY s, g ORDER BY s, g;
+----
+AIR 0 16715.00 661225.50 628222.1860 658922.705210 23.37762238 924.79090909 0.04990210 715
+AIR 1 16588.00 659533.25 626658.4910 657235.896010 23.26507714 925.01157083 0.04985975 713
+AIR 2 16639.00 660441.25 627528.5660 658137.440050 23.30392157 924.98774510 0.04984594 714
+AIR 3 16695.00 661397.80 628351.3930 659081.324900 23.34965035 925.03188811 0.04995804 715
+AIR 4 16629.00 660455.15 627293.7030 658129.761990 23.28991597 925.00721289 0.05019608 714
+AIR 5 16730.00 661311.65 628193.4915 658990.119735 23.39860140 924.91139860 0.05008392 715
+AIR 6 16665.00 661369.00 628228.5525 659049.578125 23.30769231 924.99160839 0.05011189 715
+MAIL 0 17380.00 661376.15 628132.6576 659043.967552 24.30769231 925.00160839 0.05026573 715
+MAIL 1 17430.00 661232.65 628129.3501 658920.030349 24.37762238 924.80090909 0.05005594 715
+MAIL 2 17301.00 659540.38 626682.4787 657246.932711 24.26507714 925.02157083 0.04983170 713
+MAIL 3 17353.00 660448.39 627539.1217 658147.157605 24.30392157 924.99774510 0.04983193 714
+MAIL 4 17410.00 661404.95 628448.7584 659098.882512 24.34965035 925.04188811 0.04980420 715
+MAIL 5 17343.00 660462.29 627318.6977 658136.106485 24.28991597 925.01721289 0.05018207 714
+MAIL 6 17445.00 661318.80 628305.3300 659007.748226 24.39860140 924.92139860 0.04993007 715
+RAIL 0 18771.00 660476.57 627560.7048 658172.794648 26.28991597 925.03721289 0.04984594 714
+RAIL 1 18875.00 661333.10 628215.0307 659010.527729 26.39860140 924.94139860 0.05008392 715
+RAIL 2 18810.00 661390.45 628335.3344 659073.853170 26.30769231 925.02160839 0.04995804 715
+RAIL 3 18860.00 661246.95 627942.1152 658908.658932 26.37762238 924.82090909 0.05036364 715
+RAIL 4 18727.00 659554.64 626532.3002 657246.404174 26.26507714 925.04157083 0.05008415 713
+RAIL 5 18781.00 660462.67 627571.5252 658168.328586 26.30392157 925.01774510 0.04980392 714
+RAIL 6 18840.00 661419.25 628376.3729 659108.302161 26.34965035 925.06188811 0.04995804 715
+SHIP 0 18160.00 661325.95 628205.0258 659004.141950 25.39860140 924.93139860 0.05008392 715
+SHIP 1 18095.00 661383.30 628230.6014 659057.625450 25.30769231 925.01160839 0.05011189 715
+SHIP 2 18145.00 661239.80 628042.9140 658916.066890 25.37762238 924.81090909 0.05020979 715
+SHIP 3 18014.00 659547.51 626614.5706 657248.205182 25.26507714 925.03157083 0.04995792 713
+SHIP 4 18067.00 660455.53 627563.0426 658158.420810 25.30392157 925.00774510 0.04981793 714
+SHIP 5 18125.00 661412.10 628458.7618 659108.641790 25.34965035 925.05188811 0.04980420 715
+SHIP 6 18057.00 660469.43 627432.9213 658152.630367 25.28991597 925.02721289 0.05001401 714
+TRUCK 0 19555.00 661426.40 628384.3017 659116.113857 27.34965035 925.07188811 0.04995804 715
+TRUCK 1 19485.00 660483.71 627573.6903 658182.751181 27.28991597 925.04721289 0.04983193 714
+TRUCK 2 19590.00 661340.25 628314.1675 659026.782253 27.39860140 924.95139860 0.04993007 715
+TRUCK 3 19525.00 661397.60 628349.1172 659082.035184 27.30769231 925.03160839 0.04995804 715
+TRUCK 4 19575.00 661254.10 628056.9945 658922.823687 27.37762238 924.83090909 0.05020979 715
+TRUCK 5 19440.00 659561.77 626456.4300 657243.526298 27.26507714 925.05157083 0.05021038 713
+TRUCK 6 19495.00 660469.81 627488.2086 658168.172470 27.30392157 925.02774510 0.04994398 714
+
+query R
+SELECT sum(p * disc) FROM encoded_columns WHERE disc BETWEEN 0.05 AND 0.07 AND q < 24;
+----
+208934.1634
+
+query IIRR
+SELECT count(*), sum(c), sum(mx), sum(mn) FROM (SELECT d, s, count(*) c, max(p) mx, min(p) mn FROM encoded_columns GROUP BY d, s);
+----
+90 30000 85486.05 81013.05
+
+# High-cardinality keys fall back from codes to hashing rows.
+
+query III
+SELECT count(*), sum(c), max(c) FROM (SELECT i, count(*) c FROM encoded_columns GROUP BY i);
+----
+6000 30000 7
+
+query III
+SELECT count(*), sum(c), max(c) FROM (SELECT hs, g, count(*) c FROM encoded_columns GROUP BY hs, g);
+----
+20000 30000 2
+
+query IIII
+SELECT count(DISTINCT s), count(DISTINCT i), count(DISTINCT d), count(DISTINCT hs) FROM encoded_columns;
+----
+5 6000 90 9000
+
+# Nullable encoded columns.
+
+query TIRII
+SELECT ns, count(*), sum(np), count(ni), sum(ni) FROM encoded_columns GROUP BY ns ORDER BY ns NULLS FIRST;
+----
+NULL 6000 199500.00 5000 25746630
+a 8002 266028.90 4001 20590471
+b 8000 268990.70 8000 41190732
+c 7998 268980.40 7998 41200335
+
+query II
+SELECT count(*), sum(k) FROM encoded_columns WHERE ni > 5100 AND np < 50;
+----
+5766 142434078
+
+# Joins, sorting and output of encoded columns.
+
+query IR
+SELECT count(*), sum(a.q) FROM encoded_columns a JOIN encoded_columns b ON a.k = b.k AND a.d = b.d AND a.s = b.s WHERE b.s = 'MAIL' AND b.p > 940;
+----
+1200 29400.00
+
+query TRI
+SELECT d, p, k FROM encoded_columns ORDER BY p DESC, d, k LIMIT 3;
+----
+2024-01-10 949.99 9999
+2024-01-10 949.99 59999
+2024-01-20 949.99 19999
+
+query IITTRRRTIIRTT rowsort
+SELECT k, i, d, ts, p, q, disc, s, g, ni, np, ns, hs FROM encoded_columns WHERE k % 4999 = 3;
+----
+10001 1001001 2024-01-12 2024-01-01 00:01:00.000000 900.01 2.00 0.02 MAIL 5 5101 NULL c u1001
+15000 1000000 2024-03-01 2024-01-01 00:00:00.000000 900.00 1.00 0.07 AIR 6 NULL 60.00 a u6000
+19999 1001999 2024-01-20 2024-01-01 08:19:00.000000 949.99 50.00 0.01 TRUCK 0 5199 19.90 b u1999
+3 1000003 2024-01-04 2024-01-01 00:03:00.000000 900.03 4.00 0.03 RAIL 3 5003 0.30 a u3
+5002 1002002 2024-02-22 2024-01-01 00:02:00.000000 900.02 3.00 0.08 SHIP 4 5202 50.20 NULL u5002
+54992 1051992 2024-02-12 2024-01-01 08:12:00.000000 949.92 43.00 0.09 SHIP 1 NULL 49.20 NULL u4992
+59991 1050991 2024-01-02 2024-01-01 08:11:00.000000 949.91 42.00 0.03 MAIL 2 5091 9.10 b u991
+
+# Signed zeros survive the dictionary: atan2(-0.0, -1.0) = -pi, atan2(0.0, -1.0) = pi.
+
+query III
+SELECT count(*), sum(IF(atan2(f, -1.0) < 0, 1, 0)), sum(IF(atan2(f, -1.0) > 3, 1, 0)) FROM encoded_columns WHERE f = 0;
+----
+20001 10001 10000
+
+statement ok
+UNSET enable_encoded_columns;
+
+statement ok
+DROP TABLE encoded_columns;

@@ -139,7 +139,6 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
-use databend_meta_runtime::DatabendRuntime;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -193,12 +192,9 @@ impl MutableCatalog {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider
-                .create_meta_store::<DatabendRuntime>()
-                .await
-                .map_err(|e| {
-                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-                })?
+            provider.create_default_meta_store().await.map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?
         };
 
         let tenant = conf.query.tenant_id.clone();

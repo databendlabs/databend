@@ -117,7 +117,7 @@ pub fn collect_inverted_index_metas(
 
 #[derive(Debug)]
 pub struct PendingVectorIndex {
-    pub file: Option<PendingIndexFile>,
+    pub files: Vec<(BlockIndexMeta, PendingIndexFile)>,
     pub statistics: Option<StatisticsOfVectorColumns>,
 }
 
@@ -216,7 +216,7 @@ pub fn create_block_index_specs(
     for builder in create_inverted_index_builders(table)? {
         specs.push(Arc::new(builder.into_write_spec()));
     }
-    if let Some(builder) = VectorIndexBuilder::try_create(indexes, schema.clone(), true) {
+    if let Some(builder) = VectorIndexBuilder::try_create(indexes, schema.clone(), true)? {
         specs.push(Arc::new(builder.into_write_spec()));
     }
     if let Some(builder) = SpatialIndexBuilder::try_create(indexes, schema, true) {
@@ -290,27 +290,25 @@ mod tests {
     #[test]
     fn test_outputs_reject_duplicate_singletons() {
         let vector = || PendingVectorIndex {
-            file: Some(PendingIndexFile {
-                location: ("location".to_string(), 0),
-                data: Buffer::from("payload"),
-            }),
+            files: vec![(
+                BlockIndexMeta {
+                    index_name: "vector".to_owned(),
+                    index_version: "v1".to_owned(),
+                    location: ("location".to_owned(), 1),
+                    size: 7,
+                },
+                PendingIndexFile {
+                    location: ("location".to_string(), 1),
+                    data: Buffer::from("payload"),
+                },
+            )],
             statistics: None,
         };
         let mut output = PendingBlockIndexOutput {
             vector: Some(vector()),
             ..Default::default()
         };
-        assert_eq!(
-            output
-                .vector
-                .as_ref()
-                .unwrap()
-                .file
-                .as_ref()
-                .unwrap()
-                .size(),
-            7
-        );
+        assert_eq!(output.vector.as_ref().unwrap().files[0].1.size(), 7);
         assert!(
             output
                 .merge(PendingBlockIndexOutput {

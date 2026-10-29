@@ -9,11 +9,12 @@
 ## Pull Requests
 - Allowed PR title types are `rfc`, `feat`, `fix`, `refactor`, `ci`, `docs`, and `chore`; prefer `ci` for test-only or CI-only changes.
 - Optional PR title scopes may contain only lowercase letters, digits, and hyphens, such as `query` or `admin-status`.
-- Outline motivation, implementation notes, and validation commands.
-- Link issues or RFCs when relevant.
-- Follow `PULL_REQUEST_TEMPLATE.md`, including checkboxes, verification, and screenshots when needed.
-- Attach screenshots or sample queries when UI, SQL plans, or system tables change.
-- Call out rollout risks such as migrations, config toggles, or backfills.
+- Follow `PULL_REQUEST_TEMPLATE.md` without changing its structure:
+  - Put everything you want to say under `## Summary`: motivation, key changes, test coverage, linked issues or RFCs, risks. Keep it short.
+  - Do not add new sections (`## Changes`, `## Implementation`, ...).
+  - In `## Tests` and `## Type of change`, only tick checkboxes. Do not add, remove, or reword items, and do not append text below the list. Describe test files and cases in Summary, including the reason when ticking `No Test`.
+  - In `## AI assistance`, only fill in the existing fields.
+- In Summary, attach screenshots or sample queries when UI, SQL plans, or system tables change, and call out rollout risks such as migrations, config toggles, or backfills.
 - Push the branch to your fork and create the PR into `origin`.
 - You can use `gh` tooling for the PR flow.
 - Agent-opened PRs must fill in the "AI assistance" section of the PR template, including the responsible human (`@github-id`) — the author-side owner who has read the diff and can explain the changes during review. See [`AI_POLICY.md`](../AI_POLICY.md).
@@ -30,46 +31,26 @@ I hereby agree to the terms of the CLA available at: https://docs.databend.com/d
 
 ## Summary
 
-- Enable table functions like `generate_series` and `range` to accept scalar subqueries as arguments
-- Return NULL for empty scalar subqueries to align with existing scalar subquery semantics
-
-## Changes
-
-This PR enables SQL like:
-
-```sql
-SELECT generate_series AS install_date
-FROM generate_series(
-    (SELECT count() FROM numbers(10))::int,
-    (SELECT count() FROM numbers(39))::int
-);
-```
-
-Previously, table function arguments could only be constants. Now they can be scalar subqueries that return a single value.
-
-## Implementation
-
-1. Added `contains_subquery()` function to detect subqueries in AST expressions
-2. Added `execute_subquery_for_scalar()` to execute and extract scalar values from subqueries
-3. Modified `bind_table_args` to try constant folding first, then fall back to subquery execution
-4. The subquery executor is passed from the binder to enable runtime evaluation
-5. Returns `Scalar::Null` for empty subquery results (aligns with LeftSingleJoin behavior)
+- Allow table functions such as `generate_series` and `range` to take scalar subqueries as arguments, e.g. `generate_series((SELECT count() FROM numbers(10))::int, 39)`.
+- `bind_table_args` tries constant folding first, then falls back to executing the subquery; empty results return NULL, matching scalar subquery semantics.
+- Tests: `02_0063_function_generate_series.test` covers `generate_series` and `range` with subquery arguments.
 
 ## Tests
 
-- [x] Unit Test
+- [ ] Unit Test
 - [x] Logic Test
 - [ ] Benchmark Test
-- [ ] No Test - Pair with the reviewer to explain why
-
-Added tests in `02_0063_function_generate_series.test` for:
-
-- `generate_series` with subquery arguments
-- `range` with subquery arguments
+- [ ] No Test - _Explain why_
 
 ## Type of change
 
-- [x] New feature (non-breaking change which adds functionality)
+- [ ] Bug Fix (non-breaking change which fixes an issue)
+- [x] New Feature (non-breaking change which adds functionality)
+- [ ] Breaking Change (fix or feature that could cause existing functionality not to work as expected)
+- [ ] Documentation Update
+- [ ] Refactoring
+- [ ] Performance Improvement
+- [ ] Other (please describe):
 
 ## AI assistance
 

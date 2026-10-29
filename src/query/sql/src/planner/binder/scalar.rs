@@ -39,6 +39,7 @@ pub struct ScalarBinder<'a, A = FullTypeCheckAdapter> {
     aliases: &'a [(String, ScalarExpr)],
     forbid_virtual_computed_column: bool,
     apply_masking_policy: bool,
+    masking_where_aliases: Option<Vec<(String, Expr)>>,
 }
 
 impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
@@ -57,6 +58,7 @@ impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
             aliases,
             forbid_virtual_computed_column: false,
             apply_masking_policy: true,
+            masking_where_aliases: None,
         }
     }
 
@@ -84,6 +86,7 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             aliases,
             forbid_virtual_computed_column: false,
             apply_masking_policy: true,
+            masking_where_aliases: None,
         }
     }
 
@@ -96,6 +99,10 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
         self.apply_masking_policy = false;
     }
 
+    pub(crate) fn set_masking_where_aliases(&mut self, aliases: Vec<(String, Expr)>) {
+        self.masking_where_aliases = Some(aliases);
+    }
+
     pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::try_create_with_adapter(
             self.bind_context,
@@ -105,6 +112,9 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             self.aliases,
         )?;
         type_checker.set_apply_masking_policy(self.apply_masking_policy);
+        if let Some(aliases) = &self.masking_where_aliases {
+            type_checker.set_masking_where_aliases(aliases);
+        }
         type_checker.set_forbid_virtual_computed_column(self.forbid_virtual_computed_column);
         Ok(*type_checker.resolve(expr)?)
     }

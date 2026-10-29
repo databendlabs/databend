@@ -58,7 +58,6 @@ use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_meta_plugin_semaphore::acquirer::Permit;
 use databend_meta_plugin_semaphore::errors::AcquireError;
-use databend_meta_runtime::DatabendRuntime;
 use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
@@ -124,12 +123,9 @@ impl<Data: QueueData> QueueManager<Data> {
         let metastore = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider
-                .create_meta_store::<DatabendRuntime>()
-                .await
-                .map_err(|e| {
-                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-                })?
+            provider.create_default_meta_store().await.map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?
         };
 
         info!("Queue manager initialized with permits: {:?}", permits);
@@ -490,6 +486,19 @@ where T: Future<Output =  std::result::Result<std::result::Result<Permit, E>, El
     data: Option<Arc<Data>>,
     key: Option<Data::Key>,
     manager: Arc<QueueManager<Data>>,
+}
+
+impl<Data: QueueData, T, Permit, E> PinnedDrop for AcquireQueueFuture<Data, T, Permit, E>
+where T: Future<Output = std::result::Result<std::result::Result<Permit, E>, Elapsed>>
+{
+    fn drop(this: Pin<&mut Self>) {
+        let this = this.project();
+        // Cancellation can drop the future without polling it to completion.
+        // Release the registered entry and the query context it owns in that case.
+        if let Some(key) = this.key.take() {
+            this.manager.remove_entity(&key);
+        }
+    }
 }
 }
 

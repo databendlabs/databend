@@ -23,6 +23,8 @@ use databend_common_exception::Result;
 use super::AccessType;
 use super::BuilderMut;
 use super::DataType;
+use super::EncodedColumn;
+use super::EncodedView;
 use super::GenericMap;
 use super::ReturnType;
 use super::Scalar;
@@ -64,6 +66,12 @@ pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
     ) -> Option<ColumnBuilder>;
 
     fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering;
+
+    /// A raw frame of reference value as a scalar, `None` if it is out of range. Always `None`
+    /// (the default) for types that are not frame of reference encodable.
+    fn from_for_raw(_raw: i128) -> Option<Self::Scalar> {
+        None
+    }
 
     #[inline(always)]
     fn greater_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
@@ -112,11 +120,33 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
     }
 
     fn try_downcast_column(col: &Column) -> Result<Buffer<Self::Scalar>> {
+        if let Column::Encoded(encoded) = col {
+            // Kernels that do not understand the encoding see the decoded values.
+            return T::downcast_column(&encoded.decode())
+                .ok_or_else(|| column_type_error::<Self>(col));
+        }
         T::downcast_column(col).ok_or_else(|| column_type_error::<Self>(col))
     }
 
     fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         T::downcast_domain(domain).ok_or_else(|| domain_type_error::<Self>(domain))
+    }
+
+    fn try_downcast_encoded(col: &EncodedColumn) -> Option<EncodedView<Self>> {
+        match col {
+            EncodedColumn::Dict(_) => EncodedView::try_dict(col),
+            EncodedColumn::For(c) => {
+                // The column has the type of `T` (e.g. an Int64 column is not read as Int32), so
+                // every raw value, which lies between the bounds of the values, converts to `T`.
+                T::downcast_scalar(&c.scalar_ref(c.raw_min()))?;
+                Some(EncodedView::For(c.clone()))
+            }
+        }
+    }
+
+    #[inline]
+    fn for_scalar_ref<'a>(raw: i128) -> Self::ScalarRef<'a> {
+        T::from_for_raw(raw).expect("column type checked by try_downcast_encoded")
     }
 
     fn column_len(buffer: &Buffer<Self::Scalar>) -> usize {
@@ -271,6 +301,10 @@ impl<T: SimpleType> ReturnType for SimpleValueType<T> {
     fn column_from_vec(vec: Vec<Self::Scalar>, _: &GenericMap) -> Self::Column {
         vec.into()
     }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.collect::<Vec<_>>().into()
+    }
 }
 
 impl<T: SimpleType> SimpleValueType<T> {
@@ -289,6 +323,9 @@ impl<T: SimpleType> SimpleValueType<T> {
                     ColumnView::Column(buffer) => {
                         rows.take_primitive_types(buffer.as_slice(), &mut builder);
                     }
+                    ColumnView::Encoded(view) => builder.extend(
+                        TakeIndex::iter(rows).map(|row| unsafe { view.index_unchecked(row) }),
+                    ),
                 },
                 Chunk::Repeat { block, rows } => match &views[block as usize] {
                     ColumnView::Const(scalar, _) => {
@@ -296,6 +333,10 @@ impl<T: SimpleType> SimpleValueType<T> {
                     }
                     ColumnView::Column(buffer) => {
                         rows.take_primitive_types(buffer.as_slice(), &mut builder);
+                    }
+                    ColumnView::Encoded(view) => {
+                        let value = unsafe { view.index_unchecked(rows.row as usize) };
+                        builder.resize(builder.len() + rows.count as usize, value);
                     }
                 },
                 Chunk::Range { block, row, len } => match &views[block as usize] {
@@ -305,6 +346,9 @@ impl<T: SimpleType> SimpleValueType<T> {
                     ColumnView::Column(buffer) => {
                         (row..row + len).take_primitive_types(buffer.as_slice(), &mut builder);
                     }
+                    ColumnView::Encoded(view) => builder.extend(
+                        (row..row + len).map(|row| unsafe { view.index_unchecked(row as usize) }),
+                    ),
                 },
             };
         }

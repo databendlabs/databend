@@ -32,6 +32,10 @@ pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
 pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
+/// Default namespace for unqualified table references in a stored query definition.
+pub const OPT_KEY_QUERY_CATALOG: &str = "query_catalog";
+pub const OPT_KEY_QUERY_DATABASE: &str = "query_database";
+
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
     "materialized_view_source_snapshot_location";
@@ -49,6 +53,8 @@ pub const MATERIALIZED_VIEW_INVALID_SOURCE_REASON: &str =
 pub const MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON: &str = "source database was renamed";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
+/// External-table S3 storage class for new objects; overrides the experimental session setting.
+pub const OPT_KEY_S3_STORAGE_CLASS: &str = "s3_storage_class";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
@@ -132,6 +138,24 @@ pub fn is_fuse_backed_engine(engine: &str) -> bool {
         || engine.eq_ignore_ascii_case(DYNAMIC_TABLE_ENGINE)
 }
 
+/// Table engines that have been removed from Databend but may still be
+/// referenced by table metadata created by older versions.
+///
+/// Every engine listed here must be a read-only external engine, i.e.
+/// Databend never owned any data files of such tables. Dropped tables with
+/// these engines can therefore be reclaimed by removing their metadata only,
+/// without instantiating the (no longer available) table engine.
+pub const RETIRED_TABLE_ENGINES: &[&str] = &[
+    // Removed in #20558, used to read external Delta Lake tables.
+    "DELTA",
+];
+
+pub fn is_retired_engine(engine: &str) -> bool {
+    RETIRED_TABLE_ENGINES
+        .iter()
+        .any(|retired| engine.eq_ignore_ascii_case(retired))
+}
+
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specify this option keys in DDL
 /// - Should not be shown in `show create table` statement
@@ -141,6 +165,8 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_QUERY_CATALOG);
+    r.insert(OPT_KEY_QUERY_DATABASE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
@@ -162,6 +188,8 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
+    r.insert(OPT_KEY_QUERY_CATALOG);
+    r.insert(OPT_KEY_QUERY_DATABASE);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
@@ -175,6 +203,13 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_SOURCE_TABLE_IDS);
     r
 });
+
+pub fn stored_query_namespace(options: &BTreeMap<String, String>) -> Option<(String, String)> {
+    Some((
+        options.get(OPT_KEY_QUERY_CATALOG)?.clone(),
+        options.get(OPT_KEY_QUERY_DATABASE)?.clone(),
+    ))
+}
 
 pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     RESERVED_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
@@ -268,6 +303,22 @@ mod tests {
         assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
         assert!(is_reserved_opt_key(OPT_KEY_CLONE_GROUP_ID));
         assert!(is_internal_opt_key(OPT_KEY_CLONE_GROUP_ID));
+    }
+
+    #[test]
+    fn test_stored_query_metadata_is_reserved_and_internal() {
+        for key in [OPT_KEY_QUERY_CATALOG, OPT_KEY_QUERY_DATABASE] {
+            assert!(is_reserved_opt_key(key));
+            assert!(is_internal_opt_key(key));
+        }
+        let mut options = BTreeMap::new();
+        assert_eq!(stored_query_namespace(&options), None);
+        options.insert(OPT_KEY_QUERY_CATALOG.to_string(), "default".to_string());
+        options.insert(OPT_KEY_QUERY_DATABASE.to_string(), "db".to_string());
+        assert_eq!(
+            stored_query_namespace(&options),
+            Some(("default".to_string(), "db".to_string()))
+        );
     }
 
     #[test]

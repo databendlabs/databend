@@ -27,7 +27,6 @@
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -37,26 +36,28 @@ use databend_common_storage::FaultKind;
 use databend_common_storage::FaultOp;
 use databend_common_storage::FaultRule;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::physical_plans::IPhysicalPlan;
 use databend_query::physical_plans::PhysicalPlan;
 use databend_query::physical_plans::PhysicalPlanMeta;
 use databend_query::physical_plans::TableScan;
 use databend_query::physical_plans::publish_planned_pruning_stats;
+use databend_query::pipelines::PipelineBuilder;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelinePullingExecutor;
 use databend_query::schedulers::build_local_pipeline;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextPartitionStats;
-use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sql::Planner;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::stream::PullingExecutorStream;
 use databend_query::stream::ReadDataBlockStream;
-use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
 
+use super::data_metrics::execute_like_prepared_query;
+use super::data_metrics::init_lazy_delete_fragments;
 use super::data_metrics::run_and_observe;
 use super::data_metrics::run_and_observe_with;
 
@@ -650,123 +651,63 @@ async fn hand_built_table_scan_publishes_partition_stats() -> Result<()> {
     Ok(())
 }
 
-/// On a cluster worker, pipeline *preparation* (`INIT_QUERY_FRAGMENTS`) runs in
-/// its own RPC scope, before `START_PREPARED_QUERY`. For a lazy `DELETE` that
-/// phase already reads segment and index data (`do_mutation_block_pruning`).
-/// This exercises `init_query_fragments` the way the RPC handler does, outside
-/// any `io_stats` scope, and checks the preparation IO lands on the query's
-/// counter before any pipeline has executed, so it cannot be hidden behind
-/// execution-time reads.
+/// A lazy `DELETE` prunes on the node that runs the `MutationSource`, either
+/// while the fragment is prepared (`enable_prune_pipeline = 0`) or in a prune
+/// pipeline at runtime. Either way that node publishes only what it scanned;
+/// the whole-table `partitions_total` is published once, by the coordinator.
+/// The two segments are split across the two simulated nodes, so this node
+/// scans one block; the other node's block would arrive through the
+/// statistics exchange. A per-node total would show 4 here, not 2.
 #[tokio::test(flavor = "multi_thread")]
-async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
-    use databend_query::interpreters::MutationInterpreter;
-    use databend_query::schedulers::Fragmenter;
-    use databend_query::schedulers::QueryFragmentsActions;
-    use databend_query::servers::flight::v1::actions::init_query_fragments;
-    use databend_query::servers::flight::v1::exchange::DataExchangeManager;
-    use databend_query::sql::plans::Plan;
+async fn lazy_delete_publishes_scanned_per_node_and_total_once() -> Result<()> {
+    for enable_prune_pipeline in [false, true] {
+        let fixture = TestFixture::setup().await?;
+        let (ctx, fragments) = init_lazy_delete_fragments(&fixture, enable_prune_pipeline).await?;
 
-    let fixture = TestFixture::setup().await?;
-    fixture.create_default_database().await?;
-    let db = fixture.default_db_name();
-    let table = format!("{db}.lazy_delete");
-
-    fixture
-        .execute_command(&format!("create table {table} (a int, b string)"))
-        .await?;
-    // Two inserts give two segments; with a two-node cluster below the DELETE
-    // source becomes lazy (`segments >= nodes`), deferring block pruning to
-    // pipeline preparation.
-    for _ in 0..2 {
-        fixture
-            .execute_command(&format!(
-                "insert into {table} select number, to_string(number) from numbers(20000)"
-            ))
-            .await?;
-    }
-
-    let local_id = "node1";
-    let ctx = fixture
-        .new_query_ctx_with_cluster(
-            ClusterDescriptor::new()
-                .with_node(local_id, "")
-                .with_node("node2", ""),
-        )
-        .await?;
-    assert!(ThreadTracker::io_stats().is_none());
-
-    let sql = format!("delete from {table} where b like '%99%'");
-    let (plan, _) = Planner::new(ctx.clone()).plan_sql(&sql).await?;
-    let Plan::DataMutation { s_expr, schema, .. } = plan else {
-        unreachable!("expected a DataMutation plan")
-    };
-    let mutation = s_expr.mutation()?.clone();
-    let interpreter = MutationInterpreter::try_create(
-        ctx.clone(),
-        s_expr.planned()?.clone(),
-        schema,
-        mutation.metadata.clone(),
-    )?;
-    let physical_plan = interpreter.build_physical_plan(&mutation, false).await?;
-    // The coordinator publishes the planned statistics (the whole-table
-    // `partitions_total` for this lazy source) when it enters pipeline
-    // building; `init_query_fragments` below is the worker side and must not.
-    publish_planned_pruning_stats(ctx.as_ref(), &physical_plan);
-    assert_eq!(
-        ctx.get_io_stats().read_bytes,
-        0,
-        "planning must not read through the query counter in this setup"
-    );
-
-    // Split the plan into fragments exactly as the coordinator does, and take
-    // the ones that `INIT_QUERY_FRAGMENTS` would hand to this node.
-    let mut actions = QueryFragmentsActions::create(ctx.clone());
-    for fragment in Fragmenter::try_create(ctx.clone())?.build_fragment(&physical_plan)? {
-        fragment.get_actions(ctx.clone(), &mut actions)?;
-    }
-    let fragments = actions
-        .get_query_fragments()?
-        .remove(local_id)
-        .expect("local node must receive fragments");
-    assert!(
-        fragments
+        // The coordinator half: `build_physical_plan` ran on `ctx`, so publish
+        // its planned statistics the way `build_distributed_pipeline` does.
+        let fragment = fragments
             .fragments
             .iter()
-            .any(|fragment| { format!("{:?}", fragment.physical_plan).contains("MutationSource") }),
-        "the lazy mutation source must be prepared on this node"
-    );
+            .find(|fragment| format!("{:?}", fragment.physical_plan).contains("MutationSource"))
+            .expect("the lazy mutation source must be prepared on this node");
+        publish_planned_pruning_stats(ctx.as_ref(), &fragment.physical_plan);
 
-    // Register the context like `INIT_QUERY_ENV` does on a worker, then run
-    // the real `INIT_QUERY_FRAGMENTS` handler.
-    let query_id = ctx.get_id();
-    let exchange_manager = DataExchangeManager::instance();
-    exchange_manager.handle_statistics_exchange(query_id.clone(), "peer".to_string())?;
-    exchange_manager.set_ctx(&query_id, ctx.clone())?;
+        if enable_prune_pipeline {
+            let mut build_res = PipelineBuilder::create(
+                ctx.get_function_context()?,
+                ctx.get_settings(),
+                ctx.clone(),
+            )
+            .finalize(&fragment.physical_plan)?;
+            build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+            let prune_pipelines = std::mem::take(&mut build_res.sources_pipelines);
+            assert!(
+                !prune_pipelines.is_empty(),
+                "lazy DELETE must come with a prune pipeline"
+            );
+            execute_like_prepared_query(&ctx, prune_pipelines).await?;
+        }
 
-    let prepared = init_query_fragments(fragments).await;
-    // Undo the registration above. In production this happens when the query
-    // finishes executing, which this test never does; without it the
-    // `QueryCoordinator` (and the `QueryContext` it holds) would stay in the
-    // global `DataExchangeManager` for the rest of the test binary. Done before
-    // `?` so that a failed preparation is cleaned up too.
-    exchange_manager.on_finished_query(&query_id, None);
-    prepared?;
-
-    let io_stats = ctx.get_io_stats();
-    assert!(
-        io_stats.read_bytes > 0,
-        "lazy DELETE pruning during pipeline preparation read nothing through the query counter"
-    );
-    assert_eq!(io_stats.write_bytes, 0, "nothing executed yet");
-
-    // `partitions_total` is the whole-table block count, published once by
-    // `publish_planned_pruning_stats` above on the coordinator. The lazy pruning
-    // publishes only what this node scanned under the same plan id: the two
-    // segments are reshuffled across the two nodes, so one segment of one
-    // block; `b like '%99%'` cannot be range-pruned. A whole-table total
-    // from every node would show up here as 4.
-    let partition_stats = ctx.get_partition_stats();
-    assert_eq!(partition_stats.total, 2);
-    assert_eq!(partition_stats.scanned, 1);
+        let stats = ctx.get_partition_stats();
+        assert_eq!(
+            (stats.total, stats.scanned),
+            (2, 1),
+            "enable_prune_pipeline = {enable_prune_pipeline}: whole-table total of 2 blocks, \
+             this node's share of 1 scanned; a per-node total would show 4"
+        );
+        let mutation_source_id = fragment
+            .physical_plan
+            .try_find_mutation_source()
+            .expect("fragment holds the mutation source")
+            .get_meta()
+            .plan_id;
+        let per_plan = ctx.get_pruned_partitions_stats();
+        assert_eq!(
+            per_plan.keys().copied().collect::<Vec<_>>(),
+            vec![mutation_source_id],
+            "one entry, under the MutationSource's physical id (not the fragment root's)"
+        );
+    }
     Ok(())
 }

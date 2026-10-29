@@ -112,7 +112,6 @@ use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::NodeInfo;
 use databend_meta_client::types::SeqV;
-use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
@@ -949,7 +948,7 @@ impl LiteTableContext {
             rpc_conf.timeout = Some(Duration::from_millis(1));
             let catalog_manager = Arc::new(CatalogManager {
                 meta: MetaStoreProvider::new(rpc_conf)
-                    .create_meta_store::<DatabendRuntime>()
+                    .create_default_meta_store()
                     .await
                     .map_err(|err| ErrorCode::Internal(err.to_string()))?,
                 default_catalog: default_catalog_dyn,
@@ -1160,6 +1159,7 @@ impl LiteTableContext {
                 database: database.to_string(),
                 view: view_name.to_string(),
                 query: query.to_string(),
+                query_namespace: Some((self.current_catalog.clone(), database.to_string())),
             },
             // Production View TableMeta stores the query but no schema. Keep the harness aligned
             // so lineage tests cannot accidentally depend on persisted view fields.
@@ -1205,6 +1205,13 @@ impl LiteTableContext {
     fn register_view(&self, view: &ReplayView, schema: Arc<TableSchema>) -> Result<()> {
         let mut options = BTreeMap::new();
         options.insert(LITE_VIEW_QUERY_KEY.to_string(), view.query.clone());
+        if let Some((catalog, database)) = &view.query_namespace {
+            use databend_storages_common_table_meta::table::OPT_KEY_QUERY_CATALOG;
+            use databend_storages_common_table_meta::table::OPT_KEY_QUERY_DATABASE;
+
+            options.insert(OPT_KEY_QUERY_CATALOG.to_string(), catalog.clone());
+            options.insert(OPT_KEY_QUERY_DATABASE.to_string(), database.clone());
+        }
 
         let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
         let table = Arc::new(FakeTable {
@@ -1305,7 +1312,8 @@ impl LiteTableContext {
     pub async fn register_udf(self: &Arc<Self>, udf: UserDefinedFunction) -> Result<()> {
         UserApiProvider::instance()
             .add_udf(&self.tenant, udf, &CreateOption::CreateOrReplace)
-            .await
+            .await?;
+        Ok(())
     }
 
     pub async fn register_table_sql(self: &Arc<Self>, sql: &str) -> Result<()> {
@@ -1333,7 +1341,8 @@ impl LiteTableContext {
                     Plan::CreateUDF(plan) => {
                         UserApiProvider::instance()
                             .add_udf(&self.tenant, plan.udf.clone(), &plan.create_option)
-                            .await
+                            .await?;
+                        Ok(())
                     }
                     _ => unreachable!("create udf statement must bind to create udf plan"),
                 }
@@ -2351,6 +2360,7 @@ $$
                 database: "default".to_string(),
                 view: "v".to_string(),
                 query: "SELECT a FROM default.t".to_string(),
+                query_namespace: None,
             }],
             udfs: vec![],
             table_stats: HashMap::from([(0, crate::ReplayTable {

@@ -217,6 +217,9 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
     }
 
     fn on_finish(&mut self, generate_data: bool) -> Result<Vec<DataBlock>> {
+        // The serialized partial states are only needed for this merge; the
+        // processor is kept until the query ends, so do not keep them in it.
+        let to_merge_data = std::mem::take(&mut self.to_merge_data);
         if !generate_data {
             return Ok(vec![]);
         }
@@ -240,7 +243,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             .zip(result_builders.iter_mut())
             .enumerate()
         {
-            for block in self.to_merge_data.iter() {
+            for block in to_merge_data.iter() {
                 func.merge_serialized(
                     AggregateStateSet::new(std::slice::from_ref(&main_addr), loc),
                     block.get_by_offset(idx),

@@ -66,6 +66,7 @@ use databend_common_tracing::TracingConfig as InnerTracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
+use serfig::collectors::IntoCollector;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
@@ -245,7 +246,9 @@ impl Config {
         }
 
         // Then, load from env.
-        builder = builder.collect(from_env());
+        builder = builder
+            .collect(from_env())
+            .collect(Self::from_env_aliases());
 
         // Finally, load from args.
         builder = builder.collect(from_self(self));
@@ -279,13 +282,51 @@ impl Config {
         }
 
         // Then, load from env.
-        builder = builder.collect(from_env());
+        builder = builder
+            .collect(from_env())
+            .collect(Self::from_env_aliases());
 
         // Check obsoleted.
         let conf = builder.build()?;
         conf.check_obsoleted()?;
 
         Ok(conf)
+    }
+
+    /// Collector for env aliases of config items, right after `from_env()`.
+    ///
+    /// An alias is another name for the same item: `ALIBABA_CLOUD_ROLE_ARN`
+    /// for `STORAGE_OSS_ROLE_ARN`, etc. It only fills items the Databend name
+    /// leaves unset, so the config reflects the identity reqsign actually uses
+    /// and `init_oss_operator` does not enable anonymous fallback for an
+    /// RRSA-only deployment.
+    ///
+    /// Only the filled items differ from `Config::default()`; serfig skips
+    /// default-valued items when merging, so precedence stays
+    /// `file < env (Databend name, then alias) < args`.
+    fn from_env_aliases() -> impl IntoCollector<Self> {
+        let set = |key: &str| env::var(key).ok().filter(|v| !v.is_empty());
+        let unset = |key: &str| set(key).is_none();
+
+        let mut compat = Self::default();
+
+        if unset("STORAGE_OSS_ROLE_ARN")
+            && let Some(role_arn) = set("ALIBABA_CLOUD_ROLE_ARN")
+        {
+            compat.storage.oss.oss_role_arn = role_arn;
+        }
+
+        // reqsign ignores a half pair; apply both or neither.
+        if unset("STORAGE_OSS_ACCESS_KEY_ID")
+            && unset("STORAGE_OSS_ACCESS_KEY_SECRET")
+            && let Some(ak) = set("ALIBABA_CLOUD_ACCESS_KEY_ID")
+            && let Some(sk) = set("ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+        {
+            compat.storage.oss.oss_access_key_id = ak;
+            compat.storage.oss.oss_access_key_secret = sk;
+        }
+
+        from_self(compat)
     }
 }
 
@@ -1914,11 +1955,53 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_python_script: bool,
 
+    /// Maximum Python scalar UDF processes on this node (0 = effective CPU count).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers: usize,
+
+    /// Python worker budget shared by a tenant (0 = inherit the node limit).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers_per_tenant: usize,
+
+    /// Maximum resident Python workers per query (0 = minimum runtimes plus
+    /// max_threads - 1). Concurrent execution always respects max_threads.
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers_per_query: usize,
+
+    /// Bound Python worker admission waiters independently of running queries.
+    #[clap(long, value_name = "VALUE", default_value = "128")]
+    pub python_udf_max_queued_queries: usize,
+
+    #[clap(long, value_name = "VALUE", default_value = "60")]
+    pub python_udf_queue_timeout_secs: u64,
+
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_execution_timeout_secs: u64,
+
+    /// Recycle idle extra Python workers after this interval; keep one per runtime.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_worker_idle_timeout_secs: u64,
+
+    /// Install Python UDF dependencies from wheels only (`pip --only-binary=:all:`).
+    /// Source distributions run arbitrary build code on the query node at install time.
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub python_udf_pip_only_binary: bool,
+
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_js_script: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_wasm_script: bool,
+
+    /// Memory limit in MiB of each in-process script UDF runtime: the
+    /// JavaScript heap and the WebAssembly linear memory (0 = unlimited).
+    #[clap(long, value_name = "VALUE", default_value = "1024")]
+    pub udf_script_memory_limit_mb: usize,
+
+    /// Interrupt an in-process script UDF call that runs longer than this
+    /// (0 = unlimited). Currently enforced for JavaScript only.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub udf_script_execution_timeout_secs: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_sandbox: bool,
@@ -3274,6 +3357,16 @@ pub struct CacheConfig {
     )]
     pub vector_index_filter_size: u64,
 
+    /// Max bytes of FP16 refine pages cached in memory. HNSW components and the
+    /// validity are cached decoded in the vector index cache instead. Set it to 0
+    /// to disable it.
+    #[clap(
+        long = "cache-vector-index-refine-size",
+        value_name = "VALUE",
+        default_value = "34359738368"
+    )]
+    pub vector_index_refine_size: u64,
+
     /// Max bytes of cached vector index filters on disk. Set it to 0 to disable it.
     #[clap(
         long = "disk-cache-vector-index-data-size",
@@ -3472,6 +3565,7 @@ impl Default for CacheConfig {
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,
             vector_index_filter_size: 64424509440,
+            vector_index_refine_size: 34359738368,
             disk_cache_vector_index_data_size: 0,
             vector_index_filter_memory_ratio: 0,
             spatial_index_meta_count: 30000,
@@ -3935,6 +4029,171 @@ mod test {
                     "http://127.0.2.1:1111"
                 );
                 assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
+            },
+        );
+    }
+
+    // Synthetic fixtures: every value names only the layer it comes from.
+    const ALIAS_ROLE_ARN: &str = "acs:ram::0:role/from-alias-env";
+    const DATABEND_ROLE_ARN: &str = "acs:ram::0:role/from-databend-env";
+    const FILE_ROLE_ARN: &str = "acs:ram::0:role/from-file";
+
+    /// Identity comes only from the alias env; neither the config file nor
+    /// Databend's own env set it.
+    #[test]
+    fn test_env_aliases_fills_empty_oss_items() {
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some(ALIAS_ROLE_ARN)),
+                ("ALIBABA_CLOUD_ACCESS_KEY_ID", Some("ak-from-alias-env")),
+                ("ALIBABA_CLOUD_ACCESS_KEY_SECRET", Some("sk-from-alias-env")),
+                ("STORAGE_OSS_ROLE_ARN", None),
+                ("STORAGE_OSS_ACCESS_KEY_ID", None),
+                ("STORAGE_OSS_ACCESS_KEY_SECRET", None),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file("").unwrap();
+                assert_eq!(cfg.storage.oss.oss_role_arn, ALIAS_ROLE_ARN);
+                assert_eq!(cfg.storage.oss.oss_access_key_id, "ak-from-alias-env");
+                assert_eq!(cfg.storage.oss.oss_access_key_secret, "sk-from-alias-env");
+            },
+        );
+    }
+
+    #[test]
+    fn test_env_aliases_databend_env_wins() {
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some(ALIAS_ROLE_ARN)),
+                ("ALIBABA_CLOUD_ACCESS_KEY_ID", Some("ak-from-alias-env")),
+                ("ALIBABA_CLOUD_ACCESS_KEY_SECRET", Some("sk-from-alias-env")),
+                ("STORAGE_OSS_ROLE_ARN", Some(DATABEND_ROLE_ARN)),
+                ("STORAGE_OSS_ACCESS_KEY_ID", Some("ak-from-databend-env")),
+                (
+                    "STORAGE_OSS_ACCESS_KEY_SECRET",
+                    Some("sk-from-databend-env"),
+                ),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file("").unwrap();
+                assert_eq!(cfg.storage.oss.oss_role_arn, DATABEND_ROLE_ARN);
+                assert_eq!(cfg.storage.oss.oss_access_key_id, "ak-from-databend-env");
+                assert_eq!(
+                    cfg.storage.oss.oss_access_key_secret,
+                    "sk-from-databend-env"
+                );
+            },
+        );
+    }
+
+    /// The config file selects OSS and names the bucket but carries no
+    /// credential items at all; the identity comes only from the alias env.
+    /// The alias must land on top of the file layer without disturbing it.
+    #[test]
+    fn test_env_aliases_fills_role_arn_over_file_without_oss_credentials() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            file.path(),
+            r#"
+[query]
+tenant_id = "tenant-from-file"
+cluster_id = "cluster-from-file"
+
+[storage]
+type = "oss"
+
+[storage.oss]
+bucket = "bucket-from-file"
+endpoint_url = "https://oss.example.com"
+"#,
+        )
+        .unwrap();
+
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some(ALIAS_ROLE_ARN)),
+                ("ALIBABA_CLOUD_ACCESS_KEY_ID", None),
+                ("ALIBABA_CLOUD_ACCESS_KEY_SECRET", None),
+                ("STORAGE_OSS_ROLE_ARN", None),
+                ("STORAGE_OSS_ACCESS_KEY_ID", None),
+                ("STORAGE_OSS_ACCESS_KEY_SECRET", None),
+                ("QUERY_TENANT_ID", None),
+                ("QUERY_CLUSTER_ID", None),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file(file.path().to_str().unwrap()).unwrap();
+                // From file, untouched — including a subtree the alias
+                // collector never touches, proving its `Config::default()`
+                // payload does not reset earlier layers.
+                assert_eq!(cfg.query.tenant_id, "tenant-from-file");
+                assert_eq!(cfg.query.cluster_id, "cluster-from-file");
+                assert_eq!(cfg.storage.typ, "oss");
+                assert_eq!(cfg.storage.oss.oss_bucket, "bucket-from-file");
+                assert_eq!(cfg.storage.oss.oss_endpoint_url, "https://oss.example.com");
+                // From alias env.
+                assert_eq!(cfg.storage.oss.oss_role_arn, ALIAS_ROLE_ARN);
+                assert_eq!(cfg.storage.oss.oss_access_key_id, "");
+                assert_eq!(cfg.storage.oss.oss_access_key_secret, "");
+            },
+        );
+    }
+
+    /// The alias sits in the env layer, so like `STORAGE_OSS_ROLE_ARN` it
+    /// overrides the config file (`file < env < args`).
+    #[test]
+    fn test_env_aliases_alias_overrides_file_like_any_env() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            file.path(),
+            format!(
+                r#"
+[storage]
+type = "oss"
+
+[storage.oss]
+bucket = "bucket-from-file"
+role_arn = "{FILE_ROLE_ARN}"
+"#
+            ),
+        )
+        .unwrap();
+
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some(ALIAS_ROLE_ARN)),
+                ("STORAGE_OSS_ROLE_ARN", None),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file(file.path().to_str().unwrap()).unwrap();
+                assert_eq!(cfg.storage.oss.oss_role_arn, ALIAS_ROLE_ARN);
+            },
+        );
+    }
+
+    /// reqsign requires both halves of the static pair; a half pair yields no
+    /// static credential, so the config must stay empty too. Empty values are
+    /// treated as unset.
+    #[test]
+    fn test_env_aliases_ignores_half_pair_and_empty_values() {
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some("")),
+                ("ALIBABA_CLOUD_ACCESS_KEY_ID", Some("ak-from-alias-env")),
+                ("ALIBABA_CLOUD_ACCESS_KEY_SECRET", None),
+                ("STORAGE_OSS_ROLE_ARN", None),
+                ("STORAGE_OSS_ACCESS_KEY_ID", None),
+                ("STORAGE_OSS_ACCESS_KEY_SECRET", None),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file("").unwrap();
+                assert_eq!(cfg.storage.oss.oss_role_arn, "");
+                assert_eq!(cfg.storage.oss.oss_access_key_id, "");
+                assert_eq!(cfg.storage.oss.oss_access_key_secret, "");
             },
         );
     }

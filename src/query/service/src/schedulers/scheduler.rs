@@ -17,6 +17,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::DefinitionScope;
 use databend_common_sql::Planner;
 use databend_common_sql::planner::QueryExecutor;
 use futures_util::TryStreamExt;
@@ -170,8 +171,17 @@ impl ServiceQueryExecutor {
 #[async_trait]
 impl QueryExecutor for ServiceQueryExecutor {
     async fn execute_query_with_sql_string(&self, query_sql: &str) -> Result<Vec<DataBlock>> {
+        self.execute_query_in_scope(query_sql, DefinitionScope::session())
+            .await
+    }
+
+    async fn execute_query_in_scope(
+        &self,
+        query_sql: &str,
+        scope: DefinitionScope,
+    ) -> Result<Vec<DataBlock>> {
         let result = async {
-            let mut planner = Planner::new(self.ctx.clone());
+            let mut planner = Planner::new(self.ctx.clone()).with_definition_scope(scope);
             let (plan, _) = planner.plan_sql(query_sql).await?;
             let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
             let stream = interpreter

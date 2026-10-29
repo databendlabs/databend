@@ -7,6 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+ahash = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-cast = { workspace = true }
@@ -60,7 +61,7 @@ recursive = { workspace = true }
 rust_decimal = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
 smallvec = { workspace = true }
 strength_reduce = { workspace = true }
 terminal_size = { workspace = true }

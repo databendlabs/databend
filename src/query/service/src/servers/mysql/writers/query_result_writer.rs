@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::parser::SqlSecrets;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column as ExprColumn;
@@ -71,6 +72,8 @@ impl QueryResult {
 pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
     inner: Option<QueryResultWriter<'a, W>>,
     session: Arc<Session>,
+    // Values to scrub from the logged error; the client gets it as is.
+    log_secrets: SqlSecrets,
 }
 
 fn write_field<W: AsyncWrite + Unpin>(
@@ -210,7 +213,13 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
         DFQueryResultWriter::<'a, W> {
             inner: Some(inner),
             session,
+            log_secrets: SqlSecrets::default(),
         }
+    }
+
+    /// Credentials of the query, scrubbed from logged errors.
+    pub fn set_log_secrets(&mut self, secrets: SqlSecrets) {
+        self.log_secrets = secrets;
     }
 
     #[async_backtrace::framed]
@@ -312,7 +321,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                         .consume_convert_to_full()
                         .take_columns()
                         .into_iter()
-                        .map(|column| column.into_column().unwrap())
+                        .map(|column| column.into_column().unwrap().decode_encoded())
                         .collect::<Vec<_>>();
 
                     for row_index in 0..num_rows {
@@ -392,7 +401,10 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     async fn err(&self, error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         self.session.txn_mgr().lock().set_fail();
         if error.code() != ErrorCode::ABORTED_QUERY && error.code() != ErrorCode::ABORTED_SESSION {
-            error!("OnQuery Error: {:?}", error);
+            error!(
+                "OnQuery Error: {}",
+                self.log_secrets.scrub(&format!("{error:?}"))
+            );
             writer
                 .error(ErrorKind::ER_UNKNOWN_ERROR, error.to_string().as_bytes())
                 .await?;

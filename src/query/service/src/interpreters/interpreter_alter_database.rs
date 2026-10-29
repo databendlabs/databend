@@ -16,17 +16,19 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_sql::binder::StageResolver;
+use databend_common_sql::planner::binder::ddl::database::DEFAULT_S3_STORAGE_CLASS;
 use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use databend_common_sql::plans::AlterDatabasePlan;
-use databend_common_storage::EndpointPolicyScope;
 use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -166,18 +168,13 @@ impl Interpreter for AlterDatabaseInterpreter {
                     ));
                 }
 
-                let operator = databend_common_storage::init_operator_with_policy_scope(
-                    &storage_params,
-                    EndpointPolicyScope::External,
-                )
-                .map_err(|e| {
-                    databend_common_exception::ErrorCode::BadArguments(format!(
-                        "Failed to access storage location '{}': {}",
-                        path, e
-                    ))
-                })?;
-
-                databend_common_sql::binder::verify_external_location_privileges(operator)
+                let storage_class = match merged_options.get(DEFAULT_S3_STORAGE_CLASS) {
+                    Some(value) => value
+                        .parse::<S3StorageClass>()
+                        .map_err(databend_common_exception::ErrorCode::InvalidArgument)?,
+                    None => self.ctx.get_settings().get_s3_storage_class()?,
+                };
+                databend_common_sql::binder::verify_external_location_privileges(&storage_params, storage_class)
                 .await
                 .map_err(|e| {
                     databend_common_exception::ErrorCode::BadArguments(format!(

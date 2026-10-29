@@ -19,6 +19,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
+use databend_common_http::TlsConfig;
 use databend_common_http::health_handler;
 use databend_common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
@@ -31,7 +32,6 @@ use log::warn;
 use poem::Endpoint;
 use poem::Route;
 use poem::get;
-use poem::listener::OpensslTlsConfig;
 use poem::post;
 
 use crate::servers::Server;
@@ -194,8 +194,8 @@ impl AdminService {
         route
     }
 
-    fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
-        let cfg = OpensslTlsConfig::new()
+    fn build_tls(config: &InnerConfig) -> Result<TlsConfig, std::io::Error> {
+        let cfg = TlsConfig::new()
             .cert_from_file(config.query.common.api_tls_server_cert.as_str())
             .key_from_file(config.query.common.api_tls_server_key.as_str());
 

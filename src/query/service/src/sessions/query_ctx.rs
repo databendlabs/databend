@@ -39,6 +39,7 @@ use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_ast::parser::SqlSecrets;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -559,6 +560,11 @@ impl QueryContext {
         *self.shared.user_agent.write() = ua;
     }
 
+    /// Credential values hidden from the query text, see `add_query_secrets`.
+    pub fn query_secrets(&self) -> SqlSecrets {
+        self.shared.query_secrets.read().clone()
+    }
+
     pub fn get_ua(&self) -> String {
         let ua = self.shared.user_agent.read();
         ua.clone()
@@ -1045,6 +1051,28 @@ impl QueryContext {
 }
 
 impl QueryContext {
+    #[cfg(feature = "python-udf")]
+    pub(crate) fn python_udf_workers(
+        &self,
+    ) -> Result<Arc<databend_query_script_udf_support::PythonQueryWorkers>> {
+        let max_threads = self.get_settings().get_max_threads()? as usize;
+        let mut workers = self.shared.python_udf_workers.lock();
+        if workers
+            .as_ref()
+            .is_some_and(|workers| workers.is_finished())
+        {
+            // Nested SQL executors can reuse a context for sequential executions.
+            // An ended execution must not donate its interpreter or sealed budget.
+            *workers = None;
+        }
+        Ok(workers
+            .get_or_insert_with(|| {
+                databend_query_script_udf_support::PythonWorkerManager::instance()
+                    .query(self.shared.get_tenant().tenant_name(), max_threads)
+            })
+            .clone())
+    }
+
     pub(crate) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {
         self.shared.get_row_fetch_io_semaphore(max_threads)
     }

@@ -210,6 +210,9 @@ impl Binder {
             AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),
             AccountMgrLevel::Warehouse(w) => Ok(GrantObject::Warehouse(w.clone())),
             AccountMgrLevel::Connection(c) => Ok(GrantObject::Connection(c.clone())),
+            AccountMgrLevel::Integration(c) => {
+                Ok(GrantObject::Integration(self.normalize_identifier(c).name))
+            }
             AccountMgrLevel::Sequence(s) => Ok(GrantObject::Sequence(s.clone())),
             AccountMgrLevel::Procedure(p) => {
                 let procedure_id = self.resolve_procedure_id(p).await?;
@@ -286,6 +289,9 @@ impl Binder {
             AccountMgrLevel::Stage(stage) => Ok(vec![GrantObject::Stage(stage.clone())]),
             AccountMgrLevel::Warehouse(w) => Ok(vec![GrantObject::Warehouse(w.clone())]),
             AccountMgrLevel::Connection(c) => Ok(vec![GrantObject::Connection(c.clone())]),
+            AccountMgrLevel::Integration(c) => Ok(vec![GrantObject::Integration(
+                self.normalize_identifier(c).name,
+            )]),
             AccountMgrLevel::Sequence(s) => Ok(vec![GrantObject::Sequence(s.clone())]),
             AccountMgrLevel::Procedure(p) => {
                 let procedure_id = self.resolve_procedure_id(p).await?;
@@ -601,6 +607,10 @@ impl Binder {
             None
         };
 
+        let default_role = user_options.iter().rev().find_map(|option| match option {
+            UserOptionItem::DefaultRole(role) => Some(role.clone()),
+            _ => None,
+        });
         let change_auth = new_auth_info.is_some() || key_pair_changed;
         let change_user_option = user_option != user_info.option;
         let new_user_option = if change_user_option {
@@ -618,6 +628,7 @@ impl Binder {
             user_info,
             change_auth,
             change_user_option,
+            default_role,
         };
 
         Ok(Plan::AlterUser(Box::new(plan)))

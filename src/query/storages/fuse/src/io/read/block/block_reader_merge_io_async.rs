@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use crate::BlockReadResult;
 use crate::io::BlockReadContext;
 use crate::io::BlockReader;
+use crate::io::read::block::parquet::ColumnEncoding;
 
 impl BlockReader {
     #[async_backtrace::framed]
@@ -84,7 +85,7 @@ impl BlockReadContext {
                 let column_array_cache_key = column_cache_key_builder.array_cache_key(
                     column_id,
                     column_meta,
-                    &data_type.to_string(),
+                    &ColumnEncoding::cache_type_key(self.column_encoding(*column_id), data_type),
                 );
 
                 // first, check in memory table data cache

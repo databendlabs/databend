@@ -424,6 +424,32 @@ async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_query_error_is_returned_unscrubbed() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    // Errors go back to the client that sent the SQL, as is, so that a
+    // value or column named like a credential does not garble them. Only
+    // logs and query history scrub them.
+    for (sql, kept) in [
+        (
+            "CREATE USER u IDNETIFIED BY 'client_visible'",
+            "client_visible",
+        ),
+        (
+            "SELECT * FROM numbers(1) WHERE customer_key = customer_id",
+            "customer_id",
+        ),
+    ] {
+        let (status, result) =
+            post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
+        assert_eq!(status, StatusCode::OK, "{:?}", result);
+        let message = result.error.map(|e| e.message).unwrap_or_default();
+        assert!(message.contains(kept), "{sql}: {message}");
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_simple_sql() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 

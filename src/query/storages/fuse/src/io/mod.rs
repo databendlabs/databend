@@ -66,6 +66,7 @@ pub use write::SpatialIndexBuilder;
 pub(crate) use write::StreamBlockBuilder;
 pub(crate) use write::StreamBlockProperties;
 pub use write::VectorIndexBuilder;
+pub use write::VectorIndexSearchOptions;
 pub use write::VirtualColumnBuildMode;
 pub use write::VirtualColumnBuilder;
 pub use write::VirtualColumnLayoutPlanner;

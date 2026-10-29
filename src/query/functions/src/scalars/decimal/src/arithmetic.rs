@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::*;
 use std::sync::Arc;
 
 use databend_common_expression::Domain;
@@ -23,22 +22,27 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
-use databend_common_expression::ScalarFunction;
 use databend_common_expression::ScalarFunctionDomain;
 use databend_common_expression::Value;
 use databend_common_expression::types::SimpleDomain;
-use databend_common_expression::types::compute_view::Compute;
-use databend_common_expression::types::compute_view::ComputeView;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
-use databend_common_expression::vectorize_2_arg;
-use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::with_decimal_mapped_type;
 
-use super::convert_to_decimal_domain;
-use crate::decimal_to_decimal_fast;
-use crate::other_to_decimal;
+mod domain;
+mod encoded;
+mod kernel;
+mod plan;
+mod row;
+pub(crate) use kernel::Kernel;
+pub(crate) use kernel::evaluator;
+use plan::BinaryBinding;
+pub(crate) use plan::InputPlan;
+pub(crate) use row::Rounded64;
+pub(crate) use row::Rounded128;
+pub(crate) use row::Rounded256;
+
+use crate::decimal::DecimalExt;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ArithmeticOp {
@@ -50,39 +54,37 @@ enum ArithmeticOp {
 }
 
 impl ArithmeticOp {
-    fn calc<T>(&self, a: T, b: T) -> T
-    where T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> {
+    const ALL: [ArithmeticOp; 5] = [
+        ArithmeticOp::Plus,
+        ArithmeticOp::Minus,
+        ArithmeticOp::Multiply,
+        ArithmeticOp::Divide,
+        ArithmeticOp::Modulo,
+    ];
+
+    const fn name(self) -> &'static str {
         match self {
-            ArithmeticOp::Plus => a + b,
-            ArithmeticOp::Minus => a - b,
-            ArithmeticOp::Multiply => a * b,
-            _ => unimplemented!(),
+            ArithmeticOp::Plus => "plus",
+            ArithmeticOp::Minus => "minus",
+            ArithmeticOp::Multiply => "multiply",
+            ArithmeticOp::Divide => "divide",
+            ArithmeticOp::Modulo => "modulo",
         }
     }
 
-    fn calc_domain<T: Decimal>(
-        &self,
-        lhs: &SimpleDomain<T>,
-        rhs: &SimpleDomain<T>,
-        precision: u8,
-    ) -> Option<SimpleDomain<T>> {
-        match self {
-            ArithmeticOp::Plus => domain_plus(lhs, rhs, precision),
-            ArithmeticOp::Minus => domain_minus(lhs, rhs, precision),
-            ArithmeticOp::Multiply => domain_mul(lhs, rhs, precision),
-            ArithmeticOp::Divide | ArithmeticOp::Modulo => {
-                // For div and mod, we cannot determine the domain.
-                None
-            }
-        }
+    // A legal decimal signature always has bound input/result sizes. Sizing
+    // rule violations are internal errors, never an overload miss.
+    fn size(&self, precision: u8, scale: u8) -> DecimalSize {
+        DecimalSize::new(precision, scale).unwrap_or_else(|error| {
+            panic!("internal {self:?} binding produced Decimal({precision},{scale}): {error}")
+        })
     }
 
-    // Returns binded types and result type
     fn result_size(
         &self,
         a: &DecimalSize,
         b: &DecimalSize,
-    ) -> Option<(DecimalSize, DecimalSize, DecimalSize)> {
+    ) -> (DecimalSize, DecimalSize, DecimalSize) {
         if *self == ArithmeticOp::Modulo {
             return Self::modulo_size(a, b);
         }
@@ -119,399 +121,86 @@ impl ArithmeticOp {
                 precision.min(i256::MAX_PRECISION)
             };
 
-        let result_type = DecimalSize::new(precision, scale).ok()?;
+        let result_type = self.size(precision, scale);
         match self {
-            ArithmeticOp::Multiply => Some((
-                DecimalSize::new(precision, a.scale()).ok()?,
-                DecimalSize::new(precision, b.scale()).ok()?,
+            ArithmeticOp::Multiply => (
+                self.size(precision, a.scale()),
+                self.size(precision, b.scale()),
                 result_type,
-            )),
+            ),
 
             ArithmeticOp::Divide => {
                 let p = precision.max(a.precision()).max(b.precision());
-                Some((
-                    DecimalSize::new(p, a.scale()).ok()?,
-                    DecimalSize::new(p, b.scale()).ok()?,
+                (
+                    self.size(p, a.scale()),
+                    self.size(p, b.scale()),
                     result_type,
-                ))
+                )
             }
 
             ArithmeticOp::Plus | ArithmeticOp::Minus => {
-                Some((result_type, result_type, result_type))
+                let required = a.leading_digits().max(b.leading_digits()) + scale + 1;
+                if required <= precision {
+                    (result_type, result_type, result_type)
+                } else {
+                    (
+                        self.size(precision, a.scale()),
+                        self.size(precision, b.scale()),
+                        result_type,
+                    )
+                }
             }
 
             ArithmeticOp::Modulo => unreachable!(),
         }
     }
 
-    // The remainder is taken on both operands aligned to the larger scale,
-    // which can need more digits than either operand has: in
-    // `0.1::DECIMAL(38, 38) % 1` the divisor becomes 1 followed by 38 zeros.
-    // So the operands get their own size, up to Decimal256 even for two
-    // Decimal128 operands. The remainder is smaller in magnitude than both
-    // operands, so the result needs only the fewer leading digits.
-    fn modulo_size(
-        a: &DecimalSize,
-        b: &DecimalSize,
-    ) -> Option<(DecimalSize, DecimalSize, DecimalSize)> {
+    // Align inside the arithmetic operation: aligned operands can exceed even
+    // Decimal256 while the remainder fits. Preserve each operand's own scale
+    // and use the larger input precision independently of the result precision.
+    fn modulo_size(a: &DecimalSize, b: &DecimalSize) -> (DecimalSize, DecimalSize, DecimalSize) {
         let scale = a.scale().max(b.scale());
+        let precision = a.precision().max(b.precision());
+        let op = ArithmeticOp::Modulo;
+        let result = op.size(a.leading_digits().min(b.leading_digits()) + scale, scale);
         let aligned = a.leading_digits().max(b.leading_digits()) + scale;
-        let operands = DecimalSize::new(aligned.min(i256::MAX_PRECISION), scale).ok()?;
-        let result =
-            DecimalSize::new(a.leading_digits().min(b.leading_digits()) + scale, scale).ok()?;
-        Some((operands, operands, result))
-    }
-}
-
-fn convert_to_decimal(
-    value: &Value<AnyType>,
-    data_type: &DataType,
-    size: DecimalSize,
-    ctx: &mut EvalContext,
-) -> ((Value<AnyType>, DecimalSize), DecimalDataType) {
-    if data_type.is_decimal() {
-        let (value_decimal, value_type) = decimal_to_decimal_fast(value, ctx, size);
-        ((value_decimal, size), value_type)
-    } else {
-        let value_type = DecimalDataType::from(size);
-        let value_decimal = other_to_decimal(value, None, ctx, data_type, value_type);
-        ((value_decimal, size), value_type)
-    }
-}
-
-fn op_decimal(
-    a: (&Value<AnyType>, &DataType, DecimalSize),
-    b: (&Value<AnyType>, &DataType, DecimalSize),
-    ctx: &mut EvalContext,
-    result_type: DecimalDataType,
-    op: ArithmeticOp,
-) -> Value<AnyType> {
-    // Modulo computes at its operands' size, which can be wider than its result.
-    let compute_size = if op == ArithmeticOp::Modulo {
-        a.2
-    } else {
-        result_type.size()
-    };
-    let (a, a_type) = convert_to_decimal(a.0, a.1, a.2, ctx);
-    let (b, b_type) = convert_to_decimal(b.0, b.1, b.2, ctx);
-
-    with_decimal_mapped_type!(|T| match DecimalDataType::from(compute_size) {
-        DecimalDataType::T(_) => {
-            with_decimal_mapped_type!(|A| match a_type {
-                DecimalDataType::A(_) => {
-                    with_decimal_mapped_type!(|B| match b_type {
-                        DecimalDataType::B(_) => {
-                            with_decimal_mapped_type!(|OUT| match result_type {
-                                DecimalDataType::OUT(size) => {
-                                    binary_decimal::<
-                                        DecimalConvert<T, OUT>,
-                                        ComputeView<DecimalConvert<A, T>, _, _>,
-                                        ComputeView<DecimalConvert<B, T>, _, _>,
-                                        _,
-                                        _,
-                                    >(a, b, ctx, size, op)
-                                }
-                            })
-                        }
-                    })
-                }
-            })
-        }
-    })
-}
-
-fn binary_decimal<C, L, R, T, U>(
-    (a, a_size): (Value<AnyType>, DecimalSize),
-    (b, b_size): (Value<AnyType>, DecimalSize),
-    ctx: &mut EvalContext,
-    return_size: DecimalSize,
-    op: ArithmeticOp,
-) -> Value<AnyType>
-where
-    T: Decimal + Add<Output = T> + Sub<Output = T> + Mul<Output = T>,
-    U: Decimal,
-    C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
-    L: for<'a> AccessType<ScalarRef<'a> = T>,
-    R: for<'a> AccessType<ScalarRef<'a> = T>,
-{
-    let overflow = return_size.precision() == T::MAX_PRECISION;
-
-    let a = a.try_downcast().unwrap();
-    let b = b.try_downcast().unwrap();
-
-    let zero = T::zero();
-    let one = T::one();
-
-    match op {
-        ArithmeticOp::Divide => {
-            let scale_a = a_size.scale();
-            let scale_b = b_size.scale();
-
-            // Note: the result scale is always larger than the left scale
-            let scale_mul = (scale_b + return_size.scale() - scale_a) as u32;
-            let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| {
-                // We are using round div here which follow snowflake's behavior: https://docs.snowflake.com/sql-reference/operators-arithmetic
-                // For example:
-                // round_div(5, 2) --> 3
-                // round_div(-5, 2) --> -3
-                // round_div(5, -2) --> -3
-                // round_div(-5, -2) --> 3
-                if std::hint::unlikely(b == zero) {
-                    ctx.set_error(result.len(), "divided by zero");
-                    result.push(C::compute(one));
-                } else {
-                    match a.do_round_div(b, scale_mul) {
-                        Some(t) => result.push(C::compute(t)),
-                        None => {
-                            ctx.set_error(
-                                result.len(),
-                                concat!("Decimal div overflow at line : ", line!()),
-                            );
-                            result.push(C::compute(one));
-                        }
-                    }
-                }
-            };
-
-            vectorize_with_builder_2_arg::<L, R, DecimalType<U>>(func)(a, b, ctx)
-        }
-
-        ArithmeticOp::Multiply => {
-            let scale_a = a_size.scale();
-            let scale_b = b_size.scale();
-
-            let scale_mul = scale_a + scale_b - return_size.scale();
-
-            if scale_mul == 0 {
-                vectorize_2_arg::<L, R, DecimalType<U>>(|a, b, _| C::compute(op.calc(a, b)))(
-                    a, b, ctx,
-                )
-            } else {
-                let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| match a
-                    .do_round_mul(b, scale_mul as u32, overflow)
-                {
-                    Some(t) => result.push(C::compute(t)),
-                    None => {
-                        ctx.set_error(
-                            result.len(),
-                            concat!("Decimal multiply overflow at line : ", line!()),
-                        );
-                        result.push(C::compute(one));
-                    }
-                };
-
-                vectorize_with_builder_2_arg::<L, R, DecimalType<U>>(func)(a, b, ctx)
-            }
-        }
-
-        ArithmeticOp::Modulo => {
-            // The operands share the result's scale, so the remainder of their
-            // unscaled values is the remainder of the decimals, and it fits the
-            // result's narrower precision. Like `%` on integers, it takes the
-            // sign of the dividend.
-            let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| {
-                if std::hint::unlikely(b == zero) {
-                    ctx.set_error(result.len(), "divided by zero");
-                    result.push(C::compute(zero));
-                } else {
-                    // checked_rem fails only on T::MIN % -1, which no decimal
-                    // within its precision can reach.
-                    result.push(C::compute(a.checked_rem(b).unwrap_or(zero)));
-                }
-            };
-
-            vectorize_with_builder_2_arg::<L, R, DecimalType<U>>(func)(a, b, ctx)
-        }
-
-        ArithmeticOp::Plus | ArithmeticOp::Minus => {
-            if overflow {
-                let min_for_precision = T::min_for_precision(return_size.precision());
-                let max_for_precision = T::max_for_precision(return_size.precision());
-
-                let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| {
-                    let t = op.calc(a, b);
-
-                    if t < min_for_precision || t > max_for_precision {
-                        ctx.set_error(
-                            result.len(),
-                            concat!("Decimal overflow at line : ", line!()),
-                        );
-                        result.push(C::compute(one));
-                    } else {
-                        result.push(C::compute(t));
-                    }
-                };
-
-                vectorize_with_builder_2_arg::<L, R, DecimalType<U>>(func)(a, b, ctx)
-            } else {
-                vectorize_2_arg::<L, R, DecimalType<U>>(|l, r, _| C::compute(op.calc(l, r)))(
-                    a, b, ctx,
-                )
-            }
-        }
-    }
-    .upcast_with_type(&DataType::Decimal(return_size))
-}
-
-#[inline(always)]
-fn domain_plus<T: Decimal>(
-    lhs: &SimpleDomain<T>,
-    rhs: &SimpleDomain<T>,
-    precision: u8,
-) -> Option<SimpleDomain<T>> {
-    // For plus, the scale of the two operands must be the same.
-    let min = T::min_for_precision(precision);
-    let max = T::max_for_precision(precision);
-    Some(SimpleDomain {
-        min: lhs
-            .min
-            .checked_add(rhs.min)
-            .filter(|&m| m >= min && m <= max)?,
-        max: lhs
-            .max
-            .checked_add(rhs.max)
-            .filter(|&m| m >= min && m <= max)?,
-    })
-}
-
-#[inline(always)]
-fn domain_minus<T: Decimal>(
-    lhs: &SimpleDomain<T>,
-    rhs: &SimpleDomain<T>,
-    precision: u8,
-) -> Option<SimpleDomain<T>> {
-    // For minus, the scale of the two operands must be the same.
-    let min = T::min_for_precision(precision);
-    let max = T::max_for_precision(precision);
-    Some(SimpleDomain {
-        min: lhs
-            .min
-            .checked_sub(rhs.max)
-            .filter(|&m| m >= min && m <= max)?,
-        max: lhs
-            .max
-            .checked_sub(rhs.min)
-            .filter(|&m| m >= min && m <= max)?,
-    })
-}
-
-#[inline(always)]
-fn domain_mul<T: Decimal>(
-    lhs: &SimpleDomain<T>,
-    rhs: &SimpleDomain<T>,
-    precision: u8,
-) -> Option<SimpleDomain<T>> {
-    let min = T::min_for_precision(precision);
-    let max = T::max_for_precision(precision);
-
-    let a = lhs
-        .min
-        .checked_mul(rhs.min)
-        .filter(|&m| m >= min && m <= max)?;
-    let b = lhs
-        .min
-        .checked_mul(rhs.max)
-        .filter(|&m| m >= min && m <= max)?;
-    let c = lhs
-        .max
-        .checked_mul(rhs.min)
-        .filter(|&m| m >= min && m <= max)?;
-    let d = lhs
-        .max
-        .checked_mul(rhs.max)
-        .filter(|&m| m >= min && m <= max)?;
-
-    Some(SimpleDomain {
-        min: a.min(b).min(c).min(d),
-        max: a.max(b).max(c).max(d),
-    })
-}
-
-struct DecimalBinaryCalcDomain {
-    left_size: DecimalSize,
-    right_size: DecimalSize,
-    return_size: DecimalSize,
-    arithmetic_op: ArithmeticOp,
-}
-
-impl ScalarFunctionDomain for DecimalBinaryCalcDomain {
-    fn domain_eval(&self, ctx: &FunctionContext, d: &[Domain]) -> FunctionDomain<AnyType> {
-        let (left, right) = (
-            DecimalDataType::Decimal256(self.left_size),
-            DecimalDataType::Decimal256(self.right_size),
-        );
-        let lhs = convert_to_decimal_domain(ctx, d[0].clone(), left);
-        let rhs = convert_to_decimal_domain(ctx, d[1].clone(), right);
-
-        let (lhs, rhs) = match (lhs, rhs) {
-            (Some(lhs), Some(rhs)) => (lhs, rhs),
-            _ => return FunctionDomain::Full,
-        };
-
-        let size = self.return_size;
-
-        let default_domain = if matches!(
-            self.arithmetic_op,
-            ArithmeticOp::Divide | ArithmeticOp::Modulo
-        ) {
-            FunctionDomain::MayThrow
+        if aligned <= i256::MAX_PRECISION {
+            let operands = op.size(aligned, scale);
+            (operands, operands, result)
         } else {
-            FunctionDomain::Full
-        };
-        {
-            match (lhs, rhs) {
-                (DecimalDomain::Decimal256(d1, _), DecimalDomain::Decimal256(d2, _)) => self
-                    .arithmetic_op
-                    .calc_domain(&d1, &d2, size.precision())
-                    .map(|d| match size.data_kind() {
-                        DecimalDataKind::Decimal64 => DecimalDomain::Decimal64(
-                            SimpleDomain {
-                                min: d.min.as_i64(),
-                                max: d.max.as_i64(),
-                            },
-                            size,
-                        ),
-                        DecimalDataKind::Decimal128 => DecimalDomain::Decimal128(
-                            SimpleDomain {
-                                min: d.min.as_i128(),
-                                max: d.max.as_i128(),
-                            },
-                            size,
-                        ),
-                        DecimalDataKind::Decimal256 => DecimalDomain::Decimal256(d, size),
-                    }),
-                _ => unreachable!("unreachable decimal domain {:?} /{:?}", lhs, rhs),
-            }
+            (
+                op.size(precision, a.scale()),
+                op.size(precision, b.scale()),
+                result,
+            )
         }
-        .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
-        .unwrap_or(default_domain)
     }
 }
 
-struct DecimalBinaryFunctionEvaluator {
-    args_type: Vec<DataType>,
-    left_size: DecimalSize,
-    right_size: DecimalSize,
-    return_size: DecimalSize,
-    arithmetic_op: ArithmeticOp,
-}
-
-impl ScalarFunction for DecimalBinaryFunctionEvaluator {
-    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-        let return_decimal_type = DecimalDataType::from(self.return_size);
-
-        op_decimal(
-            (&args[0], &self.args_type[0], self.left_size),
-            (&args[1], &self.args_type[1], self.right_size),
-            ctx,
-            return_decimal_type,
-            self.arithmetic_op,
-        )
-    }
+fn bind_function(
+    op: ArithmeticOp,
+    args_type: [DataType; 2],
+    binding: BinaryBinding,
+    domain: impl ScalarFunctionDomain,
+    nullable: bool,
+) -> Arc<Function> {
+    let inputs = [
+        InputPlan::prepare(&args_type[0], binding.left),
+        InputPlan::prepare(&args_type[1], binding.right),
+    ];
+    let signature = FunctionSignature {
+        name: op.name().to_owned(),
+        args_type: args_type.to_vec(),
+        return_type: DataType::Decimal(binding.result),
+    };
+    let eval = plan::bind(op, binding, inputs);
+    Arc::new(Function::with_passthrough_nullable(
+        signature, domain, eval, None, nullable,
+    ))
 }
 
 fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: ArithmeticOp) {
-    let name = format!("{:?}", arithmetic_op).to_lowercase();
+    let name = arithmetic_op.name();
 
     let factory = FunctionFactory::Closure(Box::new(move |_, args_type| {
         if args_type.len() != 2 {
@@ -519,7 +208,10 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
         }
 
         let has_nullable = args_type.iter().any(|x| x.is_nullable_or_null());
-        let args_type: Vec<DataType> = args_type.iter().map(|x| x.remove_nullable()).collect();
+        let args_type = [
+            args_type[0].remove_nullable(),
+            args_type[1].remove_nullable(),
+        ];
 
         // number X decimal -> decimal
         // decimal X number -> decimal
@@ -531,39 +223,41 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
         let decimal_a = args_type[0].get_decimal_properties()?;
         let decimal_b = args_type[1].get_decimal_properties()?;
 
-        let (left_size, right_size, return_size) =
-            arithmetic_op.result_size(&decimal_a, &decimal_b)?;
-
-        let signature = FunctionSignature {
-            name: format!("{:?}", arithmetic_op).to_lowercase(),
-            args_type: args_type.clone(),
-            return_type: DataType::Decimal(return_size),
-        };
-
-        let calc_domain = DecimalBinaryCalcDomain {
-            left_size,
-            right_size,
-            return_size,
-            arithmetic_op,
-        };
-        let eval = DecimalBinaryFunctionEvaluator {
-            args_type,
-            left_size,
-            right_size,
-            return_size,
-            arithmetic_op,
-        };
-
-        Some(Arc::new(Function::with_passthrough_nullable(
-            signature,
-            calc_domain,
-            eval,
-            None,
-            has_nullable,
-        )))
+        let op = arithmetic_op;
+        let binding = BinaryBinding::new(op, &[decimal_a, decimal_b]);
+        Some(match op {
+            ArithmeticOp::Plus => bind_function(
+                op,
+                args_type,
+                binding,
+                domain::AddSubtractDomain::<false>::new(binding),
+                has_nullable,
+            ),
+            ArithmeticOp::Minus => bind_function(
+                op,
+                args_type,
+                binding,
+                domain::AddSubtractDomain::<true>::new(binding),
+                has_nullable,
+            ),
+            ArithmeticOp::Multiply => bind_function(
+                op,
+                args_type,
+                binding,
+                domain::MultiplyDomain::new(binding),
+                has_nullable,
+            ),
+            ArithmeticOp::Divide | ArithmeticOp::Modulo => bind_function(
+                op,
+                args_type,
+                binding,
+                FunctionDomain::MayThrow,
+                has_nullable,
+            ),
+        })
     }));
 
-    registry.register_function_factory(&name, factory);
+    registry.register_function_factory(name, factory);
 }
 
 pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
@@ -637,26 +331,636 @@ fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<
         DecimalDataType::Decimal64(size) => {
             let arg = arg.try_downcast().unwrap();
             type T = DecimalType<i64>;
-            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_with_type(&DataType::Decimal(size))
+            vectorize_1_arg::<T, T>(|t, _| DecimalExt::wrapping_neg(t))(arg, ctx)
+                .upcast_with_type(&DataType::Decimal(size))
         }
         DecimalDataType::Decimal128(size) => {
             let arg = arg.try_downcast().unwrap();
             type T = DecimalType<i128>;
-            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_with_type(&DataType::Decimal(size))
+            vectorize_1_arg::<T, T>(|t, _| DecimalExt::wrapping_neg(t))(arg, ctx)
+                .upcast_with_type(&DataType::Decimal(size))
         }
         DecimalDataType::Decimal256(size) => {
             let arg = arg.try_downcast().unwrap();
             type T = DecimalType<i256>;
-            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_with_type(&DataType::Decimal(size))
+            vectorize_1_arg::<T, T>(|t, _| DecimalExt::wrapping_neg(t))(arg, ctx)
+                .upcast_with_type(&DataType::Decimal(size))
         }
     }
 }
 
 pub fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
-    // TODO checked overflow by default
-    register_decimal_binary_op(registry, ArithmeticOp::Plus);
-    register_decimal_binary_op(registry, ArithmeticOp::Minus);
-    register_decimal_binary_op(registry, ArithmeticOp::Divide);
-    register_decimal_binary_op(registry, ArithmeticOp::Multiply);
-    register_decimal_binary_op(registry, ArithmeticOp::Modulo);
+    for op in ArithmeticOp::ALL {
+        register_decimal_binary_op(registry, op);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::Domain;
+    use databend_common_expression::Function;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::FunctionDomain;
+    use databend_common_expression::FunctionEval;
+    use databend_common_expression::FunctionRegistry;
+    use databend_common_expression::Value;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::*;
+    use num_bigint::BigInt;
+    use proptest::prelude::*;
+
+    use super::ArithmeticOp;
+    use super::BinaryBinding;
+    use crate::testing::*;
+
+    const OPS: [ArithmeticOp; 5] = ArithmeticOp::ALL;
+
+    /// Fewer shapes for evaluation: scales {0, p/2, p}, and the narrowest and
+    /// widest signed and unsigned integers.
+    fn evaluated_types(precisions: impl IntoIterator<Item = u8>) -> Vec<DataType> {
+        let mut types = vec![];
+        for p in precisions {
+            types.extend(scales(p, [0, p / 2, p]).map(|s| decimal_type(p, s)));
+        }
+        types.extend(
+            [
+                NumberDataType::Int8,
+                NumberDataType::UInt8,
+                NumberDataType::Int64,
+                NumberDataType::UInt64,
+            ]
+            .map(DataType::Number),
+        );
+        types
+    }
+
+    fn registry() -> FunctionRegistry {
+        let mut registry = FunctionRegistry::empty();
+        super::super::register_decimal_arithmetic(&mut registry);
+        registry
+    }
+
+    struct Bound<'a> {
+        op: ArithmeticOp,
+        types: [&'a DataType; 2],
+        function: Arc<Function>,
+        result: DecimalSize,
+    }
+
+    impl<'a> Bound<'a> {
+        fn new(registry: &FunctionRegistry, op: ArithmeticOp, types: [&'a DataType; 2]) -> Self {
+            let function = bind_function(registry, op.name(), vec![], &types.map(Clone::clone));
+            let result = *function.signature.return_type.as_decimal().unwrap();
+            Self {
+                op,
+                types,
+                function,
+                result,
+            }
+        }
+
+        /// Exact result of one row: operands are scaled exactly, products and
+        /// quotients round half away from zero, remainders truncate.
+        fn expected(&self, a: &BigInt, b: &BigInt) -> Expected {
+            let [sa, sb] = self
+                .types
+                .map(|ty| ty.get_decimal_properties().unwrap().scale() as u32);
+            let scale = self.result.scale() as u32;
+            let value = match self.op {
+                ArithmeticOp::Plus => a * pow10(scale - sa) + b * pow10(scale - sb),
+                ArithmeticOp::Minus => a * pow10(scale - sa) - b * pow10(scale - sb),
+                ArithmeticOp::Multiply => round_half_away(&(a * b), &pow10(sa + sb - scale)),
+                _ if b == &BigInt::from(0) => return None,
+                ArithmeticOp::Divide => round_half_away(&(a * pow10(sb + scale - sa)), b),
+                ArithmeticOp::Modulo => (a * pow10(scale - sa)) % (b * pow10(scale - sb)),
+            };
+            fits(&value, self.result.precision()).then_some(value)
+        }
+
+        /// Evaluates rows `a[i] op b[i]`. A scalar side broadcasts its first value;
+        /// rows hidden by `visible` hold storage extremes instead of their values.
+        fn check(&self, a: &[BigInt], b: &[BigInt], scalar: [bool; 2], visible: Option<&[bool]>) {
+            let num_rows = a.len();
+            let operand = |side: usize, values: &[BigInt]| -> (Value<AnyType>, Vec<BigInt>) {
+                let ty = self.types[side];
+                if scalar[side] {
+                    let value = values[0].clone();
+                    return (Value::Scalar(scalar_value(ty, &value)), vec![
+                        value;
+                        num_rows
+                    ]);
+                }
+                let payloads = hidden_payloads(ty);
+                let rows = (0..num_rows)
+                    .map(|row| match visible {
+                        Some(visible) if !visible[row] => payloads[(row + side) % 2].clone(),
+                        _ => values[row].clone(),
+                    })
+                    .collect::<Vec<_>>();
+                (Value::Column(column(ty, &rows)), rows)
+            };
+            let (left, a) = operand(0, a);
+            let (right, b) = operand(1, b);
+            let expected = a
+                .iter()
+                .zip(&b)
+                .map(|(a, b)| self.expected(a, b))
+                .collect::<Vec<_>>();
+            check_rows(&self.function, &[left, right], visible, &expected, |row| {
+                format!(
+                    "{:?}({}, {}) -> {:?}, row {row}: {} {:?} {}, scalar={scalar:?}",
+                    self.op, self.types[0], self.types[1], self.result, a[row], self.op, b[row]
+                )
+            });
+        }
+    }
+
+    /// FOR input with canonical logical metadata, including wide Decimal sizes
+    /// that `try_encode` does not produce directly. Empty inputs still have a
+    /// valid frame, and the full u64 delta span is allowed.
+    fn for_value(ty: &DataType, values: &[BigInt]) -> Value<AnyType> {
+        let raw = values
+            .iter()
+            .map(|v| i128::try_from(v).unwrap())
+            .collect::<Vec<_>>();
+        let min = raw.iter().copied().min().unwrap_or(0);
+        let max = raw.iter().copied().max().unwrap_or(min);
+        let max_delta = u64::try_from(max - min).unwrap();
+        let deltas = NarrowBuffer::pack(raw.iter().map(|v| (v - min) as u64), max_delta);
+        Value::Column(databend_common_expression::Column::Encoded(Box::new(
+            EncodedColumn::For(ForColumn::new(ty.clone(), min, max_delta, deltas)),
+        )))
+    }
+
+    impl Bound<'_> {
+        /// Compare the selected backend with decoded execution and the exact
+        /// arithmetic oracle. Encoding is checked separately so an accidental
+        /// unconditional fallback cannot make the tests pass.
+        fn check_for(
+            &self,
+            a: &[BigInt],
+            b: &[BigInt],
+            scalar: [bool; 2],
+            visible: Option<&[bool]>,
+            stays_encoded: bool,
+        ) {
+            assert_eq!(a.len(), b.len());
+            let num_rows = a.len();
+            let args = [a, b];
+            let args = std::array::from_fn::<_, 2, _>(|side| {
+                if scalar[side] {
+                    Value::Scalar(scalar_value(self.types[side], &args[side][0]))
+                } else {
+                    for_value(self.types[side], args[side])
+                }
+            });
+            let plain = args.each_ref().map(|arg| arg.decoded().into_owned());
+            let FunctionEval::Scalar { eval, .. } = &self.function.eval else {
+                unreachable!("scalar function")
+            };
+            let func_ctx = FunctionContext::default();
+            let mut ctx = context(
+                &func_ctx,
+                num_rows,
+                visible.map(|v| v.iter().copied().collect()),
+            );
+            let mut plain_ctx = ctx.clone();
+            // The expression evaluator decodes arguments before calling a
+            // kernel that does not accept encoded input.
+            let value = eval.eval(
+                if eval.accepts_encoded_args() {
+                    &args
+                } else {
+                    &plain
+                },
+                &mut ctx,
+            );
+            let plain_value = eval.eval(&plain, &mut plain_ctx);
+            let describe = || {
+                format!(
+                    "{:?}({:?}) -> {:?}, scalar={scalar:?}, visible={visible:?}",
+                    self.op, self.types, self.result
+                )
+            };
+            assert_eq!(value.is_encoded(), stays_encoded, "{}", describe());
+            assert_eq!(
+                value.as_column().unwrap().data_type(),
+                DataType::Decimal(self.result),
+                "{}",
+                describe()
+            );
+            assert_eq!(ctx.errors, plain_ctx.errors, "{}", describe());
+            let errors = error_rows(&ctx);
+            let actual = rows(&value.decoded(), num_rows);
+            let decoded = rows(&plain_value, num_rows);
+            for row in 0..num_rows {
+                if visible.is_some_and(|v| !v[row]) {
+                    assert!(!errors[row], "hidden row {row}: {}", describe());
+                    continue;
+                }
+                let a = &a[if scalar[0] { 0 } else { row }];
+                let b = &b[if scalar[1] { 0 } else { row }];
+                match self.expected(a, b) {
+                    Some(expected) => {
+                        assert!(!errors[row], "row {row}: {}", describe());
+                        assert_eq!(actual[row], expected, "row {row}: {}", describe());
+                        assert_eq!(actual[row], decoded[row], "row {row}: {}", describe());
+                    }
+                    None => assert!(errors[row], "row {row}: {}", describe()),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn for_clamped_add_subtract_aligns_scales() {
+        let registry = registry();
+        // The first pair is the regression: coefficient 1 at scale 0 must
+        // become 10^20, not 1, before adding/subtracting a scale-20 unit.
+        for (precision, scale) in [(38, 20), (76, 40), (76, 76)] {
+            let types = [decimal_type(precision, 0), decimal_type(precision, scale)];
+            let a = [1, 2, -1, -2].map(BigInt::from);
+            let b = [1, -1, 1, -1].map(BigInt::from);
+            for op in [ArithmeticOp::Plus, ArithmeticOp::Minus] {
+                for reverse in [false, true] {
+                    let (types, a, b) = if reverse {
+                        ([&types[1], &types[0]], &b, &a)
+                    } else {
+                        ([&types[0], &types[1]], &a, &b)
+                    };
+                    let bound = Bound::new(&registry, op, types);
+                    for scalar in [[false, false], [false, true], [true, false]] {
+                        bound.check_for(a, b, scalar, None, false);
+                        bound.check_for(a, b, scalar, Some(&[false, true, false, true]), false);
+                        bound.check_for(a, b, scalar, Some(&[false; 4]), false);
+                    }
+                    bound.check_for(&[], &[], [false; 2], Some(&[]), false);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn for_raw_plans_preserve_encoding() {
+        let registry = registry();
+        let a = [1, 2, -1, -2].map(BigInt::from);
+        let b = [2, -1, 2, -1].map(BigInt::from);
+        // Both native and checked plans retain the runtime i64 optimization,
+        // independent of the result's canonical Decimal storage width.
+        for precision in [17, 18, 38, 39, 76] {
+            for scale in [0, 2] {
+                let ty = decimal_type(precision, scale);
+                for op in [
+                    ArithmeticOp::Plus,
+                    ArithmeticOp::Minus,
+                    ArithmeticOp::Multiply,
+                ] {
+                    let bound = Bound::new(&registry, op, [&ty, &ty]);
+                    for scalar in [[false, false], [false, true], [true, false]] {
+                        bound.check_for(&a, &b, scalar, None, true);
+                        bound.check_for(&a, &b, scalar, Some(&[false, true, false, true]), true);
+                        bound.check_for(&a, &b, scalar, Some(&[false; 4]), true);
+                    }
+                    bound.check_for(&[], &[], [false; 2], Some(&[]), true);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn for_runtime_rejections_fall_back() {
+        let registry = registry();
+        for (op, sizes, a, b) in [
+            // Result fits Decimal128 but not i64.
+            (ArithmeticOp::Plus, [(38, 0); 2], i64::MAX as i128, 1),
+            (ArithmeticOp::Minus, [(38, 0); 2], i64::MIN as i128, 1),
+            (ArithmeticOp::Multiply, [(38, 0); 2], i64::MAX as i128, 2),
+            // An operand itself does not fit i64.
+            (ArithmeticOp::Plus, [(38, 0); 2], i64::MAX as i128 + 1, 1),
+            (ArithmeticOp::Minus, [(38, 0); 2], 1, i64::MIN as i128 - 1),
+            // Checked rounded multiplication must also use its normal kernel.
+            (
+                ArithmeticOp::Multiply,
+                [(18, 18); 2],
+                1_000_000_000,
+                1_000_000_000,
+            ),
+            // Rounded multiplication is not raw-coefficient multiplication.
+            (ArithmeticOp::Multiply, [(7, 7); 2], 5, 10),
+            // An encoded column needs input rescaling; a scalar could convert,
+            // but the column must fall back instead of adding raw coefficients.
+            (ArithmeticOp::Plus, [(10, 2), (10, 5)], 1, 2),
+            (ArithmeticOp::Minus, [(10, 5), (10, 2)], 1, 2),
+        ] {
+            let types = sizes.map(|(p, s)| decimal_type(p, s));
+            let bound = Bound::new(&registry, op, types.each_ref());
+            let a = [BigInt::from(a); 1];
+            let b = [BigInt::from(b); 1];
+            bound.check_for(&a, &b, [false; 2], None, false);
+        }
+
+        // Bounds include hidden rows. An i64-unsafe result rejects the entire
+        // FOR attempt rather than using only the visible rows as its proof.
+        let ty = decimal_type(38, 0);
+        let a = [BigInt::from(i64::MAX), BigInt::from(1)];
+        let bound = Bound::new(&registry, ArithmeticOp::Multiply, [&ty, &ty]);
+        bound.check_for(&a, &a, [false; 2], Some(&[false, true]), false);
+        bound.check_for(&a, &a, [false; 2], Some(&[false; 2]), false);
+        // After rejecting a wide scalar, the normal kernel must skip hidden
+        // rows whose products would overflow even the Decimal precision.
+        let b = [pow10(20), pow10(20)];
+        bound.check_for(&a, &b, [false, true], Some(&[false, true]), false);
+        bound.check_for(&a, &b, [false, true], Some(&[false; 2]), false);
+    }
+
+    #[test]
+    fn for_chunks_and_full_width_deltas() {
+        let registry = registry();
+        let ty = decimal_type(38, 0);
+        // Cross two chunk boundaries and exercise wrapping delta arithmetic
+        // across the entire i64 range, including a u64::MAX output delta.
+        let a = (0..2051)
+            .map(|row| BigInt::from([i64::MIN, i64::MAX, 0, 1][row % 4]))
+            .collect::<Vec<_>>();
+        for op in [
+            ArithmeticOp::Plus,
+            ArithmeticOp::Minus,
+            ArithmeticOp::Multiply,
+        ] {
+            let b = vec![BigInt::from(u8::from(op == ArithmeticOp::Multiply)); a.len()];
+            let bound = Bound::new(&registry, op, [&ty, &ty]);
+            bound.check_for(&a, &b, [false; 2], None, true);
+            bound.check_for(&a, &b, [false, true], None, true);
+        }
+    }
+
+    #[test]
+    fn for_scalar_conversion_keeps_fast_path() {
+        let registry = registry();
+        let decimal = decimal_type(15, 2);
+        let a = [100, 200].map(BigInt::from);
+        let b = [15, 15].map(BigInt::from);
+        for scalar_ty in [decimal_type(2, 1), DataType::Number(NumberDataType::Int8)] {
+            for op in [
+                ArithmeticOp::Plus,
+                ArithmeticOp::Minus,
+                ArithmeticOp::Multiply,
+            ] {
+                let bound = Bound::new(&registry, op, [&decimal, &scalar_ty]);
+                bound.check_for(&a, &b, [false, true], None, true);
+                let bound = Bound::new(&registry, op, [&scalar_ty, &decimal]);
+                bound.check_for(&b, &a, [true, false], None, true);
+            }
+        }
+    }
+
+    // Edge values of both operands, crossed, for every sampled signature: once
+    // without validity, once with every third row hidden behind storage extremes.
+    #[test]
+    fn kernels_match_bigint_on_edges() {
+        let registry = registry();
+        let types = evaluated_types([1, 2, 18, 19, 38, 39, 76]);
+        for [x, y] in signatures(&types) {
+            let (xs, ys) = (edges(x), edges(y));
+            let a = xs.iter().flat_map(|a| ys.iter().map(move |_| a.clone()));
+            let b = xs.iter().flat_map(|_| ys.iter().cloned());
+            let (a, b) = (a.collect::<Vec<_>>(), b.collect::<Vec<_>>());
+            let visible = (0..a.len()).map(|row| row % 3 != 0).collect::<Vec<_>>();
+            for op in OPS {
+                let bound = Bound::new(&registry, op, [x, y]);
+                bound.check(&a, &b, [false; 2], None);
+                bound.check(&a, &b, [false; 2], Some(&visible));
+            }
+        }
+    }
+
+    fn operand_type() -> impl Strategy<Value = DataType> {
+        prop_oneof![
+            4 => (1_u8..=76, any::<u8>()).prop_map(|(p, s)| decimal_type(p, s % (p + 1))),
+            1 => (0..INTEGERS.len()).prop_map(|i| DataType::Number(INTEGERS[i])),
+        ]
+    }
+
+    /// A value of `ty` drawn from `seed`: uniform over the whole range, small, or
+    /// an edge value.
+    fn sample(ty: &DataType, seed: &[u8; 32]) -> BigInt {
+        let edges = edges(ty);
+        let (min, max) = (edges[0].clone(), edges[edges.len() - 1].clone());
+        let random = BigInt::from_signed_bytes_le(&seed[2..]);
+        match seed[0] % 3 {
+            0 => &min + (random % (&max - &min + 1u8) + (&max - &min + 1u8)) % (&max - &min + 1u8),
+            1 => BigInt::from(seed[1] as i8).clamp(min, max),
+            _ => edges[seed[1] as usize % edges.len()].clone(),
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn kernels_match_bigint(
+            op in 0..OPS.len(),
+            x in operand_type(),
+            y in operand_type(),
+            seeds in any::<[[u8; 32]; 8]>(),
+            visible in any::<[bool; 4]>(),
+            scalar in any::<[bool; 2]>(),
+            masked in any::<bool>(),
+        ) {
+            prop_assume!(x.is_decimal() || y.is_decimal());
+            let bound = Bound::new(&registry(), OPS[op], [&x, &y]);
+            let a = seeds[..4].iter().map(|seed| sample(&x, seed)).collect::<Vec<_>>();
+            let b = seeds[4..].iter().map(|seed| sample(&y, seed)).collect::<Vec<_>>();
+            bound.check(&a, &b, scalar, masked.then_some(&visible[..]));
+        }
+    }
+
+    // Drivers decide which rows a row kernel sees: `SKIP` kernels see only visible
+    // rows, and none at all for an invisible or empty batch; the others see every
+    // row once. A scalar pair is one evaluation.
+    #[test]
+    fn drivers_call_kernels_on_selected_rows() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+
+        use super::InputPlan;
+        use super::kernel;
+        use super::kernel::DecimalArgs;
+
+        let size = DecimalSize::new(18, 0).unwrap();
+        let ty = DataType::Decimal(size);
+        let plans = [InputPlan::prepare(&ty, size); 2];
+        let func_ctx = FunctionContext::default();
+        let operand = |is_scalar: bool, value: i64, rows: Vec<i64>| {
+            if is_scalar {
+                Value::Scalar(scalar_value(&ty, &BigInt::from(value)))
+            } else {
+                Value::Column(column(
+                    &ty,
+                    &rows.into_iter().map(BigInt::from).collect::<Vec<_>>(),
+                ))
+            }
+        };
+        let run = |skip: bool, a: &Value<AnyType>, b: &Value<AnyType>, validity: &[bool]| {
+            let calls = AtomicUsize::new(0);
+            let visible = validity.iter().filter(|v| **v).count() > 0;
+            let row = |a: i64, b: i64| {
+                calls.fetch_add(1, Ordering::Relaxed);
+                assert!(
+                    !skip || (visible && (a, b) == (3, 2)),
+                    "kernel saw a hidden row"
+                );
+                a.wrapping_mul(b)
+            };
+            for fallible in [false, true] {
+                let mut ctx = context(
+                    &func_ctx,
+                    validity.len(),
+                    Some(validity.iter().copied().collect()),
+                );
+                let args = DecimalArgs::<i64, i64>::new([a, b], &plans);
+                match (skip, fallible) {
+                    (true, false) => drop(kernel::map::<true, i64, i64, i64, i64, _>(
+                        args, &mut ctx, size, row,
+                    )),
+                    (false, false) => drop(kernel::map::<false, i64, i64, i64, i64, _>(
+                        args, &mut ctx, size, row,
+                    )),
+                    (true, true) => drop(kernel::checked::<true, i64, i64, i64, i64, _>(
+                        args,
+                        &mut ctx,
+                        size,
+                        |a, b| Ok(row(a, b)),
+                        1,
+                    )),
+                    (false, true) => drop(kernel::checked::<false, i64, i64, i64, i64, _>(
+                        args,
+                        &mut ctx,
+                        size,
+                        |a, b| Ok(row(a, b)),
+                        1,
+                    )),
+                }
+                assert!(ctx.errors.is_none());
+            }
+            calls.load(Ordering::Relaxed) / 2
+        };
+        for scalar in [[false, false], [false, true], [true, false], [true, true]] {
+            let a = operand(scalar[0], 3, vec![i64::MAX, 3, i64::MIN, 3]);
+            let b = operand(scalar[1], 2, vec![i64::MIN, 2, i64::MAX, 2]);
+            let pair = scalar == [true, true];
+            let partial = [false, true, false, true];
+            assert_eq!(
+                run(true, &a, &b, &partial),
+                if pair { 1 } else { 2 },
+                "{scalar:?}"
+            );
+            assert_eq!(
+                run(false, &a, &b, &partial),
+                if pair { 1 } else { 4 },
+                "{scalar:?}"
+            );
+            assert_eq!(run(true, &a, &b, &[false; 4]), 0, "{scalar:?}");
+        }
+        let empty = Value::Column(column(&ty, &[]));
+        assert_eq!(run(true, &empty, &empty, &[]), 0);
+    }
+
+    fn decimal_bounds(domain: &DecimalDomain) -> (BigInt, BigInt, DecimalSize) {
+        match domain {
+            DecimalDomain::Decimal64(d, size) => (bigint(d.min), bigint(d.max), *size),
+            DecimalDomain::Decimal128(d, size) => (bigint(d.min), bigint(d.max), *size),
+            DecimalDomain::Decimal256(d, size) => (bigint(d.min), bigint(d.max), *size),
+        }
+    }
+
+    /// Ranges built from the type's minimum, -1, 0, 1 and maximum.
+    fn intervals(ty: &DataType) -> Vec<[BigInt; 2]> {
+        let edges = edges(ty);
+        let (min, max) = (edges[0].clone(), edges[edges.len() - 1].clone());
+        let points = [
+            min.clone(),
+            BigInt::from(-1),
+            BigInt::from(0),
+            BigInt::from(1),
+            max.clone(),
+        ]
+        .into_iter()
+        .filter(|v| &min <= v && v <= &max)
+        .collect::<Vec<_>>();
+        points
+            .iter()
+            .flat_map(|lo| {
+                points
+                    .iter()
+                    .filter(move |hi| lo <= *hi)
+                    .map(move |hi| [lo.clone(), hi.clone()])
+            })
+            .collect()
+    }
+
+    // Add, subtract and multiply are monotone in each operand, so a domain is the
+    // exact range of its corner results. A domain may stay conservative (MayThrow)
+    // only if a corner fails or an endpoint does not fit the size the domain
+    // computes in: the result size for add/sub, the bound operand sizes for
+    // multiply.
+    #[test]
+    fn domains_are_exact_or_conservative() {
+        let registry = registry();
+        let func_ctx = FunctionContext::default();
+        let types = operand_types([1, 18, 19, 38, 39, 76]);
+        for [x, y] in signatures(&types) {
+            let original = [x, y].map(|ty| ty.get_decimal_properties().unwrap());
+            for op in [
+                ArithmeticOp::Plus,
+                ArithmeticOp::Minus,
+                ArithmeticOp::Multiply,
+            ] {
+                let bound = &Bound::new(&registry, op, [x, y]);
+                let FunctionEval::Scalar { calc_domain, .. } = &bound.function.eval else {
+                    unreachable!("scalar function")
+                };
+                let binding = BinaryBinding::new(op, &original);
+                let sizes = match op {
+                    ArithmeticOp::Multiply => [binding.left, binding.right],
+                    _ => [binding.result; 2],
+                };
+                let fits_size = |side: usize, value: &BigInt| {
+                    let shift = sizes[side].scale() - original[side].scale();
+                    fits(&(value * pow10(shift as u32)), sizes[side].precision())
+                };
+                for a in intervals(x) {
+                    for b in intervals(y) {
+                        let domains = [column(x, &a).domain(), column(y, &b).domain()];
+                        let corners = a
+                            .iter()
+                            .flat_map(|a| b.iter().map(move |b| bound.expected(a, b)))
+                            .collect::<Option<Vec<_>>>();
+                        let context = format!("{op:?}({x}, {y}): {a:?} {b:?}");
+                        match (calc_domain.domain_eval(&func_ctx, &domains), corners) {
+                            (FunctionDomain::Domain(Domain::Decimal(domain)), Some(corners)) => {
+                                let range = (
+                                    corners.iter().min().unwrap().clone(),
+                                    corners.iter().max().unwrap().clone(),
+                                    bound.result,
+                                );
+                                assert_eq!(decimal_bounds(&domain), range, "{context}");
+                            }
+                            (FunctionDomain::MayThrow, None) => {}
+                            (FunctionDomain::MayThrow, Some(_)) => assert!(
+                                !a.iter().all(|v| fits_size(0, v))
+                                    || !b.iter().all(|v| fits_size(1, v)),
+                                "needlessly conservative: {context}"
+                            ),
+                            (domain, corners) => {
+                                panic!("{context}: domain {domain:?}, corners {corners:?}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

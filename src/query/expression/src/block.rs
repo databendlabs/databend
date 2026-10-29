@@ -38,7 +38,9 @@ use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
+use crate::types::EncodedView;
 use crate::types::ValueType;
+use crate::types::encoded::EncodedViewIter;
 
 pub type SendableDataBlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
@@ -234,6 +236,14 @@ impl BlockEntry {
                 T::to_owned_scalar(T::try_downcast_scalar(&scalar.as_ref())?),
                 *num_rows,
             )),
+            BlockEntry::Column(Column::Encoded(encoded)) => {
+                match T::try_downcast_encoded(encoded) {
+                    Some(view) => Ok(ColumnView::Encoded(view)),
+                    None => Ok(ColumnView::Column(T::try_downcast_column(
+                        self.as_column().unwrap(),
+                    )?)),
+                }
+            }
             BlockEntry::Column(column) => Ok(ColumnView::Column(T::try_downcast_column(column)?)),
         }
     }
@@ -274,6 +284,7 @@ impl TryFrom<Value<AnyType>> for BlockEntry {
 pub enum ColumnView<T: AccessType> {
     Const(T::Scalar, usize),
     Column(T::Column),
+    Encoded(EncodedView<T>),
 }
 
 impl<T: AccessType> ColumnView<T> {
@@ -281,6 +292,7 @@ impl<T: AccessType> ColumnView<T> {
         match self {
             ColumnView::Const(_, num_rows) => *num_rows,
             ColumnView::Column(column) => T::column_len(column),
+            ColumnView::Encoded(view) => view.len(),
         }
     }
 
@@ -294,6 +306,7 @@ impl<T: AccessType> ColumnView<T> {
                 ColumnViewIter::Const(T::to_scalar_ref(scalar), *num_rows)
             }
             ColumnView::Column(column) => ColumnViewIter::Column(T::iter_column(column)),
+            ColumnView::Encoded(view) => ColumnViewIter::Encoded(view.iter()),
         }
     }
 
@@ -307,6 +320,7 @@ impl<T: AccessType> ColumnView<T> {
                 }
             }
             ColumnView::Column(column) => T::index_column(column, i),
+            ColumnView::Encoded(view) => view.index(i),
         }
     }
 
@@ -319,6 +333,7 @@ impl<T: AccessType> ColumnView<T> {
             match self {
                 ColumnView::Const(scalar, _) => T::to_scalar_ref(scalar),
                 ColumnView::Column(column) => T::index_column_unchecked(column, i),
+                ColumnView::Encoded(view) => view.index_unchecked(i),
             }
         }
     }
@@ -332,13 +347,45 @@ impl<T: ValueType> ColumnView<T> {
                 BlockEntry::new_const_column(data_type, scalar, num_rows)
             }
             ColumnView::Column(column) => T::upcast_column_with_type(column, &data_type).into(),
+            ColumnView::Encoded(view) => view.upcast(&data_type).into(),
         }
     }
+}
+
+/// Runs `body` with `iter` bound to an iterator over the values of `view` (a
+/// `&ColumnView<T>`), with a concrete iterator type per layout instead of [`ColumnViewIter`],
+/// which matches the layout on every row. Plain columns and each delta width of frame of
+/// reference columns get their own copy of `body`.
+#[macro_export]
+macro_rules! with_column_view_iter {
+    ($T:ty, $view:expr, | $iter:ident | $body:expr) => {{
+        let view: &$crate::ColumnView<$T> = $view;
+        match view {
+            $crate::ColumnView::Column(column) => {
+                let $iter = <$T as $crate::types::AccessType>::iter_column(column);
+                $body
+            }
+            $crate::ColumnView::Encoded($crate::types::EncodedView::For(column)) => {
+                let base = column.base();
+                $crate::with_narrow_buffer!(column.deltas(), |deltas| {
+                    let $iter = deltas.iter().map(move |delta| {
+                        <$T as $crate::types::AccessType>::for_scalar_ref(base + *delta as i128)
+                    });
+                    $body
+                })
+            }
+            view => {
+                let $iter = view.iter();
+                $body
+            }
+        }
+    }};
 }
 
 pub enum ColumnViewIter<'a, T: AccessType> {
     Column(T::ColumnIterator<'a>),
     Const(T::ScalarRef<'a>, usize),
+    Encoded(EncodedViewIter<'a, T>),
 }
 
 impl<'a, T: AccessType> Iterator for ColumnViewIter<'a, T> {
@@ -347,6 +394,7 @@ impl<'a, T: AccessType> Iterator for ColumnViewIter<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             ColumnViewIter::Column(iter) => iter.next(),
+            ColumnViewIter::Encoded(iter) => iter.next(),
             ColumnViewIter::Const(scalar, n) => {
                 if *n == 0 {
                     None
@@ -361,6 +409,7 @@ impl<'a, T: AccessType> Iterator for ColumnViewIter<'a, T> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         match self {
             ColumnViewIter::Column(iter) => iter.size_hint(),
+            ColumnViewIter::Encoded(iter) => iter.size_hint(),
             ColumnViewIter::Const(_, n) => (*n, Some(*n)),
         }
     }

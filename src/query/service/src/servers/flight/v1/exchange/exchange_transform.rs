@@ -20,6 +20,7 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 
+use super::block_coalescer::CoalesceThreshold;
 use super::broadcast_recv_transform::ExchangeRecvTransform;
 use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;
@@ -34,9 +35,12 @@ use crate::servers::flight::v1::exchange::BroadcastRecvTransform;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
-use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_outbound_channels;
-use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_channels;
-use crate::servers::flight::v1::network::create_local_channels;
+use crate::servers::flight::v1::exchange::exchange_sink::build_broadcast_senders;
+use crate::servers::flight::v1::exchange::exchange_sink::build_hash_shuffle_nodes;
+use crate::servers::flight::v1::exchange::exchange_sink::exchange_send_buffer_config;
+use crate::servers::flight::v1::exchange::hash_shuffle_writer::hash_shuffle_send_budget;
+use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
+use crate::servers::flight::v1::network::outbound::create_local_block_senders;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
@@ -144,16 +148,17 @@ impl ExchangeTransform {
         let exchange_id = &params.exchange_id;
         let exchange_manager = DataExchangeManager::instance();
 
-        let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+        let receive_channels = exchange_manager.get_or_create_exchange_receive_channels(
             query_id,
             exchange_id,
             local_threads,
         )?;
 
-        assert_eq!(channel_set.channels.len(), local_threads);
+        assert_eq!(receive_channels.receivers.len(), local_threads);
 
-        let local_outbound = create_local_channels(&channel_set);
-        let channels = build_broadcast_outbound_channels(params, local_outbound, compression)?;
+        let local_senders = create_local_block_senders(&receive_channels);
+        let buffer_config = exchange_send_buffer_config(&ctx.get_settings())?;
+        let senders = build_broadcast_senders(params, local_senders, compression, buffer_config)?;
 
         let mut items = Vec::with_capacity(local_threads);
 
@@ -161,7 +166,7 @@ impl ExchangeTransform {
             items.push(BroadcastSendTransform::create_item(
                 idx,
                 local_pos,
-                channels.clone(),
+                senders.clone(),
                 waker.clone(),
             ));
         }
@@ -169,11 +174,12 @@ impl ExchangeTransform {
         pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
 
         let mut items = Vec::with_capacity(local_threads);
-        for idx in 0..channel_set.channels.len() {
+        for (idx, receiver) in receive_channels.receivers.iter().enumerate() {
             items.push(BroadcastRecvTransform::create_item(
                 idx,
-                channel_set.create_receiver(idx, &params.schema),
+                ExchangeQueueReceiver::create(&params.schema, receiver.clone()),
                 waker.clone(),
+                None,
             ));
         }
 
@@ -198,10 +204,18 @@ impl ExchangeTransform {
             local_pos += threads.len();
         }
 
+        let settings = ctx.get_settings();
         let waker = pipeline.get_waker();
-        let compression = ctx.get_settings().get_query_flight_compression()?;
-        let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
-        let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
+        let compression = settings.get_query_flight_compression()?;
+        let buffer_config = exchange_send_buffer_config(&settings)?;
+        let budget = hash_shuffle_send_budget(
+            local_threads,
+            settings.get_hash_shuffle_send_buffer_bytes()?,
+        );
+        let coalesce = CoalesceThreshold::create(
+            settings.get_hash_shuffle_rows_threshold()?,
+            settings.get_hash_shuffle_bytes_threshold()?,
+        );
 
         pipeline.resize(local_threads, false)?;
 
@@ -209,20 +223,21 @@ impl ExchangeTransform {
         let exchange_id = &params.exchange_id;
         let exchange_manager = DataExchangeManager::instance();
 
-        let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+        let receive_channels = exchange_manager.get_or_create_exchange_receive_channels(
             query_id,
             exchange_id,
             local_threads,
         )?;
-        assert_eq!(channel_set.channels.len(), local_threads);
+        assert_eq!(receive_channels.receivers.len(), local_threads);
 
-        let local_outbound = create_local_channels(&channel_set);
-        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+        let local_senders = create_local_block_senders(&receive_channels);
+        let nodes = build_hash_shuffle_nodes(params, local_senders, compression, buffer_config)?;
+        let num_partitions = nodes.last().map(|x| x.partitions.end).unwrap_or_default();
 
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
             params.shuffle_keys.clone(),
-            remote_outbound.len(),
+            num_partitions,
             local_pos,
         )?);
 
@@ -232,21 +247,21 @@ impl ExchangeTransform {
                 idx,
                 local_pos + idx,
                 scatter.clone(),
-                remote_outbound.clone(),
+                nodes.clone(),
                 waker.clone(),
-                rows_threshold,
-                bytes_threshold,
+                budget,
             ));
         }
 
         pipeline.add_pipe(Pipe::create(local_threads, local_threads, items));
 
         let mut items = Vec::with_capacity(local_threads);
-        for idx in 0..channel_set.channels.len() {
+        for (idx, receiver) in receive_channels.receivers.iter().enumerate() {
             items.push(ExchangeRecvTransform::create_item(
                 idx,
-                channel_set.create_receiver(idx, &params.schema),
+                ExchangeQueueReceiver::create(&params.schema, receiver.clone()),
                 waker.clone(),
+                Some(coalesce),
             ));
         }
 
