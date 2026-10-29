@@ -252,15 +252,15 @@ impl AggregateHashTable {
                 &mut group_state,
             )
         } else {
-            group_state.dict_hashes =
-                group_columns
-                    .iter()
-                    .any(BlockEntry::is_dict_encoded)
-                    .then(|| {
-                        let mut hashes = vec![0; row_count];
-                        group_hash_entries(group_columns, &mut hashes);
-                        hashes
-                    });
+            // Probing by codes hashes only one representative row per code combination, so
+            // hashing every row of the block up front is only worth it without codes.
+            group_state.dict_hashes = (group_state.code_addresses.is_empty()
+                && group_columns.iter().any(BlockEntry::is_dict_encoded))
+            .then(|| {
+                let mut hashes = vec![0; row_count];
+                group_hash_entries(group_columns, &mut hashes);
+                hashes
+            });
             let mut new_count = 0;
             for start in (0..row_count).step_by(BATCH_SIZE) {
                 let end = (start + BATCH_SIZE).min(row_count);
