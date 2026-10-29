@@ -319,8 +319,8 @@ HashJoin
     ├── apply join filters: [#0]
     └── estimated rows: 3.00
 
-# A value-changing root expression stays on its own scan even when the probe
-# subtree contains an equivalent connector.
+# A value-changing root expression is never rewritten to its argument column.
+# The equality `p.a + 10 = c.id` carries the complete expression value to c.id.
 
 query T
 EXPLAIN SELECT *
@@ -336,7 +336,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:b.id (#2), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
+│   └── filter id:1, build key:b.id (#2), probe targets:[p.a (#0) + 10@scan0, c.id (#1)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 2.00
 ├── TableScan(Build)
 │   ├── table: default.default.rf_expr_build
@@ -369,6 +369,7 @@ HashJoin
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     │   ├── push downs: [filters: [], limit: NONE]
+    │   ├── apply join filters: [#1]
     │   └── estimated rows: 3.00
     └── TableScan(Probe)
         ├── table: default.default.rf_expr_probe

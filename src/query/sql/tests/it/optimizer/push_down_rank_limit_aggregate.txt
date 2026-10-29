@@ -305,6 +305,7 @@ TopN
                 ├── build keys: [categories.category (#2)]
                 ├── probe keys: [events.category (#0)]
                 ├── other filters: []
+                ├── runtime filters: [#0: categories.category (#2) -> events.category (#0)]
                 ├── Scan
                 │   ├── table: default.categories (#1)
                 │   ├── filters: []
@@ -314,7 +315,8 @@ TopN
                     ├── table: default.events (#0)
                     ├── filters: []
                     ├── order by: []
-                    └── limit: NONE
+                    ├── limit: NONE
+                    └── runtime filters: [#0: events.category (#0)]
 
 rank_limit: [#0 ASC] limit 3
 

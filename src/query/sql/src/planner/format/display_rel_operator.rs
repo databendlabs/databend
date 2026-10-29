@@ -247,6 +247,15 @@ fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTre
             op.limit.map_or("NONE".to_string(), |l| l.to_string())
         )),
     ];
+    if !op.runtime_filters.is_empty() {
+        children.push(FormatTreeNode::new(format!(
+            "runtime filters: [{}]",
+            op.runtime_filters
+                .iter()
+                .map(|rf| format!("#{}: {}", rf.id, format_scalar(id_humanizer, &rf.probe_key)))
+                .join(", ")
+        )));
+    }
     if op.secure_predicates.is_some() {
         children.push(FormatTreeNode::new("ROW ACCESS POLICY APPLIED".to_string()));
     }
@@ -273,11 +282,26 @@ fn join_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Join) -> FormatTre
         .collect::<Vec<String>>()
         .join(", ");
 
-    FormatTreeNode::with_children(format!("Join({:?})", op.join_type), vec![
+    let mut children = vec![
         FormatTreeNode::new(format!("build keys: [{}]", build_keys)),
         FormatTreeNode::new(format!("probe keys: [{}]", probe_keys)),
         FormatTreeNode::new(format!("other filters: [{}]", join_filters)),
-    ])
+    ];
+    if !op.runtime_filters.is_empty() {
+        children.push(FormatTreeNode::new(format!(
+            "runtime filters: [{}]",
+            op.runtime_filters
+                .iter()
+                .map(|rf| format!(
+                    "#{}: {} -> {}",
+                    rf.id,
+                    format_scalar(id_humanizer, &rf.build_key),
+                    format_scalar(id_humanizer, &rf.probe_key)
+                ))
+                .join(", ")
+        )));
+    }
+    FormatTreeNode::with_children(format!("Join({:?})", op.join_type), children)
 }
 
 fn aggregate_to_format_tree<I: IdHumanizer>(

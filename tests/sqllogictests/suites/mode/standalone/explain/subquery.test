@@ -1066,8 +1066,6 @@ HashJoin
 ├── probe keys: [j.id (#3)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
-│   └── filter id:1, build key:o.id (#0), probe targets:[j.id (#3)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.50
 ├── HashJoin(Build)
 │   ├── output columns: [o.id (#0)]
@@ -1076,8 +1074,6 @@ HashJoin
 │   ├── probe keys: [k (#1)]
 │   ├── keys is null equal: [true]
 │   ├── filters: [o.c (#2) > scalar_subquery_5 (#5)]
-│   ├── build join filters:
-│   │   └── filter id:0, build key:k (#7), probe targets:[k (#1)@scan0], filter type:
 │   ├── estimated rows: 1.50
 │   ├── AggregateFinal(Build)
 │   │   ├── output columns: [MAX(v) (#5), k (#7)]
@@ -1160,7 +1156,6 @@ HashJoin
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: NONE]
-│       ├── apply join filters: [#0]
 │       └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.nullable_scalar_exchange_join
@@ -1172,7 +1167,6 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#1]
     └── estimated rows: 3.00
 
 statement ok

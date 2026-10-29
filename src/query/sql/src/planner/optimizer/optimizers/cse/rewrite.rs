@@ -132,6 +132,7 @@ mod tests {
             single_to_inner: None,
             build_side_cache_info: None,
             spatial_join: None,
+            runtime_filters: vec![],
         };
         SExpr::create_binary(Arc::new(RelOperator::Join(join)), left, right)
     }

@@ -147,6 +147,7 @@ Exchange(Merge)
             │               ├── build keys: [a (#2), b (#3)]
             │               ├── probe keys: [a (#6), b (#7)]
             │               ├── other filters: []
+            │               ├── runtime filters: [#0: a (#2) -> a (#6), #1: b (#3) -> b (#7)]
             │               ├── Exchange(Broadcast)
             │               │   └── ConstantTableScan
             │               │       ├── columns: [a (#2), b (#3)]

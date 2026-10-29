@@ -63,6 +63,7 @@ Join(Inner)
 ├── build keys: [function_context_default_join_r.k (#3)]
 ├── probe keys: [function_context_default_join_l.k (#1)]
 ├── other filters: [gt(CAST(function_context_default_join_l.ts (#0) AS Date NULL), CAST(function_context_default_join_r.ts (#2) AS Date NULL))]
+├── runtime filters: [#0: function_context_default_join_r.k (#3) -> function_context_default_join_l.k (#1)]
 ├── output columns: [function_context_default_join_l.k (#1), function_context_default_join_l.ts (#0), function_context_default_join_r.k (#3), function_context_default_join_r.ts (#2)]
 ├── outer columns: []
 ├── used columns: [function_context_default_join_l.k (#1), function_context_default_join_l.ts (#0), function_context_default_join_r.k (#3), function_context_default_join_r.ts (#2)]
@@ -91,6 +92,7 @@ Join(Inner)
     ├── filters: []
     ├── order by: []
     ├── limit: NONE
+    ├── runtime filters: [#0: function_context_default_join_l.k (#1)]
     ├── output columns: [function_context_default_join_l.k (#1), function_context_default_join_l.ts (#0)]
     ├── outer columns: []
     ├── used columns: [function_context_default_join_l.k (#1), function_context_default_join_l.ts (#0)]
@@ -201,6 +203,7 @@ Join(Inner)
 ├── build keys: [function_context_default_equi_r.ts (#1)]
 ├── probe keys: [CAST(function_context_default_equi_l.d (#0) AS Timestamp NULL)]
 ├── other filters: []
+├── runtime filters: [#0: function_context_default_equi_r.ts (#1) -> CAST(function_context_default_equi_l.d (#0) AS Timestamp NULL)]
 ├── output columns: [function_context_default_equi_l.d (#0), function_context_default_equi_r.ts (#1)]
 ├── outer columns: []
 ├── used columns: [function_context_default_equi_l.d (#0), function_context_default_equi_r.ts (#1)]
@@ -226,6 +229,7 @@ Join(Inner)
     ├── filters: []
     ├── order by: []
     ├── limit: NONE
+    ├── runtime filters: [#0: CAST(function_context_default_equi_l.d (#0) AS Timestamp NULL)]
     ├── output columns: [function_context_default_equi_l.d (#0)]
     ├── outer columns: []
     ├── used columns: [function_context_default_equi_l.d (#0)]

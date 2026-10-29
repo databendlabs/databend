@@ -100,6 +100,7 @@ pub struct Metadata {
     /// materialized view. Capturing here keeps those execution rewrites out of lineage.
     bound_query_lineage: Option<BoundQueryLineage>,
     next_runtime_filter_id: usize,
+    next_join_runtime_filter_key: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
 }
@@ -557,6 +558,14 @@ impl Metadata {
         let next_runtime_filter_id = self.next_runtime_filter_id;
         self.next_runtime_filter_id += 1;
         next_runtime_filter_id
+    }
+
+    /// Allocate the planner key that links a join runtime filter to the scans it reaches.
+    /// The execution id is allocated separately when the hash join is built.
+    pub fn next_join_runtime_filter_key(&mut self) -> usize {
+        let key = self.next_join_runtime_filter_key;
+        self.next_join_runtime_filter_key += 1;
+        key
     }
 
     pub fn add_base_column_scan_id(&mut self, base_column_scan_id: HashMap<Symbol, usize>) {

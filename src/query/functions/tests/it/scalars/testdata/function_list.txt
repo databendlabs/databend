@@ -121,6 +121,7 @@ weekofyear -> to_week_of_year
 year -> to_year
 
 Functions overloads:
+0 __runtime_filter FACTORY
 0 abs FACTORY
 1 abs(UInt64) :: UInt64
 2 abs(UInt64 NULL) :: UInt64 NULL

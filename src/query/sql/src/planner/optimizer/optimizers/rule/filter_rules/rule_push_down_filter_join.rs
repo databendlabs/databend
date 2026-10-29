@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::types::DataType;
 
+use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
@@ -47,6 +48,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
+use crate::plans::as_runtime_filter_predicate;
 
 pub struct RulePushDownFilterJoin {
     matchers: Vec<Matcher>,
@@ -126,6 +128,40 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
+/// A runtime filter predicate only removes rows whose probe key cannot match the build side
+/// of the join that created it, and that join rejects NULL keys. If the key is NULL for every
+/// row that this outer join extends with NULLs, filtering the null-supplying input first
+/// cannot change the rows that reach the originating join with a matchable key.
+fn can_push_runtime_filter_into_null_supplying_side(
+    predicate: &ScalarExpr,
+    null_supplying_columns: &ColumnSet,
+    join_type: &JoinType,
+    metadata: MetadataRef,
+    func_ctx: &FunctionContext,
+) -> Result<bool> {
+    // Single joins report an error for multiple matches; removing matches could hide it.
+    if !matches!(join_type, JoinType::Left | JoinType::Right | JoinType::Full) {
+        return Ok(false);
+    }
+    let Some((_, probe_key)) = as_runtime_filter_predicate(predicate) else {
+        return Ok(false);
+    };
+    let key_is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "is_not_null".to_string(),
+        params: vec![],
+        arguments: vec![probe_key.clone()],
+        return_type: Box::new(DataType::Boolean),
+    });
+    can_filter_null(
+        &key_is_not_null,
+        null_supplying_columns,
+        join_type,
+        metadata,
+        func_ctx,
+    )
+}
+
 fn try_push_down_filter_join(
     s_expr: &SExpr,
     metadata: MetadataRef,
@@ -182,6 +218,12 @@ fn try_push_down_filter_join(
                         &join.join_type,
                         metadata.clone(),
                         func_ctx,
+                    )? || can_push_runtime_filter_into_null_supplying_side(
+                        &predicate,
+                        &left_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
                     )? {
                         left_push_down.push(predicate);
                     } else {
@@ -197,6 +239,12 @@ fn try_push_down_filter_join(
                     JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::FullAsof
                 ) {
                     if can_filter_null(
+                        &predicate,
+                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )? || can_push_runtime_filter_into_null_supplying_side(
                         &predicate,
                         &right_prop.output_columns,
                         &join.join_type,

@@ -37,9 +37,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
@@ -50,9 +48,6 @@ use tokio::sync::Barrier;
 
 use super::PhysicalPlanCast;
 use super::runtime_filter::PhysicalRuntimeFilters;
-use super::runtime_filter::RuntimeFilterProbeKey;
-use super::runtime_filter::canonical_equivalence_connector;
-use super::runtime_filter::resolve_runtime_filter_probe_expr;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -81,9 +76,7 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
-    Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
     Vec<((usize, bool), usize)>,
-    Vec<Option<IndexType>>,
 );
 
 type ProjectionsResult = (
@@ -91,8 +84,6 @@ type ProjectionsResult = (
     BTreeSet<usize>,
     Option<(usize, HashMap<Symbol, usize>)>,
 );
-
-type RuntimeFilterExpr = Option<RuntimeFilterProbeKey<databend_common_expression::Expr<String>>>;
 
 type MergedFieldsResult = (
     Vec<DataField>,
@@ -704,32 +695,6 @@ impl PhysicalPlanBuilder {
         Ok(())
     }
 
-    /// Prepares runtime filter expression for join conditions
-    ///
-    /// # Arguments
-    /// * `left_condition` - The left side condition
-    ///
-    /// # Returns
-    /// The typed probe key and its scan/column metadata, if the expression
-    /// references exactly one physical base column.
-    fn prepare_runtime_filter_expr(
-        &self,
-        left_condition: &ScalarExpr,
-    ) -> Result<RuntimeFilterExpr> {
-        let Some(probe) = resolve_runtime_filter_probe_expr(&self.metadata, left_condition)? else {
-            return Ok(None);
-        };
-        let is_connector =
-            canonical_equivalence_connector(probe.probe_key.as_remote_expr()).is_ok();
-        Ok(Some(RuntimeFilterProbeKey {
-            probe_key: probe.probe_key,
-            scan_id: probe.scan_id,
-            column_idx: probe.column_idx,
-            is_connector,
-            is_null_equal: false,
-        }))
-    }
-
     /// Handles inner join column optimization
     ///
     /// # Arguments
@@ -804,9 +769,7 @@ impl PhysicalPlanBuilder {
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
         let mut is_null_equal = Vec::new();
-        let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
-        let mut build_table_indexes = Vec::new();
 
         let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
         for condition in join.equi_conditions.iter() {
@@ -821,24 +784,6 @@ impl PhysicalPlanBuilder {
             let left_expr = left_condition
                 .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()))?;
-
-            // Prepare runtime filter expression
-            let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
-
-            let right_used_columns = right_condition.used_columns();
-            let build_table_index = if right_used_columns.len() == 1 {
-                let column_idx = *right_used_columns.iter().next().unwrap();
-                if matches!(
-                    self.metadata.read().column(column_idx),
-                    ColumnEntry::BaseTableColumn(_)
-                ) {
-                    self.metadata.read().column(column_idx).table_index()
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
 
             // Handle inner join column optimization
             if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
@@ -880,57 +825,23 @@ impl PhysicalPlanBuilder {
                 &BUILTIN_FUNCTIONS,
             )?;
 
-            // Process runtime filter expressions
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter
-                .map(|probe| {
-                    probe.try_map_probe_key(|probe_key| {
-                        check_cast(
-                            probe_key.span(),
-                            false,
-                            probe_key,
-                            &common_ty,
-                            &BUILTIN_FUNCTIONS,
-                        )
-                    })
-                })
-                .transpose()?;
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|mut probe| {
-                probe.is_null_equal = condition.is_null_equal;
-                probe
-            });
-
             // Fold constants
             let (left_expr, _) =
                 ConstantFolder::fold(Cow::Owned(left_expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             let (right_expr, _) =
                 ConstantFolder::fold(Cow::Owned(right_expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-            let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|probe| {
-                probe.map_probe_key(|probe_key| {
-                    ConstantFolder::fold(Cow::Owned(probe_key), &self.func_ctx, &BUILTIN_FUNCTIONS)
-                        .0
-                        .into_owned()
-                })
-            });
-
             // Add to result collections
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
             is_null_equal.push(condition.is_null_equal);
-            left_join_conditions_rt.push(
-                left_expr_for_runtime_filter
-                    .map(|probe| probe.map_probe_key(|probe_key| probe_key.as_remote_expr())),
-            );
-            build_table_indexes.push(build_table_index);
         }
 
         Ok((
             left_join_conditions,
             right_join_conditions,
             is_null_equal,
-            left_join_conditions_rt,
             probe_to_build_index,
-            build_table_indexes,
         ))
     }
 
@@ -1307,20 +1218,14 @@ impl PhysicalPlanBuilder {
         let probe_schema = self.prepare_probe_schema(join.join_type, &probe_side)?;
 
         // Step 5: Process join conditions
-        let (
-            left_join_conditions,
-            right_join_conditions,
-            is_null_equal,
-            left_join_conditions_rt,
-            mut probe_to_build_index,
-            build_table_indexes,
-        ) = self.process_equi_conditions(
-            join,
-            &probe_schema,
-            &build_schema,
-            &column_projections,
-            &mut pre_column_projections,
-        )?;
+        let (left_join_conditions, right_join_conditions, is_null_equal, mut probe_to_build_index) =
+            self.process_equi_conditions(
+                join,
+                &probe_schema,
+                &build_schema,
+                &column_projections,
+                &mut pre_column_projections,
+            )?;
 
         // Step 6: Prepare projections and cache info
         let (probe_projections, mut build_projections, build_side_cache_info) = self
@@ -1359,8 +1264,6 @@ impl PhysicalPlanBuilder {
             join,
             s_expr,
             &right_join_conditions,
-            left_join_conditions_rt,
-            build_table_indexes,
         )
         .await?;
 

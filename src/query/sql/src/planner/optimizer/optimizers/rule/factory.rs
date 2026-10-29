@@ -44,6 +44,7 @@ use crate::optimizer::optimizers::rule::RulePushDownFilterJoin;
 use crate::optimizer::optimizers::rule::RulePushDownFilterProjectSet;
 use crate::optimizer::optimizers::rule::RulePushDownFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownFilterSort;
+use crate::optimizer::optimizers::rule::RulePushDownFilterUdf;
 use crate::optimizer::optimizers::rule::RulePushDownFilterUnion;
 use crate::optimizer::optimizers::rule::RulePushDownFilterWindow;
 use crate::optimizer::optimizers::rule::RulePushDownFilterWindowTopN;
@@ -86,6 +87,7 @@ impl RuleFactory {
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
+            RuleID::PushDownFilterUdf => Ok(Box::new(RulePushDownFilterUdf::new())),
             RuleID::MergeLimit => Ok(Box::new(RuleMergeLimit::new())),
             RuleID::PushDownLimit => Ok(Box::new(RulePushDownLimit::new(metadata))),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),

@@ -1,0 +1,105 @@
+statement ok
+create or replace database rf_pushdown;
+
+statement ok
+use rf_pushdown;
+
+statement ok
+create table probe1 (k int not null, v int not null);
+
+statement ok
+create table probe2 (k int not null, v int not null);
+
+statement ok
+create table build (k int not null);
+
+statement ok
+insert into probe1 values (1, 10), (2, 20), (3, 30);
+
+statement ok
+insert into probe1 values (8, 80), (9, 90);
+
+statement ok
+insert into probe2 values (2, 200), (5, 500), (8, 800);
+
+statement ok
+insert into build values (2), (8);
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+set join_runtime_filter_selectivity_threshold = 101;
+
+# The runtime filter reaches both inputs of UNION ALL.
+query II
+select f.k, f.v from (select k, v from probe1 union all select k, v from probe2) f
+join build b on f.k = b.k order by f.k, f.v;
+----
+2 20
+2 200
+8 80
+8 800
+
+# The runtime filter on a derived key is evaluated as `k + 1` at the scan.
+query II
+select f.k1, f.v from (select k + 1 as k1, v from probe1) f
+join build b on f.k1 = b.k order by f.k1;
+----
+2 10
+
+# The runtime filter must not be applied below ORDER BY ... LIMIT: the limit keeps
+# keys 1, 2, 3 first, and only key 2 joins.
+query II
+select f.k, f.v from (select k, v from probe1 order by k limit 3) f
+join build b on f.k = b.k order by f.k;
+----
+2 20
+
+# The same holds for a window function without the key in PARTITION BY.
+query III
+select f.k, f.v, f.rn from (select k, v, row_number() over (order by k) as rn from probe1) f
+join build b on f.k = b.k order by f.k;
+----
+2 20 2
+8 80 4
+
+# A runtime filter on a group key passes the aggregate.
+query II
+select f.k, f.s from (select k, sum(v) as s from probe2 group by k) f
+join build b on f.k = b.k order by f.k;
+----
+2 200
+8 800
+
+statement ok
+create table mid (j int not null);
+
+statement ok
+create table dim (k int not null);
+
+statement ok
+insert into mid values (10), (20), (40);
+
+statement ok
+insert into dim values (0), (1);
+
+# probe1 is the null-supplying side of the LEFT JOIN. COALESCE maps the NULL-extended
+# row (j = 40) to key 0, so the runtime filter on coalesce(p.k, 0) must stay above it;
+# applying it to probe1 would turn the row with j = 20 into a NULL-extended match.
+query I
+select m.j from mid m left join probe1 p on m.j = p.v
+join dim d on coalesce(p.k, 0) = d.k order by m.j;
+----
+10
+40
+
+# A NULL-rejecting key may enter the null-supplying side.
+query I
+select m.j from mid m left join probe1 p on m.j = p.v
+join dim d on p.k = d.k order by m.j;
+----
+10
+
+statement ok
+drop database rf_pushdown;

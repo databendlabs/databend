@@ -190,6 +190,7 @@ Join(Inner)
 ├── build keys: [k (#2)]
 ├── probe keys: [j.k (#3)]
 ├── other filters: []
+├── runtime filters: [#0: k (#2) -> j.k (#3)]
 ├── UnionAll
 │   ├── output: [k (#2)]
 │   ├── left: [l.k (#0)]
@@ -210,7 +211,8 @@ Join(Inner)
     ├── table: default.j (#2)
     ├── filters: []
     ├── order by: []
-    └── limit: NONE
+    ├── limit: NONE
+    └── runtime filters: [#0: j.k (#3)]
 
 cardinality: 300.000
 precise_cardinality: None
