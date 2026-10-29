@@ -25,6 +25,7 @@ use databend_common_expression::types::NumberScalar;
 
 use super::DerivedColumnScope;
 use super::FlattenPlanResult;
+use super::scalar_aggregate::empty_aggregate_value;
 use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::Metadata;
@@ -155,6 +156,8 @@ impl SubqueryDecorrelatorOptimizer {
                         .grouping_sets
                         .as_ref()
                         .is_some_and(|grouping_sets| grouping_sets.sets.iter().any(Vec::is_empty));
+                // The empty-input value must be known to be NULL. A UDAF can return any
+                // value for an empty input even if its declared type is nullable.
                 let aliases_null_on_empty_input = std::ptr::eq(expr, subquery)
                     && aggregate.group_items.is_empty()
                     && aggregate.grouping_sets.is_none()
@@ -162,7 +165,11 @@ impl SubqueryDecorrelatorOptimizer {
                         .aggregate_functions
                         .iter()
                         .filter(|item| aliases.contains(&item.index))
-                        .all(|item| item.scalar.data_type().is_nullable_or_null());
+                        .all(|item| match &item.scalar {
+                            ScalarExpr::AggregateFunction(func) => empty_aggregate_value(func)
+                                .is_some_and(|(value, _)| value == Scalar::Null),
+                            _ => false,
+                        });
                 if returns_row_for_empty_input && !aliases_null_on_empty_input {
                     return Err(ErrorCode::Unimplemented(
                         "Unsupported correlated subquery: an outer column is compared with a value derived from a correlated aggregate that returns a row for empty input",
@@ -593,7 +600,8 @@ impl SubqueryDecorrelatorOptimizer {
         // An operator above needs every correlated column, but a column that is neither
         // resolved yet nor referenced by either input would never be materialized. Put
         // the outer input on the side whose rows the join keeps. Full joins keep rows from
-        // both sides and asof joins match rows by range, so they are left unchanged.
+        // both sides and asof joins match rows by range, so neither input can carry the
+        // outer columns for every row; reject them instead of failing to resolve later.
         if need_cross_join
             && !left_need_cross_join
             && !right_need_cross_join
@@ -623,7 +631,12 @@ impl SubqueryDecorrelatorOptimizer {
                 | JoinType::Asof
                 | JoinType::LeftAsof
                 | JoinType::RightAsof
-                | JoinType::FullAsof => {}
+                | JoinType::FullAsof => {
+                    return Err(ErrorCode::Unimplemented(format!(
+                        "Unsupported correlated subquery: outer columns cannot be materialized below a {} join",
+                        join.join_type
+                    )));
+                }
             }
         }
 

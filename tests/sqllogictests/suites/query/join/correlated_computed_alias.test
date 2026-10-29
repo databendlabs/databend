@@ -221,3 +221,16 @@ WHERE EXISTS (
         GROUP BY GROUPING SETS ((), (t2.a))
     ) s WHERE s.n=t1.a
 );
+
+# A full join keeps rows from both sides, so neither input can carry the outer
+# columns needed by the correlated LIMIT above it.
+statement error 1002
+SELECT count(*) FROM (VALUES (1,1),(2,1)) t1(a,b)
+WHERE EXISTS (
+    SELECT 1 FROM (
+        SELECT x.a FROM (
+            SELECT * FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b
+        ) x FULL JOIN (VALUES (1)) t3(c) ON true
+        ORDER BY x.a DESC LIMIT 1
+    ) s WHERE s.a=t1.a
+);

@@ -386,28 +386,43 @@ async fn test_scalar_subquery_comparison_refreshes_return_type() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_count_alias_without_group_by_is_rejected() -> Result<()> {
-    // These aggregates return a row for an empty input (`count(*)` is 0), but materializing
-    // the outer input would drop that row. Reject the query instead of returning wrong results.
-    let statements = [
+async fn test_unsupported_alias_materialization_is_rejected() -> Result<()> {
+    // An aggregate that returns a non-NULL row for an empty input (`count(*)` is 0, a UDAF may
+    // return anything) would lose that row once the outer input is materialized below it, and
+    // a full join cannot carry the outer columns for every row. Reject these queries instead
+    // of returning wrong results.
+    let statements: [(&str, &[&str], &str); 5] = [
         (
             "count_alias",
+            &[],
             "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n=t1.a)",
         ),
         (
             "count_alias_under_window",
+            &[],
             "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n, row_number() OVER () AS r FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n=t1.a)",
         ),
         (
             "count_alias_with_empty_grouping_set",
+            &[],
             "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b GROUP BY GROUPING SETS ((), (t2.a))) s WHERE s.n=t1.a)",
         ),
+        (
+            "udaf_alias",
+            &[TEST_UDAF_SQL],
+            "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT weighted_avg(t2.a, 1) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n=t1.a)",
+        ),
+        (
+            "alias_above_full_join",
+            &[],
+            "SELECT * FROM (VALUES (1,1),(2,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT x.a FROM (SELECT * FROM (VALUES (1,1),(2,1)) t2(a,b) WHERE t2.b=t1.b) x FULL JOIN (VALUES (1)) t3(c) ON true ORDER BY x.a DESC LIMIT 1) s WHERE s.a=t1.a)",
+        ),
     ];
-    for (name, sql) in statements {
+    for (name, setup_sqls, sql) in statements {
         let case = SqlTestCase {
             name,
             description: "",
-            setup_sqls: &[],
+            setup_sqls,
             sql,
         };
         let ctx = setup_context(&case).await?;
