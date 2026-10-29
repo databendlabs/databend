@@ -1267,7 +1267,7 @@ impl DefaultSettings {
                 }),
                 ("hash_shuffle_send_buffer_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256 * 1024 * 1024),
-                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share.",
+                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share. Each destination thread then gets about this value / (nodes x threads^2) bytes per send, so raise it on clusters with many nodes and threads: the memory of a node grows with it, but not with the number of nodes.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
