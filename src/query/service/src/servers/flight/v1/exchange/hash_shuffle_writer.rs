@@ -22,6 +22,10 @@
 //! still carries `budget / P` bytes per thread. Every remote node receives the
 //! blocks of all its threads in one call, which the send buffer packs into shared
 //! frames.
+//!
+//! A block that carries a meta and no rows, such as the states of a partial
+//! aggregate, is routed whole by [`FlightScatter::route_meta_block`] instead, and
+//! its parts wait for the next send under the same budget.
 
 use std::collections::HashSet;
 use std::ops::Range;
@@ -40,6 +44,7 @@ use crate::servers::flight::v1::network::SyncTaskSet;
 use crate::servers::flight::v1::network::outbound::HashShuffleDispatcher;
 use crate::servers::flight::v1::network::outbound::ShuffleSendAddress;
 use crate::servers::flight::v1::network::outbound::ShuffleSendFuture;
+use crate::servers::flight::v1::network::outbound::block_owned_bytes;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 /// Per-thread send buffer: the share of `node_budget` of each local sender.
@@ -68,6 +73,9 @@ pub struct HashShuffleWriter {
     /// (e.g. under `count(*)`) or only NULL columns, and so a zero memory size.
     buffered_rows: usize,
     buffered_bytes: usize,
+    /// Blocks routed whole to each partition, sent after its rows.
+    routed: Vec<Vec<DataBlock>>,
+    routed_blocks: usize,
     budget: usize,
     nodes: Vec<ShuffleNode>,
 }
@@ -92,6 +100,8 @@ impl HashShuffleWriter {
             num_partitions,
             buffered_rows: 0,
             buffered_bytes: 0,
+            routed: vec![vec![]; num_partitions],
+            routed_blocks: 0,
             budget,
             nodes,
         }
@@ -123,7 +133,10 @@ impl HashShuffleWriter {
     /// buffered rows reached the budget and should be flushed.
     pub fn add_block(&mut self, block: DataBlock) -> Result<bool> {
         if block.is_empty() {
-            return Ok(false);
+            return match block.get_meta() {
+                Some(_) => self.add_routed_block(block),
+                None => Ok(false),
+            };
         }
 
         let Some(partition_ids) = self.scatter.scatter_indices(&block)? else {
@@ -141,6 +154,31 @@ impl HashShuffleWriter {
         Ok(self.buffered_bytes >= self.budget)
     }
 
+    /// Route a block with a meta and no rows whole to its partitions.
+    fn add_routed_block(&mut self, block: DataBlock) -> Result<bool> {
+        let Some(parts) = self.scatter.route_meta_block(block)? else {
+            return Ok(false);
+        };
+        if parts.len() != self.num_partitions {
+            return Err(ErrorCode::Internal(format!(
+                "Logical error, {} scatter routed a block to {} of {} partitions",
+                self.scatter.name(),
+                parts.len(),
+                self.num_partitions
+            )));
+        }
+
+        for (partition, part) in parts.into_iter().enumerate() {
+            if part.is_empty() && part.get_meta().is_none() {
+                continue;
+            }
+            self.buffered_bytes += block_owned_bytes(&part);
+            self.routed[partition].push(part);
+            self.routed_blocks += 1;
+        }
+        Ok(self.buffered_bytes >= self.budget)
+    }
+
     /// Send every buffered partition.
     ///
     /// The rows of partition `own` are returned instead of sent, so the caller can
@@ -148,21 +186,32 @@ impl HashShuffleWriter {
     pub fn flush(&mut self, own: Option<usize>) -> Result<(Option<DataBlock>, bool)> {
         debug_assert!(self.handle.is_none());
 
-        if self.buffered_rows == 0 {
+        if self.buffered_rows == 0 && self.routed_blocks == 0 {
             return Ok((None, false));
         }
         self.buffered_rows = 0;
         self.buffered_bytes = 0;
+        self.routed_blocks = 0;
 
-        let mut partitions: Vec<Option<DataBlock>> = vec![None; self.num_partitions];
+        let mut rows: Vec<Option<DataBlock>> = vec![None; self.num_partitions];
         for (partition, block) in self.stream.take_partitions(&HashSet::new()) {
             if !block.is_empty() {
-                partitions[partition] = Some(block);
+                rows[partition] = Some(block);
             }
         }
 
-        // Keep the direct-output partition out of both local and remote delivery.
-        let own_block = own.and_then(|partition| partitions[partition].take());
+        // Keep the rows of the direct-output partition out of both local and remote delivery.
+        let own_block = own.and_then(|partition| rows[partition].take());
+        let mut partitions = rows
+            .into_iter()
+            .zip(self.routed.iter_mut())
+            .map(|(rows, routed)| {
+                let mut blocks = Vec::with_capacity(rows.is_some() as usize + routed.len());
+                blocks.extend(rows);
+                blocks.append(routed);
+                blocks
+            })
+            .collect::<Vec<_>>();
         let mut futures: Vec<ShuffleSendFuture> = vec![];
 
         for (node_idx, node) in self.nodes.iter().enumerate() {
@@ -254,6 +303,9 @@ mod tests {
     use arrow_schema::Schema as ArrowSchema;
     use databend_common_base::runtime::Runtime;
     use databend_common_expression::BlockEntry;
+    use databend_common_expression::BlockMetaInfo;
+    use databend_common_expression::BlockMetaInfoDowncast;
+    use databend_common_expression::BlockProfileStatistics;
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
     use databend_common_expression::types::AccessType;
@@ -474,6 +526,112 @@ mod tests {
         Ok(())
     }
 
+    /// Stands for data a block carries in its meta, like the states of a partial aggregate.
+    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+    struct TestStates {
+        partition: usize,
+        bytes: usize,
+    }
+
+    #[typetag::serde(name = "test_hash_shuffle_states")]
+    impl BlockMetaInfo for TestStates {
+        fn output_stats(&self) -> Option<BlockProfileStatistics> {
+            Some(BlockProfileStatistics {
+                rows: 1,
+                bytes: self.bytes,
+            })
+        }
+    }
+
+    fn states_block(partition: usize, bytes: usize) -> DataBlock {
+        DataBlock::empty_with_meta(Box::new(TestStates { partition, bytes }))
+    }
+
+    /// Routes rows like `ModuloScatter`, and states whole to their partition.
+    struct StatesScatter {
+        num_partitions: usize,
+    }
+
+    impl FlightScatter for StatesScatter {
+        fn name(&self) -> &'static str {
+            "States"
+        }
+
+        fn execute(&self, _data_block: DataBlock) -> Result<Vec<DataBlock>> {
+            unreachable!()
+        }
+
+        fn scatter_indices(&self, data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
+            ModuloScatter {
+                num_partitions: self.num_partitions as u64,
+            }
+            .scatter_indices(data_block)
+        }
+
+        fn route_meta_block(&self, data_block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
+            let partition = TestStates::downcast_ref_from(data_block.get_meta().unwrap())
+                .unwrap()
+                .partition;
+            let mut blocks = vec![DataBlock::empty(); self.num_partitions];
+            blocks[partition] = data_block;
+            Ok(Some(blocks))
+        }
+    }
+
+    /// Blocks routed whole count the bytes of their meta against the budget, and are delivered
+    /// through the channels with the next flush, also for the own partition.
+    #[test]
+    fn test_writer_routes_meta_blocks_under_budget() -> Result<()> {
+        let (nodes, receivers) = local_nodes(1, 4);
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(StatesScatter { num_partitions: 4 }));
+        let mut writer = HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, 100);
+
+        assert!(!writer.add_block(states_block(2, 60))?);
+        assert_eq!(writer.buffered_bytes, 60);
+        assert!(writer.add_block(states_block(1, 50))?);
+
+        let (own, pending) = writer.flush(Some(1))?;
+        assert!(!pending);
+        assert!(own.is_none());
+        assert_eq!(writer.buffered_bytes, 0);
+        for (partition, receiver) in receivers.iter().enumerate() {
+            let states = drain_blocks(receiver)
+                .map(|block| {
+                    TestStates::downcast_ref_from(block.get_meta().unwrap())
+                        .unwrap()
+                        .partition
+                })
+                .collect::<Vec<_>>();
+            match partition {
+                1 | 2 => assert_eq!(states, vec![partition]),
+                _ => assert!(states.is_empty()),
+            }
+        }
+
+        // Rows of the own partition still bypass the channels next to routed blocks.
+        writer.add_block(make_block(0..8))?;
+        writer.add_block(states_block(1, 1))?;
+        let (own, _) = writer.flush(Some(1))?;
+        check_rows(&own.unwrap(), 1, 4);
+        let routed = drain_blocks(&receivers[1]).collect::<Vec<_>>();
+        assert_eq!(routed.len(), 1);
+        assert!(routed[0].get_meta().is_some());
+        Ok(())
+    }
+
+    /// A scatter that only partitions rows drops blocks without rows, as before.
+    #[test]
+    fn test_writer_drops_meta_blocks_without_routing() -> Result<()> {
+        let (nodes, receivers) = local_nodes(1, 4);
+        let mut writer = writer(nodes, usize::MAX);
+
+        assert!(!writer.add_block(states_block(0, 10))?);
+        assert_eq!(writer.flush(None)?.0.map(|b| b.num_rows()), None);
+        assert!(receivers.iter().all(|receiver| receiver.is_empty()));
+        Ok(())
+    }
+
     #[test]
     fn test_writer_returns_own_partition_and_skips_closed() -> Result<()> {
         let (nodes, receivers) = local_nodes(1, 4);
@@ -636,7 +794,7 @@ mod tests {
                 let dispatcher =
                     HashShuffleDispatcher::remote(0, buffer, compression, arrow_schema.clone())?;
                 let mut sends = Vec::new();
-                dispatcher.prepare_send(0, &mut [Some(block.clone())], &mut sends)?;
+                dispatcher.prepare_send(0, &mut [vec![block.clone()]], &mut sends)?;
                 for (_, result) in futures::future::join_all(sends).await {
                     result?;
                 }

@@ -1490,10 +1490,12 @@ impl FragmentCoordinator {
                 ExchangeParams::GlobalShuffleExchange(GlobalExchangeParams {
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
-                    schema: self.physical_plan.output_schema()?,
+                    schema: exchange_injector
+                        .global_shuffle_schema(&self.physical_plan.output_schema()?),
                     exchange_id: exchange.id.clone(),
-                    shuffle_keys: exchange.shuffle_keys.clone(),
                     destination_channels: exchange.destination_channels.clone(),
+                    shuffle_scatter: exchange_injector
+                        .flight_scatter(&info.query_ctx, data_exchange)?,
                 }),
             )),
         }

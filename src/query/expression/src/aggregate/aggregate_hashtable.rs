@@ -15,7 +15,6 @@
 // A new AggregateHashtable which inspired by duckdb's https://duckdb.org/2022/03/07/aggregate-hashtable.html
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
@@ -26,7 +25,6 @@ use super::HASH_INDEX_LOAD_FACTOR;
 use super::HashIndex;
 use super::HashTableConfig;
 use super::LOAD_FACTOR;
-use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
 use super::hash_index_adapter::AdapterImpl;
@@ -99,11 +97,6 @@ impl GroupKeyState {
         self.dict_hashes
             .as_deref()
             .map(|hashes| &hashes[self.row_offset..self.row_offset + row_count])
-    }
-
-    fn clear_codes(&mut self) {
-        self.code_addresses.fill(RowPtr::null());
-        self.rank_of_code.fill(u32::MAX);
     }
 }
 
@@ -308,7 +301,7 @@ impl AggregateHashTable {
         capacity: usize,
         mut sampler: Option<&mut DistinctSampler>,
     ) -> Result<PartialAddStats> {
-        debug_assert!(self.config.partial_agg && self.config.partial_adaptive);
+        debug_assert!(self.config.partial_agg);
         let mut stats = PartialAddStats::default();
         Self::for_each_batch(
             group_columns,
@@ -440,22 +433,6 @@ impl AggregateHashTable {
         };
 
         self.accumulate_states(state, params, agg_states, row_count)?;
-
-        if self.config.partial_agg && !self.config.partial_adaptive {
-            // check size
-            if self.hash_index.count() + BATCH_SIZE > self.hash_index.resize_threshold()
-                && self.hash_index.capacity() >= self.config.max_partial_capacity
-            {
-                self.clear_ht();
-            }
-
-            // check maybe_repartition
-            if self.maybe_repartition() {
-                self.clear_ht();
-                group_state.clear_codes();
-            }
-        }
-
         Ok(new_group_count)
     }
 
@@ -784,70 +761,8 @@ impl AggregateHashTable {
         Ok(true)
     }
 
-    fn maybe_repartition(&mut self) -> bool {
-        // already final stage or the max radix bits
-        if !self.config.partial_agg || (self.current_radix_bits == self.config.max_radix_bits) {
-            return false;
-        }
-
-        let bytes_per_partition = self.payload.memory_size() / self.payload.partition_count();
-
-        let mut new_radix_bits = self.current_radix_bits;
-
-        if bytes_per_partition > MAX_PAGE_SIZE * self.config.block_fill_factor as usize {
-            new_radix_bits += self.config.repartition_radix_bits_incr;
-        }
-
-        loop {
-            let current_max_radix_bits = self.config.current_max_radix_bits.load(Ordering::SeqCst);
-            if current_max_radix_bits < new_radix_bits
-                && self
-                    .config
-                    .current_max_radix_bits
-                    .compare_exchange(
-                        current_max_radix_bits,
-                        new_radix_bits,
-                        Ordering::SeqCst,
-                        Ordering::SeqCst,
-                    )
-                    .is_err()
-            {
-                continue;
-            }
-            break;
-        }
-
-        let current_max_radix_bits = self.config.current_max_radix_bits.load(Ordering::SeqCst);
-
-        if current_max_radix_bits > self.current_radix_bits {
-            let temp_payload = PartitionedPayload::new(
-                self.payload.group_types.clone(),
-                self.payload.aggrs.clone(),
-                1,
-                vec![Arc::new(Bump::new())],
-            );
-            let payload = std::mem::replace(&mut self.payload, temp_payload);
-            let mut state = PayloadFlushState::default();
-
-            self.current_radix_bits = current_max_radix_bits;
-            self.payload = payload.repartition(1 << current_max_radix_bits, &mut state);
-            return true;
-        }
-        false
-    }
-
     // scan payload to reconstruct PointArray
     fn resize(&mut self, new_capacity: usize) {
-        if self.config.partial_agg && !self.config.partial_adaptive {
-            let target = new_capacity.min(self.config.max_partial_capacity);
-            if target == self.hash_index.capacity() {
-                return;
-            }
-            self.hash_index_resize_count += 1;
-            self.hash_index = HashIndex::with_capacity(target);
-            return;
-        }
-
         self.hash_index_resize_count += 1;
 
         let mut hash_index = HashIndex::with_capacity(new_capacity);
@@ -872,11 +787,6 @@ impl AggregateHashTable {
 
     pub fn get_capacity_for_count(count: usize) -> usize {
         ((count.max(Self::initial_capacity()) as f64 * LOAD_FACTOR) as usize).next_power_of_two()
-    }
-
-    fn clear_ht(&mut self) {
-        self.payload.mark_min_cardinality();
-        self.hash_index.reset();
     }
 
     pub fn allocated_bytes(&self) -> usize {
