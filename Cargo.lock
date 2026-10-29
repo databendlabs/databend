@@ -275,6 +275,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "argminmax"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "088a9c28ca36500c581f9f54b63460492d2b4f71e1e61d176e8fb79565109b01"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "ariadne"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3398,6 +3407,7 @@ name = "databend-common-functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "argminmax",
  "base64 0.22.1",
  "blake3",
  "borsh",
