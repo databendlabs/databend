@@ -43,8 +43,12 @@ use crate::pipelines::processors::transforms::aggregator::statistics::Aggregatio
 use crate::sessions::QueryContext;
 
 #[allow(clippy::enum_variant_names)]
-pub(crate) enum HashTable {
+enum HashTable {
     MovedOut,
+    /// No block has arrived yet. The table is allocated on first use, so that the
+    /// processors of a scan pruned to zero rows do not each pay for an empty table
+    /// while the pipeline is being built.
+    Uninitialized(HashTableConfig),
     AggregateHashTable(AggregateHashTable),
 }
 
@@ -138,21 +142,12 @@ impl TransformPartialAggregate {
         let spill_schema = params.spill_schema();
         let spillers = Spiller::create(ctx.clone(), spill_schema, partition_stream, bucket_num)?;
 
-        let arena = Arc::new(Bump::new());
-
-        let hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
-            params.group_data_types.clone(),
-            params.aggregate_functions.clone(),
-            config,
-            arena,
-        ));
-
         Ok(AccumulatingTransformer::create(
             input,
             output,
             TransformPartialAggregate {
                 params,
-                hash_table,
+                hash_table: HashTable::Uninitialized(config),
                 probe_state: ProbeState::default(),
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
                 statistics: AggregationStatistics::new("PartialAggregate"),
@@ -181,9 +176,14 @@ impl TransformPartialAggregate {
 
         self.statistics.record_block(rows_num, block_bytes);
 
+        if let HashTable::Uninitialized(config) = &self.hash_table {
+            self.hash_table =
+                HashTable::AggregateHashTable(Self::new_hash_table(&self.params, config.clone()));
+        }
+
         {
             match &mut self.hash_table {
-                HashTable::MovedOut => {
+                HashTable::MovedOut | HashTable::Uninitialized(_) => {
                     unreachable!("[TRANSFORM-AGGREGATOR] Hash table already moved out")
                 }
                 HashTable::AggregateHashTable(hashtable) => {
@@ -206,19 +206,23 @@ impl TransformPartialAggregate {
         }
     }
 
+    fn new_hash_table(params: &AggregatorParams, config: HashTableConfig) -> AggregateHashTable {
+        AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            config,
+            Arc::new(Bump::new()),
+        )
+    }
+
     fn spill_out(&mut self) -> Result<()> {
         if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
             let config = v.config.clone();
 
             self.spillers.spill(v.payload, self.is_row_shuffle)?;
 
-            let arena = Arc::new(Bump::new());
-            self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
-                self.params.group_data_types.clone(),
-                self.params.aggregate_functions.clone(),
-                config,
-                arena,
-            ));
+            self.hash_table =
+                HashTable::AggregateHashTable(Self::new_hash_table(&self.params, config));
         } else {
             unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
         }
@@ -247,10 +251,24 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     unreachable!("[TRANSFORM-AGGREGATOR] Hash table already moved out in finish")
                 }
             },
+            // No block arrived, so there is nothing to output. `finish` is still called
+            // because the partition stream is shared with the other partial processors.
+            HashTable::Uninitialized(_) => {
+                let blocks = self.spillers.finish()?;
+                self.statistics.log_empty_finish_statistics();
+                blocks
+            }
             HashTable::AggregateHashTable(hashtable) => {
                 let mut blocks = self.spillers.finish()?;
 
                 self.statistics.log_finish_statistics(&hashtable);
+
+                // Nothing was aggregated. Do not emit a block of empty payloads: downstream
+                // does not need it, and in cluster mode each block passes the exchange
+                // scatter, serializer and flight sink.
+                if hashtable.payload.len() == 0 {
+                    return Ok(blocks);
+                }
 
                 let payloads = hashtable
                     .payload
@@ -270,5 +288,110 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 blocks
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::BlockMetaInfoDowncast;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::UInt64Type;
+
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    const BUCKET_NUM: usize = 4;
+
+    // Boxed like in the pipeline: the probe state alone is about 100KB, too large to
+    // keep several transforms in the test future on the test thread's stack.
+    fn create_transform(ctx: &Arc<QueryContext>) -> Result<Box<TransformPartialAggregate>> {
+        let key_type = DataType::Number(NumberDataType::UInt64);
+        let params = AggregatorParams::try_create(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "key",
+                key_type.clone(),
+            )])),
+            vec![key_type],
+            &[0],
+            &[],
+            &[],
+            false,
+            1024,
+            1024 * 1024,
+        )?;
+        let spillers = Spiller::create(
+            ctx.clone(),
+            params.spill_schema(),
+            SharedPartitionStream::new(1, 0, params.max_block_bytes, BUCKET_NUM),
+            BUCKET_NUM,
+        )?;
+        Ok(Box::new(TransformPartialAggregate {
+            hash_table: HashTable::Uninitialized(HashTableConfig::partial_aggregate(
+                BUCKET_NUM.trailing_zeros() as u64,
+                1,
+                1,
+            )),
+            probe_state: ProbeState::default(),
+            params,
+            statistics: AggregationStatistics::new("PartialAggregate"),
+            settings: MemorySettings::from_aggregate_settings(ctx)?,
+            spillers,
+            is_row_shuffle: false,
+        }))
+    }
+
+    fn output_rows(blocks: &[DataBlock]) -> usize {
+        blocks
+            .iter()
+            .map(|block| {
+                let meta = block.get_meta().and_then(AggregateMeta::downcast_ref_from);
+                let Some(AggregateMeta::Partitioned {
+                    data: PartitionedData::AggregatePayload(payloads),
+                    ..
+                }) = meta
+                else {
+                    unreachable!("partial aggregate only outputs aggregate payloads here")
+                };
+                payloads.iter().map(|p| p.payload.len()).sum::<usize>()
+            })
+            .sum()
+    }
+
+    // A partial processor without input rows allocates no hash table and emits no block.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_partial_aggregate_without_rows_emits_nothing() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        let mut transform = create_transform(&ctx)?;
+        assert!(transform.on_finish(true)?.is_empty());
+
+        // An empty block creates the hash table but still aggregates nothing.
+        let mut transform = create_transform(&ctx)?;
+        assert!(
+            transform
+                .transform(DataBlock::new_from_columns(vec![UInt64Type::from_data(
+                    Vec::<u64>::new()
+                )]))?
+                .is_empty()
+        );
+        assert!(matches!(
+            transform.hash_table,
+            HashTable::AggregateHashTable(_)
+        ));
+        assert!(transform.on_finish(true)?.is_empty());
+
+        let mut transform = create_transform(&ctx)?;
+        transform.transform(DataBlock::new_from_columns(vec![UInt64Type::from_data(
+            vec![1, 2, 2, 3],
+        )]))?;
+        let blocks = transform.on_finish(true)?;
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(output_rows(&blocks), 3);
+        Ok(())
     }
 }

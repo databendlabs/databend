@@ -331,6 +331,42 @@ select count(*) from (select number from numbers(2000000) group by number);
 ----
 2000000
 
+## Most buckets are empty: only a few groups, or no input rows at all
+query II
+select number % 3 as k, sum(number) from numbers_mt(10000) group by k order by k;
+----
+0 16668333
+1 16661667
+2 16665000
+
+query I
+select count(*) from (select number % 7 as k, sum(number) from numbers_mt(10000) where number > 100000 group by k);
+----
+0
+
+statement ok
+set force_aggregate_data_spill = 1;
+
+query II
+select number % 3 as k, sum(number) from numbers_mt(10000) group by k order by k;
+----
+0 16668333
+1 16661667
+2 16665000
+
+query I
+select count(*) from (select number % 7 as k, sum(number) from numbers_mt(10000) where number > 100000 group by k);
+----
+0
+
+## Spilled final-aggregate tasks whose consumer finishes early (the other join side is empty) must not hang
+query II
+select a.k, count(*) from (select number % 4 as k from numbers_mt(1000) group by k) a join (select number % 4 as k from numbers_mt(2000) where number > 5000 group by k) b on a.k = b.k group by a.k order by a.k;
+----
+
+statement ok
+unset force_aggregate_data_spill;
+
 
 ## Aggregation without Exchange source
 query III

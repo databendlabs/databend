@@ -67,6 +67,11 @@ impl AggregationStatistics {
         );
     }
 
+    /// Log statistics of a processor that never created a hash table.
+    pub fn log_empty_finish_statistics(&mut self) {
+        self.log_finish(0, 0, None);
+    }
+
     pub fn log_final_finish_statistics(
         &mut self,
         task_id: Option<u64>,
