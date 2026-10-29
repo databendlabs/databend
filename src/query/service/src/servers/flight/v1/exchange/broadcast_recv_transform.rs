@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Broadcast receive source. Reads data from InboundChannels only (no input port).
-//! Uses async_process to await data from ReceiversStream.
+//! Receive side of broadcast and hash exchanges. Merges the blocks from its input
+//! port (the local sender's own partition) with those from its ExchangeQueueReceiver.
 
 use std::any::Any;
 use std::sync::Arc;
@@ -31,9 +31,11 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use petgraph::graph::NodeIndex;
 
-use crate::servers::flight::v1::network::InboundChannel;
+use super::block_coalescer::BlockCoalescer;
+use super::block_coalescer::CoalesceThreshold;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
+use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
 
 pub struct ExchangeRecvTransform {
     input: Arc<InputPort>,
@@ -41,15 +43,17 @@ pub struct ExchangeRecvTransform {
 
     id: NodeIndex,
     tasks: SyncTaskSet,
-    receiver: Arc<dyn InboundChannel>,
+    receiver: Arc<ExchangeQueueReceiver>,
     handle: Option<SyncTaskHandle<'static, Result<Option<DataBlock>>>>,
+    coalescer: BlockCoalescer,
 }
 
 impl ExchangeRecvTransform {
     pub fn create_item(
         worker_id: usize,
-        receiver: Arc<dyn InboundChannel>,
+        receiver: Arc<ExchangeQueueReceiver>,
         waker: Arc<ExecutorWaker>,
+        coalesce: Option<CoalesceThreshold>,
     ) -> PipeItem {
         let input = InputPort::create();
         let output = OutputPort::create();
@@ -61,6 +65,7 @@ impl ExchangeRecvTransform {
 
             handle: None,
             id: Default::default(),
+            coalescer: BlockCoalescer::create(coalesce),
         }));
 
         PipeItem::create(processor, vec![input], vec![output])
@@ -88,48 +93,64 @@ impl Processor for ExchangeRecvTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if self.handle.is_none() && !self.receiver.is_closed() {
-            let receiver = self.receiver.clone();
-            let recv_fut = Box::pin(async move { receiver.recv().await });
-            self.handle = Some(self.tasks.spawn(self.id, recv_fut));
-        }
+        loop {
+            if let Some(data_block) = self.coalescer.pop() {
+                self.output.push_data(Ok(data_block));
+                return Ok(Event::NeedConsume);
+            }
 
-        if let Some(mut handle) = self.handle.take() {
-            match handle.poll(matches!(cause, EventCause::Other)) {
-                Poll::Ready(Ok(None)) => {
-                    if self.input.is_finished() {
-                        self.output.finish();
-                        return Ok(Event::Finished);
+            if self.handle.is_none() && !self.receiver.is_closed() {
+                let receiver = self.receiver.clone();
+                let recv_fut = Box::pin(async move { receiver.recv_block().await });
+                self.handle = Some(self.tasks.spawn(self.id, recv_fut));
+            }
+
+            if let Some(mut handle) = self.handle.take() {
+                match handle.poll(matches!(cause, EventCause::Other)) {
+                    Poll::Ready(Ok(None)) => {}
+                    Poll::Ready(Ok(Some(data_block))) => {
+                        self.coalescer.push(data_block)?;
+                        continue;
                     }
-                }
-                Poll::Ready(Ok(Some(data_block))) => {
-                    self.output.push_data(Ok(data_block));
-                    return Ok(Event::NeedConsume);
-                }
-                Poll::Ready(Err(cause)) => {
-                    self.receiver.close();
-                    return Err(cause);
-                }
-                Poll::Pending => {
-                    self.handle = Some(handle);
-                }
-            };
-        }
+                    Poll::Ready(Err(cause)) => {
+                        self.receiver.close();
+                        return Err(cause);
+                    }
+                    Poll::Pending => {
+                        self.handle = Some(handle);
+                    }
+                };
+            }
 
-        if self.input.has_data() {
-            let data_block = self.input.pull_data().unwrap()?;
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
+            if self.input.has_data() {
+                let data_block = self.input.pull_data().unwrap()?;
+                self.coalescer.push(data_block)?;
+                continue;
+            }
 
-        if self.input.is_finished() && self.handle.is_none() {
-            self.output.finish();
-            self.receiver.close();
-            return Ok(Event::Finished);
-        }
+            if self.input.is_finished() && self.handle.is_none() {
+                if self.coalescer.flush()? {
+                    continue;
+                }
 
-        self.input.set_need_data();
-        Ok(Event::NeedData)
+                self.output.finish();
+                self.receiver.close();
+                return Ok(Event::Finished);
+            }
+
+            self.input.set_need_data();
+            return Ok(Event::NeedData);
+        }
+    }
+
+    fn details_status(&self) -> Option<String> {
+        let (coalescing_rows, coalescing_bytes) = self.coalescer.buffered();
+        Some(format!(
+            "handle_pending={}, coalescing_rows={}, coalescing_bytes={}",
+            self.handle.is_some(),
+            coalescing_rows,
+            coalescing_bytes,
+        ))
     }
 
     fn set_id(&mut self, id: NodeIndex) {

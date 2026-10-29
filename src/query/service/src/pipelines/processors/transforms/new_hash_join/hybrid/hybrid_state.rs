@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::PoisonError;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -20,13 +22,27 @@ use std::sync::atomic::Ordering;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_sql::plans::JoinType;
 
+use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinFactory;
-use crate::pipelines::processors::transforms::HybridHashJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
+
+/// States shared by all processors of one hybrid hash join level.
+#[derive(Clone)]
+pub struct HybridLevelStates {
+    pub basic: Arc<BasicHashJoinState>,
+    pub hybrid: Arc<HybridHashJoinState>,
+}
+
+/// States shared by all processors once a level switches to grace mode: the grace state
+/// that partitions this level's data and the states of the level that restores it.
+#[derive(Clone)]
+pub struct NextLevelStates {
+    pub grace: Arc<GraceHashJoinState>,
+    pub level: HybridLevelStates,
+}
 
 pub struct HybridHashJoinState {
     pub ctx: Arc<QueryContext>,
@@ -50,6 +66,10 @@ pub struct HybridHashJoinState {
     build_input_rows: AtomicUsize,
 
     pub transition_queue: ConcurrentQueue<DataBlock>,
+
+    // Owned here so that every restore partition of the parent grace join gets fresh
+    // next-level states: they are dropped together with this level's grace mode.
+    next_level: Mutex<Option<NextLevelStates>>,
 }
 
 impl HybridHashJoinState {
@@ -77,6 +97,7 @@ impl HybridHashJoinState {
             ever_spilled: AtomicBool::new(false),
             build_input_rows: AtomicUsize::new(0),
             transition_queue: ConcurrentQueue::unbounded(),
+            next_level: Mutex::new(None),
         }))
     }
 
@@ -105,11 +126,30 @@ impl HybridHashJoinState {
         self.build_input_rows.load(Ordering::Acquire)
     }
 
-    pub fn create_grace_state(&self) -> Result<Arc<GraceHashJoinState>> {
-        self.factory.create_grace_state(self.level + 1)
+    /// Returns the next-level states, creating them on the first call after a reset.
+    pub fn next_level_states(&self) -> Result<NextLevelStates> {
+        let mut next_level = self
+            .next_level
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+
+        if let Some(states) = next_level.as_ref() {
+            return Ok(states.clone());
+        }
+
+        let states = NextLevelStates {
+            grace: GraceHashJoinState::create(self.ctx.clone()),
+            level: self.factory.create_level_states(self.level + 1)?,
+        };
+        *next_level = Some(states.clone());
+        Ok(states)
     }
 
-    pub fn create_hybrid_join(&self, typ: JoinType) -> Result<HybridHashJoin> {
-        self.factory.create_hybrid_join(typ, self.level + 1)
+    pub fn reset_next_level_states(&self) {
+        let mut next_level = self
+            .next_level
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        *next_level = None;
     }
 }
