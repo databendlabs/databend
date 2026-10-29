@@ -44,6 +44,10 @@ use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::sessions::QueryContext;
 
+/// Rows aggregated between two observations of the partial state, so that it changes within
+/// large input blocks rather than after them.
+const DECISION_ROWS: usize = 64 * 1024;
+
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum HashTable {
     MovedOut,
@@ -149,18 +153,38 @@ impl TransformPartialAggregate {
         let rows_num = block.num_rows();
         self.statistics.record_block(rows_num, block.memory_size());
 
-        if matches!(self.state, PartialState::Bypass) {
-            // The block is forwarded as is: the shuffle routes its rows by their group keys.
-            self.output_rows += rows_num;
-            return Ok(if rows_num == 0 { vec![] } else { vec![block] });
+        // Aggregate a large block in slices, so that the state can change within it.
+        let mut output = vec![];
+        let mut start = 0;
+        while start < rows_num {
+            if matches!(self.state, PartialState::Bypass) {
+                // The rows are forwarded as is: the shuffle routes them by their group keys.
+                self.output_rows += rows_num - start;
+                output.push(match start {
+                    0 => block,
+                    _ => block.slice(start..rows_num),
+                });
+                break;
+            }
+            let end = (start + DECISION_ROWS).min(rows_num);
+            let slice = match (start, end) {
+                (0, end) if end == rows_num => block.clone(),
+                _ => block.slice(start..end),
+            };
+            output.extend(self.aggregate_slice(&slice)?);
+            start = end;
         }
+        Ok(output)
+    }
 
+    fn aggregate_slice(&mut self, block: &DataBlock) -> Result<Vec<DataBlock>> {
+        let rows_num = block.num_rows();
         let HashTable::AggregateHashTable(hashtable) = &mut self.hash_table else {
             unreachable!("[TRANSFORM-AGGREGATOR] Hash table already moved out")
         };
-        let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
+        let group_columns = ProjectedBlock::project(&self.params.group_columns, block);
         let params_columns =
-            Self::aggregate_arguments(&block, &self.params.aggregate_functions_arguments);
+            Self::aggregate_arguments(block, &self.params.aggregate_functions_arguments);
         let capacity = self.state.capacity();
         let stats = hashtable.add_groups_partial(
             &mut self.probe_state,
