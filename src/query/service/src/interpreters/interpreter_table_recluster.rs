@@ -14,6 +14,7 @@
 
 databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,6 +25,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
@@ -431,7 +433,25 @@ impl ReclusterTableInterpreter {
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
         self.ctx.set_executor(complete_executor.get_inner())?;
+        let io_before = self.ctx.get_local_io_stats().snapshot();
+        let blocked_before = self.ctx.get_recluster_blocked_nanos();
+        let execute_started = std::time::Instant::now();
         let execution_result = complete_executor.execute().await;
+        // Everything below is scoped to this node: its executor graph, its blocked time,
+        // its opendal stats. In a distributed round every node runs this same code for
+        // its own fragment and emits its own lines, keyed by `node`; nothing is merged.
+        log_recluster_processor_profile(
+            &self.ctx.get_cluster().local_id,
+            &complete_executor.get_inner().get_proc_profiles(),
+            execute_started.elapsed(),
+            self.ctx
+                .get_local_io_stats()
+                .snapshot()
+                .delta_since(&io_before),
+            self.ctx
+                .get_recluster_blocked_nanos()
+                .saturating_sub(blocked_before),
+        );
 
         // Make sure the executor and any pipeline-held claim start releasing before an error is
         // returned to the FINAL loop for another round. Claim release remains asynchronous, so a
@@ -593,5 +613,132 @@ impl ReclusterTableInterpreter {
             }
         }
         Ok(())
+    }
+}
+
+/// Emit one `recluster.profile.round` line and one `recluster.profile.processor` line per
+/// processor kind, so the stage distribution of a round (group sources, final merge,
+/// compact, serialize, commit) is visible even though the whole pipeline shares a single
+/// `Recluster` plan node in `system.query_profile`.
+///
+/// Scope: **this node only**. `profiles` is this node's executor graph, `blocked_nanos`
+/// is what this node's group sources accumulated, `io` is this node's opendal delta. In a
+/// distributed round every participating node runs this for its own fragment and emits
+/// its own lines; join them on `node`. Nothing is merged across nodes on purpose: each
+/// node's `wall_ms` is its own, so each node's ratios are self-consistent.
+///
+/// For `SyncSource`-based group sources, executor `CpuTime` includes time blocked on
+/// object storage inside `generate()`; `blocked_ms` takes that back out, and the
+/// `recluster.profile.group_source` lines break it down per group.
+fn log_recluster_processor_profile(
+    node: &str,
+    profiles: &[Arc<databend_common_base::runtime::profile::Profile>],
+    execute_elapsed: Duration,
+    io: databend_common_base::runtime::IoStatsSnapshot,
+    blocked_nanos: u64,
+) {
+    use std::sync::atomic::Ordering;
+
+    use databend_common_base::runtime::profile::ProfileStatisticsName;
+
+    #[derive(Default)]
+    struct Agg {
+        instances: usize,
+        cpu_nanos: u64,
+        wait_nanos: u64,
+        max_cpu_nanos: u64,
+    }
+
+    let mut by_name: BTreeMap<String, Agg> = BTreeMap::new();
+    let mut total_cpu_nanos = 0u64;
+    for p in profiles {
+        let stat = |name: ProfileStatisticsName| {
+            p.statistics[name as usize].load(Ordering::Relaxed) as u64
+        };
+        let cpu = stat(ProfileStatisticsName::CpuTime);
+        let agg = by_name.entry(p.p_name.clone()).or_default();
+        agg.instances += 1;
+        agg.cpu_nanos += cpu;
+        agg.wait_nanos += stat(ProfileStatisticsName::WaitTime);
+        agg.max_cpu_nanos = agg.max_cpu_nanos.max(cpu);
+        total_cpu_nanos += cpu;
+    }
+
+    let wall_ms = execute_elapsed.as_secs_f64() * 1e3;
+    let total_cpu_ms = total_cpu_nanos as f64 / 1e6;
+    let blocked_ms = blocked_nanos as f64 / 1e6;
+    // Executor CpuTime for sync sources includes time blocked on S3; take it back out.
+    let true_cpu_ms = (total_cpu_ms - blocked_ms).max(0.0);
+    let per_wall = |num: f64| -> String {
+        if wall_ms > 0.0 {
+            format!("{:.2}", num / wall_ms)
+        } else {
+            "0.00".to_string()
+        }
+    };
+    info!(
+        event = "recluster.profile.round",
+        node,
+        wall_ms = format!("{wall_ms:.1}"),
+        processors = profiles.len(),
+        // sum of executor CpuTime over all processors on this node
+        total_cpu_ms = format!("{total_cpu_ms:.1}"),
+        // sum over this node's group sources of time blocked in recv_blocking
+        blocked_ms = format!("{blocked_ms:.1}"),
+        true_cpu_ms = format!("{true_cpu_ms:.1}"),
+        // avg executor threads occupied (busy or blocked) over the round
+        thread_occupancy = per_wall(total_cpu_ms),
+        // avg executor threads actually computing
+        cpu_parallelism = per_wall(true_cpu_ms),
+        // this node's opendal stats for this round
+        io_read_count = io.read_count,
+        io_read_bytes = io.read_bytes,
+        io_read_ms = io.read_duration_ms,
+        // avg object-storage reads in flight; compare with the number of group sources
+        io_read_concurrency = per_wall(io.read_duration_ms as f64),
+        io_write_count = io.write_count,
+        io_write_bytes = io.write_bytes,
+        io_write_ms = io.write_duration_ms;
+        "Recluster round processor profile"
+    );
+    for (name, agg) in by_name {
+        let cpu_ms = agg.cpu_nanos as f64 / 1e6;
+        let max_cpu_ms = agg.max_cpu_nanos as f64 / 1e6;
+        // Only the recluster group source blocks on S3 inside process(); for it, show
+        // how much of cpu_ms was really I/O wait. Zero for every other kind.
+        let kind_blocked_ms = if name == "HorizontalMultiwayReclusterSource" {
+            blocked_ms
+        } else {
+            0.0
+        };
+        let kind_true_cpu_ms = (cpu_ms - kind_blocked_ms).max(0.0);
+        // 1.0 = CPU spread evenly across instances; N = one instance did all the work.
+        let cpu_skew = if agg.cpu_nanos > 0 {
+            agg.max_cpu_nanos as f64 * agg.instances as f64 / agg.cpu_nanos as f64
+        } else {
+            0.0
+        };
+        // Slowest instance's CPU as a share of the round: the critical-path candidate.
+        let max_instance_cpu_pct_of_wall = if wall_ms > 0.0 {
+            max_cpu_ms / wall_ms * 100.0
+        } else {
+            0.0
+        };
+        info!(
+            event = "recluster.profile.processor",
+            node,
+            name = name.as_str(),
+            instances = agg.instances,
+            cpu_ms = format!("{cpu_ms:.1}"),
+            blocked_ms = format!("{kind_blocked_ms:.1}"),
+            true_cpu_ms = format!("{kind_true_cpu_ms:.1}"),
+            wait_ms = format!("{:.1}", agg.wait_nanos as f64 / 1e6),
+            max_instance_cpu_ms = format!("{max_cpu_ms:.1}"),
+            cpu_skew = format!("{cpu_skew:.2}"),
+            max_instance_cpu_pct_of_wall = format!("{max_instance_cpu_pct_of_wall:.1}");
+            // No output_rows: port-level row counters are only recorded on edges that
+            // cross a PlanScope boundary, and every edge here is inside `Recluster`.
+            "Recluster processor stage profile"
+        );
     }
 }

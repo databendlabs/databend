@@ -20,12 +20,18 @@ use std::collections::VecDeque;
 use std::mem;
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_catalog::table_context::TableContextQueryState;
@@ -72,6 +78,7 @@ use databend_common_storages_fuse::operations::ReclusterIndexInput;
 use databend_common_storages_fuse::operations::ReclusterIndexRowRange;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_io::blocked_nanos;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Versioned;
 
@@ -83,6 +90,83 @@ use crate::spillers::SortSpillerImpl;
 struct ReclusterMergeInputBlock {
     meta: Arc<BlockMeta>,
     ordinal: u32,
+}
+
+/// Upper bounds (ms) of the per-`read()` latency histogram buckets; the last bucket is
+/// open-ended. Prefetch hits land in the first bucket, a cold object-storage round trip
+/// in the third or fourth. A bimodal shape means prefetch depth is sometimes enough and
+/// sometimes not.
+const READ_HIST_BOUNDS_MS: [f64; 4] = [1.0, 10.0, 50.0, 200.0];
+
+/// Per-group wall-clock breakdown of the synchronous work inside a recluster group
+/// source, emitted as `recluster.profile.group_source` when the group finishes.
+///
+/// The executor's `CpuTime` for a `SyncSource` includes time blocked on object storage
+/// inside `generate()`, so it cannot separate "waiting for S3" from "merging rows". This
+/// struct records the read phase separately and splits it into the part spent blocked in
+/// `recv_blocking` (`blocked_nanos`) and the rest (parquet decode).
+#[derive(Default)]
+struct ReclusterGroupMetrics {
+    /// `FuseLowLevelFullRowReader::read` (object storage fetch + parquet decode).
+    read_nanos: AtomicU64,
+    read_calls: AtomicU64,
+    /// Portion of `read_nanos` spent blocked waiting for a range to arrive. The
+    /// remainder is decode. Also accumulated on the `QueryContext` so the round-level
+    /// log can report it without joining per-group lines.
+    blocked_nanos: AtomicU64,
+    /// Longest single `read()`.
+    max_read_nanos: AtomicU64,
+    /// Histogram of `read()` latencies, see `READ_HIST_BOUNDS_MS`.
+    read_hist: [AtomicU64; READ_HIST_BOUNDS_MS.len() + 1],
+    /// Cluster-key expression evaluation (`CompoundBlockOperator`).
+    eval_nanos: AtomicU64,
+    /// Sort key encoding (`RowConverter::convert`).
+    convert_nanos: AtomicU64,
+    /// Per-batch order validation (`validate_batch`).
+    validate_nanos: AtomicU64,
+    /// Spill reads, only non-zero when the group fell back to external merge.
+    spill_read_nanos: AtomicU64,
+    spill_read_calls: AtomicU64,
+    /// Rows read from original blocks.
+    input_rows: AtomicU64,
+    logged: AtomicBool,
+}
+
+impl ReclusterGroupMetrics {
+    #[inline]
+    fn add(counter: &AtomicU64, d: Duration) {
+        counter.fetch_add(d.as_nanos() as u64, Ordering::Relaxed);
+    }
+
+    fn ms(counter: &AtomicU64) -> f64 {
+        counter.load(Ordering::Relaxed) as f64 / 1e6
+    }
+
+    /// Record one `read()`: total elapsed, the blocked part of it, histogram, max.
+    fn record_read(&self, elapsed: Duration, blocked: Duration, ctx: &QueryContext) {
+        let nanos = elapsed.as_nanos() as u64;
+        self.read_nanos.fetch_add(nanos, Ordering::Relaxed);
+        self.read_calls.fetch_add(1, Ordering::Relaxed);
+        let blocked_nanos = blocked.as_nanos() as u64;
+        self.blocked_nanos
+            .fetch_add(blocked_nanos, Ordering::Relaxed);
+        ctx.incr_recluster_blocked_nanos(blocked_nanos);
+        self.max_read_nanos.fetch_max(nanos, Ordering::Relaxed);
+        let ms = elapsed.as_secs_f64() * 1e3;
+        let bucket = READ_HIST_BOUNDS_MS
+            .iter()
+            .position(|&b| ms < b)
+            .unwrap_or(READ_HIST_BOUNDS_MS.len());
+        self.read_hist[bucket].fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn hist_string(&self) -> String {
+        self.read_hist
+            .iter()
+            .map(|c| c.load(Ordering::Relaxed).to_string())
+            .collect::<Vec<_>>()
+            .join("/")
+    }
 }
 
 #[derive(Clone)]
@@ -100,6 +184,10 @@ struct ReclusterMergeConfig {
     minimum_batch: bool,
     lineage: bool,
     emit_order: bool,
+    /// Shared by every stream of one group; replaced per group in `into_groups`.
+    metrics: Arc<ReclusterGroupMetrics>,
+    /// Group ordinal within the task, for log correlation.
+    group: usize,
 }
 
 /// Source ordinals always refer to original task inputs, including after spill.
@@ -279,10 +367,16 @@ where R::Converter: Send
                 let Some(path) = paths.pop_front() else {
                     return Ok((None, false));
                 };
+                let metrics = &self.merge_config.metrics;
+                let t = Instant::now();
                 let mut block = self.spiller.reader(&path)?.read()?;
+                ReclusterGroupMetrics::add(&metrics.spill_read_nanos, t.elapsed());
+                metrics.spill_read_calls.fetch_add(1, Ordering::Relaxed);
                 let key = block.get_last_column().clone();
                 block.pop_columns(1);
+                let t = Instant::now();
                 let batch = self.validate_batch(block, key)?;
+                ReclusterGroupMetrics::add(&self.merge_config.metrics.validate_nanos, t.elapsed());
                 return Ok((Some(batch), false));
             }
             ReclusterMergeInput::Original {
@@ -322,11 +416,17 @@ where R::Converter: Send
                     *reader = Some(reopened);
                 }
                 let minimum = self.merge_config.minimum_batch;
-                let Some(block) = reader
+                let metrics = &self.merge_config.metrics;
+                let blocked_before = blocked_nanos();
+                let t = Instant::now();
+                let read = reader
                     .as_mut()
                     .expect("initialized reader")
-                    .read(self.merge_config.batch_rows, minimum)?
-                else {
+                    .read(self.merge_config.batch_rows, minimum)?;
+                let elapsed = t.elapsed();
+                let blocked = Duration::from_nanos(blocked_nanos().saturating_sub(blocked_before));
+                metrics.record_read(elapsed, blocked, &self.merge_config.ctx);
+                let Some(block) = read else {
                     reader.take().expect("initialized reader").finish()?;
                     return Ok((None, false));
                 };
@@ -336,7 +436,10 @@ where R::Converter: Send
                     bytes: block.memory_size(),
                 });
                 let rows = block.num_rows();
+                metrics.input_rows.fetch_add(rows as u64, Ordering::Relaxed);
+                let t = Instant::now();
                 let mut block = self.merge_config.eval.transform(block)?.maybe_gc();
+                ReclusterGroupMetrics::add(&metrics.eval_nanos, t.elapsed());
                 if self.merge_config.lineage {
                     let start = u32::try_from(*position)
                         .map_err(|_| ErrorCode::BadArguments("input_block row exceeds u32"))?;
@@ -353,10 +456,14 @@ where R::Converter: Send
                 block
             }
         };
+        let t = Instant::now();
         let rows = self.converter.convert(&block)?;
         let keys = rows.to_column();
+        ReclusterGroupMetrics::add(&self.merge_config.metrics.convert_nanos, t.elapsed());
         block.take_meta();
+        let t = Instant::now();
         let batch = self.validate_batch(block, keys)?;
+        ReclusterGroupMetrics::add(&self.merge_config.metrics.validate_nanos, t.elapsed());
         Ok((Some(batch), false))
     }
 }
@@ -624,6 +731,20 @@ impl RowsTypeVisitor for ReclusterMergeFactory {
 
 pub struct HorizontalReclusterSource {
     merge_execution: Box<dyn ReclusterMergeExecution>,
+    metrics: Arc<ReclusterGroupMetrics>,
+    /// Cluster-local id of the node running this source, for log correlation across
+    /// nodes in a distributed round.
+    node: String,
+    group: usize,
+    input_blocks: usize,
+    /// Wall-clock from the first `generate()` to the finishing one. Compared with the
+    /// round's total elapsed this shows how long the source was alive, and with
+    /// `generate_nanos` how much of that time it spent inside `generate()` vs. parked on a
+    /// full output port.
+    started: Option<Instant>,
+    generate_nanos: u64,
+    output_blocks: u64,
+    output_rows: u64,
 }
 
 impl HorizontalReclusterSource {
@@ -648,7 +769,7 @@ impl HorizontalReclusterSource {
         for mut factory in group_factories {
             let output = OutputPort::create();
             let merge_execution = select_row_type(&mut factory, fixed)?;
-            let source = Self { merge_execution };
+            let source = Self::new(&factory, merge_execution);
             pipe.push(PipeItem::create(
                 SyncSourcer::create(
                     factory.merge_config.ctx.get_scan_progress(),
@@ -790,6 +911,8 @@ impl ReclusterMergeFactory {
             minimum_batch,
             lineage,
             emit_order: false,
+            metrics: Arc::new(ReclusterGroupMetrics::default()),
+            group: 0,
         };
         Ok(Self {
             merge_config,
@@ -827,9 +950,11 @@ impl ReclusterMergeFactory {
             partitions[index].push(input);
         }
         let mut factories = Vec::with_capacity(groups);
-        for (input_blocks, rows) in partitions.into_iter().zip(group_rows) {
+        for (group, (input_blocks, rows)) in partitions.into_iter().zip(group_rows).enumerate() {
             let mut config = self.merge_config.clone();
             config.emit_order = true;
+            config.metrics = Arc::new(ReclusterGroupMetrics::default());
+            config.group = group;
             let fan_in = self.fan_in.min(input_blocks.len().max(2));
             factories.push(Self {
                 merge_config: config,
@@ -852,15 +977,107 @@ impl SyncSource for HorizontalReclusterSource {
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.merge_execution.finished() {
+            self.log_summary();
             return Ok(None);
         }
+        self.started.get_or_insert_with(Instant::now);
+        let t = Instant::now();
         // A spill/recovery step can make progress without producing rows. Yield an empty block,
         // which SyncSourcer skips, rather than interpreting that step as EOF or busy-looping here.
-        Ok(Some(
-            self.merge_execution
-                .step()?
-                .unwrap_or_else(DataBlock::empty),
-        ))
+        let block = self.merge_execution.step()?;
+        self.generate_nanos += t.elapsed().as_nanos() as u64;
+        if let Some(block) = &block {
+            self.output_blocks += 1;
+            self.output_rows += block.num_rows() as u64;
+        }
+        if self.merge_execution.finished() {
+            // Log on the finishing step so the line appears even if the executor never
+            // calls generate() again after the last block is pushed.
+            self.log_summary();
+        }
+        Ok(Some(block.unwrap_or_else(DataBlock::empty)))
+    }
+}
+
+impl HorizontalReclusterSource {
+    fn new(
+        factory: &ReclusterMergeFactory,
+        merge_execution: Box<dyn ReclusterMergeExecution>,
+    ) -> Self {
+        Self {
+            merge_execution,
+            metrics: factory.merge_config.metrics.clone(),
+            node: factory.merge_config.ctx.get_cluster().local_id.clone(),
+            group: factory.merge_config.group,
+            input_blocks: factory.input_blocks.len(),
+            started: None,
+            generate_nanos: 0,
+            output_blocks: 0,
+            output_rows: 0,
+        }
+    }
+
+    fn log_summary(&self) {
+        if self.metrics.logged.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let m = &self.metrics;
+        let wall_ms = self
+            .started
+            .map(|s| s.elapsed().as_secs_f64() * 1e3)
+            .unwrap_or(0.0);
+        let generate_ms = self.generate_nanos as f64 / 1e6;
+        let read_ms = ReclusterGroupMetrics::ms(&m.read_nanos);
+        let blocked_ms = ReclusterGroupMetrics::ms(&m.blocked_nanos);
+        let decode_ms = (read_ms - blocked_ms).max(0.0);
+        let max_read_ms = ReclusterGroupMetrics::ms(&m.max_read_nanos);
+        let eval_ms = ReclusterGroupMetrics::ms(&m.eval_nanos);
+        let convert_ms = ReclusterGroupMetrics::ms(&m.convert_nanos);
+        let validate_ms = ReclusterGroupMetrics::ms(&m.validate_nanos);
+        let spill_read_ms = ReclusterGroupMetrics::ms(&m.spill_read_nanos);
+        // Time inside generate() not attributed to any measured phase: loser-tree compare,
+        // take/gather in build_output, emit_order key re-encode, lineage columns.
+        let merge_ms =
+            (generate_ms - read_ms - eval_ms - convert_ms - validate_ms - spill_read_ms).max(0.0);
+        let read_calls = m.read_calls.load(Ordering::Relaxed);
+        let avg_read_ms = if read_calls > 0 {
+            read_ms / read_calls as f64
+        } else {
+            0.0
+        };
+        log::info!(
+            event = "recluster.profile.group_source",
+            node = self.node.as_str(),
+            group = self.group,
+            input_blocks = self.input_blocks,
+            input_rows = m.input_rows.load(Ordering::Relaxed),
+            output_blocks = self.output_blocks,
+            output_rows = self.output_rows,
+            // first generate() -> finishing generate(); includes time parked on a full port.
+            wall_ms = format!("{wall_ms:.1}"),
+            // time inside generate(); ~ executor CpuTime for this source.
+            generate_ms = format!("{generate_ms:.1}"),
+            // object storage fetch + parquet decode.
+            read_ms = format!("{read_ms:.1}"),
+            // part of read_ms spent blocked in recv_blocking waiting for S3; the only
+            // genuinely non-CPU time inside generate().
+            blocked_ms = format!("{blocked_ms:.1}"),
+            // read_ms - blocked_ms: parquet decode + range bookkeeping.
+            decode_ms = format!("{decode_ms:.1}"),
+            read_calls,
+            avg_read_ms = format!("{avg_read_ms:.2}"),
+            max_read_ms = format!("{max_read_ms:.1}"),
+            // read() latency buckets: <1ms / 1-10 / 10-50 / 50-200 / >=200
+            read_hist = m.hist_string(),
+            eval_ms = format!("{eval_ms:.1}"),
+            convert_ms = format!("{convert_ms:.1}"),
+            validate_ms = format!("{validate_ms:.1}"),
+            // generate_ms minus all measured phases: loser-tree compare + take/gather.
+            merge_ms = format!("{merge_ms:.1}"),
+            spill_read_ms = format!("{spill_read_ms:.1}"),
+            spill_read_calls = m.spill_read_calls.load(Ordering::Relaxed);
+            "Recluster group source profile"
+        );
     }
 }
 
@@ -1009,6 +1226,8 @@ mod tests {
             minimum_batch: fan_in != 16,
             lineage,
             emit_order: false,
+            metrics: Arc::new(ReclusterGroupMetrics::default()),
+            group: 0,
         };
         let spiller = SortSpillerImpl::new(ctx.clone())?;
         let mut probe = ReclusterMergeStream::<R>::new(
@@ -1122,9 +1341,8 @@ mod tests {
             let mut items = Vec::new();
             for mut factory in group_factories {
                 let output = OutputPort::create();
-                let source = HorizontalReclusterSource {
-                    merge_execution: factory.visit_type::<R>()?,
-                };
+                let merge_execution = factory.visit_type::<R>()?;
+                let source = HorizontalReclusterSource::new(&factory, merge_execution);
                 items.push(PipeItem::create(
                     SyncSourcer::create(ctx.get_scan_progress(), output.clone(), source)?,
                     vec![],
