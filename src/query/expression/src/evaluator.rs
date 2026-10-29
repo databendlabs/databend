@@ -589,9 +589,14 @@ impl<'a> Evaluator<'a> {
             }
             ctx.num_rows = self.data_block.num_rows();
             if let Value::Column(values) = result {
-                result = Value::Column(Column::Encoded(Box::new(EncodedColumn::Dict(
-                    DictColumn::new(keys, values),
-                ))));
+                let dict = DictColumn::new(keys, values);
+                // Consumers read dictionary columns through encoded views, which only some
+                // types support (e.g. not the Boolean result of LIKE): expand the others.
+                result = Value::Column(if DictColumn::supports(&dict.values.data_type()) {
+                    Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
+                } else {
+                    dict.decode()
+                });
             }
         }
 

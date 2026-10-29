@@ -25,6 +25,15 @@ SELECT count(*) FROM dictionary_scalar WHERE s LIKE '%a.com%';
 ----
 3072
 
+# A projected LIKE over a dictionary returns a regular Boolean column: a Boolean dictionary
+# column failed the typed sort key of Top-N.
+query B
+SELECT s LIKE '%a.com%' AS m FROM dictionary_scalar ORDER BY m LIMIT 3;
+----
+0
+0
+0
+
 statement ok
 DROP TABLE dictionary_scalar;
 

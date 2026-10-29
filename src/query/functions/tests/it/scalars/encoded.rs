@@ -354,7 +354,8 @@ fn test_dictionary_function_evaluation() {
 fn test_dictionary_like() {
     let (encoded, plain) = dict(&["google_a", "googleXa", "example"], &[0, 1, 2, 0, 1, 0]);
     for text in ["s LIKE '%google%'", r#""like"(s, 'google!_%', '!')"#] {
-        eval_dictionary(text, encoded.clone(), plain.clone(), None, true);
+        // The Boolean result is expanded: Boolean has no encoded views.
+        eval_dictionary(text, encoded.clone(), plain.clone(), None, false);
     }
 }
 
