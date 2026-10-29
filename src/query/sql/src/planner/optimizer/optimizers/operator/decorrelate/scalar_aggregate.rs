@@ -475,6 +475,14 @@ impl SubqueryDecorrelatorOptimizer {
         };
         let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
         if empty_input_result_is_null(&shape, subquery.output_column.index, &func_ctx) {
+            if !kept_operators_are_deterministic(&shape) {
+                // The check folded e.g. `if(now() > '2026-01-01', count(*), NULL)`, so the plan
+                // choice is valid only for this query.
+                self.ctx
+                    .get_metadata()
+                    .write()
+                    .set_holds_query_specific_value();
+            }
             return Ok(ScalarSubqueryRewrite::GenericPlan);
         }
         let Some(rewrite) = self.rewrite_scalar_aggregate(outer, &shape, true, false)? else {
@@ -583,6 +591,16 @@ fn empty_input_result_is_null(
         }
     }
     matches!(values.get(&output), Some((Scalar::Null, _)))
+}
+
+fn kept_operators_are_deterministic(shape: &ScalarAggregateShape) -> bool {
+    shape.kept.iter().all(|op| match op {
+        RelOperator::EvalScalar(eval) => {
+            eval.items.iter().all(|item| item.scalar.is_deterministic())
+        }
+        RelOperator::Filter(filter) => filter.predicates.iter().all(ScalarExpr::is_deterministic),
+        _ => true,
+    })
 }
 
 /// Folds `scalar` with its columns replaced by the constants in `values`. Returns `None` if a

@@ -56,6 +56,9 @@ pub struct PlanCacheItem {
     pub(crate) plan: Plan,
     pub(crate) setting_changes: Vec<(String, ChangeValue)>,
     pub(crate) variables: HashMap<String, Scalar>,
+    /// Binding marked the query result cache unusable, for example because the statement calls
+    /// `now()`. A plan cache hit skips binding, so the flag is kept here and applied on hit.
+    pub(crate) result_cache_uncacheable: bool,
 }
 
 static PLAN_CACHE: LazyLock<InMemoryLruCache<PlanCacheItem>> =
@@ -184,16 +187,31 @@ impl Planner {
         };
 
         let metadata = metadata.read();
-        cache_ctx
-            .matches_metadata_tables(metadata.tables())
-            .then(|| plan_item.as_ref().clone())
+        if !cache_ctx.matches_metadata_tables(metadata.tables()) {
+            return None;
+        }
+
+        if plan_item.result_cache_uncacheable {
+            self.ctx.result_cache_state().set_cacheable(false);
+        }
+        Some(plan_item.as_ref().clone())
     }
 
     pub(crate) fn set_cache(&self, cache_ctx: PlanCacheContext, plan: Plan) {
+        let Plan::Query { metadata, .. } = &plan else {
+            return;
+        };
+        if metadata.read().holds_query_specific_value() {
+            // Planning stored e.g. the value of `now()` in the plan; it is valid only for this
+            // query.
+            return;
+        }
+
         let plan_item = PlanCacheItem {
             plan,
             setting_changes: self.setting_changes(),
             variables: self.ctx.get_all_variables(),
+            result_cache_uncacheable: !self.ctx.result_cache_state().cacheable(),
         };
         let cache = LazyLock::force(&PLAN_CACHE);
         cache.insert(cache_ctx.cache_key, plan_item);

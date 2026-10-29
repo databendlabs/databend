@@ -423,12 +423,10 @@ where A: TypeCheckAdapter
             && arguments.len() == expected_config_args
             && params.is_empty()
         {
-            let max_num_buckets: u64 = check_number(
-                None,
-                &self.func_ctx,
-                arguments[1].as_expr()?,
-                &BUILTIN_FUNCTIONS,
-            )?;
+            let num_buckets = arguments[1].as_expr()?;
+            self.mark_folded_value(&num_buckets);
+            let max_num_buckets: u64 =
+                check_number(None, &self.func_ctx, num_buckets, &BUILTIN_FUNCTIONS)?;
 
             arguments.remove(1);
             arg_types.remove(1);

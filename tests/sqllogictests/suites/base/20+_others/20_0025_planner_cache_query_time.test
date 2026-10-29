@@ -1,0 +1,166 @@
+# Repeat identical top-level SELECTs: only these can hit the planner cache.
+statement ok
+DROP DATABASE IF EXISTS db20_25;
+
+statement ok
+CREATE DATABASE db20_25;
+
+statement ok
+USE db20_25;
+
+statement ok
+SET enable_planner_cache = 1;
+
+statement ok
+CREATE TABLE t (a INT NOT NULL, ts TIMESTAMP NOT NULL);
+
+statement ok
+INSERT INTO t VALUES (1, '2020-01-01 00:00:00'), (2, '2020-01-02 00:00:00');
+
+# now() stays symbolic in the cached logical plan; physical pruning is rebuilt.
+query I
+SELECT count(*) FROM t WHERE ts > subtract_minutes(now(), 15);
+----
+0
+
+query I
+SELECT count(*) FROM t WHERE ts > subtract_minutes(now(), 15);
+----
+0
+
+# No writes between these two statements. The cached logical plan must use
+# a fresh timestamp when building the second physical scan and prune result.
+statement ok
+INSERT INTO t VALUES (3, now() + interval 2 second);
+
+query I
+SELECT count(*) FROM t WHERE ts < now();
+----
+2
+
+statement ok
+SELECT sleep(3);
+
+query I
+SELECT count(*) FROM t WHERE ts < now();
+----
+3
+
+# today() / yesterday() / tomorrow() are derived from the same query start time
+# as now() and stay symbolic in the cached logical plan too.
+query I
+SELECT count(*) FROM t WHERE ts >= DATE_SUB(HOUR, 26, today()) AND ts < DATE_SUB(HOUR, -26, today());
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE ts >= DATE_SUB(HOUR, 26, today()) AND ts < DATE_SUB(HOUR, -26, today());
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE ts >= yesterday() AND ts < tomorrow() + 1;
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE ts >= yesterday() AND ts < tomorrow() + 1;
+----
+1
+
+query I
+SELECT count(*) FROM t WHERE ts < today() - 365;
+----
+2
+
+query I
+SELECT count(*) FROM t WHERE ts < today() - 365;
+----
+2
+
+# Constant scalar subqueries, VALUES and lambda bodies are evaluated while
+# planning. Reusing these logical plans would freeze the timestamp from the
+# first execution.
+query B
+SELECT (SELECT now()) < now() - interval 1 second FROM t LIMIT 1;
+----
+0
+
+statement ok
+SELECT sleep(2);
+
+query B
+SELECT (SELECT now()) < now() - interval 1 second FROM t LIMIT 1;
+----
+0
+
+query B
+SELECT v.n < now() - interval 1 second FROM (VALUES (now())) AS v(n), t LIMIT 1;
+----
+0
+
+statement ok
+SELECT sleep(2);
+
+query B
+SELECT v.n < now() - interval 1 second FROM (VALUES (now())) AS v(n), t LIMIT 1;
+----
+0
+
+query I
+SELECT length(array_filter([now()], x -> x < now() + interval 1 second)) FROM t LIMIT 1;
+----
+1
+
+statement ok
+SELECT sleep(2);
+
+query I
+SELECT length(array_filter([now()], x -> x < now() + interval 1 second)) FROM t LIMIT 1;
+----
+1
+
+# Binding flags the result cache as ineligible. A planner-cache hit must also
+# restore that flag, even though binding is skipped.
+statement ok
+SET enable_query_result_cache = 1;
+
+statement ok
+SET query_result_cache_min_execute_secs = 0;
+
+statement ok
+truncate table system.query_cache;
+
+query B
+SELECT max(now()) > TIMESTAMP '2000-01-01 00:00:00' FROM t;
+----
+1
+
+query B
+SELECT max(now()) > TIMESTAMP '2000-01-01 00:00:00' FROM t;
+----
+1
+
+query I
+SELECT count() FROM system.query_cache;
+----
+0
+
+query I
+SELECT max(a) FROM t;
+----
+3
+
+query I
+SELECT count() FROM system.query_cache;
+----
+1
+
+statement ok
+SET enable_query_result_cache = 0;
+
+statement ok
+truncate table system.query_cache;
+
+statement ok
+DROP DATABASE db20_25;

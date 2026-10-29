@@ -559,11 +559,10 @@ where A: TypeCheckAdapter
             CoreWindowFrameBound::Following(Some(expr))
             | CoreWindowFrameBound::Preceding(Some(expr)) => {
                 let deref!((expr, _)) = self.resolve_core(arena, *expr)?;
-                let (expr, _) = ConstantFolder::fold(
-                    Cow::Owned(expr.as_expr()?),
-                    &self.func_ctx,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let expr = expr.as_expr()?;
+                self.mark_folded_value(&expr);
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 match expr.into_owned().into_constant() {
                     Ok(expr::Constant { scalar, .. }) => Ok(Some(scalar)),
                     Err(expr) => Err(ErrorCode::SemanticError(

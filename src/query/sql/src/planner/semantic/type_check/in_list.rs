@@ -165,6 +165,7 @@ where A: super::TypeCheckAdapter
             let scalar = if *data_type != common_type {
                 let cast = wrap_cast(&scalar, &common_type);
                 let expr = cast.as_expr()?;
+                self.mark_folded_value(&expr);
                 let (expr, _) =
                     ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 match expr.into_owned().into_constant() {

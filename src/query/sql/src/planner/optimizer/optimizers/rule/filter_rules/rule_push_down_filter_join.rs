@@ -126,6 +126,15 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
+/// Pushing a predicate below the null-supplying side of an outer join relies on its value for
+/// NULL input. For a non-deterministic predicate, for example
+/// `coalesce(t.end_time, now()) > '2026-01-01'`, that value is valid only for this query.
+fn record_null_rejection(metadata: &MetadataRef, predicate: &ScalarExpr) {
+    if !predicate.is_deterministic() {
+        metadata.write().set_holds_query_specific_value();
+    }
+}
+
 fn try_push_down_filter_join(
     s_expr: &SExpr,
     metadata: MetadataRef,
@@ -183,6 +192,7 @@ fn try_push_down_filter_join(
                         metadata.clone(),
                         func_ctx,
                     )? {
+                        record_null_rejection(&metadata, &predicate);
                         left_push_down.push(predicate);
                     } else {
                         original_predicates.push(predicate);
@@ -203,6 +213,7 @@ fn try_push_down_filter_join(
                         metadata.clone(),
                         func_ctx,
                     )? {
+                        record_null_rejection(&metadata, &predicate);
                         right_push_down.push(predicate);
                     } else {
                         original_predicates.push(predicate);

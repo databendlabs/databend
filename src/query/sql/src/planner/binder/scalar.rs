@@ -17,8 +17,11 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnIndex;
+use databend_common_expression::Expr as EExpr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::MetadataRef;
 use crate::planner::binder::BindContext;
@@ -121,5 +124,18 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
         self.adapter.clone()?.function_context()
+    }
+
+    /// Records that binding stores the value of `expr` in the logical plan. A value computed
+    /// from a non-deterministic expression such as `now()` is valid only for this query.
+    pub(crate) fn mark_folded_value<Index: ColumnIndex>(&self, expr: &EExpr<Index>) {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            self.set_holds_query_specific_value();
+        }
+    }
+
+    /// Records that the logical plan holds a value that is valid only for this query.
+    pub(crate) fn set_holds_query_specific_value(&self) {
+        self.metadata.write().set_holds_query_specific_value();
     }
 }

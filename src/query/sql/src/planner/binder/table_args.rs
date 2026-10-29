@@ -105,6 +105,8 @@ fn try_fold_to_scalar(
     subquery_executor: &Option<Arc<dyn QueryExecutor>>,
 ) -> Result<Scalar> {
     let expr = scalar.as_expr()?;
+    // A folded argument such as `generate_series(today(), ...)` is valid only for this query.
+    scalar_binder.mark_folded_value(&expr);
     let (expr, _) = ConstantFolder::fold(
         Cow::Owned(expr),
         &scalar_binder.get_func_ctx()?,
@@ -116,6 +118,9 @@ fn try_fold_to_scalar(
         Err(_) => {
             if contains_subquery(ast_expr) {
                 if let Some(executor) = subquery_executor {
+                    // The subquery runs while planning, and its result, for example of
+                    // `(SELECT today())`, is valid only for this query.
+                    scalar_binder.set_holds_query_specific_value();
                     return execute_subquery_for_scalar(executor, ast_expr);
                 }
                 return Err(ErrorCode::Internal(

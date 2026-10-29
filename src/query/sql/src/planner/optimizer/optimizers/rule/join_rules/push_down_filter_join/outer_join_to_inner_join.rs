@@ -58,9 +58,13 @@ pub fn outer_join_to_inner_join(
 
     let mut can_filter_left_null = false;
     let mut can_filter_right_null = false;
+    // The same flags derived from deterministic predicates only.
+    let mut stable_filter_left_null = false;
+    let mut stable_filter_right_null = false;
     let left_prop = join_rel_expr.derive_relational_prop_child(0)?;
     let right_prop = join_rel_expr.derive_relational_prop_child(1)?;
     for predicate in &filter.predicates {
+        let deterministic = predicate.is_deterministic();
         let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
         match pred {
             JoinPredicate::Left(_)
@@ -73,6 +77,7 @@ pub fn outer_join_to_inner_join(
                 )? =>
             {
                 can_filter_left_null = true;
+                stable_filter_left_null |= deterministic;
             }
             JoinPredicate::Right(_)
                 if can_filter_null(
@@ -84,6 +89,7 @@ pub fn outer_join_to_inner_join(
                 )? =>
             {
                 can_filter_right_null = true;
+                stable_filter_right_null |= deterministic;
             }
             JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
                 if can_filter_null(
@@ -94,6 +100,7 @@ pub fn outer_join_to_inner_join(
                     &stat_context.function_context,
                 )? {
                     can_filter_left_null = true;
+                    stable_filter_left_null |= deterministic;
                 }
                 if can_filter_null(
                     predicate,
@@ -103,6 +110,7 @@ pub fn outer_join_to_inner_join(
                     &stat_context.function_context,
                 )? {
                     can_filter_right_null = true;
+                    stable_filter_right_null |= deterministic;
                 }
             }
             _ => (),
@@ -114,6 +122,17 @@ pub fn outer_join_to_inner_join(
         eliminate_outer_join_type(join.join_type, can_filter_left_null, can_filter_right_null);
     if join.join_type == original_join_type {
         return Ok((s_expr.clone(), false));
+    }
+    if join.join_type
+        != eliminate_outer_join_type(
+            original_join_type,
+            stable_filter_left_null,
+            stable_filter_right_null,
+        )
+    {
+        // The new join type relies on the value of a non-deterministic predicate, for example
+        // `coalesce(t.end_time, now()) > '2026-01-01'`, and is valid only for this query.
+        metadata.write().set_holds_query_specific_value();
     }
 
     if matches!(
