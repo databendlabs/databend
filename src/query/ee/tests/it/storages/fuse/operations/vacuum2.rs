@@ -62,7 +62,9 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
+use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -145,6 +147,291 @@ async fn test_vacuum_table_command() -> anyhow::Result<()> {
         .await?;
     assert_only_current_snapshot_files(&ctx, storage_root, database, table).await?;
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_preserves_max_block_timestamp() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_data_retention_time_in_days(0)?;
+    settings.set_max_execute_time_in_seconds(3600)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!("CREATE TABLE {db}.bound(c INT) AS SELECT 1"))
+        .await?;
+    let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let table = catalog.get_table(&tenant, &db, "bound").await?;
+    let initial = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_eq!(
+        initial.max_block_timestamp,
+        initial.timestamp.map(|ts| ts + chrono::Duration::hours(1))
+    );
+
+    settings.set_max_execute_time_in_seconds(7200)?;
+    fixture
+        .execute_command(&format!("UPDATE {db}.bound SET c=2"))
+        .await?;
+    let table = catalog.get_table(&tenant, &db, "bound").await?;
+    let updated = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert!(updated.max_block_timestamp > initial.max_block_timestamp);
+    let bound = updated.max_block_timestamp;
+
+    settings.set_max_execute_time_in_seconds(0)?;
+    for sql in [
+        format!("INSERT INTO {db}.bound VALUES (3)"),
+        format!("ANALYZE TABLE {db}.bound"),
+        format!("TRUNCATE TABLE {db}.bound"),
+    ] {
+        fixture.execute_command(&sql).await?;
+        let table = catalog.get_table(&tenant, &db, "bound").await?;
+        let snapshot = FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap();
+        assert_eq!(snapshot.max_block_timestamp, bound, "{sql}");
+    }
+
+    let table = catalog.get_table(&tenant, &db, "bound").await?;
+    let before = FuseTable::try_from_table(table.as_ref())?.snapshot_loc();
+    // The first pass can collect the later INSERT's older block; the next sweep is empty.
+    for _ in 0..2 {
+        do_vacuum2(table.as_ref(), ctx.clone(), true).await?;
+    }
+    let table = catalog.get_table(&tenant, &db, "bound").await?;
+    assert_eq!(
+        FuseTable::try_from_table(table.as_ref())?.snapshot_loc(),
+        before,
+        "a future bound must not cause repeated snapshot advancement"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_advances_idle_head_with_nonzero_retention() -> anyhow::Result<()> {
+    for respect_flash_back in [false, true] {
+        check_vacuum2_advances_with_nonzero_retention(respect_flash_back).await?;
+    }
+    Ok(())
+}
+
+async fn check_vacuum2_advances_with_nonzero_retention(
+    respect_flash_back: bool,
+) -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!("CREATE TABLE {db}.idle(c INT) AS SELECT 1"))
+        .await?;
+    settings.set_data_retention_time_in_days(1)?;
+    let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let mut old = (*fuse.read_table_snapshot().await?.unwrap()).clone();
+    let old_time = chrono::Utc::now() - chrono::Duration::days(2);
+    old.timestamp = Some(old_time);
+    old.snapshot_id = uuid_from_date_time(old_time);
+    fuse.commit_to_meta_server(
+        ctx.as_ref(),
+        table.get_table_info(),
+        fuse.meta_location_generator(),
+        old.clone(),
+        None,
+        &None,
+        fuse.get_operator_ref(),
+    )
+    .await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    let old_location = FuseTable::try_from_table(table.as_ref())?
+        .snapshot_loc()
+        .unwrap();
+
+    // This unreferenced block is newer than the idle head but still inside retention.
+    let orphan_time = chrono::Utc::now() - chrono::Duration::hours(1);
+    let ((orphan, _), _) = fuse
+        .meta_location_generator()
+        .gen_block_location(TableMetaTimestamps {
+            snapshot_timestamp: orphan_time,
+            segment_block_timestamp: orphan_time,
+            snapshot_timestamp_validation_context: None,
+        });
+    let operator = fuse.get_operator();
+    operator.write(&orphan, "recent orphan").await?;
+
+    do_vacuum2(table.as_ref(), ctx.clone(), respect_flash_back).await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    let advanced = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_ne!(advanced.snapshot_id, old.snapshot_id);
+    assert_eq!(advanced.max_block_timestamp, old.max_block_timestamp);
+    // The second pass must select its root through the retention policy. The new head
+    // is not eligible yet, so neither the previous root nor recent garbage can be purged.
+    assert!(operator.exists(&old_location).await?);
+    assert!(operator.exists(&orphan).await?);
+    do_vacuum2(table.as_ref(), ctx, respect_flash_back).await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    assert_eq!(
+        FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap()
+            .snapshot_id,
+        advanced.snapshot_id
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_advances_gc_root_to_collect_orphan_blocks() -> anyhow::Result<()> {
+    for (create_table, options) in [
+        ("TABLE", ""),
+        ("TABLE", "data_retention_num_snapshots_to_keep=1"),
+        ("TRANSIENT TABLE", ""),
+    ] {
+        for respect_flash_back in [false, true] {
+            check_vacuum2_advances_gc_root(respect_flash_back, create_table, options).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn check_vacuum2_advances_gc_root(
+    respect_flash_back: bool,
+    create_table: &str,
+    options: &str,
+) -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!(
+            "CREATE {create_table} {db}.idle(c INT) {options} AS SELECT 1"
+        ))
+        .await?;
+    let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+
+    // Age the head without waiting for retention. Its live blocks keep their original paths.
+    let mut old = (*fuse.read_table_snapshot().await?.unwrap()).clone();
+    let old_time = chrono::Utc::now() - chrono::Duration::days(2);
+    old.timestamp = Some(old_time);
+    old.snapshot_id = uuid_from_date_time(old_time);
+    fuse.commit_to_meta_server(
+        ctx.as_ref(),
+        table.get_table_info(),
+        fuse.meta_location_generator(),
+        old.clone(),
+        None,
+        &None,
+        fuse.get_operator_ref(),
+    )
+    .await?;
+
+    // This unreferenced block is past retention, but newer than the idle head.
+    let orphan_time = old_time + chrono::Duration::hours(1);
+    let ((orphan, _), _) = fuse
+        .meta_location_generator()
+        .gen_block_location(TableMetaTimestamps {
+            snapshot_timestamp: orphan_time,
+            segment_block_timestamp: orphan_time,
+            snapshot_timestamp_validation_context: None,
+        });
+    let operator = fuse.get_operator();
+    operator.write(&orphan, "orphan").await?;
+
+    let before_root = old_time - chrono::Duration::seconds(1);
+    let ((older_orphan, _), _) =
+        fuse.meta_location_generator()
+            .gen_block_location(TableMetaTimestamps {
+                snapshot_timestamp: before_root,
+                segment_block_timestamp: before_root,
+                snapshot_timestamp_validation_context: None,
+            });
+    operator.write(&older_orphan, "older orphan").await?;
+
+    // A successful block sweep must not advance, even with a partial delete chunk.
+    do_vacuum2(table.as_ref(), ctx.clone(), respect_flash_back).await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    assert_eq!(
+        FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap()
+            .snapshot_id,
+        old.snapshot_id
+    );
+    assert!(!operator.exists(&older_orphan).await?);
+    assert!(operator.exists(&orphan).await?);
+
+    // The next invocation finds no blocks before the root. It must advance and collect
+    // the newer orphan in the same call, preserving all snapshot contents.
+    do_vacuum2(table.as_ref(), ctx.clone(), respect_flash_back).await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    let advanced = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_ne!(advanced.snapshot_id, old.snapshot_id);
+    assert!(advanced.timestamp.unwrap() > old_time);
+    assert_eq!(
+        advanced.prev_snapshot_id,
+        Some((old.snapshot_id, old.format_version))
+    );
+    let mut unchanged = (*advanced).clone();
+    unchanged.snapshot_id = old.snapshot_id;
+    unchanged.timestamp = old.timestamp;
+    unchanged.prev_snapshot_id = old.prev_snapshot_id;
+    unchanged.prev_table_seq = old.prev_table_seq;
+    assert_eq!(
+        serde_json::to_value(&unchanged)?,
+        serde_json::to_value(&old)?
+    );
+    assert!(!operator.exists(&orphan).await?);
+
+    // The new root is beyond the recorded bound; another vacuum must preserve it.
+    do_vacuum2(table.as_ref(), ctx.clone(), respect_flash_back).await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    assert_eq!(
+        FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap()
+            .snapshot_id,
+        advanced.snapshot_id
+    );
+    assert!(!operator.exists(&orphan).await?);
+    assert_eq!(
+        query_count(
+            fixture
+                .execute_query(&format!("SELECT count(*) FROM {db}.idle"))
+                .await?
+        )
+        .await?,
+        1
+    );
     Ok(())
 }
 
@@ -1620,6 +1907,15 @@ async fn test_vacuum2_protected_segments_span_multiple_chunks() -> anyhow::Resul
 /// then fail to commit so no committed snapshot can reference a deleted block.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum2_rejects_transaction_whose_blocks_were_collected() -> anyhow::Result<()> {
+    for advance_by_vacuum in [false, true] {
+        check_vacuum2_rejects_transaction_whose_blocks_were_collected(advance_by_vacuum).await?;
+    }
+    Ok(())
+}
+
+async fn check_vacuum2_rejects_transaction_whose_blocks_were_collected(
+    advance_by_vacuum: bool,
+) -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture
         .default_session()
@@ -1688,9 +1984,11 @@ async fn test_vacuum2_rejects_transaction_whose_blocks_were_collected() -> anyho
     // Ensure the next committed snapshot has a strictly later logical timestamp than the
     // transaction's block objects and can therefore become their gc-root cutoff.
     tokio::time::sleep(Duration::from_millis(2)).await;
-    fixture
-        .execute_command(&format!("insert into {db_name}.{tbl_name} values (3)"))
-        .await?;
+    if !advance_by_vacuum {
+        fixture
+            .execute_command(&format!("insert into {db_name}.{tbl_name} values (3)"))
+            .await?;
+    }
     fixture
         .execute_command(&format!(
             "call system$fuse_vacuum2('{db_name}', '{tbl_name}')"
@@ -1722,7 +2020,7 @@ async fn test_vacuum2_rejects_transaction_whose_blocks_were_collected() -> anyho
         .await?;
     let blocks: Vec<DataBlock> = stream.try_collect().await?;
     let committed_rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
-    assert_eq!(committed_rows, 2);
+    assert_eq!(committed_rows, if advance_by_vacuum { 1 } else { 2 });
 
     Ok(())
 }

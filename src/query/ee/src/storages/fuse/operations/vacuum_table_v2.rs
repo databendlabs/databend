@@ -39,6 +39,8 @@ use databend_storages_common_index::ExternalFile;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
@@ -113,6 +115,22 @@ pub async fn do_vacuum2(
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<()> {
+    if vacuum_once(table, ctx.clone(), respect_flash_back, true).await? {
+        // Rebuild protection roots and publish LVTs for the new head. Limit this invocation
+        // to one extra pass, even if concurrent writes leave more unreferenced blocks.
+        vacuum_once(table, ctx, respect_flash_back, false).await?;
+    }
+    Ok(())
+}
+
+/// Returns whether a new GC root was committed and needs another vacuum pass.
+#[async_backtrace::framed]
+async fn vacuum_once(
+    table: &dyn Table,
+    ctx: Arc<dyn TableContext>,
+    respect_flash_back: bool,
+    allow_new_gc_root: bool,
+) -> Result<bool> {
     let table_info = table.get_table_info();
     {
         if ctx.txn_mgr().lock().is_active() {
@@ -120,7 +138,7 @@ pub async fn do_vacuum2(
                 "Transaction is active, skipping vacuum, target table {}",
                 table_info.desc
             );
-            return Ok(());
+            return Ok(false);
         }
     }
 
@@ -134,7 +152,7 @@ pub async fn do_vacuum2(
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
-        return Ok(());
+        return Ok(false);
     };
     let fuse_table = FuseTable::try_from_table(owner.as_ref())?;
     let table_info = fuse_table.get_table_info();
@@ -431,7 +449,73 @@ pub async fn do_vacuum2(
         removed_files,
     ));
 
-    Ok(())
+    if allow_new_gc_root && block_gc_stats.removed_blocks == 0 {
+        return advance_gc_root(fuse_table, &ctx).await;
+    }
+
+    Ok(false)
+}
+
+/// Advance an idle head when recorded block timestamps can now fall before a new GC root.
+async fn advance_gc_root(table: &FuseTable, ctx: &Arc<dyn TableContext>) -> Result<bool> {
+    let Some(previous) = table.read_table_snapshot().await? else {
+        return Ok(false);
+    };
+
+    let (Some(root_timestamp), Some(max_block_timestamp)) =
+        (previous.timestamp, previous.max_block_timestamp)
+    else {
+        return Ok(false);
+    };
+    // Object-key cutoffs exclude the entire root millisecond. Wait until the recorded
+    // bound is eligible so repeated vacuums cannot keep advancing toward a future bound.
+    let max_block_millis = max_block_timestamp.timestamp_millis();
+    if max_block_millis < root_timestamp.timestamp_millis()
+        || max_block_millis >= Utc::now().timestamp_millis()
+    {
+        return Ok(false);
+    }
+
+    ctx.check_aborting()
+        .map_err(|err| err.with_context("aborted before advancing GC root after vacuum"))?;
+    // Auto vacuum can share the writing query's cached timestamps. Use fresh timestamps here:
+    // this commit writes no blocks and must advance beyond the current head.
+    let timestamps = TableMetaTimestamps::new(Some(previous.clone()), chrono::Duration::zero());
+    let snapshot = TableSnapshot::try_from_previous(
+        previous,
+        table.cluster_key_info(),
+        Some(table.get_table_info().ident.seq),
+        timestamps,
+    )?;
+    match table
+        .commit_to_meta_server(
+            ctx.as_ref(),
+            table.get_table_info(),
+            table.meta_location_generator(),
+            snapshot,
+            None,
+            &None,
+            table.get_operator_ref(),
+        )
+        .await
+    {
+        Ok(()) => {
+            info!(
+                "Advanced GC root after vacuum for table {}",
+                table.get_table_info().desc
+            );
+            Ok(true)
+        }
+        // Another writer already changed the table. Leave its head intact and do not retry.
+        Err(err) if err.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
+            info!(
+                "Skipping GC root advancement after concurrent update of table {}",
+                table.get_table_info().desc
+            );
+            Ok(false)
+        }
+        Err(err) => Err(err),
+    }
 }
 
 /// Removes user dictionary objects under `prefix` that no current index definition references.
@@ -957,6 +1041,38 @@ mod tests {
 
     use super::*;
     use crate::test_kits::context::EESetup;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn advance_gc_root_skips_concurrent_update() -> anyhow::Result<()> {
+        let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+        fixture
+            .default_session()
+            .get_settings()
+            .set_data_retention_time_in_days(0)?;
+        fixture.create_default_database().await?;
+        let db = fixture.default_db_name();
+        fixture
+            .execute_command(&format!("CREATE TABLE {db}.idle(c INT) AS SELECT 1"))
+            .await?;
+        let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+        let catalog = ctx.get_default_catalog()?;
+        let tenant = ctx.get_tenant();
+        let stale = catalog.get_table(&tenant, &db, "idle").await?;
+        fixture
+            .execute_command(&format!("INSERT INTO {db}.idle VALUES (2)"))
+            .await?;
+        let current = catalog.get_table(&tenant, &db, "idle").await?;
+
+        assert!(!advance_gc_root(FuseTable::try_from_table(stale.as_ref())?, &ctx).await?);
+
+        let after = catalog.get_table(&tenant, &db, "idle").await?;
+        assert_eq!(after.get_table_info().ident, current.get_table_info().ident);
+        assert_eq!(
+            FuseTable::try_from_table(after.as_ref())?.snapshot_loc(),
+            FuseTable::try_from_table(current.as_ref())?.snapshot_loc()
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_collect_block_index_locations_keeps_per_block_order() {
