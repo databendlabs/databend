@@ -62,7 +62,7 @@ use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
 use futures::future::select;
-use futures::future::try_join_all;
+use futures::stream::FuturesUnordered;
 use log::error;
 use log::info;
 use log::warn;
@@ -257,10 +257,24 @@ impl ClusterHelper for Cluster {
         let mut response = HashMap::with_capacity(actions.len());
         if flight_params.concurrent {
             // Each node only handles its own share of the request, so the calls are
-            // independent and can be in flight at the same time. The first error wins
-            // and drops the remaining in-flight requests.
-            for (id, result) in try_join_all(actions).await? {
-                response.insert(id, result);
+            // independent and can be in flight at the same time. On failure, still wait
+            // for every started call to settle before returning the first error: dropping
+            // a call does not revoke a request the node already received, and the caller
+            // usually cleans up right after, which must not race with a late request.
+            let mut pending = actions.into_iter().collect::<FuturesUnordered<_>>();
+            let mut first_error = None;
+            while let Some(result) = pending.next().await {
+                match result {
+                    Ok((id, result)) => {
+                        response.insert(id, result);
+                    }
+                    Err(cause) => {
+                        first_error.get_or_insert(cause);
+                    }
+                }
+            }
+            if let Some(cause) = first_error {
+                return Err(cause);
             }
         } else {
             for action in actions {

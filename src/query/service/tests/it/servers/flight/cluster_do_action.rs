@@ -194,3 +194,41 @@ async fn test_finish_query_reaches_live_nodes_despite_failed_ones() -> anyhow::R
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_finish_query_is_bounded_on_hung_node() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let config = GlobalConfig::instance();
+
+    // The kernel completes the TCP handshake from the backlog, but nobody ever reads
+    // or answers, as with a node that hangs.
+    let hung_listener = StdTcpListener::bind("127.0.0.1:0")?;
+    let hung = node_id("hung");
+    let cluster = Cluster::create(
+        vec![node(&hung, &hung_listener.local_addr()?.to_string())],
+        config.query.node_id.clone(),
+    );
+
+    for reuse in [false, true] {
+        // A long flight timeout, as with the 60s default: the cleanup must not wait
+        // for it on the error path.
+        let params = FlightParams {
+            timeout: 60,
+            ..flight_params(false, reuse)
+        };
+        let started = std::time::Instant::now();
+        let failed =
+            finish_query_on_nodes(&cluster, [hung.clone()], &finish_packet(), params).await;
+        let elapsed = started.elapsed();
+
+        assert_eq!(failed.len(), 1, "reuse = {reuse}");
+        assert_eq!(failed[0].0, hung);
+        assert!(
+            elapsed < std::time::Duration::from_secs(15),
+            "reuse = {reuse}, cleanup took {elapsed:?}"
+        );
+    }
+
+    drop(hung_listener);
+    Ok(())
+}
