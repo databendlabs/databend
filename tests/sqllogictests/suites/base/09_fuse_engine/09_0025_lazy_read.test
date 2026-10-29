@@ -122,3 +122,38 @@ drop table t_11882
 
 statement ok
 drop table t_17146
+
+# Rows fetched from many blocks of one segment: each block holds one result row,
+# and the blocks span several row fetch metadata windows.
+statement ok
+create or replace table t_row_fetch_segment(a int, b string) row_per_block = 2
+
+statement ok
+insert into t_row_fetch_segment select number, concat('s', number::string) from numbers(30)
+
+query II
+select segment_count, block_count from fuse_snapshot('default', 't_row_fetch_segment')
+----
+1 15
+
+query IT
+select * from t_row_fetch_segment order by a % 2, a limit 15
+----
+0 s0
+2 s2
+4 s4
+6 s6
+8 s8
+10 s10
+12 s12
+14 s14
+16 s16
+18 s18
+20 s20
+22 s22
+24 s24
+26 s26
+28 s28
+
+statement ok
+drop table t_row_fetch_segment
