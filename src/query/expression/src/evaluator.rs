@@ -552,12 +552,13 @@ impl<'a> Evaluator<'a> {
         let all_scalar = args.iter().all(|arg| matches!(arg, Value::Scalar(_)));
         let dictionary = dictionary_eval
             .then(|| {
-                let Some((index, DictColumn { keys, values })) = Self::take_dictionary_arg(&mut args)
+                let Some((index, DictColumn { keys, values })) =
+                    Self::take_dictionary_arg(&mut args)
                 else {
                     for arg in &mut args {
                         if arg.is_encoded() {
-                            *arg = std::mem::replace(arg, Value::Scalar(Scalar::Null))
-                                .decode_owned();
+                            *arg =
+                                std::mem::replace(arg, Value::Scalar(Scalar::Null)).decode_owned();
                         }
                     }
                     return None;

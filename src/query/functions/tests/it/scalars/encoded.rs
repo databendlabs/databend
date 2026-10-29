@@ -17,7 +17,6 @@
 
 use std::borrow::Cow;
 
-use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;

@@ -440,11 +440,8 @@ where
             // Keep validity-aware iteration on the original path below.
             column @ ColumnView::Encoded(_) if validity.is_none() => {
                 with_column_view_iter!(NumberType<T>, &column, |values| {
-                    self.value += sum_selected(
-                        values,
-                        |i| unsafe { column.index_unchecked(i) },
-                        None,
-                    );
+                    self.value +=
+                        sum_selected(values, |i| unsafe { column.index_unchecked(i) }, None);
                 });
             }
             ColumnView::Encoded(view) => {

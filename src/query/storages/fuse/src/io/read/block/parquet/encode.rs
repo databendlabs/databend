@@ -73,7 +73,7 @@ impl ColumnEncoding {
 
     /// Converts the Arrow array read from Parquet into the narrowest in-memory form: the
     /// encoded column, or the regular column if no encoding makes the block smaller.
-     pub fn encode(
+    pub fn encode(
         self,
         array: ArrayRef,
         data_type: &DataType,
