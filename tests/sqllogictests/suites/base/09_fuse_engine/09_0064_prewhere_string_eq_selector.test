@@ -89,6 +89,30 @@ p6,p8,p12,p14,p16,p18
 statement ok
 UNSET enable_encoded_columns
 
+# Blocks written before ADD COLUMN read the new columns as constant columns.
+statement ok
+ALTER TABLE t ADD COLUMN c STRING DEFAULT 'a%'
+
+statement ok
+ALTER TABLE t ADD COLUMN nc STRING NULL
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' AND c LIKE '%a%'
+----
+p0,p3,p6,p9,p12,p15,p18
+
+# The constant is the LIKE input and the column is the pattern.
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' AND 'abc' LIKE c
+----
+p0,p3,p6,p9,p12,p15,p18
+
+# LIKE over a constant NULL column must leave its rows to the next OR child.
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' AND (nc LIKE '%a%' OR id < 7)
+----
+p0,p3,p6
+
 statement ok
 UNSET max_block_size
 
