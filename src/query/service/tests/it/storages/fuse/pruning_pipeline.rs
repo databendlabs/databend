@@ -18,11 +18,15 @@ use std::sync::Arc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeLimitFilter;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -39,6 +43,7 @@ use databend_common_expression::types::number::UInt64Type;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::parse_to_filters;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::FuseBlockPartInfo;
@@ -53,6 +58,8 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextPartitionStats;
 use databend_query::sessions::TableContextQueryIdentity;
+use databend_query::sessions::TableContextRuntimeFilter;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -152,21 +159,21 @@ async fn apply_snapshot_pruning(
     Ok((got, stats))
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_snapshot_pruner() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-
-    fixture.create_default_database().await?;
-
-    let test_tbl_name = "test_index_helper";
+/// Creates `test_tbl_name` with columns `a`, `b` and appends `num_blocks`
+/// blocks of `row_per_block` rows, one block per segment. Column `a` is
+/// always 1; column `b` equals the block index.
+async fn create_test_table(
+    fixture: &TestFixture,
+    ctx: Arc<QueryContext>,
+    test_tbl_name: &str,
+    num_blocks: usize,
+    row_per_block: usize,
+) -> Result<Arc<dyn Table>> {
     let test_schema = TableSchemaRefExt::create(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
         TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
     ]);
 
-    let num_blocks = 10;
-    let row_per_block = 10;
     let num_blocks_opt = row_per_block.to_string();
 
     // create test table
@@ -237,13 +244,32 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         .await?;
 
     // get the latest tbl
-    let table = catalog
+    catalog
         .get_table(
             &fixture.default_tenant(),
             fixture.default_db_name().as_str(),
             test_tbl_name,
         )
-        .await?;
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_snapshot_pruner() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    fixture.create_default_database().await?;
+
+    let num_blocks = 10;
+    let row_per_block = 10;
+    let table = create_test_table(
+        &fixture,
+        ctx.clone(),
+        "test_index_helper",
+        num_blocks,
+        row_per_block,
+    )
+    .await?;
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
@@ -411,6 +437,223 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         .0;
     assert!(explain_stats.pruning_stats.segments_read_cost > 0);
     assert!(explain_stats.pruning_stats.segments_decompress_cost > 0);
+
+    Ok(())
+}
+
+/// Runs a lazy prune pipeline built by `build_prune_pipeline` and returns the
+/// parts it produced.
+async fn execute_lazy_prune_pipeline(
+    ctx: Arc<QueryContext>,
+    fuse_table: &FuseTable,
+    prune_pipeline: Pipeline,
+) -> Result<Vec<PartInfoPtr>> {
+    let rx = fuse_table.pruned_result_receiver.lock().clone().unwrap();
+    let executor =
+        QueryPipelineExecutor::create(prune_pipeline, ExecutorSettings::try_create(ctx)?)?;
+    executor.execute()?;
+    let mut parts = Vec::new();
+    while let Ok(Ok(part)) = rx.recv().await {
+        parts.push(part);
+    }
+    Ok(parts)
+}
+
+fn block_locations(parts: &[PartInfoPtr]) -> Vec<String> {
+    let mut locations = parts
+        .iter()
+        .map(|part| FuseBlockPartInfo::from_part(part).unwrap().location.clone())
+        .collect::<Vec<_>>();
+    locations.sort();
+    locations
+}
+
+/// Lazy (distributed) pruning runs the prune pipeline inside the query
+/// executor. It must produce the same partitions as plan-time pruning, and its
+/// parallelism is bounded by the number of segments to prune, not by
+/// `max_threads` / `max_storage_io_requests`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lazy_prune_pipeline_over_segments() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture.create_default_database().await?;
+
+    let settings = ctx.get_settings();
+    settings.set_max_threads(8)?;
+    settings.set_max_storage_io_requests(8)?;
+    // Both plans below prune the same segments with the same filter; disable
+    // the prune cache so the second one does not just replay the first.
+    settings.set_setting("enable_prune_cache".to_string(), "0".to_string())?;
+
+    // 3 segments with a single block each: strictly fewer than `max_threads`.
+    let num_blocks = 3;
+    let row_per_block = 10;
+    let table = create_test_table(
+        &fixture,
+        ctx.clone(),
+        "test_lazy_prune_pipeline",
+        num_blocks,
+        row_per_block,
+    )
+    .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+    // prunes the block whose `b` is 0
+    let push_downs = Some(PushDownInfo {
+        filters: Some(parse_to_filters(ctx.clone(), table.clone(), "b > 0")?),
+        ..Default::default()
+    });
+
+    // Lazy plan: the partitions are the segments, pruned at execution time.
+    settings.set_setting("enable_distributed_pruning".to_string(), "1".to_string())?;
+    let lazy_plan = table
+        .read_plan(ctx.clone(), push_downs.clone(), None, false, false)
+        .await?;
+    assert!(matches!(
+        lazy_plan.parts.partitions_type(),
+        PartInfoType::LazyLevel
+    ));
+    assert_eq!(lazy_plan.parts.len(), num_blocks);
+
+    let mut source_pipeline = Pipeline::create();
+    let prune_pipeline = table
+        .build_prune_pipeline(ctx.clone(), &lazy_plan, &mut source_pipeline, 0)?
+        .expect("lazy partitions must build a prune pipeline");
+    assert!(
+        prune_pipeline.get_max_threads() <= num_blocks,
+        "prune pipeline width {} must not exceed the {} segments to prune",
+        prune_pipeline.get_max_threads(),
+        num_blocks
+    );
+    let lazy_parts = execute_lazy_prune_pipeline(ctx.clone(), fuse_table, prune_pipeline).await?;
+
+    // Plan-time pruning of the same table with the same filter.
+    settings.set_setting("enable_distributed_pruning".to_string(), "0".to_string())?;
+    let eager_plan = table
+        .read_plan(ctx.clone(), push_downs, None, false, false)
+        .await?;
+    assert!(matches!(
+        eager_plan.parts.partitions_type(),
+        PartInfoType::BlockLevel
+    ));
+
+    assert_eq!(lazy_parts.len(), num_blocks - 1);
+    assert_eq!(
+        block_locations(&lazy_parts),
+        block_locations(&eager_plan.parts.partitions)
+    );
+
+    Ok(())
+}
+
+/// Builds the lazy prune pipeline of `plan`. `None` means the pruning result
+/// is replayed from the prune cache instead of being pruned again.
+fn build_lazy_prune_pipeline(
+    ctx: Arc<QueryContext>,
+    table: &Arc<dyn Table>,
+    plan: &DataSourcePlan,
+    plan_id: u32,
+) -> Result<Option<Pipeline>> {
+    let mut source_pipeline = Pipeline::create();
+    table.build_prune_pipeline(ctx, plan, &mut source_pipeline, plan_id)
+}
+
+/// A runtime `LIMIT` scan filter that never fires must not disable the prune
+/// result cache: `SELECT ... WHERE <selective> LIMIT n` should replay the
+/// cached pruning result on re-execution exactly like the query without
+/// `LIMIT`. When the limit does fire and cuts pruning short, the partial
+/// result must not be cached.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lazy_prune_cache_with_runtime_limit_filter() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture.create_default_database().await?;
+
+    let enable_lazy_prune_cache = |ctx: &Arc<QueryContext>| -> Result<()> {
+        let settings = ctx.get_settings();
+        settings.set_max_threads(8)?;
+        settings.set_max_storage_io_requests(8)?;
+        settings.set_setting("enable_prune_cache".to_string(), "1".to_string())?;
+        settings.set_setting("enable_distributed_pruning".to_string(), "1".to_string())
+    };
+    enable_lazy_prune_cache(&ctx)?;
+
+    let num_blocks = 4;
+    let row_per_block = 10;
+    let table = create_test_table(
+        &fixture,
+        ctx.clone(),
+        "test_lazy_prune_cache_runtime_limit",
+        num_blocks,
+        row_per_block,
+    )
+    .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+    // Case 1: a registered, never-fired LIMIT filter (the limit is far above
+    // the rows that survive pruning). The result is complete and must be cached.
+    // `b = 2` keeps exactly one block; `is_deterministic` makes it cacheable.
+    let push_downs = Some(PushDownInfo {
+        filters: Some(parse_to_filters(ctx.clone(), table.clone(), "b = 2")?),
+        limit: Some(100),
+        is_deterministic: true,
+        ..Default::default()
+    });
+    let plan = table
+        .read_plan(ctx.clone(), push_downs, None, false, false)
+        .await?;
+    assert!(matches!(
+        plan.parts.partitions_type(),
+        PartInfoType::LazyLevel
+    ));
+    ctx.register_runtime_scan_filter(plan.scan_id, Arc::new(RuntimeLimitFilter::new()));
+
+    let prune_pipeline = build_lazy_prune_pipeline(ctx.clone(), &table, &plan, 0)?
+        .expect("nothing is cached yet, the first run must prune");
+    let parts = execute_lazy_prune_pipeline(ctx.clone(), fuse_table, prune_pipeline).await?;
+    assert_eq!(parts.len(), 1);
+
+    assert!(
+        build_lazy_prune_pipeline(ctx.clone(), &table, &plan, 1)?.is_none(),
+        "complete pruning result under an idle LIMIT filter must be cached"
+    );
+    let cached_stats = ctx
+        .get_pruned_partitions_stats()
+        .get(&1)
+        .cloned()
+        .expect("a cache hit publishes the cached statistics");
+    assert_eq!(cached_stats.partitions_scanned, 1);
+    assert_eq!(cached_stats.read_rows, row_per_block);
+
+    // Case 2: a LIMIT filter that has already fired: pruning stops early, the
+    // result is partial and must not be cached.
+    let ctx2 = fixture.new_query_ctx().await?;
+    enable_lazy_prune_cache(&ctx2)?;
+    let push_downs = Some(PushDownInfo {
+        filters: Some(parse_to_filters(ctx2.clone(), table.clone(), "b >= 0")?),
+        limit: Some(1),
+        is_deterministic: true,
+        ..Default::default()
+    });
+    let plan2 = table
+        .read_plan(ctx2.clone(), push_downs, None, false, false)
+        .await?;
+    assert!(matches!(
+        plan2.parts.partitions_type(),
+        PartInfoType::LazyLevel
+    ));
+    let fired = Arc::new(RuntimeLimitFilter::new());
+    fired.finish();
+    ctx2.register_runtime_scan_filter(plan2.scan_id, fired);
+
+    let prune_pipeline = build_lazy_prune_pipeline(ctx2.clone(), &table, &plan2, 0)?
+        .expect("nothing is cached yet, the first run must prune");
+    let parts = execute_lazy_prune_pipeline(ctx2.clone(), fuse_table, prune_pipeline).await?;
+    assert!(parts.is_empty(), "a fired LIMIT filter drops every block");
+    assert!(
+        build_lazy_prune_pipeline(ctx2.clone(), &table, &plan2, 1)?.is_some(),
+        "a pruning result cut short by a runtime LIMIT filter must not be cached"
+    );
 
     Ok(())
 }

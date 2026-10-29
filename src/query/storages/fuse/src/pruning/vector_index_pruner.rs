@@ -499,7 +499,7 @@ impl VectorIndexPruner {
 
         let handles = self
             .pruning_ctx
-            .pruning_runtime
+            .pruning_runtime()?
             .try_spawn_batch_with_owned_semaphore(self.pruning_ctx.pruning_semaphore.clone(), tasks)
             .await?;
         future::try_join_all(handles)

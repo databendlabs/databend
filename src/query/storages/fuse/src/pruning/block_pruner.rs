@@ -97,7 +97,7 @@ impl BlockPruner {
             return Ok(block_metas);
         }
 
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
+        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let pruning_ctx = self.pruning_ctx.clone();
 
@@ -191,7 +191,7 @@ impl BlockPruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
+        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();

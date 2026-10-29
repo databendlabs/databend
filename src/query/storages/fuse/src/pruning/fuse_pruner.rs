@@ -58,6 +58,7 @@ use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use parking_lot::Mutex;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::prelude::SliceRandom;
@@ -88,7 +89,15 @@ use databend_common_catalog::plan::VirtualPredicateRef;
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
     pub dal: Operator,
-    pub pruning_runtime: Arc<Runtime>,
+    /// Dedicated runtime for the batch pruning paths (`FusePruner::pruning`,
+    /// bloom / inverted / vector index block pruning, recluster).
+    ///
+    /// It is created on first use: the pipeline based pruning without index
+    /// pruners never touches it, and spawning (and later joining) a
+    /// `max_threads` worker runtime for every table scan is a measurable cost
+    /// on the query critical path.
+    pruning_runtime: Mutex<Option<Arc<Runtime>>>,
+    pruning_runtime_threads: usize,
     pub pruning_semaphore: Arc<Semaphore>,
 
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
@@ -274,16 +283,12 @@ impl PruningContext {
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
-        // Pruning runtime.
-        let pruning_runtime = Arc::new(Runtime::with_worker_threads(
-            max_threads,
-            Some("pruning-worker".to_owned()),
-        )?);
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
             dal,
-            pruning_runtime,
+            pruning_runtime: Mutex::new(None),
+            pruning_runtime_threads: max_threads,
             pruning_semaphore,
             limit_pruner,
             range_pruner,
@@ -299,6 +304,20 @@ impl PruningContext {
             pruning_cost,
         });
         Ok(pruning_ctx)
+    }
+
+    /// The pruning runtime, created on first use.
+    pub fn pruning_runtime(&self) -> Result<Arc<Runtime>> {
+        let mut guard = self.pruning_runtime.lock();
+        if let Some(runtime) = guard.as_ref() {
+            return Ok(runtime.clone());
+        }
+        let runtime = Arc::new(Runtime::with_worker_threads(
+            self.pruning_runtime_threads,
+            Some("pruning-worker".to_owned()),
+        )?);
+        *guard = Some(runtime.clone());
+        Ok(runtime)
     }
 }
 
@@ -423,6 +442,7 @@ impl FusePruner {
             Default::default(),
         )?;
         let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
+        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
 
         let mut remain = segment_locs.len() % self.max_concurrency;
         let batch_size = segment_locs.len() / self.max_concurrency;
@@ -435,7 +455,7 @@ impl FusePruner {
 
             let mut batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
             let inverse_range_index = self.get_inverse_range_index();
-            works.push(self.pruning_ctx.pruning_runtime.spawn({
+            works.push(pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 let segment_pruner = segment_pruner.clone();
                 let pruning_ctx = self.pruning_ctx.clone();
@@ -615,6 +635,7 @@ impl FusePruner {
         let batch_size = block_metas.len() / self.max_concurrency;
         let mut works = Vec::with_capacity(self.max_concurrency);
         let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
+        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
         let mut segment_idx = 0;
 
         while !block_metas.is_empty() {
@@ -623,7 +644,7 @@ impl FusePruner {
             remain -= gap_size;
 
             let batch = block_metas.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(self.pruning_ctx.pruning_runtime.spawn({
+            works.push(pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 async move {
                     // Build pruning tasks.
