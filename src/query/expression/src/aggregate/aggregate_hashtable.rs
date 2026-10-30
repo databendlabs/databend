@@ -44,6 +44,10 @@ use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 
+/// A partial aggregation stops probing (see `AggregateHashTable::maybe_stop_probing`) when at
+/// least this fraction of the rows probed until its hash index was full were new groups.
+const PARTIAL_PROBE_MIN_NEW_GROUP_RATIO: f64 = 0.9;
+
 #[derive(Default)]
 struct GroupKeyState {
     dict_hashes: Option<Vec<u64>>,
@@ -116,6 +120,10 @@ pub struct AggregateHashTable {
     current_radix_bits: u64,
     hash_index: HashIndex,
     hash_index_resize_count: usize,
+    // Rows probed and groups they created since the hash index was last cleared, see
+    // `maybe_stop_probing`.
+    probed_rows: usize,
+    probed_new_groups: usize,
 }
 
 unsafe impl Send for AggregateHashTable {}
@@ -152,6 +160,8 @@ impl AggregateHashTable {
             hash_index: HashIndex::with_capacity(capacity),
             config,
             hash_index_resize_count: 0,
+            probed_rows: 0,
+            probed_new_groups: 0,
         }
     }
 
@@ -184,6 +194,8 @@ impl AggregateHashTable {
             hash_index: HashIndex::with_capacity(capacity),
             config,
             hash_index_resize_count: 0,
+            probed_rows: 0,
+            probed_new_groups: 0,
         }
     }
 
@@ -223,6 +235,8 @@ impl AggregateHashTable {
             hash_index,
             config,
             hash_index_resize_count: 0,
+            probed_rows: 0,
+            probed_new_groups: 0,
         }
     }
 
@@ -393,11 +407,16 @@ impl AggregateHashTable {
         }
 
         if self.config.partial_agg {
+            if !self.direct_append {
+                self.probed_rows += row_count;
+                self.probed_new_groups += new_group_count;
+            }
             // check size
             if self.hash_index.count() + BATCH_SIZE > self.hash_index.resize_threshold()
                 && self.hash_index.capacity() >= self.config.max_partial_capacity
             {
                 self.clear_ht();
+                self.maybe_stop_probing();
             }
 
             // check maybe_repartition
@@ -711,6 +730,19 @@ impl AggregateHashTable {
     fn clear_ht(&mut self) {
         self.payload.mark_min_cardinality();
         self.hash_index.reset();
+    }
+
+    /// A partial aggregation only pre-aggregates: the final aggregation merges the groups by
+    /// key anyway. Once a full hash index merged almost no rows (nearly every probed row was a
+    /// new group, e.g. `GROUP BY WatchID`), probing the next rows is unlikely to pay either, so
+    /// they are appended to the payload directly, without the hash index.
+    fn maybe_stop_probing(&mut self) {
+        let rows = std::mem::take(&mut self.probed_rows);
+        let new_groups = std::mem::take(&mut self.probed_new_groups);
+        if rows > 0 && new_groups as f64 >= rows as f64 * PARTIAL_PROBE_MIN_NEW_GROUP_RATIO {
+            self.direct_append = true;
+            self.hash_index = HashIndex::dummy();
+        }
     }
 
     pub fn allocated_bytes(&self) -> usize {
