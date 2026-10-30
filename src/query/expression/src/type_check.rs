@@ -28,6 +28,7 @@ use crate::ColumnIndex;
 use crate::ConstantFolder;
 use crate::DynamicCastRules;
 use crate::ExprVisitor;
+use crate::FoldRules;
 use crate::FunctionContext;
 use crate::Scalar;
 use crate::cast_scalar;
@@ -258,27 +259,19 @@ pub fn check_string<Index: ColumnIndex>(
     expr: Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<String> {
-    let (expr, _) = if expr.data_type() != &DataType::String {
-        ConstantFolder::fold(
-            Cow::Owned(Expr::Cast(Cast {
-                span,
-                is_try: false,
-                expr: Box::new(expr),
-                dest_type: DataType::String,
-            })),
-            func_ctx,
-            fn_registry,
-        )
+    let expr = if expr.data_type() != &DataType::String {
+        Expr::Cast(Cast {
+            span,
+            is_try: false,
+            expr: Box::new(expr),
+            dest_type: DataType::String,
+        })
     } else {
-        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
+        expr
     };
-    let expr = expr.into_owned();
 
-    match expr {
-        Expr::Constant(Constant {
-            scalar: Scalar::String(string),
-            ..
-        }) => Ok(string),
+    match FoldRules::eval_constant(func_ctx, fn_registry, &expr) {
+        Some(Scalar::String(string)) => Ok(string),
         _ => Err(
             ErrorCode::from_string_no_backtrace("expected string literal".to_string())
                 .set_span(span),
@@ -293,27 +286,19 @@ pub fn check_number<T: Number, Index: ColumnIndex>(
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
     let origin_ty = expr.data_type().clone();
-    let (expr, _) = if origin_ty != DataType::Number(T::data_type()) {
-        ConstantFolder::fold(
-            Cow::Owned(Expr::Cast(Cast {
-                span,
-                is_try: false,
-                expr: Box::new(expr),
-                dest_type: DataType::Number(T::data_type()),
-            })),
-            func_ctx,
-            fn_registry,
-        )
+    let expr = if origin_ty != DataType::Number(T::data_type()) {
+        Expr::Cast(Cast {
+            span,
+            is_try: false,
+            expr: Box::new(expr),
+            dest_type: DataType::Number(T::data_type()),
+        })
     } else {
-        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
+        expr
     };
-    let expr = expr.into_owned();
 
-    match expr {
-        Expr::Constant(Constant {
-            scalar: Scalar::Number(num),
-            ..
-        }) => T::try_downcast_scalar(&num).ok_or_else(|| {
+    match FoldRules::eval_constant(func_ctx, fn_registry, &expr) {
+        Some(Scalar::Number(num)) => T::try_downcast_scalar(&num).ok_or_else(|| {
             ErrorCode::InvalidArgument(format!("Expect {}, but got {}", T::data_type(), origin_ty))
                 .set_span(span)
         }),
