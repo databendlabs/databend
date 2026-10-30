@@ -606,9 +606,14 @@ impl Catalog for SessionCatalog {
                         .retryable_update_multi_table_meta(tenant, req)
                         .await?
                 };
-                self.temp_tbl_mgr
-                    .lock()
-                    .update_multi_table_meta(update_temp_tables);
+                // An OCC conflict is an inner Err, not a successful commit.
+                // Keep temporary tables unchanged until persistent updates succeed;
+                // otherwise a failed retry can partially commit a mixed transaction.
+                if reply.is_ok() {
+                    self.temp_tbl_mgr
+                        .lock()
+                        .update_multi_table_meta(update_temp_tables);
+                }
                 Ok(reply)
             }
             TxnState::Active => {
