@@ -59,7 +59,7 @@ use crate::with_number_mapped_type;
 /// where it is unset.
 ///
 /// Both values must have type `data_type`, and every column among them must
-/// have `mask.len()` rows.
+/// have `mask.len()` rows. Encoded columns are decoded.
 pub fn select_if_then_else(
     mask: &Bitmap,
     then_value: &Value<AnyType>,
@@ -71,6 +71,10 @@ pub fn select_if_then_else(
             assert_eq!(column.len(), mask.len());
         }
     }
+    // Encoded columns are selected through their decoded values.
+    let then_value = then_value.decoded();
+    let else_value = else_value.decoded();
+    let (then_value, else_value) = (then_value.as_ref(), else_value.as_ref());
     // An aggregate state is selected as its physical type.
     let physical_type = data_type.physical_type();
     let data_type = physical_type.as_ref();

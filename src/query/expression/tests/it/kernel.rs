@@ -842,6 +842,9 @@ fn test_select_if_then_else_non_strict_decimal() {
     use databend_common_expression::select_if_then_else;
     use databend_common_expression::types::AggregateStateDataType;
     use databend_common_expression::types::DecimalColumn;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::NarrowBuffer;
     use databend_common_expression::types::NullableColumn;
 
     // Decimal(10, 2) carried by a Decimal128 column is a non-strict
@@ -856,6 +859,27 @@ fn test_select_if_then_else_non_strict_decimal() {
         result,
         Column::Decimal(DecimalColumn::Decimal64(vec![1_i64, 0, 3].into(), size))
     );
+
+    // The same values as a dictionary-encoded column, with all-set and mixed masks.
+    let dict = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+        NarrowBuffer::pack([0_u64, 1, 2].into_iter(), 2),
+        non_strict.clone(),
+    ))));
+    for (bits, expected) in [
+        ([true; 3], vec![1_i64, 2, 3]),
+        ([true, false, true], vec![1_i64, 0, 3]),
+    ] {
+        let result = select_if_then_else(
+            &Bitmap::from(bits.as_slice()),
+            &Value::Column(dict.clone()),
+            &zero,
+            &data_type,
+        );
+        assert_eq!(
+            result,
+            Column::Decimal(DecimalColumn::Decimal64(expected.into(), size))
+        );
+    }
 
     // The same column under a nullable type, with a NULL scalar on the other side.
     let nullable_type = data_type.wrap_nullable();
