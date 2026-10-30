@@ -172,7 +172,10 @@ fn test_concurrent_vector_index_inserts_stay_within_budget() {
     for t in threads {
         t.join().unwrap();
     }
-    assert_eq!(store.kind_stats(CacheKind::VectorIndex).resident, 0);
+    // Values no longer held stay charged only while cached.
+    let stats = store.kind_stats(CacheKind::VectorIndex);
+    assert_eq!(stats.resident, stats.in_cache);
+    assert_eq!(live.count(), stats.items);
 }
 
 #[test]

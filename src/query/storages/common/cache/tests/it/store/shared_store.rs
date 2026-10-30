@@ -171,5 +171,8 @@ fn test_concurrent_inserts_stay_within_budgets() {
     for t in threads {
         t.join().unwrap();
     }
-    assert_eq!(store.kind_stats(META).resident, 0);
+    // Values no longer held stay charged only while cached.
+    let kind = store.kind_stats(META);
+    assert_eq!(kind.resident, kind.in_cache);
+    assert_eq!(live.count(), kind.items);
 }

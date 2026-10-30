@@ -197,12 +197,17 @@ impl KindStore for LegacyStore {
         let pool = &self.pools[kind.pool().index()];
         let (victims, outcome) = {
             let mut lru = state.lru.lock();
-            let (victims, room) = self.make_room(kind, &mut lru, capacity, key, bytes);
+            let (mut victims, room) = self.make_room(kind, &mut lru, capacity, key, bytes);
             match room {
                 Err(reason) => (victims, Err(reason)),
                 Ok(()) => {
                     // Charged under the lock: `VectorIndex` checks `resident` here, so
                     // concurrent inserts cannot both pass the check before either charges.
+                    // Its victims are unreferenced, so they are released first: `resident`
+                    // then never exceeds the capacity, not even briefly.
+                    if kind == CacheKind::VectorIndex {
+                        self.forget(kind, std::mem::take(&mut victims));
+                    }
                     let reservation = Reservation::charge(pool.clone(), state.usage.clone(), bytes);
                     let replaced = lru.insert(key.to_string(), Entry { value, bytes });
                     pool.enter(bytes);
