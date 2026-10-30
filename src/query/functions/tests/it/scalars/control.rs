@@ -98,6 +98,156 @@ fn test_if_accepts_non_strict_decimal_columns() {
     }
 }
 
+#[test]
+fn test_if_accepts_nested_non_strict_decimal_columns() {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::Expr;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    // A tuple field `Decimal(10, 2)` carried by a Decimal128 column: the result
+    // field uses the strict Decimal64 width, also when every row reaches the
+    // same branch, and when two full 64-row runs reach both branches.
+    let size = DecimalSize::new(10, 2).unwrap();
+    let tuple = |base: i16, len: usize| {
+        Column::Tuple(vec![
+            Column::Decimal(DecimalColumn::Decimal128(
+                (0..len).map(|row| (base as i128) + row as i128).collect(),
+                size,
+            )),
+            Int16Type::from_data((0..len).map(|row| base + row as i16).collect::<Vec<_>>()),
+        ])
+    };
+    let column_ref = |id: usize, data_type: DataType| {
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id,
+            data_type,
+            display_name: format!("c{id}"),
+        })
+    };
+    for cond in [
+        vec![true, true],
+        vec![false, false],
+        vec![true, false],
+        [vec![true; 64], vec![false; 64]].concat(),
+    ] {
+        let len = cond.len();
+        let (then_column, else_column) = (tuple(1000, len), tuple(2000, len));
+        let data_type = then_column.data_type();
+        let block = DataBlock::new_from_columns(vec![
+            BooleanType::from_data(cond.clone()),
+            then_column.clone(),
+            else_column.clone(),
+        ]);
+        let args = [
+            column_ref(0, DataType::Boolean),
+            column_ref(1, data_type.clone()),
+            column_ref(2, data_type.clone()),
+        ];
+        let expr = check_function(None, "if", &[], &args, &BUILTIN_FUNCTIONS).unwrap();
+        let ctx = FunctionContext::default();
+        let result = Evaluator::new(&block, &ctx, &BUILTIN_FUNCTIONS)
+            .run(&expr)
+            .unwrap()
+            .into_column()
+            .unwrap();
+        let expected = cond
+            .iter()
+            .enumerate()
+            .map(|(row, take_then)| (if *take_then { 1000 } else { 2000 }) + row as i64)
+            .collect::<Vec<i64>>();
+        assert_eq!(
+            result.as_tuple().unwrap()[0],
+            Column::Decimal(DecimalColumn::Decimal64(expected.clone().into(), size)),
+            "{cond:?}"
+        );
+        assert_eq!(
+            result.as_tuple().unwrap()[1],
+            Int16Type::from_data(expected.iter().map(|v| *v as i16).collect::<Vec<_>>())
+        );
+    }
+}
+
+#[test]
+fn test_if_with_opaque_result() {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::Expr;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    // `Scalar::default_value` has no `Opaque` value: a branch that no enabled
+    // row reaches, and the inner value of a NULL branch, must not need one.
+    let column_ref = |id: usize, data_type: &DataType| {
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id,
+            data_type: data_type.clone(),
+            display_name: format!("c{id}"),
+        })
+    };
+    let data_type = DataType::Opaque(1);
+    let nullable_type = data_type.wrap_nullable();
+    let then_column = Column::random(&data_type, 4, None);
+    let else_column = Column::random(&data_type, 4, None);
+    let nullable_then =
+        NullableColumn::new_column(then_column.clone(), vec![true, true, false, true].into());
+    let null = Expr::constant(Scalar::Null, Some(nullable_type.clone()));
+
+    for cond in [
+        vec![true, true, true, true],
+        vec![false, false, false, false],
+        vec![true, false, true, false],
+    ] {
+        let block = DataBlock::new_from_columns(vec![
+            BooleanType::from_data(cond.clone()),
+            then_column.clone(),
+            else_column.clone(),
+            nullable_then.clone(),
+        ]);
+        let cases = [
+            (
+                vec![
+                    column_ref(0, &DataType::Boolean),
+                    column_ref(1, &data_type),
+                    column_ref(2, &data_type),
+                ],
+                then_column.clone(),
+                else_column.clone(),
+            ),
+            (
+                vec![
+                    column_ref(0, &DataType::Boolean),
+                    column_ref(3, &nullable_type),
+                    null.clone(),
+                ],
+                nullable_then.clone(),
+                Column::Null { len: 4 },
+            ),
+        ];
+        for (args, then_expected, else_expected) in cases {
+            let expr = check_function(None, "if", &[], &args, &BUILTIN_FUNCTIONS).unwrap();
+            let ctx = FunctionContext::default();
+            let result = Evaluator::new(&block, &ctx, &BUILTIN_FUNCTIONS)
+                .run(&expr)
+                .unwrap();
+            for (row, take_then) in cond.iter().enumerate() {
+                let expected = if *take_then {
+                    then_expected.index(row)
+                } else {
+                    else_expected.index(row)
+                };
+                assert_eq!(result.index(row), expected, "{cond:?} row {row}");
+            }
+        }
+    }
+}
+
 fn test_if(file: &mut impl Write) {
     run_ast(file, "if(false, 1, false, 2, NULL)", &[]);
     run_ast(file, "if(true, 1, NULL, 2, NULL)", &[]);
@@ -210,6 +360,95 @@ fn test_if(file: &mut impl Write) {
         ),
         ("expr_a", Int64Type::from_data(vec![1i64, 2, 0, 4])),
         ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
+    ]);
+
+    // A column condition that is true (or false, or NULL) on every row: the
+    // rows reach a single branch, and the division by zero in the other
+    // branch must not be reported.
+    run_ast(file, "if(cond_a, expr_a, 1 / expr_zero)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, true, true, true]),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+        ("expr_zero", Int64Type::from_data(vec![0i64, 0, 0, 0])),
+    ]);
+    run_ast(file, "if(cond_a, 1 / expr_zero, expr_a)", &[
+        (
+            "cond_a",
+            BooleanType::from_data_with_validity(vec![false, true, false, true], vec![
+                true, false, true, false,
+            ]),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+        ("expr_zero", Int64Type::from_data(vec![0i64, 0, 0, 0])),
+    ]);
+    // The first condition takes every row: the errors in later conditions and
+    // branches must not be reported.
+    run_ast(
+        file,
+        "if(cond_a, expr_a, 1 / expr_zero = 1, 1 / expr_zero, expr_a)",
+        &[
+            (
+                "cond_a",
+                BooleanType::from_data(vec![true, true, true, true]),
+            ),
+            ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+            ("expr_zero", Int64Type::from_data(vec![0i64, 0, 0, 0])),
+        ],
+    );
+    // The inner `if` runs only for the rows where `cond_a` is true, and there
+    // `cond_b` is true as well: its else branch is reached by no enabled row.
+    run_ast(
+        file,
+        "if(cond_a, if(cond_b, expr_a, 1 / expr_zero), expr_else)",
+        &[
+            (
+                "cond_a",
+                BooleanType::from_data(vec![true, false, true, false]),
+            ),
+            (
+                "cond_b",
+                BooleanType::from_data(vec![true, false, true, true]),
+            ),
+            ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+            ("expr_zero", Int64Type::from_data(vec![0i64, 0, 0, 0])),
+            ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
+        ],
+    );
+    // String, Boolean and nullable results with mixed conditions.
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data_with_validity(vec![true, false, true, true], vec![
+                true, true, true, false,
+            ]),
+        ),
+        ("expr_true", StringType::from_data(vec!["a", "b", "c", "d"])),
+        ("expr_else", StringType::from_data(vec!["w", "x", "y", "z"])),
+    ]);
+    run_ast(file, "if(cond_a, expr_true, NULL)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        ("expr_true", StringType::from_data(vec!["a", "b", "c", "d"])),
+    ]);
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        (
+            "expr_true",
+            BooleanType::from_data(vec![true, true, false, false]),
+        ),
+        (
+            "expr_else",
+            BooleanType::from_data_with_validity(vec![true, false, true, false], vec![
+                true, true, false, true,
+            ]),
+        ),
     ]);
 }
 

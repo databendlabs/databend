@@ -2590,6 +2590,14 @@ impl ColumnBuilder {
             (ColumnBuilder::Vector(builder), ScalarRef::Vector(value)) => {
                 builder.push_repeat(value, n);
             }
+            (ColumnBuilder::Opaque(builder), ScalarRef::Opaque(value)) => {
+                with_opaque_type!(|T| match (builder, value) {
+                    (OpaqueColumnBuilder::T(builder), OpaqueScalarRef::T(value)) => {
+                        builder.extend(std::iter::repeat_n(*value, n));
+                    }
+                    _ => unreachable!("Mismatched Opaque types"),
+                })
+            }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         };
     }
