@@ -1050,10 +1050,12 @@ pub(crate) fn check_cast_function(
         display_name: String::new(),
     });
 
+    // Params are typed as literals are, so that the call is the one written
+    // in SQL, e.g. `to_decimal(10, 2)(x)`.
     let params = if let DataType::Decimal(ty) = dest_type.remove_nullable_ref() {
         vec![
-            Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-            Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
+            Scalar::Number(NumberScalar::UInt8(ty.precision())),
+            Scalar::Number(NumberScalar::UInt8(ty.scale())),
         ]
     } else {
         vec![]
