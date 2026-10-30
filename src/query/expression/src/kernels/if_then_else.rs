@@ -71,6 +71,9 @@ pub fn select_if_then_else(
             assert_eq!(column.len(), mask.len());
         }
     }
+    // An aggregate state is selected as its physical type.
+    let physical_type = data_type.physical_type();
+    let data_type = physical_type.as_ref();
     if has_nested_decimal(data_type) {
         return select_rows(mask, then_value, else_value, data_type);
     }
@@ -78,10 +81,10 @@ pub fn select_if_then_else(
         .unwrap_or_else(|| select_values::<AnyType>(mask, then_value, else_value, data_type))
 }
 
-/// Whether `data_type` has a decimal inside an array, map or tuple. A
-/// non-strict decimal (e.g. `Decimal(10, 2)` carried by `Decimal128`) nested
-/// there can only be converted to the strict width row by row, so such types
-/// skip the bulk paths.
+/// Whether `data_type` has a decimal inside an array, map or tuple (also
+/// through the physical type of an aggregate state). A non-strict decimal (e.g.
+/// `Decimal(10, 2)` carried by `Decimal128`) nested there can only be converted
+/// to the strict width row by row, so such types skip the bulk paths.
 pub(crate) fn has_nested_decimal(data_type: &DataType) -> bool {
     fn contains_decimal(data_type: &DataType) -> bool {
         match data_type {
@@ -90,6 +93,7 @@ pub(crate) fn has_nested_decimal(data_type: &DataType) -> bool {
                 contains_decimal(inner)
             }
             DataType::Tuple(fields) => fields.iter().any(contains_decimal),
+            DataType::AggregateState(state) => contains_decimal(state.physical_type()),
             _ => false,
         }
     }
@@ -97,6 +101,7 @@ pub(crate) fn has_nested_decimal(data_type: &DataType) -> bool {
         DataType::Nullable(inner) => has_nested_decimal(inner),
         DataType::Array(inner) | DataType::Map(inner) => contains_decimal(inner),
         DataType::Tuple(fields) => fields.iter().any(contains_decimal),
+        DataType::AggregateState(state) => has_nested_decimal(state.physical_type()),
         _ => false,
     }
 }

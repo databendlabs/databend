@@ -840,6 +840,7 @@ fn test_select_if_then_else() {
 fn test_select_if_then_else_non_strict_decimal() {
     use databend_common_expression::Value;
     use databend_common_expression::select_if_then_else;
+    use databend_common_expression::types::AggregateStateDataType;
     use databend_common_expression::types::DecimalColumn;
     use databend_common_expression::types::NullableColumn;
 
@@ -887,13 +888,24 @@ fn test_select_if_then_else_non_strict_decimal() {
         Column::Decimal(DecimalColumn::Decimal128(vec![7_i128, 8, 9].into(), size)),
         Int16Type::from_data(vec![10_i16, 11, 12]),
     ]);
-    for bits in [[true; 3], [false; 3], [true, false, true]] {
+    // The same tuple as the physical type of an aggregate state.
+    let state_type = DataType::AggregateState(Box::new(AggregateStateDataType {
+        function_name: "test".to_string(),
+        params: vec![],
+        argument_types: vec![],
+        state_type: Box::new(tuple_type.clone()),
+        state_version: 0,
+    }));
+    for (ty, bits) in [&tuple_type, &state_type]
+        .into_iter()
+        .flat_map(|ty| [[true; 3], [false; 3], [true, false, true]].map(|bits| (ty, bits)))
+    {
         let mask = Bitmap::from(bits.as_slice());
         let result = select_if_then_else(
             &mask,
             &Value::Column(tuple.clone()),
             &Value::Column(other.clone()),
-            &tuple_type,
+            ty,
         );
         let expected = bits
             .iter()
