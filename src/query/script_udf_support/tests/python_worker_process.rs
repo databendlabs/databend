@@ -55,6 +55,7 @@ fn function(name: &str, code: &str) -> ScriptUdfFunctionDesc {
         data_type: Box::new(DataType::Number(NumberDataType::Int64)),
         headers: BTreeMap::new(),
         udf_type: UDFType::Script(Box::new(UDFScriptCode {
+            external_access_integrations: vec![],
             language: UDFLanguage::Python,
             runtime_version: String::new(),
             imports_stage_info: vec![],
@@ -325,13 +326,9 @@ async fn pids(transforms: &mut [TransformUdfScript]) -> BTreeSet<String> {
         .collect()
 }
 
-// No external network or packages: a local HTTP service exercises the same
-// socket/DNS path as requests, and denied calls must become SQL-layer errors.
+// Unbound workers must fail network access as SQL-layer errors, not NULL values.
 #[cfg(target_os = "linux")]
 async fn network_policy_tests() {
-    use tokio::io::AsyncBufReadExt;
-    use tokio::io::AsyncWriteExt;
-
     fn nullable_transform(
         query: Arc<PythonQueryWorkers>,
         name: &str,
@@ -344,27 +341,18 @@ async fn network_policy_tests() {
         TransformUdfScript::new(FunctionContext::default(), functions, runtimes)
     }
 
-    assert!(!PythonWorkerConfig::default().allow_network);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let code = format!(
-        r#"
+    let code = r#"
 import urllib.request
 
 def handler(x):
-    with urllib.request.urlopen('http://localhost:{port}/snapshot', timeout=2) as response:
+    with urllib.request.urlopen('http://127.0.0.1:1/snapshot', timeout=2) as response:
         assert response.read() == b'7'
     return x
-"#
-    );
+"#;
     let denied = PythonWorkerManager::new(PythonWorkerConfig::default())
         .unwrap()
         .query("denied", 1);
-    let mut udf = nullable_transform(
-        denied.clone(),
-        "network_denied",
-        &code.replace("localhost", "127.0.0.1"),
-    );
+    let mut udf = nullable_transform(denied.clone(), "network_denied", code);
     let error = udf
         .transform(input(7))
         .await
@@ -373,58 +361,21 @@ def handler(x):
     assert!(error.message().contains("Permission denied"), "{error}");
     denied.finish();
 
-    let server = databend_common_base::runtime::spawn(async move {
-        loop {
-            let (stream, _) = listener.accept().await.unwrap();
-            let mut stream = tokio::io::BufReader::new(stream);
-            let mut line = String::new();
-            stream.read_line(&mut line).await.unwrap();
-            // Local service probes must not consume the UDF's one response.
-            if !line.starts_with("GET /snapshot ") {
-                continue;
-            }
-            loop {
-                line.clear();
-                if stream.read_line(&mut line).await.unwrap() == 0 || line == "\r\n" {
-                    break;
-                }
-            }
-            stream
-                .get_mut()
-                .write_all(b"HTTP/1.0 200 OK\r\nContent-Length: 1\r\n\r\n7")
-                .await
-                .unwrap();
-            break;
-        }
-    });
-    let manager = PythonWorkerManager::new(PythonWorkerConfig {
-        allow_network: true,
-        ..Default::default()
-    })
-    .unwrap();
-    let allowed = manager.query("allowed", 1);
-    let mut udf = nullable_transform(allowed.clone(), "network_allowed", &code);
-    let result = tokio::time::timeout(Duration::from_secs(10), udf.transform(input(7)))
-        .await
+    // No administrator override may weaken networking or the other restrictions.
+    let restricted_query = PythonWorkerManager::new(PythonWorkerConfig::default())
         .unwrap()
-        .unwrap();
-    assert_eq!(result.get_by_offset(1).index(0).unwrap().to_string(), "7");
-    server.await.unwrap();
-    allowed.finish();
-
-    // Enabling clients must not disable filesystem, local-service or process isolation.
-    let restricted_query = manager.query("restricted", 1);
+        .query("restricted", 1);
     let mut restricted = nullable_transform(
         restricted_query.clone(),
         "network_still_sandboxed",
         r#"
-import os, socket, ssl, subprocess
+import socket, subprocess
 
 def handler(x):
-    ssl.create_default_context()
-    assert socket.getaddrinfo('localhost', 443)
     actions = [lambda: open('/etc/passwd').read(),
                lambda: socket.socket(socket.AF_UNIX),
+               lambda: socket.socket(socket.AF_INET),
+               lambda: socket.socket(socket.AF_INET6),
                lambda: subprocess.run(['/bin/true']),
                lambda: socket.socket().bind(('127.0.0.1', 0))]
     for action in actions:
@@ -432,7 +383,7 @@ def handler(x):
             action()
         except PermissionError:
             continue
-        raise AssertionError('network exception disabled another sandbox restriction')
+        raise AssertionError('sandbox restriction was not enforced')
     return x
 "#,
     );
@@ -758,6 +709,7 @@ def finish(state):
 fn udaf(query: &Arc<PythonQueryWorkers>, name: &str, code: &str) -> AggregateCallRef {
     let int64 = DataType::Number(NumberDataType::Int64);
     let code = UDFScriptCode {
+        external_access_integrations: vec![],
         language: UDFLanguage::Python,
         runtime_version: String::new(),
         imports_stage_info: vec![],

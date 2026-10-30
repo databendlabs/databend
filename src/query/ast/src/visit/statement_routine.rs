@@ -24,6 +24,17 @@ impl Walk for UDFDefinition {
         &self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
+        if let UDFDefinition::UDFScript {
+            external_access_integrations,
+            ..
+        }
+        | UDFDefinition::UDAFScript {
+            external_access_integrations,
+            ..
+        } = self
+        {
+            try_walk!(external_access_integrations.walk(visitor));
+        }
         match self {
             UDFDefinition::LambdaUDF {
                 parameters,
@@ -109,6 +120,17 @@ impl WalkMut for UDFDefinition {
         &mut self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
+        if let UDFDefinition::UDFScript {
+            external_access_integrations,
+            ..
+        }
+        | UDFDefinition::UDAFScript {
+            external_access_integrations,
+            ..
+        } = self
+        {
+            try_walk!(external_access_integrations.walk_mut(visitor));
+        }
         match self {
             UDFDefinition::LambdaUDF {
                 parameters,

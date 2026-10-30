@@ -22,6 +22,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_sql::IndexType;
 use databend_common_sql::plans::UDFType;
 use databend_query::physical_plans::UdfFunctionDesc;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use serde::Deserialize;
@@ -83,6 +84,110 @@ fn policy_udf_plan_rejects_legacy_executor() -> anyhow::Result<()> {
         "{err}"
     );
     assert_eq!(from_value::<UdfFunctionDesc>(wire)?, desc);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn script_external_access_requires_usage_on_create_and_alter() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.enable_udf_python_script = true;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    fixture.execute_command("CREATE NETWORK RULE script_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com:443')").await?;
+    fixture.execute_command("CREATE EXTERNAL ACCESS INTEGRATION script_access ALLOWED_NETWORK_RULES = (script_rule) ENABLED = TRUE").await?;
+    fixture
+        .execute_command("CREATE ROLE script_developer")
+        .await?;
+    fixture
+        .execute_command("GRANT SUPER ON *.* TO ROLE script_developer")
+        .await?;
+    fixture
+        .execute_command("GRANT ALTER ON *.* TO ROLE script_developer")
+        .await?;
+    let session = fixture.default_session();
+    let mut admin = session.get_current_user()?;
+    admin.grants.grant_role("account_admin".into());
+    let mut developer = UserInfo::new("script_developer", "%", AuthInfo::None);
+    developer.grants.grant_role("script_developer".into());
+    let scalar = "CREATE FUNCTION script_bound(INT) RETURNS INT LANGUAGE python HANDLER = 'handler' AS $$def handler(x): return x$$ EXTERNAL_ACCESS_INTEGRATIONS = (script_access)";
+    let aggregate = "CREATE FUNCTION script_agg(INT) STATE {s INT} RETURNS INT LANGUAGE python AS $$pass$$ EXTERNAL_ACCESS_INTEGRATIONS = (script_access)";
+    session.set_authed_user(developer.clone(), None).await?;
+    session.set_current_role_checked("script_developer").await?;
+    session.set_secondary_roles_checked(Some(vec![])).await?;
+    for sql in [scalar, aggregate] {
+        assert_eq!(
+            fixture.execute_command(sql).await.unwrap_err().code(),
+            ErrorCode::PERMISSION_DENIED
+        );
+    }
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("GRANT USAGE ON INTEGRATION script_access TO ROLE script_developer")
+        .await?;
+    session.set_authed_user(developer.clone(), None).await?;
+    session.set_current_role_checked("script_developer").await?;
+    for sql in [scalar, aggregate] {
+        fixture.execute_command(sql).await?;
+        fixture
+            .execute_command(&sql.replacen("CREATE FUNCTION", "ALTER FUNCTION", 1))
+            .await?;
+    }
+    let tenant = fixture.new_query_ctx().await?.get_tenant();
+    let provider = databend_common_users::UserApiProvider::instance();
+    for name in ["script_bound", "script_agg"] {
+        let udf = provider.get_udf(&tenant, name).await?.unwrap();
+        assert_eq!(udf.definition.external_access_integrations(), &[
+            "script_access".to_owned()
+        ]);
+    }
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("REVOKE USAGE ON INTEGRATION script_access FROM ROLE script_developer")
+        .await?;
+    session.set_authed_user(developer, None).await?;
+    session.set_current_role_checked("script_developer").await?;
+    for sql in [scalar, aggregate] {
+        let alter = sql.replacen("CREATE FUNCTION", "ALTER FUNCTION", 1);
+        assert_eq!(
+            fixture.execute_command(&alter).await.unwrap_err().code(),
+            ErrorCode::PERMISSION_DENIED
+        );
+    }
+    session.set_authed_user(admin, None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("ALTER EXTERNAL ACCESS INTEGRATION script_access SET ENABLED = FALSE")
+        .await?;
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while provider
+            .validate_external_access_bindings(&tenant, &["script_access".into()])
+            .await
+            .is_ok()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await?;
+    assert!(
+        fixture
+            .execute_command(&scalar.replace("script_bound", "disabled_script"))
+            .await
+            .unwrap_err()
+            .message()
+            .contains("disabled")
+    );
+    let javascript = scalar
+        .replace("script_bound", "js_bound")
+        .replace("LANGUAGE python", "LANGUAGE javascript");
+    assert!(
+        fixture
+            .execute_command(&javascript)
+            .await
+            .unwrap_err()
+            .message()
+            .contains("only supported for Python")
+    );
     Ok(())
 }
 

@@ -45,8 +45,6 @@ fn udf_error(error: impl std::fmt::Display) -> ErrorCode {
 
 #[derive(Clone, Debug)]
 pub struct PythonWorkerConfig {
-    /// Node administrator policy, never taken from SQL or UDF metadata.
-    pub allow_network: bool,
     pub max_workers: usize,
     pub max_workers_per_tenant: usize,
     pub max_workers_per_query: usize,
@@ -59,7 +57,6 @@ pub struct PythonWorkerConfig {
 impl Default for PythonWorkerConfig {
     fn default() -> Self {
         Self {
-            allow_network: false,
             max_workers: 0,
             max_workers_per_tenant: 0,
             max_workers_per_query: 0,
@@ -122,11 +119,6 @@ impl PythonWorkerManager {
                 "Python UDF workers run WITHOUT the OS sandbox on this platform (local development only): user code can access files, network and processes of the query service user"
             );
         }
-        if config.allow_network {
-            log::warn!(
-                "python_udf_allow_network is enabled: all Python UDFs on this node can access IPv4/IPv6 destinations, including internal services; use only as a temporary exception on dedicated warehouses"
-            );
-        }
         Ok(Arc::new(Self {
             slots: Arc::new(Semaphore::new(config.max_workers)),
             queued: Arc::new(Semaphore::new(config.max_queued_queries)),
@@ -168,6 +160,7 @@ impl PythonWorkerManager {
             parallelism = parallelism.min(self.config.max_workers_per_query);
         }
         Arc::new(PythonQueryWorkers {
+            tenant: tenant.to_owned(),
             manager: self.clone(),
             parallelism,
             execution_slots: Arc::new(Semaphore::new(parallelism)),
@@ -212,6 +205,7 @@ impl PythonWorkerManager {
 /// single admission, then grow pools opportunistically without waiting for extra
 /// quota. max_threads bounds execution, not the number of UDF operators.
 pub struct PythonQueryWorkers {
+    tenant: String,
     manager: Arc<PythonWorkerManager>,
     parallelism: usize,
     execution_slots: Arc<Semaphore>,
@@ -292,6 +286,7 @@ impl PythonQueryWorkers {
     pub(crate) fn aggregate_runtime(
         self: &Arc<Self>,
         function: PythonFunction,
+        integrations: Vec<String>,
     ) -> Result<Arc<PythonRuntime>> {
         let _guard = self.aggregate_registration.lock();
         let existing = self
@@ -299,10 +294,12 @@ impl PythonQueryWorkers {
             .lock()
             .iter()
             .filter_map(Weak::upgrade)
-            .find(|runtime| runtime.function == function);
+            .find(|runtime| {
+                runtime.function == function && runtime.external_access_integrations == integrations
+            });
         match existing {
             Some(runtime) => Ok(runtime),
-            None => PythonRuntime::new(function, self.clone(), None),
+            None => PythonRuntime::new(function, self.clone(), None, integrations),
         }
     }
 
@@ -495,7 +492,7 @@ impl Worker {
         reservation: Arc<Reservation>,
         directory: Option<TempDir>,
         function: &PythonFunction,
-        allow_network: bool,
+        network_proxy: Option<Arc<dyn arrow_udf_python_worker::NetworkProxy>>,
         runtime: tokio::runtime::Handle,
     ) -> Result<Self> {
         let directory = match directory {
@@ -515,7 +512,9 @@ impl Worker {
         };
         let mut command = arrow_udf_python_worker::WorkerCommand::current_exe([PYTHON_WORKER_ARG])
             .map_err(udf_error)?;
-        command.allow_network = allow_network;
+        // Native Internet sockets stay denied, with or without a proxy binding.
+        command.allow_network = false;
+        command.network_proxy = network_proxy;
         let working_dir = directory.path().to_path_buf();
         let process = arrow_udf_python_worker::WorkerProcess::spawn(
             &command,

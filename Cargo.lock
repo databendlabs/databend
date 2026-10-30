@@ -571,7 +571,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-python-worker"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=cc08c3e538f8347545540020dc289cc498c7d3e5#cc08c3e538f8347545540020dc289cc498c7d3e5"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=ccb8b79e075836acd1ce833aaf1c2e87b2c69b99#ccb8b79e075836acd1ce833aaf1c2e87b2c69b99"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -591,7 +591,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=cc08c3e538f8347545540020dc289cc498c7d3e5#cc08c3e538f8347545540020dc289cc498c7d3e5"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=ccb8b79e075836acd1ce833aaf1c2e87b2c69b99#ccb8b79e075836acd1ce833aaf1c2e87b2c69b99"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -5816,21 +5816,31 @@ dependencies = [
  "arrow-udf-python-worker",
  "arrow-udf-runtime",
  "async-trait",
+ "bytes",
  "databend-common-base",
  "databend-common-cache",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-grpc",
  "databend-common-meta-app",
  "databend-common-pipeline-transforms",
  "databend-common-sql",
  "databend-common-storage",
+ "databend-common-users",
+ "databend-common-version",
+ "databend-meta-client 260205.13.5",
  "futures",
+ "http 1.3.1",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "libc",
  "log",
  "parking_lot 0.12.3",
  "tokio",
  "toml 0.8.22",
+ "url",
  "uuid",
  "walkdir",
  "zip",

@@ -221,6 +221,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (189, "2026-10-11: Add: zero-copy table clone binding"),
     (190, "2026-10-12: Add: remote UDF external access integrations and network rules"),
     (191, "2026-10-22: Add: table.proto/TableMeta.masking_where_use_unmasked_value"),
+    (192, "2026-10-29: Add: Python script UDF external access integrations"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

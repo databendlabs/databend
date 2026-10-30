@@ -35263,6 +35263,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35307,6 +35308,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35431,6 +35433,7 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35548,6 +35551,7 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: NameWithTypes(
                 [
                     (
@@ -35619,6 +35623,7 @@ AlterUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,

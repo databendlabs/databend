@@ -99,6 +99,7 @@ fn udaf_script_with_language(name: &str, language: &str) -> UserDefinedFunction 
         name: name.to_string(),
         description: String::new(),
         definition: UDFDefinition::UDAFScript(UDAFScript {
+            external_access_integrations: vec![],
             code: "return state;".to_string(),
             imports: Vec::new(),
             packages: Vec::new(),

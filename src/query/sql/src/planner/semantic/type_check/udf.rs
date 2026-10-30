@@ -633,6 +633,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
         udf_definition: UDFScript,
     ) -> Result<UDFServer> {
         let UDFScript {
+            external_access_integrations: _,
             code,
             imports,
             packages,
@@ -1112,6 +1113,13 @@ where A: UdfAdapter
         let language = udf_definition.language.parse()?;
         let config = self.udf_adapter.validation_config()?;
         let use_cloud = matches!(language, UDFLanguage::Python) && config.enable_udf_sandbox;
+        if !udf_definition.external_access_integrations.is_empty()
+            && (language != UDFLanguage::Python || use_cloud)
+        {
+            return Err(ErrorCode::InvalidArgument(
+                "Script EXTERNAL_ACCESS_INTEGRATIONS requires local Python execution; the configured execution route is not supported",
+            ));
+        }
         if use_cloud {
             UDFValidator::is_udf_cloud_script_allowed_with_config(&language, &config)?;
             let udf_definition = self
@@ -1122,6 +1130,7 @@ where A: UdfAdapter
 
         UDFValidator::is_udf_script_allowed_with_config(&language, &config)?;
         let UDFScript {
+            external_access_integrations,
             code,
             handler,
             language: _,
@@ -1145,14 +1154,15 @@ where A: UdfAdapter
         let code_blob = self.udf_adapter.load_udf_code(code)?.into_boxed_slice();
         let imports_stage_info = self.udf_adapter.load_stage_locations(&imports)?;
 
-        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
+        let udf_type = UDFType::script(UDFScriptCode {
+            external_access_integrations,
             language,
             runtime_version,
             code: code_blob.into(),
             imports_stage_info,
             imports,
             packages,
-        }));
+        });
 
         let arg_names = arguments
             .iter()
@@ -1188,6 +1198,7 @@ where A: UdfAdapter
         udf_definition: UDAFScript,
     ) -> Result<UdfResolveResult> {
         let UDAFScript {
+            external_access_integrations,
             code,
             language,
             arg_types,
@@ -1205,14 +1216,20 @@ where A: UdfAdapter
         let code_blob = self.udf_adapter.load_udf_code(code)?.into_boxed_slice();
         let imports_stage_info = self.udf_adapter.load_stage_locations(&imports)?;
 
-        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
+        if !external_access_integrations.is_empty() && language != UDFLanguage::Python {
+            return Err(ErrorCode::InvalidArgument(
+                "Script EXTERNAL_ACCESS_INTEGRATIONS requires Python execution",
+            ));
+        }
+        let udf_type = UDFType::script(UDFScriptCode {
+            external_access_integrations,
             language,
             runtime_version,
             code: code_blob.into(),
             imports,
             imports_stage_info,
             packages,
-        }));
+        });
 
         let arguments = args
             .iter()

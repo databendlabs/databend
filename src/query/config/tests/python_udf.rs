@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::CommandFactory;
 use clap::Parser;
 use databend_common_config::Config;
-use databend_common_config::InnerConfig;
 
 #[derive(Parser)]
 struct Args {
@@ -23,27 +23,17 @@ struct Args {
 }
 
 #[test]
-fn test_python_udf_network_policy_defaults_to_denied() {
-    assert!(!InnerConfig::default().query.common.python_udf_allow_network);
-    let parsed: InnerConfig = Args::parse_from(["databend-query"])
-        .config
-        .try_into()
-        .unwrap();
-    assert!(!parsed.query.common.python_udf_allow_network);
-}
-
-#[test]
-fn test_python_udf_network_policy_operator_configuration() {
-    let parsed: InnerConfig =
-        Args::parse_from(["databend-query", "--python-udf-allow-network", "true"])
-            .config
-            .try_into()
-            .unwrap();
-    assert!(parsed.query.common.python_udf_allow_network);
-    for enabled in [false, true] {
-        let config: Config =
-            toml::from_str(&format!("[query]\npython_udf_allow_network = {enabled}\n")).unwrap();
-        let config: InnerConfig = config.try_into().unwrap();
-        assert_eq!(config.query.common.python_udf_allow_network, enabled);
+fn test_python_udf_has_no_unrestricted_network_configuration() {
+    Args::try_parse_from(["databend-query"]).expect("default configuration is valid");
+    assert!(
+        Args::command()
+            .get_arguments()
+            .all(|arg| arg.get_long() != Some("python-udf-allow-network"))
+    );
+    for value in ["false", "true"] {
+        let error = Args::try_parse_from(["databend-query", "--python-udf-allow-network", value])
+            .err()
+            .expect("unrestricted network CLI option must not exist");
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 }

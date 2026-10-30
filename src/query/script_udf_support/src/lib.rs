@@ -18,6 +18,10 @@
 #[cfg(feature = "script-udf")]
 mod script_udf {
     #[cfg(feature = "python-udf")]
+    mod python_egress {
+        include!("python_egress.rs");
+    }
+    #[cfg(feature = "python-udf")]
     pub mod python_worker {
         include!("python_worker.rs");
     }

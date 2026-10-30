@@ -1982,12 +1982,6 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "300")]
     pub python_udf_worker_idle_timeout_secs: u64,
 
-    /// Temporary compatibility exception: allow outbound IPv4/IPv6 access from
-    /// every Python UDF on this node. Other sandbox restrictions remain enabled.
-    /// Configure only on dedicated warehouses; not a SQL session setting.
-    #[clap(long, value_name = "VALUE", default_value = "false", action = ArgAction::Set)]
-    pub python_udf_allow_network: bool,
-
     /// Install Python UDF dependencies from wheels only (`pip --only-binary=:all:`).
     /// Source distributions run arbitrary build code on the query node at install time.
     #[clap(long, value_name = "VALUE", default_value = "true")]

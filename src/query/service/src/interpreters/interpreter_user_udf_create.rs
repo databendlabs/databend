@@ -67,6 +67,17 @@ impl Interpreter for CreateUserUDFScript {
             {
                 UDFValidator::verify_server(self.ctx.as_ref(), &udf.name, server).await?;
             }
+            let integrations = udf.definition.external_access_integrations();
+            if !integrations.is_empty()
+                && matches!(
+                    &udf.definition,
+                    UDFDefinition::UDFScript(_) | UDFDefinition::UDAFScript(_)
+                )
+            {
+                UserApiProvider::instance()
+                    .validate_external_access_bindings(&tenant, integrations)
+                    .await?;
+            }
             let changed = UserApiProvider::instance()
                 .add_udf(&tenant, udf, &plan.create_option)
                 .await?;

@@ -9,8 +9,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Run with the default node policy, python_udf_allow_network=false. The opt-in
-# policy is covered by the real-worker tests against a local HTTP server.
+# Unbound workers cannot use the network. Integration-bound HTTP access is
+# covered separately by 08_0007_external_access.sh.
 bendsql_connect_root --output null --query="
 CREATE OR REPLACE FUNCTION python_network_uncaught (INT64) RETURNS INT64
 LANGUAGE python HANDLER = 'handler' AS \$\$
@@ -53,5 +53,5 @@ def handler():
 "
 bendsql_connect_root --query="SELECT parse_json(python_network_caught()):error::STRING"
 bendsql_connect_root --query='SELECT python_network_null() IS NULL'
-# Administrator-only configuration must not appear as a mutable SQL setting.
+# No SQL setting may enable unrestricted Python worker networking.
 bendsql_connect_root --query="SELECT count(*) FROM system.settings WHERE name = 'python_udf_allow_network'"

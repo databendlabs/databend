@@ -105,6 +105,32 @@ fn validate_wasm_udf_type(data_type: &TableDataType) -> Result<()> {
 }
 
 impl Binder {
+    fn bind_script_external_access(
+        &self,
+        definition: &mut PlanUDFDefinition,
+        names: &[Identifier],
+    ) -> Result<()> {
+        let (language, bindings) = match definition {
+            PlanUDFDefinition::UDFScript(script) => {
+                (&script.language, &mut script.external_access_integrations)
+            }
+            PlanUDFDefinition::UDAFScript(script) => {
+                (&script.language, &mut script.external_access_integrations)
+            }
+            _ => unreachable!("expected a script definition"),
+        };
+        if !names.is_empty() && language != "python" {
+            return Err(ErrorCode::InvalidArgument(
+                "EXTERNAL_ACCESS_INTEGRATIONS is only supported for Python scripts",
+            ));
+        }
+        *bindings = names
+            .iter()
+            .map(|name| normalize_identifier(name, &self.name_resolution_ctx).name)
+            .collect();
+        Ok(())
+    }
+
     pub(in crate::planner::binder) async fn bind_udf_definition(
         &mut self,
         udf_name: &Identifier,
@@ -208,6 +234,7 @@ impl Binder {
             }
             UDFDefinition::UDAFServer { .. } => unimplemented!(),
             UDFDefinition::UDFScript {
+                external_access_integrations,
                 arg_types,
                 return_type,
                 code,
@@ -220,7 +247,7 @@ impl Binder {
             } => {
                 let parsed_language = language.parse::<UDFLanguage>()?;
                 UDFValidator::is_udf_script_allowed(&parsed_language)?;
-                let definition = create_udf_definition_script(
+                let mut definition = create_udf_definition_script(
                     arg_types,
                     None,
                     return_type,
@@ -232,6 +259,7 @@ impl Binder {
                     code,
                     *immutable,
                 )?;
+                self.bind_script_external_access(&mut definition, external_access_integrations)?;
                 Ok(UserDefinedFunction {
                     name,
                     description,
@@ -241,6 +269,7 @@ impl Binder {
                 })
             }
             UDFDefinition::UDAFScript {
+                external_access_integrations,
                 arg_types,
                 state_fields,
                 return_type,
@@ -251,7 +280,7 @@ impl Binder {
                 packages,
             } => {
                 UDFValidator::is_udaf_script_allowed(&language.parse::<UDFLanguage>()?)?;
-                let definition = create_udf_definition_script(
+                let mut definition = create_udf_definition_script(
                     arg_types,
                     Some(state_fields),
                     return_type,
@@ -263,6 +292,7 @@ impl Binder {
                     code,
                     None,
                 )?;
+                self.bind_script_external_access(&mut definition, external_access_integrations)?;
                 Ok(UserDefinedFunction {
                     name,
                     description,
@@ -519,6 +549,7 @@ fn create_udf_definition_script(
             }
 
             Ok(PlanUDFDefinition::UDAFScript(UDAFScript {
+                external_access_integrations: vec![],
                 code: code.to_string(),
                 arg_types,
                 imports: imports.to_vec(),
@@ -530,6 +561,7 @@ fn create_udf_definition_script(
             }))
         }
         None => Ok(PlanUDFDefinition::UDFScript(UDFScript {
+            external_access_integrations: vec![],
             code: code.to_string(),
             arg_types,
             return_type,

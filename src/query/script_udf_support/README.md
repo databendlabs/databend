@@ -77,7 +77,6 @@ python_udf_max_queued_queries = 128
 python_udf_queue_timeout_secs = 60
 python_udf_execution_timeout_secs = 300
 python_udf_worker_idle_timeout_secs = 300
-python_udf_allow_network = false
 ```
 
 Zero selects automatic sizing:
@@ -140,34 +139,78 @@ directory and `RLIMIT_CORE=0` still apply) and the query node logs a warning
 when the worker manager starts. Do not serve untrusted UDFs from macOS. Other
 non-Linux platforms refuse to run Python UDFs.
 
-### Temporary network compatibility exception
+### Integration-bound HTTP(S) access
 
-`[query].python_udf_allow_network = true` is a node administrator configuration,
-not a SQL setting or a UDF option. It allows outbound IPv4/IPv6 clients for **all
-Python scalar and aggregate UDFs on that node**. The default is `false`. Configure
-all nodes consistently and restart them when enabling or revoking it. Existing
-UDF definitions follow the node policy; recreating a function is not required.
-The equivalent command-line option is `--python-udf-allow-network=true`.
+Local Python scalar and aggregate scripts can bind the existing SQL-managed
+`NETWORK RULE` / `EXTERNAL ACCESS INTEGRATION` objects used by remote UDFs:
 
-Enable the exception before deploying the default-deny worker to existing
-network-dependent customers. Give advance notice and at least one month for
-migration before revoking an existing customer's exception, honoring any longer
-promised window. Do not treat a successful INSERT as proof of a successful
-external download when customer code catches exceptions.
+```sql
+CREATE NETWORK RULE events_rule TYPE = HOST_PORT MODE = EGRESS
+    VALUE_LIST = ('api.example.com:443');
+CREATE EXTERNAL ACCESS INTEGRATION events_access
+    ALLOWED_NETWORK_RULES = (events_rule) ENABLED = TRUE;
+GRANT USAGE ON INTEGRATION events_access TO ROLE udf_developer;
 
-Use this only on a dedicated warehouse for a time-limited, audited migration.
-The flag does not implement a destination allowlist: internal and loopback
-services are reachable too, subject to the deployment's egress policy. It does
-not add bandwidth or connection limits. Document the owner and expiry outside
-the engine configuration and revoke the exception after migration to external
-jobs or UDF servers. A warning is logged when the exception is enabled.
+CREATE FUNCTION fetch_events(STRING) RETURNS STRING LANGUAGE python
+PACKAGES = ('requests') HANDLER = 'handler' AS $$
+import requests
+
+def handler(key):
+    response = requests.get('https://api.example.com/events', params={'key': key}, timeout=10)
+    response.raise_for_status()
+    return response.text
+$$ EXTERNAL_ACCESS_INTEGRATIONS = (events_access);
+```
+
+Use the same suffix for `ALTER FUNCTION` or Python aggregate definitions. Existing
+CREATE/ALTER privileges are unchanged; binding additionally requires USAGE on
+every integration. Definitions persist the binding, and both stored metadata and
+distributed plans reject older readers/executors that cannot enforce it.
+Invocation follows existing UDF privileges, not integration USAGE. Revoking
+USAGE prevents future bindings/ALTERs; it does **not** revoke networking from an
+already-bound function. Disable/drop an integration or change/drop its network
+rules to revoke egress. All named integrations must remain present and enabled;
+their rules form a union, matching exact canonical HOST_PORT values. An omitted
+rule port means 443. A nonempty operator `udf_server_allow_list` remains the same
+hostname-only ceiling used for remote UDFs. Remote-only transport flags do not
+turn Script HTTP access on or off; an explicit rule must authorize its port.
+
+The worker still cannot create Internet sockets. Proxy-aware synchronous clients
+such as `urllib.request` and `requests` use a private host-controlled transport;
+the host authorizes each HTTP target or HTTPS CONNECT destination and performs
+DNS/connect itself. Cross-destination redirects require a newly authorized HTTP
+request or CONNECT tunnel; Host headers cannot change the checked destination.
+HTTP Upgrade and arbitrary TCP/UDP/native-socket clients are unsupported. HTTPS
+is end-to-end: the proxy does not decrypt TLS or implement application-level
+hostname/SNI filtering inside a CONNECT tunnel. CONNECT approval grants an
+opaque byte stream to the approved endpoint, not a guarantee that its payload is
+TLS or HTTP. Rule authors must trust approved hostnames and their DNS; HOST_PORT
+rules do not impose a separate public-IP-only policy.
+
+Each active HTTP connection and CONNECT tunnel rechecks policy every second,
+including while idle between batches. A failed/denied check closes the connection;
+each check has a five-second deadline. Revocation follows the existing remote-UDF
+asynchronous meta-watch propagation, plus this check interval/deadline; there is
+no instantaneous cross-node revocation guarantee. Workers need not restart to
+see rule changes. Query cancellation/completion closes their proxy streams.
+Connections have a five-minute maximum lifetime, five-second header/connect
+limits and at most 32 concurrent host streams per worker. Plain HTTP requests
+and responses are streamed with a 16 MiB body limit; opaque CONNECT tunnels have
+no application-body inspection. Large downloads may require multiple requests.
+
+Without bindings, workers cannot use the network. There is no configuration,
+CLI or SQL setting that enables unrestricted Python worker networking. Bound
+workers also cannot create Internet sockets: only approved HTTP/CONNECT targets
+are reachable through the host proxy. This mode requires the enforced Linux
+sandbox. It does not change execution routing: unsupported/nonlocal script
+execution routes reject bindings rather than drop the policy. Package installation
+remains a separate host-side operation, not traffic governed by these per-function
+rules.
 
 Landlock filesystem restrictions and seccomp process restrictions remain
-mandatory. Network-enabled workers may read resolver configuration and public
-CA certificate paths (including configured `SSL_CERT_FILE`/`SSL_CERT_DIR`), and
-create IPv4/IPv6 stream/datagram sockets, but cannot bind/listen, create raw
-sockets or create Unix sockets to local services. Dependency installation remains
-a separate host-side operation.
+mandatory. Proxy-bound workers may read public CA certificate paths (including
+configured `SSL_CERT_FILE`/`SSL_CERT_DIR`) for end-to-end HTTPS verification, but
+cannot create IPv4/IPv6 or Unix sockets to local services.
 
 Uncaught Python exceptions, including network permission errors, fail SQL
 execution; they must not be treated as successful NULL results. Python code

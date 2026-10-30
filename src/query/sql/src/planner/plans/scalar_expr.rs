@@ -1406,6 +1406,8 @@ impl Display for UDFLanguage {
 #[derive(Clone, Debug, Educe, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[educe(Hash(bound = false))]
 pub struct UDFScriptCode {
+    #[serde(default)]
+    pub external_access_integrations: Vec<String>,
     pub language: UDFLanguage,
     pub runtime_version: String,
     #[educe(Hash(ignore))]
@@ -1419,13 +1421,31 @@ pub struct UDFScriptCode {
 pub enum UDFType {
     Server(String), // server_addr
     Script(Box<UDFScriptCode>),
+    // An old executing node must fail deserialization rather than ignore a
+    // mandatory policy field and run under the legacy network exception.
+    ScriptWithExternalAccess(Box<UDFScriptCode>),
 }
 
 impl UDFType {
+    pub fn script_code(&self) -> Option<&UDFScriptCode> {
+        match self {
+            Self::Script(code) | Self::ScriptWithExternalAccess(code) => Some(code),
+            Self::Server(_) => None,
+        }
+    }
+
+    pub fn script(code: UDFScriptCode) -> Self {
+        if code.external_access_integrations.is_empty() {
+            Self::Script(Box::new(code))
+        } else {
+            Self::ScriptWithExternalAccess(Box::new(code))
+        }
+    }
+
     pub fn match_type(&self, is_script: bool) -> bool {
         match self {
             UDFType::Server(_) => !is_script,
-            UDFType::Script(_) => is_script,
+            UDFType::Script(_) | UDFType::ScriptWithExternalAccess(_) => is_script,
         }
     }
 }
@@ -1868,6 +1888,36 @@ mod tests {
     use super::*;
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
+
+    #[test]
+    fn script_network_policy_survives_distributed_plan_serialization() {
+        #[derive(serde::Deserialize)]
+        enum LegacyType {
+            Server,
+            Script,
+        }
+        let code = UDFScriptCode {
+            external_access_integrations: vec!["access".into()],
+            language: UDFLanguage::Python,
+            runtime_version: String::new(),
+            imports_stage_info: vec![],
+            imports: vec![],
+            packages: vec![],
+            code: Arc::new(Box::new([])),
+        };
+        let plan = UDFType::script(code);
+        let bytes = serde_json::to_vec(&plan).unwrap();
+        let round_trip: UDFType = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(plan, round_trip);
+        assert!(matches!(round_trip, UDFType::ScriptWithExternalAccess(_)));
+        let error = serde_json::from_slice::<LegacyType>(&bytes).err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("unknown variant `ScriptWithExternalAccess`"),
+            "{error}"
+        );
+    }
 
     fn column_expr(index: usize) -> ScalarExpr {
         ScalarExpr::BoundColumnRef(BoundColumnRef {
