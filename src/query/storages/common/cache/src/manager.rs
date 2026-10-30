@@ -30,14 +30,14 @@ use crate::DiskCacheAccessor;
 use crate::DiskCacheBuilder;
 use crate::KindLimit;
 use crate::PoolCaps;
-use crate::cache_kind::CacheKind;
+use crate::backend::KindStore;
 use crate::cache_manager::CacheManager as KindCacheManager;
 use crate::cache_manager::CacheRow;
-use crate::store::KindStore;
-use crate::store::LegacyStore;
-use crate::store::SharedStore;
-use crate::store::legacy_capacities;
-use crate::store::legacy_total_bytes;
+use crate::legacy::LegacyStore;
+use crate::legacy::legacy_capacities;
+use crate::legacy::legacy_total_bytes;
+use crate::registry::CacheKind;
+use crate::shared::SharedStore;
 
 // The existing payload size is the total memory budget for page and full-component caches.
 pub(crate) fn inverted_index_payload_capacities(total: usize) -> (usize, usize) {
@@ -406,7 +406,7 @@ mod tests {
     use super::*;
     use crate::ColumnData;
     use crate::Unit;
-    use crate::cache_kind::Pool;
+    use crate::registry::Pool;
 
     /// Disk tiers configured for every kind that has one: column data, the index metas,
     /// bloom filters, inverted lookup / payload, vector refine pages and spatial files.

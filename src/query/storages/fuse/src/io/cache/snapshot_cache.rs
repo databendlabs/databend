@@ -88,8 +88,8 @@ mod tests {
     use databend_storages_common_cache::CacheKind;
     use databend_storages_common_cache::Reader;
     use databend_storages_common_cache::cache_manager::CacheManager;
-    use databend_storages_common_cache::store::LegacyCapacity;
-    use databend_storages_common_cache::store::LegacyStore;
+    use databend_storages_common_cache::legacy::LegacyCapacity;
+    use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_table_meta::meta::Statistics;
     use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 

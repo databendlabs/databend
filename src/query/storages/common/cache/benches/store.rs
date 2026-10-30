@@ -27,10 +27,10 @@ use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
-use databend_storages_common_cache::store::KindStore;
-use databend_storages_common_cache::store::LegacyCapacity;
-use databend_storages_common_cache::store::LegacyStore;
-use databend_storages_common_cache::store::SharedStore;
+use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::legacy::LegacyCapacity;
+use databend_storages_common_cache::legacy::LegacyStore;
+use databend_storages_common_cache::shared::SharedStore;
 use divan::black_box;
 
 const KEYS: usize = 10_000;

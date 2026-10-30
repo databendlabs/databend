@@ -34,7 +34,6 @@ use super::size::statistics;
 use super::size::table_schema;
 use super::size::vec;
 use crate::CachedItem;
-use crate::IcebergTableCacheValue;
 use crate::items::size::block_meta;
 
 /// Partitions are opaque `dyn PartInfo`; this is the typical size of a fuse block part.
@@ -91,13 +90,6 @@ impl CachedItem for SegmentStatistics {
 impl CachedItem for ParquetMetaData {
     fn mem_bytes(&self) -> usize {
         self.memory_size()
-    }
-}
-
-/// The table is opaque `dyn Table`; its schema is the part that grows with the table.
-impl CachedItem for IcebergTableCacheValue {
-    fn mem_bytes(&self) -> usize {
-        size_of::<Self>() + 2 * table_schema(&self.table().get_table_info().meta.schema)
     }
 }
 

@@ -222,8 +222,8 @@ mod tests {
     use databend_common_expression::types::F32;
     use databend_common_expression::types::VectorColumn;
     use databend_storages_common_cache::CacheKind;
-    use databend_storages_common_cache::store::LegacyCapacity;
-    use databend_storages_common_cache::store::LegacyStore;
+    use databend_storages_common_cache::legacy::LegacyCapacity;
+    use databend_storages_common_cache::legacy::LegacyStore;
     use futures::future::join_all;
 
     use super::*;

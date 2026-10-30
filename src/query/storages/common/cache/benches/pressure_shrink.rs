@@ -23,8 +23,8 @@ use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
-use databend_storages_common_cache::store::KindStore;
-use databend_storages_common_cache::store::SharedStore;
+use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::shared::SharedStore;
 
 const POOL_BYTES: usize = 10 << 30;
 const ENTRY_BYTES: usize = 1 << 20;

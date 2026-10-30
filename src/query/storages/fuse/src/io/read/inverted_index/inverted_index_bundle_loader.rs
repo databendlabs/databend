@@ -872,8 +872,8 @@ mod tests {
 
     use databend_storages_common_cache::CacheKind;
     use databend_storages_common_cache::CachedItem;
-    use databend_storages_common_cache::store::LegacyCapacity;
-    use databend_storages_common_cache::store::LegacyStore;
+    use databend_storages_common_cache::legacy::LegacyCapacity;
+    use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_index::BundleOpenSlice;
     use opendal::raw::Access;
     use opendal::raw::Layer;

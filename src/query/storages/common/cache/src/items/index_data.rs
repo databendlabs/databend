@@ -20,17 +20,10 @@ use databend_storages_common_index::InvertedIndexPayloadBytes;
 use databend_storages_common_index::filters::FilterImpl;
 
 use crate::CachedItem;
-use crate::CachedVectorIndex;
 
 impl CachedItem for FilterImpl {
     fn mem_bytes(&self) -> usize {
         FilterImpl::mem_bytes(self)
-    }
-}
-
-impl CachedItem for CachedVectorIndex {
-    fn mem_bytes(&self) -> usize {
-        self.memory_size()
     }
 }
 

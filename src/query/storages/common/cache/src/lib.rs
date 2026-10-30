@@ -16,53 +16,42 @@
 #![feature(io_const_error)]
 #![allow(clippy::collapsible_if, clippy::let_and_return)]
 
-mod cache;
-mod cache_items;
-mod cache_kind;
-pub mod cache_manager;
-mod cache_ref;
-mod cached_item;
-mod caches;
-mod disk_codec;
-mod items;
-mod manager;
-mod mem_cache;
-mod pool_caps;
-mod providers;
-mod reader;
-mod single_flight;
-pub mod store;
-mod temp_dir;
-mod ttl_reader;
-mod vector_index_cache;
+//! Process-wide caches. `registry` lists the cache kinds; `CacheManager` builds them on the
+//! legacy backend (`legacy`, one LRU per kind) or the shared one (`shared`, S3-FIFO pools),
+//! with optional disk tiers (`disk`). Readers get a typed `MemCache` per kind (`handle`) and
+//! load through `read`. `local` holds LRU caches owned by a single component.
 
-pub use cache::*;
-pub use cache_kind::CacheKind;
-pub use cache_kind::Pool;
-pub use cache_ref::CacheRef;
-pub use cache_ref::Reservation;
-pub use cache_ref::Usage;
-pub use cached_item::CachedItem;
-pub use caches::*;
-pub use disk_codec::DiskCodec;
+mod accessor;
+pub mod backend;
+pub mod cache_manager;
+mod disk;
+mod handle;
+mod items;
+pub mod legacy;
+mod local;
+mod manager;
+mod read;
+mod registry;
+pub mod shared;
+mod temp_dir;
+
+pub use accessor::CacheAccessor;
+pub use backend::KindLimit;
+pub use backend::Unit;
+pub use disk::*;
+pub use handle::MemCache;
+pub use handle::cache_ref::CacheRef;
+pub use handle::cache_ref::Reservation;
+pub use handle::cache_ref::Usage;
+pub use items::*;
+pub use local::CacheValue;
+pub use local::InMemoryLruCache;
 pub use manager::CacheManager;
-pub use mem_cache::MemCache;
-pub use pool_caps::KindLimit;
-pub use pool_caps::PoolCaps;
-pub use providers::DiskCacheAccessor;
-pub use providers::DiskCacheBuilder;
-pub use providers::DiskCacheError;
-pub use providers::DiskCacheKey;
-pub use providers::DiskCacheResult;
-pub use providers::InMemoryLruCache;
-pub use providers::LruDiskCache;
-pub use providers::LruDiskCacheBuilder;
-pub use providers::LruDiskCacheHolder;
-pub use providers::TableDataCacheKey;
-pub use providers::disk_cache::disk_cache_lru::read_cache_content;
-pub use reader::Reader;
-pub use single_flight::SingleFlight;
+pub use read::Reader;
+pub use read::SingleFlight;
+pub use read::TTLReader;
+pub use read::TTLValue;
+pub use registry::CacheKind;
+pub use registry::Pool;
+pub use shared::PoolCaps;
 pub use temp_dir::*;
-pub use ttl_reader::TTLReader;
-pub use ttl_reader::TTLValue;
-pub use vector_index_cache::CachedVectorIndex;

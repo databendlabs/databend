@@ -24,18 +24,18 @@ use databend_common_metrics::cache::get_cache_hit_count;
 use databend_common_metrics::cache::get_cache_miss_count;
 
 use crate::CacheAccessor;
+use crate::CachedItem;
 use crate::DiskCacheAccessor;
+use crate::DiskCodec;
+use crate::KindLimit;
+use crate::MemCache;
 use crate::Unit;
-use crate::cache_kind::CacheKind;
-use crate::cache_kind::Pool;
-use crate::cached_item::CachedItem;
-use crate::disk_codec::DiskCodec;
-use crate::mem_cache::MemCache;
-use crate::pool_caps::KindLimit;
-use crate::store::KindStats;
-use crate::store::KindStore;
-use crate::store::PoolStats;
-use crate::store::ShrinkReport;
+use crate::backend::KindStats;
+use crate::backend::KindStore;
+use crate::backend::PoolStats;
+use crate::backend::ShrinkReport;
+use crate::registry::CacheKind;
+use crate::registry::Pool;
 
 const POOL_PREFIX: &str = "pool:";
 

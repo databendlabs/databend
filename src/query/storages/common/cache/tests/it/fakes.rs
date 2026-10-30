@@ -25,8 +25,8 @@ use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
 use databend_storages_common_cache::Reader;
-use databend_storages_common_cache::store::KindStore;
-use databend_storages_common_cache::store::SharedStore;
+use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::shared::SharedStore;
 
 pub const META: CacheKind = CacheKind::TableSnapshot;
 pub const META2: CacheKind = CacheKind::SegmentInfo;
