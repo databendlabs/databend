@@ -56,6 +56,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
@@ -1005,6 +1006,14 @@ impl CreateTableInterpreter {
                 options.insert(
                     FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE.to_string(),
                     "1".to_string(),
+                );
+            }
+
+            // Virtual columns are enabled by default for newly created tables.
+            if !options.contains_key(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN) {
+                options.insert(
+                    FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN.to_string(),
+                    "true".to_string(),
                 );
             }
         }
