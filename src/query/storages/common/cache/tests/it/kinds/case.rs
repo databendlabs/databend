@@ -232,6 +232,8 @@ impl<K: Sample> KindCase for Case<K> {
     }
 
     fn mem_bytes_ratio(&self) -> (f64, Accuracy) {
+        // The first value also allocates lazily initialized statics, which stay.
+        drop(K::sample(5));
         let (value, truth) = measure(|| K::sample(5));
         (value.mem_bytes() as f64 / truth as f64, K::ACCURACY)
     }

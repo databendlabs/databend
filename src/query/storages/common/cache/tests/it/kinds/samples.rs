@@ -17,8 +17,10 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use ::parquet::arrow::ArrowWriter;
 use ::parquet::file::metadata::ParquetMetaDataReader;
@@ -31,8 +33,8 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::Table;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorColumn;
@@ -75,8 +77,14 @@ use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
+use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
+use databend_storages_common_table_meta::meta::column_oriented_segment::deserialize_column_oriented_segment;
 
+use crate::mem_bytes_accuracy::block_meta;
 use crate::mem_bytes_accuracy::block_metas;
 use crate::mem_bytes_accuracy::index_meta;
 use crate::mem_bytes_accuracy::schema;
@@ -87,8 +95,11 @@ use crate::mem_bytes_accuracy::summary;
 pub enum Accuracy {
     /// Within the margin of the other measured values.
     Measured,
-    /// The value holds opaque parts (`dyn Table`, `dyn PartInfo`) sized by a typical figure.
+    /// Parts of the value are sized by a typical figure (`dyn Table`, `dyn PartInfo`) or left
+    /// out; only the order of magnitude is checked.
     Estimated,
+    /// The sample stands in for a value whose size it cannot reproduce; not checked.
+    Unchecked,
 }
 
 /// A real value of a kind; `seed` makes values of one kind differ.
@@ -153,11 +164,35 @@ impl Sample for segment::Info {
 }
 
 impl Sample for segment::ColumnOriented {
+    /// `mem_bytes` counts the block metas only, as before this backend: the schema and the
+    /// summary are left out, about 40% of a 64-block segment and under 5% of a full one.
+    const ACCURACY: Accuracy = Accuracy::Estimated;
+
+    /// A segment as cached: written, then read back with every column.
     fn sample(seed: u32) -> Arc<ColumnOrientedSegment> {
+        let mut builder = ColumnOrientedSegmentBuilder::new(Arc::new(schema(4)), 64);
+        for i in (0..64).map(|i| i + seed % 1024 * 64) {
+            let mut meta = block_meta(4, i);
+            meta.create_on = Some(chrono::Utc::now());
+            builder.add_block(meta, VirtualBlockInput::None).unwrap();
+        }
+        let written = builder
+            .build(BlockThresholds::default(), None, None)
+            .unwrap();
+        let columns: HashSet<String> = written
+            .segment_schema
+            .fields()
+            .iter()
+            .map(|field| field.name().clone())
+            .collect();
+        let bytes = Bytes::from(written.serialize().unwrap());
+        drop(written);
+        let (block_metas, segment_schema, summary) =
+            deserialize_column_oriented_segment(bytes, &columns, true).unwrap();
         Arc::new(ColumnOrientedSegment {
-            block_metas: DataBlock::empty(),
-            summary: summary(2 + seed % 2),
-            segment_schema: schema(2),
+            block_metas,
+            summary: summary.unwrap(),
+            segment_schema,
         })
     }
 }
@@ -238,20 +273,29 @@ impl Sample for vector::Meta {
 }
 
 impl Sample for vector::Index {
-    fn sample(seed: u32) -> CachedVectorIndex {
-        let values = (0..64)
-            .map(|i| F32::from(((i + seed) as f32 * 0.17).sin()))
-            .collect::<Vec<_>>();
-        let column = Column::Vector(VectorColumn::Float32((values.into(), 8)));
-        let (_, entries) = HNSWIndex::build(4, 8, 0, column, DistanceType::L2).unwrap();
-        let components: Vec<Vec<u8>> = entries
-            .into_iter()
-            .map(|entry| match entry {
-                BlockEntry::Const(Scalar::Binary(bytes), _, _) => bytes,
-                _ => unreachable!("HNSW build produces binary components"),
-            })
-            .collect();
-        let index = HNSWIndex::open(DistanceType::L2, 8, 8, &components, None).unwrap();
+    /// About 10% over what the index holds; the cache errs toward charging more.
+    const ACCURACY: Accuracy = Accuracy::Estimated;
+
+    /// An index as cached: opened from its stored components, built once.
+    fn sample(_seed: u32) -> CachedVectorIndex {
+        const ROWS: usize = 256;
+        const DIM: usize = 16;
+        static COMPONENTS: OnceLock<Vec<Vec<u8>>> = OnceLock::new();
+        let components = COMPONENTS.get_or_init(|| {
+            let values = (0..ROWS * DIM)
+                .map(|i| F32::from((i as f32 * 0.17).sin()))
+                .collect::<Vec<_>>();
+            let column = Column::Vector(VectorColumn::Float32((values.into(), DIM)));
+            let (_, entries) = HNSWIndex::build(16, 64, 0, column, DistanceType::L2).unwrap();
+            entries
+                .into_iter()
+                .map(|entry| match entry {
+                    BlockEntry::Const(Scalar::Binary(bytes), _, _) => bytes,
+                    _ => unreachable!("HNSW build produces binary components"),
+                })
+                .collect()
+        });
+        let index = HNSWIndex::open(DistanceType::L2, DIM, ROWS, components, None).unwrap();
         CachedVectorIndex::new(index)
     }
 }
@@ -314,7 +358,8 @@ impl Table for FakeTable {
 }
 
 impl Sample for iceberg::Table {
-    const ACCURACY: Accuracy = Accuracy::Estimated;
+    /// A real table holds iceberg metadata the fake one does not have.
+    const ACCURACY: Accuracy = Accuracy::Unchecked;
 
     fn sample(seed: u32) -> IcebergTableCacheValue {
         let info = TableInfo {

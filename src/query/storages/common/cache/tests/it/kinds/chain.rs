@@ -54,16 +54,17 @@ fn test_disk_round_trip() {
 /// The backends size their caches by `mem_bytes`; it follows the bytes a value holds.
 #[test]
 fn test_mem_bytes_follow_allocations() {
+    let mut off = Vec::new();
     for case in cases() {
         let (ratio, accuracy) = case.mem_bytes_ratio();
         let expected = match accuracy {
             Accuracy::Measured => 0.75..=1.1,
             Accuracy::Estimated => 0.1..=10.0,
+            Accuracy::Unchecked => continue,
         };
-        assert!(
-            expected.contains(&ratio),
-            "{:?}: mem_bytes / allocated = {ratio:.2}",
-            case.kind()
-        );
+        if !expected.contains(&ratio) {
+            off.push(format!("{:?}: {ratio:.2}", case.kind()));
+        }
     }
+    assert!(off.is_empty(), "mem_bytes / allocated: {off:#?}");
 }

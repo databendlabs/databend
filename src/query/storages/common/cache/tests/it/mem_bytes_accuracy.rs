@@ -124,7 +124,7 @@ pub(crate) fn summary(columns: u32) -> Statistics {
     }
 }
 
-fn block_meta(columns: u32, i: u32) -> BlockMeta {
+pub(crate) fn block_meta(columns: u32, i: u32) -> BlockMeta {
     let col_metas = (0..columns)
         .map(|c| {
             let meta = SingleColumnMeta {
