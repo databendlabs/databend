@@ -35,11 +35,9 @@ Sort
                                 │       ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
                                 │       ├── order by: []
                                 │       └── limit: NONE
-                                └── Exchange(Hash)
-                                    ├── Exchange(Hash): keys: [orders.o_custkey (#1)]
-                                    └── Scan
-                                        ├── table: default.orders (#0)
-                                        ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
-                                        ├── order by: []
-                                        └── limit: NONE
+                                └── Scan
+                                    ├── table: default.orders (#0)
+                                    ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
+                                    ├── order by: []
+                                    └── limit: NONE
 

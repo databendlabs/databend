@@ -44,6 +44,28 @@ impl ExchangeReceiveChannels {
     }
 }
 
+impl Drop for ExchangeReceiveChannels {
+    /// A query aborted before its pipelines took the receivers leaves this
+    /// collection as their last owner: release what was already queued for them.
+    fn drop(&mut self) {
+        for receiver in &self.receivers {
+            if receiver.receiver_count() == 1 {
+                close_queue(receiver);
+            }
+        }
+    }
+}
+
+/// Stop producers and discard queued items, releasing their quota.
+///
+/// Producers wait for the quota of queued items, and keep the queue alive while
+/// they wait, so a queue left by its last receiver must be drained explicitly.
+fn close_queue(receiver: &Receiver<QueueItem>) {
+    receiver.close();
+
+    while receiver.try_recv().is_ok() {}
+}
+
 /// Received encoded data holding receive quota until dequeued for decoding.
 pub struct RemoteQueueItem {
     pub data: FlightData,
@@ -107,9 +129,7 @@ impl ExchangeQueueReceiver {
 
     /// Stop producers and discard queued items, releasing their quota.
     pub fn close(&self) {
-        self.receiver.close();
-
-        while self.receiver.try_recv().is_ok() {}
+        close_queue(&self.receiver);
     }
 
     /// Whether no queued blocks remain and no more can arrive.
@@ -134,15 +154,100 @@ impl ExchangeQueueReceiver {
     }
 }
 
+impl Drop for ExchangeQueueReceiver {
+    /// An aborted pipeline drops its receivers without closing them. Their queued
+    /// items would keep the quota a connection's router waits for: the router would
+    /// never answer again, and its sender would wait for that answer forever.
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::task::Poll;
+
     use databend_common_expression::DataSchema;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::UInt64Type;
     use futures::FutureExt;
 
     use super::*;
     use crate::servers::flight::v1::network::inbound::ExchangeFrameRouter;
     use crate::servers::flight::v1::network::outbound::BlockSender;
+    use crate::servers::flight::v1::network::outbound::LOCAL_CHANNEL_MAX_BYTES;
     use crate::servers::flight::v1::network::outbound::create_local_block_senders;
+    use crate::servers::flight::v1::network::wire_format::flight_data_size;
+
+    fn receiver(queues: &ExchangeReceiveChannels) -> Arc<ExchangeQueueReceiver> {
+        ExchangeQueueReceiver::create(&Arc::new(DataSchema::empty()), queues.receivers[0].clone())
+    }
+
+    /// A router waiting for connection quota held by queued items must be released
+    /// when the queue loses its last receiver without `close`, as on abort: either
+    /// a pipeline's receiver, or the collection when no pipeline took it yet.
+    #[test]
+    fn test_dropped_receiver_releases_connection_quota() {
+        futures::executor::block_on(async {
+            for pipeline_built in [true, false] {
+                let frame = || FlightData {
+                    app_metadata: 0u16.to_le_bytes().to_vec().into(),
+                    data_body: vec![42; 8].into(),
+                    ..FlightData::default()
+                };
+                let queues = ExchangeReceiveChannels::new(1);
+                let router = ExchangeFrameRouter::new(&queues, flight_data_size(&frame()));
+                let receiver = pipeline_built.then(|| receiver(&queues));
+                let queues = match pipeline_built {
+                    true => {
+                        drop(queues);
+                        None
+                    }
+                    false => Some(queues),
+                };
+
+                router.route_frame(frame()).await.unwrap();
+                let mut pending = Box::pin(router.route_frame(frame()));
+                assert!(futures::poll!(pending.as_mut()).is_pending());
+
+                drop(receiver);
+                drop(queues);
+                assert!(matches!(
+                    futures::poll!(pending.as_mut()),
+                    Poll::Ready(Err(()))
+                ));
+            }
+        });
+    }
+
+    /// The same for a local sender waiting for the node's local quota.
+    #[test]
+    fn test_dropped_receiver_releases_local_quota() {
+        futures::executor::block_on(async {
+            let queues = ExchangeReceiveChannels::new(1);
+            let senders = create_local_block_senders(&queues);
+            let receiver = receiver(&queues);
+            drop(queues);
+
+            let block = |rows: usize| {
+                DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![0u64; rows])])
+            };
+            // Takes the whole local quota.
+            senders[0]
+                .send_block(block(LOCAL_CHANNEL_MAX_BYTES / 8))
+                .await
+                .unwrap();
+            let mut pending = senders[0].send_block(block(1));
+            assert!(futures::poll!(pending.as_mut()).is_pending());
+
+            drop(receiver);
+            assert!(matches!(
+                futures::poll!(pending.as_mut()),
+                Poll::Ready(Ok(()))
+            ));
+            assert!(senders[0].is_closed());
+        });
+    }
 
     #[test]
     fn test_receiver_drains_blocks_then_observes_last_sender_drop() {

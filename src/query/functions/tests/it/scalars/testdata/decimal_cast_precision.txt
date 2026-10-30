@@ -198,7 +198,7 @@ error:
   --> SQL:1:12
   |
 1 | if(active, CAST(1e30::Float64 AS DECIMAL(1,0)), NULL)
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 812 while evaluating function `to_decimal(1, 0)(1000000000000000000000000000000)` in expr `CAST(CAST(1000000000000000000000000000000 AS Float64) AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST(1000000000000000000000000000000 AS Float64) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 805 while evaluating function `to_decimal(1, 0)(1000000000000000000000000000000)` in expr `CAST(CAST(1000000000000000000000000000000 AS Float64) AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST(1000000000000000000000000000000 AS Float64) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
 
 
 
@@ -214,7 +214,7 @@ error:
   --> SQL:1:12
   |
 1 | if(active, CAST(10::DECIMAL(2,0) AS DECIMAL(1,0)), NULL)
-  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 892 while evaluating function `to_decimal(1, 0)(10)` in expr `CAST(CAST(10 AS Decimal(2, 0)) AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST(10 AS Decimal(2, 0)) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 884 while evaluating function `to_decimal(1, 0)(10)` in expr `CAST(CAST(10 AS Decimal(2, 0)) AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST(10 AS Decimal(2, 0)) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
 
 
 

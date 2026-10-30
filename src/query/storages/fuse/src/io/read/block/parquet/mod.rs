@@ -145,7 +145,11 @@ impl BlockReader {
                     };
                     match encoding {
                         Some(encoding) => {
-                            let column = encoding.encode(arrow_array, &data_type)?;
+                            let column = encoding.encode(
+                                arrow_array,
+                                &data_type,
+                                self.dictionary_ndv_ratio,
+                            )?;
                             if let Some(cache) = cache {
                                 let memory_size = column.memory_size(false);
                                 cache.fill(

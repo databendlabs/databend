@@ -31,6 +31,7 @@ use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
 use crate::optimizer::optimizers::cascades::rule::StrategyFactory;
 use crate::optimizer::optimizers::cascades::tasks::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
+use crate::optimizer::optimizers::cascades::tasks::SchedulerStat;
 use crate::optimizer::optimizers::cascades::tasks::Task;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
@@ -47,6 +48,8 @@ pub struct CascadesOptimizer {
     pub(crate) memo: Memo,
     pub(crate) cost_model: Box<dyn CostModel>,
     pub(crate) explore_rule_set: RuleSet,
+    /// Scheduler statistics of the last search, for diagnostics and tests.
+    scheduler_stat: Option<SchedulerStat>,
 }
 
 impl CascadesOptimizer {
@@ -74,11 +77,18 @@ impl CascadesOptimizer {
             memo,
             cost_model,
             explore_rule_set,
+            scheduler_stat: None,
         })
     }
 
     pub fn memo(&self) -> &Memo {
         &self.memo
+    }
+
+    /// Statistics of the task scheduler collected by the last search, for
+    /// diagnostics and tests.
+    pub fn scheduler_stat(&self) -> Option<&SchedulerStat> {
+        self.scheduler_stat.as_ref()
     }
 
     pub(crate) fn enforce_distribution(&self) -> bool {
@@ -123,6 +133,7 @@ impl CascadesOptimizer {
                     let mut local_optimizer = CascadesOptimizer::new(opt_ctx)?;
                     let local_expr = local_optimizer.optimize_without_staging(&s_expr)?;
                     self.memo = local_optimizer.memo;
+                    self.scheduler_stat = local_optimizer.scheduler_stat;
                     return Ok(local_expr);
                 }
             }
@@ -213,7 +224,9 @@ impl CascadesOptimizer {
 
         let mut scheduler = TaskManager::new().with_task_limit(task_limit);
         scheduler.add_task(Task::OptimizeGroup(root_task));
-        scheduler.run(self)?;
+        let run_result = scheduler.run(self);
+        self.scheduler_stat = Some(scheduler.into_stat());
+        run_result?;
 
         debug!("Memo:\n{}", self.memo.display()?);
 

@@ -709,6 +709,48 @@ impl DataBlockVec {
         locations: &RowLocations,
     ) {
         let views = Self::column_views::<T>(storage);
+        // Local codes are comparable only within one view. Independent dictionaries and
+        // FOR bases across blocks must keep comparing their actual values.
+        if let [ColumnView::Encoded(view)] = views.as_slice() {
+            match view {
+                EncodedView::For(column) => {
+                    crate::with_narrow_buffer!(column.deltas(), |deltas| {
+                        sort_compare.update_permutation_by(None, |left, right| {
+                            deltas[left as usize].cmp(&deltas[right as usize])
+                        });
+                    });
+                    return;
+                }
+                EncodedView::Dict { keys, values }
+                    if T::column_len(values) <= u32::MAX as usize =>
+                {
+                    let compare = |left: usize, right: usize| {
+                        T::compare(unsafe { T::index_column_unchecked(values, left) }, unsafe {
+                            T::index_column_unchecked(values, right)
+                        })
+                    };
+                    let mut order = (0..T::column_len(values) as u32).collect::<Vec<_>>();
+                    order.sort_unstable_by(|left, right| compare(*left as usize, *right as usize));
+                    let mut ranks = vec![0u32; order.len()];
+                    let mut rank = 0;
+                    for pair in order.windows(2) {
+                        // Functions may produce equal values for different codes. Keep
+                        // their ranks equal for subsequent sort keys and LimitRank.
+                        rank += u32::from(!compare(pair[0] as usize, pair[1] as usize).is_eq());
+                        ranks[pair[1] as usize] = rank;
+                    }
+                    drop(order);
+                    crate::with_narrow_buffer!(keys, |keys| {
+                        sort_compare.update_permutation_by(None, |left, right| {
+                            ranks[keys[left as usize] as usize]
+                                .cmp(&ranks[keys[right as usize] as usize])
+                        });
+                    });
+                    return;
+                }
+                _ => {}
+            }
+        }
         sort_compare.update_permutation_by(None, |left, right| {
             let (lhs_block, lhs_row) = locations.get(left);
             let (rhs_block, rhs_row) = locations.get(right);
