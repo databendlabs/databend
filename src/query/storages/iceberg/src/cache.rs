@@ -12,26 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::IcebergTableCacheValue;
-use databend_storages_common_cache::InMemoryCacheTTLReader;
-use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache::Loader;
+use databend_storages_common_cache::Reader;
+use databend_storages_common_cache::TTLReader;
 
 use crate::IcebergTable;
 use crate::credential::credential_refresh_at;
 
-pub struct LoaderWrapper<T>(T);
-pub type IcebergTableReader = InMemoryCacheTTLReader<
-    IcebergTableCacheValue,
-    LoaderWrapper<(Arc<dyn iceberg::Catalog>, Arc<CatalogInfo>)>,
->;
+/// Loads an iceberg table by its `table_cache_key`.
+pub struct IcebergTableLoader {
+    catalog: Arc<dyn iceberg::Catalog>,
+    info: Arc<CatalogInfo>,
+}
+
+pub type IcebergTableReader = TTLReader<IcebergTableLoader>;
 
 pub(crate) const SEP_STR: &str = "\u{001f}";
 
@@ -49,17 +52,20 @@ fn parse_table_cache_key(cache_key: &str) -> Result<(&str, &str)> {
     Ok((keys[1], keys[2]))
 }
 
-#[async_trait::async_trait]
-impl Loader<IcebergTableCacheValue>
-    for LoaderWrapper<(Arc<dyn iceberg::Catalog>, Arc<CatalogInfo>)>
-{
+impl Reader for IcebergTableLoader {
+    type Key = String;
+    type Item = IcebergTableCacheValue;
+
+    fn cache_key<'a>(&self, key: &'a String) -> Cow<'a, str> {
+        Cow::Borrowed(key)
+    }
+
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<IcebergTableCacheValue> {
-        let (database_name, table_name) = parse_table_cache_key(&params.location)?;
-        let inner = &self.0;
+    async fn read(&self, key: &String) -> Result<IcebergTableCacheValue> {
+        let (database_name, table_name) = parse_table_cache_key(key)?;
         let iceberg = IcebergTable::try_create_from_iceberg_catalog(
-            inner.0.clone(),
-            inner.1.clone(),
+            self.catalog.clone(),
+            self.info.clone(),
             database_name,
             table_name,
         )
@@ -77,9 +83,12 @@ pub fn iceberg_table_cache_reader(
     catalog: Arc<dyn iceberg::Catalog>,
     info: Arc<CatalogInfo>,
 ) -> IcebergTableReader {
+    let cache = CacheManager::instance()
+        .kind_manager()
+        .mem_cache(CacheKind::IcebergTable);
     IcebergTableReader::new(
-        CacheManager::instance().get_iceberg_table_cache(),
-        LoaderWrapper((catalog, info)),
+        cache,
+        IcebergTableLoader { catalog, info },
         Duration::from_secs(600),
     )
 }

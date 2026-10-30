@@ -109,8 +109,10 @@ fn test_disk_decode_failure_evicts_disk_entry() {
     assert!(!disk.contains_key("bad"));
 }
 
+/// As before the refactor, a memory capacity of 0 leaves the disk tier working: the default
+/// column data cache is disk only.
 #[test]
-fn test_disabled_kind_skips_disk() {
+fn test_disk_tier_works_without_memory_tier() {
     let dir = tempfile::tempdir().unwrap();
     let disk = disk(&dir);
     let store = shared_store(0, 1 << 20, 0);
@@ -119,13 +121,18 @@ fn test_disabled_kind_skips_disk() {
     cache.put("k", Blob(vec![1; 10]));
     wait_for(|| disk.contains_key("k"));
 
-    CacheManager::new(store, Default::default())
+    CacheManager::new(store.clone(), Default::default())
         .set_capacity_by_name("bloom_filter", 0)
         .unwrap();
-    assert!(cache.lookup("k").is_none());
-    assert!(!cache.contains("k"));
-    cache.put("other", Blob(vec![1; 10]));
-    assert!(!disk.contains_key("other"));
+    assert!(cache.is_enabled());
+    assert_eq!(cache.lookup("k").unwrap().0, vec![1; 10]);
+    assert!(cache.contains("k"));
+    assert!(!cache.put("other", Blob(vec![2; 10])).is_charged());
+    wait_for(|| disk.contains_key("other"));
+    assert_eq!(store.kind_stats(CacheKind::BloomFilter).items, 0);
+
+    let memory_only = MemCache::<Blob>::new(store, CacheKind::BloomFilter);
+    assert!(!memory_only.is_enabled());
 }
 
 #[test]

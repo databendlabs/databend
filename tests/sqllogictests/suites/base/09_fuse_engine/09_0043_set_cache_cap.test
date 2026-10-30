@@ -17,3 +17,37 @@ query B
 select count()>=1 from system.caches where name = 'memory_cache_segment_block_metas' and capacity = 3;
 ----
 1
+
+# Footers of parquet files read from a stage are cached.
+statement ok
+create or replace stage s_09_0043;
+
+statement ok
+create or replace table t_09_0043(a int, b string);
+
+statement ok
+insert into t_09_0043 select number, number::string from numbers(100);
+
+statement ok
+copy into @s_09_0043 from t_09_0043 file_format = (type = parquet);
+
+query I
+select count(*) from @s_09_0043 (file_format => 'parquet');
+----
+100
+
+query I
+select count(*) from @s_09_0043 (file_format => 'parquet');
+----
+100
+
+query B
+select hit > 0 and num_items > 0 from system.caches where name = 'memory_cache_parquet_meta_data';
+----
+1
+
+statement ok
+drop stage s_09_0043;
+
+statement ok
+drop table t_09_0043;

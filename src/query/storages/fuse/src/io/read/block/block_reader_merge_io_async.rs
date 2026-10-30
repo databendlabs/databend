@@ -19,9 +19,8 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
 use databend_common_metrics::storage::*;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::MergeIOReader;
@@ -31,6 +30,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use crate::BlockReadResult;
 use crate::io::BlockReadContext;
 use crate::io::BlockReader;
+use crate::io::FuseCaches;
 use crate::io::read::block::parquet::ColumnEncoding;
 
 impl BlockReader {
@@ -64,8 +64,9 @@ impl BlockReadContext {
 
         let mut ranges = vec![];
         // for async read, try using table data cache (if enabled in settings)
-        let column_data_cache = CacheManager::instance().get_column_data_cache();
-        let column_array_cache = CacheManager::instance().get_table_data_array_cache();
+        let caches = FuseCaches::instance();
+        let column_data_cache = &caches.column_data;
+        let column_array_cache = &caches.column_arrays;
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
 
@@ -90,8 +91,9 @@ impl BlockReadContext {
 
                 // first, check in memory table data cache
                 // column_array_cache
+                // Bytes are reported as from memory, not from the data cache.
                 if let Some(cache_array) =
-                    column_array_cache.get_sized(&column_array_cache_key, len)
+                    column_array_cache.lookup(column_array_cache_key.as_ref())
                 {
                     // Record bytes scanned from memory cache (table data only)
                     Profile::record_usize_profile(
@@ -101,10 +103,13 @@ impl BlockReadContext {
                     cached_column_array.push((*column_id, cache_array));
                     continue;
                 }
+                if column_array_cache.is_enabled() {
+                    metrics_inc_cache_miss_bytes(len, column_array_cache.name());
+                }
 
                 // and then, check on disk table data cache
                 if let Some(cached_column_raw_data) =
-                    column_data_cache.get_sized(&column_cache_key, len)
+                    column_data_cache.lookup_sized(column_cache_key.as_ref(), len)
                 {
                     cached_column_data.push((*column_id, cached_column_raw_data));
                     continue;
@@ -151,8 +156,8 @@ impl BlockReadContext {
                     .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
                 let data = chunk_data.slice(range.clone());
 
-                column_data_cache.insert(
-                    column_cache_key.as_ref().to_owned(),
+                column_data_cache.fill(
+                    column_cache_key.as_ref(),
                     ColumnData::from_merge_io_read_result(data.to_vec()),
                 );
             }

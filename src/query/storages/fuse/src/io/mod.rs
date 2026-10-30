@@ -22,6 +22,7 @@ mod write;
 
 pub use cache::FuseCaches;
 pub use cache::IndexMetaCache;
+pub use cache::InvertedIndexCache;
 pub use cache::SegmentCache;
 pub use cache::SnapshotCache;
 pub use cache::SnapshotKey;

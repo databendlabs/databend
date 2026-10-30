@@ -14,7 +14,6 @@
 
 pub mod disk_cache;
 mod disk_cache_builder;
-mod hybrid_cache;
 mod memory_cache;
 
 pub use disk_cache::DiskCacheKey;
@@ -26,6 +25,4 @@ pub use disk_cache::io_result::Result as DiskCacheResult;
 pub use disk_cache_builder::DiskCacheAccessor;
 pub use disk_cache_builder::DiskCacheBuilder;
 pub use disk_cache_builder::TableDataCacheKey;
-pub use hybrid_cache::HybridCache;
-pub use hybrid_cache::HybridCacheExt;
 pub use memory_cache::InMemoryLruCache;

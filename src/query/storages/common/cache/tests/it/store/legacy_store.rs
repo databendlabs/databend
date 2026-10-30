@@ -80,6 +80,32 @@ fn test_vector_index_keeps_held_values() {
     assert!(cache.put("d", live.item(100)).is_charged());
 }
 
+/// Ported from the removed `VectorIndexCache`: an oversized index is returned uncached without
+/// evicting hot ones, and an evicted index stays charged until its last reader drops it.
+#[test]
+fn test_vector_index_oversized_and_evicted_while_held() {
+    let store = legacy(&[(CacheKind::VectorIndex, LegacyCapacity::Bytes(200))]);
+    let cache = cache(&store, CacheKind::VectorIndex);
+    let live = Live::default();
+    drop(cache.put("hot", live.item(100)));
+    let large = cache.put("large", live.item(300));
+    assert!(!large.is_charged());
+    assert!(cache.contains("hot"));
+    assert!(!cache.contains("large"));
+    drop(large);
+    assert_eq!(store.kind_stats(CacheKind::VectorIndex).resident, 100);
+
+    let reader = cache.lookup("hot").unwrap();
+    let another_reader = reader.clone();
+    assert!(cache.evict("hot"));
+    let stats = store.kind_stats(CacheKind::VectorIndex);
+    assert_eq!((stats.items, stats.resident), (0, 100));
+    drop(reader);
+    assert_eq!(store.kind_stats(CacheKind::VectorIndex).resident, 100);
+    drop(another_reader);
+    assert_eq!(store.kind_stats(CacheKind::VectorIndex).resident, 0);
+}
+
 #[test]
 fn test_unconfigured_kind_is_disabled() {
     let store = legacy(&[]);

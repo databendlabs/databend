@@ -62,7 +62,7 @@ impl IndexLoadSpec for VectorIndexLoadSpec {
     }
 
     // Raw HNSW component bytes are not cached: the decoded index is kept in
-    // `VectorIndexCache`, so caching the bytes as well would store it twice.
+    // `FuseCaches::vector_indexes`, so caching the bytes as well would store it twice.
     fn file_cache(_caches: &FuseCaches) -> Option<&MemCache<Self::File>> {
         None
     }

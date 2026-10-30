@@ -29,8 +29,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visitor::ValueVisitor;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CachedColumnArray;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -48,6 +46,7 @@ pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
+use crate::io::FuseCaches;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
@@ -99,11 +98,9 @@ impl BlockReader {
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
-        let array_cache = if self.put_cache && !has_selection {
-            CacheManager::instance().get_table_data_array_cache()
-        } else {
-            None
-        };
+        let caches = FuseCaches::instance();
+        let array_cache = Some(&caches.column_arrays)
+            .filter(|cache| self.put_cache && !has_selection && cache.is_enabled());
 
         for ((i, field), column_node) in self
             .projected_schema
@@ -134,7 +131,7 @@ impl BlockReader {
                     // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     // Nested columns are neither cached nor encoded.
-                    let cache = array_cache.as_ref().filter(|_| !column_node.is_nested);
+                    let cache = array_cache.filter(|_| !column_node.is_nested);
                     let cache_key = || {
                         let meta = column_metas.get(&field.column_id).unwrap();
                         let (offset, len) = meta.offset_length();
@@ -151,8 +148,8 @@ impl BlockReader {
                             let column = encoding.encode(arrow_array, &data_type)?;
                             if let Some(cache) = cache {
                                 let memory_size = column.memory_size(false);
-                                cache.insert(
-                                    cache_key().into(),
+                                cache.fill(
+                                    cache_key().as_ref(),
                                     (CachedColumnArray::Column(column.clone()), memory_size),
                                 );
                             }
@@ -161,8 +158,8 @@ impl BlockReader {
                         None => {
                             if let Some(cache) = cache {
                                 let array_memory_size = arrow_array.get_array_memory_size();
-                                cache.insert(
-                                    cache_key().into(),
+                                cache.fill(
+                                    cache_key().as_ref(),
                                     (arrow_array.clone().into(), array_memory_size),
                                 );
                             }

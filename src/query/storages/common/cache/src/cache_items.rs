@@ -38,8 +38,6 @@ pub use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 pub use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
 pub use parquet::file::metadata::ParquetMetaData;
 
-use crate::HybridCache;
-
 pub struct ColumnData(Bytes);
 
 impl ColumnData {
@@ -60,7 +58,6 @@ impl ColumnData {
     }
 }
 
-pub type ColumnDataCache = HybridCache<ColumnData>;
 impl TryFrom<&ColumnData> for Vec<u8> {
     type Error = ErrorCode;
     fn try_from(value: &ColumnData) -> Result<Self, Self::Error> {

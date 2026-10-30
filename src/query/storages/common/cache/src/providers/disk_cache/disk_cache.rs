@@ -415,4 +415,12 @@ pub mod io_result {
 
 use io_result::*;
 
-use crate::caches::FileSize;
+/// Bytes of one disk cache file, the unit the disk LRU accounts in.
+pub(crate) struct FileSize(pub u64);
+
+impl From<FileSize> for CacheValue<FileSize> {
+    fn from(value: FileSize) -> Self {
+        let bytes = value.0 as usize;
+        CacheValue::new(value, bytes)
+    }
+}

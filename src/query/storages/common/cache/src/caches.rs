@@ -20,25 +20,7 @@ use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
 use databend_common_expression::Column;
 
-use crate::CacheAccessor;
-use crate::InMemoryLruCache;
 pub use crate::cache_items::*;
-use crate::manager::CacheManager;
-use crate::providers::HybridCache;
-
-/// Count-limited cache of complete persisted raw-bundle footers.
-pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
-/// Byte-limited cache of term dictionaries and small fieldnorm/fast components.
-/// Large `.fieldnorm` / `.fast` files are stored as payload pages instead.
-pub type InvertedIndexLookupCache = HybridCache<InvertedIndexLookupBytes>;
-/// Byte-limited cache of postings, positions, store, and other payload pages.
-pub type InvertedIndexPayloadCache = HybridCache<InvertedIndexPayloadBytes>;
-/// Memory-only cache of complete `.idx` and `.pos` components. Kept separate from pages so
-/// large full warmups cannot evict frequently accessed small posting ranges.
-pub type InvertedIndexFullPayloadCache = InMemoryLruCache<InvertedIndexPayloadBytes>;
-
-/// In memory object cache of parquet FileMetaData of external parquet rs files
-pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
 
 pub struct IcebergTableCacheValue {
     table: Arc<dyn Table>,
@@ -79,12 +61,8 @@ impl IcebergTableCacheValue {
     }
 }
 
-pub type IcebergTableCache = InMemoryLruCache<IcebergTableCacheValue>;
-
-/// In memory object cache of table column array
-pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
-pub type ArrayRawDataUncompressedSize = usize;
-pub type SizedColumnArray = (CachedColumnArray, ArrayRawDataUncompressedSize);
+/// A deserialized column and its uncompressed size in bytes.
+pub type SizedColumnArray = (CachedColumnArray, usize);
 
 /// A deserialized column kept in the in-memory column array cache.
 #[derive(Clone, Debug)]
@@ -98,30 +76,6 @@ pub enum CachedColumnArray {
 impl From<ArrayRef> for CachedColumnArray {
     fn from(array: ArrayRef) -> Self {
         CachedColumnArray::Arrow(array)
-    }
-}
-
-// Bind Type of cached objects to Caches
-//
-// The `Cache` should return
-// - cache item of Type `T`
-// - and implement `CacheAccessor` properly
-pub trait CachedObject<T> {
-    type Cache: CacheAccessor<V = T>;
-    fn cache() -> Option<Self::Cache>;
-}
-
-impl CachedObject<IcebergTableCacheValue> for IcebergTableCacheValue {
-    type Cache = IcebergTableCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_iceberg_table_cache()
-    }
-}
-
-impl CachedObject<ParquetMetaData> for ParquetMetaData {
-    type Cache = ParquetMetaDataCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_parquet_meta_data_cache()
     }
 }
 
@@ -140,84 +94,6 @@ impl<T> CacheValue<T> {
 
     pub fn get_inner(&self) -> Arc<T> {
         self.inner.clone()
-    }
-
-    pub(crate) fn is_shared(&self) -> bool {
-        Arc::strong_count(&self.inner) > 1
-    }
-}
-
-impl From<IcebergTableCacheValue> for CacheValue<IcebergTableCacheValue> {
-    fn from(value: IcebergTableCacheValue) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<ColumnData> for CacheValue<ColumnData> {
-    fn from(value: ColumnData) -> Self {
-        CacheValue {
-            mem_bytes: value.size(),
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<InvertedIndexMeta> for CacheValue<InvertedIndexMeta> {
-    fn from(value: InvertedIndexMeta) -> Self {
-        CacheValue {
-            mem_bytes: value.memory_size(),
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<InvertedIndexLookupBytes> for CacheValue<InvertedIndexLookupBytes> {
-    fn from(value: InvertedIndexLookupBytes) -> Self {
-        CacheValue {
-            mem_bytes: std::mem::size_of::<InvertedIndexLookupBytes>() + value.data.len(),
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<InvertedIndexPayloadBytes> for CacheValue<InvertedIndexPayloadBytes> {
-    fn from(value: InvertedIndexPayloadBytes) -> Self {
-        CacheValue {
-            mem_bytes: std::mem::size_of::<InvertedIndexPayloadBytes>() + value.data.len(),
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<ParquetMetaData> for CacheValue<ParquetMetaData> {
-    fn from(value: ParquetMetaData) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<SizedColumnArray> for CacheValue<SizedColumnArray> {
-    fn from(value: SizedColumnArray) -> Self {
-        CacheValue {
-            mem_bytes: value.1,
-            inner: Arc::new(value),
-        }
-    }
-}
-
-pub struct FileSize(pub u64);
-
-impl From<FileSize> for CacheValue<FileSize> {
-    fn from(value: FileSize) -> Self {
-        CacheValue {
-            mem_bytes: value.0 as usize,
-            inner: Arc::new(value),
-        }
     }
 }
 

@@ -135,7 +135,8 @@ impl CacheManager {
                     name: disk.name().to_string(),
                     kind: Some(kind),
                     pool: None,
-                    enabled: self.store.is_enabled(kind),
+                    // Works without the memory tier.
+                    enabled: true,
                     num_items: disk.len() as u64,
                     size: disk.bytes_size(),
                     in_cache_size: disk.bytes_size(),

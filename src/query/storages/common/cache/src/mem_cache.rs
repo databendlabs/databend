@@ -40,6 +40,7 @@ use crate::reader::Reader;
 use crate::single_flight::SingleFlight;
 use crate::store::InsertMode;
 use crate::store::InsertOutcome;
+use crate::store::KindStats;
 use crate::store::KindStore;
 
 struct DiskTier<T> {
@@ -140,8 +141,18 @@ impl<T: CachedItem> MemCache<T> {
     }
 
     /// Whether values of this kind can be cached at all; lets writers skip building them.
+    /// True with only the disk tier: as before the refactor, a memory capacity of 0 leaves
+    /// the disk tier working.
     pub fn is_enabled(&self) -> bool {
+        self.memory_enabled() || self.disk_allowed()
+    }
+
+    fn memory_enabled(&self) -> bool {
         self.store.is_enabled(self.kind)
+    }
+
+    fn disk_allowed(&self) -> bool {
+        self.disk.as_ref().is_some_and(|d| d.allowed())
     }
 
     pub fn is_read_only(&self) -> bool {
@@ -156,6 +167,11 @@ impl<T: CachedItem> MemCache<T> {
         self.kind.legacy_name()
     }
 
+    /// Items, bytes and capacity of the kind's memory tier.
+    pub fn stats(&self) -> KindStats {
+        self.store.kind_stats(self.kind)
+    }
+
     pub fn lookup(&self, key: &str) -> Option<CacheRef<T>> {
         self.lookup_tiers(key, None)
     }
@@ -166,12 +182,11 @@ impl<T: CachedItem> MemCache<T> {
     }
 
     pub fn contains(&self, key: &str) -> bool {
-        self.store.is_enabled(self.kind)
-            && (self.store.contains(self.kind, key)
-                || self
-                    .disk
-                    .as_ref()
-                    .is_some_and(|d| d.allowed() && d.cache.contains_key(key)))
+        (self.memory_enabled() && self.store.contains(self.kind, key))
+            || self
+                .disk
+                .as_ref()
+                .is_some_and(|d| d.allowed() && d.cache.contains_key(key))
     }
 
     pub async fn get<R: Reader<Item = T>>(&self, reader: &R, key: R::Key) -> Result<CacheRef<T>> {
@@ -186,7 +201,7 @@ impl<T: CachedItem> MemCache<T> {
             Box::pin(self.flight.run(&cache_key, async {
                 let start = Instant::now();
                 let value = reader.read(&key).await?;
-                if self.store.is_enabled(self.kind) {
+                if self.is_enabled() {
                     let millis = start.elapsed().as_millis() as u64;
                     metrics_inc_cache_miss_load_millisecond(millis, self.name());
                 }
@@ -223,8 +238,8 @@ impl<T: CachedItem> MemCache<T> {
     }
 
     fn lookup_tiers(&self, key: &str, len: Option<u64>) -> Option<CacheRef<T>> {
-        if !self.store.is_enabled(self.kind) {
-            return None;
+        if !self.memory_enabled() {
+            return self.lookup_disk(key);
         }
         let name = self.name();
         metrics_inc_cache_access_count(1, name);
@@ -256,23 +271,31 @@ impl<T: CachedItem> MemCache<T> {
             return Some(hit);
         }
         metrics_inc_cache_miss_count(1, name);
-
-        if let Some(value) = self.disk.as_ref().and_then(|d| d.read(key)) {
-            return Some(self.store_value(key, value, InsertMode::Fill, false));
-        }
-        if let Some(len) = len {
+        let hit = self.lookup_disk(key);
+        if hit.is_none()
+            && let Some(len) = len
+        {
             metrics_inc_cache_miss_bytes(len, name);
         }
-        None
+        hit
+    }
+
+    /// A disk hit refills the memory tier when it is enabled. The disk cache records its own
+    /// hits and bytes.
+    fn lookup_disk(&self, key: &str) -> Option<CacheRef<T>> {
+        let value = self.disk.as_ref().and_then(|d| d.read(key))?;
+        Some(self.store_value(key, value, InsertMode::Fill, false))
     }
 
     fn store_value(&self, key: &str, value: T, mode: InsertMode, to_disk: bool) -> CacheRef<T> {
-        let skip = mode == InsertMode::Fill && self.read_only;
-        if skip || !self.store.is_enabled(self.kind) {
+        if mode == InsertMode::Fill && self.read_only {
             return CacheRef::new(value);
         }
         if to_disk && let Some(disk) = &self.disk {
             disk.write(key, &value);
+        }
+        if !self.memory_enabled() {
+            return CacheRef::new(value);
         }
         let bytes = value.mem_bytes();
         let value = CacheRef::new(value);

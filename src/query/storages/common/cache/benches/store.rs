@@ -22,6 +22,7 @@ use std::sync::LazyLock;
 use bytes::Bytes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::MemCache;
@@ -65,10 +66,20 @@ fn next_key() -> &'static str {
     &KEY_NAMES[i % KEYS]
 }
 
-static CURRENT: LazyLock<InMemoryLruCache<ColumnData>> = LazyLock::new(|| {
+/// The value as stored by the pre-refactor caches.
+struct Current(ColumnData);
+
+impl From<Current> for CacheValue<Current> {
+    fn from(value: Current) -> Self {
+        let bytes = value.0.size();
+        CacheValue::new(value, bytes)
+    }
+}
+
+static CURRENT: LazyLock<InMemoryLruCache<Current>> = LazyLock::new(|| {
     let cache = InMemoryLruCache::with_bytes_capacity("bench".to_string(), CAP);
     for key in KEY_NAMES.iter() {
-        cache.insert(key.clone(), value());
+        cache.insert(key.clone(), Current(value()));
     }
     cache
 });

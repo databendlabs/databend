@@ -37,7 +37,7 @@ use crate::store::kind_store::RejectReason;
 use crate::store::kind_store::ShrinkReport;
 use crate::store::legacy_capacities::legacy_unit;
 
-/// Kinds released under memory pressure, matching `CacheManager::release_cache_memory(Basic)`.
+/// Kinds released under memory pressure: the ones the pre-refactor `release_cache_memory(Basic)` cleared.
 const RECLAIMABLE: [CacheKind; 7] = [
     CacheKind::ColumnArray,
     CacheKind::SegmentBlockMetas,

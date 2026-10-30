@@ -28,17 +28,8 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_metrics::cache::get_cache_access_count;
-use databend_common_metrics::cache::get_cache_hit_count;
-use databend_common_metrics::cache::get_cache_miss_count;
 use databend_common_storages_fuse::TableContext;
-use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::CacheValue;
-use databend_storages_common_cache::DiskCacheAccessor;
-use databend_storages_common_cache::HybridCache;
-use databend_storages_common_cache::InMemoryLruCache;
-use databend_storages_common_cache::Unit;
 use databend_storages_common_cache::cache_manager::CacheRow;
 
 use crate::SyncOneBlockSystemTable;
@@ -73,79 +64,9 @@ impl SyncSystemTable for CachesTable {
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_node = ctx.get_cluster().local_id.clone();
-        let cache_manager = CacheManager::instance();
-        let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
-        let inverted_index_lookup_cache = cache_manager.get_inverted_index_lookup_cache();
-        let inverted_index_payload_cache = cache_manager.get_inverted_index_payload_cache();
-        let inverted_index_full_payload_cache =
-            cache_manager.get_inverted_index_full_payload_cache();
-        let vector_index_cache = cache_manager.get_vector_index_cache();
-        let parquet_meta_data_cache = cache_manager.get_parquet_meta_data_cache();
-        let column_data_cache = cache_manager.get_column_data_cache();
-        let table_column_array_cache = cache_manager.get_table_data_array_cache();
-        let iceberg_table_cache = cache_manager.get_iceberg_table_cache();
-
         let mut columns = CachesTableColumns::default();
-
-        for row in cache_manager.migrated_cache_rows() {
+        for row in CacheManager::instance().cache_rows() {
             Self::append_cache_row(row, &local_node, &mut columns);
-        }
-
-        if let Some(column_data_cache) = column_data_cache {
-            Self::append_rows_of_hybrid_cache(&column_data_cache, &local_node, &mut columns);
-        }
-
-        if let Some(inverted_index_meta_cache) = inverted_index_meta_cache {
-            Self::append_rows_of_hybrid_cache(
-                &inverted_index_meta_cache,
-                &local_node,
-                &mut columns,
-            );
-        }
-
-        if let Some(inverted_index_lookup_cache) = inverted_index_lookup_cache {
-            Self::append_rows_of_hybrid_cache(
-                &inverted_index_lookup_cache,
-                &local_node,
-                &mut columns,
-            );
-        }
-
-        if let Some(inverted_index_payload_cache) = inverted_index_payload_cache {
-            Self::append_rows_of_hybrid_cache(
-                &inverted_index_payload_cache,
-                &local_node,
-                &mut columns,
-            );
-        }
-
-        if let Some(inverted_index_full_payload_cache) = inverted_index_full_payload_cache {
-            Self::append_row(
-                &inverted_index_full_payload_cache,
-                &local_node,
-                &mut columns,
-            );
-        }
-
-        if let Some(vector_index_cache) = vector_index_cache {
-            Self::append_memory_cache_row(
-                &vector_index_cache,
-                Unit::Bytes,
-                &local_node,
-                &mut columns,
-            );
-        }
-
-        if let Some(parquet_meta_data_cache) = parquet_meta_data_cache {
-            Self::append_row(&parquet_meta_data_cache, &local_node, &mut columns);
-        }
-
-        if let Some(table_column_array_cache) = table_column_array_cache {
-            Self::append_row(&table_column_array_cache, &local_node, &mut columns);
-        }
-
-        if let Some(iceberg_table_cache) = iceberg_table_cache {
-            Self::append_row(&iceberg_table_cache, &local_node, &mut columns);
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -191,45 +112,6 @@ impl CachesTable {
         SyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    fn append_row<V: Into<CacheValue<V>>>(
-        cache: &InMemoryLruCache<V>,
-        local_node: &str,
-        columns: &mut CachesTableColumns,
-    ) {
-        Self::append_memory_cache_row(cache, cache.unit(), local_node, columns);
-    }
-
-    fn append_memory_cache_row(
-        cache: &impl CacheAccessor,
-        unit: Unit,
-        local_node: &str,
-        columns: &mut CachesTableColumns,
-    ) {
-        columns.nodes.push(local_node.to_string());
-        columns.names.push(cache.name().to_string());
-        columns.num_items.push(cache.len() as u64);
-        columns.size.push(cache.bytes_size());
-
-        match unit {
-            Unit::Bytes => {
-                columns.unit.push(unit.to_string());
-                columns.capacity.push(cache.bytes_capacity());
-            }
-            Unit::Count => {
-                columns.unit.push(unit.to_string());
-                columns.capacity.push(cache.items_capacity());
-            }
-        }
-
-        let access = get_cache_access_count(cache.name());
-        let hit = get_cache_hit_count(cache.name());
-        let miss = get_cache_miss_count(cache.name());
-
-        columns.access.push(access);
-        columns.hit.push(hit);
-        columns.miss.push(miss);
-    }
-
     fn append_cache_row(row: CacheRow, local_node: &str, columns: &mut CachesTableColumns) {
         columns.nodes.push(local_node.to_string());
         columns.names.push(row.name);
@@ -240,38 +122,5 @@ impl CachesTable {
         columns.access.push(row.access);
         columns.hit.push(row.hit);
         columns.miss.push(row.miss);
-    }
-
-    fn append_on_disk_cache_row(
-        cache: &DiskCacheAccessor,
-        local_node: &str,
-        columns: &mut CachesTableColumns,
-    ) {
-        let name = cache.name();
-        columns.nodes.push(local_node.to_owned());
-        columns.names.push(name.to_string());
-        columns.num_items.push(cache.len() as u64);
-        columns.size.push(cache.bytes_size());
-        columns.capacity.push(cache.bytes_capacity());
-        columns.unit.push(Unit::Bytes.to_string());
-        let access = get_cache_access_count(name);
-        let hit = get_cache_hit_count(name);
-        let miss = get_cache_miss_count(name);
-        columns.access.push(access);
-        columns.hit.push(hit);
-        columns.miss.push(miss);
-    }
-
-    fn append_rows_of_hybrid_cache<V: Into<CacheValue<V>>>(
-        cache: &HybridCache<V>,
-        local_node: &str,
-        columns: &mut CachesTableColumns,
-    ) {
-        if let Some(in_memory_cache) = cache.in_memory_cache() {
-            Self::append_row(in_memory_cache, local_node, columns);
-        }
-        if let Some(on_disk_cache) = cache.on_disk_cache() {
-            Self::append_on_disk_cache_row(on_disk_cache, local_node, columns);
-        }
     }
 }

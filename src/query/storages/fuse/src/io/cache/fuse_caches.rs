@@ -18,9 +18,15 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachedVectorIndex;
+use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_cache::cache_manager::CacheManager;
 use databend_storages_common_index::BloomIndexMeta;
+use databend_storages_common_index::InvertedIndexLookupBytes;
+use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_index::InvertedIndexPayloadBytes;
 use databend_storages_common_index::SpatialIndexFile;
 use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_index::VectorIndexFile;
@@ -44,6 +50,37 @@ pub struct FuseCaches {
     pub vector_refine_pages: MemCache<VectorIndexFile>,
     /// Pruning results of deterministic scans (`enable_prune_cache`).
     pub prune_results: MemCache<(PartStatistics, Partitions)>,
+    pub inverted: InvertedIndexCache,
+    /// Decoded HNSW indexes. Readers holding one keep it charged.
+    pub vector_indexes: MemCache<CachedVectorIndex>,
+    /// Raw column bytes, keyed by `TableDataCacheKey` without the type.
+    pub column_data: MemCache<ColumnData>,
+    /// Deserialized columns, keyed by `TableDataCacheKey` with the type.
+    pub column_arrays: MemCache<SizedColumnArray>,
+}
+
+/// Inverted index bundles: the footer, then whole lookup files or 64 KiB pages.
+#[derive(Clone)]
+pub struct InvertedIndexCache {
+    /// Persisted footers, keyed by `inverted_index_meta_cache_key`.
+    pub meta: MemCache<InvertedIndexMeta>,
+    /// Term dictionaries and small fieldnorm / fast files, whole or paged.
+    pub lookup: MemCache<InvertedIndexLookupBytes>,
+    /// Pages of postings, positions, store and large fieldnorm / fast files.
+    pub payload: MemCache<InvertedIndexPayloadBytes>,
+    /// Complete `.idx` / `.pos` components, apart from pages so warmups cannot evict hot pages.
+    pub full_payload: MemCache<InvertedIndexPayloadBytes>,
+}
+
+impl InvertedIndexCache {
+    pub fn read_only(&self) -> Self {
+        InvertedIndexCache {
+            meta: self.meta.read_only(),
+            lookup: self.lookup.read_only(),
+            payload: self.payload.read_only(),
+            full_payload: self.full_payload.read_only(),
+        }
+    }
 }
 
 /// Footers of index files, keyed by index file path. Entries are `Arc`, like snapshots.
@@ -89,6 +126,15 @@ impl FuseCaches {
             spatial_files: manager.hybrid_cache(CacheKind::SpatialIndex),
             vector_refine_pages: manager.hybrid_cache(CacheKind::VectorRefine),
             prune_results: manager.mem_cache(CacheKind::PruneResult),
+            inverted: InvertedIndexCache {
+                meta: manager.hybrid_cache(CacheKind::InvertedIndexMeta),
+                lookup: manager.hybrid_cache(CacheKind::InvertedIndexLookup),
+                payload: manager.hybrid_cache(CacheKind::InvertedIndexPayload),
+                full_payload: manager.mem_cache(CacheKind::InvertedIndexFullPayload),
+            },
+            vector_indexes: manager.mem_cache(CacheKind::VectorIndex),
+            column_data: manager.hybrid_cache(CacheKind::ColumnData),
+            column_arrays: manager.mem_cache(CacheKind::ColumnArray),
         })
     }
 
@@ -107,6 +153,10 @@ impl FuseCaches {
             spatial_files: self.spatial_files.read_only(),
             vector_refine_pages: self.vector_refine_pages.read_only(),
             prune_results: self.prune_results.read_only(),
+            inverted: self.inverted.read_only(),
+            vector_indexes: self.vector_indexes.read_only(),
+            column_data: self.column_data.read_only(),
+            column_arrays: self.column_arrays.read_only(),
         })
     }
 

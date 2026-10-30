@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::intrinsics::unlikely;
 use std::sync::Arc;
 
@@ -22,10 +23,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableField;
 use databend_common_storage::read_metadata_async;
+use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::InMemoryCacheReader;
-use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache::Loader;
+use databend_storages_common_cache::Reader;
 use opendal::Operator;
 use parquet::basic::LogicalType;
 use parquet::file::metadata::ParquetMetaData;
@@ -44,14 +44,15 @@ pub async fn read_metadata_async_cached(
 ) -> Result<Arc<ParquetMetaData>> {
     let info = operator.info();
     let location = format!("{dedup_key}:{}/{}/{}", info.name(), info.root(), path);
-    let reader = MetaReader::meta_data_reader(operator.clone(), location.len() - path.len());
-    let load_params = LoadParams {
-        location,
-        len_hint: file_size,
-        ver: 0,
-        put_cache: true,
+    let reader = ParquetMetaReader {
+        operator: operator.clone(),
+        prefix_len: location.len() - path.len(),
     };
-    reader.read(&load_params).await
+    let cache = CacheManager::instance()
+        .kind_manager()
+        .mem_cache::<Arc<ParquetMetaData>>(CacheKind::ParquetMeta);
+    let meta = cache.get(&reader, (location, file_size)).await?;
+    Ok(Arc::clone(&meta))
 }
 
 #[async_backtrace::framed]
@@ -536,29 +537,31 @@ fn check_memory_usage(max_memory_usage: u64) -> Result<()> {
     Ok(())
 }
 
-pub struct LoaderWrapper<T>(T, usize);
-pub type ParquetMetaReader = InMemoryCacheReader<ParquetMetaData, LoaderWrapper<Operator>>;
-
-pub struct MetaReader;
-impl MetaReader {
-    pub fn meta_data_reader(dal: Operator, prefix_len: usize) -> ParquetMetaReader {
-        ParquetMetaReader::new(
-            CacheManager::instance().get_parquet_meta_data_cache(),
-            LoaderWrapper(dal, prefix_len),
-        )
-    }
+/// Reads the footer of an external parquet file. The key is the cache location (the file path
+/// behind a `prefix_len`-byte prefix that names the storage) and, when known, the file size.
+struct ParquetMetaReader {
+    operator: Operator,
+    prefix_len: usize,
 }
 
-#[async_trait::async_trait]
-impl Loader<ParquetMetaData> for LoaderWrapper<Operator> {
+impl Reader for ParquetMetaReader {
+    type Key = (String, Option<u64>);
+    type Item = Arc<ParquetMetaData>;
+
+    fn cache_key<'a>(&self, key: &'a Self::Key) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<ParquetMetaData> {
-        let location = &params.location[self.1..];
-        let size = match params.len_hint {
-            Some(v) => v,
-            None => self.0.stat(location).await?.content_length(),
+    async fn read(&self, (location, size): &Self::Key) -> Result<Arc<ParquetMetaData>> {
+        let path = &location[self.prefix_len..];
+        let size = match size {
+            Some(v) => *v,
+            None => self.operator.stat(path).await?.content_length(),
         };
-        read_metadata_async(location, &self.0, Some(size)).await
+        Ok(Arc::new(
+            read_metadata_async(path, &self.operator, Some(size)).await?,
+        ))
     }
 }
 

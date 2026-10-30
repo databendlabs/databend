@@ -19,6 +19,7 @@ mod mem_bytes_accuracy;
 mod mem_cache;
 mod providers;
 mod store;
+mod ttl_reader;
 
 #[global_allocator]
 static ALLOCATOR: mem_bytes_accuracy::CountingAlloc = mem_bytes_accuracy::CountingAlloc;

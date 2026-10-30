@@ -35,7 +35,6 @@ use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
 use databend_common_storage::MutationStatus;
-use databend_storages_common_cache::LoadParams;
 use iceberg::arrow::schema_to_arrow_schema;
 use iceberg::spec::DataFileFormat;
 use iceberg::spec::Literal;
@@ -546,16 +545,9 @@ impl AsyncSink for IcebergCommitSink {
             &self.db_name,
             &self.table_name,
         );
-        let params = LoadParams {
-            location: cache_key,
-            len_hint: None,
-            ver: 0,
-            put_cache: false,
-        };
-
         let reader =
             cache::iceberg_table_cache_reader(self.catalog.clone(), self.catalog_info.clone());
-        reader.remove(&params);
+        reader.remove(&cache_key);
 
         Ok(())
     }
