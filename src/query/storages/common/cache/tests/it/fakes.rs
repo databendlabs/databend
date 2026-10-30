@@ -26,12 +26,28 @@ use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::kinds::bloom;
+use databend_storages_common_cache::kinds::column;
+use databend_storages_common_cache::kinds::segment;
+use databend_storages_common_cache::kinds::table;
 use databend_storages_common_cache::shared::SharedStore;
 
-pub const META: CacheKind = CacheKind::TableSnapshot;
-pub const META2: CacheKind = CacheKind::SegmentInfo;
-pub const INDEX: CacheKind = CacheKind::BloomFilter;
-pub const DATA: CacheKind = CacheKind::ColumnData;
+/// Kinds the tests store `Item`s in, one or two per pool.
+pub fn meta_kind() -> CacheKind {
+    CacheKind::of::<table::Snapshot>()
+}
+
+pub fn meta2_kind() -> CacheKind {
+    CacheKind::of::<segment::Info>()
+}
+
+pub fn index_kind() -> CacheKind {
+    CacheKind::of::<bloom::Filter>()
+}
+
+pub fn data_kind() -> CacheKind {
+    CacheKind::of::<column::Data>()
+}
 
 /// A cached value of a fixed size that counts how many instances are alive.
 pub struct Item {
@@ -124,8 +140,8 @@ pub fn shared_store(meta: usize, index: usize, data: usize) -> Arc<dyn KindStore
     Arc::new(SharedStore::new(
         PoolCaps { meta, index, data },
         [
-            (CacheKind::ColumnData, KindLimit::UNLIMITED),
-            (CacheKind::ColumnArray, KindLimit::UNLIMITED),
+            (CacheKind::of::<column::Data>(), KindLimit::UNLIMITED),
+            (CacheKind::of::<column::Array>(), KindLimit::UNLIMITED),
         ],
         4,
     ))

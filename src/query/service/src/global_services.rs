@@ -207,7 +207,7 @@ impl GlobalServices {
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
-        FuseCaches::init(CacheManager::instance().kind_manager());
+        FuseCaches::init(&CacheManager::instance());
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config
@@ -256,10 +256,11 @@ impl GlobalServices {
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
         // The legacy cache backend keeps its old behavior: caches are not shrunk under pressure.
-        if CacheManager::instance().is_shared() {
+        if config.cache.shared_memory_enabled {
             let cache_manager = CacheManager::instance();
-            GLOBAL_QUERIES_MANAGER
-                .set_reclaim_handle(move |relieved| cache_manager.shrink_for_pressure(relieved));
+            GLOBAL_QUERIES_MANAGER.set_reclaim_handle(move |relieved| {
+                cache_manager.shrink_for_pressure(relieved).freed
+            });
         }
 
         Ok(())

@@ -16,12 +16,15 @@ use std::sync::Arc;
 
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
+use databend_common_config::CacheConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::warn;
 use parking_lot::Mutex;
 
-use super::config::legacy_unit;
+use crate::CacheKind;
 use crate::KindLimit;
+use crate::Pool;
 use crate::Unit;
 use crate::backend::InsertMode;
 use crate::backend::InsertOutcome;
@@ -34,19 +37,8 @@ use crate::backend::entry::Entry;
 use crate::handle::cache_ref::ErasedValue;
 use crate::handle::cache_ref::Reservation;
 use crate::handle::cache_ref::Usage;
-use crate::registry::CacheKind;
-use crate::registry::Pool;
-
-/// Kinds released under memory pressure: the ones the pre-refactor `release_cache_memory(Basic)` cleared.
-const RECLAIMABLE: [CacheKind; 7] = [
-    CacheKind::ColumnArray,
-    CacheKind::SegmentBlockMetas,
-    CacheKind::ColumnData,
-    CacheKind::InvertedIndexPayload,
-    CacheKind::InvertedIndexFullPayload,
-    CacheKind::VectorIndex,
-    CacheKind::VectorRefine,
-];
+use crate::legacy::LegacyKind;
+use crate::legacy::LegacyKinds;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LegacyCapacity {
@@ -70,27 +62,56 @@ impl LegacyCapacity {
     }
 }
 
-struct LegacyKind {
+struct KindState {
     lru: Mutex<LruCache<String, Entry>>,
     capacity: Mutex<LegacyCapacity>,
     usage: Arc<Usage>,
+    /// `None` for kinds the legacy backend does not support; they stay disabled.
+    legacy: Option<&'static LegacyKind>,
 }
 
-/// One LRU per kind with the pre-refactor capacity rules. Only `VectorIndex` counts values
-/// still held by readers against its capacity, as before.
+impl KindState {
+    fn unit(&self) -> Unit {
+        self.legacy.map_or(Unit::Bytes, |legacy| legacy.unit)
+    }
+
+    fn counts_held_values(&self) -> bool {
+        self.legacy.is_some_and(|legacy| legacy.counts_held_values)
+    }
+}
+
+/// One LRU per kind with the pre-refactor capacity rules of `LegacyKinds`.
 pub struct LegacyStore {
-    kinds: Box<[LegacyKind]>,
+    kinds: Box<[KindState]>,
     pools: [Arc<Usage>; 3],
 }
 
 impl LegacyStore {
-    pub fn new(capacities: impl IntoIterator<Item = (CacheKind, LegacyCapacity)>) -> Self {
-        let kinds: Box<[LegacyKind]> = CacheKind::ALL
+    /// Sized by `LegacyKinds`, warning when the byte capacities exceed the memory limit.
+    pub fn from_config(config: &CacheConfig, max_server_memory_usage: u64) -> Self {
+        let capacities = LegacyKinds::global().capacities(config, max_server_memory_usage);
+        let total: u128 = capacities
             .iter()
-            .map(|_| LegacyKind {
+            .map(|(_, capacity)| match capacity {
+                LegacyCapacity::Bytes(n) => *n as u128,
+                _ => 0,
+            })
+            .sum();
+        if max_server_memory_usage > 0 && total > max_server_memory_usage as u128 {
+            warn!(
+                "[CacheManager] Cache capacities sum to {total} bytes, more than max_server_memory_usage {max_server_memory_usage}"
+            );
+        }
+        LegacyStore::new(capacities)
+    }
+
+    pub fn new(capacities: impl IntoIterator<Item = (CacheKind, LegacyCapacity)>) -> Self {
+        let kinds: Box<[KindState]> = CacheKind::all()
+            .map(|kind| KindState {
                 lru: Mutex::new(LruCache::with_bytes_capacity(usize::MAX)),
                 capacity: Mutex::new(LegacyCapacity::Disabled),
                 usage: Arc::new(Usage::default()),
+                legacy: LegacyKinds::global().get(kind),
             })
             .collect();
         for (kind, capacity) in capacities {
@@ -102,7 +123,7 @@ impl LegacyStore {
         }
     }
 
-    fn kind(&self, kind: CacheKind) -> &LegacyKind {
+    fn kind(&self, kind: CacheKind) -> &KindState {
         &self.kinds[kind.index()]
     }
 
@@ -116,6 +137,32 @@ impl LegacyStore {
         count
     }
 
+    fn set_limit(&self, kind: CacheKind, limit: KindLimit) {
+        let state = self.kind(kind);
+        let capacity = {
+            let mut capacity = state.capacity.lock();
+            *capacity = match (limit.max_bytes, state.unit()) {
+                (Some(0), _) => LegacyCapacity::Disabled,
+                (Some(n), Unit::Count) => LegacyCapacity::Items(n),
+                (Some(n), Unit::Bytes) => LegacyCapacity::Bytes(n),
+                (None, _) => LegacyCapacity::Bytes(usize::MAX),
+            };
+            *capacity
+        };
+        let removed: Vec<_> = {
+            let mut lru = state.lru.lock();
+            let mut removed = Vec::new();
+            while capacity.exceeded(&lru, 0, 0) {
+                match lru.pop_by_policy() {
+                    Some((_, entry)) => removed.push(entry),
+                    None => break,
+                }
+            }
+            removed
+        };
+        self.forget(kind, removed);
+    }
+
     fn make_room(
         &self,
         kind: CacheKind,
@@ -125,7 +172,7 @@ impl LegacyStore {
         bytes: usize,
     ) -> (Vec<Entry>, std::result::Result<(), RejectReason>) {
         let mut victims = Vec::new();
-        if kind == CacheKind::VectorIndex {
+        if self.kind(kind).counts_held_values() {
             let LegacyCapacity::Bytes(max) = capacity else {
                 return (victims, Err(RejectReason::Disabled));
             };
@@ -206,11 +253,11 @@ impl KindStore for LegacyStore {
             match room {
                 Err(reason) => (victims, Err(reason)),
                 Ok(()) => {
-                    // Charged under the lock: `VectorIndex` checks `resident` here, so
+                    // Charged under the lock: kinds counting held values check `resident` here, so
                     // concurrent inserts cannot both pass the check before either charges.
                     // Its victims are unreferenced, so they are released first: `resident`
                     // then never exceeds the capacity, not even briefly.
-                    if kind == CacheKind::VectorIndex {
+                    if state.counts_held_values() {
                         self.forget(kind, std::mem::take(&mut victims));
                     }
                     let reservation = Reservation::charge(pool.clone(), state.usage.clone(), bytes);
@@ -236,31 +283,18 @@ impl KindStore for LegacyStore {
         self.forget(kind, removed.into_iter().collect()) > 0
     }
 
-    /// The bound is interpreted in the kind's legacy unit (bytes or items).
+    /// The bound is interpreted in the kind's legacy unit (bytes or items). A kind sharing its
+    /// budget with another resizes both.
     fn set_kind_limit(&self, kind: CacheKind, limit: KindLimit) {
-        let state = self.kind(kind);
-        let capacity = {
-            let mut capacity = state.capacity.lock();
-            *capacity = match (limit.max_bytes, legacy_unit(kind)) {
-                (Some(0), _) => LegacyCapacity::Disabled,
-                (Some(n), Unit::Count) => LegacyCapacity::Items(n),
-                (Some(n), Unit::Bytes) => LegacyCapacity::Bytes(n),
-                (None, _) => LegacyCapacity::Bytes(usize::MAX),
-            };
-            *capacity
-        };
-        let removed: Vec<_> = {
-            let mut lru = state.lru.lock();
-            let mut removed = Vec::new();
-            while capacity.exceeded(&lru, 0, 0) {
-                match lru.pop_by_policy() {
-                    Some((_, entry)) => removed.push(entry),
-                    None => break,
-                }
+        let partner = self.kind(kind).legacy.and_then(|l| l.shares_budget_with);
+        match (partner, limit.max_bytes) {
+            (Some(partner), Some(total)) => {
+                let (own, other) = LegacyKind::split_budget(total);
+                self.set_limit(kind, KindLimit::bytes(own));
+                self.set_limit(partner, KindLimit::bytes(other));
             }
-            removed
-        };
-        self.forget(kind, removed);
+            _ => self.set_limit(kind, limit),
+        }
     }
 
     fn set_pool_cap(&self, _pool: Pool, _bytes: usize) -> Result<()> {
@@ -274,7 +308,7 @@ impl KindStore for LegacyStore {
         let (capacity, unit) = match *state.capacity.lock() {
             LegacyCapacity::Bytes(n) => (Some(n), Unit::Bytes),
             LegacyCapacity::Items(n) => (Some(n), Unit::Count),
-            LegacyCapacity::Disabled => (Some(0), legacy_unit(kind)),
+            LegacyCapacity::Disabled => (Some(0), state.unit()),
         };
         KindStats {
             kind,
@@ -290,32 +324,9 @@ impl KindStore for LegacyStore {
         Vec::new()
     }
 
-    fn shrink_for_pressure(&self, relieved: &dyn Fn() -> bool) -> ShrinkReport {
-        let mut report = ShrinkReport::default();
-        for kind in RECLAIMABLE {
-            let before = self.kind(kind).usage.resident();
-            let removed = {
-                let Some(mut lru) = self.kind(kind).lru.try_lock() else {
-                    continue;
-                };
-                let keys: Vec<String> = lru
-                    .iter()
-                    .filter(|(_, e)| !e.is_shared())
-                    .map(|(k, _)| k.clone())
-                    .collect();
-                keys.iter().filter_map(|k| lru.pop(k)).collect::<Vec<_>>()
-            };
-            let evicted = self.forget(kind, removed);
-            if evicted == 0 {
-                continue;
-            }
-            report.evicted += evicted;
-            report.batches += 1;
-            report.freed += before.saturating_sub(self.kind(kind).usage.resident());
-            if relieved() {
-                break;
-            }
-        }
-        report
+    /// Never reclaims: the pre-refactor caches were not shrunk under memory pressure, and the
+    /// memory manager gets a reclaim handle only with the shared backend.
+    fn shrink_for_pressure(&self, _relieved: &dyn Fn() -> bool) -> ShrinkReport {
+        ShrinkReport::default()
     }
 }

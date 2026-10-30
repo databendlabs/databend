@@ -17,42 +17,12 @@ use std::sync::Arc;
 use bytes::Bytes;
 use databend_common_exception::Result;
 
-use crate::items::*;
-
-/// Serialization for kinds that have a disk tier.
+/// Serialization of the values of kinds that have a disk tier.
 pub trait DiskCodec: Sized {
     fn encode(&self) -> Result<Vec<u8>>;
 
     fn decode(bytes: Bytes) -> Result<Self>;
 }
-
-/// Types that already convert to and from bytes for the pre-refactor hybrid caches.
-macro_rules! disk_codec_via_try_from {
-    ($($ty:ty),* $(,)?) => {$(
-        impl DiskCodec for $ty {
-            fn encode(&self) -> Result<Vec<u8>> {
-                Vec::<u8>::try_from(self)
-            }
-
-            fn decode(bytes: Bytes) -> Result<Self> {
-                Self::try_from(bytes)
-            }
-        }
-    )*};
-}
-
-disk_codec_via_try_from!(
-    BloomIndexMeta,
-    FilterImpl,
-    IndexMeta,
-    IndexFile,
-    VectorIndexMeta,
-    VirtualColumnFileMeta,
-    InvertedIndexMeta,
-    InvertedIndexLookupBytes,
-    InvertedIndexPayloadBytes,
-    ColumnData,
-);
 
 /// For kinds whose entries are handed out as `Arc<T>`.
 impl<T: DiskCodec> DiskCodec for Arc<T> {

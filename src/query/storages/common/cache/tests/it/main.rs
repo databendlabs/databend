@@ -19,6 +19,7 @@ mod invariants;
 mod legacy;
 mod manager;
 mod mem_bytes_accuracy;
+mod registry;
 mod shared;
 mod ttl;
 

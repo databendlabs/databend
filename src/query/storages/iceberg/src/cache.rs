@@ -19,11 +19,11 @@ use std::time::Duration;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::IcebergTableCacheValue;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::TTLReader;
+use databend_storages_common_cache::kinds;
 
 use crate::IcebergTable;
 use crate::credential::credential_refresh_at;
@@ -83,9 +83,7 @@ pub fn iceberg_table_cache_reader(
     catalog: Arc<dyn iceberg::Catalog>,
     info: Arc<CatalogInfo>,
 ) -> IcebergTableReader {
-    let cache = CacheManager::instance()
-        .kind_manager()
-        .mem_cache(CacheKind::IcebergTable);
+    let cache = CacheManager::instance().cache::<kinds::iceberg::Table>();
     IcebergTableReader::new(
         cache,
         IcebergTableLoader { catalog, info },

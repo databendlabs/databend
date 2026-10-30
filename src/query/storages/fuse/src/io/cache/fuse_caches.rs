@@ -17,12 +17,19 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CachedVectorIndex;
 use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::SizedColumnArray;
-use databend_storages_common_cache::cache_manager::CacheManager;
+use databend_storages_common_cache::kinds::bloom;
+use databend_storages_common_cache::kinds::column;
+use databend_storages_common_cache::kinds::inverted;
+use databend_storages_common_cache::kinds::segment;
+use databend_storages_common_cache::kinds::spatial;
+use databend_storages_common_cache::kinds::table;
+use databend_storages_common_cache::kinds::vector;
+use databend_storages_common_cache::kinds::virtual_column;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
@@ -107,34 +114,34 @@ impl FuseCaches {
     pub fn new(manager: &CacheManager) -> Arc<Self> {
         Arc::new(FuseCaches {
             snapshots: SnapshotCache {
-                snapshots: manager.mem_cache(CacheKind::TableSnapshot),
-                stats: manager.mem_cache(CacheKind::TableSnapshotStats),
+                snapshots: manager.cache::<table::Snapshot>(),
+                stats: manager.cache::<table::SnapshotStats>(),
             },
             segments: SegmentCache {
-                segments: manager.mem_cache(CacheKind::SegmentInfo),
-                column_oriented: manager.mem_cache(CacheKind::ColumnOrientedSegment),
-                block_metas: manager.mem_cache(CacheKind::SegmentBlockMetas),
-                stats: manager.mem_cache(CacheKind::SegmentStats),
+                segments: manager.cache::<segment::Info>(),
+                column_oriented: manager.cache::<segment::ColumnOriented>(),
+                block_metas: manager.cache::<segment::BlockMetas>(),
+                stats: manager.cache::<segment::Stats>(),
             },
             index_metas: IndexMetaCache {
-                bloom: manager.hybrid_cache(CacheKind::BloomIndexMeta),
-                vector: manager.hybrid_cache(CacheKind::VectorIndexMeta),
-                spatial: manager.hybrid_cache(CacheKind::SpatialIndexMeta),
-                virtual_column: manager.hybrid_cache(CacheKind::VirtualColumnMeta),
+                bloom: manager.cache::<bloom::IndexMeta>(),
+                vector: manager.cache::<vector::Meta>(),
+                spatial: manager.cache::<spatial::Meta>(),
+                virtual_column: manager.cache::<virtual_column::Meta>(),
             },
-            bloom_filters: manager.hybrid_cache(CacheKind::BloomFilter),
-            spatial_files: manager.hybrid_cache(CacheKind::SpatialIndex),
-            vector_refine_pages: manager.hybrid_cache(CacheKind::VectorRefine),
-            prune_results: manager.mem_cache(CacheKind::PruneResult),
+            bloom_filters: manager.cache::<bloom::Filter>(),
+            spatial_files: manager.cache::<spatial::Index>(),
+            vector_refine_pages: manager.cache::<vector::Refine>(),
+            prune_results: manager.cache::<table::PruneResult>(),
             inverted: InvertedIndexCache {
-                meta: manager.hybrid_cache(CacheKind::InvertedIndexMeta),
-                lookup: manager.hybrid_cache(CacheKind::InvertedIndexLookup),
-                payload: manager.hybrid_cache(CacheKind::InvertedIndexPayload),
-                full_payload: manager.mem_cache(CacheKind::InvertedIndexFullPayload),
+                meta: manager.cache::<inverted::Meta>(),
+                lookup: manager.cache::<inverted::Lookup>(),
+                payload: manager.cache::<inverted::Payload>(),
+                full_payload: manager.cache::<inverted::FullPayload>(),
             },
-            vector_indexes: manager.mem_cache(CacheKind::VectorIndex),
-            column_data: manager.hybrid_cache(CacheKind::ColumnData),
-            column_arrays: manager.mem_cache(CacheKind::ColumnArray),
+            vector_indexes: manager.cache::<vector::Index>(),
+            column_data: manager.cache::<column::Data>(),
+            column_arrays: manager.cache::<column::Array>(),
         })
     }
 

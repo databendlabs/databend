@@ -86,8 +86,9 @@ mod tests {
     use databend_common_exception::ErrorCode;
     use databend_common_expression::TableSchema;
     use databend_storages_common_cache::CacheKind;
+    use databend_storages_common_cache::CacheManager;
     use databend_storages_common_cache::Reader;
-    use databend_storages_common_cache::cache_manager::CacheManager;
+    use databend_storages_common_cache::kinds::table;
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_table_meta::meta::Statistics;
@@ -165,10 +166,13 @@ mod tests {
     fn caches(snapshot_items: usize) -> (CacheManager, Arc<FuseCaches>) {
         let store = Arc::new(LegacyStore::new([
             (
-                CacheKind::TableSnapshot,
+                CacheKind::of::<table::Snapshot>(),
                 LegacyCapacity::Items(snapshot_items),
             ),
-            (CacheKind::TableSnapshotStats, LegacyCapacity::Items(10)),
+            (
+                CacheKind::of::<table::SnapshotStats>(),
+                LegacyCapacity::Items(10),
+            ),
         ]));
         let manager = CacheManager::new(store, HashMap::new());
         let caches = FuseCaches::new(&manager);
@@ -177,11 +181,11 @@ mod tests {
 
     fn items(manager: &CacheManager, kind: CacheKind) -> usize {
         manager
-            .kind_stats()
+            .rows()
             .into_iter()
-            .find(|s| s.kind == kind)
+            .find(|row| row.kind == Some(kind))
             .unwrap()
-            .items
+            .num_items as usize
     }
 
     #[tokio::test]
@@ -202,7 +206,7 @@ mod tests {
         let files = SnapshotFiles::default();
 
         read_only.snapshots.get(&files, "s1".into(), 4).await?;
-        assert_eq!(items(&manager, CacheKind::TableSnapshot), 0);
+        assert_eq!(items(&manager, CacheKind::of::<table::Snapshot>()), 0);
 
         // Read-only views still see entries filled elsewhere, and writes still go in.
         caches.snapshots.get(&files, "s1".into(), 4).await?;
@@ -222,7 +226,7 @@ mod tests {
             assert_eq!(err.unwrap_err().code(), ErrorCode::STORAGE_NOT_FOUND);
         }
         assert_eq!(files.reads(), 2);
-        assert_eq!(items(&manager, CacheKind::TableSnapshot), 0);
+        assert_eq!(items(&manager, CacheKind::of::<table::Snapshot>()), 0);
         Ok(())
     }
 
@@ -233,7 +237,7 @@ mod tests {
         for loc in ["a", "b", "c"] {
             caches.snapshots.get(&files, loc.into(), 4).await?;
         }
-        assert_eq!(items(&manager, CacheKind::TableSnapshot), 2);
+        assert_eq!(items(&manager, CacheKind::of::<table::Snapshot>()), 2);
         assert!(!caches.snapshots.contains("a"));
 
         assert!(caches.snapshots.evict("c"));
@@ -252,12 +256,12 @@ mod tests {
             .get_stats(&StatsFiles, "loc".into(), 0)
             .await?;
         assert_eq!(stats.row_count, 0);
-        assert_eq!(items(&manager, CacheKind::TableSnapshot), 1);
-        assert_eq!(items(&manager, CacheKind::TableSnapshotStats), 1);
+        assert_eq!(items(&manager, CacheKind::of::<table::Snapshot>()), 1);
+        assert_eq!(items(&manager, CacheKind::of::<table::SnapshotStats>()), 1);
 
         // Evicting a snapshot leaves the statistics at the same location alone.
         caches.snapshots.evict("loc");
-        assert_eq!(items(&manager, CacheKind::TableSnapshotStats), 1);
+        assert_eq!(items(&manager, CacheKind::of::<table::SnapshotStats>()), 1);
         Ok(())
     }
 }

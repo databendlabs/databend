@@ -19,8 +19,8 @@ use std::sync::Arc;
 use databend_common_cache::Equivalent;
 use databend_common_cache::MemSized;
 
+use crate::CacheKind;
 use crate::handle::cache_ref::ErasedValue;
-use crate::registry::CacheKind;
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct EntryKey {

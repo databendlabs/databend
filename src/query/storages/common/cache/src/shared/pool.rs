@@ -24,13 +24,13 @@ use databend_common_cache::S3FifoConfig;
 use parking_lot::RwLock;
 use parking_lot::RwLockWriteGuard;
 
+use crate::CacheKind;
+use crate::Pool;
 use crate::backend::entry::Entry;
 use crate::backend::entry::EntryKey;
 use crate::backend::entry::KeyRef;
 use crate::handle::cache_ref::ErasedValue;
 use crate::handle::cache_ref::Usage;
-use crate::registry::CacheKind;
-use crate::registry::Pool;
 
 const BATCH_ENTRIES: usize = 64;
 const BATCH_BYTES: usize = 64 * 1024 * 1024;
@@ -199,6 +199,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
+    use crate::kinds::table;
 
     fn entry(bytes: usize) -> Entry {
         Entry {
@@ -210,7 +211,11 @@ mod tests {
     #[test]
     fn test_non_blocking_eviction_skips_locked_shards() {
         let store = PoolStore::new(Pool::Meta, 1000, 1);
-        store.insert(KeyRef::new(CacheKind::TableSnapshot, "a"), entry(10), None);
+        store.insert(
+            KeyRef::new(CacheKind::of::<table::Snapshot>(), "a"),
+            entry(10),
+            None,
+        );
         let guard = store.shards[0].write();
         assert!(store.evict_batch(0, usize::MAX, false).is_empty());
         drop(guard);
@@ -222,7 +227,11 @@ mod tests {
         let store = PoolStore::new(Pool::Meta, 1000, 2);
         for i in 0..10 {
             let key = i.to_string();
-            store.insert(KeyRef::new(CacheKind::TableSnapshot, &key), entry(10), None);
+            store.insert(
+                KeyRef::new(CacheKind::of::<table::Snapshot>(), &key),
+                entry(10),
+                None,
+            );
         }
         assert_eq!(store.evict_batch(0, 25, true).len(), 3);
     }

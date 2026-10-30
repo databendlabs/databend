@@ -30,7 +30,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::cache_manager::CacheRow;
+use databend_storages_common_cache::CacheRow;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -65,7 +65,11 @@ impl SyncSystemTable for CachesTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_node = ctx.get_cluster().local_id.clone();
         let mut columns = CachesTableColumns::default();
-        for row in CacheManager::instance().cache_rows() {
+        for row in CacheManager::instance()
+            .rows()
+            .into_iter()
+            .filter(|row| row.enabled)
+        {
             Self::append_cache_row(row, &local_node, &mut columns);
         }
 

@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_config::CacheConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::info;
 
-use crate::registry::Pool;
+use crate::CacheKind;
+use crate::KindLimit;
+use crate::Pool;
+use crate::shared::SharedStore;
 
 const MAX_TOTAL_RATIO: u64 = 80;
 
@@ -48,6 +53,51 @@ impl PoolCaps {
             Pool::Index => self.index,
             Pool::Data => self.data,
         }
+    }
+}
+
+impl SharedStore {
+    /// Pools sized by ratio of the memory limit: `max_server_memory_usage`, or 80% of the
+    /// system memory when it is 0, as for the `max_memory_usage` setting.
+    pub fn from_config(config: &CacheConfig, max_server_memory_usage: u64) -> Result<SharedStore> {
+        let memory_limit = match max_server_memory_usage {
+            0 => {
+                let info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
+                1024 * info.total * 80 / 100
+            }
+            limit => limit,
+        };
+        let memory_limit = usize::try_from(memory_limit)
+            .map_err(|_| ErrorCode::InvalidConfig("memory limit exceeds this platform"))?;
+        let caps = PoolCaps::from_ratios(
+            memory_limit,
+            config.meta_max_ratio,
+            config.index_max_ratio,
+            config.data_max_ratio,
+        )?;
+        let limits = config
+            .kind_max_bytes
+            .iter()
+            .map(|(name, bytes)| {
+                let kind = CacheKind::from_name(name).ok_or_else(|| {
+                    ErrorCode::InvalidConfig(format!(
+                        "unknown cache '{name}' in cache.kind_max_bytes"
+                    ))
+                })?;
+                let bytes = usize::try_from(*bytes).map_err(|_| {
+                    ErrorCode::InvalidConfig(format!(
+                        "cache.kind_max_bytes.{name} exceeds this platform"
+                    ))
+                })?;
+                Ok((kind, KindLimit::bytes(bytes)))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let shards = std::thread::available_parallelism().map_or(8, |n| n.get().max(8));
+        info!(
+            "[CacheManager] Shared cache pools: meta {} bytes, index {} bytes, data {} bytes",
+            caps.meta, caps.index, caps.data
+        );
+        Ok(SharedStore::new(caps, limits, shards))
     }
 }
 

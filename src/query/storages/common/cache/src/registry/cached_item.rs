@@ -12,7 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod lru;
+/// A value that can be cached. Its kind decides where it is cached; one type may be the value
+/// of several kinds.
+pub trait CachedItem: Send + Sync + 'static {
+    fn mem_bytes(&self) -> usize;
+}
 
-pub use lru::CacheValue;
-pub use lru::InMemoryLruCache;
+/// For kinds whose values are handed out as `Arc<T>` beyond the cache. Holders of the inner
+/// `Arc` are not seen by the store: such values are not pinned and drop out of `resident` once
+/// evicted, as with the pre-refactor caches.
+impl<T: CachedItem> CachedItem for std::sync::Arc<T> {
+    fn mem_bytes(&self) -> usize {
+        T::mem_bytes(self)
+    }
+}

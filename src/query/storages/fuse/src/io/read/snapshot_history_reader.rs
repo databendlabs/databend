@@ -84,8 +84,9 @@ mod tests {
     use databend_common_exception::Result;
     use databend_common_expression::TableSchema;
     use databend_storages_common_cache::CacheKind;
+    use databend_storages_common_cache::CacheManager;
     use databend_storages_common_cache::Reader;
-    use databend_storages_common_cache::cache_manager::CacheManager;
+    use databend_storages_common_cache::kinds::table;
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_table_meta::meta::Statistics;
@@ -100,7 +101,7 @@ mod tests {
 
     fn caches() -> Arc<FuseCaches> {
         let store = Arc::new(LegacyStore::new([(
-            CacheKind::TableSnapshot,
+            CacheKind::of::<table::Snapshot>(),
             LegacyCapacity::Items(10),
         )]));
         FuseCaches::new(&CacheManager::new(store, HashMap::new()))

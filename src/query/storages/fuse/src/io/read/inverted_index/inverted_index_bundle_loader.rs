@@ -872,6 +872,7 @@ mod tests {
 
     use databend_storages_common_cache::CacheKind;
     use databend_storages_common_cache::CachedItem;
+    use databend_storages_common_cache::kinds::inverted;
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_index::BundleOpenSlice;
@@ -957,18 +958,21 @@ mod tests {
 
     fn lookup_cache(capacity: usize) -> MemCache<InvertedIndexLookupBytes> {
         local_cache(
-            CacheKind::InvertedIndexLookup,
+            CacheKind::of::<inverted::Lookup>(),
             LegacyCapacity::Bytes(capacity),
         )
     }
 
     fn no_lookup_cache() -> MemCache<InvertedIndexLookupBytes> {
-        local_cache(CacheKind::InvertedIndexLookup, LegacyCapacity::Disabled)
+        local_cache(
+            CacheKind::of::<inverted::Lookup>(),
+            LegacyCapacity::Disabled,
+        )
     }
 
     fn payload_cache(capacity: usize) -> MemCache<InvertedIndexPayloadBytes> {
         local_cache(
-            CacheKind::InvertedIndexPayload,
+            CacheKind::of::<inverted::Payload>(),
             LegacyCapacity::Bytes(capacity),
         )
     }
@@ -978,7 +982,7 @@ mod tests {
             0 => LegacyCapacity::Disabled,
             n => LegacyCapacity::Bytes(n),
         };
-        local_cache(CacheKind::InvertedIndexFullPayload, capacity)
+        local_cache(CacheKind::of::<inverted::FullPayload>(), capacity)
     }
 
     async fn payload_file_handle_with_full_capacity(
@@ -1035,7 +1039,7 @@ mod tests {
     }
 
     fn cache_state(location: &str, object_size: u64) -> FooterCacheState {
-        let meta_cache = local_cache(CacheKind::InvertedIndexMeta, LegacyCapacity::Items(10));
+        let meta_cache = local_cache(CacheKind::of::<inverted::Meta>(), LegacyCapacity::Items(10));
         let lookup_cache = lookup_cache(4 * MAX_FULL_LOOKUP_CACHE_SIZE);
         FooterCacheState::new(location, object_size, meta_cache, lookup_cache)
     }

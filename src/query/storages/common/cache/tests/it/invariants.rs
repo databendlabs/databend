@@ -18,6 +18,7 @@ use databend_common_base::runtime::Thread;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_cache::legacy::LegacyCapacity;
 use databend_storages_common_cache::legacy::LegacyStore;
 use rand::Rng;
@@ -25,16 +26,16 @@ use rand::SeedableRng;
 use rand::rngs::SmallRng;
 
 use crate::fakes::Live;
-use crate::fakes::META;
-use crate::fakes::META2;
 use crate::fakes::cache;
+use crate::fakes::meta_kind;
+use crate::fakes::meta2_kind;
 use crate::fakes::shared_store;
 
 const CAP: usize = 10_000;
 
 fn run(store: Arc<dyn KindStore>, live: Live, seed: u64) {
-    let a = cache(&store, META);
-    let b = cache(&store, META2);
+    let a = cache(&store, meta_kind());
+    let b = cache(&store, meta2_kind());
     let mut rng = SmallRng::seed_from_u64(seed);
     let mut held = Vec::new();
     let mut held_b = Vec::new();
@@ -59,7 +60,7 @@ fn run(store: Arc<dyn KindStore>, live: Live, seed: u64) {
                 } else {
                     KindLimit::bytes(rng.gen_range(0..CAP))
                 };
-                store.set_kind_limit(CacheKind::SegmentInfo, limit);
+                store.set_kind_limit(CacheKind::of::<segment::Info>(), limit);
                 None
             }
             6 => {
@@ -95,14 +96,17 @@ fn run_concurrently(store: &Arc<dyn KindStore>, live: &Live) {
 #[test]
 fn test_legacy_counters_stay_consistent_under_concurrency() {
     let store: Arc<dyn KindStore> = Arc::new(LegacyStore::new([
-        (META, LegacyCapacity::Items(50)),
-        (META2, LegacyCapacity::Bytes(CAP)),
+        (meta_kind(), LegacyCapacity::Items(50)),
+        (meta2_kind(), LegacyCapacity::Bytes(CAP)),
     ]));
     let live = Live::default();
     run_concurrently(&store, &live);
 
     // Nothing is held any more: every value alive is cached, and charged exactly once.
-    let (a, b) = (store.kind_stats(META), store.kind_stats(META2));
+    let (a, b) = (
+        store.kind_stats(meta_kind()),
+        store.kind_stats(meta2_kind()),
+    );
     assert_eq!(a.resident, a.in_cache);
     assert_eq!(b.resident, b.in_cache);
     assert!(a.items <= 50);
@@ -111,10 +115,13 @@ fn test_legacy_counters_stay_consistent_under_concurrency() {
 
     // Neither kind is reclaimed under memory pressure by the legacy backend; evict instead.
     for key in 0..200 {
-        store.evict(META, &key.to_string());
-        store.evict(META2, &key.to_string());
+        store.evict(meta_kind(), &key.to_string());
+        store.evict(meta2_kind(), &key.to_string());
     }
-    let (a, b) = (store.kind_stats(META), store.kind_stats(META2));
+    let (a, b) = (
+        store.kind_stats(meta_kind()),
+        store.kind_stats(meta2_kind()),
+    );
     assert_eq!((a.resident, a.in_cache, a.items), (0, 0, 0));
     assert_eq!((b.resident, b.in_cache, b.items), (0, 0, 0));
     assert_eq!(live.count(), 0);
@@ -126,8 +133,8 @@ fn test_counters_stay_consistent_under_concurrency() {
     let live = Live::default();
     run_concurrently(&store, &live);
 
-    store.set_kind_limit(CacheKind::SegmentInfo, KindLimit::UNLIMITED);
-    cache(&store, META).put("last", live.item(1));
+    store.set_kind_limit(CacheKind::of::<segment::Info>(), KindLimit::UNLIMITED);
+    cache(&store, meta_kind()).put("last", live.item(1));
     let meta = &store.pool_stats()[0];
     assert_eq!(meta.resident, meta.in_cache);
     assert!(meta.in_cache <= CAP);

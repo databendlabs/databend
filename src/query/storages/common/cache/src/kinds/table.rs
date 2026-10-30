@@ -12,32 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Table snapshots, their statistics, and pruning results.
+
 use std::mem::size_of;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
-use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
-use parquet::file::metadata::ParquetMetaData;
 
-use super::size::hash_map;
-use super::size::location;
-use super::size::option;
-use super::size::scalar;
-use super::size::statistics;
-use super::size::table_schema;
-use super::size::vec;
+use crate::CacheDef;
 use crate::CachedItem;
-use crate::items::size::block_meta;
+use crate::Pool;
+use crate::size::hash_map;
+use crate::size::location;
+use crate::size::option;
+use crate::size::scalar;
+use crate::size::statistics;
+use crate::size::table_schema;
+use crate::size::vec;
 
-/// Partitions are opaque `dyn PartInfo`; this is the typical size of a fuse block part.
-const PART_INFO_BYTES: usize = 512;
+/// Table snapshots, by snapshot location.
+pub struct Snapshot;
+
+impl CacheDef for Snapshot {
+    type Value = Arc<TableSnapshot>;
+    const NAME: &'static str = "memory_cache_table_snapshot";
+    const POOL: Pool = Pool::Meta;
+}
+
+/// Table statistics (HLL, histograms, ...) of snapshots, by location.
+pub struct SnapshotStats;
+
+impl CacheDef for SnapshotStats {
+    type Value = Arc<TableSnapshotStatistics>;
+    const NAME: &'static str = "memory_cache_table_statistics";
+    const POOL: Pool = Pool::Meta;
+}
+
+/// Pruning results of deterministic scans (`enable_prune_cache`).
+pub struct PruneResult;
+
+impl CacheDef for PruneResult {
+    type Value = (PartStatistics, Partitions);
+    const NAME: &'static str = "memory_cache_prune_partitions";
+    const POOL: Pool = Pool::Meta;
+}
 
 impl CachedItem for TableSnapshot {
     fn mem_bytes(&self) -> usize {
@@ -62,36 +84,8 @@ impl CachedItem for TableSnapshotStatistics {
     }
 }
 
-impl CachedItem for CompactSegmentInfo {
-    fn mem_bytes(&self) -> usize {
-        size_of::<Self>() + statistics(&self.summary) + self.raw_block_metas.bytes.capacity()
-    }
-}
-
-impl CachedItem for ColumnOrientedSegment {
-    fn mem_bytes(&self) -> usize {
-        size_of::<Self>() + self.block_metas.memory_size()
-    }
-}
-
-impl CachedItem for Vec<Arc<BlockMeta>> {
-    fn mem_bytes(&self) -> usize {
-        let arc_inner = size_of::<BlockMeta>() + 2 * size_of::<usize>();
-        size_of::<Self>() + vec(self, |b| arc_inner + block_meta(b))
-    }
-}
-
-impl CachedItem for SegmentStatistics {
-    fn mem_bytes(&self) -> usize {
-        self.memory_size()
-    }
-}
-
-impl CachedItem for ParquetMetaData {
-    fn mem_bytes(&self) -> usize {
-        self.memory_size()
-    }
-}
+/// Partitions are opaque `dyn PartInfo`; this is the typical size of a fuse block part.
+const PART_INFO_BYTES: usize = 512;
 
 impl CachedItem for (PartStatistics, Partitions) {
     fn mem_bytes(&self) -> usize {

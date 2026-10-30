@@ -222,6 +222,7 @@ mod tests {
     use databend_common_expression::types::F32;
     use databend_common_expression::types::VectorColumn;
     use databend_storages_common_cache::CacheKind;
+    use databend_storages_common_cache::kinds::vector;
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use futures::future::join_all;
@@ -230,7 +231,7 @@ mod tests {
 
     /// A cache of its own, so tests do not share process-wide state.
     fn local_cache(capacity: LegacyCapacity) -> MemCache<CachedVectorIndex> {
-        let kind = CacheKind::VectorIndex;
+        let kind = CacheKind::of::<vector::Index>();
         MemCache::new(Arc::new(LegacyStore::new([(kind, capacity)])), kind)
     }
 

@@ -16,11 +16,11 @@ use std::cell::Cell;
 
 use databend_storages_common_cache::Pool;
 
-use crate::fakes::DATA;
-use crate::fakes::INDEX;
 use crate::fakes::Live;
-use crate::fakes::META;
 use crate::fakes::cache;
+use crate::fakes::data_kind;
+use crate::fakes::index_kind;
+use crate::fakes::meta_kind;
 use crate::fakes::shared_store;
 
 fn resident(store: &dyn databend_storages_common_cache::backend::KindStore, pool: Pool) -> usize {
@@ -36,9 +36,9 @@ fn resident(store: &dyn databend_storages_common_cache::backend::KindStore, pool
 fn test_shrink_order_and_early_stop() {
     let store = shared_store(10_000, 10_000, 10_000);
     let live = Live::default();
-    let meta = cache(&store, META);
-    let index = cache(&store, INDEX);
-    let data = cache(&store, DATA);
+    let meta = cache(&store, meta_kind());
+    let index = cache(&store, index_kind());
+    let data = cache(&store, data_kind());
     for i in 0..10 {
         meta.put(&i.to_string(), live.item(100));
         index.put(&i.to_string(), live.item(100));
@@ -59,7 +59,7 @@ fn test_shrink_order_and_early_stop() {
 fn test_shrink_skips_held_values() {
     let store = shared_store(10_000, 0, 0);
     let live = Live::default();
-    let meta = cache(&store, META);
+    let meta = cache(&store, meta_kind());
     let held = meta.put("held", live.item(100));
     meta.put("free", live.item(50));
 
@@ -74,7 +74,7 @@ fn test_shrink_skips_held_values() {
 fn test_relieved_is_checked_after_each_batch() {
     let store = shared_store(10_000, 0, 0);
     let live = Live::default();
-    let meta = cache(&store, META);
+    let meta = cache(&store, meta_kind());
     for i in 0..100 {
         meta.put(&i.to_string(), live.item(10));
     }

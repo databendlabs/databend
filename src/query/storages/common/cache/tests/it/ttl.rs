@@ -31,11 +31,14 @@ use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::TTLReader;
 use databend_storages_common_cache::TTLValue;
 use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::kinds::iceberg;
 use databend_storages_common_cache::legacy::LegacyCapacity;
 use databend_storages_common_cache::legacy::LegacyStore;
 use databend_storages_common_cache::shared::SharedStore;
 
-const KIND: CacheKind = CacheKind::IcebergTable;
+fn kind() -> CacheKind {
+    CacheKind::of::<iceberg::Table>()
+}
 
 struct Value {
     generation: usize,
@@ -105,12 +108,12 @@ struct Fixture {
 }
 
 fn fixture(sync_refresh: bool, ttl: Duration) -> Fixture {
-    let store = Arc::new(LegacyStore::new([(KIND, LegacyCapacity::Items(10))]));
+    let store = Arc::new(LegacyStore::new([(kind(), LegacyCapacity::Items(10))]));
     fixture_on(store, sync_refresh, ttl)
 }
 
 fn fixture_on(store: Arc<dyn KindStore>, sync_refresh: bool, ttl: Duration) -> Fixture {
-    let cache = MemCache::new(store, KIND);
+    let cache = MemCache::new(store, kind());
     let loads = Arc::new(AtomicUsize::new(0));
     let fail = Arc::new(AtomicBool::new(false));
     let reader = CountingReader {
@@ -195,7 +198,7 @@ async fn test_rejected_refresh_drops_old_value() -> Result<()> {
             index: 0,
             data: 0,
         },
-        [(KIND, KindLimit::bytes(bytes * 3 / 2))],
+        [(kind(), KindLimit::bytes(bytes * 3 / 2))],
         1,
     ));
     let f = fixture_on(store, false, Duration::from_secs(600));

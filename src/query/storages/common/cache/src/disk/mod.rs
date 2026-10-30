@@ -13,9 +13,10 @@
 // limitations under the License.
 
 mod builder;
-#[allow(clippy::module_inception)]
 mod cache;
 mod codec;
+mod disk_def;
+mod disk_tiers;
 mod key;
 mod lru;
 
@@ -26,6 +27,10 @@ pub use cache::io_result::Error as DiskCacheError;
 pub use cache::io_result::Result as DiskCacheResult;
 pub use cache::*;
 pub use codec::DiskCodec;
+pub use disk_def::Codec;
+pub use disk_def::Disk;
+pub use disk_def::DiskInfo;
+pub(crate) use disk_tiers::disk_tiers;
 pub use key::DiskCacheKey;
 pub use lru::LruDiskCache;
 pub use lru::LruDiskCacheBuilder;

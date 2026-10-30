@@ -28,6 +28,7 @@ use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
 use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_cache::legacy::LegacyCapacity;
 use databend_storages_common_cache::legacy::LegacyStore;
 use databend_storages_common_cache::shared::SharedStore;
@@ -36,7 +37,9 @@ use divan::black_box;
 const KEYS: usize = 10_000;
 const VALUE_BYTES: usize = 64;
 const CAP: usize = 1 << 30;
-const KIND: CacheKind = CacheKind::SegmentInfo;
+fn kind() -> CacheKind {
+    CacheKind::of::<segment::Info>()
+}
 const THREADS: [usize; 4] = [1, 8, 32, 64];
 
 fn main() {
@@ -85,7 +88,7 @@ static CURRENT: LazyLock<InMemoryLruCache<Current>> = LazyLock::new(|| {
 });
 
 fn filled(store: Arc<dyn KindStore>) -> MemCache<ColumnData> {
-    let cache = MemCache::new(store, KIND);
+    let cache = MemCache::new(store, kind());
     for key in KEY_NAMES.iter() {
         cache.put(key, value());
     }
@@ -94,7 +97,7 @@ fn filled(store: Arc<dyn KindStore>) -> MemCache<ColumnData> {
 
 static LEGACY: LazyLock<MemCache<ColumnData>> = LazyLock::new(|| {
     filled(Arc::new(LegacyStore::new([(
-        KIND,
+        kind(),
         LegacyCapacity::Bytes(CAP),
     )])))
 });

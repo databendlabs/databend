@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The pre-refactor caches: one LRU per kind, sized by the legacy options.
+//! The pre-refactor caches: one LRU per kind, sized by the legacy options. Everything the legacy
+//! backend needs about a kind is registered here, in `LegacyKinds::builtin`.
 
-mod config;
+mod builtin;
+mod registry;
 mod store;
 
-pub use config::legacy_capacities;
-pub use config::legacy_total_bytes;
+pub use registry::LegacyKind;
+pub use registry::LegacyKinds;
 pub use store::LegacyCapacity;
 pub use store::LegacyStore;

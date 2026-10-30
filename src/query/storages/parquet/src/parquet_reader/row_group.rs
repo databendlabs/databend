@@ -21,9 +21,9 @@ use bytes::Bytes;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::ColumnData;
+use databend_storages_common_cache::kinds::column;
 use opendal::Operator;
 use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::RowGroups;
@@ -493,11 +493,7 @@ pub async fn cached_range_read(
     enable_cache: bool,
 ) -> Result<HashMap<Range<u64>, Bytes>> {
     let mut handles = Vec::with_capacity(merged_ranges.len());
-    let column_data_cache = enable_cache.then(|| {
-        CacheManager::instance()
-            .kind_manager()
-            .hybrid_cache::<ColumnData>(CacheKind::ColumnData)
-    });
+    let column_data_cache = enable_cache.then(|| CacheManager::instance().cache::<column::Data>());
     for range in merged_ranges {
         let fut_read = op.read_with(location);
         let key = format!("{}_{location}_{range:?}", op.info().root());

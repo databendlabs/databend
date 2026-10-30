@@ -25,6 +25,9 @@ use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::kinds::bloom;
+use databend_storages_common_cache::kinds::segment;
+use databend_storages_common_cache::kinds::table;
 use databend_storages_common_cache::legacy::LegacyCapacity;
 use databend_storages_common_cache::legacy::LegacyStore;
 use rand::Rng;
@@ -154,15 +157,15 @@ fn run(kind: CacheKind, unit: Unit, seed: u64) {
 #[test]
 fn test_items_capacity_matches_lru_cache() {
     for seed in 0..20 {
-        run(CacheKind::TableSnapshot, Unit::Items, seed);
-        run(CacheKind::BloomIndexMeta, Unit::Items, seed);
+        run(CacheKind::of::<table::Snapshot>(), Unit::Items, seed);
+        run(CacheKind::of::<bloom::IndexMeta>(), Unit::Items, seed);
     }
 }
 
 #[test]
 fn test_bytes_capacity_matches_lru_cache() {
     for seed in 0..20 {
-        run(CacheKind::SegmentInfo, Unit::Bytes, seed);
-        run(CacheKind::BloomFilter, Unit::Bytes, seed);
+        run(CacheKind::of::<segment::Info>(), Unit::Bytes, seed);
+        run(CacheKind::of::<bloom::Filter>(), Unit::Bytes, seed);
     }
 }

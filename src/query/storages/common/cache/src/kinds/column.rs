@@ -12,12 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Column data: raw bytes as read from storage, and deserialized columns.
+
 use arrow::array::ArrayRef;
 use bytes::Bytes;
+use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::Column;
 
+use crate::CacheDef;
 use crate::CachedItem;
+use crate::Disk;
+use crate::DiskCodec;
+use crate::KindLimit;
+use crate::Pool;
+
+/// Raw column bytes, by `TableDataCacheKey` without the type. Off in the shared backend
+/// unless `cache.kind_max_bytes` sizes it; its disk tier is the table data cache.
+pub struct Data;
+
+impl CacheDef for Data {
+    type Value = ColumnData;
+    const NAME: &'static str = "memory_cache_column_data";
+    const POOL: Pool = Pool::Data;
+    const SHARED_LIMIT: KindLimit = KindLimit::DISABLED;
+    const DISK: Option<Disk<Self::Value>> = Some(
+        Disk::new("v1", |c| match c.data_cache_storage {
+            CacheStorageTypeInnerConfig::Disk => c.disk_cache_config.max_bytes,
+            CacheStorageTypeInnerConfig::None => 0,
+        })
+        .reload_policy(|c| c.data_cache_key_reload_policy.clone()),
+    );
+}
+
+/// Deserialized columns, by `TableDataCacheKey` with the type. Off in the shared backend
+/// unless `cache.kind_max_bytes` sizes it.
+pub struct Array;
+
+impl CacheDef for Array {
+    type Value = SizedColumnArray;
+    const NAME: &'static str = "memory_cache_table_data";
+    const POOL: Pool = Pool::Data;
+    const SHARED_LIMIT: KindLimit = KindLimit::DISABLED;
+}
 
 pub struct ColumnData(Bytes);
 
@@ -41,7 +79,7 @@ impl ColumnData {
 
 impl TryFrom<&ColumnData> for Vec<u8> {
     type Error = ErrorCode;
-    fn try_from(value: &ColumnData) -> Result<Self, Self::Error> {
+    fn try_from(value: &ColumnData) -> std::result::Result<Self, Self::Error> {
         Ok(value.0.to_vec())
     }
 }
@@ -50,7 +88,7 @@ impl TryFrom<&ColumnData> for Vec<u8> {
 impl TryFrom<Bytes> for ColumnData {
     type Error = ErrorCode;
 
-    fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+    fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
         Ok(ColumnData(value))
     }
 }
@@ -82,5 +120,15 @@ impl CachedItem for ColumnData {
 impl CachedItem for SizedColumnArray {
     fn mem_bytes(&self) -> usize {
         self.1
+    }
+}
+
+impl DiskCodec for ColumnData {
+    fn encode(&self) -> Result<Vec<u8>> {
+        Vec::<u8>::try_from(self)
+    }
+
+    fn decode(bytes: Bytes) -> Result<Self> {
+        Self::try_from(bytes)
     }
 }

@@ -12,26 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Iceberg tables loaded from their catalog.
+
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_catalog::table::Table;
+use databend_common_catalog::table::Table as CatalogTable;
 
-use super::size::table_schema;
+use crate::CacheDef;
 use crate::CachedItem;
+use crate::Pool;
 use crate::TTLValue;
+use crate::size::table_schema;
+
+/// Iceberg tables, by `{catalog}\u{1f}{database}\u{1f}{table}`; refreshed after a TTL.
+pub struct Table;
+
+impl CacheDef for Table {
+    type Value = IcebergTableCacheValue;
+    const NAME: &'static str = "memory_cache_iceberg_table";
+    const POOL: Pool = Pool::Meta;
+}
 
 pub struct IcebergTableCacheValue {
-    table: Arc<dyn Table>,
+    table: Arc<dyn CatalogTable>,
     refreshing: AtomicBool,
     loaded_at: Instant,
     credential_refresh_at: Option<Instant>,
 }
 
 impl IcebergTableCacheValue {
-    pub fn new(table: Arc<dyn Table>, credential_refresh_at: Option<Instant>) -> Self {
+    pub fn new(table: Arc<dyn CatalogTable>, credential_refresh_at: Option<Instant>) -> Self {
         Self {
             table,
             refreshing: AtomicBool::new(false),
@@ -40,7 +53,7 @@ impl IcebergTableCacheValue {
         }
     }
 
-    pub fn table(&self) -> Arc<dyn Table> {
+    pub fn table(&self) -> Arc<dyn CatalogTable> {
         self.table.clone()
     }
 

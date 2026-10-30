@@ -24,6 +24,7 @@ use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
 use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::shared::SharedStore;
 
 const POOL_BYTES: usize = 10 << 30;
@@ -50,7 +51,7 @@ fn full_pool() -> Arc<dyn KindStore> {
         data: 0,
     };
     let store: Arc<dyn KindStore> = Arc::new(SharedStore::new(caps, [], SHARDS));
-    let cache = MemCache::new(store.clone(), CacheKind::BloomFilter);
+    let cache = MemCache::new(store.clone(), CacheKind::of::<bloom::Filter>());
     for i in 0..POOL_BYTES / ENTRY_BYTES {
         cache.put(&format!("1/2/_i_b/bloom_{i:08}.parquet"), Claim);
     }

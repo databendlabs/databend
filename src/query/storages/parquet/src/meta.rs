@@ -23,9 +23,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableField;
 use databend_common_storage::read_metadata_async;
-use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::Reader;
+use databend_storages_common_cache::kinds;
 use opendal::Operator;
 use parquet::basic::LogicalType;
 use parquet::file::metadata::ParquetMetaData;
@@ -48,9 +48,7 @@ pub async fn read_metadata_async_cached(
         operator: operator.clone(),
         prefix_len: location.len() - path.len(),
     };
-    let cache = CacheManager::instance()
-        .kind_manager()
-        .mem_cache::<Arc<ParquetMetaData>>(CacheKind::ParquetMeta);
+    let cache = CacheManager::instance().cache::<kinds::parquet::Meta>();
     let meta = cache.get(&reader, (location, file_size)).await?;
     Ok(Arc::clone(&meta))
 }

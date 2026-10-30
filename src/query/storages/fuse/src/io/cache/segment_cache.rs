@@ -115,7 +115,8 @@ mod tests {
     use databend_common_expression::DataBlock;
     use databend_common_expression::TableSchema;
     use databend_storages_common_cache::CacheKind;
-    use databend_storages_common_cache::cache_manager::CacheManager;
+    use databend_storages_common_cache::CacheManager;
+    use databend_storages_common_cache::kinds::segment;
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_table_meta::meta::Compression;
@@ -132,13 +133,22 @@ mod tests {
 
     fn caches() -> Arc<FuseCaches> {
         let store = Arc::new(LegacyStore::new([
-            (CacheKind::SegmentInfo, LegacyCapacity::Bytes(1 << 20)),
             (
-                CacheKind::ColumnOrientedSegment,
+                CacheKind::of::<segment::Info>(),
                 LegacyCapacity::Bytes(1 << 20),
             ),
-            (CacheKind::SegmentBlockMetas, LegacyCapacity::Items(10)),
-            (CacheKind::SegmentStats, LegacyCapacity::Bytes(1 << 20)),
+            (
+                CacheKind::of::<segment::ColumnOriented>(),
+                LegacyCapacity::Bytes(1 << 20),
+            ),
+            (
+                CacheKind::of::<segment::BlockMetas>(),
+                LegacyCapacity::Items(10),
+            ),
+            (
+                CacheKind::of::<segment::Stats>(),
+                LegacyCapacity::Bytes(1 << 20),
+            ),
         ]));
         FuseCaches::new(&CacheManager::new(store, HashMap::new()))
     }

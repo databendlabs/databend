@@ -20,7 +20,9 @@ use databend_common_exception::Result;
 
 use super::pool::PoolStore;
 use super::pool::Removed;
+use crate::CacheKind;
 use crate::KindLimit;
+use crate::Pool;
 use crate::PoolCaps;
 use crate::Unit;
 use crate::backend::InsertMode;
@@ -35,8 +37,6 @@ use crate::backend::entry::KeyRef;
 use crate::handle::cache_ref::ErasedValue;
 use crate::handle::cache_ref::Reservation;
 use crate::handle::cache_ref::Usage;
-use crate::registry::CacheKind;
-use crate::registry::Pool;
 
 const UNLIMITED: usize = usize::MAX;
 
@@ -71,14 +71,13 @@ impl SharedStore {
         kind_limits: impl IntoIterator<Item = (CacheKind, KindLimit)>,
         shards: usize,
     ) -> Self {
-        let kinds: Box<[KindState]> = CacheKind::ALL
-            .iter()
+        let kinds: Box<[KindState]> = CacheKind::all()
             .map(|kind| {
                 let state = KindState {
                     usage: Arc::new(Usage::default()),
                     limit: AtomicUsize::new(UNLIMITED),
                 };
-                state.set_limit(kind.default_limit());
+                state.set_limit(kind.info().shared_limit);
                 state
             })
             .collect();

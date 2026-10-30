@@ -3582,9 +3582,9 @@ pub struct CacheConfig {
     )]
     pub data_max_ratio: u64,
 
-    /// Shared backend: byte limits of single caches within their pool, keyed by cache name
-    /// (e.g. `vector_index`, `column_data`); 0 turns a cache off. Config file only:
-    /// `[cache.kind_max_bytes]`.
+    /// Shared backend: byte limits of single caches within their pool, keyed by their name in
+    /// `system.caches` (e.g. `memory_cache_column_data`); 0 turns a cache off. Config file
+    /// only: `[cache.kind_max_bytes]`.
     #[clap(skip)]
     pub kind_max_bytes: BTreeMap<String, u64>,
 
