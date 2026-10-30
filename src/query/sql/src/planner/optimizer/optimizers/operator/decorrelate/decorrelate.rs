@@ -757,7 +757,10 @@ impl SubqueryDecorrelatorOptimizer {
                 if srf.arguments.len() != 1 {
                     return Ok(None);
                 }
-                let Ok(const_scalar) = ConstantExpr::try_from(srf.arguments[0].clone()) else {
+                // Only the array value matters: its elements become constants.
+                let (ScalarExpr::ConstantExpr(const_scalar)
+                | ScalarExpr::TypedConstantExpr(const_scalar, _)) = &srf.arguments[0]
+                else {
                     return Ok(None);
                 };
                 let Some(child_expr) = &subquery.child_expr else {
