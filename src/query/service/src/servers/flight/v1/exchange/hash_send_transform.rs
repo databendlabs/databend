@@ -73,7 +73,7 @@ impl Processor for HashSendTransform {
             .writer
             .poll_sending(matches!(cause, EventCause::Other))?
         {
-            return Ok(Event::NeedConsume);
+            return self.writer.buffer_while_sending(&self.input);
         }
 
         if self.output.is_finished() {
@@ -89,25 +89,29 @@ impl Processor for HashSendTransform {
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
+            self.writer.add_block(data_block)?;
+        }
 
-            let budget_reached = self.writer.add_block(data_block)?;
-            if budget_reached {
-                // `can_push` stays true on a port finished while it needed data. A
-                // block pushed there is never consumed, and this processor would
-                // wait for that consumption instead of pulling its input again.
-                let own = (!self.output.is_finished() && self.output.can_push())
-                    .then_some(self.local_pos);
-                let (own_block, sends_pending) = self.writer.flush(own)?;
-                let pushed = if let Some(block) = own_block {
-                    self.output.push_data(Ok(block));
-                    true
-                } else {
-                    false
-                };
+        // The budget may also have been reached while the previous round was sending.
+        if self.writer.budget_reached() {
+            // `can_push` stays true on a port finished while it needed data. A
+            // block pushed there is never consumed, and this processor would
+            // wait for that consumption instead of pulling its input again.
+            let own =
+                (!self.output.is_finished() && self.output.can_push()).then_some(self.local_pos);
+            let (own_block, sends_pending) = self.writer.flush(own)?;
+            let pushed = if let Some(block) = own_block {
+                self.output.push_data(Ok(block));
+                true
+            } else {
+                false
+            };
 
-                if sends_pending || pushed {
-                    return Ok(Event::NeedConsume);
-                }
+            if sends_pending {
+                return self.writer.buffer_while_sending(&self.input);
+            }
+            if pushed {
+                return Ok(Event::NeedConsume);
             }
         }
 

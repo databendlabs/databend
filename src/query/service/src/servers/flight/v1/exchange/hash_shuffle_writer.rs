@@ -23,6 +23,10 @@
 //! blocks of all its threads in one call, which the send buffer packs into shared
 //! frames.
 //!
+//! While one round is sending, the sender keeps buffering its input into the next
+//! round, so its upstream (e.g. a storage scan) keeps running. It waits only when
+//! that round reaches the budget too, so at most two rounds are held at once.
+//!
 //! A block that carries a meta and no rows, such as the states of a partial
 //! aggregate, is routed whole by [`FlightScatter::route_meta_block`] instead, and
 //! its parts wait for the next send under the same budget.
@@ -36,7 +40,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::ExecutorWaker;
+use databend_common_pipeline::core::InputPort;
 use petgraph::graph::NodeIndex;
 
 use crate::servers::flight::v1::network::SyncTaskHandle;
@@ -129,8 +135,32 @@ impl HashShuffleWriter {
         }
     }
 
+    /// True when the buffered rows reached the budget and should be flushed.
+    pub fn budget_reached(&self) -> bool {
+        self.buffered_bytes >= self.budget
+    }
+
+    /// The event of a sender whose previous round is still sending: it buffers
+    /// `input` into the next round until that round reaches the budget too. The
+    /// sends wake the sender when they complete.
+    pub fn buffer_while_sending(&mut self, input: &InputPort) -> Result<Event> {
+        if !self.budget_reached() && input.has_data() {
+            let data_block = input.pull_data().unwrap()?;
+            self.add_block(data_block)?;
+        }
+
+        if self.budget_reached() || input.is_finished() {
+            return Ok(Event::NeedConsume);
+        }
+
+        input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
     /// Copy the rows of `block` into their partitions. Returns true when the
     /// buffered rows reached the budget and should be flushed.
+    ///
+    /// Blocks may be added while the previous round is still sending.
     pub fn add_block(&mut self, block: DataBlock) -> Result<bool> {
         if block.is_empty() {
             return match block.get_meta() {
@@ -179,7 +209,8 @@ impl HashShuffleWriter {
         Ok(self.buffered_bytes >= self.budget)
     }
 
-    /// Send every buffered partition.
+    /// Send every buffered partition. Must not be called while the previous round
+    /// is still sending, which keeps the rounds of each destination in order.
     ///
     /// The rows of partition `own` are returned instead of sent, so the caller can
     /// push them to its own output. Returns whether sends are still pending.
