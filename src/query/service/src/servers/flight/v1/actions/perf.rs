@@ -90,8 +90,8 @@ pub struct PerfNodeStatus {
     pub state: PerfState,
     pub elapsed_secs: u64,
     pub message: Option<String>,
-    /// Flamegraph SVG of the samples collected so far, only set for `Dump`.
-    pub flamegraph: Option<String>,
+    /// Folded stacks of the samples collected so far, only set for `Dump`.
+    pub folded: Option<String>,
 }
 
 impl PerfNodeStatus {
@@ -100,7 +100,7 @@ impl PerfNodeStatus {
             state,
             elapsed_secs: 0,
             message: None,
-            flamegraph: None,
+            folded: None,
         }
     }
 
@@ -114,7 +114,7 @@ impl PerfNodeStatus {
 
 /// The on-demand profiling session of this node. The CPU profiler is
 /// process-wide, so a node profiles one target at a time; the last session is
-/// kept after it stops so its flamegraph can still be fetched.
+/// kept after it stops so its samples can still be fetched.
 struct PerfSession {
     id: u64,
     target: PerfTarget,
@@ -130,18 +130,18 @@ enum PerfSessionState {
     Stopped {
         elapsed: Duration,
         reason: String,
-        flamegraph: Result<String>,
+        folded: Result<String>,
     },
 }
 
 impl PerfSession {
-    fn status(&self, with_flamegraph: bool) -> PerfNodeStatus {
+    fn status(&self, with_folded: bool) -> PerfNodeStatus {
         match &self.state {
             PerfSessionState::Profiling(guard) => {
-                let (flamegraph, message) = match with_flamegraph {
+                let (folded, message) = match with_folded {
                     false => (None, None),
-                    true => match guard.dump() {
-                        Ok(svg) => (Some(svg), None),
+                    true => match guard.dump_folded() {
+                        Ok(folded) => (Some(folded), None),
                         Err(cause) => (None, Some(cause.message())),
                     },
                 };
@@ -149,16 +149,16 @@ impl PerfSession {
                     state: PerfState::Profiling,
                     elapsed_secs: self.started_at.elapsed().as_secs(),
                     message,
-                    flamegraph,
+                    folded,
                 }
             }
             PerfSessionState::Stopped {
                 elapsed,
                 reason,
-                flamegraph,
+                folded,
             } => {
-                let (flamegraph, message) = match (with_flamegraph, flamegraph) {
-                    (true, Ok(svg)) => (Some(svg.clone()), Some(reason.clone())),
+                let (folded, message) = match (with_folded, folded) {
+                    (true, Ok(folded)) => (Some(folded.clone()), Some(reason.clone())),
                     (true, Err(cause)) => (None, Some(cause.message())),
                     (false, _) => (None, Some(reason.clone())),
                 };
@@ -166,21 +166,21 @@ impl PerfSession {
                     state: PerfState::Stopped,
                     elapsed_secs: elapsed.as_secs(),
                     message,
-                    flamegraph,
+                    folded,
                 }
             }
         }
     }
 
-    /// Stop sampling and keep the final flamegraph.
+    /// Stop sampling and keep the final samples.
     fn stop(&mut self, reason: String) {
         if let PerfSessionState::Profiling(guard) = &self.state {
             info!("Stop profiling {} on this node: {}", self.target, reason);
-            let flamegraph = guard.dump();
+            let folded = guard.dump_folded();
             self.state = PerfSessionState::Stopped {
                 elapsed: self.started_at.elapsed(),
                 reason,
-                flamegraph,
+                folded,
             };
         }
     }
@@ -189,7 +189,7 @@ impl PerfSession {
 static PERF_SESSION: Mutex<Option<PerfSession>> = Mutex::new(None);
 
 pub async fn perf(request: PerfRequest) -> Result<PerfNodeStatus> {
-    // Rendering a flamegraph symbolizes every sampled stack, keep it off the
+    // Dumping the samples symbolizes every sampled stack, keep it off the
     // async workers.
     databend_common_base::runtime::spawn_blocking(move || match request {
         PerfRequest::Start {
@@ -274,10 +274,10 @@ fn stop(target: &PerfTarget) -> PerfNodeStatus {
     }
 }
 
-fn status(target: &PerfTarget, with_flamegraph: bool) -> PerfNodeStatus {
+fn status(target: &PerfTarget, with_folded: bool) -> PerfNodeStatus {
     let session = PERF_SESSION.lock();
     match session.as_ref() {
-        Some(current) if &current.target == target => current.status(with_flamegraph),
+        Some(current) if &current.target == target => current.status(with_folded),
         _ => idle_status(target),
     }
 }

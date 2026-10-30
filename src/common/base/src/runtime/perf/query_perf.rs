@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+use std::fmt::Write;
 use std::ops::Deref;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
@@ -118,8 +120,9 @@ pub struct DynamicPerfGuard {
 }
 
 impl DynamicPerfGuard {
-    pub fn dump(&self) -> Result<String> {
-        QueryPerf::dump(&self.profiler_guard)
+    /// The samples collected so far as folded stacks.
+    pub fn dump_folded(&self) -> Result<String> {
+        QueryPerf::dump_folded(&self.profiler_guard)
     }
 }
 
@@ -186,18 +189,54 @@ impl QueryPerf {
         })
     }
 
+    /// The flamegraph SVG of the samples collected so far.
     pub fn dump(profiler_guard: &ProfilerGuard<'static>) -> Result<String> {
-        let reporter = profiler_guard
+        Self::render_flamegraph(&Self::dump_folded(profiler_guard)?)
+    }
+
+    /// The samples collected so far as folded stacks, the common input of
+    /// flamegraph tools: one `thread;outermost;...;innermost count` line per
+    /// distinct stack.
+    pub fn dump_folded(profiler_guard: &ProfilerGuard<'static>) -> Result<String> {
+        let report = profiler_guard
             .report()
             .frames_post_processor(frames_post_processor())
             .build()
             .map_err(|_e| ErrorCode::Internal("Failed to report profiler data"))?;
-        debug!("perf stop, begin to dump flamegraph");
-        let mut svg = Vec::new();
-        reporter
-            .flamegraph(&mut svg)
-            .map_err(|_e| ErrorCode::Internal("Failed to generate flamegraph SVG"))?;
+        debug!("begin to dump folded stacks");
 
+        let mut folded = String::new();
+        for (frames, count) in report.data.iter() {
+            folded.push_str(&Self::folded_frame(&frames.thread_name_or_id()));
+            for frame in frames.frames.iter().rev() {
+                for symbol in frame.iter().rev() {
+                    folded.push(';');
+                    folded.push_str(&Self::folded_frame(&symbol.name()));
+                }
+            }
+            let _ = writeln!(folded, " {count}");
+        }
+        Ok(folded)
+    }
+
+    /// A frame name for folded stacks. `;` separates frames, but Rust symbols
+    /// may contain it, e.g. `[u8; 32]`.
+    pub fn folded_frame(name: &str) -> Cow<'_, str> {
+        match name.contains(';') {
+            true => Cow::Owned(name.replace(';', ",")),
+            false => Cow::Borrowed(name),
+        }
+    }
+
+    /// Render folded stacks as a flamegraph SVG, empty without samples.
+    pub fn render_flamegraph(folded: &str) -> Result<String> {
+        if folded.is_empty() {
+            return Ok(String::new());
+        }
+        let mut svg = Vec::new();
+        let mut options = inferno::flamegraph::Options::default();
+        inferno::flamegraph::from_lines(&mut options, folded.lines(), &mut svg)
+            .map_err(|e| ErrorCode::Internal(format!("Failed to generate flamegraph SVG, {e}")))?;
         String::from_utf8(svg).map_err(|_e| ErrorCode::Internal("Failed to convert SVG to string"))
     }
 
@@ -304,6 +343,26 @@ mod tests {
     use crate::runtime::QueryPerf;
     use crate::runtime::ThreadTracker;
     use crate::runtime::TrackingPayloadExt;
+
+    #[test]
+    fn test_folded_frame() {
+        assert_eq!(QueryPerf::folded_frame("process"), "process");
+        assert_eq!(
+            QueryPerf::folded_frame("drop_in_place<[u8; 32]>"),
+            "drop_in_place<[u8, 32]>"
+        );
+    }
+
+    #[test]
+    fn test_render_flamegraph() {
+        assert_eq!(QueryPerf::render_flamegraph("").unwrap(), "");
+
+        let folded = "threads;execute;process 3\nthreads;execute;drop<[u8, 1]> 1\n";
+        let svg = QueryPerf::render_flamegraph(folded).unwrap();
+        assert!(svg.starts_with("<?xml"));
+        assert!(svg.contains("process (3 samples, 75.00%)"));
+        assert!(svg.contains("drop&lt;[u8, 1]&gt; (1 samples, 25.00%)"));
+    }
 
     #[test]
     fn test_exclusive_profiler_guard() {

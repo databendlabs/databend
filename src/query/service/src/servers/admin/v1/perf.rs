@@ -20,11 +20,17 @@
 //! - `POST .../start?frequency=&seconds=`
 //! - `POST .../stop`
 //! - `GET  .../status`
-//! - `GET  .../flamegraph`: flamegraph of every node, cumulative since start,
-//!   available while profiling and after it stops.
+//! - `GET  .../flamegraph?format=html|folded`: the samples of every node,
+//!   cumulative since start, available while profiling and after it stops.
+//!   `html` (default) is a page with a flamegraph per node, `404` without
+//!   samples. `folded` is the folded stacks of all nodes, each under its node
+//!   id as the outermost frame, for flamegraph tools; empty without samples.
 //! - `GET  ...`: a page driving the above, refreshing the flamegraph
 //!   periodically. Link to the query page with the `current_query_id` of
 //!   `/v1/processlist`.
+//!
+//! Apart from the html flamegraph, requests answer `200 OK` even if the query
+//! runs nowhere, so a `404` means a server without this API.
 //!
 //! Every request is forwarded to all nodes of the cluster. A node that fails
 //! to answer is reported in its status instead of failing the request.
@@ -34,6 +40,7 @@ use std::collections::HashMap;
 
 use databend_common_base::runtime::QueryPerf;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_settings::FlightKeepAliveParams;
 use http::StatusCode;
@@ -87,6 +94,20 @@ pub struct StartPerfParams {
     pub seconds: Option<u64>,
 }
 
+#[derive(Deserialize, Default, Clone, Copy, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum FlamegraphFormat {
+    #[default]
+    Html,
+    Folded,
+}
+
+#[derive(Deserialize, Default)]
+pub struct FlamegraphParams {
+    #[serde(default)]
+    pub format: FlamegraphFormat,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PerfResponse {
     pub target: PerfTarget,
@@ -121,8 +142,9 @@ pub async fn query_perf_status(Path(query_id): Path<String>) -> poem::Result<imp
 #[async_backtrace::framed]
 pub async fn query_perf_flamegraph(
     Path(query_id): Path<String>,
+    Query(params): Query<FlamegraphParams>,
 ) -> poem::Result<impl IntoResponse> {
-    flamegraph(PerfTarget::Query(query_id)).await
+    flamegraph(PerfTarget::Query(query_id), params.format).await
 }
 
 #[poem::handler]
@@ -155,8 +177,10 @@ pub async fn process_perf_status() -> poem::Result<impl IntoResponse> {
 
 #[poem::handler]
 #[async_backtrace::framed]
-pub async fn process_perf_flamegraph() -> poem::Result<impl IntoResponse> {
-    flamegraph(PerfTarget::Process).await
+pub async fn process_perf_flamegraph(
+    Query(params): Query<FlamegraphParams>,
+) -> poem::Result<impl IntoResponse> {
+    flamegraph(PerfTarget::Process, params.format).await
 }
 
 #[poem::handler]
@@ -185,6 +209,9 @@ async fn start(
     status_response(target, request).await
 }
 
+/// Always `200 OK` with the state of every node, `nodes` is empty if no node
+/// runs or profiled the target. A `404` thus only means a server without
+/// this API, which callers can tell apart from an unknown query.
 async fn status_response(target: PerfTarget, request: PerfRequest) -> poem::Result<poem::Response> {
     let nodes = do_perf(request)
         .await
@@ -192,21 +219,33 @@ async fn status_response(target: PerfTarget, request: PerfRequest) -> poem::Resu
         .into_iter()
         .filter(|(_, status)| status.state != PerfState::NotRunning)
         .collect::<BTreeMap<_, _>>();
-    let status = match nodes.is_empty() {
-        true => StatusCode::NOT_FOUND,
-        false => StatusCode::OK,
-    };
-    Ok(Json(PerfResponse { target, nodes })
-        .with_status(status)
-        .into_response())
+    Ok(Json(PerfResponse { target, nodes }).into_response())
 }
 
-async fn flamegraph(target: PerfTarget) -> poem::Result<poem::Response> {
+async fn flamegraph(target: PerfTarget, format: FlamegraphFormat) -> poem::Result<poem::Response> {
     let request = PerfRequest::Dump {
         target: target.clone(),
     };
     let nodes = do_perf(request).await.map_err(internal_error)?;
-    match render_flamegraphs(&GlobalConfig::instance().query.node_id, nodes) {
+    if let FlamegraphFormat::Folded = format {
+        return Ok(merge_folded(nodes)
+            .with_content_type("text/plain; charset=utf-8")
+            .into_response());
+    }
+
+    // Laying out the flamegraphs walks every stack, keep it off the async
+    // workers.
+    let local_node_id = GlobalConfig::instance().query.node_id.clone();
+    let rendered = databend_common_base::runtime::spawn_blocking(move || {
+        render_flamegraphs(&local_node_id, nodes)
+    })
+    .await
+    .map_err(|cause| {
+        internal_error(ErrorCode::Internal(format!(
+            "flamegraph task failed: {cause}"
+        )))
+    })?;
+    match rendered {
         Ok(html) => Ok(Html(html).into_response()),
         Err(failures) => Err(poem::Error::from_string(
             format!("No profile of {target} on any node. {failures}"),
@@ -238,7 +277,7 @@ async fn do_perf(request: PerfRequest) -> Result<HashMap<String, PerfNodeStatus>
     let config = GlobalConfig::instance();
     let cluster = ClusterDiscovery::instance().discover(&config).await?;
 
-    // Rendering a flamegraph symbolizes every sampled stack and may take a
+    // Dumping the samples symbolizes every sampled stack and may take a
     // while, the other requests answer at once and must not stall the page on
     // an unresponsive node.
     let timeout = match request {
@@ -275,6 +314,28 @@ async fn do_perf(request: PerfRequest) -> Result<HashMap<String, PerfNodeStatus>
         .collect())
 }
 
+/// Folded stacks of every node merged, each stack under its node id as the
+/// outermost frame.
+fn merge_folded(nodes: HashMap<String, PerfNodeStatus>) -> String {
+    let mut nodes = nodes
+        .into_iter()
+        .filter_map(|(node_id, status)| Some((node_id, status.folded?)))
+        .collect::<Vec<_>>();
+    nodes.sort();
+
+    let mut merged = String::new();
+    for (node_id, folded) in nodes {
+        let node_frame = QueryPerf::folded_frame(&node_id);
+        for stack in folded.lines() {
+            merged.push_str(&node_frame);
+            merged.push(';');
+            merged.push_str(stack);
+            merged.push('\n');
+        }
+    }
+    merged
+}
+
 /// Render the flamegraph of every node, the local node first, with the nodes
 /// that failed listed above. Without any flamegraph, return the failures.
 fn render_flamegraphs(
@@ -294,10 +355,17 @@ fn render_flamegraphs(
             }
             PerfState::NotRunning | PerfState::Idle => continue,
         };
-        let Some(flamegraph) = status.flamegraph else {
-            let message = status.message.unwrap_or_default();
-            failures.push(format!("{node_id}: {message}"));
-            continue;
+        let flamegraph = match status.folded.as_deref().map(QueryPerf::render_flamegraph) {
+            Some(Ok(svg)) => svg,
+            Some(Err(cause)) => {
+                failures.push(format!("{node_id}: {}", cause.message()));
+                continue;
+            }
+            None => {
+                let message = status.message.unwrap_or_default();
+                failures.push(format!("{node_id}: {message}"));
+                continue;
+            }
         };
         let mut title = format!("{node_id} ({state}, {}s", status.elapsed_secs);
         if let Some(message) = &status.message {
@@ -348,16 +416,17 @@ fn internal_error(cause: databend_common_exception::ErrorCode) -> poem::Error {
 mod tests {
     use std::collections::HashMap;
 
+    use super::merge_folded;
     use super::render_flamegraphs;
     use crate::servers::flight::v1::actions::PerfNodeStatus;
     use crate::servers::flight::v1::actions::PerfState;
 
-    fn status(state: PerfState, flamegraph: Option<&str>) -> PerfNodeStatus {
+    fn status(state: PerfState, folded: Option<&str>) -> PerfNodeStatus {
         PerfNodeStatus {
             state,
             elapsed_secs: 7,
             message: None,
-            flamegraph: flamegraph.map(str::to_string),
+            folded: folded.map(str::to_string),
         }
     }
 
@@ -366,11 +435,11 @@ mod tests {
         let nodes = HashMap::from([
             (
                 "a-remote".to_string(),
-                status(PerfState::Stopped, Some("<svg>remote</svg>")),
+                status(PerfState::Stopped, Some("threads;remote_fn 1\n")),
             ),
             (
                 "z-local".to_string(),
-                status(PerfState::Profiling, Some("<svg>local</svg>")),
+                status(PerfState::Profiling, Some("threads;local_fn 3\n")),
             ),
             ("idle".to_string(), status(PerfState::Idle, None)),
             ("gone".to_string(), status(PerfState::NotRunning, None)),
@@ -380,6 +449,8 @@ mod tests {
         let local = html.find("Current Node: z-local (profiling, 7s)").unwrap();
         let remote = html.find("Node: a-remote (stopped, 7s)").unwrap();
         assert!(local < remote);
+        assert!(html.contains("local_fn (3 samples, 100.00%)"));
+        assert!(html.contains("remote_fn (1 samples, 100.00%)"));
         assert!(!html.contains("idle"));
         assert!(!html.contains("gone"));
         assert!(!html.contains("Failed nodes"));
@@ -391,7 +462,7 @@ mod tests {
         let nodes = HashMap::from([
             (
                 "n1".to_string(),
-                status(PerfState::Profiling, Some("<svg>n1</svg>")),
+                status(PerfState::Profiling, Some("threads;main 1\n")),
             ),
             (
                 "n2".to_string(),
@@ -409,5 +480,26 @@ mod tests {
             ("n2".to_string(), PerfNodeStatus::failed("busy".to_string())),
         ]);
         assert_eq!(render_flamegraphs("n1", nodes), Err("n2: busy".to_string()));
+    }
+
+    #[test]
+    fn test_merge_folded_under_node_frames() {
+        let nodes = HashMap::from([
+            (
+                "n2".to_string(),
+                status(PerfState::Stopped, Some("threads;b 2\n")),
+            ),
+            (
+                "n1".to_string(),
+                status(PerfState::Profiling, Some("threads;a 1\nio;c 4\n")),
+            ),
+            ("n3".to_string(), PerfNodeStatus::failed("busy".to_string())),
+            ("n4".to_string(), status(PerfState::Idle, None)),
+        ]);
+        assert_eq!(
+            merge_folded(nodes),
+            "n1;threads;a 1\nn1;io;c 4\nn2;threads;b 2\n"
+        );
+        assert_eq!(merge_folded(HashMap::new()), "");
     }
 }

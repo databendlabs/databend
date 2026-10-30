@@ -312,6 +312,7 @@ iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/databe
 paimon = { version = "=0.2.0", default-features = false, features = ["storage-fs", "storage-s3", "storage-oss"] }
 
 indexmap = "2.0.0"
+inferno = { version = "0.11", default-features = false, features = ["nameattr"] }
 itertools = "0.13.0"
 jaq-core = "3.1.0"
 jaq-json = "2.0.1"
