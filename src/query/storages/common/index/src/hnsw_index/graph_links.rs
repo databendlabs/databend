@@ -118,6 +118,13 @@ impl GraphLinks {
         self.view().links(point_id, level)
     }
 
+    /// Hints the CPU to load the links of `point_id` at `level`, ahead of
+    /// iterating them with [`Self::links`].
+    #[inline]
+    pub fn prefetch_links(&self, point_id: PointOffsetType, level: usize) {
+        self.view().prefetch_links(point_id, level)
+    }
+
     pub fn point_level(&self, point_id: PointOffsetType) -> usize {
         self.view().point_level(point_id)
     }
@@ -135,5 +142,42 @@ impl GraphLinks {
             edges.push(levels);
         }
         edges
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Links can be prefetched for every point and level, in both formats, and
+    /// read the same afterwards.
+    #[test]
+    fn test_prefetch_links() {
+        let (num_points, m, m0) = (20u32, 4, 8);
+        // Every point links to the next five at level 0; points 0 and 5 also
+        // link to each other at level 1.
+        let edges: Vec<Vec<Vec<PointOffsetType>>> = (0..num_points)
+            .map(|point| {
+                let mut levels = vec![(1..=5).map(|i| (point + i) % num_points).collect()];
+                if point % 5 == 0 && point < 10 {
+                    levels.push(vec![5 - point]);
+                }
+                levels
+            })
+            .collect();
+        for format in [GraphLinksFormat::Plain, GraphLinksFormat::Compressed] {
+            let links =
+                GraphLinksSerializer::new(edges.clone(), format, m, m0).to_graph_links_ram();
+            for (point, levels) in edges.iter().enumerate() {
+                for (level, expected) in levels.iter().enumerate() {
+                    links.prefetch_links(point as PointOffsetType, level);
+                    let mut got: Vec<_> = links.links(point as PointOffsetType, level).collect();
+                    got.sort_unstable();
+                    let mut expected = expected.clone();
+                    expected.sort_unstable();
+                    assert_eq!(got, expected);
+                }
+            }
+        }
     }
 }

@@ -21,6 +21,7 @@ use itertools::Either;
 use itertools::Itertools as _;
 use zerocopy::FromBytes;
 use zerocopy::Immutable;
+use zerocopy::IntoBytes;
 use zerocopy::native_endian::U64 as NativeU64;
 
 use super::GraphLinksFormat;
@@ -33,6 +34,7 @@ use crate::hnsw_index::common::bitpacking_links::PackedLinksIterator;
 use crate::hnsw_index::common::bitpacking_links::iterate_packed_links;
 use crate::hnsw_index::common::bitpacking_ordered;
 use crate::hnsw_index::common::types::PointOffsetType;
+use crate::hnsw_index::common::utils::prefetch_bytes;
 
 /// An (almost) zero-copy, non-owning view into serialized graph links stored
 /// as a `&[u8]` slice.
@@ -118,12 +120,38 @@ impl GraphLinksView<'_> {
         })
     }
 
-    pub(super) fn links(&self, point_id: PointOffsetType, level: usize) -> LinksIterator<'_> {
-        let idx = if level == 0 {
+    /// The position of the links of `point_id` at `level` in the offsets.
+    fn links_index(&self, point_id: PointOffsetType, level: usize) -> usize {
+        if level == 0 {
             point_id as usize
         } else {
             self.level_offsets[level] as usize + self.reindex[point_id as usize] as usize
-        };
+        }
+    }
+
+    /// Hints the CPU to load the links of `point_id` at `level`, ahead of
+    /// iterating them with [`Self::links`].
+    pub(super) fn prefetch_links(&self, point_id: PointOffsetType, level: usize) {
+        let idx = self.links_index(point_id, level);
+        match self.compression {
+            CompressionInfo::Uncompressed { links, offsets } => {
+                let links_range = offsets[idx].get() as usize..offsets[idx + 1].get() as usize;
+                prefetch_bytes(links[links_range].as_bytes());
+            }
+            CompressionInfo::Compressed {
+                compressed_links,
+                ref offsets,
+                ..
+            } => {
+                let links_range =
+                    offsets.get(idx).unwrap() as usize..offsets.get(idx + 1).unwrap() as usize;
+                prefetch_bytes(&compressed_links[links_range]);
+            }
+        }
+    }
+
+    pub(super) fn links(&self, point_id: PointOffsetType, level: usize) -> LinksIterator<'_> {
+        let idx = self.links_index(point_id, level);
 
         match self.compression {
             CompressionInfo::Uncompressed { links, offsets } => {
