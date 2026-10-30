@@ -560,6 +560,19 @@ impl Binder {
         let source_table_name = source_entry.name().to_string();
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
+        // Refresh, read, and privilege checks resolve the source database from this option, so
+        // reject a source without it here instead of creating an unusable materialized view.
+        source_table
+            .get_table_info()
+            .meta
+            .options
+            .get(OPT_KEY_DATABASE_ID)
+            .ok_or_else(|| {
+                ErrorCode::InvalidMaterializedView(format!(
+                    "source table id {source_table_id} does not record its database id"
+                ))
+            })?
+            .parse::<u64>()?;
         // Refresh, read, and privilege checks resolve the source through its table id in the
         // default catalog, so the source may live in any database of the target catalog.
         if source_catalog_name != catalog_name {
