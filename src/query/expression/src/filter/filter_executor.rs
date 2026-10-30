@@ -218,6 +218,13 @@ impl FilterExecutor {
         self.max_block_size
     }
 
+    /// Grow the selection buffers so that `select` accepts a block of `num_rows` rows.
+    pub fn reserve(&mut self, num_rows: usize) {
+        if self.max_block_size < num_rows {
+            self.incr_max_block_size(num_rows);
+        }
+    }
+
     fn incr_max_block_size(&mut self, new_max_block_size: usize) {
         self.max_block_size = new_max_block_size;
         self.true_selection = vec![0; self.max_block_size];
