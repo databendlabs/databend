@@ -1,0 +1,55 @@
+=== decimal_scale_from_folded_expression ===
+description: A constant argument read as a parameter accepts expressions folded at bind time.
+sql: round(CAST(number AS DECIMAL(10,3)), 1 + 1)
+status: ok
+scalar: round(2)(CAST(number (#0) AS Decimal(10, 3) NULL), 2)
+type: Decimal(10, 2) NULL
+
+=== decimal_scale_from_explicit_cast ===
+description: An explicit cast of a literal folds at bind time, so it is read as a parameter.
+sql: round(CAST(number AS DECIMAL(10,3)), CAST(2 AS INT))
+status: ok
+scalar: round(2)(CAST(number (#0) AS Decimal(10, 3) NULL), 2)
+type: Decimal(10, 2) NULL
+
+=== decimal_scale_rejects_column ===
+description: A column cannot be read as a constant parameter.
+sql: round(CAST(number AS DECIMAL(10,3)), number)
+status: error
+code: 2004
+message: Need constant number, but got CAST(number (#0) AS Int64)
+
+=== decimal_precision_from_explicit_cast ===
+description: to_decimal precision accepts a cast literal.
+sql: to_decimal(text, CAST(10 AS INT), 2)
+status: ok
+scalar: to_decimal(10, 2)(text (#1), 10, 2)
+type: Decimal(10, 2) NULL
+
+=== histogram_buckets_must_fit_target_type ===
+description: A constant that does not convert to the parameter type reports the failed cast.
+sql: histogram(number, -1)
+status: error
+code: 2004
+message: Need constant number, but got CAST(-1 AS UInt64)
+
+=== range_offset_from_explicit_cast ===
+description: A window RANGE offset accepts a cast literal.
+sql: sum(number) OVER (ORDER BY delta RANGE BETWEEN CAST(2 AS INT) PRECEDING AND CURRENT ROW)
+status: ok
+scalar: sum(number) OVER (ORDER BY delta RANGE BETWEEN CAST(2 AS Int32) PRECEDING AND CURRENT ROW)
+type: Int64 NULL
+
+=== range_offset_rejects_column ===
+description: A window RANGE offset must be constant.
+sql: sum(number) OVER (ORDER BY delta RANGE BETWEEN number PRECEDING AND CURRENT ROW)
+status: error
+code: 1065
+message: Only constant is allowed in RANGE offset
+
+=== lag_offset_accepts_folded_cast ===
+description: An explicit cast of a literal folds before LAG reads its offset.
+sql: lag(number, CAST(2 AS INT)) OVER (ORDER BY delta)
+status: ok
+scalar: lag(number, CAST(2 AS Int32)) OVER (ORDER BY delta)
+type: Int64 NULL

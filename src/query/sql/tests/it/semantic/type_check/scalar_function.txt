@@ -2,28 +2,28 @@
 description: Failed parent folding must not shrink its checked Decimal arguments into integers and select another overload.
 sql: 1::DECIMAL(38,0) / 0::DECIMAL(38,0)
 status: ok
-scalar: divide(CAST(1 AS Decimal(38, 0)), CAST(0 AS Decimal(38, 0)))
+scalar: divide(1, 0)
 type: Decimal(38, 6)
 
 === decimal_round_overflow_keeps_checked_argument_types ===
 description: A rounding overflow remains a Decimal call rather than a stale Decimal return type on a Float64 overload.
 sql: round(99::DECIMAL(2,0), -2)
 status: ok
-scalar: round(-2)(CAST(99 AS Decimal(2, 0)), -2)
+scalar: round(-2)(99, -2)
 type: Decimal(2, 0)
 
 === decimal_constant_argument_keeps_precision ===
 description: Folding a constant Decimal argument must not change the precision used to resolve a nonconstant division.
 sql: 1::DECIMAL(38,0) / number::DECIMAL(38,0)
 status: ok
-scalar: divide(CAST(1 AS Decimal(38, 0)), CAST(number (#0) AS Decimal(38, 0) NULL))
+scalar: divide(1, CAST(number (#0) AS Decimal(38, 0) NULL))
 type: Decimal(38, 6) NULL
 
 === mixed_numeric_decimal_error_keeps_checked_argument_types ===
 description: The integer argument of a Decimal-valued call also contributes to its inferred precision.
 sql: 1::UInt64 / 0::DECIMAL(38,0)
 status: ok
-scalar: divide(CAST(1 AS UInt64), CAST(0 AS Decimal(38, 0)))
+scalar: divide(1, 0)
 type: Decimal(26, 6)
 
 === unknown_function_keeps_suggestion ===
@@ -100,12 +100,12 @@ type: Variant NULL
 description: Removing constant IF branches must preserve alignment with planner arguments.
 sql: if(false, 1, number > 0, 2, 3)
 status: ok
-scalar: if(false, 1, gt(number (#0), 0), 2, 3)
+scalar: if(gt(number (#0), 0), 2, 3)
 type: UInt8
 
 === partially_folded_if_with_nested_cast ===
 description: A nested cast selected by constant folding must not be treated as a top-level cast rewrite.
 sql: if(true, CAST(number AS BIGINT), 0)
 status: ok
-scalar: if(true, CAST(number (#0) AS Int64 NULL), 0)
+scalar: CAST(number (#0) AS Int64 NULL)
 type: Int64 NULL
