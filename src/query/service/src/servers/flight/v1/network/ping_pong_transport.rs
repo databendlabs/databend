@@ -47,7 +47,7 @@ pub trait PingPongCallback: Send + Sync + 'static {
     fn on_closed(&self);
 }
 
-pub struct PingPongExchangeInner {
+pub struct PingPongTransportInner {
     in_flight: AtomicBool,
     send_time: Mutex<Option<Instant>>,
     send_tx: Sender<FlightData>,
@@ -56,32 +56,32 @@ pub struct PingPongExchangeInner {
     pub shutdown: WatchNotify,
 }
 
-/// A non-blocking ping-pong style flight exchange.
+/// Transport Flight frames with at most one request in flight per connection.
 ///
 /// This exchange guarantees that at most one request is in-flight at any time.
 /// When a request is sent, subsequent sends will return the data back to the caller
 /// until a response is received.
-pub struct PingPongExchange {
+pub struct PingPongTransport {
     pub num_threads: usize,
-    inner: Arc<PingPongExchangeInner>,
+    inner: Arc<PingPongTransportInner>,
     response_stream: Mutex<Option<BoxStream<'static, Result<FlightData, Status>>>>,
 }
 
-impl Drop for PingPongExchange {
+impl Drop for PingPongTransport {
     fn drop(&mut self) {
         self.inner.shutdown.notify_waiters();
     }
 }
 
-impl std::ops::Deref for PingPongExchange {
-    type Target = PingPongExchangeInner;
+impl std::ops::Deref for PingPongTransport {
+    type Target = PingPongTransportInner;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl PingPongExchangeInner {
+impl PingPongTransportInner {
     pub fn get_rtt(&self) -> Duration {
         self.send_time
             .lock()
@@ -95,53 +95,48 @@ impl PingPongExchangeInner {
     /// - `Ok(None)`: Data was sent successfully
     /// - `Ok(Some(data))`: A request is already in-flight, data is returned to caller
     /// - `Err(status)`: The exchange is closed
-    pub fn try_send(&self, data: FlightData) -> Result<Option<FlightData>, Status> {
+    pub fn try_send_frame(&self, data: FlightData) -> Result<Option<FlightData>, Status> {
         if self.in_flight.fetch_or(true, Ordering::SeqCst) {
             return Ok(Some(data));
         }
 
-        self.force_send(data)
+        self.send_frame(data).map(|()| None)
     }
 
-    pub(crate) fn force_send(&self, data: FlightData) -> Result<Option<FlightData>, Status> {
+    /// Claim the single in-flight slot without sending. On success the caller must
+    /// follow up with `send_frame` or `release_send_slot`.
+    pub(crate) fn try_acquire_send_slot(&self) -> bool {
+        !self.in_flight.fetch_or(true, Ordering::SeqCst)
+    }
+
+    /// Send a frame after acquiring the in-flight slot, or fail the exchange.
+    /// The previous response proves its request was consumed, so a full request
+    /// queue while holding the slot is a protocol invariant violation.
+    pub(crate) fn send_frame(&self, data: FlightData) -> Result<(), Status> {
         *self.send_time.lock() = Some(Instant::now());
         match self.send_tx.try_send(data) {
-            Ok(_) => Ok(None),
+            Ok(_) => Ok(()),
             Err(TrySendError::Closed(_)) => {
                 *self.send_time.lock() = None;
                 self.in_flight.store(false, Ordering::SeqCst);
                 Err(Status::aborted(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE))
             }
-            Err(TrySendError::Full(data)) => {
+            Err(TrySendError::Full(_)) => {
                 *self.send_time.lock() = None;
                 self.in_flight.store(false, Ordering::SeqCst);
-                Ok(Some(data))
+                Err(Status::internal(
+                    "Flight request queue is full while holding the send slot",
+                ))
             }
         }
     }
 
-    pub fn ready_send(&self) {
+    pub fn release_send_slot(&self) {
         self.in_flight.store(false, Ordering::SeqCst);
     }
 }
 
-impl PingPongExchange {
-    pub fn from_parts(
-        num_threads: usize,
-        send_tx: async_channel::Sender<FlightData>,
-        response_stream: tonic::Streaming<FlightData>,
-        local_node_id: String,
-        remote_node_id: String,
-    ) -> Self {
-        Self::from_stream(
-            num_threads,
-            send_tx,
-            response_stream,
-            local_node_id,
-            remote_node_id,
-        )
-    }
-
+impl PingPongTransport {
     pub fn from_stream(
         num_threads: usize,
         send_tx: async_channel::Sender<FlightData>,
@@ -149,7 +144,7 @@ impl PingPongExchange {
         local_node_id: impl Into<String>,
         remote_node_id: impl Into<String>,
     ) -> Self {
-        let inner = Arc::new(PingPongExchangeInner {
+        let inner = Arc::new(PingPongTransportInner {
             in_flight: AtomicBool::new(false),
             send_time: Mutex::new(None),
             send_tx,
@@ -262,13 +257,13 @@ mod tests {
     fn create_mock_exchange(
         num_threads: usize,
     ) -> (
-        PingPongExchange,
+        PingPongTransport,
         async_channel::Receiver<FlightData>,
         async_channel::Sender<Result<FlightData, Status>>,
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(
+        let exchange = PingPongTransport::from_stream(
             num_threads,
             send_tx,
             pong_rx,
@@ -290,17 +285,27 @@ mod tests {
         let (exchange, send_rx, _pong_tx) = create_mock_exchange(2);
 
         // First send should succeed
-        assert!(exchange.try_send(make_flight_data(10)).unwrap().is_none());
+        assert!(
+            exchange
+                .try_send_frame(make_flight_data(10))
+                .unwrap()
+                .is_none()
+        );
 
         // Data should arrive on send_rx
         let received = send_rx.recv().await.unwrap();
         assert_eq!(received.data_body.len(), 10);
 
         // Simulate pong by clearing in_flight
-        exchange.ready_send();
+        exchange.release_send_slot();
 
         // Second send should succeed
-        assert!(exchange.try_send(make_flight_data(20)).unwrap().is_none());
+        assert!(
+            exchange
+                .try_send_frame(make_flight_data(20))
+                .unwrap()
+                .is_none()
+        );
         let received = send_rx.recv().await.unwrap();
         assert_eq!(received.data_body.len(), 20);
     }
@@ -310,19 +315,29 @@ mod tests {
         let (exchange, send_rx, _pong_tx) = create_mock_exchange(2);
 
         // First send succeeds
-        assert!(exchange.try_send(make_flight_data(1)).unwrap().is_none());
+        assert!(
+            exchange
+                .try_send_frame(make_flight_data(1))
+                .unwrap()
+                .is_none()
+        );
 
         // Second send returns data back (in-flight)
-        let returned = exchange.try_send(make_flight_data(2)).unwrap();
+        let returned = exchange.try_send_frame(make_flight_data(2)).unwrap();
         assert!(returned.is_some());
         assert_eq!(returned.unwrap().data_body.len(), 2);
 
         // Drain the channel and simulate pong
         let _ = send_rx.recv().await.unwrap();
-        exchange.ready_send();
+        exchange.release_send_slot();
 
         // Now send should succeed again
-        assert!(exchange.try_send(make_flight_data(3)).unwrap().is_none());
+        assert!(
+            exchange
+                .try_send_frame(make_flight_data(3))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[tokio::test]
@@ -332,7 +347,7 @@ mod tests {
         // Drop the receiver to close the channel
         drop(send_rx);
 
-        let result = exchange.try_send(make_flight_data(1));
+        let result = exchange.try_send_frame(make_flight_data(1));
         let status = result.expect_err("closed request channel should abort the exchange");
         assert_eq!(status.code(), tonic::Code::Aborted);
         assert_eq!(status.message(), REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE);

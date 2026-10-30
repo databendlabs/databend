@@ -22,10 +22,10 @@ set enable_join_runtime_filter = 0
 
 # Flush partitions while the scan is running, before all producers reach EOF.
 statement ok
-set hash_shuffle_rows_threshold = 1
+set hash_shuffle_send_buffer_bytes = 1
 
 statement ok
-set hash_shuffle_bytes_threshold = 1
+set exchange_frame_bytes = 1
 
 # A hang must fail this test instead of waiting for the whole CI job to time out.
 statement ok
@@ -97,10 +97,10 @@ statement ok
 unset enable_join_runtime_filter
 
 statement ok
-unset hash_shuffle_rows_threshold
+unset hash_shuffle_send_buffer_bytes
 
 statement ok
-unset hash_shuffle_bytes_threshold
+unset exchange_frame_bytes
 
 statement ok
 unset max_execute_time_in_seconds

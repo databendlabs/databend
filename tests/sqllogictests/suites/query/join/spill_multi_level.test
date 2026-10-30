@@ -1,0 +1,105 @@
+# Test recursive hash join spill (max_hash_join_spill_level >= 2).
+# Every restored level-0 partition spills again at level 1, so the level-2
+# join states are created and destroyed once per restored partition.
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set max_hash_join_spill_level = 2;
+
+statement ok
+create or replace table t1 as select number % 1000 as k, number as v from numbers(10000);
+
+statement ok
+create or replace table t2 as select number % 1500 + 500 as k, number as v from numbers(6000);
+
+# INNER JOIN
+query III
+select count(*), sum(t1.v), sum(t2.v) from t1 join t2 on t1.k = t2.k;
+----
+20000 104990000 49990000
+
+# LEFT OUTER JOIN
+query IIII
+select count(*), count(t2.k), sum(t1.v), sum(t2.v) from t1 left join t2 on t1.k = t2.k;
+----
+25000 20000 128737500 49990000
+
+# RIGHT OUTER JOIN
+query IIII
+select count(*), count(t1.k), sum(t1.v), sum(t2.v) from t1 right join t2 on t1.k = t2.k;
+----
+24000 20000 104990000 62988000
+
+# LEFT SEMI JOIN
+query II
+select count(*), sum(v) from t1 where exists(select * from t2 where t1.k = t2.k);
+----
+5000 26247500
+
+# LEFT ANTI JOIN
+query II
+select count(*), sum(v) from t1 where not exists(select * from t2 where t1.k = t2.k);
+----
+5000 23747500
+
+# RIGHT SEMI JOIN
+query II
+select count(*), sum(t2.v) from t1 right semi join t2 on t1.k = t2.k;
+----
+2000 4999000
+
+# RIGHT ANTI JOIN
+query II
+select count(*), sum(t2.v) from t1 right anti join t2 on t1.k = t2.k;
+----
+4000 12998000
+
+# Level 3 uses a small key domain to bound the number of restored partitions.
+statement ok
+set max_hash_join_spill_level = 3;
+
+statement ok
+create or replace table t3 as select number % 20 as k, number as v from numbers(2000);
+
+statement ok
+create or replace table t4 as select number % 30 + 10 as k, number as v from numbers(600);
+
+query III
+select count(*), sum(t3.v), sum(t4.v) from t3 join t4 on t3.k = t4.k;
+----
+20000 20090000 5790000
+
+query IIII
+select count(*), count(t4.k), sum(t3.v), sum(t4.v) from t3 left join t4 on t3.k = t4.k;
+----
+21000 20000 21084500 5790000
+
+query II
+select count(*), sum(t4.v) from t3 right anti join t4 on t3.k = t4.k;
+----
+400 121800
+
+statement ok
+unset max_hash_join_spill_level;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+unset force_join_data_spill;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+drop table if exists t3;
+
+statement ok
+drop table if exists t4;

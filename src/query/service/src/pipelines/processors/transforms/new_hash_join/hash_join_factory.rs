@@ -12,30 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::PoisonError;
-use std::sync::Weak;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
-use super::common::CStyleCell;
-use super::grace::GraceHashJoinState;
 use super::grace::GraceMemoryJoin;
 use super::hybrid::HybridHashJoin;
 use super::hybrid::HybridHashJoinState;
+use super::hybrid::HybridLevelStates;
 use super::memory::NestedLoopJoin;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
-use crate::pipelines::processors::transforms::GraceHashJoin;
 use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::memory::AntiLeftHashJoin;
@@ -48,14 +40,10 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
 pub struct HashJoinFactory {
-    mutex: Mutex<()>,
     ctx: Arc<QueryContext>,
     desc: Arc<HashJoinDesc>,
     hash_method: HashMethodKind,
     function_ctx: FunctionContext,
-    grace_state: CStyleCell<HashMap<usize, Weak<GraceHashJoinState>>>,
-    basic_state: CStyleCell<HashMap<usize, Weak<BasicHashJoinState>>>,
-    hybrid_state: CStyleCell<HashMap<usize, Weak<HybridHashJoinState>>>,
 }
 
 impl HashJoinFactory {
@@ -70,246 +58,31 @@ impl HashJoinFactory {
             desc,
             function_ctx,
             hash_method: method,
-            mutex: Mutex::new(()),
-            grace_state: CStyleCell::new(HashMap::new()),
-            basic_state: CStyleCell::new(HashMap::new()),
-            hybrid_state: CStyleCell::new(HashMap::new()),
         })
     }
 
-    pub fn create_grace_state(self: &Arc<Self>, id: usize) -> Result<Arc<GraceHashJoinState>> {
-        let locked = self.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        let ctx = self.ctx.clone();
-
-        match self.grace_state.as_mut().entry(id) {
-            Entry::Occupied(v) => match v.get().upgrade() {
-                Some(v) => Ok(v),
-                None => Err(ErrorCode::Internal(format!(
-                    "Error state: The level {} grace hash state has been destroyed.",
-                    id
-                ))),
-            },
-            Entry::Vacant(v) => {
-                let grace_state = GraceHashJoinState::create(ctx, id, self.clone());
-                v.insert(Arc::downgrade(&grace_state));
-                Ok(grace_state)
-            }
-        }
+    /// Create the states shared by all processors of one hybrid hash join level.
+    pub fn create_level_states(self: &Arc<Self>, level: usize) -> Result<HybridLevelStates> {
+        Ok(HybridLevelStates {
+            basic: Arc::new(BasicHashJoinState::create()),
+            hybrid: HybridHashJoinState::create(self.ctx.clone(), level, self.clone())?,
+        })
     }
 
-    pub fn create_basic_state(self: &Arc<Self>, id: usize) -> Result<Arc<BasicHashJoinState>> {
-        let locked = self.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        match self.basic_state.as_mut().entry(id) {
-            Entry::Occupied(v) => match v.get().upgrade() {
-                Some(v) => Ok(v),
-                None => Err(ErrorCode::Internal(format!(
-                    "Error state: The level {} basic hash state has been destroyed.",
-                    id
-                ))),
-            },
-            Entry::Vacant(v) => {
-                let basic_hash_state = Arc::new(BasicHashJoinState::create(id, self.clone()));
-                v.insert(Arc::downgrade(&basic_hash_state));
-                Ok(basic_hash_state)
-            }
-        }
-    }
-
-    pub fn create_hybrid_state(self: &Arc<Self>, level: usize) -> Result<Arc<HybridHashJoinState>> {
-        let locked = self.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        match self.hybrid_state.as_mut().entry(level) {
-            Entry::Occupied(v) => match v.get().upgrade() {
-                Some(v) => Ok(v),
-                None => Err(ErrorCode::Internal(format!(
-                    "Error state: The level {} hybrid hash state has been destroyed.",
-                    level
-                ))),
-            },
-            Entry::Vacant(v) => {
-                let ctx = self.ctx.clone();
-                let hybrid_state = HybridHashJoinState::create(ctx, level, self.clone())?;
-                v.insert(Arc::downgrade(&hybrid_state));
-                Ok(hybrid_state)
-            }
-        }
-    }
-
-    pub fn remove_basic_state(&self, id: usize) {
-        let locked = self.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        self.basic_state.as_mut().remove(&id);
-    }
-
-    pub fn remove_grace_state(&self, id: usize) {
-        let locked = self.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-        self.grace_state.as_mut().remove(&id);
-    }
-
-    pub fn create_hash_join(self: &Arc<Self>, typ: JoinType, id: usize) -> Result<Box<dyn Join>> {
-        // let settings = self.ctx.get_settings();
-        //
-        // if settings.get_force_join_data_spill()? {
-        //     return self.create_grace_join(typ, id);
-        // }
-
-        Ok(Box::new(self.create_hybrid_join(typ, id)?))
-    }
-
-    pub fn create_grace_join(self: &Arc<Self>, typ: JoinType, id: usize) -> Result<Box<dyn Join>> {
-        match typ {
-            JoinType::Inner => {
-                let inner_hash_join = InnerHashJoin::create(
-                    &self.ctx.get_settings(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_basic_state(id)?,
-                    0,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_grace_state(id + 1)?,
-                    inner_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::Left => {
-                let left_hash_join = OuterLeftHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_basic_state(id)?,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_grace_state(id + 1)?,
-                    left_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::LeftAnti => {
-                let left_anti_hash_join = AntiLeftHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_basic_state(id)?,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_grace_state(id + 1)?,
-                    left_anti_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::LeftSemi => {
-                let left_semi_hash_join = SemiLeftHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_basic_state(id)?,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_grace_state(id + 1)?,
-                    left_semi_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::Right => {
-                let right_hash_join = OuterRightHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_basic_state(id)?,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_grace_state(id + 1)?,
-                    right_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::RightSemi => {
-                let semi_right_hash_join = SemiRightHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_basic_state(id)?,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_grace_state(id + 1)?,
-                    semi_right_hash_join,
-                    0,
-                )?))
-            }
-            JoinType::RightAnti => {
-                let anti_right_hash_join = AntiRightHashJoin::create(
-                    &self.ctx,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_basic_state(id)?,
-                )?;
-
-                Ok(Box::new(GraceHashJoin::create(
-                    self.ctx.clone(),
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    self.create_grace_state(id + 1)?,
-                    anti_right_hash_join,
-                    0,
-                )?))
-            }
-            _ => unreachable!(),
-        }
+    pub fn create_hash_join(
+        self: &Arc<Self>,
+        typ: JoinType,
+        states: HybridLevelStates,
+    ) -> Result<Box<dyn Join>> {
+        Ok(Box::new(self.create_hybrid_join(typ, states)?))
     }
 
     /// Create a basic memory join (used internally by HybridHashJoin)
     pub fn create_memory_join(
         self: &Arc<Self>,
         typ: JoinType,
-        level: usize,
+        basic_state: Arc<BasicHashJoinState>,
     ) -> Result<Box<dyn GraceMemoryJoin>> {
-        let basic_state = self.create_basic_state(level)?;
         match typ {
             JoinType::Inner => {
                 let settings = self.ctx.get_settings();
@@ -380,18 +153,14 @@ impl HashJoinFactory {
         }
     }
 
-    /// Create a HybridHashJoin at the specified level
+    /// Create a HybridHashJoin on the given level states
     pub fn create_hybrid_join(
         self: &Arc<Self>,
         typ: JoinType,
-        level: usize,
+        states: HybridLevelStates,
     ) -> Result<HybridHashJoin> {
-        let basic_state = self.create_basic_state(level)?;
-        let memory_join = self.create_memory_join(typ, level)?;
+        let memory_join = self.create_memory_join(typ, states.basic.clone())?;
         let memory_settings = MemorySettings::from_join_settings(&self.ctx)?;
-
-        // Use shared hybrid_state so all processors can coordinate spill
-        let hybrid_state = self.create_hybrid_state(level)?;
 
         Ok(HybridHashJoin::create(
             self.ctx.clone(),
@@ -399,8 +168,8 @@ impl HashJoinFactory {
             self.hash_method.clone(),
             self.desc.clone(),
             memory_settings,
-            hybrid_state,
-            basic_state,
+            states.hybrid,
+            states.basic,
             memory_join,
             typ,
         ))
