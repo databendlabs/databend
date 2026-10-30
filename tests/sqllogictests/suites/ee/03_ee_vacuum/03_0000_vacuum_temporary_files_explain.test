@@ -18,8 +18,12 @@
 statement ok
 SET force_aggregate_data_spill = 1;
 
+# The final aggregate writes spill files only beyond half of max_block_bytes per bucket.
 statement ok
-EXPLAIN ANALYZE SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string order by 1 desc);
+SET max_block_bytes = 1048576;
+
+statement ok
+EXPLAIN ANALYZE SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(2000000) group by number::string order by 1 desc);
 
 query ?
 SELECT COUNT() > 0 as c FROM system.temp_files
@@ -27,7 +31,7 @@ SELECT COUNT() > 0 as c FROM system.temp_files
 0
 
 statement ok
-EXPLAIN PERF SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string order by 1 desc);
+EXPLAIN PERF SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(2000000) group by number::string order by 1 desc);
 
 query ?
 SELECT COUNT() > 0 as c FROM system.temp_files
@@ -44,6 +48,9 @@ SELECT COUNT() > 0 as c FROM system.temp_files
 
 statement ok
 unset max_threads;
+
+statement ok
+unset max_block_bytes;
 
 statement ok
 unset force_aggregate_data_spill;
