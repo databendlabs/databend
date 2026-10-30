@@ -50,6 +50,8 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_enterprise_materialized_view::get_materialized_view_handler;
@@ -221,20 +223,28 @@ impl Binder {
                     .get(OPT_KEY_DATABASE_ID)
                     .ok_or_else(|| ErrorCode::Internal("materialized view database id is missing"))?
                     .parse::<u64>()?;
-                let mv_database = catalog.get_db_name_by_id(database_id).await?;
+                // A materialized view may live in a different database than its source. A dropped
+                // database keeps its id-to-name mapping and the MV source bindings until GC, and
+                // `get_db_name_by_id` still returns that name. `mget_database_names_by_ids` also
+                // checks `drop_on`; MVs in a dropped database are skipped like dropped MVs, so
+                // queries on the source table are not affected.
+                let Some(mv_database) = catalog
+                    .mget_database_names_by_ids(&tenant, &[database_id])
+                    .await?
+                    .pop()
+                    .flatten()
+                else {
+                    continue;
+                };
                 let Some(mv_name) = catalog.get_table_name_by_id(mv.mv_id).await? else {
                     continue;
                 };
                 let current_mv = catalog.get_table(&tenant, &mv_database, &mv_name).await?;
-                let mv_table =
-                    catalog.get_table_by_info(&databend_common_meta_app::schema::TableInfo {
-                        ident: databend_common_meta_app::schema::TableIdent::new(
-                            mv.mv_id,
-                            mv.table_meta.seq,
-                        ),
-                        meta: mv.table_meta.data.clone(),
-                        ..current_mv.get_table_info().clone()
-                    })?;
+                let mv_table = catalog.get_table_by_info(&TableInfo {
+                    ident: TableIdent::new(mv.mv_id, mv.table_meta.seq),
+                    meta: mv.table_meta.data.clone(),
+                    ..current_mv.get_table_info().clone()
+                })?;
 
                 let logical_query = parse_materialized_view_query(
                     &mv.definition.data.original_query,
@@ -550,7 +560,9 @@ impl Binder {
         let source_table_name = source_entry.name().to_string();
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
-        let source_database_id = source_table
+        // Refresh, read, and privilege checks resolve the source database from this option, so
+        // reject a source without it here instead of creating an unusable materialized view.
+        source_table
             .get_table_info()
             .meta
             .options
@@ -561,9 +573,11 @@ impl Binder {
                 ))
             })?
             .parse::<u64>()?;
-        if source_catalog_name != catalog_name || source_database_id != target_database_id {
+        // Refresh, read, and privilege checks resolve the source through its table id in the
+        // default catalog, so the source may live in any database of the target catalog.
+        if source_catalog_name != catalog_name {
             return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view and source table must belong to the same catalog and database: target '{}.{}', source '{}.{}'",
+                "materialized view and source table must belong to the same catalog: target '{}.{}', source '{}.{}'",
                 catalog_name, database_name, source_catalog_name, source_database
             )));
         }
