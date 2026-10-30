@@ -127,6 +127,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use databend_common_meta_app::schema::DBIdTableName;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::ListedMVSource;
 use databend_common_meta_app::schema::ListedMaterializedView;
@@ -723,17 +724,33 @@ where
     let source_database_keys = source_database_ids
         .iter()
         .map(|database_id| DatabaseIdToName::new(*database_id).to_string_key())
+        .chain(
+            source_database_ids
+                .iter()
+                .map(|database_id| DatabaseId::new(*database_id).to_string_key()),
+        )
         .collect::<Vec<_>>();
-    let source_database_responses = mget_responses(kv_api, &source_database_keys).await?;
+    let mut source_database_name_responses = mget_responses(kv_api, &source_database_keys).await?;
+    let source_database_meta_responses =
+        source_database_name_responses.split_off(source_database_ids.len());
     let mut source_database_names = HashMap::with_capacity(source_database_ids.len());
-    for (database_id, response) in source_database_ids
-        .into_iter()
-        .zip(source_database_responses)
-    {
-        let (_, database_name) = deserialize_struct_get_response::<DatabaseIdToName>(response)?;
+    // DROP DATABASE marks only DatabaseMeta and keeps both the id-to-name mapping and the tables'
+    // TableMeta until GC, so a source in a dropped database must be checked through its database.
+    let mut active_source_database_ids = BTreeSet::new();
+    for (database_id, (name_response, meta_response)) in source_database_ids.into_iter().zip(
+        source_database_name_responses
+            .into_iter()
+            .zip(source_database_meta_responses),
+    ) {
+        let (_, database_name) =
+            deserialize_struct_get_response::<DatabaseIdToName>(name_response)?;
         if let Some(database_name) = database_name {
             source_database_names
                 .insert(database_id, database_name.data.database_name().to_string());
+        }
+        let (_, database_meta) = deserialize_struct_get_response::<DatabaseId>(meta_response)?;
+        if database_meta.is_some_and(|meta| meta.data.drop_on.is_none()) {
+            active_source_database_ids.insert(database_id);
         }
     }
 
@@ -744,16 +761,17 @@ where
             .get(&target.source_table_id)
             .cloned()
             .unwrap_or((None, None, false));
-        let (database_id, database_name, table_name) = match table_name {
+        let (database_id, database_name, table_name, is_active) = match table_name {
             Some(table_name) => {
                 let database_id = table_name.data.db_id;
                 (
                     Some(database_id),
                     source_database_names.get(&database_id).cloned(),
                     Some(table_name.data.table_name),
+                    is_active && active_source_database_ids.contains(&database_id),
                 )
             }
-            None => (None, None, None),
+            None => (None, None, None, is_active),
         };
         listed.push(ListedMaterializedView {
             mv: target.mv,

@@ -50,6 +50,8 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_enterprise_materialized_view::get_materialized_view_handler;
@@ -222,8 +224,10 @@ impl Binder {
                     .ok_or_else(|| ErrorCode::Internal("materialized view database id is missing"))?
                     .parse::<u64>()?;
                 // A materialized view may live in a different database than its source. A dropped
-                // database keeps its id-to-name mapping until GC, so resolve only active databases
-                // and skip MVs in dropped ones instead of failing queries on the source table.
+                // database keeps its id-to-name mapping and the MV source bindings until GC, and
+                // `get_db_name_by_id` still returns that name. `mget_database_names_by_ids` also
+                // checks `drop_on`; MVs in a dropped database are skipped like dropped MVs, so
+                // queries on the source table are not affected.
                 let Some(mv_database) = catalog
                     .mget_database_names_by_ids(&tenant, &[database_id])
                     .await?
@@ -236,15 +240,11 @@ impl Binder {
                     continue;
                 };
                 let current_mv = catalog.get_table(&tenant, &mv_database, &mv_name).await?;
-                let mv_table =
-                    catalog.get_table_by_info(&databend_common_meta_app::schema::TableInfo {
-                        ident: databend_common_meta_app::schema::TableIdent::new(
-                            mv.mv_id,
-                            mv.table_meta.seq,
-                        ),
-                        meta: mv.table_meta.data.clone(),
-                        ..current_mv.get_table_info().clone()
-                    })?;
+                let mv_table = catalog.get_table_by_info(&TableInfo {
+                    ident: TableIdent::new(mv.mv_id, mv.table_meta.seq),
+                    meta: mv.table_meta.data.clone(),
+                    ..current_mv.get_table_info().clone()
+                })?;
 
                 let logical_query = parse_materialized_view_query(
                     &mv.definition.data.original_query,

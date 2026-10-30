@@ -178,7 +178,7 @@ pub struct ListedMVSource {
     pub database_id: Option<u64>,
     pub database_name: Option<String>,
     pub table_name: Option<String>,
-    /// Whether source `TableMeta` exists and is not soft-dropped.
+    /// Whether source `TableMeta` exists and is not soft-dropped, and its database is not dropped.
     pub is_active: bool,
     pub bound_source_generation: Option<u64>,
     pub current_source_generation: Option<u64>,
