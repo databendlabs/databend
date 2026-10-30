@@ -92,7 +92,11 @@ impl Processor for HashSendTransform {
 
             let budget_reached = self.writer.add_block(data_block)?;
             if budget_reached {
-                let own = self.output.can_push().then_some(self.local_pos);
+                // `can_push` stays true on a port finished while it needed data. A
+                // block pushed there is never consumed, and this processor would
+                // wait for that consumption instead of pulling its input again.
+                let own = (!self.output.is_finished() && self.output.can_push())
+                    .then_some(self.local_pos);
                 let (own_block, sends_pending) = self.writer.flush(own)?;
                 let pushed = if let Some(block) = own_block {
                     self.output.push_data(Ok(block));
