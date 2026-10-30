@@ -26,8 +26,10 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Planner;
+use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::StatContext;
+use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
@@ -421,6 +423,44 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
     ] {
         ctx.bind_sql(sql).await?;
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_optimizer_context_rule_settings() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    let opt_ctx = OptimizerContext::new(
+        ctx.clone(),
+        MetadataRef::default(),
+        ctx.get_function_context()?,
+    )
+    .with_settings(&ctx.get_settings())?;
+
+    // Defaults: empty skip list, grouping sets to union disabled.
+    assert!(!opt_ctx.get_enable_trace());
+    assert!(!opt_ctx.is_rule_disabled(RuleID::PushDownLimit));
+    assert!(opt_ctx.is_rule_disabled(RuleID::GroupingSetsToUnion));
+    assert!(opt_ctx.is_rule_disabled(RuleID::HierarchicalGroupingSetsToUnion));
+    assert!(opt_ctx.is_optimizer_disabled(&RuleID::GroupingSetsToUnion.to_string()));
+
+    let settings = ctx.get_settings();
+    settings.set_optimizer_skip_list("pUsHdOwNlImIt, CollectStatisticsOptimizer".to_string())?;
+    settings.set_setting("grouping_sets_to_union".to_string(), "1".to_string())?;
+    settings.set_setting("enable_optimizer_trace".to_string(), "1".to_string())?;
+
+    let opt_ctx = OptimizerContext::new(
+        ctx.clone(),
+        MetadataRef::default(),
+        ctx.get_function_context()?,
+    )
+    .with_settings(&settings)?;
+    assert!(opt_ctx.get_enable_trace());
+    assert!(opt_ctx.is_rule_disabled(RuleID::PushDownLimit));
+    assert!(!opt_ctx.is_rule_disabled(RuleID::MergeLimit));
+    assert!(!opt_ctx.is_rule_disabled(RuleID::GroupingSetsToUnion));
+    assert!(!opt_ctx.is_rule_disabled(RuleID::HierarchicalGroupingSetsToUnion));
+    assert!(opt_ctx.is_optimizer_disabled("COLLECTSTATISTICSOPTIMIZER"));
 
     Ok(())
 }
