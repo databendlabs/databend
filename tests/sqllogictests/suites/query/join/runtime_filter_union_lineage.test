@@ -84,6 +84,20 @@ select u.k,u.d from (select k,running_difference(v) as d from (select k,v from r
 1 0
 1 10
 
+# Nullable identity aliases in an outer join may now receive RF. Keep both
+# the matched aggregate and a NULL-extended preserved-side row unchanged.
+query I
+select sum(a) from (select number as a from numbers(10)) x right join (select number as a from numbers(5)) y using(a);
+----
+10
+
+query II rowsort
+select x.a,y.a from (select number as a from numbers(2)) x right join (select number as a from numbers(3)) y using(a);
+----
+0 0
+1 1
+NULL 2
+
 statement ok
 set enable_join_runtime_filter = 1;
 
@@ -120,6 +134,18 @@ select u.k,u.d from (select k,running_difference(v) as d from (select k,v from r
 ----
 1 0
 1 10
+
+query I
+select sum(a) from (select number as a from numbers(10)) x right join (select number as a from numbers(5)) y using(a);
+----
+10
+
+query II rowsort
+select x.a,y.a from (select number as a from numbers(2)) x right join (select number as a from numbers(3)) y using(a);
+----
+0 0
+1 1
+NULL 2
 
 statement ok
 unset enable_join_runtime_filter;
