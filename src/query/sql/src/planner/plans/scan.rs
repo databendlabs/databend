@@ -23,12 +23,8 @@ use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
-use databend_common_expression::stat_distribution::StatCount;
-use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Histogram;
-use databend_common_statistics::StatBounds;
 use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -36,11 +32,9 @@ use databend_storages_common_table_meta::table::ChangeType;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::Symbol;
-use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::CountMinSketchSet;
 use crate::optimizer::ir::Distribution;
-use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -256,17 +250,6 @@ impl Scan {
     }
 }
 
-fn derive_scan_ndv(ndv: Option<u64>, null_count: u64, num_rows: Option<u64>) -> NdvEstimate {
-    let max_non_null_count = num_rows
-        .map(|num_rows| num_rows.saturating_sub(null_count) as f64)
-        .unwrap_or(u64::MAX as f64);
-
-    match ndv {
-        Some(ndv) => NdvEstimate::exact(ndv as f64),
-        None => NdvEstimate::upper_bound(max_non_null_count),
-    }
-}
-
 impl PartialEq for Scan {
     fn eq(&self, other: &Self) -> bool {
         self.table_index == other.table_index
@@ -342,43 +325,12 @@ impl Operator for Scan {
                 continue;
             }
             if let Some(scan_col_stat) = v {
-                let col_stat = &scan_col_stat.basic;
-                let null_count = StatCount::exact(col_stat.null_count);
-                if num_rows.is_some_and(|num_rows| num_rows > 0 && col_stat.null_count == num_rows)
-                {
-                    column_stats.insert(*k, ColumnStat::AllNull { null_count });
-                    continue;
-                }
-                let (Some(min), Some(max)) = (col_stat.min.clone(), col_stat.max.clone()) else {
-                    continue;
-                };
-                let ndv = derive_scan_ndv(col_stat.ndv, col_stat.null_count, num_rows);
-
-                let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
-                    && histogram.is_some()
-                {
-                    histogram.clone()
-                } else {
-                    num_rows.and_then(|num_rows| {
-                        let num_rows = num_rows.saturating_sub(col_stat.null_count);
-                        if num_rows == 0 {
-                            return None;
-                        }
-                        let ndv = col_stat.ndv?;
-                        HistogramBuilder::from_ndv(
-                            ndv,
-                            num_rows,
-                            Some((min.clone(), max.clone())),
-                            DEFAULT_HISTOGRAM_BUCKETS,
-                            scan_col_stat.histogram_spacing_unit,
-                        )
-                        .ok()
-                    })
-                };
-                let Ok(bounds) = StatBounds::new(min, max) else {
-                    continue;
-                };
-                if let Ok(column_stat) = ColumnStat::new(bounds, ndv, null_count, histogram) {
+                let histogram = self.statistics.histograms.get(k).cloned().flatten();
+                if let Ok(Some(column_stat)) = scan_col_stat.basic.to_column_stat(
+                    num_rows,
+                    histogram,
+                    scan_col_stat.histogram_spacing_unit,
+                ) {
                     column_stats.insert(*k, column_stat);
                 }
             }

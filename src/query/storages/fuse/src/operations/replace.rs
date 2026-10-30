@@ -146,13 +146,18 @@ impl FuseTable {
                 } else {
                     let maybe_col_stats =
                         col_stats_provider.column_statistics(key.table_field.column_id);
-                    // Safe to unwrap: ndv in FuseTable's ColumnStatistics is not None.
-                    maybe_col_stats.map(|col_stats| (idx, col_stats.ndv.unwrap()))
+                    maybe_col_stats.map(|col_stats| {
+                        let ndv = col_stats
+                            .ndv
+                            .map(|ndv| ndv.expected.unwrap_or(ndv.upper))
+                            .unwrap_or(0.0);
+                        (idx, ndv)
+                    })
                 }
             })
             .collect::<Vec<_>>();
 
-        cols.sort_by(|l, r| l.1.cmp(&r.1).reverse());
+        cols.sort_by(|l, r| l.1.total_cmp(&r.1).reverse());
         Ok(cols
             .into_iter()
             .map(|v| v.0)

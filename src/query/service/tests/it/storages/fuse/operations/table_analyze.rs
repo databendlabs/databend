@@ -27,6 +27,7 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_statistics::Datum;
+use databend_common_statistics::NdvEstimate;
 use databend_common_storage::MetaHLL12;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -83,12 +84,16 @@ async fn test_exact_ndv_bounds_without_analyze() -> anyhow::Result<()> {
     assert!(snapshot.table_statistics_location.is_none());
     let provider = table.column_statistics_provider(ctx.clone()).await?;
     assert_eq!(provider.stats_num_rows(), Some(0));
-    for (column_id, expected) in [(0, 3), (1, 250), (2, 250), (3, 2)] {
-        assert_eq!(
-            provider.column_statistics(column_id).unwrap().ndv,
-            Some(expected),
-            "column {column_id}"
-        );
+    // Without a table-level HLL, the summary's block NDV sum is the point and
+    // its sketch margin the upper; the exact row/domain bounds still cap both.
+    for (column_id, upper, exact) in [(0, 3, true), (1, 250, false), (2, 250, false), (3, 2, true)]
+    {
+        let ndv = provider.column_statistics(column_id).unwrap().ndv.unwrap();
+        assert_eq!(ndv.upper, upper as f64, "column {column_id}");
+        assert!(ndv.expected.is_some(), "column {column_id}");
+        if exact {
+            assert_eq!(ndv, NdvEstimate::exact(upper as f64), "column {column_id}");
+        }
     }
     Ok(())
 }
@@ -154,7 +159,10 @@ async fn test_unknown_legacy_sample_ndv_after_sql_append() -> anyhow::Result<()>
     let provider = table.column_statistics_provider(ctx.clone()).await?;
     assert_eq!(provider.stats_num_rows(), Some(0));
     assert_eq!(provider.num_rows(), Some(100));
-    assert_eq!(provider.column_statistics(0).unwrap().ndv, Some(100));
+    assert_eq!(
+        provider.column_statistics(0).unwrap().ndv,
+        Some(NdvEstimate::upper_bound(100.0))
+    );
     Ok(())
 }
 
@@ -310,7 +318,7 @@ async fn check_column_ndv_statistics(
         let stat = provider.column_statistics(*i);
         assert!(stat.is_some());
         // Safe to unwrap: FuseTable's ndv is not None.
-        assert_eq!(stat.unwrap().ndv.unwrap(), *num);
+        assert_eq!(stat.unwrap().ndv.unwrap().expected, Some(*num as f64));
     }
 
     Ok(())

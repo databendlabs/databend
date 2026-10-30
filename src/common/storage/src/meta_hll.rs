@@ -17,6 +17,7 @@
 use std::hash::Hash;
 
 use ahash::RandomState;
+use databend_common_statistics::StatEstimate;
 
 pub type MetaHLL12 = simple_hll::HyperLogLog<12>;
 
@@ -111,6 +112,29 @@ impl MetaHLL {
         z += m * hll_sigma(histogram[0] as f64 / m);
 
         (0.5 / 2_f64.ln() * m * m / z).round() as usize
+    }
+
+    /// Point NDV and nominal two-sided 95% interval under uniform independent
+    /// hashing. HLL's asymptotic relative standard error is 1.04 / sqrt(m)
+    /// (Flajolet et al., HyperLogLog, 2007). This is an approximation, especially
+    /// for small cardinalities, not a deterministic support bound.
+    ///
+    /// Invert -z*r <= (estimate - true)/true <= z*r to obtain the interval;
+    /// using estimate * (1 +/- z*r) would not invert that error model.
+    pub fn count_estimate(&self) -> StatEstimate {
+        Self::estimate_interval(self.count() as f64)
+    }
+
+    /// The interval of [`Self::count_estimate`] for a point produced by this
+    /// sketch. Before rounding both endpoints are linear in the point, so the
+    /// upper of a sum of estimates equals the sum of their uppers.
+    pub fn estimate_interval(point: f64) -> StatEstimate {
+        let relative_margin = 1.959963984540054 * 1.04 / (M as f64).sqrt();
+        StatEstimate::new(
+            (point / (1.0 + relative_margin)).floor(),
+            point,
+            (point / (1.0 - relative_margin)).ceil(),
+        )
     }
 
     #[inline]
@@ -316,6 +340,56 @@ mod tests {
             sized_number_test!($SIZE, i32);
             typed_large_number_test!($SIZE);
         }};
+    }
+
+    #[test]
+    fn test_count_estimate_is_derived_from_sketch_error() {
+        let mut hll = MetaHLL::new();
+        assert_eq!(
+            hll.count_estimate(),
+            databend_common_statistics::StatEstimate::exact(0.0)
+        );
+        for value in 0..10_000_u64 {
+            hll.add_object(&value);
+        }
+        let estimate = hll.count_estimate();
+        let relative_margin = 1.959963984540054 * 1.04 / (M as f64).sqrt();
+        assert_eq!(estimate.expected, hll.count() as f64);
+        assert_eq!(
+            estimate.lower,
+            (estimate.expected / (1.0 + relative_margin)).floor()
+        );
+        assert_eq!(
+            estimate.upper,
+            (estimate.expected / (1.0 - relative_margin)).ceil()
+        );
+        assert!(estimate.lower < estimate.expected);
+        assert!(estimate.expected < estimate.upper);
+    }
+
+    #[test]
+    fn test_count_estimate_empirical_coverage() {
+        // Distinct salted input sets exercise the estimator's random-hashing
+        // model reproducibly. The loose binomial guard avoids a flaky demand
+        // for exactly 95% coverage in a finite experiment.
+        for cardinality in [1, 10, 100, 1000, 10_000] {
+            let mut covered = 0;
+            for trial in 0..256_u64 {
+                let mut hll = MetaHLL::new();
+                for value in 0..cardinality {
+                    hll.add_object(&(trial, value));
+                }
+                let estimate = hll.count_estimate();
+                if estimate.lower <= cardinality as f64 && cardinality as f64 <= estimate.upper {
+                    covered += 1;
+                }
+            }
+            eprintln!("NDV={cardinality}: nominal 95% interval covered {covered}/256 trials");
+            assert!(
+                covered >= 230,
+                "insufficient coverage for NDV={cardinality}: {covered}/256"
+            );
+        }
     }
 
     #[test]

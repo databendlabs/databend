@@ -161,7 +161,7 @@ fn write_input_stats(file: &mut impl Write, side: &str, stats: TableStats) -> Re
         stats.rows,
         min,
         max,
-        ndv,
+        ndv.expected.unwrap_or(ndv.upper),
         if stats.histogram_json.is_some() {
             "present"
         } else {

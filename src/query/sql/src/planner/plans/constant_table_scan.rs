@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -21,20 +22,14 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::stat_distribution::NdvEstimate;
-use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::NumberType;
 use databend_common_functions::aggregates::eval_aggr;
-use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
-use databend_common_statistics::StatBounds;
 
 use crate::ColumnSet;
 use crate::Symbol;
-use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
-use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -161,77 +156,73 @@ impl Operator for ConstantTableScan {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
             let (is_all_null, bitmap) = value.validity();
-            if is_all_null {
-                if self.num_rows > 0 {
-                    column_stats.insert(*index, ColumnStat::AllNull {
-                        null_count: StatCount::exact(self.num_rows as u64),
-                    });
-                }
-                continue;
+            let mut basic = BasicColumnStatistics {
+                null_count: if is_all_null {
+                    self.num_rows as u64
+                } else {
+                    bitmap.map_or(0, |bitmap| bitmap.null_count() as u64)
+                },
+                ..Default::default()
+            };
+            if !is_all_null {
+                let (mins, _) = eval_aggr(
+                    "min",
+                    vec![],
+                    &[value.clone().into()],
+                    self.num_rows,
+                    vec![],
+                )?;
+                let min = if let Some(v) = mins.index(0) {
+                    match v.to_owned().to_datum() {
+                        Some(val) => val,
+                        None => {
+                            continue;
+                        }
+                    }
+                } else {
+                    continue;
+                };
+                let (maxs, _) = eval_aggr(
+                    "max",
+                    vec![],
+                    &[value.clone().into()],
+                    self.num_rows,
+                    vec![],
+                )?;
+                let max = if let Some(v) = maxs.index(0) {
+                    match v.to_owned().to_datum() {
+                        Some(val) => val,
+                        None => {
+                            continue;
+                        }
+                    }
+                } else {
+                    continue;
+                };
+
+                let distinct_values = eval_aggr(
+                    "count_distinct",
+                    vec![],
+                    &[value.clone().into()],
+                    self.num_rows,
+                    vec![],
+                )?;
+                let ndv = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap()[0];
+
+                basic.min = Some(min);
+                basic.max = Some(max);
+                basic = basic.with_exact_ndv(Some(ndv), self.num_rows as u64);
             }
-            let (mins, _) = eval_aggr(
-                "min",
-                vec![],
-                &[value.clone().into()],
-                self.num_rows,
-                vec![],
-            )?;
-            let min = if let Some(v) = mins.index(0) {
-                match v.to_owned().to_datum() {
-                    Some(val) => val,
-                    None => {
-                        continue;
-                    }
-                }
-            } else {
-                continue;
-            };
-            let (maxs, _) = eval_aggr(
-                "max",
-                vec![],
-                &[value.clone().into()],
-                self.num_rows,
-                vec![],
-            )?;
-            let max = if let Some(v) = maxs.index(0) {
-                match v.to_owned().to_datum() {
-                    Some(val) => val,
-                    None => {
-                        continue;
-                    }
-                }
-            } else {
-                continue;
-            };
-
-            let distinct_values = eval_aggr(
-                "approx_count_distinct",
-                vec![],
-                &[value.clone().into()],
-                self.num_rows,
-                vec![],
-            )?;
-            let ndv = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap()[0];
-
-            let null_count = bitmap.map_or(0, |bitmap| bitmap.null_count() as u64);
-
-            let histogram = HistogramBuilder::from_ndv(
-                ndv,
-                self.num_rows as u64,
-                Some((min.clone(), max.clone())),
-                DEFAULT_HISTOGRAM_BUCKETS,
-                crate::plans::Statistics::histogram_spacing_unit(&value.data_type()),
-            )
-            .ok();
-            let bounds = StatBounds::new(min, max)?;
-            let column_stat = ColumnStat::new(
-                bounds,
-                NdvEstimate::exact(ndv as f64),
-                StatCount::exact(null_count),
-                histogram,
-            )
-            .map_err(ErrorCode::Internal)?;
-            column_stats.insert(*index, column_stat);
+            if let Some(column_stat) = basic
+                .to_column_stat(
+                    Some(self.num_rows as u64),
+                    None,
+                    crate::plans::Statistics::histogram_spacing_unit(&value.data_type()),
+                )
+                .map_err(ErrorCode::Internal)?
+            {
+                column_stats.insert(*index, column_stat);
+            }
         }
         Ok(Arc::new(StatInfo {
             cardinality: self.num_rows as f64,

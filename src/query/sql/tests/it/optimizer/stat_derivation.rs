@@ -37,6 +37,7 @@ use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOp;
 use databend_common_statistics::Datum;
+use databend_common_statistics::NdvEstimate;
 
 use crate::framework::LiteTableContext;
 use crate::framework::golden::open_golden_file;
@@ -70,14 +71,14 @@ fn column_statistics() -> HashMap<String, BasicColumnStatistics> {
         ("k".to_string(), BasicColumnStatistics {
             min: Some(Datum::Int(1)),
             max: Some(Datum::Int(100)),
-            ndv: Some(100),
+            ndv: Some(NdvEstimate::exact(100.0)),
             null_count: 10,
             in_memory_size: 800,
         }),
         ("p".to_string(), BasicColumnStatistics {
             min: Some(Datum::Int(1)),
             max: Some(Datum::Int(5)),
-            ndv: Some(5),
+            ndv: Some(NdvEstimate::exact(5.0)),
             null_count: 0,
             in_memory_size: 800,
         }),
@@ -163,14 +164,14 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
             ("d".to_string(), BasicColumnStatistics {
                 min: Some(Datum::Int(0)),
                 max: Some(Datum::Int(80_000)),
-                ndv: Some(1000),
+                ndv: Some(NdvEstimate::exact(1000.0)),
                 null_count: 0,
                 in_memory_size: 4000,
             }),
             ("ts".to_string(), BasicColumnStatistics {
                 min: Some(Datum::Int(0)),
                 max: Some(Datum::Int(80_000 * 86_400 * 1_000_000)),
-                ndv: Some(1000),
+                ndv: Some(NdvEstimate::exact(1000.0)),
                 null_count: 0,
                 in_memory_size: 8000,
             }),

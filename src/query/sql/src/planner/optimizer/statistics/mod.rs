@@ -13,5 +13,6 @@
 // limitations under the License.
 
 pub mod collect_statistics;
+pub mod trace;
 
 pub use collect_statistics::CollectStatisticsOptimizer;

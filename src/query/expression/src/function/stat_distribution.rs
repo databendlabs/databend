@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_statistics::BorrowedHistogram;
+use databend_common_statistics::ColumnStat;
 use databend_common_statistics::Histogram;
 pub use databend_common_statistics::NdvEstimate;
 pub use databend_common_statistics::StatCardinality;
@@ -107,6 +108,41 @@ impl<D> StatDistribution<D> {
 }
 
 impl<'a> ArgStat<'a> {
+    /// Adapt the shared column-statistics model to a logical expression domain.
+    /// Bounds, NDV and histogram interpretation already happened in that model.
+    pub fn from_column_stat(stat: &'a ColumnStat, data_type: &DataType) -> Result<Self, String> {
+        if let ColumnStat::AllNull { null_count } = stat {
+            if !matches!(data_type, DataType::Null | DataType::Nullable(_)) {
+                return Err(format!(
+                    "all-NULL statistics require a nullable data type, got {data_type:?}"
+                ));
+            }
+            return Ok(Self {
+                domain: Domain::Nullable(NullableDomain {
+                    has_null: true,
+                    value: None,
+                }),
+                ndv: stat.ndv(),
+                null_count: *null_count,
+                distribution: BorrowedDistribution::Unknown,
+            });
+        }
+        let null_count = stat.null_count();
+        let distribution = stat
+            .histogram()
+            .map(BorrowedDistribution::Histogram)
+            .unwrap_or(BorrowedDistribution::Unknown);
+        let bounds = stat
+            .bounds()
+            .ok_or_else(|| "all-NULL statistics do not have value bounds".to_string())?;
+        Ok(Self {
+            domain: Domain::from_bounds(data_type, bounds, null_count.upper() > 0.0)?,
+            ndv: stat.ndv(),
+            null_count,
+            distribution,
+        })
+    }
+
     pub fn histogram(&self) -> Option<BorrowedHistogram<'a>> {
         self.distribution.as_histogram()
     }
@@ -293,6 +329,48 @@ mod tests {
     use crate::types::boolean::BooleanDomain;
     use crate::types::number::NumberDomain;
     use crate::types::number::SimpleDomain;
+
+    #[test]
+    fn test_shared_column_stat_adapter_preserves_estimates() {
+        let column = databend_common_statistics::BasicColumnStatistics {
+            min: Some(databend_common_statistics::Datum::Int(0)),
+            max: Some(databend_common_statistics::Datum::Int(99)),
+            ndv: Some(NdvEstimate::new(12.0, 15.0)),
+            null_count: 20,
+            in_memory_size: 800,
+        }
+        .to_column_stat(Some(100), None, 1.0)
+        .unwrap()
+        .unwrap();
+        let data_type = DataType::Number(crate::types::NumberDataType::Int64).wrap_nullable();
+        let adapted = ArgStat::from_column_stat(&column, &data_type).unwrap();
+        assert_eq!(adapted.ndv, column.ndv());
+        assert_eq!(adapted.null_count, column.null_count());
+        let histogram_rows = adapted.histogram().map(|histogram| histogram.num_values());
+        assert!((histogram_rows.unwrap() - 80.0).abs() < 1e-9);
+        adapted
+            .check_consistency_with_type(Some(&data_type))
+            .unwrap();
+    }
+
+    #[test]
+    fn test_all_null_column_adapter_requires_nullable_type() {
+        let column = ColumnStat::AllNull {
+            null_count: StatCount::exact(3),
+        };
+        let data_type = DataType::Number(crate::types::NumberDataType::Int64);
+        assert!(ArgStat::from_column_stat(&column, &data_type).is_err());
+        let adapted = ArgStat::from_column_stat(&column, &data_type.wrap_nullable()).unwrap();
+        assert_eq!(adapted.ndv, NdvEstimate::exact(0.0));
+        assert_eq!(adapted.null_count, StatCount::exact(3));
+        assert!(matches!(
+            adapted.domain,
+            Domain::Nullable(NullableDomain {
+                value: None,
+                has_null: true
+            })
+        ));
+    }
 
     #[test]
     fn test_empty_histogram_requires_non_null_value_domain() {

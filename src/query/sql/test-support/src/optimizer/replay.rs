@@ -22,6 +22,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_sql::optimizer::ColumnStatisticsTrace;
 use databend_common_statistics::Histogram;
 use serde::Deserialize;
 
@@ -75,7 +76,7 @@ pub struct ReplayRowAccessPolicy {
 pub struct ReplayColumn {
     pub table_index: usize,
     pub column_name: String,
-    pub statistics: Option<BasicColumnStatistics>,
+    pub statistics: Option<ColumnStatisticsTrace>,
     pub histogram: Option<HistogramStats>,
 }
 
@@ -146,12 +147,12 @@ impl ReplayInput {
                         if column.table_index != table_index {
                             return None;
                         }
-                        column
-                            .statistics
-                            .as_ref()
-                            .map(|stats| (column.column_name.clone(), stats.clone()))
+                        column.statistics.as_ref().map(|stats| {
+                            BasicColumnStatistics::try_from(stats)
+                                .map(|stats| (column.column_name.clone(), stats))
+                        })
                     })
-                    .collect();
+                    .collect::<Result<HashMap<_, _>>>()?;
                 let histograms = self
                     .column_stats
                     .iter()

@@ -39,7 +39,7 @@ use uuid::Uuid;
 
 use crate::IcebergTable;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct IcebergStatistics {
     /// Number of records in this table
     pub record_count: u64,
@@ -52,6 +52,83 @@ pub struct IcebergStatistics {
 
     /// Computed statistics for each column
     pub computed_statistics: HashMap<ColumnId, statistics::BasicColumnStatistics>,
+}
+
+// Only engine-options transport needs serde. Keep the Iceberg wire format
+// independent of runtime statistics; Iceberg currently supplies no column NDV.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct IcebergStatisticsWire {
+    record_count: u64,
+    file_size_in_bytes: u64,
+    number_of_manifest_files: u64,
+    number_of_data_files: u64,
+    computed_statistics: HashMap<ColumnId, IcebergColumnStatisticsWire>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct IcebergColumnStatisticsWire {
+    min: Option<databend_common_statistics::Datum>,
+    max: Option<databend_common_statistics::Datum>,
+    null_count: u64,
+    in_memory_size: u64,
+}
+
+impl TryFrom<&IcebergStatistics> for IcebergStatisticsWire {
+    type Error = ErrorCode;
+
+    fn try_from(stats: &IcebergStatistics) -> Result<Self> {
+        if stats
+            .computed_statistics
+            .values()
+            .any(|column| column.ndv.is_some())
+        {
+            return Err(ErrorCode::Internal(
+                "Iceberg engine-options wire format does not support column NDV",
+            ));
+        }
+        Ok(Self {
+            record_count: stats.record_count,
+            file_size_in_bytes: stats.file_size_in_bytes,
+            number_of_manifest_files: stats.number_of_manifest_files,
+            number_of_data_files: stats.number_of_data_files,
+            computed_statistics: stats
+                .computed_statistics
+                .iter()
+                .map(|(id, column)| {
+                    (*id, IcebergColumnStatisticsWire {
+                        min: column.min.clone(),
+                        max: column.max.clone(),
+                        null_count: column.null_count,
+                        in_memory_size: column.in_memory_size,
+                    })
+                })
+                .collect(),
+        })
+    }
+}
+
+impl From<IcebergStatisticsWire> for IcebergStatistics {
+    fn from(stats: IcebergStatisticsWire) -> Self {
+        Self {
+            record_count: stats.record_count,
+            file_size_in_bytes: stats.file_size_in_bytes,
+            number_of_manifest_files: stats.number_of_manifest_files,
+            number_of_data_files: stats.number_of_data_files,
+            computed_statistics: stats
+                .computed_statistics
+                .into_iter()
+                .map(|(id, column)| {
+                    (id, BasicColumnStatistics {
+                        min: column.min,
+                        max: column.max,
+                        ndv: None,
+                        null_count: column.null_count,
+                        in_memory_size: column.in_memory_size,
+                    })
+                })
+                .collect(),
+        }
+    }
 }
 
 impl IcebergStatistics {
@@ -263,5 +340,48 @@ pub fn parse_datum(data: &Datum) -> Option<Scalar> {
         }
         PrimitiveLiteral::AboveMax => None,
         PrimitiveLiteral::BelowMin => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_statistics_engine_options_round_trip() -> Result<()> {
+        let stats = IcebergStatistics {
+            record_count: 100,
+            file_size_in_bytes: 800,
+            number_of_manifest_files: 2,
+            number_of_data_files: 3,
+            computed_statistics: HashMap::from([(7, BasicColumnStatistics {
+                min: Some(databend_common_statistics::Datum::Int(1)),
+                max: Some(databend_common_statistics::Datum::Int(50)),
+                ndv: None,
+                null_count: 20,
+                in_memory_size: 800,
+            })]),
+        };
+        let json = serde_json::to_string(&IcebergStatisticsWire::try_from(&stats)?)?;
+        let wire: IcebergStatisticsWire = serde_json::from_str(&json)?;
+        let replay = IcebergStatistics::from(wire);
+        assert_eq!(replay.record_count, stats.record_count);
+        assert_eq!(replay.file_size_in_bytes, stats.file_size_in_bytes);
+        assert_eq!(
+            replay.number_of_manifest_files,
+            stats.number_of_manifest_files
+        );
+        assert_eq!(replay.number_of_data_files, stats.number_of_data_files);
+        let column = replay.column_statistics(7).unwrap();
+        assert_eq!(column.min, stats.computed_statistics[&7].min);
+        assert_eq!(column.max, stats.computed_statistics[&7].max);
+        assert_eq!(column.ndv, None);
+        assert_eq!(column.null_count, 20);
+        assert_eq!(column.in_memory_size, 800);
+        let mut with_ndv = stats;
+        with_ndv.computed_statistics.get_mut(&7).unwrap().ndv =
+            Some(databend_common_statistics::NdvEstimate::new(10.0, 80.0));
+        assert!(IcebergStatisticsWire::try_from(&with_ndv).is_err());
+        Ok(())
     }
 }

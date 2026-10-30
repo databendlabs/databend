@@ -105,7 +105,6 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
@@ -155,6 +154,7 @@ use crate::FuseStorageFormat;
 use crate::Table;
 use crate::TableStatistics;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
+use crate::fuse_column::column_ndv_estimates;
 use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
@@ -1351,13 +1351,8 @@ impl Table for FuseTable {
             let stats = snapshot.summary.col_stats.clone();
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
             let additional_stats_meta = snapshot.summary.additional_stats_meta.as_ref();
-            let column_distinct_values = match additional_stats_meta.and_then(|v| v.hll.as_ref()) {
-                Some(v) if !v.is_empty() => decode_column_hll(v)?
-                    .map(|v| v.iter().map(|hll| (*hll.0, hll.1.count() as u64)).collect()),
-                _ => table_statistics
-                    .as_ref()
-                    .map(|v| v.column_distinct_values()),
-            };
+            let (column_distinct_values, stats_row_count) =
+                column_ndv_estimates(additional_stats_meta, table_statistics.as_deref())?;
             let histograms = table_statistics
                 .as_ref()
                 .map(|v| v.histograms.clone())
@@ -1371,10 +1366,6 @@ impl Table for FuseTable {
             let count_min_sketch = aligned_table_statistics
                 .map(|v| v.count_min_sketch.clone())
                 .unwrap_or_default();
-            let stats_row_count = additional_stats_meta
-                .map(|v| v.row_count)
-                .or(table_statistics.as_ref().map(|v| v.row_count))
-                .unwrap_or(0);
             FuseTableColumnStatisticsProvider::new(
                 stats,
                 histograms,

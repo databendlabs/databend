@@ -503,7 +503,7 @@ fn build_input_domains(
                 return Ok((binding, Domain::full(&data_type)));
             }
 
-            match column_stat.to_arg_stat(&data_type) {
+            match ArgStat::from_column_stat(column_stat, &data_type) {
                 Ok(arg_stat) => Ok((binding, arg_stat.domain)),
                 Err(msg) => {
                     log::warn!(
@@ -923,7 +923,7 @@ impl SelectivityVisitor<'_> {
                 _ => return Ok(None),
             }
 
-            match column_stat.to_arg_stat(&data_type) {
+            match ArgStat::from_column_stat(column_stat, &data_type) {
                 Ok(arg_stat) => {
                     input_stats.insert(binding, arg_stat);
                 }
