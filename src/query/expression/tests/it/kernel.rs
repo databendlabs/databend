@@ -725,3 +725,128 @@ fn test_estimated_scalar_repeat_size() {
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 }
+
+#[test]
+fn test_select_if_then_else() {
+    use databend_common_expression::Value;
+    use databend_common_expression::select_if_then_else;
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    let mut rng = StdRng::seed_from_u64(20881);
+    let mut data_types = get_all_test_data_types(DataTypeFilter::All);
+    data_types.extend([
+        DataType::Decimal(DecimalSize::new_unchecked(50, 5)),
+        DataType::Tuple(vec![
+            DataType::Number(NumberDataType::Int16),
+            DataType::String,
+        ]),
+    ]);
+    data_types.extend(
+        [
+            DataType::Boolean,
+            DataType::Number(NumberDataType::Int64),
+            DataType::Number(NumberDataType::Float64),
+            DataType::Decimal(DecimalSize::new_unchecked(10, 2)),
+            DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
+            DataType::Decimal(DecimalSize::new_unchecked(50, 5)),
+            DataType::Date,
+            DataType::Timestamp,
+            DataType::Binary,
+            DataType::Variant,
+            DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
+        ]
+        .map(|ty| DataType::Nullable(Box::new(ty))),
+    );
+
+    for len in [0, 1, 63, 64, 65, 130, 700] {
+        for shape in ["random", "runs", "all_set", "all_unset"] {
+            // A sliced mask exercises bit offsets that are not word aligned.
+            let offset = rng.gen_range(0..64);
+            let mut run_left = 0;
+            let mut bit = false;
+            let bits = (0..offset + len)
+                .map(|_| match shape {
+                    "random" => rng.gen_bool(0.5),
+                    "runs" => {
+                        if run_left == 0 {
+                            run_left = rng.gen_range(1..200);
+                            bit = !bit;
+                        }
+                        run_left -= 1;
+                        bit
+                    }
+                    "all_set" => true,
+                    _ => false,
+                })
+                .collect::<Vec<_>>();
+            let mut mask = Bitmap::from(bits.as_slice());
+            mask.slice(offset, len);
+
+            for data_type in &data_types {
+                let then_column = Column::random(data_type, len, None);
+                let else_column = Column::random(data_type, len, None);
+                let mut scalars = vec![
+                    Column::random(data_type, 1, None)
+                        .index(0)
+                        .unwrap()
+                        .to_owned(),
+                ];
+                if data_type.is_nullable_or_null() {
+                    scalars.push(Scalar::Null);
+                }
+
+                let mut cases = vec![(
+                    Value::Column(then_column.clone()),
+                    Value::Column(else_column.clone()),
+                )];
+                for scalar in scalars {
+                    cases.push((
+                        Value::Scalar(scalar.clone()),
+                        Value::Column(else_column.clone()),
+                    ));
+                    cases.push((
+                        Value::Column(then_column.clone()),
+                        Value::Scalar(scalar.clone()),
+                    ));
+                    cases.push((Value::Scalar(scalar.clone()), Value::Scalar(scalar)));
+                }
+
+                for (then_value, else_value) in cases {
+                    let result = select_if_then_else(&mask, &then_value, &else_value, data_type);
+                    assert_eq!(&result.data_type(), data_type);
+                    assert_eq!(result.len(), len);
+                    for (row, take_then) in mask.iter().enumerate() {
+                        let source = if take_then { &then_value } else { &else_value };
+                        assert_eq!(
+                            result.index(row).unwrap(),
+                            source.index(row).unwrap(),
+                            "{data_type} {shape} len {len} row {row}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_select_if_then_else_non_strict_decimal() {
+    use databend_common_expression::Value;
+    use databend_common_expression::select_if_then_else;
+    use databend_common_expression::types::DecimalColumn;
+
+    // Decimal(10, 2) carried by a Decimal128 column is a non-strict
+    // representation: the selection reads it at the strict Decimal64 width.
+    let size = DecimalSize::new_unchecked(10, 2);
+    let data_type = DataType::Decimal(size);
+    let non_strict = Column::Decimal(DecimalColumn::Decimal128(vec![1_i128, 2, 3].into(), size));
+    let mask = Bitmap::from([true, false, true].as_slice());
+    let zero = Value::Scalar(Scalar::Decimal(DecimalScalar::Decimal128(0, size)));
+    let result = select_if_then_else(&mask, &Value::Column(non_strict), &zero, &data_type);
+    assert_eq!(
+        result,
+        Column::Decimal(DecimalColumn::Decimal64(vec![1_i64, 0, 3].into(), size))
+    );
+}

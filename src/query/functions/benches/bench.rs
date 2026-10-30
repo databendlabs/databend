@@ -70,6 +70,89 @@ mod numeric_if {
     }
 }
 
+/// Row selection of a binary `if` under different condition shapes: alternating
+/// (every 64-row mask word is mixed), clustered (two runs, as on a column the
+/// table is clustered by) and all true (one branch is never needed).
+#[divan::bench_group(sample_count = 30)]
+mod if_selection {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::FromData;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::type_check;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::number::Int64Type;
+    use databend_common_expression_test_support as parser;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use divan::counter::ItemsCount;
+
+    const ROWS: usize = 65_536;
+
+    fn bench_expr(bencher: divan::Bencher, sql: &str) {
+        let raw_expr = parser::parse_raw_expr(
+            sql,
+            &[
+                ("x", DataType::Number(NumberDataType::Int64)),
+                ("s", DataType::String),
+            ],
+            &BUILTIN_FUNCTIONS,
+        );
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let x = (0..ROWS).map(|value| value as i64).collect::<Vec<_>>();
+        let s = (0..ROWS)
+            .map(|value| format!("value_{value:08}_with_a_long_suffix"))
+            .collect::<Vec<_>>();
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::Column(Int64Type::from_data(x)),
+                BlockEntry::Column(StringType::from_data(s)),
+            ],
+            ROWS,
+        );
+        let func_ctx = FunctionContext::default();
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .bench(|| evaluator.run(&expr).unwrap());
+    }
+
+    #[divan::bench(args = ["alternating", "clustered", "all_true"])]
+    fn int64(bencher: divan::Bencher, shape: &str) {
+        bench_expr(bencher, &format!("if({}, x, x * 3)", condition(shape)));
+    }
+
+    #[divan::bench(args = ["alternating", "clustered", "all_true"])]
+    fn nullable_int64(bencher: divan::Bencher, shape: &str) {
+        bench_expr(bencher, &format!("if({}, x, NULL)", condition(shape)));
+    }
+
+    #[divan::bench(args = ["alternating", "clustered", "all_true"])]
+    fn string(bencher: divan::Bencher, shape: &str) {
+        bench_expr(bencher, &format!("if({}, s, 'none')", condition(shape)));
+    }
+
+    #[divan::bench(args = ["alternating", "clustered", "all_true"])]
+    fn boolean(bencher: divan::Bencher, shape: &str) {
+        bench_expr(
+            bencher,
+            &format!("if({}, x > 10, x < 10)", condition(shape)),
+        );
+    }
+
+    fn condition(shape: &str) -> String {
+        match shape {
+            "alternating" => "x % 2 = 0".to_string(),
+            "clustered" => format!("x < {}", ROWS / 2),
+            "all_true" => "x >= 0".to_string(),
+            _ => unreachable!(),
+        }
+    }
+}
+
 // bench            fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ╰─ dummy                       │               │               │               │         │
 //    ├─ check                    │               │               │               │         │

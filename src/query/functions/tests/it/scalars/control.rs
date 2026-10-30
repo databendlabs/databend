@@ -211,6 +211,95 @@ fn test_if(file: &mut impl Write) {
         ("expr_a", Int64Type::from_data(vec![1i64, 2, 0, 4])),
         ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
     ]);
+
+    // A column condition that is true (or false, or NULL) on every row: the
+    // rows reach a single branch, and the division by zero in the other
+    // branch must not be reported.
+    run_ast(file, "if(cond_a, expr_a, 1 / expr_zero)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, true, true, true]),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+        ("expr_zero", Int64Type::from_data(vec![0i64, 0, 0, 0])),
+    ]);
+    run_ast(file, "if(cond_a, 1 / expr_zero, expr_a)", &[
+        (
+            "cond_a",
+            BooleanType::from_data_with_validity(vec![false, true, false, true], vec![
+                true, false, true, false,
+            ]),
+        ),
+        ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+        ("expr_zero", Int64Type::from_data(vec![0i64, 0, 0, 0])),
+    ]);
+    // The first condition takes every row: the errors in later conditions and
+    // branches must not be reported.
+    run_ast(
+        file,
+        "if(cond_a, expr_a, 1 / expr_zero = 1, 1 / expr_zero, expr_a)",
+        &[
+            (
+                "cond_a",
+                BooleanType::from_data(vec![true, true, true, true]),
+            ),
+            ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+            ("expr_zero", Int64Type::from_data(vec![0i64, 0, 0, 0])),
+        ],
+    );
+    // The inner `if` runs only for the rows where `cond_a` is true, and there
+    // `cond_b` is true as well: its else branch is reached by no enabled row.
+    run_ast(
+        file,
+        "if(cond_a, if(cond_b, expr_a, 1 / expr_zero), expr_else)",
+        &[
+            (
+                "cond_a",
+                BooleanType::from_data(vec![true, false, true, false]),
+            ),
+            (
+                "cond_b",
+                BooleanType::from_data(vec![true, false, true, true]),
+            ),
+            ("expr_a", Int64Type::from_data(vec![1i64, 2, 3, 4])),
+            ("expr_zero", Int64Type::from_data(vec![0i64, 0, 0, 0])),
+            ("expr_else", Int64Type::from_data(vec![9i64, 10, 11, 12])),
+        ],
+    );
+    // String, Boolean and nullable results with mixed conditions.
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data_with_validity(vec![true, false, true, true], vec![
+                true, true, true, false,
+            ]),
+        ),
+        ("expr_true", StringType::from_data(vec!["a", "b", "c", "d"])),
+        ("expr_else", StringType::from_data(vec!["w", "x", "y", "z"])),
+    ]);
+    run_ast(file, "if(cond_a, expr_true, NULL)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        ("expr_true", StringType::from_data(vec!["a", "b", "c", "d"])),
+    ]);
+    run_ast(file, "if(cond_a, expr_true, expr_else)", &[
+        (
+            "cond_a",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+        (
+            "expr_true",
+            BooleanType::from_data(vec![true, true, false, false]),
+        ),
+        (
+            "expr_else",
+            BooleanType::from_data_with_validity(vec![true, false, true, false], vec![
+                true, true, false, true,
+            ]),
+        ),
+    ]);
 }
 
 fn test_is_not_null(file: &mut impl Write) {

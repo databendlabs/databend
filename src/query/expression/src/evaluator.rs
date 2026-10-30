@@ -39,35 +39,21 @@ use crate::block::DataBlock;
 use crate::expr::*;
 use crate::expression::Expr;
 use crate::function::EvalContext;
+use crate::kernels::select_if_then_else;
 use crate::type_check::check_cast_function;
 use crate::type_check::format_function_argument_mismatch_hint;
 use crate::type_check::resolve_cast_function;
 use crate::types::BooleanType;
 use crate::types::DataType;
-use crate::types::Decimal64Type;
-use crate::types::Decimal128Type;
-use crate::types::Decimal256Type;
 use crate::types::DecimalColumn;
-use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::DictColumn;
 use crate::types::EncodedColumn;
 use crate::types::F32;
-use crate::types::Float32Type;
-use crate::types::Float64Type;
-use crate::types::Int8Type;
-use crate::types::Int16Type;
-use crate::types::Int32Type;
-use crate::types::Int64Type;
 use crate::types::NullableType;
-use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::ReturnType;
 use crate::types::StringType;
-use crate::types::UInt8Type;
-use crate::types::UInt16Type;
-use crate::types::UInt32Type;
-use crate::types::UInt64Type;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::types::VectorDataType;
@@ -194,151 +180,6 @@ fn expand_scalar_error(
         None => Bitmap::new_constant(false, num_rows).make_mut(),
     };
     *errors = Some((expanded, msg));
-}
-
-/// Selects the rows of a binary `if` through the concrete value type `T`,
-/// instead of pushing type-erased scalars into a generic `ColumnBuilder`.
-fn select_binary_if_typed<T: ValueType>(
-    flag: &Bitmap,
-    then_result: &Value<AnyType>,
-    else_result: &Value<AnyType>,
-    data_type: &DataType,
-    len: usize,
-) -> Result<Column> {
-    let then_result = then_result.try_downcast::<T>()?;
-    let else_result = else_result.try_downcast::<T>()?;
-    let mut output_builder = ColumnBuilder::with_capacity(data_type, len);
-
-    {
-        let mut output = T::downcast_builder(&mut output_builder);
-        match (&then_result, &else_result) {
-            (Value::Scalar(then_value), Value::Scalar(else_value)) => {
-                let then_value = T::to_scalar_ref(then_value);
-                let else_value = T::to_scalar_ref(else_value);
-                for take_then in flag.iter() {
-                    let value = if take_then {
-                        then_value.clone()
-                    } else {
-                        else_value.clone()
-                    };
-                    T::push_item_mut(&mut output, value);
-                }
-            }
-            (Value::Scalar(then_value), Value::Column(else_column)) => {
-                let then_value = T::to_scalar_ref(then_value);
-                for (row, take_then) in flag.iter().enumerate() {
-                    let value = if take_then {
-                        then_value.clone()
-                    } else {
-                        // SAFETY: `row` < `flag.len()`, which equals the column length.
-                        unsafe { T::index_column_unchecked(else_column, row) }
-                    };
-                    T::push_item_mut(&mut output, value);
-                }
-            }
-            (Value::Column(then_column), Value::Scalar(else_value)) => {
-                let else_value = T::to_scalar_ref(else_value);
-                for (row, take_then) in flag.iter().enumerate() {
-                    let value = if take_then {
-                        // SAFETY: `row` < `flag.len()`, which equals the column length.
-                        unsafe { T::index_column_unchecked(then_column, row) }
-                    } else {
-                        else_value.clone()
-                    };
-                    T::push_item_mut(&mut output, value);
-                }
-            }
-            (Value::Column(then_column), Value::Column(else_column)) => {
-                for (row, take_then) in flag.iter().enumerate() {
-                    // SAFETY: `row` < `flag.len()`, which equals both column lengths.
-                    let value = if take_then {
-                        unsafe { T::index_column_unchecked(then_column, row) }
-                    } else {
-                        unsafe { T::index_column_unchecked(else_column, row) }
-                    };
-                    T::push_item_mut(&mut output, value);
-                }
-            }
-        }
-    }
-
-    Ok(output_builder.build())
-}
-
-/// Typed row selection for a binary `if` whose result is a number or a decimal
-/// (optionally nullable). Returns `None` for other result types, which keep the
-/// generic selection.
-fn select_binary_numeric_if(
-    flag: &Bitmap,
-    then_result: &Value<AnyType>,
-    else_result: &Value<AnyType>,
-    data_type: &DataType,
-    len: usize,
-) -> Result<Option<Column>> {
-    macro_rules! select_plain {
-        ($type:ty) => {
-            select_binary_if_typed::<$type>(flag, then_result, else_result, data_type, len)
-        };
-    }
-    macro_rules! select_nullable {
-        ($type:ty) => {
-            select_binary_if_typed::<NullableType<$type>>(
-                flag,
-                then_result,
-                else_result,
-                data_type,
-                len,
-            )
-        };
-    }
-    macro_rules! select_number {
-        ($number_type:expr, $select:ident) => {
-            match $number_type {
-                NumberDataType::UInt8 => $select!(UInt8Type),
-                NumberDataType::UInt16 => $select!(UInt16Type),
-                NumberDataType::UInt32 => $select!(UInt32Type),
-                NumberDataType::UInt64 => $select!(UInt64Type),
-                NumberDataType::Int8 => $select!(Int8Type),
-                NumberDataType::Int16 => $select!(Int16Type),
-                NumberDataType::Int32 => $select!(Int32Type),
-                NumberDataType::Int64 => $select!(Int64Type),
-                NumberDataType::Float32 => $select!(Float32Type),
-                NumberDataType::Float64 => $select!(Float64Type),
-            }
-        };
-    }
-
-    // Old persisted values or callers using a non-strict decimal representation
-    // may carry more bits than the logical precision requires. The typed path
-    // requires an exact physical width; let the generic builder normalize these
-    // values instead of failing its downcast.
-    if data_type.remove_nullable().is_decimal()
-        && [then_result, else_result]
-            .into_iter()
-            .any(|value| DecimalDataType::from_value(value).is_some_and(|(ty, _)| !ty.is_strict()))
-    {
-        return Ok(None);
-    }
-
-    let column = match data_type {
-        DataType::Number(number_type) => select_number!(number_type, select_plain)?,
-        DataType::Decimal(size) => match size.data_kind() {
-            DecimalDataKind::Decimal64 => select_plain!(Decimal64Type)?,
-            DecimalDataKind::Decimal128 => select_plain!(Decimal128Type)?,
-            DecimalDataKind::Decimal256 => select_plain!(Decimal256Type)?,
-        },
-        DataType::Nullable(inner) => match inner.as_ref() {
-            DataType::Number(number_type) => select_number!(number_type, select_nullable)?,
-            DataType::Decimal(size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 => select_nullable!(Decimal64Type)?,
-                DecimalDataKind::Decimal128 => select_nullable!(Decimal128Type)?,
-                DecimalDataKind::Decimal256 => select_nullable!(Decimal256Type)?,
-            },
-            _ => return Ok(None),
-        },
-        _ => return Ok(None),
-    };
-    Ok(Some(column))
 }
 
 pub struct Evaluator<'a> {
@@ -2012,12 +1853,21 @@ impl<'a> Evaluator<'a> {
             .iter()
             .find_map(|col| col.as_column().map(Column::len));
 
-        // Evaluate the condition first and then partially evaluate the result branches.
+        // Evaluate the conditions in order and each result branch only for the
+        // enabled rows that reach it. A branch that no enabled row reaches is not
+        // evaluated: with an all-unset validity it would run for nobody, so it
+        // could neither produce a selected value nor report an error.
         let mut validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, num_rows));
         let mut conds = Vec::new();
         let mut flags = Vec::new();
         let mut results = Vec::new();
+        // The branches that some enabled row reaches: an index into `results`,
+        // or `None` for the else branch.
+        let mut reached = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
+            if validity.true_count() == 0 {
+                break;
+            }
             let cond = self.partial_run(&args[cond_idx], Some(validity.clone()), options, false)?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
@@ -2025,6 +1875,7 @@ impl<'a> Evaluator<'a> {
                     flags.push(Bitmap::new_constant(false, len.unwrap_or(1)));
                 }
                 Value::Scalar(Some(true)) => {
+                    reached.push(Some(results.len()));
                     results.push(self.partial_run(
                         &args[cond_idx + 1],
                         Some(validity.clone()),
@@ -2037,20 +1888,30 @@ impl<'a> Evaluator<'a> {
                 }
                 Value::Column(cond) => {
                     let flag = (&cond.column) & (&cond.validity);
-                    results.push(self.partial_run(
-                        &args[cond_idx + 1],
-                        Some((&validity) & (&flag)),
-                        options,
-                        false,
-                    )?);
+                    let branch_validity = (&validity) & (&flag);
+                    if branch_validity.true_count() == 0 {
+                        results.push(Value::Scalar(Scalar::default_value(&generics[0])));
+                    } else {
+                        reached.push(Some(results.len()));
+                        results.push(self.partial_run(
+                            &args[cond_idx + 1],
+                            Some(branch_validity),
+                            options,
+                            false,
+                        )?);
+                    }
                     validity = (&validity) & (&flag.not());
                     flags.push(flag);
                 }
             };
             conds.push(cond);
         }
-        let else_result =
-            self.partial_run(&args[args.len() - 1], Some(validity), options, false)?;
+        let else_result = if validity.true_count() == 0 {
+            Value::Scalar(Scalar::default_value(&generics[0]))
+        } else {
+            reached.push(None);
+            self.partial_run(&args[args.len() - 1], Some(validity), options, false)?
+        };
 
         // Assert that all the arguments have the same length.
         assert!(
@@ -2065,11 +1926,38 @@ impl<'a> Evaluator<'a> {
                 .all_equal()
         );
 
-        if let (Some(len), [flag], [then_result]) = (len, flags.as_slice(), results.as_slice())
-            && let Some(column) =
-                select_binary_numeric_if(flag, then_result, &else_result, &generics[0], len)?
-        {
-            return Ok(Value::Column(column));
+        if let Some(len) = len {
+            // When every enabled row reaches the same branch, that branch is the
+            // result. Rows that are not enabled may hold any value. A decimal
+            // carried with a non-strict width still goes through the selection,
+            // which converts it to the width of its precision.
+            let single_branch = match reached.as_slice() {
+                [] => {
+                    let default = Value::<AnyType>::Scalar(Scalar::default_value(&generics[0]));
+                    return Ok(Value::Column(
+                        default.convert_to_full_column(&generics[0], len),
+                    ));
+                }
+                [Some(idx)] => Some(&results[*idx]),
+                [None] => Some(&else_result),
+                _ => None,
+            };
+            if let Some(value) = single_branch
+                && DecimalDataType::from_value(value).is_none_or(|(ty, _)| ty.is_strict())
+            {
+                return Ok(Value::Column(
+                    value.convert_to_full_column(&generics[0], len),
+                ));
+            }
+
+            if let ([flag], [then_result]) = (flags.as_slice(), results.as_slice()) {
+                return Ok(Value::Column(select_if_then_else(
+                    flag,
+                    then_result,
+                    &else_result,
+                    &generics[0],
+                )));
+            }
         }
 
         // Pick the results from the result branches depending on the condition.
