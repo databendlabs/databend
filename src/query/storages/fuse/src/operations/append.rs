@@ -30,7 +30,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
-use databend_common_pipeline_transforms::OrderedBlockCompactBuilder;
+use databend_common_pipeline_transforms::BlockCompactBuilder;
 use databend_common_pipeline_transforms::TransformCompactBlock;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
@@ -94,12 +94,8 @@ impl FuseTable {
         } else {
             let block_thresholds = self.get_block_thresholds();
             if self.use_hash_write_distribution() {
-                // Each lane arrives sorted by partition and input position.
-                // BlockCompactBuilder would pass a large block through ahead of
-                // pending smaller ones; keep the arrival order instead.
-                pipeline.add_accumulating_transformer(|| {
-                    OrderedBlockCompactBuilder::new(block_thresholds, 0)
-                });
+                pipeline
+                    .add_accumulating_transformer(|| BlockCompactBuilder::new(block_thresholds));
                 pipeline.add_block_meta_transformer(|| TransformCompactBlock);
             } else {
                 build_compact_block_pipeline(pipeline, block_thresholds)?;
