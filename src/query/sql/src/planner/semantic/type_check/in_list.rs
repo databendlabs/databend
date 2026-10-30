@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
@@ -35,7 +32,6 @@ use super::TypeChecker;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::Visibility;
-use crate::binder::wrap_cast;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
@@ -163,16 +159,17 @@ where A: super::TypeCheckAdapter
         let mut builder = ColumnBuilder::with_capacity(&common_type, num_rows);
         for (scalar, data_type) in list_scalars.into_iter().zip(list_types.iter()) {
             let scalar = if *data_type != common_type {
-                let cast = wrap_cast(&scalar, &common_type);
-                let expr = cast.as_expr()?;
-                let (expr, _) =
-                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-                match expr.into_owned().into_constant() {
-                    Ok(constant) => ScalarExpr::ConstantExpr(ConstantExpr {
+                let value = scalar
+                    .constant_value(&self.func_ctx)
+                    .and_then(|(value, from)| {
+                        self.cast_constant(scalar.span(), value, from, &common_type)
+                    });
+                match value {
+                    Some(value) => ScalarExpr::ConstantExpr(ConstantExpr {
                         span: scalar.span(),
-                        value: constant.scalar,
+                        value,
                     }),
-                    Err(_) => {
+                    None => {
                         return Err(ErrorCode::SemanticError(
                             "Values can't contain subquery, aggregate functions, window functions, or UDFs",
                         ).set_span(span));

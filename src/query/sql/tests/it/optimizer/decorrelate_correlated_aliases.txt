@@ -369,10 +369,10 @@ EvalScalar
             ├── EvalScalar
             │   ├── scalars: [typed_constant_inner.b (#1) AS (#1), 1 AS (#3)]
             │   └── Filter
-            │       ├── filters: [eq(typed_constant_inner.b (#1), typed_constant_inner.b (#1)), true]
+            │       ├── filters: [eq(typed_constant_inner.b (#1), typed_constant_inner.b (#1))]
             │       └── Scan
             │           ├── table: default.typed_constant_inner (#1)
-            │           ├── filters: [eq(typed_constant_inner.b (#1), typed_constant_inner.b (#1)), true]
+            │           ├── filters: [eq(typed_constant_inner.b (#1), typed_constant_inner.b (#1))]
             │           ├── order by: []
             │           └── limit: NONE
             └── Scan

@@ -1,0 +1,251 @@
+=== constant_arithmetic ===
+description: Calls over constants are evaluated.
+sql: 1 + 2 * 3
+status: ok
+scalar: 7
+type: UInt8
+
+=== decimal_product_with_reduced_scale ===
+description: A product rounded to a smaller scale is evaluated, not taken from raw-value domains.
+sql: CAST(2.5 AS DECIMAL(38, 14)) * CAST(2 AS DECIMAL(38, 14))
+status: ok
+scalar: 5.00000000000000
+type: Decimal(15, 14)
+
+=== column_free_lambda_is_evaluated ===
+description: A lambda over constants is evaluated by its parent.
+sql: length(array_transform([1, 2], x -> x + 1))
+status: ok
+scalar: 2
+type: UInt8
+
+=== explicit_cast_keeps_its_type ===
+description: A folded explicit cast keeps its type, so the parent is checked on Int64.
+sql: CAST(1 AS BIGINT) + CAST(number AS TINYINT UNSIGNED)
+status: ok
+scalar: plus(1, CAST(number (#0) AS UInt8 NULL))
+type: Int64 NULL
+
+=== explicit_decimal_cast_keeps_size ===
+description: A folded decimal cast keeps its size, so the parent stays decimal arithmetic.
+sql: CAST(1 AS DECIMAL(38, 0)) / CAST(3 AS DECIMAL(38, 0))
+status: ok
+scalar: 0.333333
+type: Decimal(6, 6)
+
+=== explicit_nullable_cast_is_typed_constant ===
+description: A literal cannot have a nullable type, so the folded cast keeps it as a typed constant.
+sql: CAST(1 AS INT NULL)
+status: ok
+scalar: 1
+type: Int32 NULL
+
+=== call_over_explicit_cast_is_literal ===
+description: The type of an explicit cast does not carry through a call that folds over it.
+sql: CAST(1 AS BIGINT) + 1
+status: ok
+scalar: 2
+type: UInt8
+
+=== implicit_cast_to_timestamp_is_replaced ===
+description: The literal cast to a timestamp is replaced by its value.
+sql: ts > '2001-01-01'
+status: ok
+scalar: gt(ts (#5), '2001-01-01 00:00:00.000000')
+type: Boolean NULL
+
+=== implicit_cast_to_decimal_keeps_literal ===
+description: The value shrinks to an integer, not the checked decimal, so the literal stays.
+sql: CAST(number AS DECIMAL(10, 3)) * 2
+status: ok
+scalar: multiply(CAST(number (#0) AS Decimal(10, 3) NULL), 2)
+type: Decimal(13, 3) NULL
+
+=== string_compared_with_number_is_not_cast ===
+description: eq has a (number, string) overload, so the literal is not cast and stays a string.
+sql: number = '5'
+status: ok
+scalar: eq(number (#0), '5')
+type: Boolean NULL
+
+=== type_range_decides_comparison ===
+description: The range of UInt8 decides the comparison.
+sql: small < 300
+status: ok
+scalar: true
+type: Boolean
+
+=== type_range_through_explicit_cast ===
+description: Type ranges follow casts.
+sql: CAST(small AS BIGINT) < 1000
+status: ok
+scalar: true
+type: Boolean
+
+=== non_nullable_argument_is_not_null ===
+description: Nullability of a non-nullable expression decides IS NOT NULL.
+sql: is_not_null(small + 1)
+status: ok
+scalar: true
+type: Boolean
+
+=== nullable_argument_stays ===
+description: A nullable column can be NULL.
+sql: is_not_null(number)
+status: ok
+scalar: is_not_null(number (#0))
+type: Boolean
+
+=== argument_that_may_throw_stays ===
+description: An argument that may fail cannot be dropped, so IS NOT NULL is kept.
+sql: is_not_null(to_int64(text))
+status: ok
+scalar: is_not_null(CAST(text (#1) AS Int64 NULL))
+type: Boolean
+
+=== multiply_non_nullable_by_zero ===
+description: A non-nullable value times zero is zero.
+sql: nn * 0
+status: ok
+scalar: 0
+type: UInt8
+
+=== multiply_nullable_by_zero_stays ===
+description: A nullable value times zero can be NULL.
+sql: number * 0
+status: ok
+scalar: multiply(number (#0), 0)
+type: Int64 NULL
+
+=== aggregate_reference_can_be_dropped ===
+description: Aggregates are computed by their operator; their non-null result decides IS NOT NULL.
+sql: is_not_null(count(number))
+status: ok
+scalar: true
+type: Boolean
+
+=== if_selects_first_branch ===
+description: A true first condition selects its branch.
+sql: if(true, number, delta)
+status: ok
+scalar: number (#0)
+type: Int64 NULL
+
+=== if_selects_else_branch_with_cast ===
+description: The selected branch keeps the type of the call through the implicit cast.
+sql: if(false, number, delta)
+status: ok
+scalar: CAST(delta (#3) AS Int64 NULL)
+type: Int64 NULL
+
+=== if_selects_constant_branch_as_literal ===
+description: A selected constant branch is typed as a literal, not as the type that if unifies its branches to.
+sql: if(true, 1, number)
+status: ok
+scalar: 1
+type: UInt8
+
+=== if_selects_explicitly_cast_constant_as_literal ===
+description: The type of an explicit cast does not carry through the if that selects it.
+sql: if(true, 1::INT64, number)
+status: ok
+scalar: 1
+type: UInt8
+
+=== if_null_condition_is_false ===
+description: A NULL condition never selects its branch.
+sql: if(NULL, number, delta)
+status: ok
+scalar: CAST(delta (#3) AS Int64 NULL)
+type: Int64 NULL
+
+=== if_drops_false_branch ===
+description: Branches behind false conditions are removed.
+sql: if(flag, number, false, delta, number + 1)
+status: ok
+scalar: if(flag (#4), number (#0), plus(number (#0), 1))
+type: Int64 NULL
+
+=== if_drops_unevaluated_failing_branch ===
+description: A branch that is never evaluated may fail; it is dropped.
+sql: if(false, to_int64('bad'), number)
+status: ok
+scalar: number (#0)
+type: Int64 NULL
+
+=== case_with_constant_condition ===
+description: CASE lowers to IF and drops branches behind false conditions.
+sql: CASE WHEN 1 = 2 THEN 'a' WHEN flag THEN 'b' ELSE 'c' END
+status: ok
+scalar: if(flag (#4), 'b', 'c')
+type: String
+
+=== coalesce_of_non_nullable ===
+description: COALESCE of a non-nullable first argument yields it.
+sql: coalesce(nn, number)
+status: ok
+scalar: CAST(assume_not_null(nn (#8)) AS Int64 NULL)
+type: Int64 NULL
+
+=== boolean_absorption ===
+description: false absorbs AND of a non-nullable boolean.
+sql: nb AND false
+status: ok
+scalar: false
+type: Boolean
+
+=== contradictory_ranges_on_non_nullable ===
+description: Contradictory comparisons on a non-nullable column are false.
+sql: nn > 10 AND nn < 5
+status: ok
+scalar: false
+type: Boolean
+
+=== contradictory_ranges_on_nullable_stay ===
+description: With a nullable column, AND yields NULL or false, so it is kept.
+sql: number > 10 AND number < 5
+status: ok
+scalar: and(gt(number (#0), 10), lt(number (#0), 5))
+type: Boolean NULL
+
+=== non_deterministic_call_stays ===
+description: Non-deterministic calls are not evaluated.
+sql: rand() < 2
+status: ok
+scalar: lt(rand(), 2)
+type: Boolean
+
+=== udf_is_not_dropped_by_nullability ===
+description: A UDF may fail or have effects, so IS NOT NULL keeps it.
+sql: is_not_null(script_udf(text))
+status: ok
+scalar: is_not_null(handler(CAST(text (#1) AS String)))
+type: Boolean
+
+=== udf_is_not_dropped_by_multiplication ===
+description: A UDF is kept even when the result is known.
+sql: length(script_udf(text)) * 0
+status: ok
+scalar: multiply(length(handler(CAST(text (#1) AS String))), 0)
+type: UInt64
+
+=== if_selects_udf_branch ===
+description: Selecting a branch keeps it even when it is a UDF.
+sql: if(true, script_udf(text), 'x')
+status: ok
+scalar: handler(CAST(text (#1) AS String))
+type: String
+
+=== grouping_is_not_evaluated ===
+description: grouping is computed by the aggregate operator, so a call over it is kept, even without arguments.
+sql: grouping() = 0
+status: ok
+scalar: eq(grouping(), 0)
+type: Boolean
+
+=== grouping_is_not_dropped_by_nullability ===
+description: grouping is kept for the aggregate rewriter, even when its result is known not to be NULL.
+sql: is_not_null(grouping(number))
+status: ok
+scalar: is_not_null(grouping(number (#0)))
+type: Boolean

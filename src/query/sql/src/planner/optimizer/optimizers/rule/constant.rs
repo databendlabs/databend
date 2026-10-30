@@ -23,7 +23,13 @@ pub fn is_true(predicate: &ScalarExpr) -> bool {
         ScalarExpr::ConstantExpr(ConstantExpr {
             value: Scalar::Boolean(true),
             ..
-        })
+        }) | ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                value: Scalar::Boolean(true),
+                ..
+            },
+            _
+        )
     )
 }
 
@@ -33,7 +39,10 @@ pub fn is_falsy(predicate: &ScalarExpr) -> bool {
         ScalarExpr::ConstantExpr(ConstantExpr {
             value,
             ..
-        }) if value == &Scalar::Boolean(false) || value == &Scalar::Null
+        }) | ScalarExpr::TypedConstantExpr(ConstantExpr {
+            value,
+            ..
+        }, _) if value == &Scalar::Boolean(false) || value == &Scalar::Null
     )
 }
 

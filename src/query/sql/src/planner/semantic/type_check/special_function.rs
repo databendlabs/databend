@@ -18,9 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::shrink_scalar;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use unicase::Ascii;
 
 use super::AuthFunction;
@@ -542,18 +540,17 @@ where A: TypeCheckAdapter
         scalar: Option<&ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let index = if let Some(scalar) = scalar {
-            let expr = scalar.as_expr()?;
-            if expr.as_constant().is_none() {
+            if scalar.as_expr()?.as_constant().is_none() {
                 return Err(ErrorCode::BadArguments(
                     "last_query_id argument only support constant argument",
                 )
                 .set_span(span));
             }
-            check_number(span, &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?
+            self.constant_number::<i32>(span, scalar)?
         } else {
             -1
         };
-        let function = SessionFunction::LastQueryId(index as i32);
+        let function = SessionFunction::LastQueryId(index);
         self.resolve_special_literal(span, self.adapter.resolve_session_function(function)?)
     }
 

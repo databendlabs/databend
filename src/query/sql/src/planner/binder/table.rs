@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
@@ -43,7 +42,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::TableField;
 use databend_common_expression::is_stream_column;
@@ -731,13 +729,15 @@ impl Binder {
             false,
         )?;
         let deref!((scalar, _)) = type_checker.resolve(expr)?;
-        let scalar_expr = scalar.as_expr()?;
-        let (new_expr, _) = ConstantFolder::fold(
-            Cow::Owned(scalar_expr),
-            &self.ctx.get_function_context()?,
-            &BUILTIN_FUNCTIONS,
-        );
-        Ok(new_expr.into_owned())
+        match scalar.constant_value(&self.ctx.get_function_context()?) {
+            Some((scalar, data_type)) => Ok(Constant {
+                span: expr.span(),
+                scalar,
+                data_type,
+            }
+            .into()),
+            None => scalar.as_expr(),
+        }
     }
 
     pub(crate) fn resolve_data_travel_point(
