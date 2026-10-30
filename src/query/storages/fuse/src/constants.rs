@@ -61,7 +61,11 @@ pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX_V2: &str = "_i_i_v2";
 /// Content-addressed user dictionaries referenced by inverted index options.
 pub const FUSE_TBL_INVERTED_INDEX_DICT_PREFIX: &str = "_i_i_d";
+/// Legacy combined (Parquet) vector-index prefix.
 pub const FUSE_TBL_VECTOR_INDEX_PREFIX: &str = "_i_v";
+/// One-file-per-index vector bundle prefix. The directory, not the file name,
+/// selects the bundle reader.
+pub const FUSE_TBL_VECTOR_INDEX_PREFIX_V2: &str = "_i_v_v2";
 pub const FUSE_TBL_SPATIAL_INDEX_PREFIX: &str = "_i_s";
 pub const LEGACY_FUSE_TBL_REF_PREFIX: &str = "_ref";
 

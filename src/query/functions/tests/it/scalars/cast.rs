@@ -1239,3 +1239,94 @@ fn gen_bitmap_data() -> Column {
 
     BitmapType::from_data(rbs)
 }
+
+#[test]
+fn test_decimal_cast_precision_and_partial_errors() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("decimal_cast_precision.txt").unwrap();
+    for expression in [
+        "CAST(9::Int64 AS DECIMAL(1,0))",
+        "CAST(10::Int64 AS DECIMAL(1,0))",
+        "CAST(-10::Int64 AS DECIMAL(1,0))",
+        "CAST(9223372036854775807::Int64 AS DECIMAL(1,0))",
+        "CAST(18446744073709551615::UInt64 AS DECIMAL(1,0))",
+        "TRY_CAST(10::Int64 AS DECIMAL(1,0))",
+        "TRY_CAST(18446744073709551615::UInt64 AS DECIMAL(1,0))",
+        "CAST(FALSE AS DECIMAL(1,1))",
+        "CAST(TRUE AS DECIMAL(1,1))",
+        "TRY_CAST(TRUE AS DECIMAL(1,1))",
+        "CAST(parse_json('true') AS DECIMAL(1,1))",
+        "TRY_CAST(parse_json('true') AS DECIMAL(1,1))",
+    ] {
+        run_ast(file, expression, &[]);
+    }
+    let strings = [("s", StringType::from_data(vec!["10", "100", "2"]))];
+    run_ast(file, "CAST(s AS DECIMAL(3,0)) <= 10", &strings);
+    let strings = [("s", StringType::from_data(vec!["10", "100x", "2"]))];
+    run_ast(file, "CAST(s AS DECIMAL(3,0)) <= 10", &strings);
+    let columns = [("a", Int64Type::from_data(vec![-10, -9, 0, 9, 10]))];
+    run_ast(file, "CAST(a AS DECIMAL(1,0))", &columns);
+    run_ast(file, "TRY_CAST(a AS DECIMAL(1,0))", &columns);
+    let columns = [("active", BooleanType::from_data(vec![false, true, false]))];
+    run_ast(
+        file,
+        "if(active, CAST(10::Int64 AS DECIMAL(1,0)), NULL)",
+        &columns,
+    );
+    run_ast(
+        file,
+        "if(active, TRY_CAST(10::Int64 AS DECIMAL(1,0)), NULL)",
+        &columns,
+    );
+    for expression in [
+        "CAST(1e30::Float64 AS DECIMAL(1,0))",
+        "CAST('bad' AS DECIMAL(1,0))",
+        "CAST(10::DECIMAL(2,0) AS DECIMAL(1,0))",
+        "CAST(TRUE AS DECIMAL(1,1))",
+        "CAST(parse_json('10') AS DECIMAL(1,0))",
+        "CAST(parse_json('true') AS DECIMAL(1,1))",
+    ] {
+        run_ast(file, format!("if(active, {expression}, NULL)"), &columns);
+    }
+    run_ast(
+        file,
+        "if(active, CAST(parse_json('7') AS DECIMAL(1,0)), NULL)",
+        &columns,
+    );
+    let columns = [("active", BooleanType::from_data(vec![false, false, false]))];
+    run_ast(
+        file,
+        "if(active, CAST(10::Int64 AS DECIMAL(1,0)), 1::DECIMAL(1,0))",
+        &columns,
+    );
+    // TRY over Variant writes NULL for every failure kind without an error.
+    let columns = [
+        (
+            "s",
+            StringType::from_data(vec!["1.5", "1000", "\"x\"", "null"]),
+        ),
+        (
+            "active",
+            BooleanType::from_data(vec![true, false, true, true]),
+        ),
+    ];
+    for expression in [
+        "CAST(parse_json(s) AS DECIMAL(3,1))",
+        "TRY_CAST(parse_json(s) AS DECIMAL(3,1))",
+        "if(active, CAST(parse_json(s) AS DECIMAL(3,1)), NULL)",
+        "if(active, TRY_CAST(parse_json(s) AS DECIMAL(3,1)), NULL)",
+    ] {
+        run_ast(file, expression, &columns);
+    }
+    // A scalar string with a format column follows each visible row's format.
+    let columns = [
+        ("f", StringType::from_data(vec!["9999", "999"])),
+        ("active", BooleanType::from_data(vec![false, true])),
+    ];
+    run_ast(file, "to_decimal(3, 0)('123', f)", &columns);
+    run_ast(
+        file,
+        "if(active, to_decimal(3, 0)('123', f), NULL)",
+        &columns,
+    );
+}

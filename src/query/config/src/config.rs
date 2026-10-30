@@ -1982,11 +1982,26 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "300")]
     pub python_udf_worker_idle_timeout_secs: u64,
 
+    /// Install Python UDF dependencies from wheels only (`pip --only-binary=:all:`).
+    /// Source distributions run arbitrary build code on the query node at install time.
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub python_udf_pip_only_binary: bool,
+
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_js_script: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_wasm_script: bool,
+
+    /// Memory limit in MiB of each in-process script UDF runtime: the
+    /// JavaScript heap and the WebAssembly linear memory (0 = unlimited).
+    #[clap(long, value_name = "VALUE", default_value = "1024")]
+    pub udf_script_memory_limit_mb: usize,
+
+    /// Interrupt an in-process script UDF call that runs longer than this
+    /// (0 = unlimited). Currently enforced for JavaScript only.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub udf_script_execution_timeout_secs: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_sandbox: bool,
@@ -3342,6 +3357,16 @@ pub struct CacheConfig {
     )]
     pub vector_index_filter_size: u64,
 
+    /// Max bytes of FP16 refine pages cached in memory. HNSW components and the
+    /// validity are cached decoded in the vector index cache instead. Set it to 0
+    /// to disable it.
+    #[clap(
+        long = "cache-vector-index-refine-size",
+        value_name = "VALUE",
+        default_value = "34359738368"
+    )]
+    pub vector_index_refine_size: u64,
+
     /// Max bytes of cached vector index filters on disk. Set it to 0 to disable it.
     #[clap(
         long = "disk-cache-vector-index-data-size",
@@ -3500,6 +3525,17 @@ pub struct CacheConfig {
     )]
     pub table_data_deserialized_memory_ratio: u64,
 
+    /// Max percentage of distinct values to rows for which a block of an in-memory encoded column
+    /// (setting `enable_encoded_columns`) is dictionary encoded. By default it is 100: any block
+    /// may be, but a dictionary built from the column is only kept if it is smaller than the
+    /// regular column.
+    #[clap(
+        long = "cache-table-data-encoded-dictionary-ndv-ratio",
+        value_name = "VALUE",
+        default_value = "100"
+    )]
+    pub table_data_encoded_dictionary_ndv_ratio: u64,
+
     #[clap(
         long = "cache-iceberg-table-meta-count",
         value_name = "VALUE",
@@ -3540,6 +3576,7 @@ impl Default for CacheConfig {
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,
             vector_index_filter_size: 64424509440,
+            vector_index_refine_size: 34359738368,
             disk_cache_vector_index_data_size: 0,
             vector_index_filter_memory_ratio: 0,
             spatial_index_meta_count: 30000,
@@ -3556,6 +3593,7 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Reset,
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
+            table_data_encoded_dictionary_ndv_ratio: 100,
             iceberg_table_meta_count: 1024,
 
             // ----- the following options/args are all deprecated               ----

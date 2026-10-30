@@ -54,7 +54,7 @@ use databend_common_storage::init_stage_operator;
 
 use self::venv::TempDir;
 #[cfg(feature = "python-udf")]
-use super::python_worker::PythonFunction;
+use super::python_worker::python_function;
 #[cfg(feature = "python-udf")]
 use super::python_worker::PythonQueryWorkers;
 #[cfg(feature = "python-udf")]
@@ -63,6 +63,9 @@ use super::python_worker::PythonRuntime;
 use super::python_worker::PythonWorkerManager;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
+use super::script_udf_limits::ScriptUdfLimits;
+use super::script_udf_limits::new_js_runtime;
+use super::script_udf_limits::wasm_runtime_config;
 use crate::ScriptUdfFunctionDesc;
 
 pub enum ScriptRuntime {
@@ -97,7 +100,9 @@ impl ScriptRuntime {
             }
             UDFLanguage::WebAssembly => {
                 let start = std::time::Instant::now();
-                let runtime = arrow_udf_runtime::wasm::Runtime::new(code).map_err(|err| {
+                let config = wasm_runtime_config(&ScriptUdfLimits::current());
+                let runtime = arrow_udf_runtime::wasm::Runtime::with_config(code, config)
+                    .map_err(|err| {
                     ErrorCode::UDFRuntimeError(format!(
                         "Failed to create WASM runtime for module: {err}"
                     ))
@@ -157,12 +162,13 @@ impl ScriptRuntime {
                     }
                 }
 
-                let function = PythonFunction {
-                    name: func.name.clone(),
-                    handler: func.func_name.clone(),
+                let function = python_function(
+                    func.name.clone(),
+                    func.func_name.clone(),
                     code,
-                    return_field: arrow_field_from_data_type(&func.name, *func.data_type.clone()),
-                };
+                    arrow_field_from_data_type(&func.name, *func.data_type.clone()),
+                    None,
+                );
                 Ok(Self::Python(PythonRuntime::new(
                     function,
                     query.clone(),
@@ -501,8 +507,9 @@ impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder
 
     fn build(&self) -> Result<arrow_udf_runtime::javascript::Runtime> {
         let start = std::time::Instant::now();
+        let limits = ScriptUdfLimits::current();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            arrow_udf_runtime::javascript::Runtime::new()
+            new_js_runtime(&limits)
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
@@ -815,7 +822,11 @@ impl TransformUdfScript {
                         // cache lock across install, stage reads, or archive restoration.
                         Ok(Some(entry.get_private(|| {
                             let temp_dir = venv::create_venv(PY_VERSION.as_str())?;
-                            venv::install_deps(temp_dir.path(), &dependencies)?;
+                            venv::install_deps(
+                                temp_dir.path(),
+                                &dependencies,
+                                ScriptUdfLimits::current().pip_only_binary,
+                            )?;
 
                             if !imports_stage_info.is_empty() {
                                 let imports_stage_info = imports_stage_info.clone();
@@ -1059,6 +1070,7 @@ impl TransformUdfScript {
 }
 
 pub(super) mod venv {
+    use std::ffi::OsString;
     use std::fs;
     use std::fs::File;
     use std::io;
@@ -1196,16 +1208,137 @@ pub(super) mod venv {
         }
     }
 
-    pub fn install_deps(temp_dir_path: &Path, deps: &[String]) -> Result<(), String> {
+    /// Environment variables a child process may inherit from the query node.
+    /// Everything else (cloud credentials, tokens, service configuration) is
+    /// withheld. `prefixes` match variable families such as `LC_*`.
+    pub fn allowed_env(names: &[&str], prefixes: &[&str]) -> Vec<(OsString, OsString)> {
+        std::env::vars_os()
+            .filter(|(key, _)| {
+                key.to_str().is_some_and(|key| {
+                    names.contains(&key) || prefixes.iter().any(|prefix| key.starts_with(prefix))
+                })
+            })
+            .collect()
+    }
+
+    /// Variables any Python child needs to locate itself and its locale.
+    pub const PYTHON_ENV: &[&str] = &[
+        "PATH",
+        "HOME",
+        "LANG",
+        "LANGUAGE",
+        "TZ",
+        "TMPDIR",
+        "LD_LIBRARY_PATH",
+        "DYLD_LIBRARY_PATH",
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+    ];
+
+    /// Operator-provided pip configuration: index mirrors, proxies and CAs.
+    const PIP_ENV: &[&str] = &[
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "NO_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "no_proxy",
+        "all_proxy",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    ];
+
+    /// Accept only `name[extras] <version specifiers>` requirements. Direct
+    /// references (`pkg @ url`), URLs, local paths, environment markers and
+    /// anything that pip could parse as an option are rejected: they would let
+    /// a UDF author fetch code from arbitrary or internal network locations
+    /// or read local files on the query node.
+    pub fn validate_requirement(requirement: &str) -> Result<(), String> {
+        let invalid = || {
+            Err(format!(
+                "Invalid Python UDF dependency {requirement:?}: only 'name[extras]<version specifiers>' from the configured package index is allowed"
+            ))
+        };
+        let requirement = requirement.trim();
+        if requirement.is_empty() || requirement.len() > 256 {
+            return invalid();
+        }
+        let name_len = requirement
+            .find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')))
+            .unwrap_or(requirement.len());
+        let (name, mut rest) = requirement.split_at(name_len);
+        if !name.starts_with(|c: char| c.is_ascii_alphanumeric())
+            || !name.ends_with(|c: char| c.is_ascii_alphanumeric())
+        {
+            return invalid();
+        }
+        rest = rest.trim_start();
+        if let Some(extras) = rest.strip_prefix('[') {
+            let Some((extras, tail)) = extras.split_once(']') else {
+                return invalid();
+            };
+            if !extras.chars().all(|c| {
+                c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ',' | ' ')
+            }) {
+                return invalid();
+            }
+            rest = tail.trim_start();
+        }
+        if !rest.is_empty() && !rest.starts_with(['<', '>', '=', '!', '~']) {
+            return invalid();
+        }
+        // Defense in depth on top of `--`: no token may look like an option.
+        if requirement
+            .split(|c: char| c.is_whitespace() || matches!(c, '[' | ','))
+            .any(|token| token.starts_with('-'))
+        {
+            return invalid();
+        }
+        if !rest.chars().all(|c| {
+            c.is_ascii_alphanumeric()
+                || matches!(
+                    c,
+                    '<' | '>' | '=' | '!' | '~' | ',' | '.' | '*' | '+' | '-' | '_' | ' '
+                )
+        }) {
+            return invalid();
+        }
+        Ok(())
+    }
+
+    pub fn install_deps(
+        temp_dir_path: &Path,
+        deps: &[String],
+        only_binary: bool,
+    ) -> Result<(), String> {
         if deps.is_empty() {
             return Ok(());
         }
+        for dep in deps {
+            validate_requirement(dep)?;
+        }
 
-        let target_path = temp_dir_path.display().to_string();
-        let status = Command::new("python")
+        let mut command = Command::new("python");
+        command
             .args(["-m", "pip", "install"])
-            .args(deps)
-            .args(["--target", &target_path])
+            .args(["--no-input", "--disable-pip-version-check", "--target"])
+            .arg(temp_dir_path);
+        if only_binary {
+            // Source distributions execute build scripts on the query node.
+            command.arg("--only-binary=:all:");
+        }
+        // `--` ends option parsing: a requirement can never become a pip option.
+        command.arg("--").args(deps.iter().map(|dep| dep.trim()));
+        let status = command
+            .env_clear()
+            .envs(allowed_env(&[PYTHON_ENV, PIP_ENV].concat(), &["LC_", "PIP_"]))
+            .current_dir(temp_dir_path)
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
@@ -1214,6 +1347,8 @@ pub(super) mod venv {
         if status.success() {
             log::info!("Dependency installation success {}", deps.join(", "));
             Ok(())
+        } else if only_binary {
+            Err("Dependency installation failed (only wheels are allowed: 'python_udf_pip_only_binary' is enabled)".into())
         } else {
             Err("Dependency installation failed".into())
         }
@@ -1751,6 +1886,50 @@ mod tests {
             assert_eq!(restored.column(0).data_type(), &ArrowDataType::LargeBinary);
             assert!(restored.column(0).is_null(1));
         }
+    }
+
+    #[test]
+    fn test_validate_python_requirement() {
+        for accepted in [
+            "numpy",
+            "numpy==1.26.4",
+            " pandas>=2,<3 ",
+            "requests[socks]>=2.0",
+            "requests [socks, security] ~= 2.31",
+            "scikit-learn!=1.4.0",
+            "Foo.Bar_baz-1==1.0.post1+local",
+        ] {
+            venv::validate_requirement(accepted)
+                .unwrap_or_else(|err| panic!("{accepted:?} must be accepted: {err}"));
+        }
+        for rejected in [
+            "",
+            "   ",
+            "--index-url=http://127.0.0.1/simple",
+            "-r/etc/passwd",
+            "-e.",
+            "pkg==1.0 --index-url http://127.0.0.1/simple",
+            "pkg[--pre]",
+            "pkg @ https://example.com/pkg.whl",
+            "pkg@https://example.com/pkg.whl",
+            "git+https://example.com/repo.git",
+            "https://example.com/pkg.whl",
+            "file:///etc/passwd",
+            "./local_dir",
+            "/etc/passwd",
+            "..\\pkg",
+            "pkg; os_name == 'posix'",
+            "pkg[extra",
+            "pkg-",
+            "pkg 1.0",
+            "pkg==1.0\nother",
+        ] {
+            assert!(
+                venv::validate_requirement(rejected).is_err(),
+                "{rejected:?} must be rejected"
+            );
+        }
+        assert!(venv::validate_requirement(&"a".repeat(257)).is_err());
     }
 
     #[test]

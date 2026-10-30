@@ -31,6 +31,7 @@ use log::debug;
 use log::warn;
 
 use crate::BindContext;
+use crate::DefinitionScope;
 use crate::SelectBuilder;
 use crate::ViewRewriter;
 use crate::binder::Binder;
@@ -76,13 +77,11 @@ impl Binder {
             .iter()
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .collect::<Vec<_>>();
-        let mut visitor = ViewRewriter {
-            current_database: database.clone(),
-        };
+        let mut visitor = ViewRewriter::new(&database, self.name_resolution_ctx.clone());
         query.walk_mut(&mut visitor)?;
         let subquery = format!("{}", query);
         let query_plan = if lineage_enabled() {
-            match self.view_query_plan(&query).await {
+            match self.view_query_plan(&query, &catalog, &database).await {
                 Ok(plan) => Some(Box::new(plan)),
                 Err(error) => {
                     warn!("Failed to bind CREATE VIEW query for lineage: {:?}", error);
@@ -253,9 +252,22 @@ impl Binder {
             schema,
         })))
     }
-    async fn view_query_plan(&mut self, query: &databend_common_ast::ast::Query) -> Result<Plan> {
+    async fn view_query_plan(
+        &mut self,
+        query: &databend_common_ast::ast::Query,
+        catalog: &str,
+        database: &str,
+    ) -> Result<Plan> {
         let stmt = Statement::Query(Box::new(query.clone()));
         let mut bind_context = BindContext::new();
-        self.bind_statement(&mut bind_context, &stmt).await
+        // A newly created definition binds in its own namespace with strict CTE
+        // resolution, even when it is planned from a legacy-definition reader.
+        let previous = std::mem::replace(
+            &mut self.definition_scope,
+            DefinitionScope::in_namespace(catalog.to_string(), database.to_string()),
+        );
+        let result = self.bind_statement(&mut bind_context, &stmt).await;
+        self.definition_scope = previous;
+        result
     }
 }

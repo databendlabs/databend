@@ -233,7 +233,9 @@ impl CsvReader {
 
         let mut buf_out_pos = 0usize;
         let mut buf_out_row_end: usize = 0;
-        let last_batch_remain_len = self.last_partial_row.len();
+        let mut last_batch_remain_len = self.last_partial_row.len();
+        // `last_partial_row` holds the head of the first record completed in this batch.
+        let mut first_record = true;
         let pos = Position::from_bytes_batch(&batch, self.pos.rows);
         let mut row_batch = CSVRowBatch::default();
 
@@ -250,6 +252,7 @@ impl CsvReader {
                 self.read_record(buf_in, &mut buf_out[buf_out_pos..], &mut file_status)?;
             match res {
                 ReadRecordOutput::Record { num_fields, bytes } => {
+                    first_record = false;
                     buf_out_pos += bytes;
                     row_batch.num_fields.push(num_fields);
                     row_batch
@@ -261,7 +264,17 @@ impl CsvReader {
                 ReadRecordOutput::PartialRecord { bytes } => {
                     buf_out_pos += bytes;
                 }
-                _ => {}
+                ReadRecordOutput::RecordSkipped => {
+                    // The skipped record's output in this batch is overwritten by the next
+                    // record since `buf_out_pos` is not advanced. If it started in a previous
+                    // batch, its head is in `last_partial_row` and must be dropped as well,
+                    // otherwise it would be prepended to the next record.
+                    if first_record {
+                        first_record = false;
+                        self.last_partial_row.clear();
+                        last_batch_remain_len = 0;
+                    }
+                }
             }
             if buf_in.is_empty() {
                 // state already flushed

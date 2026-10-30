@@ -4,6 +4,30 @@ use super::*;
 async fn test_type_check_scalar_function_rules() -> Result<()> {
     let cases = [
         SqlTestCase {
+            name: "decimal_division_error_keeps_checked_argument_types",
+            description: "Failed parent folding must not shrink its checked Decimal arguments into integers and select another overload.",
+            setup_sqls: &[],
+            sql: "1::DECIMAL(38,0) / 0::DECIMAL(38,0)",
+        },
+        SqlTestCase {
+            name: "decimal_round_overflow_keeps_checked_argument_types",
+            description: "A rounding overflow remains a Decimal call rather than a stale Decimal return type on a Float64 overload.",
+            setup_sqls: &[],
+            sql: "round(99::DECIMAL(2,0), -2)",
+        },
+        SqlTestCase {
+            name: "decimal_constant_argument_keeps_precision",
+            description: "Folding a constant Decimal argument must not change the precision used to resolve a nonconstant division.",
+            setup_sqls: &[],
+            sql: "1::DECIMAL(38,0) / number::DECIMAL(38,0)",
+        },
+        SqlTestCase {
+            name: "mixed_numeric_decimal_error_keeps_checked_argument_types",
+            description: "The integer argument of a Decimal-valued call also contributes to its inferred precision.",
+            setup_sqls: &[],
+            sql: "1::UInt64 / 0::DECIMAL(38,0)",
+        },
+        SqlTestCase {
             name: "unknown_function_keeps_suggestion",
             description: "Unknown scalar functions should keep the suggestion-oriented error.",
             setup_sqls: &[],
@@ -78,4 +102,23 @@ async fn test_type_check_scalar_function_rules() -> Result<()> {
     ];
 
     run_type_check_cases("scalar_function.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_checked_decimal_constant_types_survive_partial_folding() -> Result<()> {
+    init_testing_globals();
+    for sql in [
+        "1::DECIMAL(38,0) / 0::DECIMAL(38,0)",
+        "round(99::DECIMAL(2,0), -2)",
+        "1::DECIMAL(38,0) / number::DECIMAL(38,0)",
+        "1::UInt64 / 0::DECIMAL(38,0)",
+        "1::Int64 / number::DECIMAL(38,0)",
+    ] {
+        let settings = Settings::create(Tenant::new_literal("default"));
+        let adapter = TestTypeCheckAdapter::new(settings);
+        let mut context = test_bind_context(ExprContext::Unknown);
+        let (scalar, stored_type) = resolve_type_check_sql(sql, adapter, &mut context)?;
+        assert_eq!(stored_type, *scalar.as_expr()?.data_type(), "{sql}");
+    }
+    Ok(())
 }

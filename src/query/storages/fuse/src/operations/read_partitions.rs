@@ -176,6 +176,22 @@ fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -
         })
 }
 
+/// Settings that change vector index pruning results; part of the prune cache key
+/// of vector index queries.
+fn vector_prune_settings(
+    ctx: &Arc<dyn TableContext>,
+    push_downs: &PushDownInfo,
+) -> Result<Option<(u64, u64)>> {
+    if push_downs.vector_index.is_none() {
+        return Ok(None);
+    }
+    let settings = ctx.get_settings();
+    Ok(Some((
+        settings.get_vector_refine_factor()?,
+        settings.get_vector_search_ef()?,
+    )))
+}
+
 /// Builds the key of the global prune cache for a deterministic push-down.
 ///
 /// The key must identify everything that decides which blocks survive pruning:
@@ -186,7 +202,8 @@ fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -
 /// - the function context, because pruning evaluates the filter with it (for
 ///   example, `to_date(ts)` depends on the session time zone). `now` is left
 ///   out: it differs per query, and functions that read it are
-///   non-deterministic, so their push-downs are not cached.
+///   non-deterministic, so their push-downs are not cached;
+/// - the settings that change vector index pruning (`vector_prune_settings`).
 ///
 /// Returns `None` (do not cache) for a non-deterministic push-down, or if the
 /// push-down cannot be serialized.
@@ -194,6 +211,7 @@ fn deterministic_prune_cache_key(
     func_ctx: &FunctionContext,
     segments_location: &[SegmentLocation],
     push_downs: &PushDownInfo,
+    vector_settings: Option<(u64, u64)>,
 ) -> Option<String> {
     if !push_downs.is_deterministic {
         return None;
@@ -211,10 +229,16 @@ fn deterministic_prune_cache_key(
     };
     let segments = format!("{:?}", segments_location);
     let func_ctx = format!("{:?}", func_ctx);
+    let vector_settings = format!("{:?}", vector_settings);
 
     // Prefix each part with its length, so that parts cannot run into each other.
     let mut hasher = Sha256::new();
-    for part in [segments.as_bytes(), &push_downs_bytes, func_ctx.as_bytes()] {
+    for part in [
+        segments.as_bytes(),
+        &push_downs_bytes,
+        func_ctx.as_bytes(),
+        vector_settings.as_bytes(),
+    ] {
         hasher.update((part.len() as u64).to_le_bytes());
         hasher.update(part);
     }
@@ -390,6 +414,7 @@ impl FuseTable {
                 &ctx.get_function_context()?,
                 &lazy_init_segments,
                 push_downs,
+                vector_prune_settings(&ctx, push_downs)?,
             ),
             _ => None,
         };
@@ -521,6 +546,7 @@ impl FuseTable {
                     &ctx.get_function_context()?,
                     &segments_location,
                     &push_downs,
+                    vector_prune_settings(&ctx, &push_downs)?,
                 )
             }
             _ => None,
@@ -1678,7 +1704,7 @@ mod tests {
 
     fn cache_key(func_ctx: &FunctionContext, push_downs: &PushDownInfo) -> String {
         let segments = vec![segment_location(0, "segment-a", "snapshot-a")];
-        deterministic_prune_cache_key(func_ctx, &segments, push_downs).unwrap()
+        deterministic_prune_cache_key(func_ctx, &segments, push_downs, None).unwrap()
     }
 
     // Regression test for https://github.com/databendlabs/databend/issues/20774:
@@ -1729,8 +1755,13 @@ mod tests {
         };
         let segments = vec![segment_location(0, "segment-a", "snapshot-a")];
         assert!(
-            deterministic_prune_cache_key(&FunctionContext::default(), &segments, &push_downs)
-                .is_none()
+            deterministic_prune_cache_key(
+                &FunctionContext::default(),
+                &segments,
+                &push_downs,
+                None
+            )
+            .is_none()
         );
     }
 }

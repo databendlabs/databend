@@ -47,6 +47,7 @@ use super::semantic::DistinctToGroupBy;
 use super::statement_settings::apply_statement_settings;
 use crate::Binder;
 use crate::CountSetOps;
+use crate::DefinitionScope;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
@@ -61,6 +62,7 @@ const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) query_executor: Option<Arc<dyn QueryExecutor>>,
+    definition_scope: DefinitionScope,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +76,7 @@ impl Planner {
         Planner {
             ctx,
             query_executor: None,
+            definition_scope: DefinitionScope::session(),
         }
     }
 
@@ -84,7 +87,23 @@ impl Planner {
         Planner {
             ctx,
             query_executor: Some(query_executor),
+            definition_scope: DefinitionScope::session(),
         }
+    }
+
+    /// Bind SQL in `scope` rather than the session's, without changing the session.
+    pub fn with_definition_scope(mut self, scope: DefinitionScope) -> Self {
+        self.definition_scope = scope;
+        self
+    }
+
+    /// Bind an existing stored definition as it was written, given its table options.
+    /// See [`DefinitionScope::from_stored_options`].
+    pub fn with_stored_definition(
+        self,
+        options: &std::collections::BTreeMap<String, String>,
+    ) -> Self {
+        self.with_definition_scope(DefinitionScope::from_stored_options(options))
     }
 
     #[async_backtrace::framed]
@@ -114,11 +133,14 @@ impl Planner {
             name_resolution_ctx,
             Metadata::default_ref(),
         )
-        .with_subquery_executor(self.query_executor.clone());
+        .with_subquery_executor(self.query_executor.clone())
+        .with_definition_scope(self.definition_scope.clone());
         // Attach before bind for the same reason as `plan_stmt`: table sources such as
         // ParquetRSTable::create read the query string during binding.
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-        binder.bind(stmt).await
+        self.attach_masked_query_before_bind(query_kind, stmt);
+        let plan = binder.bind(stmt).await;
+        self.attach_masked_query(query_kind, stmt);
+        plan
     }
 
     #[fastrace::trace]
@@ -306,11 +328,14 @@ impl Planner {
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
-        let plan_cache_context = if enable_materialized_view_rewrite {
-            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
-        } else {
-            None
-        };
+        // The session-based cache key does not describe a definition scope: the same
+        // SQL can bind differently in a stored definition and as an ordinary query.
+        let plan_cache_context =
+            if enable_materialized_view_rewrite && self.definition_scope.is_session() {
+                self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
+            } else {
+                None
+            };
 
         if let Some(cache_ctx) = &plan_cache_context {
             if let Some(plan) = self.get_cache(cache_ctx) {
@@ -332,13 +357,15 @@ impl Planner {
             metadata.clone(),
         )
         .with_materialized_view_rewrite(enable_materialized_view_rewrite)
-        .with_subquery_executor(self.query_executor.clone());
+        .with_subquery_executor(self.query_executor.clone())
+        .with_definition_scope(self.definition_scope.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-        let plan = binder.bind(stmt).await?;
+        self.attach_masked_query_before_bind(query_kind, stmt);
+        let plan = binder.bind(stmt).await;
         // attach again to avoid the query kind is overwritten by the subquery
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        self.attach_masked_query(query_kind, stmt);
+        let plan = plan?;
 
         // Lineage describes what the user wrote, so capture it before the optimizer
         // rewrites the plan for execution.
@@ -413,6 +440,33 @@ impl Planner {
 
         self.add_max_rows_limit(stmt);
         Ok(())
+    }
+}
+
+impl Planner {
+    /// Dynamic SQL is attached by the binder after evaluating its script, and
+    /// the first attached query text wins: skip it here.
+    fn attach_masked_query_before_bind(&self, kind: QueryKind, stmt: &Statement) {
+        if !is_execute_immediate(stmt) {
+            self.attach_masked_query(kind, stmt);
+        }
+    }
+
+    /// Call after binding, also if it failed. The first attached query text
+    /// wins, so for dynamic SQL this only records the statement, with its
+    /// expression's literals hidden, if binding failed before evaluating it.
+    fn attach_masked_query(&self, kind: QueryKind, stmt: &Statement) {
+        let (sql, secrets) = stmt.to_mask_sql_with_secrets();
+        self.ctx.add_query_secrets(secrets);
+        self.ctx.attach_query_str(kind, sql);
+    }
+}
+
+fn is_execute_immediate(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::ExecuteImmediate(_) => true,
+        Statement::StatementWithSettings { stmt, .. } => is_execute_immediate(stmt),
+        _ => false,
     }
 }
 

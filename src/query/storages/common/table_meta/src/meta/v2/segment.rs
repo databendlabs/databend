@@ -333,10 +333,53 @@ pub struct DraftVirtualBlockMeta {
     pub path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
 }
 
+/// A per-block index file to read. Not tied to an index type: any index stored
+/// either in the legacy combined file or in its own file uses it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IndexFileLocation {
+    /// Legacy combined file holding all indexes of this type of a block.
+    Legacy { path: String },
+    /// File of a single index; `size` is recorded when the file is written.
+    Bundle { path: String, size: u64 },
+}
+
+impl IndexFileLocation {
+    pub fn path(&self) -> &str {
+        match self {
+            Self::Legacy { path } | Self::Bundle { path, .. } => path,
+        }
+    }
+
+    /// The file of `index_name` at `index_version`: its own file from `metas` (sorted
+    /// by name), else the legacy combined file. An own file of another version is
+    /// stale and must be refreshed, so it does not fall back to the legacy file.
+    pub fn select(
+        legacy: Option<&Location>,
+        metas: Option<&[BlockIndexMeta]>,
+        index_name: &str,
+        index_version: &str,
+    ) -> Option<Self> {
+        let meta = metas.and_then(|metas| {
+            metas
+                .binary_search_by(|meta| meta.index_name.as_str().cmp(index_name))
+                .ok()
+                .map(|index| &metas[index])
+        });
+        if let Some(meta) = meta {
+            return (meta.index_version == index_version).then(|| Self::Bundle {
+                path: meta.location.0.clone(),
+                size: meta.size,
+            });
+        }
+        legacy.map(|location| Self::Legacy {
+            path: location.0.clone(),
+        })
+    }
+}
+
 /// Metadata of one independently stored table-index object generated for a block.
 ///
-/// Currently used by inverted indexes. Vector and spatial indexes can reuse the same layout once
-/// they move to one object per index.
+/// Used by independently stored inverted and vector index objects.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
 pub struct BlockIndexMeta {
     /// Logical index name.
@@ -376,7 +419,11 @@ pub struct BlockMeta {
     pub inverted_index_metas: Option<Vec<BlockIndexMeta>>,
     pub ngram_filter_index_size: Option<u64>,
     pub vector_index_size: Option<u64>,
+    /// Legacy combined Parquet object. Kept while any index still needs legacy data.
     pub vector_index_location: Option<Location>,
+    /// Independently stored vector indexes, sorted by name.
+    #[serde(default)]
+    pub vector_index_metas: Option<Vec<BlockIndexMeta>>,
     pub spatial_index_size: Option<u64>,
     pub spatial_index_location: Option<Location>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
@@ -431,6 +478,7 @@ impl BlockMeta {
             ngram_filter_index_size,
             vector_index_size,
             vector_index_location,
+            vector_index_metas: None,
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
@@ -451,6 +499,28 @@ impl BlockMeta {
             .binary_search_by(|meta| meta.index_name.as_str().cmp(index_name))
             .ok()
             .map(|index| &metas[index])
+    }
+
+    pub fn vector_index_meta(&self, index_name: &str) -> Option<&BlockIndexMeta> {
+        let metas = self.vector_index_metas.as_ref()?;
+        metas
+            .binary_search_by(|meta| meta.index_name.as_str().cmp(index_name))
+            .ok()
+            .map(|index| &metas[index])
+    }
+
+    /// The file of vector index `index_name` at `index_version`.
+    pub fn vector_index_file(
+        &self,
+        index_name: &str,
+        index_version: &str,
+    ) -> Option<IndexFileLocation> {
+        IndexFileLocation::select(
+            self.vector_index_location.as_ref(),
+            self.vector_index_metas.as_deref(),
+            index_name,
+            index_version,
+        )
     }
 
     pub fn compression(&self) -> Compression {
@@ -579,6 +649,7 @@ impl BlockMeta {
             inverted_index_metas: None,
             vector_index_size: None,
             vector_index_location: None,
+            vector_index_metas: None,
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
@@ -614,6 +685,7 @@ impl BlockMeta {
             inverted_index_metas: None,
             vector_index_size: None,
             vector_index_location: None,
+            vector_index_metas: None,
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,

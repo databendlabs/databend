@@ -165,6 +165,18 @@ fn test_float_to_128() {
 
 #[test]
 fn test_from_bigint() {
+    let min = i256::from_words(i128::MIN, 0);
+    let max = i256::from_words(i128::MAX, -1);
+    let boundary = BigInt::from(1) << 255_u32;
+    assert_eq!(i256::from_bigint(-boundary.clone()), Some(min));
+    assert_eq!(
+        i256::from_bigint(-boundary.clone() + 1),
+        Some(min + i256::ONE)
+    );
+    assert_eq!(i256::from_bigint(-boundary.clone() - 1), None);
+    assert_eq!(i256::from_bigint(boundary.clone() - 1), Some(max));
+    assert_eq!(i256::from_bigint(boundary), None);
+
     let cases = vec![
         ("0", 0i128),
         ("12345", 12345i128),

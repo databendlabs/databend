@@ -1,6 +1,8 @@
+# Only an unqualified table name can refer to a CTE. Issues #15755, #20686.
+# Expected results follow DuckDB ("CTE name should never be qualified").
+
 statement ok
 drop database if exists poc;
-
 
 statement ok
 create database poc;
@@ -12,12 +14,10 @@ statement ok
 create or replace table poc.t1 (n bigint);
 
 statement ok
-insert into poc.t1 (n) values (1);
+insert into poc.t1 (n) values (1), (2);
 
-statement ok
-insert into poc.t1 (n) values (2);
-
-query error
+# A qualified reference is a table even inside a same-named CTE definition.
+query I
 with t1 as (
   select * from poc.t1 where n = 1 limit 1
 ),
@@ -28,7 +28,95 @@ union_all_t as (
   select * from t1 union all
   select * from t2
 )
-select * from union_all_t;
+select * from union_all_t order by n;
+----
+1
+2
+
+query I
+with t1 as (select 99 as n) select * from poc.t1 order by n
+----
+1
+2
+
+query I
+with t1 as (select 99 as n) select * from default.poc.t1 order by n
+----
+1
+2
+
+# A qualified reference inside another CTE must not capture an earlier CTE.
+query I
+with t1 as (select 99 as n), t2 as (select * from poc.t1) select * from t2 order by n
+----
+1
+2
+
+# Metadata from an outer table must not make an inner same-named CTE misleading.
+query II
+select a.n, b.n from t1 a, (with t1 as (select 99 as n) select * from t1) b order by a.n
+----
+1 99
+2 99
+
+# A real table remains distinct from an auto-materialized same-named CTE.
+statement ok
+set enable_auto_materialize_cte = 1
+
+query II
+with t1 as (select 99 as n) select a.n, b.n from t1 a, t1 c, poc.t1 b order by b.n
+----
+99 1
+99 2
+
+statement ok
+unset enable_auto_materialize_cte
+
+# Explicit materialization uses the temporary-table path instead.
+query II
+with t1 as materialized (select 99 as n) select a.n, b.n from t1 a, poc.t1 b order by b.n
+----
+99 1
+99 2
+
+# Producer column qualifiers must follow the chosen source: real table vs CTE.
+query I
+with t1 as materialized (select 99 as n), t2 as materialized (select t1.n from poc.t1) select * from t2 order by n
+----
+1
+2
+
+query I
+with t1 as materialized (select 99 as n), t2 as materialized (select t1.n from t1) select * from t2
+----
+99
+
+# A missing qualified table must not fall back to a CTE.
+statement error 1025
+with t2 as (select 99 as n) select * from poc.t2
+
+# A new view's column-list wrapper must preserve both meanings: an unqualified
+# CTE and a qualified real table, also when read from another database.
+statement ok
+create view v_qualified(c, t) as with t1 as (select 99 as n) select a.n as cte_n, b.n as table_n from t1 a, poc.t1 b
+
+statement ok
+create or replace database poc_other
+
+statement ok
+use poc_other
+
+query II
+select * from poc.v_qualified order by t
+----
+99 1
+99 2
+
+statement ok
+use default
+
+statement ok
+drop database poc_other
 
 statement ok
 drop database poc;

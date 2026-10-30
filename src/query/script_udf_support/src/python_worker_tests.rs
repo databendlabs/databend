@@ -285,12 +285,13 @@ mod tests {
     async fn idle_runtime() -> Arc<PythonRuntime> {
         let query = manager(4).query("idle", 4);
         let runtime = PythonRuntime::new(
-            PythonFunction {
-                name: "idle".to_owned(),
-                handler: "handler".to_owned(),
-                code: "def handler(x): return x".to_owned(),
-                return_field: Field::new("x", arrow_schema::DataType::Int64, false),
-            },
+            python_function(
+                "idle".to_owned(),
+                "handler".to_owned(),
+                "def handler(x): return x".to_owned(),
+                Field::new("x", arrow_schema::DataType::Int64, false),
+                None,
+            ),
             query,
             None,
         )
@@ -301,13 +302,9 @@ mod tests {
     }
 
     fn return_idle_worker(runtime: &Arc<PythonRuntime>, reservation: Arc<Reservation>) {
-        let (socket, _peer) = UnixStream::pair().unwrap();
         let worker = Worker {
-            child: None,
-            socket,
+            process: None,
             reservation,
-            directory: None,
-            runtime: tokio::runtime::Handle::current(),
         };
         runtime.pool.lock().live += 1;
         WorkerLease::new(runtime.clone(), Some(worker), None)
@@ -469,6 +466,5 @@ mod tests {
                 .is_err()
             );
         }
-        assert!(check_length(MAX_FRAME_BYTES + 1).is_err());
     }
 }

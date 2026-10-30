@@ -147,7 +147,11 @@ impl TableIdentifier {
             },
             None => Identifier {
                 span: None,
-                name: ctx.get_current_catalog(),
+                name: binder
+                    .definition_scope
+                    .namespace()
+                    .map(|(catalog, _)| catalog.clone())
+                    .unwrap_or_else(|| ctx.get_current_catalog()),
                 quote: Some(dialect.default_ident_quote()),
                 ident_type: IdentifierType::None,
             },
@@ -161,7 +165,11 @@ impl TableIdentifier {
             },
             None => Identifier {
                 span: None,
-                name: ctx.get_current_database(),
+                name: binder
+                    .definition_scope
+                    .namespace()
+                    .map(|(_, database)| database.clone())
+                    .unwrap_or_else(|| ctx.get_current_database()),
                 quote: Some(dialect.default_ident_quote()),
                 ident_type: IdentifierType::None,
             },

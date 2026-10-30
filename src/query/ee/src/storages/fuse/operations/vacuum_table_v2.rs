@@ -204,6 +204,14 @@ pub async fn do_vacuum2(
         .inverted_index_v2_location_prefix();
     let mut gc_root_blocks = HashSet::new();
     let mut protected_inverted_index_locations = HashSet::new();
+    let target_vector_index_prefix = fuse_table
+        .meta_location_generator()
+        .vector_index_v2_location_prefix();
+    let target_legacy_vector_index_prefix = fuse_table
+        .meta_location_generator()
+        .block_vector_index_prefix();
+    // Bundles (`vector_index_metas`) and legacy combined files (`vector_index_location`).
+    let mut protected_vector_locations = HashSet::new();
     for (chunk_idx, segment_chunk) in protected_segments
         .chunks(VACUUM2_SEGMENT_READ_CHUNK_SIZE)
         .enumerate()
@@ -226,6 +234,23 @@ pub async fn do_vacuum2(
                 if block.location.0.starts_with(target_block_prefix) {
                     gc_root_blocks.insert(block_path_hash(&block.location.0));
                 }
+                protected_vector_locations.extend(
+                    block
+                        .vector_index_metas
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|meta| &meta.location.0)
+                        .filter(|path| path.starts_with(target_vector_index_prefix))
+                        .chain(
+                            block
+                                .vector_index_location
+                                .as_ref()
+                                .map(|location| &location.0)
+                                .filter(|path| path.starts_with(target_legacy_vector_index_prefix)),
+                        )
+                        .cloned(),
+                );
                 protected_inverted_index_locations.extend(
                     block
                         .inverted_index_metas
@@ -270,6 +295,34 @@ pub async fn do_vacuum2(
         table_info.desc,
         start.elapsed(),
         removed_inverted_index_v2,
+    ));
+
+    // Column-oriented segments do not carry `vector_index_metas` yet. Never sweep
+    // the namespace based on an incomplete reference set.
+    let start = std::time::Instant::now();
+    let mut removed_vector_index = 0;
+    if !fuse_table.is_column_oriented() {
+        for (prefix, legacy) in [
+            (target_vector_index_prefix, false),
+            (target_legacy_vector_index_prefix, true),
+        ] {
+            removed_vector_index += purge_vector_index_objects(
+                fuse_table.get_operator_ref(),
+                &ctx,
+                prefix,
+                legacy,
+                &protected_vector_locations,
+                gc_root_timestamp,
+                gc_root_meta_ts,
+            )
+            .await?;
+        }
+    }
+    ctx.set_status_info(&format!(
+        "Removed unreferenced vector-index objects for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_vector_index,
     ));
 
     // User dictionaries are referenced by index definitions in the table meta, not by snapshots:
@@ -366,6 +419,7 @@ pub async fn do_vacuum2(
     let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
 
     let removed_files = removed_inverted_index_v2
+        + removed_vector_index
         + block_gc_stats.removed_files
         + stats_to_gc.len()
         + segments_to_gc.len()
@@ -423,6 +477,66 @@ async fn purge_inverted_index_dict_objects(
                 );
                 continue;
             }
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
+}
+
+/// Removes vector index files under `prefix` not referenced by protected blocks.
+///
+/// Bundles (`_i_v_v2`, like inverted-index V2): only `h`-prefixed objects whose
+/// UUID v7 is older than the GC root. Legacy combined files (`_i_v`,
+/// `{uuid}_v{N}.parquet`): no longer written, so like legacy blocks they are
+/// candidates once last modified a full transaction before the GC root.
+async fn purge_vector_index_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    legacy: bool,
+    protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning vector-index objects under {prefix}"
+            )));
+        }
+        if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
+            continue;
+        }
+        if !legacy {
+            match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+                Ok(Some(timestamp)) if timestamp < gc_root_timestamp => {}
+                Ok(_) => continue,
+                Err(error) => {
+                    warn!(
+                        "skip vector-index bundle with unparsable UUID during vacuum: path={}, error={}",
+                        entry.path(),
+                        error
+                    );
+                    continue;
+                }
+            }
+        }
+        if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
+            continue;
         }
         pending.push(entry.path().to_string());
         if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {

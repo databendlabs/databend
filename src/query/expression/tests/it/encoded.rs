@@ -20,6 +20,9 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnView;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::HashMethod;
+use databend_common_expression::HashMethodSerializer;
+use databend_common_expression::KeysState;
 use databend_common_expression::Scalar;
 use databend_common_expression::SelectOp;
 use databend_common_expression::Value;
@@ -74,6 +77,18 @@ fn dict_column(values: &[&str], keys: &[u32]) -> Column {
 fn build_dict(column: &Column) -> Column {
     let dict = DictColumn::try_encode(column, 1 << 16).unwrap();
     Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
+}
+
+#[test]
+fn test_narrow_buffer_shared_storage() {
+    for max in [u8::MAX as u64, u16::MAX as u64, u32::MAX as u64, u64::MAX] {
+        let keys = NarrowBuffer::pack((0..8usize).map(|i| i as u64), max);
+        assert!(keys.shares_storage(&keys.clone()));
+        assert!(!keys.shares_storage(&NarrowBuffer::pack((0..8usize).map(|i| i as u64), max)));
+        assert!(keys.slice(1..7).shares_storage(&keys.clone().slice(1..7)));
+        assert!(!keys.slice(0..6).shares_storage(&keys.slice(1..7)));
+        assert!(!keys.slice(0..6).shares_storage(&keys.slice(0..7)));
+    }
 }
 
 /// Block-level dictionaries keep first-seen order and give up beyond `max_ndv`.
@@ -241,7 +256,7 @@ fn test_encoded_column_kernels() {
         );
 
         assert_eq!(
-            Value::Column(encoded.clone()).decode_encoded(),
+            Value::Column(encoded.clone()).decode_owned(),
             Value::Column(decoded.clone())
         );
         assert!(encoded.memory_size(false) < decoded.memory_size(false));
@@ -651,5 +666,46 @@ fn test_nullable_wraps_encoded_column() {
     let value = Value::Column(Column::Nullable(wrapped));
     assert!(value.is_encoded());
     assert_eq!(*value.decoded(), Value::Column(expected.clone()));
-    assert_eq!(value.decode_encoded(), Value::Column(expected));
+    assert_eq!(value.decode_owned(), Value::Column(expected));
+}
+
+#[test]
+fn test_encoded_row_serialization() {
+    let n = 5;
+    let validity = Bitmap::from_iter([true, false, true, true, false]);
+    let plain = [
+        Int64Type::from_data(vec![-3, 1_000_000, 7, 7, 1_000_200]),
+        Int32Type::from_data(vec![5, -2, 9, 5, 0]),
+        DateType::from_data(vec![19000, 19005, 19000, 19090, 19001]),
+        TimestampType::from_data(vec![10, 1_000_000_000, 10, 7, 999]),
+        decimal_column(&[100, -250, 90_000, 100, 0]),
+        StringType::from_data(vec!["x", "yy", "x", "", "yy"]),
+    ];
+    let encoded = |column: &Column| match column {
+        Column::String(_) => build_dict(column),
+        column => encode(column),
+    };
+    let mut decoded = plain.to_vec();
+    let mut columns = plain.iter().map(encoded).collect::<Vec<_>>();
+    decoded.push(NullableColumn::new_column(
+        plain[0].clone(),
+        validity.clone(),
+    ));
+    columns.push(NullableColumn::new_column(encoded(&plain[0]), validity));
+
+    let keys = |columns: &[Column]| {
+        let entries = columns
+            .iter()
+            .cloned()
+            .map(BlockEntry::from)
+            .collect::<Vec<_>>();
+        match HashMethodSerializer::default()
+            .build_keys_state((&entries).into(), n)
+            .unwrap()
+        {
+            KeysState::Column(column) => column,
+            _ => unreachable!(),
+        }
+    };
+    assert_eq!(keys(&columns), keys(&decoded));
 }

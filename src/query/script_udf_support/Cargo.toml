@@ -10,7 +10,7 @@ edition = { workspace = true }
 [features]
 default = []
 script-udf = ["dep:arrow-udf-runtime"]
-python-udf = ["script-udf", "arrow-udf-runtime/python"]
+python-udf = ["script-udf", "arrow-udf-runtime/python", "dep:arrow-udf-python-worker"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -19,10 +19,12 @@ arrow-cast = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
+arrow-udf-python-worker = { workspace = true, optional = true }
 arrow-udf-runtime = { workspace = true, optional = true }
 async-trait = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
+databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-meta-app = { workspace = true }
@@ -30,11 +32,8 @@ databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 futures = { workspace = true }
-libc = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 uuid = { workspace = true }
@@ -42,6 +41,10 @@ walkdir = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]
+# Same allocator as the query binary: jemalloc background threads must not
+# defeat the single-threaded sandbox entry.
+databend-common-base = { workspace = true, features = ["jemalloc"] }
+libc = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 
 [[test]]

@@ -26,6 +26,7 @@ pub use segment::DraftVirtualColumnBlockMeta;
 pub use segment::DraftVirtualColumnMeta;
 pub use segment::DraftVirtualColumnPathStatistics;
 pub use segment::ExtendedBlockMeta;
+pub use segment::IndexFileLocation;
 pub use segment::SegmentInfo;
 pub use segment::VirtualBlockMeta;
 pub use segment::VirtualColumnMeta;

@@ -20,7 +20,6 @@ use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::F64;
-use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::VariantType;
@@ -30,16 +29,19 @@ use jsonb::Number as JsonbNumber;
 use jsonb::Value as JsonbValue;
 use num_traits::AsPrimitive;
 
-use crate::decimal_scale_reduction;
+use crate::cast::ScaleReduction;
+use crate::decimal::DecimalExt;
+use crate::vectorize::skip_inactive_with_builder_1_arg;
 
 pub(super) fn variant_to_decimal<T>(
     from: Value<VariantType>,
     ctx: &mut EvalContext,
     dest_type: DecimalDataType,
     only_cast_number: bool,
+    null_on_error: bool,
 ) -> Value<NullableType<DecimalType<T>>>
 where
-    T: Decimal,
+    T: DecimalExt,
 {
     let size = dest_type.size();
     let multiplier = T::e(size.scale());
@@ -47,22 +49,8 @@ where
     let min = T::min_for_precision(size.precision());
     let max = T::max_for_precision(size.precision());
 
-    let is_scalar = from.as_scalar().is_some();
-    let len = if is_scalar { 1 } else { ctx.num_rows };
-    let mut builder = NullableColumnBuilder {
-        builder: Vec::with_capacity(len),
-        validity: MutableBitmap::with_capacity(len),
-    };
-
-    for index in 0..len {
-        if let Some(validity) = &ctx.validity {
-            if !validity.get_bit(index) {
-                builder.push_null();
-                continue;
-            }
-        }
-        let val = unsafe { from.index_unchecked(index) };
-        match cast_to_decimal(
+    skip_inactive_with_builder_1_arg::<VariantType, NullableType<DecimalType<T>>>(
+        |val, builder: &mut NullableColumnBuilder<DecimalType<T>>, ctx| match cast_to_decimal(
             val,
             min,
             max,
@@ -75,17 +63,13 @@ where
         ) {
             Ok(Some(val)) => builder.push(val),
             Ok(None) => builder.push_null(),
+            Err(_) if null_on_error => builder.push_null(),
             Err(err) => {
                 ctx.set_error(builder.len(), err);
                 builder.push_null();
             }
-        }
-    }
-    if is_scalar {
-        Value::Scalar(builder.build_scalar())
-    } else {
-        Value::Column(builder.build())
-    }
+        },
+    )(from, ctx)
 }
 
 fn cast_to_decimal<T>(
@@ -100,7 +84,7 @@ fn cast_to_decimal<T>(
     only_cast_number: bool,
 ) -> Result<Option<T>, String>
 where
-    T: Decimal,
+    T: DecimalExt,
 {
     let value = jsonb::from_slice(val).map_err(|e| format!("Invalid jsonb value, {e}"))?;
     match value {
@@ -191,7 +175,11 @@ where
                     } else {
                         T::zero()
                     };
-                    Ok(Some(v))
+                    if (min..=max).contains(&v) {
+                        Ok(Some(v))
+                    } else {
+                        Err("Decimal overflow".to_string())
+                    }
                 }
                 JsonbValue::String(s) => {
                     read_decimal_with_size::<T>(s.as_bytes(), dest_size, true, rounding_mode)
@@ -214,7 +202,7 @@ fn float_to_decimal<T, N>(
     rounding_mode: bool,
 ) -> Result<T, String>
 where
-    T: Decimal,
+    T: DecimalExt,
     N: Number + AsPrimitive<f64> + std::fmt::Display,
 {
     let mut value = x.as_() * multiplier;
@@ -228,7 +216,7 @@ where
     Err(format!("Decimal overflow, value `{x}`"))
 }
 
-fn decimal_to_decimal<T: Decimal>(
+fn decimal_to_decimal<T: DecimalExt>(
     x: T,
     min: T,
     max: T,
@@ -237,21 +225,16 @@ fn decimal_to_decimal<T: Decimal>(
     rounding_mode: bool,
 ) -> Result<T, String> {
     if from_size.scale() == dest_size.scale() && from_size.precision() <= dest_size.precision() {
-        Ok(x)
-    } else if from_size.scale() > dest_size.scale() {
-        let scale_diff = from_size.scale() - dest_size.scale();
-        match decimal_scale_reduction(
-            x,
-            min,
-            max,
-            T::e(scale_diff),
-            from_size.scale(),
-            scale_diff,
-            rounding_mode,
-        ) {
-            Some(y) => Ok(y),
-            _ => Err("Decimal overflow".to_string()),
+        // A JSONB coefficient's storage width is not a declared SQL precision.
+        if (min..=max).contains(&x) {
+            Ok(x)
+        } else {
+            Err("Decimal overflow".to_string())
         }
+    } else if from_size.scale() > dest_size.scale() {
+        ScaleReduction::<T>::new(from_size.scale() - dest_size.scale(), dest_size.precision())
+            .reduce(x, rounding_mode)
+            .ok_or_else(|| "Decimal overflow".to_string())
     } else {
         let factor = T::e(dest_size.scale() - from_size.scale());
         match x.checked_mul(factor) {

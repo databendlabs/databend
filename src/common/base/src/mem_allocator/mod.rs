@@ -39,3 +39,15 @@ mod tracker;
 
 #[cfg(feature = "memory-profiling")]
 pub use profiling::dump_profile;
+
+/// Stop and join the allocator's background threads (jemalloc purging with
+/// `background_thread:true`). For short-lived helper processes that must be
+/// single-threaded, e.g. before entering a sandbox. No-op without jemalloc.
+pub fn stop_allocator_background_threads() -> Result<(), String> {
+    #[cfg(all(feature = "jemalloc", not(target_os = "macos")))]
+    {
+        tikv_jemalloc_ctl::background_thread::write(false)
+            .map_err(|err| format!("cannot stop jemalloc background threads: {err}"))?;
+    }
+    Ok(())
+}

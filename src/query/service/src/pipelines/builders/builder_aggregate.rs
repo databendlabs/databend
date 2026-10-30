@@ -28,9 +28,11 @@ use databend_common_sql::plans::UDFType;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
+use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
     pub fn build_aggregator_params(
+        #[cfg_attr(not(feature = "python-udf"), allow(unused_variables))] ctx: &Arc<QueryContext>,
         input_schema: DataSchemaRef,
         group_by: &[Symbol],
         agg_funcs: &[AggregateFunctionDesc],
@@ -89,6 +91,14 @@ impl PipelineBuilder {
                             })
                             .collect(),
                         agg_func.sig.return_type.clone(),
+                        // Python aggregates share the query's sandboxed workers.
+                        #[cfg(feature = "python-udf")]
+                        match code.language {
+                            databend_common_sql::plans::UDFLanguage::Python => {
+                                Some(ctx.python_udf_workers()?)
+                            }
+                            _ => None,
+                        },
                     ),
                     Some((UDFType::Server(_), _state_fields)) => unimplemented!(),
                 }?;

@@ -1,0 +1,38 @@
+# Run with both decoded scans (the default) and FOR-encoded Decimal columns.
+# run-with-settings: enable_encoded_columns=1
+
+statement ok
+CREATE OR REPLACE TABLE decimal_encoded_arithmetic(id INT NOT NULL, whole DECIMAL(38,0) NOT NULL, tiny DECIMAL(38,20) NOT NULL, nullable_whole DECIMAL(38,0) NULL) STORAGE_FORMAT = 'parquet'
+
+# A narrow range of Decimal128 coefficients is eligible for FOR encoding.
+# Clamping the result precision leaves the operands at scales 0/20, so their
+# coefficients must not be added/subtracted without alignment to result scale 20.
+statement ok
+INSERT INTO decimal_encoded_arithmetic SELECT number, (number % 2 + 1)::DECIMAL(38,0), '0.00000000000000000001'::DECIMAL(38,20), if(number % 3 = 0, NULL, (number % 2 + 1)::DECIMAL(38,0)) FROM numbers(2048)
+
+# Compare exact strings: these scale-20 differences are smaller than Float64
+# precision and must not be hidden by approximate result comparison.
+query ITTT
+SELECT id, (whole + tiny)::STRING, (whole - tiny)::STRING, (tiny - whole)::STRING FROM decimal_encoded_arithmetic WHERE id < 2 ORDER BY id
+----
+0 1.00000000000000000001 0.99999999999999999999 -0.99999999999999999999
+1 2.00000000000000000001 1.99999999999999999999 -1.99999999999999999999
+
+# Scalar conversion, reversed subtraction and nullable passthrough agree with
+# the column-column path. The correct result coefficients exceed i64.
+query ITTT
+SELECT id, (whole + '0.00000000000000000001'::DECIMAL(38,20))::STRING, ('0.00000000000000000001'::DECIMAL(38,20) - whole)::STRING, (nullable_whole - tiny)::STRING FROM decimal_encoded_arithmetic WHERE id < 2 ORDER BY id
+----
+0 1.00000000000000000001 -0.99999999999999999999 NULL
+1 2.00000000000000000001 -1.99999999999999999999 1.99999999999999999999
+
+# Same-scale checked arithmetic and integral multiplication may still produce
+# encoded results; a following aligned operation must decode them correctly.
+query ITTT
+SELECT id, (whole + whole)::STRING, (whole * whole)::STRING, ((whole + whole) - tiny)::STRING FROM decimal_encoded_arithmetic WHERE id < 2 ORDER BY id
+----
+0 2 1 1.99999999999999999999
+1 4 4 3.99999999999999999999
+
+statement ok
+DROP TABLE decimal_encoded_arithmetic

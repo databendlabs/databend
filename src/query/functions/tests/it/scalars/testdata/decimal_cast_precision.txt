@@ -1,0 +1,385 @@
+ast            : CAST(9::Int64 AS DECIMAL(1,0))
+raw expr       : CAST(CAST(9 AS Int64) AS Decimal(1, 0))
+checked expr   : CAST<Int64>(CAST<UInt8>(9_u8 AS Int64) AS Decimal(1, 0))
+optimized expr : 9_d64(1,0)
+output type    : Decimal(1, 0)
+output domain  : {9..=9}
+output         : 9
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(10::Int64 AS DECIMAL(1,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 761 while evaluating function `to_decimal(1, 0)(10)` in expr `CAST(CAST(10 AS Int64) AS Decimal(1, 0))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(-10::Int64 AS DECIMAL(1,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 761 while evaluating function `to_decimal(1, 0)(-10)` in expr `CAST(- CAST(10 AS Int64) AS Decimal(1, 0))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(9223372036854775807::Int64 AS DECIMAL(1,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 761 while evaluating function `to_decimal(1, 0)(9223372036854775807)` in expr `CAST(CAST(9223372036854775807 AS Int64) AS Decimal(1, 0))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(18446744073709551615::UInt64 AS DECIMAL(1,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 761 while evaluating function `to_decimal(1, 0)(18446744073709551615)` in expr `CAST(18446744073709551615 AS Decimal(1, 0))`
+
+
+
+ast            : TRY_CAST(10::Int64 AS DECIMAL(1,0))
+raw expr       : TRY_CAST(CAST(10 AS Int64) AS Decimal(1, 0))
+checked expr   : TRY_CAST<Int64>(CAST<UInt8>(10_u8 AS Int64) AS Decimal(1, 0) NULL)
+optimized expr : NULL
+output type    : Decimal(1, 0) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(18446744073709551615::UInt64 AS DECIMAL(1,0))
+raw expr       : TRY_CAST(CAST(18446744073709551615 AS UInt64) AS Decimal(1, 0))
+checked expr   : TRY_CAST<UInt64>(18446744073709551615_u64 AS Decimal(1, 0) NULL)
+optimized expr : NULL
+output type    : Decimal(1, 0) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(FALSE AS DECIMAL(1,1))
+raw expr       : CAST(false AS Decimal(1, 1))
+checked expr   : CAST<Boolean>(false AS Decimal(1, 1))
+optimized expr : 0.0_d64(1,1)
+output type    : Decimal(1, 1)
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(TRUE AS DECIMAL(1,1))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)(true)` in expr `CAST(true AS Decimal(1, 1))`
+
+
+
+ast            : TRY_CAST(TRUE AS DECIMAL(1,1))
+raw expr       : TRY_CAST(true AS Decimal(1, 1))
+checked expr   : TRY_CAST<Boolean>(true AS Decimal(1, 1) NULL)
+optimized expr : NULL
+output type    : Decimal(1, 1) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(parse_json('true') AS DECIMAL(1,1))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)('true')` in expr `CAST(CAST('true' AS Variant) AS Decimal(1, 1))`
+
+
+
+ast            : TRY_CAST(parse_json('true') AS DECIMAL(1,1))
+raw expr       : TRY_CAST(parse_json('true') AS Decimal(1, 1))
+checked expr   : TRY_CAST<Variant>(CAST<String>("true" AS Variant) AS Decimal(1, 1) NULL)
+optimized expr : NULL
+output type    : Decimal(1, 1) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(s AS DECIMAL(3,0)) <= 10
+raw expr       : lte(CAST(s::String AS Decimal(3, 0)), 10)
+checked expr   : lte<Decimal(3, 0), Decimal(3, 0)>(CAST<String>(s AS Decimal(3, 0)), CAST<UInt8>(10_u8 AS Decimal(3, 0)))
+optimized expr : lte<Decimal(3, 0), Decimal(3, 0)>(CAST<String>(s AS Decimal(3, 0)), 10_d64(3,0))
+evaluation:
++--------+--------------+---------+
+|        | s            | Output  |
++--------+--------------+---------+
+| Type   | String       | Boolean |
+| Domain | {"10"..="2"} | Unknown |
+| Row 0  | '10'         | true    |
+| Row 1  | '100'        | false   |
+| Row 2  | '2'          | true    |
++--------+--------------+---------+
+evaluation (internal):
++--------+----------------------------------+
+| Column | Data                             |
++--------+----------------------------------+
+| s      | Column(StringColumn[10, 100, 2]) |
+| Output | Boolean([0b_____101])            |
++--------+----------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(s AS DECIMAL(3,0)) <= 10
+  | ^^^^^^^^^^^^^^^^^^^^^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(3, 0)('100x')` in expr `CAST(s AS Decimal(3, 0))`, during run expr: `CAST(s AS Decimal(3, 0)) <= CAST(10 AS Decimal(3, 0))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS DECIMAL(1,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 761 while evaluating function `to_decimal(1, 0)(-10)` in expr `CAST(a AS Decimal(1, 0))`
+
+
+
+ast            : TRY_CAST(a AS DECIMAL(1,0))
+raw expr       : TRY_CAST(a::Int64 AS Decimal(1, 0))
+checked expr   : TRY_CAST<Int64>(a AS Decimal(1, 0) NULL)
+evaluation:
++--------+------------+--------------------+
+|        | a          | Output             |
++--------+------------+--------------------+
+| Type   | Int64      | Decimal(1, 0) NULL |
+| Domain | {-10..=10} | {-9..=9} ∪ {NULL}  |
+| Row 0  | -10        | NULL               |
+| Row 1  | -9         | -9                 |
+| Row 2  | 0          | 0                  |
+| Row 3  | 9          | 9                  |
+| Row 4  | 10         | NULL               |
++--------+------------+--------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------+
+| Column | Data                                                                           |
++--------+--------------------------------------------------------------------------------+
+| a      | Column(Int64([-10, -9, 0, 9, 10]))                                             |
+| Output | NullableColumn { column: Decimal64([1, -9, 0, 9, 1]), validity: [0b___01110] } |
++--------+--------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, CAST(10::Int64 AS DECIMAL(1,0)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 761 while evaluating function `to_decimal(1, 0)(10)` in expr `CAST(CAST(10 AS Int64) AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST(10 AS Int64) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
+
+
+
+ast            : if(active, TRY_CAST(10::Int64 AS DECIMAL(1,0)), NULL)
+raw expr       : if(active::Boolean, TRY_CAST(CAST(10 AS Int64) AS Decimal(1, 0)), NULL)
+checked expr   : if<T0=Decimal(1, 0) NULL><Boolean NULL, T0, T0>(CAST<Boolean>(active AS Boolean NULL), TRY_CAST<Int64>(CAST<UInt8>(10_u8 AS Int64) AS Decimal(1, 0) NULL), CAST<NULL>(NULL AS Decimal(1, 0) NULL))
+optimized expr : NULL
+evaluation:
++--------+---------------+--------------------+
+|        | active        | Output             |
++--------+---------------+--------------------+
+| Type   | Boolean       | Decimal(1, 0) NULL |
+| Domain | {FALSE, TRUE} | {NULL}             |
+| Row 0  | false         | NULL               |
+| Row 1  | true          | NULL               |
+| Row 2  | false         | NULL               |
++--------+---------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| active | Column(Boolean([0b_____010]))                                           |
+| Output | NullableColumn { column: Decimal64([0, 0, 0]), validity: [0b_____000] } |
++--------+-------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, CAST(1e30::Float64 AS DECIMAL(1,0)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 812 while evaluating function `to_decimal(1, 0)(1000000000000000000000000000000)` in expr `CAST(CAST(1000000000000000000000000000000 AS Float64) AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST(1000000000000000000000000000000 AS Float64) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, CAST('bad' AS DECIMAL(1,0)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(1, 0)('bad')` in expr `CAST('bad' AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST('bad' AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, CAST(10::DECIMAL(2,0) AS DECIMAL(1,0)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 892 while evaluating function `to_decimal(1, 0)(10)` in expr `CAST(CAST(10 AS Decimal(2, 0)) AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST(10 AS Decimal(2, 0)) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, CAST(TRUE AS DECIMAL(1,1)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)(true)` in expr `CAST(true AS Decimal(1, 1))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(true AS Decimal(1, 1)) AS Decimal(1, 1) NULL), CAST(NULL AS Decimal(1, 1) NULL))`
+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, CAST(parse_json('10') AS DECIMAL(1,0)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow, value `10` while evaluating function `to_decimal(1, 0)('10')` in expr `CAST(CAST('10' AS Variant) AS Decimal(1, 0))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST('10' AS Variant) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST(NULL AS Decimal(1, 0) NULL))`
+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, CAST(parse_json('true') AS DECIMAL(1,1)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)('true')` in expr `CAST(CAST('true' AS Variant) AS Decimal(1, 1))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST('true' AS Variant) AS Decimal(1, 1)) AS Decimal(1, 1) NULL), CAST(NULL AS Decimal(1, 1) NULL))`
+
+
+
+ast            : if(active, CAST(parse_json('7') AS DECIMAL(1,0)), NULL)
+raw expr       : if(active::Boolean, CAST(parse_json('7') AS Decimal(1, 0)), NULL)
+checked expr   : if<T0=Decimal(1, 0) NULL><Boolean NULL, T0, T0>(CAST<Boolean>(active AS Boolean NULL), CAST<Decimal(1, 0)>(CAST<Variant>(CAST<String>("7" AS Variant) AS Decimal(1, 0)) AS Decimal(1, 0) NULL), CAST<NULL>(NULL AS Decimal(1, 0) NULL))
+optimized expr : if<T0=Decimal(1, 0) NULL><Boolean NULL, T0, T0>(CAST<Boolean>(active AS Boolean NULL), 7_d64(1,0), NULL)
+evaluation:
++--------+---------------+--------------------+
+|        | active        | Output             |
++--------+---------------+--------------------+
+| Type   | Boolean       | Decimal(1, 0) NULL |
+| Domain | {FALSE, TRUE} | {7..=7} ∪ {NULL}   |
+| Row 0  | false         | NULL               |
+| Row 1  | true          | 7                  |
+| Row 2  | false         | NULL               |
++--------+---------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| active | Column(Boolean([0b_____010]))                                           |
+| Output | NullableColumn { column: Decimal64([0, 7, 0]), validity: [0b_____010] } |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : if(active, CAST(10::Int64 AS DECIMAL(1,0)), 1::DECIMAL(1,0))
+raw expr       : if(active::Boolean, CAST(CAST(10 AS Int64) AS Decimal(1, 0)), CAST(1 AS Decimal(1, 0)))
+checked expr   : if<T0=Decimal(1, 0)><Boolean NULL, T0, T0>(CAST<Boolean>(active AS Boolean NULL), CAST<Int64>(CAST<UInt8>(10_u8 AS Int64) AS Decimal(1, 0)), CAST<UInt8>(1_u8 AS Decimal(1, 0)))
+optimized expr : 1_d64(1,0)
+evaluation:
++--------+---------+---------------+
+|        | active  | Output        |
++--------+---------+---------------+
+| Type   | Boolean | Decimal(1, 0) |
+| Domain | {FALSE} | {1..=1}       |
+| Row 0  | false   | 1             |
+| Row 1  | false   | 1             |
+| Row 2  | false   | 1             |
++--------+---------+---------------+
+evaluation (internal):
++--------+-------------------------------+
+| Column | Data                          |
++--------+-------------------------------+
+| active | Column(Boolean([0b_____000])) |
+| Output | Decimal64([1, 1, 1])          |
++--------+-------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(parse_json(s) AS DECIMAL(3,1))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow, value `1000` while evaluating function `to_decimal(3, 1)('1000')` in expr `CAST(CAST(s AS Variant) AS Decimal(3, 1))`
+
+
+
+ast            : TRY_CAST(parse_json(s) AS DECIMAL(3,1))
+raw expr       : TRY_CAST(parse_json(s::String) AS Decimal(3, 1))
+checked expr   : TRY_CAST<Variant>(CAST<String>(s AS Variant) AS Decimal(3, 1) NULL)
+evaluation:
++--------+--------------------+--------------------+
+|        | s                  | Output             |
++--------+--------------------+--------------------+
+| Type   | String             | Decimal(3, 1) NULL |
+| Domain | {"\"x\""..="null"} | Unknown            |
+| Row 0  | '1.5'              | 1.5                |
+| Row 1  | '1000'             | NULL               |
+| Row 2  | '"x"'              | NULL               |
+| Row 3  | 'null'             | NULL               |
++--------+--------------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------+
+| Column | Data                                                                               |
++--------+------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[1.5, 1000, "x", null])                                         |
+| Output | NullableColumn { column: Decimal64([1.5, 0.0, 0.0, 0.0]), validity: [0b____0001] } |
++--------+------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, CAST(parse_json(s) AS DECIMAL(3,1)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Failed to cast to variant value `x` to decimal, bad decimal literal: unexpected char while evaluating function `to_decimal(3, 1)('"x"')` in expr `CAST(CAST(s AS Variant) AS Decimal(3, 1))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(CAST(CAST(s AS Variant) AS Decimal(3, 1)) AS Decimal(3, 1) NULL), CAST(NULL AS Decimal(3, 1) NULL))`
+
+
+
+ast            : if(active, TRY_CAST(parse_json(s) AS DECIMAL(3,1)), NULL)
+raw expr       : if(active::Boolean, TRY_CAST(parse_json(s::String) AS Decimal(3, 1)), NULL)
+checked expr   : if<T0=Decimal(3, 1) NULL><Boolean NULL, T0, T0>(CAST<Boolean>(active AS Boolean NULL), TRY_CAST<Variant>(CAST<String>(s AS Variant) AS Decimal(3, 1) NULL), CAST<NULL>(NULL AS Decimal(3, 1) NULL))
+optimized expr : if<T0=Decimal(3, 1) NULL><Boolean NULL, T0, T0>(CAST<Boolean>(active AS Boolean NULL), TRY_CAST<Variant>(CAST<String>(s AS Variant) AS Decimal(3, 1) NULL), NULL)
+evaluation:
++--------+--------------------+---------------+--------------------+
+|        | s                  | active        | Output             |
++--------+--------------------+---------------+--------------------+
+| Type   | String             | Boolean       | Decimal(3, 1) NULL |
+| Domain | {"\"x\""..="null"} | {FALSE, TRUE} | Unknown            |
+| Row 0  | '1.5'              | true          | 1.5                |
+| Row 1  | '1000'             | false         | NULL               |
+| Row 2  | '"x"'              | true          | NULL               |
+| Row 3  | 'null'             | true          | NULL               |
++--------+--------------------+---------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------+
+| Column | Data                                                                               |
++--------+------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[1.5, 1000, "x", null])                                         |
+| active | Column(Boolean([0b____1101]))                                                      |
+| Output | NullableColumn { column: Decimal64([1.5, 0.0, 0.0, 0.0]), validity: [0b____0001] } |
++--------+------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(3, 0)('123', f)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ Unexpected end of input while evaluating function `to_decimal(3, 0)('123', '9999')` in expr `to_decimal(3, 0)('123', f)`
+
+
+
+ast            : if(active, to_decimal(3, 0)('123', f), NULL)
+raw expr       : if(active::Boolean, to_decimal(3, 0)('123', f::String), NULL)
+checked expr   : if<T0=Decimal(3, 0) NULL><Boolean NULL, T0, T0>(CAST<Boolean>(active AS Boolean NULL), CAST<Decimal(3, 0)>(to_decimal<String, String>(3, 0)("123", f) AS Decimal(3, 0) NULL), CAST<NULL>(NULL AS Decimal(3, 0) NULL))
+optimized expr : if<T0=Decimal(3, 0) NULL><Boolean NULL, T0, T0>(CAST<Boolean>(active AS Boolean NULL), CAST<Decimal(3, 0)>(to_decimal<String, String>(3, 0)("123", f) AS Decimal(3, 0) NULL), NULL)
+evaluation:
++--------+------------------+---------------+--------------------+
+|        | f                | active        | Output             |
++--------+------------------+---------------+--------------------+
+| Type   | String           | Boolean       | Decimal(3, 0) NULL |
+| Domain | {"999"..="9999"} | {FALSE, TRUE} | Unknown            |
+| Row 0  | '9999'           | false         | NULL               |
+| Row 1  | '999'            | true          | 123                |
++--------+------------------+---------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| f      | Column(StringColumn[9999, 999])                                        |
+| active | Column(Boolean([0b______10]))                                          |
+| Output | NullableColumn { column: Decimal64([0, 123]), validity: [0b______10] } |
++--------+------------------------------------------------------------------------+
+
+
