@@ -3441,6 +3441,7 @@ dependencies = [
  "match-template",
  "md-5",
  "naive-cityhash",
+ "num-bigint",
  "num-traits",
  "proptest",
  "rand 0.8.5",

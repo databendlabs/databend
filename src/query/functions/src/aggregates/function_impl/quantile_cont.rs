@@ -38,7 +38,10 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use num_bigint::BigInt;
+use num_bigint::BigUint;
 use num_traits::AsPrimitive;
+use num_traits::One;
 
 use super::super::common::get_levels;
 use super::AggregateRegistration;
@@ -357,12 +360,8 @@ where
             *self.value.get(whole + 1).unwrap()
         };
 
-        let result = value1
-            .checked_sub(value)
-            .and_then(|sub_result| sub_result.checked_mul(Decimal::from_float(frac)))
-            .and_then(|mul_result| value.checked_add(mul_result));
-
-        result.ok_or_else(|| ErrorCode::Overflow("Decimal overflow when interpolate"))
+        interpolate_decimal(value, value1, frac)
+            .ok_or_else(|| ErrorCode::Overflow("Decimal overflow when interpolate"))
     }
 
     fn merge_state(&mut self, rhs: &Self) {
@@ -395,6 +394,32 @@ where
             .extend(T::iter_column(&values).map(T::to_owned_scalar));
         Ok(())
     }
+}
+
+/// Returns `lower + (upper - lower) * frac` on decimal coefficients, rounded
+/// half away from zero to the input scale. `frac` is decoded to its exact
+/// binary value `mantissa * 2^exponent`, so the interpolation is exact before
+/// the single final rounding, and `upper - lower` is never materialized in the
+/// storage width, where it may overflow (e.g. `-max` to `max` in Decimal128).
+fn interpolate_decimal<D: Decimal>(lower: D, upper: D, frac: f64) -> Option<D> {
+    if frac == 0.0 || lower == upper {
+        return Some(lower);
+    }
+    let (mantissa, exponent, _) = num_traits::Float::integer_decode(frac);
+    // `frac` comes from `modf` on a non-negative finite position, so it is in
+    // (0, 1) here and its binary exponent is negative.
+    debug_assert!((0.0..1.0).contains(&frac) && exponent < 0);
+    let shift = exponent.unsigned_abs() as usize;
+    let lower = decimal_to_bigint(lower);
+    let upper = decimal_to_bigint(upper);
+    let numerator = (&lower << shift) + (upper - &lower) * mantissa;
+    let (sign, magnitude) = numerator.into_parts();
+    let magnitude = (magnitude + (BigUint::one() << (shift - 1))) >> shift;
+    D::from_bigint(BigInt::from_biguint(sign, magnitude))
+}
+
+fn decimal_to_bigint<D: Decimal>(value: D) -> BigInt {
+    BigInt::from_signed_bytes_le(&value.as_decimal::<i256>().to_le_bytes())
 }
 
 impl<T> UnaryState<T, ArrayType<T>> for AggregateDecimalQuantileContState<T>

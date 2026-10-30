@@ -795,25 +795,17 @@ fn float_to_decimal<T: DecimalExt, S: AccessType>(
 where
     for<'a> S::ScalarRef<'a>: Number + AsPrimitive<f64>,
 {
-    let multiplier: f64 = (10_f64).powi(size.scale() as i32).as_();
-
-    let min_for_precision = T::min_for_precision(size.precision());
-    let max_for_precision = T::max_for_precision(size.precision());
-
     let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
-        let mut x = x.as_() * multiplier;
-        if ctx.func_ctx.rounding_mode {
-            x = x.round();
-        }
-        let x = T::from_float(x);
-        if x > max_for_precision || x < min_for_precision {
-            ctx.set_error(
-                builder.len(),
-                concat!("Decimal overflow at line : ", line!()),
-            );
-            builder.push(T::one());
-        } else {
-            builder.push(x);
+        let rounding_mode = ctx.func_ctx.rounding_mode;
+        match T::from_float(x.as_(), size, rounding_mode) {
+            Some(x) => builder.push(x),
+            None => {
+                ctx.set_error(
+                    builder.len(),
+                    concat!("Decimal overflow at line : ", line!()),
+                );
+                builder.push(T::one());
+            }
         }
     };
 

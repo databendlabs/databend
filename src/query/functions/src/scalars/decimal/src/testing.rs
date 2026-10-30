@@ -329,10 +329,22 @@ pub fn check_rows(
     expected: &[Expected],
     describe: impl Fn(usize) -> String,
 ) {
-    let num_rows = expected.len();
     let func_ctx = FunctionContext::default();
+    check_rows_with(&func_ctx, function, args, visible, expected, describe);
+}
+
+/// [`check_rows`] under the given session settings.
+pub fn check_rows_with(
+    func_ctx: &FunctionContext,
+    function: &Function,
+    args: &[Value<AnyType>],
+    visible: Option<&[bool]>,
+    expected: &[Expected],
+    describe: impl Fn(usize) -> String,
+) {
+    let num_rows = expected.len();
     let validity = visible.map(|visible| visible.iter().copied().collect::<Bitmap>());
-    let mut ctx = context(&func_ctx, num_rows, validity);
+    let mut ctx = context(func_ctx, num_rows, validity);
     let databend_common_expression::FunctionEval::Scalar { eval, .. } = &function.eval else {
         unreachable!("scalar function")
     };
