@@ -611,7 +611,9 @@ fn fold_with_values(
 fn guard_scalar(scalar: &mut ScalarExpr, matched: &ScalarExpr) -> Result<()> {
     if matches!(
         scalar,
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_)
+        ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _)
     ) {
         return Ok(());
     }
@@ -711,7 +713,13 @@ fn is_true_constant(scalar: &ScalarExpr) -> bool {
         ScalarExpr::ConstantExpr(ConstantExpr {
             value: Scalar::Boolean(true),
             ..
-        })
+        }) | ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                value: Scalar::Boolean(true),
+                ..
+            },
+            _
+        )
     )
 }
 
