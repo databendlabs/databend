@@ -499,6 +499,7 @@ where A: super::TypeCheckAdapter
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
                     .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
+                self.mark_folded_value(&expr);
                 let (expr, _) =
                     ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
@@ -674,6 +675,7 @@ where A: super::TypeCheckAdapter
         let expr = lambda_scalar
             .type_check(&lambda_schema)?
             .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
+        self.mark_folded_value(&expr);
         let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
         let remote_lambda_expr = expr.as_remote_expr();
         let lambda_display = format!("{:?} -> {}", params, expr.sql_display());

@@ -654,12 +654,17 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut constant_scalar = None;
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
                     let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
-                    let (folded, _) = ConstantFolder::fold(
-                        Cow::Owned(scalar_expr.as_expr()?),
-                        &func_ctx,
-                        &BUILTIN_FUNCTIONS,
-                    );
+                    let expr = scalar_expr.as_expr()?;
+                    let (folded, _) =
+                        ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS);
                     if let EExpr::Constant(constant) = folded.into_owned() {
+                        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                            // The value of e.g. `(SELECT now())` is valid only for this query.
+                            self.ctx
+                                .get_metadata()
+                                .write()
+                                .set_holds_query_specific_value();
+                        }
                         constant_scalar = Some(ScalarExpr::TypedConstantExpr(
                             ConstantExpr {
                                 span: scalar_expr.span(),

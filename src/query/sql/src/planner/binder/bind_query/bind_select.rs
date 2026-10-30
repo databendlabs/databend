@@ -443,6 +443,11 @@ impl Binder {
             SelectRewriter::new(self.name_resolution_ctx.unquoted_ident_case_sensitive)
                 .with_subquery_executor(self.subquery_executor.clone());
         let new_stmt = rewriter.rewrite(stmt)?;
+        if rewriter.executed_subquery {
+            // PIVOT values computed by a subquery while binding, for example
+            // `IN (SELECT current_time())`, are valid only for this query.
+            self.metadata.write().set_holds_query_specific_value();
+        }
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
         let preparation = self.prepare_select_binding(bind_context, stmt, order_by)?;
@@ -531,6 +536,8 @@ impl Binder {
 struct SelectRewriter {
     new_stmt: Option<SelectStmt>,
     subquery_executor: Option<Arc<dyn QueryExecutor>>,
+    /// The rewrite ran a subquery and stored its result in the new statement.
+    executed_subquery: bool,
 }
 
 // helper functions to SelectRewriter
@@ -603,6 +610,7 @@ impl SelectRewriter {
         SelectRewriter {
             new_stmt: None,
             subquery_executor: None,
+            executed_subquery: false,
         }
     }
 
@@ -695,6 +703,7 @@ impl SelectRewriter {
             PivotValues::Subquery(subquery) => {
                 let query_sql = subquery.to_string();
                 if let Some(subquery_executor) = &self.subquery_executor {
+                    self.executed_subquery = true;
                     let data_blocks = databend_common_base::runtime::block_on(async move {
                         subquery_executor
                             .execute_query_with_sql_string(&query_sql)
@@ -737,6 +746,7 @@ impl SelectRewriter {
                         }
                     }
 
+                    self.executed_subquery = true;
                     let data_blocks = databend_common_base::runtime::block_on(async move {
                         subquery_executor
                             .execute_query_with_sql_string(&query_sql)

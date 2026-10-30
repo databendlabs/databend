@@ -472,6 +472,7 @@ where A: TypeCheckAdapter
             let scale = if args.len() == 2 {
                 let scalar_expr = &arguments[1];
                 let expr = type_check::check(scalar_expr, &BUILTIN_FUNCTIONS)?;
+                self.mark_folded_value(&expr);
 
                 let scale: i64 =
                     check_number(expr.span(), &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?;
@@ -500,6 +501,7 @@ where A: TypeCheckAdapter
                 let param_args = arguments.split_off(1);
                 for arg in param_args.into_iter() {
                     let expr = type_check::check(&arg, &BUILTIN_FUNCTIONS)?;
+                    self.mark_folded_value(&expr);
                     let param: u8 =
                         check_number(expr.span(), &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?;
                     params.push(Scalar::Number(NumberScalar::UInt8(param)));
@@ -553,8 +555,10 @@ where A: TypeCheckAdapter
                           default: i64|
              -> Result<i64> {
                 Ok(args.get(index).map(|arg| {
+                    let expr = arg.as_expr()?;
+                    self.mark_folded_value(&expr);
                     match ConstantFolder::fold(
-                        Cow::Owned(arg.as_expr()?),
+                        Cow::Owned(expr),
                         &func_ctx,
                         &BUILTIN_FUNCTIONS,
                     )

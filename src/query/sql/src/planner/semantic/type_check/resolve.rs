@@ -165,6 +165,15 @@ where A: TypeCheckAdapter
         self.resolve_checked_core(&arena, root)
     }
 
+    /// Records that type checking stores the value of `expr` in the logical plan. A value
+    /// computed from a non-deterministic expression such as `now()` is valid only for this
+    /// query, so the plan must not enter the plan cache.
+    pub(super) fn mark_folded_value<Index: ColumnIndex>(&self, expr: &EExpr<Index>) {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            self.metadata.write().set_holds_query_specific_value();
+        }
+    }
+
     pub(super) fn try_fold_constant<Index: ColumnIndex>(
         &self,
         expr: EExpr<Index>,

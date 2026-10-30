@@ -113,7 +113,7 @@ impl Rule for RulePushDownFilterWindowTopN {
         let predicates = filter
             .predicates
             .into_iter()
-            .filter_map(|predicate| extract_top_n(window.index, predicate, &func_ctx))
+            .filter_map(|predicate| self.top_n_bound(window.index, predicate, &func_ctx))
             .collect::<Vec<_>>();
 
         let Some(top_n) = predicates.into_iter().min() else {
@@ -162,6 +162,21 @@ impl Rule for RulePushDownFilterWindowTopN {
 }
 
 impl RulePushDownFilterWindowTopN {
+    fn top_n_bound(
+        &self,
+        column: Symbol,
+        predicate: ScalarExpr,
+        func_ctx: &FunctionContext,
+    ) -> Option<usize> {
+        let deterministic = predicate.is_deterministic();
+        let top_n = extract_top_n(column, predicate, func_ctx)?;
+        if !deterministic {
+            // A bound such as `rn <= day(now())` is valid only for this query.
+            self.metadata.write().set_holds_query_specific_value();
+        }
+        Some(top_n)
+    }
+
     fn apply_window_group(
         &self,
         s_expr: &SExpr,
@@ -181,7 +196,7 @@ impl RulePushDownFilterWindowTopN {
             let predicates = filter
                 .predicates
                 .iter()
-                .filter_map(|predicate| extract_top_n(window.index, predicate.clone(), func_ctx))
+                .filter_map(|predicate| self.top_n_bound(window.index, predicate.clone(), func_ctx))
                 .collect::<Vec<_>>();
             if let Some(top_n) = predicates.into_iter().min() {
                 top_n_windows.push((index, top_n));

@@ -731,6 +731,7 @@ where A: TypeCheckAdapter
         for (display_name, param) in params {
             let deref!((scalar, _)) = self.resolve_core(arena, *param)?;
             let expr = scalar.as_expr()?;
+            self.mark_folded_value(&expr);
             let (expr, _) =
                 ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             let constant = expr
