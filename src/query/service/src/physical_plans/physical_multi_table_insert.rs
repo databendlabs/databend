@@ -44,6 +44,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_common_storages_fuse::operations::TransformPartitionBy;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
+use databend_common_storages_fuse::operations::vector_cluster_memory_budget;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::ChunkAppendDataFormatter;
@@ -752,10 +753,15 @@ impl IPhysicalPlan for ChunkAppendData {
                 eval_cluster_key_builders.push(Box::new(builder.dummy_transform_builder()));
             }
             if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
-                let rows_per_block = block_thresholds.max_rows_per_block;
+                // All lanes of all target tables share the budget.
+                let budget_bytes = vector_cluster_memory_budget(
+                    builder.ctx.as_ref(),
+                    builder.main_pipeline.output_len(),
+                )?;
                 let vector_column_input_offset = vector_operator.vector_column_input_offset;
                 let dimension = vector_operator.info.dimension;
                 let distance_type = vector_operator.info.distance_type;
+                let page_order = vector_operator.info.page_order;
                 vector_cluster_builders.push(Box::new(move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                         input,
@@ -764,8 +770,10 @@ impl IPhysicalPlan for ChunkAppendData {
                             vector_column_input_offset,
                             dimension,
                             distance_type,
-                            rows_per_block,
-                        ),
+                            block_thresholds,
+                            budget_bytes,
+                        )
+                        .with_page_order(page_order),
                     )))
                 }));
                 vector_cluster_num += 1;

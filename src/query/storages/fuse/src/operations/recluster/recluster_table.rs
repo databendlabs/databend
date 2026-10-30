@@ -29,7 +29,10 @@ use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::ClusterKeys;
+use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
 use log::info;
@@ -39,6 +42,7 @@ use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
+use crate::io::SegmentsIO;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
@@ -109,6 +113,47 @@ fn select_task_candidates(
 }
 
 impl FuseTable {
+    /// Locations and recluster levels of the blocks in the latest snapshot of a table
+    /// with a vector cluster key, or `None` for other tables. Blocks whose cluster
+    /// statistics are missing or belong to another cluster key have level -1.
+    #[async_backtrace::framed]
+    pub async fn vector_recluster_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<Vec<(String, i32)>>> {
+        let (Some(cluster_key_id), Some(cluster_keys)) =
+            (self.cluster_key_id(), self.resolve_cluster_keys())
+        else {
+            return Ok(None);
+        };
+        let parsed = parse_cluster_keys(ctx.clone(), Arc::new(self.clone()), cluster_keys)?;
+        if !matches!(parsed, ClusterKeys::Vector { .. }) {
+            return Ok(None);
+        }
+        let Some(snapshot) = self.read_table_snapshot().await? else {
+            return Ok(Some(Vec::new()));
+        };
+        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
+        let segments_io = SegmentsIO::create(ctx, self.get_operator(), self.schema());
+        let mut blocks = Vec::new();
+        for chunk in snapshot.segments.chunks(chunk_size.max(1)) {
+            for segment in segments_io
+                .read_segments::<SegmentInfo>(chunk, true)
+                .await?
+            {
+                for block in segment?.blocks {
+                    let level = block
+                        .cluster_stats
+                        .as_ref()
+                        .filter(|stats| stats.cluster_key_id == cluster_key_id)
+                        .map_or(-1, |stats| stats.level);
+                    blocks.push((block.location.0.clone(), level));
+                }
+            }
+        }
+        Ok(Some(blocks))
+    }
+
     #[async_backtrace::framed]
     pub async fn do_recluster(
         &self,
@@ -137,12 +182,10 @@ impl FuseTable {
             return Ok(None);
         };
 
-        let mutator = Arc::new(ReclusterMutator::try_create(
-            self,
-            ctx.clone(),
-            snapshot.as_ref(),
-            mode,
-        )?);
+        let mutator = Arc::new(
+            ReclusterMutator::try_create(self, ctx.clone(), snapshot.as_ref(), mode)?
+                .with_vector_full_pass(carry.vector_full_pass.clone()),
+        );
 
         // Carry is tied to the current cluster key because cached block metas
         // may be normalized during candidate probing.
@@ -498,7 +541,8 @@ impl FuseTable {
         };
 
         if mode != ReclusterMode::Aggressive {
-            *carry = ReclusterFinalCarry::default();
+            // Keeps a started vector full pass.
+            carry.reset();
         }
 
         let recluster_seg_num = parts.removed_segment_indexes.len() as u64;

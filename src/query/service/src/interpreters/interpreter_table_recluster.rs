@@ -141,6 +141,16 @@ impl Interpreter for ReclusterTableInterpreter {
             let start = SystemTime::now();
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
+            // Vector FINAL: blocks already clustered by recluster before this
+            // statement, which get one full pass after the level-0 rounds.
+            let vector_clustered_before = if is_final {
+                match self.vector_clustered_blocks().await {
+                    Ok(blocks) => blocks,
+                    Err(e) => return Err(e.with_context("failed to execute")),
+                }
+            } else {
+                None
+            };
             let mut committed_rounds = 0;
             let (result, stop_reason) = loop {
                 if let Err(err) = ctx.check_aborting() {
@@ -160,9 +170,33 @@ impl Interpreter for ReclusterTableInterpreter {
                 match res {
                     Ok(outcome) => {
                         if let Some(reason) = outcome.stop_reason() {
-                            break (Ok(()), reason);
+                            let full_pass = matches!(outcome, ReclusterRoundOutcome::NoParts)
+                                && committed_rounds > 0
+                                && !linear_final_carry.in_vector_full_pass()
+                                && vector_clustered_before
+                                    .as_ref()
+                                    .is_some_and(|blocks| !blocks.is_empty());
+                            if !full_pass {
+                                break (Ok(()), reason);
+                            }
+                            // The level-0 rounds clustered new data on its own; rewrite
+                            // the current blocks once more so it mixes with older
+                            // clustered blocks. The pass ends when only blocks it wrote
+                            // remain.
+                            match self.current_vector_blocks().await {
+                                Ok(blocks) => {
+                                    info!(
+                                        event = "recluster.vector_full_pass",
+                                        blocks = blocks.len();
+                                        "Recluster starts the vector full pass"
+                                    );
+                                    linear_final_carry.start_vector_full_pass(blocks);
+                                }
+                                Err(e) => break (Err(e), "error"),
+                            }
+                        } else {
+                            committed_rounds += 1;
                         }
-                        committed_rounds += 1;
                     }
                     Err(e) => {
                         if is_final
@@ -244,6 +278,45 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
+    async fn vector_recluster_blocks(&self) -> Result<Option<Vec<(String, i32)>>> {
+        let ReclusterPlan {
+            catalog,
+            database,
+            table,
+            ..
+        } = &self.plan;
+        self.ctx.evict_table_from_cache(catalog, database, table)?;
+        let tbl = self.ctx.get_table(catalog, database, table).await?;
+        let Ok(fuse_table) = FuseTable::try_from_table(tbl.as_ref()) else {
+            return Ok(None);
+        };
+        fuse_table.vector_recluster_blocks(self.ctx.clone()).await
+    }
+
+    /// Blocks of a vector-clustered table that recluster has written (level >= 1),
+    /// or `None` for other tables.
+    async fn vector_clustered_blocks(&self) -> Result<Option<HashSet<String>>> {
+        Ok(self.vector_recluster_blocks().await?.map(|blocks| {
+            blocks
+                .into_iter()
+                .filter(|(_, level)| *level >= 1)
+                .map(|(location, _)| location)
+                .collect()
+        }))
+    }
+
+    /// All blocks of a vector-clustered table, which the full pass rewrites.
+    async fn current_vector_blocks(&self) -> Result<HashSet<String>> {
+        Ok(self
+            .vector_recluster_blocks()
+            .await?
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(_, level)| *level >= 0)
+            .map(|(location, _)| location)
+            .collect())
+    }
+
     async fn vacuum_table_history(&self) {
         if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)
@@ -372,7 +445,7 @@ impl ReclusterTableInterpreter {
             claim_retries += 1;
 
             // Let concurrent losers spread out before selecting another candidate set.
-            *linear_final_carry = ReclusterFinalCarry::default();
+            linear_final_carry.reset();
             let delay_ms = rand::thread_rng().gen_range(5..=20);
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
 

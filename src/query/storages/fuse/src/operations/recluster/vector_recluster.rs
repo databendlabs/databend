@@ -258,6 +258,10 @@ impl VectorReclusterStrategy {
 }
 
 impl ReclusterStrategy for VectorReclusterStrategy {
+    fn vector_seed(&self, block: &BlockMeta) -> Option<VectorColumnStatistics> {
+        block_meta_vector_stats(block, &self.info).cloned()
+    }
+
     fn select_segments(
         &self,
         properties: &ReclusterProperties,
@@ -281,6 +285,19 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         blocks: &[&ReclusterBlock],
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
+        // Blocks written by a vector recluster task (level >= 1) are already laid out
+        // by k-means. In high dimensions their spheres overlap regardless, so selecting
+        // them again by overlap rewrites the same blocks every round, until the level
+        // limit, without improving locality. Only recluster blocks that have not been
+        // clustered by a recluster task yet (level 0, such as INSERT output), except in
+        // the full pass of RECLUSTER FINAL, whose blocks were selected by the mutator.
+        let full_pass = properties.vector_full_pass.is_some();
+        let unclustered = indices
+            .iter()
+            .copied()
+            .filter(|idx| full_pass || blocks[*idx].stats().level == 0)
+            .collect::<Vec<_>>();
+        let indices = unclustered.as_slice();
         let block_count = indices.len();
         if block_count < 2 || task_budget == 0 {
             return Ok(Vec::new());
