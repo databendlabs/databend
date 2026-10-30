@@ -17,6 +17,10 @@ inputs:
     description: "Enable table meta cache"
     required: false
     default: "true"
+  shared_cache:
+    description: "Use the shared cache backend"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -31,4 +35,5 @@ runs:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_PARALLEL: ${{ inputs.parallel }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
+        CACHE_SHARED_MEMORY_ENABLED: ${{ inputs.shared_cache }}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}

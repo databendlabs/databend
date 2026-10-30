@@ -27,6 +27,7 @@ crossbeam-channel = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
+sys-info = { workspace = true }
 parquet = { workspace = true }
 rayon = { workspace = true }
 rustix = { workspace = true }

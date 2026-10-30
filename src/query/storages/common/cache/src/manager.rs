@@ -24,19 +24,64 @@ use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
+use log::warn;
 
 use crate::DiskCacheAccessor;
 use crate::DiskCacheBuilder;
+use crate::KindLimit;
+use crate::PoolCaps;
 use crate::cache_kind::CacheKind;
 use crate::cache_manager::CacheManager as KindCacheManager;
 use crate::cache_manager::CacheRow;
+use crate::store::KindStore;
 use crate::store::LegacyStore;
+use crate::store::SharedStore;
 use crate::store::legacy_capacities;
+use crate::store::legacy_total_bytes;
 
 // The existing payload size is the total memory budget for page and full-component caches.
 pub(crate) fn inverted_index_payload_capacities(total: usize) -> (usize, usize) {
     let full = total / 4;
     (total - full, full)
+}
+
+/// Legacy capacity options set to a non-default value; the shared backend does not read them.
+fn ignored_legacy_options(config: &CacheConfig) -> Vec<&'static str> {
+    let default = CacheConfig::default();
+    macro_rules! changed {
+        ($($field:ident),* $(,)?) => {
+            [$((stringify!($field), config.$field != default.$field)),*]
+        };
+    }
+    changed!(
+        enable_table_meta_cache,
+        table_meta_snapshot_count,
+        table_meta_segment_bytes,
+        segment_block_metas_count,
+        table_meta_statistic_count,
+        segment_statistics_bytes,
+        table_bloom_index_meta_count,
+        table_prune_partitions_count,
+        table_bloom_index_filter_size,
+        inverted_index_meta_count,
+        inverted_index_lookup_size,
+        inverted_index_payload_size,
+        vector_index_meta_count,
+        vector_index_filter_size,
+        vector_index_filter_memory_ratio,
+        vector_index_refine_size,
+        spatial_index_meta_count,
+        spatial_index_filter_size,
+        spatial_index_filter_memory_ratio,
+        virtual_column_meta_count,
+        data_cache_in_memory_bytes,
+        table_data_deserialized_data_bytes,
+        table_data_deserialized_memory_ratio,
+        iceberg_table_meta_count,
+    )
+    .into_iter()
+    .filter_map(|(name, changed)| changed.then_some(name))
+    .collect()
 }
 
 // Minimum threshold for table data disk cache size (in bytes).
@@ -53,6 +98,7 @@ const TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD: usize = 1024;
 /// in their pre-refactor directories. Typed caches are handed out by `kind_manager`.
 pub struct CacheManager {
     kinds: Arc<KindCacheManager>,
+    shared: bool,
 }
 
 impl CacheManager {
@@ -103,7 +149,8 @@ impl CacheManager {
                 config.data_cache_key_reload_policy.clone(),
             ));
         }
-        if config.enable_table_meta_cache {
+        // The shared backend ignores `enable_table_meta_cache`; disk options apply to both.
+        if config.enable_table_meta_cache || config.shared_memory_enabled {
             let fuzzy = DiskCacheKeyReloadPolicy::Fuzzy;
             tiers.extend(
                 [
@@ -188,13 +235,74 @@ impl CacheManager {
             }
         }
 
-        let capacities = legacy_capacities(config, *max_server_memory_usage);
-        let kinds = Arc::new(KindCacheManager::new(
-            Arc::new(LegacyStore::new(capacities)),
-            disks,
-        ));
+        let store: Arc<dyn KindStore> = if config.shared_memory_enabled {
+            Arc::new(Self::shared_store(config, *max_server_memory_usage)?)
+        } else {
+            let capacities = legacy_capacities(config, *max_server_memory_usage);
+            let total = legacy_total_bytes(&capacities);
+            if *max_server_memory_usage > 0 && total > *max_server_memory_usage as u128 {
+                warn!(
+                    "[CacheManager] Cache capacities sum to {total} bytes, more than max_server_memory_usage {max_server_memory_usage}"
+                );
+            }
+            Arc::new(LegacyStore::new(capacities))
+        };
+        let kinds = Arc::new(KindCacheManager::new(store, disks));
         kinds.set_disk_allowed(ee_mode);
-        Ok(CacheManager { kinds })
+        Ok(CacheManager {
+            kinds,
+            shared: config.shared_memory_enabled,
+        })
+    }
+
+    /// Pools sized by ratio of the memory limit: `max_server_memory_usage`, or 80% of the
+    /// system memory when it is 0, as for the `max_memory_usage` setting.
+    fn shared_store(config: &CacheConfig, max_server_memory_usage: u64) -> Result<SharedStore> {
+        let memory_limit = match max_server_memory_usage {
+            0 => {
+                let info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
+                1024 * info.total * 80 / 100
+            }
+            limit => limit,
+        };
+        let memory_limit = usize::try_from(memory_limit)
+            .map_err(|_| ErrorCode::InvalidConfig("memory limit exceeds this platform"))?;
+        let caps = PoolCaps::from_ratios(
+            memory_limit,
+            config.meta_max_ratio,
+            config.index_max_ratio,
+            config.data_max_ratio,
+        )?;
+        let limits = config
+            .kind_max_bytes
+            .iter()
+            .map(|(name, bytes)| {
+                let kind = CacheKind::from_any_name(name).ok_or_else(|| {
+                    ErrorCode::InvalidConfig(format!(
+                        "unknown cache '{name}' in cache.kind_max_bytes"
+                    ))
+                })?;
+                let bytes = usize::try_from(*bytes).map_err(|_| {
+                    ErrorCode::InvalidConfig(format!(
+                        "cache.kind_max_bytes.{name} exceeds this platform"
+                    ))
+                })?;
+                Ok((kind, KindLimit::bytes(bytes)))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let ignored = ignored_legacy_options(config);
+        if !ignored.is_empty() {
+            warn!(
+                "[CacheManager] The shared cache backend ignores: {}",
+                ignored.join(", ")
+            );
+        }
+        let shards = std::thread::available_parallelism().map_or(8, |n| n.get().max(8));
+        info!(
+            "[CacheManager] Shared cache pools: meta {} bytes, index {} bytes, data {} bytes",
+            caps.meta, caps.index, caps.data
+        );
+        Ok(SharedStore::new(caps, limits, shards))
     }
 
     pub fn instance() -> Arc<CacheManager> {
@@ -203,6 +311,18 @@ impl CacheManager {
 
     pub fn kind_manager(&self) -> &KindCacheManager {
         &self.kinds
+    }
+
+    /// Whether the shared backend (`shared_memory_enabled`) is in use.
+    pub fn is_shared(&self) -> bool {
+        self.shared
+    }
+
+    /// Evicts unreferenced entries until `relieved` returns true; returns the bytes freed.
+    /// Registered with the memory manager for the shared backend. It runs on an allocating
+    /// thread that may hold any lock, so it neither logs nor blocks on cache shard locks.
+    pub fn shrink_for_pressure(&self, relieved: &dyn Fn() -> bool) -> usize {
+        self.kinds.shrink_for_pressure(relieved).freed
     }
 
     /// `system.caches` rows: enabled memory tiers, and the disk tiers while allowed.
@@ -215,13 +335,17 @@ impl CacheManager {
     }
 
     /// Accepts a kind name, a legacy memory cache name (`memory_cache_*`) or a legacy hybrid
-    /// cache name (`cache_*`); the capacity is in the kind's legacy unit, items or bytes.
+    /// cache name (`cache_*`). The legacy backend reads the capacity in the kind's legacy unit,
+    /// items or bytes; the shared backend reads bytes and also accepts `pool:<name>` and `all`.
     pub fn set_cache_capacity(&self, name: &str, new_capacity: u64) -> Result<()> {
         let capacity = usize::try_from(new_capacity)
             .map_err(|_| ErrorCode::BadArguments("cache capacity exceeds this platform"))?;
+        if name == "all" || name.starts_with("pool:") {
+            return self.kinds.set_capacity_by_name(name, capacity);
+        }
         match CacheKind::from_any_name(name) {
             // As before, the payload size is the budget of the page and full-component caches.
-            Some(CacheKind::InvertedIndexPayload) => {
+            Some(CacheKind::InvertedIndexPayload) if !self.shared => {
                 let (pages, full) = inverted_index_payload_capacities(capacity);
                 self.kinds.set_capacity_by_name(name, pages)?;
                 self.kinds
@@ -727,6 +851,93 @@ mod tests {
         manager.set_cache_capacity("memory_cache_table_snapshot", 4)?;
         let row = row(&manager, "memory_cache_table_snapshot").unwrap();
         assert_eq!((row.capacity, row.unit), (Some(4), Unit::Count));
+        Ok(())
+    }
+
+    fn shared_config() -> CacheConfig {
+        CacheConfig {
+            shared_memory_enabled: true,
+            ..CacheConfig::default()
+        }
+    }
+
+    #[test]
+    fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
+        let config = CacheConfig {
+            // Legacy options are ignored by the shared backend.
+            enable_table_meta_cache: false,
+            table_meta_snapshot_count: 1,
+            kind_max_bytes: [
+                ("vector_index".to_string(), 1234),
+                ("memory_cache_column_data".to_string(), 5000),
+            ]
+            .into(),
+            ..shared_config()
+        };
+        assert_eq!(ignored_legacy_options(&config), [
+            "enable_table_meta_cache",
+            "table_meta_snapshot_count"
+        ]);
+        let manager = CacheManager::try_new(&config, &1_000_000, "test", false)?;
+        assert!(manager.is_shared());
+        assert_eq!(capacity(&manager, "__pool:meta"), Some(100_000));
+        assert_eq!(capacity(&manager, "__pool:index"), Some(400_000));
+        assert_eq!(capacity(&manager, "__pool:data"), Some(100_000));
+        let snapshot = row(&manager, "memory_cache_table_snapshot").unwrap();
+        assert_eq!((snapshot.capacity, snapshot.unit), (None, Unit::Bytes));
+        assert_eq!(
+            capacity(&manager, "memory_cache_vector_index_file"),
+            Some(1234)
+        );
+        assert_eq!(capacity(&manager, "memory_cache_column_data"), Some(5000));
+        // Off unless given a limit.
+        assert!(row(&manager, "memory_cache_table_data").is_none());
+
+        // Pools can be resized; the payload size is not split as in the legacy backend.
+        manager.set_cache_capacity("pool:index", 0)?;
+        assert!(row(&manager, "__pool:index").is_none());
+        assert!(row(&manager, "memory_cache_bloom_index_filter").is_none());
+        manager.set_cache_capacity("pool:index", 1000)?;
+        manager.set_cache_capacity("memory_cache_inverted_index_payload", 800)?;
+        assert_eq!(
+            capacity(&manager, "memory_cache_inverted_index_payload"),
+            Some(800)
+        );
+        assert_eq!(
+            capacity(&manager, "memory_cache_inverted_index_full_payload"),
+            None
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_shared_backend_rejects_bad_config() {
+        let too_much = CacheConfig {
+            meta_max_ratio: 50,
+            index_max_ratio: 50,
+            ..shared_config()
+        };
+        assert!(CacheManager::try_new(&too_much, &1_000_000, "test", false).is_err());
+        let unknown = CacheConfig {
+            kind_max_bytes: [("no_such_cache".to_string(), 1)].into(),
+            ..shared_config()
+        };
+        assert!(CacheManager::try_new(&unknown, &1_000_000, "test", false).is_err());
+    }
+
+    /// Pool names exist only in the shared backend.
+    #[test]
+    fn test_legacy_backend_rejects_pool_names() -> Result<()> {
+        let manager = CacheManager::try_new(&CacheConfig::default(), &(1 << 20), "test", false)?;
+        assert!(!manager.is_shared());
+        assert!(manager.set_cache_capacity("pool:meta", 1).is_err());
+        assert!(manager.set_cache_capacity("all", 0).is_err());
+        assert!(
+            !manager
+                .cache_rows()
+                .iter()
+                .any(|r| r.name.starts_with("__pool"))
+        );
         Ok(())
     }
 

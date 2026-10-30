@@ -23,6 +23,7 @@ use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::OnceLock;
 use std::sync::PoisonError;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -52,6 +53,9 @@ unsafe impl Send for ResourceMemoryInfo {}
 unsafe impl Sync for ResourceMemoryInfo {}
 
 type GcHandler = Arc<dyn Fn(&String, bool) -> bool + Send + Sync + 'static>;
+
+/// Frees memory held by caches until the closure returns true; returns the bytes freed.
+type ReclaimHandler = Arc<dyn Fn(&dyn Fn() -> bool) -> usize + Send + Sync + 'static>;
 
 #[derive(Debug)]
 struct Group {
@@ -141,12 +145,73 @@ impl ExceededMemoryState {
 
 pub struct QueriesMemoryManager {
     state: OnceLock<Mutex<ExceededMemoryState>>,
+    reclaim_handler: RwLock<Option<ReclaimHandler>>,
+    /// One thread reclaims at a time; the others recheck the limit once it is done.
+    reclaiming: Mutex<()>,
 }
 
 impl QueriesMemoryManager {
     pub const fn create() -> QueriesMemoryManager {
         QueriesMemoryManager {
             state: OnceLock::new(),
+            reclaim_handler: RwLock::new(None),
+            reclaiming: Mutex::new(()),
+        }
+    }
+
+    /// Registers how to free cache memory. When the global memory limit is exceeded, a waiting
+    /// allocation first calls it, and kills a query only if that did not bring memory back
+    /// under the limit. Exceeding only a workload group limit does not reclaim.
+    ///
+    /// The handler runs on the allocating thread, which may hold any lock: it must not block on
+    /// locks of its own, and it must not wait for other threads.
+    pub fn set_reclaim_handle<F: Fn(&dyn Fn() -> bool) -> usize + Send + Sync + 'static>(
+        &self,
+        f: F,
+    ) {
+        *self
+            .reclaim_handler
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = Some(Arc::new(f));
+    }
+
+    /// True if reclaiming cache memory brought the global memory usage back under its limit.
+    fn reclaim(&self, mem_stat: &MemStat) -> bool {
+        let Some(global) = Self::global_of(mem_stat) else {
+            return false;
+        };
+        if global.recheck_limit().is_ok() {
+            return false;
+        }
+        let Some(handler) = self
+            .reclaim_handler
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+        else {
+            return false;
+        };
+        let _reclaiming = self
+            .reclaiming
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        // Another thread may have reclaimed while this one waited.
+        if global.recheck_limit().is_ok() {
+            return true;
+        }
+        let relieved = || global.recheck_limit().is_ok();
+        handler(&relieved);
+        relieved()
+    }
+
+    fn global_of(mem_stat: &MemStat) -> Option<&MemStat> {
+        let mut parent = &mem_stat.parent_memory_stat;
+        loop {
+            match parent {
+                ParentMemStat::Root => return None,
+                ParentMemStat::StaticRef(global) => return Some(global),
+                ParentMemStat::Normal(mem_stat) => parent = &mem_stat.parent_memory_stat,
+            }
         }
     }
 
@@ -253,6 +318,10 @@ impl QueriesMemoryManager {
             ParentMemStat::StaticRef(_) => 0,
             ParentMemStat::Normal(mem_stat) => mem_stat.id,
         };
+
+        if self.reclaim(mem_stat) && Self::recheck_limit(mem_stat) {
+            return Ok(());
+        }
 
         for _index in 0..5 {
             let mut state = self.get_state();
@@ -714,5 +783,129 @@ mod tests {
             gc_counter.load(Ordering::Relaxed) >= CONCURRENT_THREADS as u64,
             "GC handler should be called multiple times"
         );
+    }
+
+    const EXCEEDED: i64 = 300 * 1024 * 1024;
+
+    /// Reclaim frees `EXCEEDED` bytes of `stat` on its `nth` call (1-based), nothing before.
+    fn reclaim_on_nth_call(
+        manager: &'static QueriesMemoryManager,
+        stat: &'static MemStat,
+        nth: u64,
+        calls: Arc<AtomicU64>,
+    ) {
+        manager.set_reclaim_handle(move |relieved| {
+            assert!(!relieved());
+            if calls.fetch_add(1, Ordering::SeqCst) + 1 < nth {
+                return 0;
+            }
+            stat.used.fetch_sub(EXCEEDED, Ordering::Relaxed);
+            assert!(relieved());
+            EXCEEDED as usize
+        });
+    }
+
+    #[test]
+    fn test_reclaim_relieves_global_limit_without_kill() {
+        static TEST_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
+        static TEST_GLOBAL_MEM_STAT: MemStat = MemStat::global(&TEST_MANAGER);
+
+        let killed = Arc::new(AtomicBool::new(false));
+        TEST_MANAGER.set_gc_handle({
+            let killed = killed.clone();
+            move |_, _| {
+                killed.store(true, Ordering::Relaxed);
+                true
+            }
+        });
+        let calls = Arc::new(AtomicU64::new(0));
+        reclaim_on_nth_call(&TEST_MANAGER, &TEST_GLOBAL_MEM_STAT, 1, calls.clone());
+
+        let tag = "test_reclaim_relieves".to_string();
+        let mem_stat = mock_mem_stat(
+            tag.clone(),
+            1,
+            ParentMemStat::StaticRef(&TEST_GLOBAL_MEM_STAT),
+            &TEST_MANAGER,
+        );
+        TEST_MANAGER.request_exceeded_memory(&mem_stat, Some(&tag));
+        mock_exceeded_memory(&TEST_GLOBAL_MEM_STAT, false);
+
+        let result = TEST_MANAGER.wait_memory(&mem_stat, Some(&tag), OutOfLimit::new(100, 50));
+        assert!(result.is_ok());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(!killed.load(Ordering::Relaxed));
+        let state = TEST_MANAGER.get_state();
+        assert_eq!(state.resources[&tag].state.load(Ordering::Acquire), RUNNING);
+    }
+
+    /// When reclaim frees nothing, a query is killed as before.
+    #[test]
+    fn test_reclaim_falls_back_to_kill() {
+        static TEST_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
+        static TEST_GLOBAL_MEM_STAT: MemStat = MemStat::global(&TEST_MANAGER);
+
+        let killed = Arc::new(AtomicBool::new(false));
+        TEST_MANAGER.set_gc_handle({
+            let killed = killed.clone();
+            move |_, force| {
+                killed.store(true, Ordering::Relaxed);
+                force
+            }
+        });
+        let calls = Arc::new(AtomicU64::new(0));
+        reclaim_on_nth_call(
+            &TEST_MANAGER,
+            &TEST_GLOBAL_MEM_STAT,
+            u64::MAX,
+            calls.clone(),
+        );
+
+        let tag = "test_reclaim_falls_back".to_string();
+        let mem_stat = mock_mem_stat(
+            tag.clone(),
+            1,
+            ParentMemStat::StaticRef(&TEST_GLOBAL_MEM_STAT),
+            &TEST_MANAGER,
+        );
+        TEST_MANAGER.request_exceeded_memory(&mem_stat, Some(&tag));
+        mock_exceeded_memory(&TEST_GLOBAL_MEM_STAT, false);
+
+        let result = TEST_MANAGER.wait_memory(&mem_stat, Some(&tag), OutOfLimit::new(100, 50));
+        assert!(result.is_ok());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(killed.load(Ordering::Relaxed));
+        let state = TEST_MANAGER.get_state();
+        assert_eq!(state.resources[&tag].state.load(Ordering::Acquire), KILLING);
+    }
+
+    /// Exceeding only a workload group limit does not reclaim cache memory.
+    #[test]
+    fn test_group_limit_does_not_reclaim() {
+        static TEST_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
+        static TEST_GLOBAL_MEM_STAT: MemStat = MemStat::global(&TEST_MANAGER);
+
+        TEST_MANAGER.set_gc_handle(|_, force| force);
+        let calls = Arc::new(AtomicU64::new(0));
+        reclaim_on_nth_call(&TEST_MANAGER, &TEST_GLOBAL_MEM_STAT, 1, calls.clone());
+
+        let group = mock_mem_stat(
+            "group".to_string(),
+            0,
+            ParentMemStat::StaticRef(&TEST_GLOBAL_MEM_STAT),
+            &TEST_MANAGER,
+        );
+        let tag = "test_group_limit".to_string();
+        let mem_stat = mock_mem_stat(
+            tag.clone(),
+            1,
+            ParentMemStat::Normal(group.clone()),
+            &TEST_MANAGER,
+        );
+        TEST_MANAGER.request_exceeded_memory(&mem_stat, Some(&tag));
+        mock_exceeded_memory(&group, false);
+
+        let _ = TEST_MANAGER.wait_memory(&mem_stat, Some(&tag), OutOfLimit::new(100, 50));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }

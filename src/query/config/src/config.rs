@@ -3532,6 +3532,51 @@ pub struct CacheConfig {
     )]
     pub iceberg_table_meta_count: u64,
 
+    /// Use the shared cache backend: three memory pools (meta, index and data), each sized as a
+    /// percentage of the server memory limit, evicted with S3-FIFO and shrunk under memory
+    /// pressure before queries are killed. The per-cache capacity options above and
+    /// `enable_table_meta_cache` are then ignored; disk cache options still apply.
+    #[clap(
+        long = "cache-shared-memory-enabled",
+        value_name = "VALUE",
+        default_value = "false"
+    )]
+    #[serde(default = "bool_false")]
+    pub shared_memory_enabled: bool,
+
+    /// Shared backend: percentage of the server memory limit for table, segment and index
+    /// metadata. The three ratios may sum to at most 80.
+    #[clap(
+        long = "cache-meta-max-ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub meta_max_ratio: u64,
+
+    /// Shared backend: percentage of the server memory limit for bloom, vector, inverted and
+    /// spatial index data.
+    #[clap(
+        long = "cache-index-max-ratio",
+        value_name = "VALUE",
+        default_value = "40"
+    )]
+    pub index_max_ratio: u64,
+
+    /// Shared backend: percentage of the server memory limit for column data. Column caches are
+    /// off unless given a limit in `kind_max_bytes`.
+    #[clap(
+        long = "cache-data-max-ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub data_max_ratio: u64,
+
+    /// Shared backend: byte limits of single caches within their pool, keyed by cache name
+    /// (e.g. `vector_index`, `column_data`); 0 turns a cache off. Config file only:
+    /// `[cache.kind_max_bytes]`.
+    #[clap(skip)]
+    pub kind_max_bytes: BTreeMap<String, u64>,
+
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
     #[clap(long = "cache-table-meta-segment-count", value_name = "VALUE")]
@@ -3583,6 +3628,11 @@ impl Default for CacheConfig {
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
             iceberg_table_meta_count: 1024,
+            shared_memory_enabled: false,
+            meta_max_ratio: 10,
+            index_max_ratio: 40,
+            data_max_ratio: 10,
+            kind_max_bytes: BTreeMap::new(),
 
             // ----- the following options/args are all deprecated               ----
             table_meta_segment_count: None,

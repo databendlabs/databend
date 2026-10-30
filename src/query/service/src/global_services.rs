@@ -255,6 +255,12 @@ impl GlobalServices {
         }
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
+        // The legacy cache backend keeps its old behavior: caches are not shrunk under pressure.
+        if CacheManager::instance().is_shared() {
+            let cache_manager = CacheManager::instance();
+            GLOBAL_QUERIES_MANAGER
+                .set_reclaim_handle(move |relieved| cache_manager.shrink_for_pressure(relieved));
+        }
 
         Ok(())
     }
