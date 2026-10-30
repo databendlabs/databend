@@ -150,6 +150,11 @@ impl LegacyStore {
         }
 
         if matches!(capacity, LegacyCapacity::Bytes(max) if bytes > max) {
+            // As the LRU cache always did: the value is inserted and then evicted together
+            // with every other entry, so the kind ends up empty and the value is not cached.
+            while let Some((_, entry)) = lru.pop_by_policy() {
+                victims.push(entry);
+            }
             return (victims, Err(RejectReason::Oversized));
         }
         // The value being replaced makes room like any other; it is replaced either way.

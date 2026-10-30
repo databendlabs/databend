@@ -80,11 +80,13 @@ fn test_replacing_lru_entry_stays_within_capacity() {
     let stats = store.kind_stats(CacheKind::BloomIndexMeta);
     assert_eq!((stats.items, stats.in_cache), (1, 80));
 
-    // A replacement larger than the whole capacity is not cached; nothing else is evicted.
+    // A replacement larger than the whole capacity is not cached and, as with the LRU cache,
+    // evicts everything else.
     cache.put("c", live.item(10));
     assert!(!cache.put("c", live.item(200)).is_charged());
-    assert!(cache.contains("a"));
-    assert_eq!(store.kind_stats(CacheKind::BloomIndexMeta).in_cache, 90);
+    assert!(!cache.contains("a") && !cache.contains("c"));
+    let stats = store.kind_stats(CacheKind::BloomIndexMeta);
+    assert_eq!((stats.items, stats.in_cache), (0, 0));
 }
 
 #[test]

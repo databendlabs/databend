@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod invariants;
+mod legacy_equivalence;
 mod legacy_store;
 mod pressure_shrink;
 mod shared_store;
