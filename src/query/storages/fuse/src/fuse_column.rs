@@ -93,9 +93,9 @@ impl FuseTableColumnStatisticsProvider {
             .map(|(column_id, stat)| {
                 // The HLL producer supplies its statistical interval and its
                 // own coverage. Without one, the summary holds the sum of
-                // per-block sketch estimates. The union cannot exceed the sum
-                // of block uppers, so it bounds NDV from above but gives no
-                // point. The summary covers every current row.
+                // per-block sketch estimates. The sum stays the point estimate,
+                // as before; the union cannot exceed the sum of block uppers,
+                // which supplies the upper. The summary covers every current row.
                 let (ndv, covered_rows) = match distinct_map.and_then(|map| map.get(&column_id)) {
                     Some(ndv) => (Some(*ndv), stats_row_count),
                     None => (
@@ -103,7 +103,8 @@ impl FuseTableColumnStatisticsProvider {
                         // unknown blocks, and all-NULL columns are handled
                         // before NDV is read.
                         stat.distinct_of_values.filter(|sum| *sum > 0).map(|sum| {
-                            NdvEstimate::upper_bound(MetaHLL::estimate_interval(sum as f64).upper)
+                            let sum = sum as f64;
+                            NdvEstimate::new(sum, MetaHLL::estimate_interval(sum).upper)
                         }),
                         row_count,
                     ),
@@ -231,9 +232,9 @@ mod tests {
     }
 
     #[test]
-    fn test_block_ndv_sum_bounds_ndv_without_hll() {
-        // Summary NDV is the sum of per-block MetaHLL estimates. Their summed
-        // upper bounds NDV, and no point estimate is derived from it.
+    fn test_block_ndv_sum_estimates_ndv_without_hll() {
+        // Summary NDV is the sum of per-block MetaHLL estimates. The sum stays
+        // the point; the summed block uppers bound the union.
         let upper = MetaHLL::estimate_interval(12.0).upper;
         assert!((12.0..2980.0).contains(&upper));
         for hlls in [None, Some(HashMap::new())] {
@@ -242,22 +243,23 @@ mod tests {
                     .column_statistics(7)
                     .unwrap()
                     .ndv,
-                Some(NdvEstimate::upper_bound(upper))
+                Some(NdvEstimate::new(12.0, upper))
             );
         }
     }
 
     #[test]
     fn test_block_ndv_sum_covers_all_rows() {
-        // Another column's HLL coverage must not extend this column's bound:
-        // the summary is maintained for every current row.
+        // Another column's HLL coverage must not extend this column's bound
+        // or extrapolate its point: the summary covers every current row.
         let other = HashMap::from([(8, NdvEstimate::new(12.0, 15.0))]);
         assert_eq!(
             provider_with(Some(12), Some(other), 100)
                 .column_statistics(7)
                 .unwrap()
                 .ndv,
-            Some(NdvEstimate::upper_bound(
+            Some(NdvEstimate::new(
+                12.0,
                 MetaHLL::estimate_interval(12.0).upper
             ))
         );
@@ -283,7 +285,7 @@ mod tests {
                 .column_statistics(7)
                 .unwrap()
                 .ndv,
-            Some(NdvEstimate::upper_bound(2980.0))
+            Some(NdvEstimate::new(2900.0, 2980.0))
         );
     }
 

@@ -84,12 +84,16 @@ async fn test_exact_ndv_bounds_without_analyze() -> anyhow::Result<()> {
     assert!(snapshot.table_statistics_location.is_none());
     let provider = table.column_statistics_provider(ctx.clone()).await?;
     assert_eq!(provider.stats_num_rows(), Some(0));
-    for (column_id, expected) in [(0, 3), (1, 250), (2, 250), (3, 2)] {
-        assert_eq!(
-            provider.column_statistics(column_id).unwrap().ndv,
-            Some(NdvEstimate::upper_bound(expected as f64)),
-            "column {column_id}"
-        );
+    // Without a table-level HLL, the summary's block NDV sum is the point and
+    // its sketch margin the upper; the exact row/domain bounds still cap both.
+    for (column_id, upper, exact) in [(0, 3, true), (1, 250, false), (2, 250, false), (3, 2, true)]
+    {
+        let ndv = provider.column_statistics(column_id).unwrap().ndv.unwrap();
+        assert_eq!(ndv.upper, upper as f64, "column {column_id}");
+        assert!(ndv.expected.is_some(), "column {column_id}");
+        if exact {
+            assert_eq!(ndv, NdvEstimate::exact(upper as f64), "column {column_id}");
+        }
     }
     Ok(())
 }
