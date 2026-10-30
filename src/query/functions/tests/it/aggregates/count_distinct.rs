@@ -137,6 +137,33 @@ fn test_count_distinct_nullable_string_serialized() -> Result<()> {
 }
 
 #[test]
+fn test_count_distinct_dictionary() -> Result<()> {
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    // "unused" is in the dictionary but never referenced, so it must not be counted.
+    let dict = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+        NarrowBuffer::pack([0, 1, 0, 2, 1, 0].into_iter(), 3),
+        StringType::from_data(vec!["a", "b", "c", "unused"]),
+    ))));
+    // The only "c" row is NULL.
+    let nullable = NullableColumn::new_column(
+        dict.clone(),
+        Bitmap::from([true, true, true, false, true, true]),
+    );
+    for (column, expected) in [(dict, 3), (nullable, 2)] {
+        for serialized in [false, true] {
+            let (result, _) =
+                eval_v2_aggr("count_distinct", &[column.clone().into()], 6, serialized)?;
+            assert_eq!(result, UInt64Type::from_data(vec![expected]));
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn test_count_distinct_float_equality_serialized() -> Result<()> {
     let columns = [
         Float32Type::from_data(vec![

@@ -3525,6 +3525,17 @@ pub struct CacheConfig {
     )]
     pub table_data_deserialized_memory_ratio: u64,
 
+    /// Max percentage of distinct values to rows for which a block of an in-memory encoded column
+    /// (setting `enable_encoded_columns`) is dictionary encoded. By default it is 100: any block
+    /// may be, but a dictionary built from the column is only kept if it is smaller than the
+    /// regular column.
+    #[clap(
+        long = "cache-table-data-encoded-dictionary-ndv-ratio",
+        value_name = "VALUE",
+        default_value = "100"
+    )]
+    pub table_data_encoded_dictionary_ndv_ratio: u64,
+
     #[clap(
         long = "cache-iceberg-table-meta-count",
         value_name = "VALUE",
@@ -3582,6 +3593,7 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Reset,
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
+            table_data_encoded_dictionary_ndv_ratio: 100,
             iceberg_table_meta_count: 1024,
 
             // ----- the following options/args are all deprecated               ----

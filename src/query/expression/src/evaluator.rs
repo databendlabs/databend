@@ -46,6 +46,8 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
+use crate::types::DictColumn;
+use crate::types::EncodedColumn;
 use crate::types::F32;
 use crate::types::NullableType;
 use crate::types::NumberScalar;
@@ -367,7 +369,7 @@ impl<'a> Evaluator<'a> {
         Ok(if keep_encoded {
             result
         } else {
-            result.decode_encoded()
+            result.decode_owned()
         })
     }
 
@@ -429,6 +431,32 @@ impl<'a> Evaluator<'a> {
         })
     }
 
+    fn take_dictionary_arg(args: &mut [Value<AnyType>]) -> Option<(usize, DictColumn)> {
+        let (index, arg) = args
+            .iter()
+            .enumerate()
+            .filter(|(_, arg)| matches!(arg, Value::Column(_)))
+            .exactly_one()
+            .ok()?;
+        let Value::Column(Column::Encoded(encoded)) = arg else {
+            return None;
+        };
+        let dict = encoded.as_dict()?;
+        if dict.is_empty() || dict.values.len() >= dict.len() {
+            return None;
+        }
+        let original = std::mem::replace(&mut args[index], Value::Scalar(Scalar::Null));
+        let Value::Column(Column::Encoded(encoded)) = original else {
+            args[index] = original;
+            return None;
+        };
+        let EncodedColumn::Dict(dict) = *encoded else {
+            args[index] = Value::Column(Column::Encoded(encoded));
+            return None;
+        };
+        Some((index, dict))
+    }
+
     fn eval_common_call(
         &self,
         call: &FunctionCall,
@@ -465,13 +493,28 @@ impl<'a> Evaluator<'a> {
             .eval
             .as_scalar()
             .is_some_and(|(_, _, eval)| eval.accepts_encoded_args());
+        let dictionary_eval = !accepts_encoded_args
+            && validity.is_none()
+            && options.selection.is_none()
+            && !options.suppress_error
+            && !function.signature.return_type.is_nullable_or_null()
+            && function
+                .signature
+                .args_type
+                .iter()
+                .all(|ty| !ty.is_nullable_or_null())
+            && self
+                .fn_registry
+                .properties
+                .get(&function.signature.name)
+                .is_some_and(|property| property.dictionary_eval && !property.non_deterministic);
         let mut args_value = Vec::with_capacity(args.len());
         for expr in args {
             match self.partial_run(
                 expr,
                 validity.clone(),
                 &mut child_option,
-                accepts_encoded_args,
+                accepts_encoded_args || dictionary_eval,
             ) {
                 Ok(value) => args_value.push(value),
                 Err(err) => {
@@ -484,7 +527,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
         }
-        let args = args_value;
+        let mut args = args_value;
 
         assert!(
             args.iter()
@@ -507,9 +550,28 @@ impl<'a> Evaluator<'a> {
         // would otherwise drop whenever row 0 is not enabled — then expand
         // the recorded error over the enabled rows.
         let all_scalar = args.iter().all(|arg| matches!(arg, Value::Scalar(_)));
+        let dictionary = dictionary_eval
+            .then(|| {
+                let Some((index, DictColumn { keys, values })) =
+                    Self::take_dictionary_arg(&mut args)
+                else {
+                    for arg in &mut args {
+                        if arg.is_encoded() {
+                            *arg =
+                                std::mem::replace(arg, Value::Scalar(Scalar::Null)).decode_owned();
+                        }
+                    }
+                    return None;
+                };
+                args[index] = Value::Column(values);
+                Some((index, keys))
+            })
+            .flatten();
         let mut ctx = EvalContext {
             generics,
-            num_rows: self.data_block.num_rows(),
+            num_rows: dictionary
+                .as_ref()
+                .map_or(self.data_block.num_rows(), |(index, _)| args[*index].len()),
             validity: if all_scalar { None } else { validity.clone() },
             errors,
             func_ctx: self.func_ctx,
@@ -518,7 +580,25 @@ impl<'a> Evaluator<'a> {
         };
 
         let (_, _, eval) = function.eval.as_scalar().unwrap();
-        let result = eval.eval(&args, &mut ctx);
+        let mut result = eval.eval(&args, &mut ctx);
+        if let Some((_, keys)) = dictionary {
+            if let Some((valids, message)) = ctx.errors.take()
+                && keys.iter().any(|key| !valids.get(key as usize))
+            {
+                return Err(ErrorCode::BadArguments(message).set_span(*span));
+            }
+            ctx.num_rows = self.data_block.num_rows();
+            if let Value::Column(values) = result {
+                let dict = DictColumn::new(keys, values);
+                // Consumers read dictionary columns through encoded views, which only some
+                // types support (e.g. not the Boolean result of LIKE): expand the others.
+                result = Value::Column(if DictColumn::supports(&dict.values.data_type()) {
+                    Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
+                } else {
+                    dict.decode()
+                });
+            }
+        }
 
         if all_scalar {
             expand_scalar_error(&mut ctx.errors, validity.as_ref(), ctx.num_rows);
