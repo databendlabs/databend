@@ -5938,6 +5938,7 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-meta-app",
  "databend-common-metrics",
  "databend-common-storage",
  "databend-storages-common-index",
