@@ -16,6 +16,7 @@ mod disk;
 mod fakes;
 mod handle;
 mod invariants;
+mod kinds;
 mod legacy;
 mod manager;
 mod mem_bytes_accuracy;

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2026 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ unsafe impl GlobalAlloc for CountingAlloc {
 }
 
 /// Returns the value with its true footprint: retained heap bytes plus its inline size.
-fn measure<T>(build: impl FnOnce() -> T) -> (T, usize) {
+pub(crate) fn measure<T>(build: impl FnOnce() -> T) -> (T, usize) {
     let before = ALLOCATED.with(Cell::get);
     let value = build();
     let heap = ALLOCATED.with(Cell::get) - before;
@@ -94,7 +94,7 @@ fn assert_accurate<T: CachedItem>(name: &str, build: impl FnOnce() -> T) {
     );
 }
 
-fn schema(columns: u32) -> TableSchema {
+pub(crate) fn schema(columns: u32) -> TableSchema {
     TableSchema::new(
         (0..columns)
             .map(|i| {
@@ -117,7 +117,7 @@ fn col_stats(columns: u32) -> HashMap<u32, ColumnStatistics> {
         .collect()
 }
 
-fn summary(columns: u32) -> Statistics {
+pub(crate) fn summary(columns: u32) -> Statistics {
     Statistics {
         col_stats: col_stats(columns),
         ..Default::default()
@@ -164,13 +164,13 @@ fn block_meta(columns: u32, i: u32) -> BlockMeta {
     )
 }
 
-fn block_metas(columns: u32, blocks: u32) -> Vec<Arc<BlockMeta>> {
+pub(crate) fn block_metas(columns: u32, blocks: u32) -> Vec<Arc<BlockMeta>> {
     (0..blocks)
         .map(|i| Arc::new(block_meta(columns, i)))
         .collect()
 }
 
-fn index_meta(columns: u32) -> IndexMeta {
+pub(crate) fn index_meta(columns: u32) -> IndexMeta {
     IndexMeta {
         columns: (0..columns)
             .map(|i| {

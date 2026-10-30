@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2026 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ impl<T> DiskTier<T> {
             return None;
         }
         let bytes = self.cache.get(key)?;
-        match (self.codec.decode)(bytes.as_ref().clone()) {
+        match self.codec.decode(bytes.as_ref().clone()) {
             Ok(value) => Some(value),
             Err(e) => {
                 warn!("failed to decode disk cache value, key {key}: {e}");
@@ -73,7 +73,7 @@ impl<T> DiskTier<T> {
         if !self.allowed() || self.cache.contains_key(key) {
             return;
         }
-        match (self.codec.encode)(value) {
+        match self.codec.encode(value) {
             Ok(bytes) => {
                 self.cache.insert(key.to_string(), bytes.into());
             }

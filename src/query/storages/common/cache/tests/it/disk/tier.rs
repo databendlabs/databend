@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2026 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
-use std::time::Instant;
 
 use bytes::Bytes;
 use databend_common_config::DiskCacheKeyReloadPolicy;
@@ -34,6 +32,7 @@ use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::vector;
 
 use crate::fakes::shared_store;
+use crate::fakes::wait_for;
 
 /// Bloom filter stand-in with a disk encoding; an empty payload fails to decode.
 struct Blob(Vec<u8>);
@@ -59,14 +58,6 @@ impl DiskCodec for Blob {
 
 fn allowed() -> Arc<AtomicBool> {
     Arc::new(AtomicBool::new(true))
-}
-
-fn wait_for(cond: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !cond() {
-        assert!(Instant::now() < deadline, "disk cache population timed out");
-        std::thread::sleep(Duration::from_millis(1));
-    }
 }
 
 fn disk(dir: &tempfile::TempDir) -> Arc<DiskCacheAccessor> {

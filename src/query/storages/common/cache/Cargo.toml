@@ -36,6 +36,7 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 chrono = { workspace = true }
+databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 divan = { workspace = true }
 futures = { workspace = true }

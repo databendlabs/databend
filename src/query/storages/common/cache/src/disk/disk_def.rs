@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2026 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ use crate::DiskCodec;
 
 /// The disk tier of a kind, part of its `CacheDef`. Only values with a `DiskCodec` can have one.
 pub struct Disk<V> {
-    pub(crate) info: DiskInfo,
-    pub(crate) codec: Codec<V>,
+    pub info: DiskInfo,
+    pub codec: Codec<V>,
 }
 
 impl<V: DiskCodec> Disk<V> {
@@ -63,8 +63,8 @@ pub struct DiskInfo {
 
 /// How a value is written to and read from its disk tier.
 pub struct Codec<V> {
-    pub(crate) encode: fn(&V) -> Result<Vec<u8>>,
-    pub(crate) decode: fn(Bytes) -> Result<V>,
+    encode: fn(&V) -> Result<Vec<u8>>,
+    decode: fn(Bytes) -> Result<V>,
 }
 
 impl<V: DiskCodec> Codec<V> {
@@ -75,3 +75,21 @@ impl<V: DiskCodec> Codec<V> {
         }
     }
 }
+
+impl<V> Codec<V> {
+    pub fn encode(&self, value: &V) -> Result<Vec<u8>> {
+        (self.encode)(value)
+    }
+
+    pub fn decode(&self, bytes: Bytes) -> Result<V> {
+        (self.decode)(bytes)
+    }
+}
+
+impl<V> Clone for Codec<V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<V> Copy for Codec<V> {}

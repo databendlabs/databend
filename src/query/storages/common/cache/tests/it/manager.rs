@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2026 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 
 use bytes::Bytes;
 use databend_common_config::CacheConfig;
@@ -46,6 +44,7 @@ use tempfile::TempDir;
 use crate::fakes::Item;
 use crate::fakes::Live;
 use crate::fakes::shared_store;
+use crate::fakes::wait_for;
 
 const MIB: u64 = 1 << 20;
 
@@ -101,14 +100,6 @@ fn disk_rows(manager: &CacheManager) -> usize {
         .iter()
         .filter(|r| r.name.starts_with("disk_"))
         .count()
-}
-
-fn wait_for(cond: impl Fn() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !cond() {
-        assert!(Instant::now() < deadline, "disk tier was not populated");
-        std::thread::sleep(Duration::from_millis(5));
-    }
 }
 
 /// In EE mode, disk tiers enabled in the config can be turned off and on at runtime; outside

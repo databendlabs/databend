@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2026 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
@@ -145,4 +146,13 @@ pub fn shared_store(meta: usize, index: usize, data: usize) -> Arc<dyn KindStore
         ],
         4,
     ))
+}
+
+/// Waits up to 10 s for `cond`, e.g. for a disk tier written in the background.
+pub fn wait_for(cond: impl Fn() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !cond() {
+        assert!(Instant::now() < deadline, "condition not met in time");
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }

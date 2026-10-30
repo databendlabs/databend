@@ -23,7 +23,6 @@ use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::OnceLock;
 use std::sync::PoisonError;
-use std::sync::RwLock;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -145,17 +144,17 @@ impl ExceededMemoryState {
 
 pub struct QueriesMemoryManager {
     state: OnceLock<Mutex<ExceededMemoryState>>,
-    reclaim_handler: RwLock<Option<ReclaimHandler>>,
+    reclaim_handler: parking_lot::RwLock<Option<ReclaimHandler>>,
     /// One thread reclaims at a time; the others recheck the limit once it is done.
-    reclaiming: Mutex<()>,
+    reclaiming: parking_lot::Mutex<()>,
 }
 
 impl QueriesMemoryManager {
     pub const fn create() -> QueriesMemoryManager {
         QueriesMemoryManager {
             state: OnceLock::new(),
-            reclaim_handler: RwLock::new(None),
-            reclaiming: Mutex::new(()),
+            reclaim_handler: parking_lot::RwLock::new(None),
+            reclaiming: parking_lot::Mutex::new(()),
         }
     }
 
@@ -169,10 +168,7 @@ impl QueriesMemoryManager {
         &self,
         f: F,
     ) {
-        *self
-            .reclaim_handler
-            .write()
-            .unwrap_or_else(PoisonError::into_inner) = Some(Arc::new(f));
+        *self.reclaim_handler.write() = Some(Arc::new(f));
     }
 
     /// True if reclaiming cache memory brought the global memory usage back under its limit.
@@ -183,18 +179,10 @@ impl QueriesMemoryManager {
         if global.recheck_limit().is_ok() {
             return false;
         }
-        let Some(handler) = self
-            .reclaim_handler
-            .read()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-        else {
+        let Some(handler) = self.reclaim_handler.read().clone() else {
             return false;
         };
-        let _reclaiming = self
-            .reclaiming
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let _reclaiming = self.reclaiming.lock();
         // Another thread may have reclaimed while this one waited.
         if global.recheck_limit().is_ok() {
             return true;
