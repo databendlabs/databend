@@ -16,5 +16,7 @@ mod histogram;
 mod ir;
 mod optimizer_test;
 mod optimizers;
+mod runtime_filter_build_stats;
+mod runtime_filter_union;
 mod statistics_trace;
 pub mod test_utils;
