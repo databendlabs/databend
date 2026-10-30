@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -29,9 +28,6 @@ use databend_common_ast::visit::Walk;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::Expr;
 use databend_common_expression::cast_scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -182,9 +178,7 @@ fn resolve_settings(
         }
 
         let (scalar, _) = *type_checker.resolve(value.as_ref())?;
-        let expr = scalar.as_expr()?;
-        let (folded, _) = ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
-        let Expr::Constant(Constant { scalar, .. }) = folded.into_owned() else {
+        let Some((scalar, _)) = scalar.constant_value(&func_ctx) else {
             return Err(ErrorCode::SemanticError("value must be constant value"));
         };
         let scalar = cast_scalar(None, scalar, &DataType::String, &BUILTIN_FUNCTIONS)?;
@@ -221,9 +215,7 @@ fn resolve_hint(
 
         let (scalar, _) = *type_checker.resolve(&item.expr)?;
         let scalar = wrap_cast(&scalar, &DataType::String);
-        let expr = scalar.as_expr()?;
-        let (folded, _) = ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
-        let Expr::Constant(Constant { scalar, .. }) = folded.into_owned() else {
+        let Some((scalar, _)) = scalar.constant_value(&func_ctx) else {
             return Err(ErrorCode::SemanticError("hint value must be a constant"));
         };
         let value = scalar.into_string().unwrap();

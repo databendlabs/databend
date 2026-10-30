@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -29,11 +28,8 @@ use databend_common_ast::visit::Walk;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::ScalarBinder;
 use crate::ScalarExpr;
@@ -104,16 +100,9 @@ fn try_fold_to_scalar(
     scalar_binder: &ScalarBinder<'_>,
     subquery_executor: &Option<Arc<dyn QueryExecutor>>,
 ) -> Result<Scalar> {
-    let expr = scalar.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(
-        Cow::Owned(expr),
-        &scalar_binder.get_func_ctx()?,
-        &BUILTIN_FUNCTIONS,
-    );
-
-    match expr.into_owned().into_constant() {
-        Ok(Constant { scalar, .. }) => Ok(scalar),
-        Err(_) => {
+    match scalar.constant_value(&scalar_binder.get_func_ctx()?) {
+        Some((scalar, _)) => Ok(scalar),
+        None => {
             if contains_subquery(ast_expr) {
                 if let Some(executor) = subquery_executor {
                     return execute_subquery_for_scalar(executor, ast_expr);

@@ -32,9 +32,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::CoreExpr;
 use super::CoreExprArena;
-use super::CoreExprArgs;
 use super::CoreExprId;
-use super::CoreMapEntries;
 use super::TypeChecker;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
@@ -80,18 +78,16 @@ where A: super::TypeCheckAdapter
 {
     pub(super) fn resolve_array(
         &mut self,
-        arena: &CoreExprArena<'_>,
         span: Span,
-        exprs: &CoreExprArgs,
+        arguments: Vec<(ScalarExpr, DataType)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut elems = Vec::with_capacity(exprs.len());
+        let mut elems = Vec::with_capacity(arguments.len());
         let mut constant_values: Option<Vec<(Scalar, DataType)>> =
-            Some(Vec::with_capacity(exprs.len()));
+            Some(Vec::with_capacity(arguments.len()));
         let mut element_type: Option<DataType> = None;
         let mut data_type_set = HashSet::with_capacity(2);
 
-        for expr in exprs {
-            let deref!((arg, data_type)) = self.resolve_core(arena, *expr)?;
+        for (arg, data_type) in arguments {
             if let Some(values) = constant_values.as_mut() {
                 let maybe_constant = match &arg {
                     ScalarExpr::ConstantExpr(constant) => Some(constant.value.clone()),
@@ -166,18 +162,10 @@ where A: super::TypeCheckAdapter
 
     pub(super) fn resolve_map(
         &mut self,
-        arena: &CoreExprArena<'_>,
         span: Span,
-        kvs: &CoreMapEntries,
+        keys: Vec<ScalarExpr>,
+        vals: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut keys = Vec::with_capacity(kvs.len());
-        let mut vals = Vec::with_capacity(kvs.len());
-        for (key_expr, val_expr) in kvs {
-            let deref!((key_arg, _data_type)) = self.resolve_literal(span, key_expr)?;
-            keys.push(key_arg);
-            let deref!((val_arg, _data_type)) = self.resolve_core(arena, *val_expr)?;
-            vals.push(val_arg);
-        }
         let deref!((key_arg, _data_type)) =
             self.resolve_scalar_function_call(span, "array", vec![], keys)?;
         let deref!((val_arg, _data_type)) =
@@ -187,15 +175,9 @@ where A: super::TypeCheckAdapter
 
     pub(super) fn resolve_tuple(
         &mut self,
-        arena: &CoreExprArena<'_>,
         span: Span,
-        exprs: &CoreExprArgs,
+        args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut args = Vec::with_capacity(exprs.len());
-        for expr in exprs {
-            let deref!((arg, _data_type)) = self.resolve_core(arena, *expr)?;
-            args.push(arg);
-        }
         self.resolve_scalar_function_call(span, "tuple", vec![], args)
     }
 }

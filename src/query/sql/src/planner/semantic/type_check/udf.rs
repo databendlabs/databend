@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -35,12 +34,10 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
@@ -994,13 +991,10 @@ where A: UdfAdapter
                         "StageLocation must have a corresponding variable name",
                     ));
                 }
-                let expr = argument.scalar.as_expr()?;
-                let (expr, _) =
-                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let Ok(Some(location)) = expr
-                    .into_owned()
-                    .into_constant()
-                    .map(|c| c.scalar.as_string().cloned())
+                let Some(Scalar::String(location)) = argument
+                    .scalar
+                    .constant_value(&self.func_ctx)
+                    .map(|(value, _)| value)
                 else {
                     return Err(ErrorCode::SemanticError(format!(
                         "invalid parameter {argument} for udf function, expected constant string",

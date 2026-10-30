@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SetType;
@@ -21,9 +19,6 @@ use databend_common_ast::ast::SetValues;
 use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::BindContext;
 use super::Binder;
@@ -65,14 +60,9 @@ impl Binder {
                     let mut results = Vec::with_capacity(exprs.len());
                     for expr in exprs.iter() {
                         let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
-                        let expr = scalar.as_expr()?;
-                        let (new_expr, _) = ConstantFolder::fold(
-                            Cow::Owned(expr),
-                            &self.ctx.get_function_context()?,
-                            &BUILTIN_FUNCTIONS,
-                        );
-                        let Constant { scalar, .. } =
-                            new_expr.into_owned().into_constant().map_err(|_| {
+                        let (scalar, _) = scalar
+                            .constant_value(&self.ctx.get_function_context()?)
+                            .ok_or_else(|| {
                                 ErrorCode::SemanticError("value must be constant value")
                             })?;
                         results.push(scalar);
