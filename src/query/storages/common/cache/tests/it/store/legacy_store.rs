@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Barrier;
 
+use databend_common_base::runtime::Thread;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::Pool;
@@ -124,6 +126,52 @@ fn test_vector_index_oversized_and_evicted_while_held() {
     drop(reader);
     assert_eq!(store.kind_stats(CacheKind::VectorIndex).resident, 100);
     drop(another_reader);
+    assert_eq!(store.kind_stats(CacheKind::VectorIndex).resident, 0);
+}
+
+/// A vector index rejected because others are pinned still accounts for the entries it evicted.
+#[test]
+fn test_rejected_vector_index_accounts_for_victims() {
+    let store = legacy(&[(CacheKind::VectorIndex, LegacyCapacity::Bytes(200))]);
+    let cache = cache(&store, CacheKind::VectorIndex);
+    let live = Live::default();
+    let _pinned = cache.put("pinned", live.item(150));
+    drop(cache.put("unpinned", live.item(50)));
+    assert!(!cache.put("new", live.item(100)).is_charged());
+    let stats = store.kind_stats(CacheKind::VectorIndex);
+    assert_eq!((stats.items, stats.in_cache, stats.resident), (1, 150, 150));
+    assert!(cache.evict("pinned"));
+    let stats = store.kind_stats(CacheKind::VectorIndex);
+    assert_eq!((stats.items, stats.in_cache), (0, 0));
+}
+
+/// Concurrent vector index inserts cannot together exceed the budget: the check and the
+/// charge happen under one lock.
+#[test]
+fn test_concurrent_vector_index_inserts_stay_within_budget() {
+    const THREADS: usize = 16;
+    let store = legacy(&[(CacheKind::VectorIndex, LegacyCapacity::Bytes(1000))]);
+    let barrier = Arc::new(Barrier::new(THREADS));
+    let live = Live::default();
+    let threads: Vec<_> = (0..THREADS)
+        .map(|t| {
+            let (store, live, barrier) = (store.clone(), live.clone(), barrier.clone());
+            Thread::spawn(move || {
+                let cache = cache(&store, CacheKind::VectorIndex);
+                // Every value is held, so eviction frees nothing.
+                let mut held = Vec::new();
+                barrier.wait();
+                for i in 0..50 {
+                    held.push(cache.put(&format!("{t}-{i}"), live.item(100)));
+                    let resident = store.kind_stats(CacheKind::VectorIndex).resident;
+                    assert!(resident <= 1000, "{resident}");
+                }
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
     assert_eq!(store.kind_stats(CacheKind::VectorIndex).resident, 0);
 }
 

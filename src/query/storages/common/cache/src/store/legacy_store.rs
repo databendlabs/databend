@@ -123,14 +123,14 @@ impl LegacyStore {
         capacity: LegacyCapacity,
         key: &str,
         bytes: usize,
-    ) -> std::result::Result<Vec<Entry>, RejectReason> {
+    ) -> (Vec<Entry>, std::result::Result<(), RejectReason>) {
         let mut victims = Vec::new();
         if kind == CacheKind::VectorIndex {
             let LegacyCapacity::Bytes(max) = capacity else {
-                return Err(RejectReason::Disabled);
+                return (victims, Err(RejectReason::Disabled));
             };
             if bytes > max {
-                return Err(RejectReason::Oversized);
+                return (victims, Err(RejectReason::Oversized));
             }
             let mut freed = 0;
             while self.kind(kind).usage.resident() - freed + bytes > max {
@@ -138,17 +138,19 @@ impl LegacyStore {
                     .iter()
                     .find(|(_, e)| !e.is_shared())
                     .map(|(k, _)| k.clone());
+                // Victims already removed are returned with the rejection, so the caller
+                // still accounts for them.
                 let Some(entry) = victim.and_then(|k| lru.pop(&k)) else {
-                    return Err(RejectReason::PoolFullPinned);
+                    return (victims, Err(RejectReason::PoolFullPinned));
                 };
                 freed += entry.bytes;
                 victims.push(entry);
             }
-            return Ok(victims);
+            return (victims, Ok(()));
         }
 
         if matches!(capacity, LegacyCapacity::Bytes(max) if bytes > max) {
-            return Err(RejectReason::Oversized);
+            return (victims, Err(RejectReason::Oversized));
         }
         // The value being replaced makes room like any other; it is replaced either way.
         if let Some(old) = lru.pop(key) {
@@ -162,7 +164,7 @@ impl LegacyStore {
                 None => break,
             }
         }
-        Ok(victims)
+        (victims, Ok(()))
     }
 }
 
@@ -192,22 +194,31 @@ impl KindStore for LegacyStore {
         if capacity == LegacyCapacity::Disabled {
             return InsertOutcome::Rejected(RejectReason::Disabled);
         }
-        let (victims, replaced) = {
-            let mut lru = state.lru.lock();
-            let victims = match self.make_room(kind, &mut lru, capacity, key, bytes) {
-                Ok(victims) => victims,
-                Err(reason) => return InsertOutcome::Rejected(reason),
-            };
-            let replaced = lru.insert(key.to_string(), Entry { value, bytes });
-            (victims, replaced)
-        };
         let pool = &self.pools[kind.pool().index()];
-        let reservation = Reservation::charge(pool.clone(), state.usage.clone(), bytes);
-        pool.enter(bytes);
-        state.usage.enter(bytes);
+        let (victims, outcome) = {
+            let mut lru = state.lru.lock();
+            let (victims, room) = self.make_room(kind, &mut lru, capacity, key, bytes);
+            match room {
+                Err(reason) => (victims, Err(reason)),
+                Ok(()) => {
+                    // Charged under the lock: `VectorIndex` checks `resident` here, so
+                    // concurrent inserts cannot both pass the check before either charges.
+                    let reservation = Reservation::charge(pool.clone(), state.usage.clone(), bytes);
+                    let replaced = lru.insert(key.to_string(), Entry { value, bytes });
+                    pool.enter(bytes);
+                    state.usage.enter(bytes);
+                    (victims, Ok((reservation, replaced)))
+                }
+            }
+        };
         self.forget(kind, victims);
-        self.forget(kind, replaced.into_iter().collect());
-        InsertOutcome::Inserted(reservation)
+        match outcome {
+            Err(reason) => InsertOutcome::Rejected(reason),
+            Ok((reservation, replaced)) => {
+                self.forget(kind, replaced.into_iter().collect());
+                InsertOutcome::Inserted(reservation)
+            }
+        }
     }
 
     fn evict(&self, kind: CacheKind, key: &str) -> bool {
