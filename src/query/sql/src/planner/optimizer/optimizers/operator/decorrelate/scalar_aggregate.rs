@@ -736,7 +736,7 @@ fn is_true_constant(scalar: &ScalarExpr) -> bool {
 /// NULL on empty input, which the LEFT join produces without a fill. The marker path is kept
 /// so that a future aggregate with a nullable result and a non-NULL empty-input value is
 /// still filled correctly instead of falling back to a plan that loses empty groups.
-fn empty_aggregate_value(func: &AggregateFunction) -> Option<(Scalar, bool)> {
+pub(super) fn empty_aggregate_value(func: &AggregateFunction) -> Option<(Scalar, bool)> {
     let eval = |nullable: bool| {
         let entries = func
             .args
