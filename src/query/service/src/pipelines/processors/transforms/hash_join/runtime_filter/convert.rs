@@ -66,8 +66,19 @@ pub async fn build_runtime_filter_infos(
     // Iterate over all runtime filter packets
     for packet in packets.into_values() {
         let desc = runtime_filter_descs.get(&packet.id).unwrap();
+        if desc.probe_targets.is_empty() {
+            continue;
+        }
         let bloom_enabled =
             should_enable_runtime_filter(desc, total_build_rows, selectivity_threshold);
+        // Hashes and the immutable SBBF are packet-wide. Target expressions
+        // and adaptive statistics below remain independent for every target.
+        let bloom = match packet.bloom {
+            Some(hashes) if bloom_enabled => {
+                Some(build_bloom_filter(hashes, max_threads, desc.id).await?)
+            }
+            _ => None,
+        };
 
         // Apply this single runtime filter to all probe targets (scan_id, probe_key pairs)
         // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
@@ -80,16 +91,6 @@ pub async fn build_runtime_filter_infos(
             } else {
                 (None, 0)
             };
-            let bloom = if bloom_enabled {
-                if let Some(ref bloom) = packet.bloom {
-                    Some(build_bloom_filter(bloom.clone(), max_threads, desc.id).await?)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
             let min_max = if let Some(ref min_max) = packet.min_max {
                 Some(build_min_max_filter(
                     min_max.clone(),
@@ -104,7 +105,7 @@ pub async fn build_runtime_filter_infos(
             let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
                 probe_expr: probe_key.clone(),
-                bloom,
+                bloom: bloom.clone(),
                 inlist,
                 inlist_value_count,
                 min_max,
@@ -406,9 +407,20 @@ mod tests {
         ));
         desc.probe_table_rows = None;
         desc.build_table_rows = Some(1000);
+        // Another packet owns a different Bloom payload, even within one
+        // conversion call. Only targets of the same packet may share it.
+        let mut other_desc = desc.clone();
+        other_desc.id = 1;
+        other_desc.probe_targets = vec![(desc.probe_targets[0].0.clone(), 9)];
+        packets.insert(1, RuntimeFilterPacket {
+            id: 1,
+            inlist: None,
+            min_max: None,
+            bloom: Some(vec![33, 44]),
+        });
         let infos = build_runtime_filter_infos(
             JoinRuntimeFilterPacket::complete(packets, 2),
-            HashMap::from([(0, &desc)]),
+            HashMap::from([(0, &desc), (1, &other_desc)]),
             1,
             1,
         )
@@ -416,12 +428,37 @@ mod tests {
         .unwrap();
         let first = &infos[&7].filters[0];
         let other = &infos[&8].filters[0];
+        let same_scan_target = &infos[&7].filters[1];
+        let other_packet = &infos[&9].filters[0];
+        let bloom = &first.bloom.as_ref().unwrap().filter;
+        assert!(
+            std::sync::Arc::ptr_eq(bloom, &other.bloom.as_ref().unwrap().filter),
+            "one packet must share its immutable Bloom across scan targets"
+        );
+        assert!(std::sync::Arc::ptr_eq(
+            bloom,
+            &same_scan_target.bloom.as_ref().unwrap().filter
+        ));
+        assert!(!std::sync::Arc::ptr_eq(
+            bloom,
+            &other_packet.bloom.as_ref().unwrap().filter
+        ));
+        assert!([11, 22].into_iter().all(|hash| bloom.check_hash(hash)));
+        assert!(
+            [33, 44].into_iter().all(|hash| other_packet
+                .bloom
+                .as_ref()
+                .unwrap()
+                .filter
+                .check_hash(hash))
+        );
         let worker = first.clone();
         assert!(std::sync::Arc::ptr_eq(&first.stats, &worker.stats));
         assert!(!std::sync::Arc::ptr_eq(&first.stats, &other.stats));
         worker.stats.record_bloom(0, 0, 10, 10);
         assert!(first.stats.bloom_disabled());
         assert!(!other.stats.bloom_disabled());
+        assert!(!other_packet.stats.bloom_disabled());
         assert!(!infos[&7].filters[1].stats.bloom_disabled());
         assert!(!std::sync::Arc::ptr_eq(
             &first.stats,
