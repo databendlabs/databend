@@ -62,10 +62,10 @@ scalar: CAST(assume_not_null(text (#1)) AS Int64 NULL)
 type: Int64 NULL
 
 === decimal_cast_factory_params ===
-description: Decimal factory params must match the params reconstructed by Expr::Cast.
+description: Literal decimal params match the params that Expr::Cast reconstructs, so the call is a cast.
 sql: to_decimal(10, 2)(assume_not_null(number))
 status: ok
-scalar: to_decimal(10, 2)(assume_not_null(number (#0)))
+scalar: CAST(assume_not_null(number (#0)) AS Decimal(10, 2))
 type: Decimal(10, 2)
 
 === variant_function_differs_from_string_cast ===

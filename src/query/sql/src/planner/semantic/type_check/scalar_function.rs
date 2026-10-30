@@ -652,8 +652,9 @@ where A: TypeCheckAdapter
                 )));
             }
 
-            params.push(Scalar::Number(NumberScalar::Int64(precision as _)));
-            params.push(Scalar::Number(NumberScalar::Int64(scale as _)));
+            // Typed as literal params are, e.g. `to_decimal(10, 2)(x)`.
+            params.push(Scalar::Number(NumberScalar::UInt8(precision as _)));
+            params.push(Scalar::Number(NumberScalar::UInt8(scale as _)));
         }
 
         let placeholders = args
