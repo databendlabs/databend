@@ -112,10 +112,10 @@ impl<'a> StatEvaluator<'a> {
             return Ok(None);
         }
 
-        let Some(input) = self.eval(&cast.expr, input_stats)? else {
+        let Some(input_stat) = self.eval(&cast.expr, input_stats)? else {
             return Ok(None);
         };
-        let input = input.as_ref();
+        let input = input_stat.as_ref();
 
         // Reuse the cast domain implementation without making statistics
         // evaluation depend on the physical value evaluator. The synthetic
@@ -141,13 +141,22 @@ impl<'a> StatEvaluator<'a> {
             return Ok(None);
         };
 
+        let (ndv, null_count) = (input.ndv, input.null_count);
+        // Histograms are typed, so their boundaries cannot be reused across a
+        // value conversion. Changing only nullability keeps the non-NULL
+        // values and their representation, so the distribution still holds.
+        let distribution = if src_type.remove_nullable_ref() == cast.dest_type.remove_nullable_ref()
+        {
+            input_stat.into_owned().distribution
+        } else {
+            OwnedDistribution::Unknown
+        };
         let stat = ReturnStat {
             domain,
             // A lossless injective cast preserves distinct values and NULLs.
-            // Histograms are typed, so their boundaries cannot be reused.
-            ndv: input.ndv,
-            null_count: input.null_count,
-            distribution: OwnedDistribution::Unknown,
+            ndv,
+            null_count,
+            distribution,
         };
         if let Err(msg) = stat.check_consistency_with_type(Some(&cast.dest_type)) {
             if cfg!(debug_assertions) {
@@ -346,6 +355,55 @@ mod tests {
         assert_eq!(stat.ndv, NdvEstimate::exact(3.0));
         assert_eq!(stat.null_count, StatCount::exact(0));
         assert!(matches!(stat.distribution, OwnedDistribution::Unknown));
+    }
+
+    #[test]
+    fn test_nullable_cast_preserves_histogram() {
+        use databend_common_statistics::BorrowedHistogram;
+        use databend_common_statistics::Histogram;
+        use databend_common_statistics::TypedHistogram;
+        use databend_common_statistics::TypedHistogramBucket;
+
+        let histogram = TypedHistogram::new(vec![TypedHistogramBucket::new(1u64, 3, 3.0, 3.0)]);
+        let src_type = DataType::Number(NumberDataType::UInt8);
+        let expr = Expr::Cast(Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0,
+                data_type: src_type.clone(),
+                display_name: "c0".to_string(),
+            })),
+            dest_type: src_type.wrap_nullable(),
+        });
+        let domain = crate::Domain::from_min_max(
+            Scalar::Number(NumberScalar::UInt8(1)),
+            Scalar::Number(NumberScalar::UInt8(3)),
+            &src_type,
+        );
+        let input_stats = HashMap::from([(0, ArgStat {
+            domain,
+            ndv: NdvEstimate::exact(3.0),
+            null_count: StatCount::exact(0),
+            distribution: BorrowedDistribution::Histogram(BorrowedHistogram::UInt(&histogram)),
+        })]);
+
+        let stat = StatEvaluator::run(
+            &expr,
+            &FunctionContext::default(),
+            &FunctionRegistry::empty(),
+            StatCardinality::exact(3),
+            &input_stats,
+        )
+        .unwrap()
+        .unwrap()
+        .into_owned();
+
+        assert!(matches!(
+            stat.distribution,
+            OwnedDistribution::Histogram(Histogram::UInt(ref h)) if *h == histogram
+        ));
     }
 
     #[test]

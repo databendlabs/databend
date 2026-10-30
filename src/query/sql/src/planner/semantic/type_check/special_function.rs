@@ -342,6 +342,37 @@ impl<'a> CoreExprArena<'a> {
 }
 
 impl SpecialFunction {
+    /// The argument expressions of the function.
+    pub(super) fn args(&self) -> Vec<CoreExprId> {
+        match self {
+            SpecialFunction::Namespace(_)
+            | SpecialFunction::Session(_)
+            | SpecialFunction::Auth(_)
+            | SpecialFunction::Timezone => vec![],
+            SpecialFunction::IsRoleInSession { role: arg }
+            | SpecialFunction::CastToVariant { arg, .. }
+            | SpecialFunction::GetVariable { arg }
+            | SpecialFunction::DecodeString { arg, .. }
+            | SpecialFunction::Scalar { arg, .. } => vec![arg.1],
+            SpecialFunction::LastQueryId { arg } => arg.iter().map(|arg| arg.1).collect(),
+            SpecialFunction::Coalesce { args }
+            | SpecialFunction::Decode { args }
+            | SpecialFunction::GreatestOrLeast { args, .. } => {
+                args.iter().map(|arg| arg.1).collect()
+            }
+            SpecialFunction::ArraySort {
+                array,
+                sort_order,
+                nulls_order,
+            } => std::iter::once(array)
+                .chain(sort_order)
+                .chain(nulls_order)
+                .map(|arg| arg.1)
+                .collect(),
+            SpecialFunction::ArrayAggregate { array, function } => vec![array.1, function.1],
+        }
+    }
+
     pub(super) fn resolve<'tc, A>(
         &self,
         type_checker: &mut TypeChecker<'tc, A>,

@@ -43,16 +43,19 @@ use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::Visibility;
 use crate::binder::AliasLookup;
+use crate::binder::AliasTable;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::binder::bind_table_reference::JoinConditions;
+use crate::binder::grouping_sets_select::PreAggregateItemsMut;
 use crate::binder::project::SelectInfo;
 use crate::binder::scalar_common::conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::scalar::ScalarBinder;
+use crate::planner::semantic::TypeChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
@@ -67,24 +70,27 @@ pub struct SelectList<'a> {
     pub items: Vec<SelectItem<'a>>,
 }
 
-#[derive(Debug)]
 pub(crate) struct ClauseAliasBindings<'a> {
-    aliases: &'a [(String, ScalarExpr)],
+    table: AliasTable<'a>,
     available: Vec<usize>,
 }
 
 pub(crate) type ClauseAliasLookup<'a> = (AliasLookup<'a>, Option<AliasLookup<'a>>);
 
 pub(crate) struct GroupItemAliasState<'a> {
-    aliases: &'a [(String, ScalarExpr)],
+    table: AliasTable<'a>,
     available: &'a [usize],
     prior_group_aliases: Vec<usize>,
 }
 
-impl ClauseAliasBindings<'_> {
+impl<'a> ClauseAliasBindings<'a> {
+    pub(crate) fn new(table: AliasTable<'a>, available: Vec<usize>) -> Self {
+        Self { table, available }
+    }
+
     pub(crate) fn group_item_state(&self) -> GroupItemAliasState<'_> {
         GroupItemAliasState {
-            aliases: self.aliases,
+            table: self.table,
             available: &self.available,
             prior_group_aliases: Vec::new(),
         }
@@ -93,7 +99,7 @@ impl ClauseAliasBindings<'_> {
 
 impl GroupItemAliasState<'_> {
     fn lookup<'a>(&'a self, indices: &'a [usize]) -> AliasLookup<'a> {
-        AliasLookup::indexed(self.aliases, indices)
+        AliasLookup::new(self.table, Some(indices))
     }
 
     pub(crate) fn group_item_aliases(
@@ -134,16 +140,17 @@ impl GroupItemAliasState<'_> {
         )
     }
 
-    pub(crate) fn matched_group_item_alias(
-        &self,
-        expr: &Expr,
-        scalar_expr: &ScalarExpr,
-    ) -> Option<usize> {
-        let column_name = Self::simple_unqualified_column_name(expr)?;
-        self.available.iter().copied().find(|index| {
-            let (alias, scalar) = &self.aliases[*index];
-            alias.eq_ignore_ascii_case(column_name) && scalar == scalar_expr
-        })
+    /// The available aliases named like `expr` if it is a simple name: a
+    /// GROUP BY item that matches one of them uses that alias.
+    pub(crate) fn same_name_aliases(&self, expr: &Expr) -> Vec<usize> {
+        let Some(column_name) = Self::simple_unqualified_column_name(expr) else {
+            return Vec::new();
+        };
+        self.available
+            .iter()
+            .copied()
+            .filter(|index| self.table.name(*index).eq_ignore_ascii_case(column_name))
+            .collect()
     }
 
     pub(crate) fn register_group_item_alias(&mut self, alias_index: usize) {
@@ -229,18 +236,13 @@ impl SelectAliasCatalog {
     }
 
     pub(crate) fn group_by_bindings(&self) -> ClauseAliasBindings<'_> {
-        let mut bindings = ClauseAliasBindings {
-            aliases: &self.aliases,
-            available: Vec::new(),
-        };
-        for item in &self.items {
-            if !item.explicit_expr_alias {
-                continue;
-            }
-
-            bindings.available.push(item.alias_index);
-        }
-        bindings
+        let available = self
+            .items
+            .iter()
+            .filter(|item| item.explicit_expr_alias)
+            .map(|item| item.alias_index)
+            .collect();
+        ClauseAliasBindings::new(AliasTable::Bound(&self.aliases), available)
     }
 }
 
@@ -413,6 +415,16 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
+        let alias_exprs = self.masking_where_alias_exprs(alias_exprs);
+        self.bind_where_impl(bind_context, aliases, alias_exprs, expr, child)
+    }
+
+    /// The SELECT aliases that WHERE resolves to their expressions, bound
+    /// unmasked, if a table lets WHERE use unmasked values.
+    fn masking_where_alias_exprs(
+        &self,
+        alias_exprs: impl Iterator<Item = (String, Expr)>,
+    ) -> Option<Vec<(String, Expr)>> {
         let has_original_where = self.metadata.read().tables().iter().any(|table| {
             !table
                 .table()
@@ -421,13 +433,7 @@ impl Binder {
                 .masking_where_use_unmasked_value
                 .is_empty()
         });
-        self.bind_where_impl(
-            bind_context,
-            aliases,
-            has_original_where.then(|| alias_exprs.collect()),
-            expr,
-            child,
-        )
+        has_original_where.then(|| alias_exprs.collect())
     }
 
     fn bind_where_impl(
@@ -438,9 +444,9 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
-        bind_context.with_expr_context(
+        let scalar = bind_context.with_expr_context(
             ExprContext::WhereClause,
-            |bind_context| -> Result<(SExpr, ScalarExpr)> {
+            |bind_context| -> Result<ScalarExpr> {
                 let mut scalar_binder = ScalarBinder::new(
                     bind_context,
                     self.ctx.clone(),
@@ -451,30 +457,68 @@ impl Binder {
                 if let Some(alias_exprs) = alias_exprs {
                     scalar_binder.set_masking_where_aliases(alias_exprs);
                 }
-                let (scalar, _) = scalar_binder.bind(expr)?;
-                let f = |scalar: &ScalarExpr| {
-                    scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
-                };
-
-                let mut any = Any::new(&f);
-                any.visit(&scalar)?;
-                if any.result() {
-                    return Err(ErrorCode::SemanticError(
-                        "Where clause can't contain aggregate or window functions".to_string(),
-                    )
-                    .set_span(scalar.span()));
-                }
-
-                reject_grouping_functions(Some(&scalar), "Where clause")?;
-
-                let filter_plan = Filter {
-                    predicates: conjunctions(&scalar).cloned().collect(),
-                };
-                let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
-
-                Ok((new_expr, scalar))
+                Ok(scalar_binder.bind(expr)?.0)
             },
-        )
+        )?;
+        Self::check_where_predicate(&scalar)?;
+        Ok((Self::where_filter(&scalar, child), scalar))
+    }
+
+    /// Bind the WHERE of a GROUPING SETS query, whose aliases resolve to the
+    /// pre-aggregate forms of the SELECT items.
+    pub(crate) fn bind_grouping_sets_where(
+        &mut self,
+        bind_context: &mut BindContext,
+        mut items: PreAggregateItemsMut<'_>,
+        expr: &Expr,
+    ) -> Result<ScalarExpr> {
+        let list = items.list();
+        let alias_exprs = self.masking_where_alias_exprs(list.alias_exprs());
+        let scalar = bind_context.with_expr_context(
+            ExprContext::WhereClause,
+            |bind_context| -> Result<ScalarExpr> {
+                let mut type_checker = TypeChecker::try_create_with_alias_fallback(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    list.lookup(),
+                    None,
+                    false,
+                )?;
+                if let Some(alias_exprs) = &alias_exprs {
+                    type_checker.set_masking_where_aliases(alias_exprs);
+                }
+                type_checker.set_pre_aggregate_items(items.reborrow());
+                Ok(type_checker.resolve(expr)?.0)
+            },
+        )?;
+        Self::check_where_predicate(&scalar)?;
+        Ok(scalar)
+    }
+
+    fn check_where_predicate(scalar: &ScalarExpr) -> Result<()> {
+        let f = |scalar: &ScalarExpr| {
+            scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
+        };
+
+        let mut any = Any::new(&f);
+        any.visit(scalar)?;
+        if any.result() {
+            return Err(ErrorCode::SemanticError(
+                "Where clause can't contain aggregate or window functions".to_string(),
+            )
+            .set_span(scalar.span()));
+        }
+
+        reject_grouping_functions(Some(scalar), "Where clause")
+    }
+
+    pub(crate) fn where_filter(predicate: &ScalarExpr, child: SExpr) -> SExpr {
+        let filter_plan = Filter {
+            predicates: conjunctions(predicate).cloned().collect(),
+        };
+        SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child))
     }
 
     #[recursive::recursive]

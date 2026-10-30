@@ -1741,12 +1741,12 @@ FROM orders JOIN lineitem ON o_orderkey = l_orderkey
 GROUP BY GROUPING SETS ((o_custkey), ())
 before_plan:
 EvalScalar
-├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
+├── scalars: [o_custkey (#25) AS (#25), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
 └── Aggregate(Initial)
-    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
+    ├── group items: [o_custkey (#25) AS (#25), _grouping_id (#26) AS (#26)]
     ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
     └── EvalScalar
-        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+        ├── scalars: [lineitem.l_extendedprice (#14) AS (#14), CAST(orders.o_custkey (#1) AS Int64 NULL) AS (#25), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
         └── Join(Inner)
             ├── build keys: [lineitem.l_orderkey (#9)]
             ├── probe keys: [orders.o_orderkey (#0)]
@@ -1770,12 +1770,12 @@ FROM orders JOIN lineitem ON o_orderkey = l_orderkey
 GROUP BY ROLLUP (o_custkey)
 before_plan:
 EvalScalar
-├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
+├── scalars: [o_custkey (#25) AS (#25), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
 └── Aggregate(Initial)
-    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
+    ├── group items: [o_custkey (#25) AS (#25), _grouping_id (#26) AS (#26)]
     ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
     └── EvalScalar
-        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+        ├── scalars: [lineitem.l_extendedprice (#14) AS (#14), CAST(orders.o_custkey (#1) AS Int64 NULL) AS (#25), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
         └── Join(Inner)
             ├── build keys: [lineitem.l_orderkey (#9)]
             ├── probe keys: [orders.o_orderkey (#0)]
@@ -1799,12 +1799,12 @@ FROM orders JOIN lineitem ON o_orderkey = l_orderkey
 GROUP BY CUBE (o_custkey)
 before_plan:
 EvalScalar
-├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
+├── scalars: [o_custkey (#25) AS (#25), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
 └── Aggregate(Initial)
-    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
+    ├── group items: [o_custkey (#25) AS (#25), _grouping_id (#26) AS (#26)]
     ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
     └── EvalScalar
-        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+        ├── scalars: [lineitem.l_extendedprice (#14) AS (#14), CAST(orders.o_custkey (#1) AS Int64 NULL) AS (#25), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
         └── Join(Inner)
             ├── build keys: [lineitem.l_orderkey (#9)]
             ├── probe keys: [orders.o_orderkey (#0)]

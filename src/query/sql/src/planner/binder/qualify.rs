@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
+use crate::binder::PreAggregateItemsMut;
 use crate::binder::ScalarBinder;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::into_conjunctions;
@@ -39,10 +40,11 @@ use crate::plans::walk_expr_mut;
 impl Binder {
     /// Analyze window in qualify clause, this will rewrite window functions.
     /// See `WindowRewriter` for more details.
-    pub fn analyze_window_qualify(
+    pub(crate) fn analyze_window_qualify(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
+        pre_aggregate: Option<PreAggregateItemsMut<'_>>,
         qualify: &Expr,
         needs_window_rewrite: bool,
     ) -> Result<ScalarExpr> {
@@ -54,6 +56,9 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
+        if let Some(items) = pre_aggregate {
+            scalar_binder.set_pre_aggregate_items(items);
+        }
         let (mut scalar, _) = scalar_binder.bind(qualify)?;
         AggregateRewriter::rewrite_existing_expr(
             &bind_context.aggregate_info,

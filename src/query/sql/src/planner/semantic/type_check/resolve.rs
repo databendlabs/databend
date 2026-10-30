@@ -80,6 +80,7 @@ where A: TypeCheckAdapter
             metadata,
             aliases,
             fallback_aliases,
+            pre_aggregate: None,
             in_aggregate_function: false,
             in_window_function: false,
             in_masking_policy: false,
@@ -87,6 +88,7 @@ where A: TypeCheckAdapter
             masking_where_aliases: None,
             resolving_masking_where_aliases: Vec::new(),
             forbid_virtual_computed_column: false,
+            grouping_key: super::grouping_key::GroupingKeyState::new(),
         })
     }
 
@@ -169,7 +171,9 @@ where A: TypeCheckAdapter
         &self,
         expr: EExpr<Index>,
     ) -> std::result::Result<Box<(ScalarExpr, DataType)>, EExpr<Index>> {
-        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS)
+            || (self.defer_column_folding() && !expr.column_refs().is_empty())
+        {
             return Err(expr);
         }
 

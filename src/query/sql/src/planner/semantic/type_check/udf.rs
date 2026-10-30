@@ -751,6 +751,7 @@ where A: super::TypeCheckAdapter
         if disallow_alias_resolution {
             self.bind_context.expr_context = ExprContext::InAggregateFunction;
         }
+        let suspended = udf.definition.is_aggregate() && self.suspend_grouping_key_scope();
         let arguments = args
             .iter()
             .map(|(display_name, arg)| {
@@ -762,6 +763,7 @@ where A: super::TypeCheckAdapter
                 })
             })
             .collect::<Result<Vec<_>>>();
+        self.resume_grouping_key_scope(suspended);
         if disallow_alias_resolution {
             self.bind_context.expr_context = original_context;
         }
@@ -837,6 +839,9 @@ where A: super::TypeCheckAdapter
         let expr = parse_expr(&sql_tokens, self.adapter.sql_dialect()?)?;
 
         let mut bind_context = BindContext::new();
+        // Pre-aggregate forms matched against grouping keys stay unfolded,
+        // including the bodies of SQL UDFs in them.
+        bind_context.defer_column_folding = self.defer_column_folding();
         let mut metadata = Metadata::default();
         let mut replacements = HashMap::new();
         for (name, data_type, scalar) in parameters {

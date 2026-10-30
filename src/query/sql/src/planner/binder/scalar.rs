@@ -22,6 +22,7 @@ use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::planner::binder::BindContext;
+use crate::planner::binder::PreAggregateItemsMut;
 use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeCheckAdapter;
@@ -40,6 +41,7 @@ pub struct ScalarBinder<'a, A = FullTypeCheckAdapter> {
     forbid_virtual_computed_column: bool,
     apply_masking_policy: bool,
     masking_where_aliases: Option<Vec<(String, Expr)>>,
+    pre_aggregate: Option<PreAggregateItemsMut<'a>>,
 }
 
 impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
@@ -59,6 +61,7 @@ impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
             forbid_virtual_computed_column: false,
             apply_masking_policy: true,
             masking_where_aliases: None,
+            pre_aggregate: None,
         }
     }
 
@@ -87,11 +90,18 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             forbid_virtual_computed_column: false,
             apply_masking_policy: true,
             masking_where_aliases: None,
+            pre_aggregate: None,
         }
     }
 
     pub fn forbid_virtual_computed_column(&mut self) {
         self.forbid_virtual_computed_column = true;
+    }
+
+    /// Let aliases resolve to the pre-aggregate SELECT items of a GROUPING SETS
+    /// query, see `TypeChecker::set_pre_aggregate_items`.
+    pub(crate) fn set_pre_aggregate_items(&mut self, items: PreAggregateItemsMut<'a>) {
+        self.pre_aggregate = Some(items);
     }
 
     /// Table maintenance predicates evaluate stored values, not user-visible masked values.
@@ -116,6 +126,9 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             type_checker.set_masking_where_aliases(aliases);
         }
         type_checker.set_forbid_virtual_computed_column(self.forbid_virtual_computed_column);
+        if let Some(items) = &mut self.pre_aggregate {
+            type_checker.set_pre_aggregate_items(items.reborrow());
+        }
         Ok(*type_checker.resolve(expr)?)
     }
 

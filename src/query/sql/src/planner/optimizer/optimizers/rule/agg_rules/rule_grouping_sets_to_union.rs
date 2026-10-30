@@ -162,35 +162,9 @@ impl Rule for RuleGroupingSetsToUnion {
                     stat_info: None,
                 });
 
-                let mask = (1 << grouping_sets.dup_group_items.len()) - 1;
-                let group_bys = agg
-                    .group_items
-                    .iter()
-                    .filter(|item| !is_grouping_id_item(item, grouping_sets.grouping_id_index))
-                    .map(|i| {
-                        agg_input_columns
-                            .iter()
-                            .position(|t| *t == i.index)
-                            .unwrap()
-                    })
-                    .collect::<Vec<_>>();
-
-                for set in &grouping_sets.sets {
-                    let mut id = 0;
-
-                    // For element in `group_bys`,
-                    // if it is in current grouping set: set 0, else: set 1. (1 represents it will be NULL in grouping)
-                    // Example: GROUP BY GROUPING SETS ((a, b), (a), (b), ())
-                    // group_bys: [a, b]
-                    // grouping_sets: [[0, 1], [0], [1], []]
-                    // grouping_ids: 00, 01, 10, 11
-
-                    for g in set {
-                        let i = group_bys.iter().position(|t| *t == g.as_usize()).unwrap();
-                        id |= 1 << i;
-                    }
-                    let grouping_id = !id & mask;
-
+                let grouping_ids =
+                    grouping_sets.grouping_ids(agg.group_items.iter().map(|item| item.index));
+                for (set, grouping_id) in grouping_sets.sets.iter().zip(grouping_ids) {
                     let mut eval_scalar = eval_scalar.clone();
                     let mut agg = agg.clone();
                     agg.grouping_sets = None;
@@ -268,16 +242,16 @@ struct ReplaceColumnForGroupingSetsVisitor {
 
 impl VisitorMut<'_> for ReplaceColumnForGroupingSetsVisitor {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        let old = expr.clone();
-
         if let ScalarExpr::BoundColumnRef(col) = expr {
             if self.group_indexes.contains(&col.column.index) {
-                *expr = ScalarExpr::CastExpr(CastExpr {
-                    argument: Box::new(old),
-                    is_try: true,
-                    target_type: Box::new(col.column.data_type.wrap_nullable()),
-                    span: col.span,
-                });
+                if !col.column.data_type.is_nullable_or_null() {
+                    *expr = ScalarExpr::CastExpr(CastExpr {
+                        argument: Box::new(col.clone().into()),
+                        is_try: true,
+                        target_type: Box::new(col.column.data_type.wrap_nullable()),
+                        span: col.span,
+                    });
+                }
             } else if self.exclude_group_indexes.contains(&col.column.index) {
                 *expr = ScalarExpr::TypedConstantExpr(
                     ConstantExpr {
