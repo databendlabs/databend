@@ -140,8 +140,8 @@ impl TypedRangeBounds {
         }
         if let BlockEntry::Column(Column::Nullable(column)) = entry {
             let mut ranks =
-                self.lower_bound_column(&BlockEntry::Column(column.column.clone()), null_rank);
-            for (rank, valid) in ranks.iter_mut().zip(column.validity.iter()) {
+                self.lower_bound_column(&BlockEntry::Column(column.column().clone()), null_rank);
+            for (rank, valid) in ranks.iter_mut().zip(column.validity().iter()) {
                 if !valid {
                     *rank = null_rank;
                 }

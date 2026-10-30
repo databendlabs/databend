@@ -29,7 +29,6 @@ use super::FunctionFactory;
 use super::FunctionFactoryClosure;
 use super::ScalarFunction;
 use super::ScalarFunctionDomain;
-use crate::Column;
 use crate::Domain;
 use crate::FunctionDomain;
 use crate::FunctionSignature;
@@ -39,7 +38,6 @@ use crate::function_stat::DeriveStat;
 use crate::function_stat::ScalarFunctionStat;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::types::NullableColumn;
 use crate::types::NullableType;
 use crate::types::ValueType;
 use crate::types::nullable::NullableDomain;
@@ -172,22 +170,11 @@ impl Function {
         let new_eval = Box::new(move |val: &[Value<AnyType>], ctx: &mut EvalContext| {
             let num_rows = ctx.num_rows;
             let output = eval.eval(val, ctx);
-            if let Some((validity, _)) = ctx.errors.take() {
-                match output {
-                    Value::Scalar(_) => Value::Scalar(Scalar::Null),
-                    Value::Column(column) => {
-                        Value::Column(NullableColumn::new_column(column, validity.into()))
-                    }
-                }
-            } else {
-                match output {
-                    Value::Scalar(scalar) => Value::Scalar(scalar),
-                    Value::Column(column) => Value::Column(NullableColumn::new_column(
-                        column,
-                        Bitmap::new_constant(true, num_rows),
-                    )),
-                }
-            }
+            let validity = match ctx.errors.take() {
+                Some((validity, _)) => validity.into(),
+                None => Bitmap::new_constant(true, num_rows),
+            };
+            output.wrap_nullable(Some(validity))
         });
 
         Function {
@@ -253,7 +240,7 @@ where T: ScalarFunction
         let mut bitmap: Option<MutableBitmap> = None;
         let mut nonull_args: Vec<Value<Result>> = Vec::with_capacity(args.len());
 
-        let mut len = 1;
+        let mut len = ctx.num_rows;
         for arg in args {
             let arg = arg.try_downcast::<T>().unwrap();
             match arg {
@@ -263,10 +250,11 @@ where T: ScalarFunction
                 }
                 Value::Column(v) => {
                     len = v.len();
-                    nonull_args.push(Value::Column(v.column.clone()));
+                    let (column, validity) = v.destructure();
+                    nonull_args.push(Value::Column(column));
                     bitmap = match bitmap {
-                        Some(m) => Some(m.bitand(&v.validity)),
-                        None => Some(v.validity.clone().make_mut()),
+                        Some(m) => Some(m.bitand(&validity)),
+                        None => Some(validity.make_mut()),
                     };
                 }
             }
@@ -276,9 +264,11 @@ where T: ScalarFunction
             Some(bitmap) => bitmap.freeze(),
             None => Bitmap::new_trued(len),
         };
-        if bitmap.null_count() > 0 {
-            ctx.validity = ctx.validity.as_ref().map(|validity| validity & &bitmap);
-        }
+        let bitmap = match &ctx.validity {
+            Some(validity) => validity & &bitmap,
+            None => bitmap,
+        };
+        ctx.validity = Some(bitmap.clone());
         let results = self.0.eval(&nonull_args, ctx);
         if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
             // If the original value is NULL, we can ignore the error.
@@ -290,25 +280,7 @@ where T: ScalarFunction
             }
         }
 
-        match results {
-            Value::Scalar(s) => {
-                if bitmap.get(0).unwrap() {
-                    Value::Scalar(s)
-                } else {
-                    Value::Scalar(Scalar::Null)
-                }
-            }
-            Value::Column(column) => {
-                let result = match column {
-                    Column::Nullable(deref!(nullable_column)) => NullableColumn::new_column(
-                        nullable_column.column,
-                        nullable_column.validity.bitand(&bitmap),
-                    ),
-                    _ => NullableColumn::new_column(column, bitmap),
-                };
-                Value::Column(result)
-            }
-        }
+        results.wrap_nullable(Some(bitmap))
     }
 }
 

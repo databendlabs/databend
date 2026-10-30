@@ -376,7 +376,7 @@ pub(super) fn register_cast(registry: &mut FunctionRegistry) {
         },
         |val, _| match val {
             Value::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
-            Value::Column(col) => Value::Column(NullableColumn::new_unchecked(
+            Value::Column(col) => Value::Column(NullableColumn::new(
                 col.iter().map(|val| *val as i64).collect(),
                 Bitmap::new_constant(true, col.len()),
             )),
@@ -395,7 +395,7 @@ pub(super) fn register_cast(registry: &mut FunctionRegistry) {
             Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new_unchecked(col, validity))
+                Value::Column(NullableColumn::new(col, validity))
             }
         },
     );

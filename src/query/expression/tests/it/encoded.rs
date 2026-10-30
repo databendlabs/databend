@@ -575,8 +575,8 @@ fn test_nullable_encoded_consumers() {
             Bitmap::new_constant(false, 8),
             Bitmap::from_iter([true, false, true, false, true, true, false, true]),
         ] {
-            let column = NullableColumn::new_column(encoded.clone(), validity.clone());
-            let plain = NullableColumn::new_column(decoded.clone(), validity);
+            let column = encoded.clone().wrap_nullable(Some(validity.clone()));
+            let plain = decoded.clone().wrap_nullable(Some(validity));
             let block = DataBlock::new_from_columns(vec![column.clone()]);
             let expected = DataBlock::new_from_columns(vec![plain.clone()]);
             let mut hashes = vec![0; 8];
@@ -635,19 +635,19 @@ fn test_nullable_wraps_encoded_column() {
     let validity = Bitmap::from_iter([true, false, true]);
     for column in [
         encode(&plain),
-        NullableColumn::new_column(dict_column(&["a", "b"], &[1, 0, 1]), validity.clone()),
+        dict_column(&["a", "b"], &[1, 0, 1]).wrap_nullable(Some(validity.clone())),
     ] {
         let wrapped = match column {
             Column::Nullable(c) => *c,
             column => NullableColumn::new(column, validity.clone()),
         };
-        assert!(matches!(wrapped.column, Column::Encoded(_)));
+        assert!(matches!(wrapped.column(), Column::Encoded(_)));
     }
     let Column::Nullable(wrapped) = encode(&plain).wrap_nullable(None) else {
         unreachable!()
     };
-    assert!(wrapped.column.is_encoded());
-    let expected = NullableColumn::new_column(plain, wrapped.validity.clone());
+    assert!(wrapped.column().is_encoded());
+    let expected = plain.wrap_nullable(Some(wrapped.validity().clone()));
     let value = Value::Column(Column::Nullable(wrapped));
     assert!(value.is_encoded());
     assert_eq!(*value.decoded(), Value::Column(expected.clone()));

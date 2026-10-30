@@ -85,7 +85,7 @@ impl HashJoinProbeState {
             row_index += 1;
         }
         let boolean_column = Column::Boolean(boolean_bit_map.into());
-        let marker_column = NullableColumn::new_column(boolean_column, validity.into());
+        let marker_column = boolean_column.wrap_nullable(Some(validity.into()));
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
@@ -156,7 +156,7 @@ impl HashJoinState {
             for entry in cols.iter() {
                 match entry.to_column() {
                     Column::Nullable(c) => {
-                        let bitmap = &c.validity;
+                        let bitmap = c.validity();
                         if bitmap.null_count() == 0 {
                             valids = Some(Bitmap::new_constant(true, num_rows));
                             break;
@@ -195,7 +195,7 @@ pub fn wrap_true_validity(
     } else {
         let mut validity = true_validity.clone();
         validity.slice(0, num_rows);
-        NullableColumn::new_column(col, validity).into()
+        col.wrap_nullable(Some(validity)).into()
     }
 }
 

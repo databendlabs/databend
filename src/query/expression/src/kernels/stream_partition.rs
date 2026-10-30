@@ -663,8 +663,8 @@ fn copy_nullable<I: Index>(
     from: &NullableColumn<AnyType>,
     indices: &[I],
 ) {
-    copy_boolean(&mut to.validity, &from.validity, indices);
-    copy_column(indices, &from.column, &mut to.builder)
+    copy_boolean(&mut to.validity, from.validity(), indices);
+    copy_column(indices, from.column(), &mut to.builder)
 }
 
 fn copy_opaque<I: Index>(indices: &[I], builder: &mut OpaqueColumnBuilder, column: &OpaqueColumn) {

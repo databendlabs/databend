@@ -58,6 +58,10 @@ impl AccessType for AnyType {
         Ok(domain.clone())
     }
 
+    fn column_is_nullable_or_null(col: &Self::Column) -> bool {
+        col.is_nullable() || col.is_null()
+    }
+
     fn column_len(col: &Self::Column) -> usize {
         col.len()
     }

@@ -1009,7 +1009,7 @@ impl DataBlock {
                 BlockEntry::Column(Column::Nullable(col)) if col.validity().true_count() == 0 => {
                     // For `Nullable` columns with no valid values,
                     // only the size of the validity bitmap is counted.
-                    col.validity.as_slice().0.len()
+                    col.validity().as_slice().0.len()
                 }
                 BlockEntry::Const(s, data_type, _) => {
                     s.as_ref().estimated_scalar_repeat_size(num_rows, data_type)

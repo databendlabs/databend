@@ -1789,7 +1789,7 @@ impl DecimalDataType {
                 _ => None,
             },
             Value::Column(Column::Nullable(deref!(column))) => {
-                with_decimal_type!(|T| match &column.column {
+                with_decimal_type!(|T| match column.column() {
                     Column::Decimal(DecimalColumn::T(_, size)) =>
                         Some((DecimalDataType::T(*size), true)),
                     _ => None,

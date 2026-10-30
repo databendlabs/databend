@@ -26,7 +26,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::nullable::NullableColumn;
 
 use crate::srfs::variant::unnest_variant_array;
 
@@ -109,12 +108,14 @@ fn build_unnest(
                                 match col {
                                     Column::Array(col) => unnest_column(col.underlying_column()),
                                     // Assuming that the invalid array has zero elements in the underlying column.
-                                    Column::Nullable(
-                                        deref!(NullableColumn {
-                                            column: Column::Array(col),
-                                            ..
-                                        }),
-                                    ) => unnest_column(col.underlying_column()),
+                                    Column::Nullable(nullable)
+                                        if matches!(nullable.column(), Column::Array(_)) =>
+                                    {
+                                        let Column::Array(col) = nullable.destructure().0 else {
+                                            unreachable!()
+                                        };
+                                        unnest_column(col.underlying_column())
+                                    }
                                     _ => col,
                                 }
                             }

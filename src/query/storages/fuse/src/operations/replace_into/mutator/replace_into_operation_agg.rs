@@ -895,7 +895,6 @@ mod tests {
     use databend_common_expression::Value;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
-    use databend_common_expression::types::nullable::NullableColumn;
     use databend_common_expression::types::number::Int32Type;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
 
@@ -961,10 +960,8 @@ mod tests {
 
     #[test]
     fn test_nullable_keys_are_not_deletion_candidates() -> Result<()> {
-        let nullable = NullableColumn::new_column(
-            Int32Type::from_data(vec![1_i32, 2_i32]),
-            [true, false].into_iter().collect(),
-        );
+        let nullable = Int32Type::from_data(vec![1_i32, 2_i32])
+            .wrap_nullable(Some([true, false].into_iter().collect()));
         let value = Value::Column(nullable);
         assert!(row_hash_of_columns(&[&value], 0)?.is_some());
         assert!(row_hash_of_columns(&[&value], 1)?.is_none());

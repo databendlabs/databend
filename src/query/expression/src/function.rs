@@ -680,22 +680,11 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
     debug_assert!(!O::data_type().is_nullable_or_null());
     move |val, ctx| {
         let output = func(val, ctx);
-        if let Some((validity, _)) = ctx.errors.take() {
-            match output {
-                Value::Scalar(_) => Value::Scalar(None),
-                Value::Column(column) => {
-                    Value::Column(NullableColumn::new_unchecked(column, validity.into()))
-                }
-            }
-        } else {
-            match output {
-                Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
-                Value::Column(column) => Value::Column(NullableColumn::new_unchecked(
-                    column,
-                    Bitmap::new_constant(true, ctx.num_rows),
-                )),
-            }
-        }
+        let validity = match ctx.errors.take() {
+            Some((validity, _)) => validity.into(),
+            None => Bitmap::new_constant(true, ctx.num_rows),
+        };
+        NullableType::<O>::wrap_value(output, validity, ctx.generics)
     }
 }
 

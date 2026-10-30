@@ -51,7 +51,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::number::Float32Type;
 use databend_common_expression::types::number::Float64Type;
@@ -194,7 +193,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, ctx| match val {
             Value::Scalar(None) => Value::Scalar(Scalar::default_value(&ctx.generics[0])),
             Value::Scalar(Some(scalar)) => Value::Scalar(scalar.to_owned()),
-            Value::Column(NullableColumn { column, .. }) => Value::Column(column),
+            Value::Column(column) => Value::Column(column.destructure().0),
         },
     );
 

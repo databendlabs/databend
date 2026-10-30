@@ -44,7 +44,6 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::i256;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::with_decimal_mapped_type;
@@ -221,10 +220,7 @@ impl VariableRowConverter {
                     builder.commit_row();
                 }
                 if data_type.is_nullable() {
-                    NullableColumn::new_column(
-                        Column::Variant(builder.build()),
-                        validity.unwrap().clone(),
-                    )
+                    Column::Variant(builder.build()).wrap_nullable(Some(validity.unwrap().clone()))
                 } else {
                     Column::Variant(builder.build())
                 }

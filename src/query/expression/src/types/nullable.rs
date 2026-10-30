@@ -34,6 +34,7 @@ use super::domain_type_error;
 use crate::ColumnBuilder;
 use crate::ColumnVec;
 use crate::ScalarRef;
+use crate::Value;
 use crate::property::Domain;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
@@ -89,6 +90,10 @@ impl<T: AccessType> AccessType for NullableType<T> {
             }),
             _ => Err(domain_type_error::<Self>(domain)),
         }
+    }
+
+    fn column_is_nullable_or_null(_col: &Self::Column) -> bool {
+        true
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -187,10 +192,7 @@ impl<T: ValueType> ValueType for NullableType<T> {
 
     fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
         let value_type = data_type.as_nullable().unwrap();
-        Column::Nullable(Box::new(NullableColumn::new(
-            T::upcast_column_with_type(col.column, value_type),
-            col.validity,
-        )))
+        T::upcast_column_with_type(col.column, value_type).wrap_nullable(Some(col.validity))
     }
 
     fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
@@ -278,6 +280,45 @@ impl<T: ArgType> ArgType for NullableType<T> {
     }
 }
 
+impl<T: ReturnType> NullableType<T> {
+    pub(crate) fn wrap_value(
+        value: Value<T>,
+        validity: Bitmap,
+        generics: &GenericMap,
+    ) -> Value<Self> {
+        match value {
+            Value::Column(column) => Value::Column(NullableColumn::new(column, validity)),
+            Value::Scalar(scalar) => {
+                Self::apply_validity(Value::Scalar(Some(scalar)), validity, generics)
+            }
+        }
+    }
+
+    /// Applies row validity to both scalar and column results.
+    pub(crate) fn apply_validity(
+        value: Value<Self>,
+        validity: Bitmap,
+        generics: &GenericMap,
+    ) -> Value<Self> {
+        match value {
+            Value::Column(mut column) => {
+                column.merge_validity(&validity);
+                Value::Column(column)
+            }
+            Value::Scalar(None) => Value::Scalar(None),
+            Value::Scalar(Some(scalar)) if validity.null_count() == 0 => {
+                Value::Scalar(Some(scalar))
+            }
+            Value::Scalar(Some(_)) if validity.true_count() == 0 => Value::Scalar(None),
+            Value::Scalar(Some(scalar)) => {
+                let mut builder = T::create_builder(validity.len(), generics);
+                T::push_item_repeat(&mut builder, T::to_scalar_ref(&scalar), validity.len());
+                Value::Column(NullableColumn::new(T::build_column(builder), validity))
+            }
+        }
+    }
+}
+
 impl<T: ReturnType> ReturnType for NullableType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         NullableColumnBuilder::with_capacity(capacity, generics)
@@ -286,8 +327,8 @@ impl<T: ReturnType> ReturnType for NullableType<T> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NullableColumn<T: AccessType> {
-    pub column: T::Column,
-    pub validity: Bitmap,
+    column: T::Column,
+    validity: Bitmap,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -297,6 +338,17 @@ pub struct NullableColumnVec {
 }
 
 impl<T: AccessType> NullableColumn<T> {
+    /// Constructs a nullable column from a non-nullable inner column.
+    /// Use `Column::wrap_nullable` for dynamically typed columns that may already be nullable.
+    pub fn new(column: T::Column, validity: Bitmap) -> Self {
+        assert_eq!(T::column_len(&column), validity.len());
+        assert!(
+            !T::column_is_nullable_or_null(&column),
+            "nullable columns require a non-nullable inner column"
+        );
+        Self { column, validity }
+    }
+
     pub fn len(&self) -> usize {
         self.validity.len()
     }
@@ -307,6 +359,12 @@ impl<T: AccessType> NullableColumn<T> {
 
     pub fn validity(&self) -> &Bitmap {
         &self.validity
+    }
+
+    /// Intersects the row validity without changing the inner column or adding a layer.
+    pub fn merge_validity(&mut self, validity: &Bitmap) {
+        assert_eq!(self.len(), validity.len());
+        self.validity = &self.validity & validity;
     }
 
     pub fn index(&self, index: usize) -> Option<Option<T::ScalarRef<'_>>> {
@@ -361,24 +419,6 @@ impl<T: AccessType> NullableColumn<T> {
     }
 }
 
-impl<T: ReturnType> NullableColumn<T> {
-    // though column and validity are public
-    // we should better use new to create a new instance to ensure the validity and column are consistent
-    // todo: make column and validity private
-    pub fn new_unchecked(column: T::Column, validity: Bitmap) -> Self {
-        debug_assert_eq!(T::column_len(&column), validity.len());
-        NullableColumn { column, validity }
-    }
-}
-
-impl NullableColumn<AnyType> {
-    pub fn new(column: Column, validity: Bitmap) -> Self {
-        debug_assert_eq!(column.len(), validity.len());
-        debug_assert!(!column.is_nullable() && !column.is_null());
-        NullableColumn { column, validity }
-    }
-}
-
 impl<T: ArgType> NullableColumn<T> {
     pub fn upcast(self) -> NullableColumn<AnyType> {
         NullableColumn::new(
@@ -391,17 +431,7 @@ impl<T: ArgType> NullableColumn<T> {
 impl NullableColumn<AnyType> {
     pub fn try_downcast<T: AccessType>(&self) -> Result<NullableColumn<T>> {
         let inner = T::try_downcast_column(&self.column)?;
-        debug_assert_eq!(T::column_len(&inner), self.validity.len());
-        Ok(NullableColumn {
-            column: inner,
-            validity: self.validity.clone(),
-        })
-    }
-
-    pub fn new_column(column: Column, validity: Bitmap) -> Column {
-        debug_assert_eq!(column.len(), validity.len());
-        debug_assert!(!matches!(column, Column::Nullable(_)));
-        Column::Nullable(Box::new(NullableColumn { column, validity }))
+        Ok(NullableColumn::new(inner, self.validity.clone()))
     }
 }
 
@@ -518,10 +548,7 @@ impl<T: ValueType> NullableColumnBuilder<T> {
 
     pub fn build(self) -> NullableColumn<T> {
         assert_eq!(self.validity.len(), T::builder_len(&self.builder));
-        NullableColumn {
-            column: T::build_column(self.builder),
-            validity: self.validity.into(),
-        }
+        NullableColumn::new(T::build_column(self.builder), self.validity.into())
     }
 
     pub fn build_scalar(self) -> Option<T::Scalar> {

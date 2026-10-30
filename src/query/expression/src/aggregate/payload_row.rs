@@ -275,7 +275,14 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::Nullable(c) => unsafe {
-            serialize_column_to_rowformat(arena, &c.column, select_vector, address, offset, scratch)
+            serialize_column_to_rowformat(
+                arena,
+                c.column(),
+                select_vector,
+                address,
+                offset,
+                scratch,
+            )
         },
 
         // for complex column
@@ -467,20 +474,20 @@ impl<'s> CompareState<'s> {
             BlockEntry::Const(scalar, _, _) => self.match_const_column(scalar, col_offset, counts),
             BlockEntry::Column(column) => match column {
                 Column::Nullable(c) => {
-                    if c.validity.null_count() == 0 {
+                    if c.validity().null_count() == 0 {
                         let counts = self.match_with(counts, |_, row_ptr| unsafe {
                             row_ptr.read_bool(validity_offset)
                         });
-                        self.match_column(&c.column, col_offset, None, counts)
-                    } else if c.validity.true_count() == 0 {
+                        self.match_column(c.column(), col_offset, None, counts)
+                    } else if c.validity().true_count() == 0 {
                         self.match_with(counts, |_, row_ptr| unsafe {
                             !row_ptr.read_bool(validity_offset)
                         })
                     } else {
                         self.match_column(
-                            &c.column,
+                            c.column(),
                             col_offset,
-                            Some((&c.validity, validity_offset)),
+                            Some((c.validity(), validity_offset)),
                             counts,
                         )
                     }
