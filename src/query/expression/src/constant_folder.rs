@@ -20,7 +20,6 @@ use log::error;
 
 use crate::ColumnIndex;
 use crate::FunctionContext;
-use crate::FunctionDomain;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
 use crate::Scalar;
@@ -37,14 +36,15 @@ use crate::property::Domain;
 use crate::type_check::check_function;
 use crate::type_check::resolve_cast_function;
 use crate::types::DataType;
-use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
 
-const MAX_FUNCTION_ARGS_TO_FOLD: usize = 4096;
-
+mod fold_rules;
 mod monotonicity;
 mod range_constraint;
 
+pub use fold_rules::FilterDomain;
+pub use fold_rules::FoldRules;
+pub use fold_rules::IfPruning;
 pub use range_constraint::RangeConstraint;
 
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
@@ -492,11 +492,25 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 let new_domain = if is_try {
                     inner_domain.and_then(|inner_domain| {
-                        self.calculate_try_cast(span, &src_type, dest_type, &inner_domain)
+                        FoldRules::calculate_try_cast(
+                            self.func_ctx,
+                            self.fn_registry,
+                            span,
+                            &src_type,
+                            dest_type,
+                            &inner_domain,
+                        )
                     })
                 } else {
                     inner_domain.and_then(|inner_domain| {
-                        self.calculate_cast(span, &src_type, dest_type, &inner_domain)
+                        FoldRules::calculate_cast(
+                            self.func_ctx,
+                            self.fn_registry,
+                            span,
+                            &src_type,
+                            dest_type,
+                            &inner_domain,
+                        )
                     })
                 };
 
@@ -562,121 +576,67 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let is_or = call.function.signature.name.starts_with("or_");
                 let span = call.span;
 
-                if node.args_len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                if node.args_len() > FoldRules::MAX_FUNCTION_ARGS_TO_FOLD {
                     return (FoldResult::Unchanged(node.into_cow()), None);
                 }
                 let (node, args) = node.into_args();
 
                 let mut changed = false;
                 let mut args_expr = Vec::with_capacity(args.len());
-                // Start with the operator identity: false for OR, true for AND.
-                // Starting with both values possible would pin OR's has_true,
-                // even when every argument is known to be false or NULL.
-                let mut result_domain = Some(BooleanDomain {
-                    has_true: !is_or,
-                    has_false: is_or,
-                });
+                let mut filter = FilterDomain::new(is_or);
 
                 for arg in args {
                     let (arg, domain) = self.fold_once(arg);
                     changed |= arg.is_changed();
                     // A temporary hack to make `and_filters` shortcut on false.
                     // TODO(andylokandy): make it a rule in the optimizer.
-                    if let Expr::Constant(Constant {
-                        scalar: Scalar::Boolean(result),
-                        ..
-                    }) = arg.as_ref()
+                    if let Expr::Constant(Constant { scalar, .. }) = arg.as_ref()
+                        && filter.is_absorbing(scalar)
                     {
-                        if is_or == *result {
-                            return (
-                                FoldResult::Changed(Expr::Constant(Constant {
-                                    span,
-                                    scalar: Scalar::Boolean(is_or),
-                                    data_type: DataType::Boolean,
-                                })),
-                                None,
-                            );
-                        }
+                        return (
+                            FoldResult::Changed(Expr::Constant(Constant {
+                                span,
+                                scalar: Scalar::Boolean(filter.absorbing_value()),
+                                data_type: DataType::Boolean,
+                            })),
+                            None,
+                        );
                     }
                     args_expr.push(arg);
 
-                    result_domain = result_domain.zip(domain).map(|(func_domain, domain)| {
-                        let (domain_has_true, domain_has_false) = match &domain {
-                            Domain::Boolean(boolean_domain) => {
-                                (boolean_domain.has_true, boolean_domain.has_false)
-                            }
-                            Domain::Nullable(nullable_domain) => match &nullable_domain.value {
-                                Some(inner_domain) => {
-                                    let boolean_domain = inner_domain.as_boolean().unwrap();
-                                    (
-                                        boolean_domain.has_true,
-                                        nullable_domain.has_null || boolean_domain.has_false,
-                                    )
-                                }
-                                None => (false, true),
-                            },
-                            _ => unreachable!(),
-                        };
-                        let (has_true, has_false) = if is_or {
-                            (
-                                func_domain.has_true || domain_has_true,
-                                func_domain.has_false && domain_has_false,
-                            )
-                        } else {
-                            (
-                                func_domain.has_true && domain_has_true,
-                                func_domain.has_false || domain_has_false,
-                            )
-                        };
-                        BooleanDomain {
-                            has_true,
-                            has_false,
-                        }
-                    });
-
-                    if let Some(Scalar::Boolean(result)) = result_domain
-                        .as_ref()
-                        .and_then(|domain| Domain::Boolean(*domain).as_singleton())
-                    {
-                        if is_or == result {
-                            return (
-                                FoldResult::Changed(Expr::Constant(Constant {
-                                    span,
-                                    scalar: Scalar::Boolean(result),
-                                    data_type: DataType::Boolean,
-                                })),
-                                None,
-                            );
-                        }
+                    filter.add(domain);
+                    if filter.singleton() == Some(filter.absorbing_value()) {
+                        return (
+                            FoldResult::Changed(Expr::Constant(Constant {
+                                span,
+                                scalar: Scalar::Boolean(filter.absorbing_value()),
+                                data_type: DataType::Boolean,
+                            })),
+                            None,
+                        );
                     }
                 }
 
                 // Check for mutually exclusive ranges in AND filters
-                if !is_or && args_expr.len() >= 2 {
-                    if let Some(is_mutually_exclusive) =
-                        self.check_mutually_exclusive_ranges(&args_expr)
-                    {
-                        if is_mutually_exclusive {
-                            return (
-                                FoldResult::Changed(Expr::Constant(Constant {
-                                    span,
-                                    scalar: Scalar::Boolean(false),
-                                    data_type: DataType::Boolean,
-                                })),
-                                None,
-                            );
-                        }
-                    }
-                }
-
-                if let Some(scalar) = result_domain
-                    .as_ref()
-                    .and_then(|domain| Domain::Boolean(*domain).as_singleton())
+                if !is_or
+                    && args_expr.len() >= 2
+                    && self.check_mutually_exclusive_ranges(&args_expr)
                 {
                     return (
                         FoldResult::Changed(Expr::Constant(Constant {
                             span,
-                            scalar,
+                            scalar: Scalar::Boolean(false),
+                            data_type: DataType::Boolean,
+                        })),
+                        None,
+                    );
+                }
+
+                if let Some(result) = filter.singleton() {
+                    return (
+                        FoldResult::Changed(Expr::Constant(Constant {
+                            span,
+                            scalar: Scalar::Boolean(result),
                             data_type: DataType::Boolean,
                         })),
                         None,
@@ -709,17 +669,17 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                             if folded {
                                 None
                             } else {
-                                result_domain.map(Domain::Boolean)
+                                filter.domain().map(Domain::Boolean)
                             },
                         );
                     }
                 }
 
                 let result = node.finish_fold(args_expr, changed);
-                (result, result_domain.map(Domain::Boolean))
+                (result, filter.domain().map(Domain::Boolean))
             }
             FoldNode::FunctionCall(node) => {
-                if node.args_len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                if node.args_len() > FoldRules::MAX_FUNCTION_ARGS_TO_FOLD {
                     return (FoldResult::Unchanged(node.into_cow()), None);
                 }
                 let (node, args) = node.into_args();
@@ -745,70 +705,46 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         return (result, None);
                     }
 
-                    let mut simplified_indices = Vec::with_capacity(args_expr.len());
-                    let mut found_true_branch = false;
-                    for cond_idx in (0..args_expr.len() - 1).step_by(2) {
-                        match args_expr[cond_idx]
-                            .as_ref()
-                            .as_constant()
-                            .map(|c| &c.scalar)
-                        {
-                            Some(Scalar::Boolean(true)) => {
-                                if simplified_indices.is_empty() {
-                                    return (
-                                        FoldResult::Changed(
-                                            args_expr.remove(cond_idx + 1).into_expr(),
-                                        ),
-                                        None,
-                                    );
-                                }
-                                simplified_indices.push(cond_idx + 1);
-                                found_true_branch = true;
-                                break;
-                            }
-                            Some(Scalar::Boolean(false) | Scalar::Null) => {}
-                            _ => {
-                                simplified_indices.push(cond_idx);
-                                simplified_indices.push(cond_idx + 1);
-                            }
+                    let pruning = FoldRules::if_pruning(args_expr.len(), |index| {
+                        args_expr[index].as_ref().as_constant().map(|c| &c.scalar)
+                    });
+                    match pruning {
+                        IfPruning::Unchanged => {}
+                        IfPruning::Select(index) => {
+                            return (
+                                FoldResult::Changed(args_expr.swap_remove(index).into_expr()),
+                                None,
+                            );
                         }
-                    }
-
-                    if simplified_indices.is_empty() {
-                        return (
-                            FoldResult::Changed(args_expr.pop().unwrap().into_expr()),
-                            None,
-                        );
-                    }
-                    if !found_true_branch {
-                        simplified_indices.push(args_expr.len() - 1);
-                    }
-                    if simplified_indices.len() != args_expr.len() {
-                        let mut original_args = args_expr.into_iter().map(Some).collect::<Vec<_>>();
-                        let simplified_args = simplified_indices
-                            .iter()
-                            .map(|&index| original_args[index].take().unwrap().into_expr())
-                            .collect::<Vec<_>>();
-                        match check_function(
-                            call.span,
-                            "if",
-                            call.id.params(),
-                            &simplified_args,
-                            self.fn_registry,
-                        ) {
-                            Ok(Expr::FunctionCall(mut call)) => {
-                                call.args = simplified_args;
-                                return (FoldResult::Changed(Expr::FunctionCall(call)), None);
-                            }
-                            Ok(func_expr) => return (FoldResult::Changed(func_expr), None),
-                            Err(_) => {
-                                for (index, arg) in
-                                    simplified_indices.into_iter().zip(simplified_args)
-                                {
-                                    original_args[index] =
-                                        Some(FoldResult::Unchanged(Cow::Owned(arg)));
+                        IfPruning::Keep(simplified_indices) => {
+                            let mut original_args =
+                                args_expr.into_iter().map(Some).collect::<Vec<_>>();
+                            let simplified_args = simplified_indices
+                                .iter()
+                                .map(|&index| original_args[index].take().unwrap().into_expr())
+                                .collect::<Vec<_>>();
+                            match check_function(
+                                call.span,
+                                "if",
+                                call.id.params(),
+                                &simplified_args,
+                                self.fn_registry,
+                            ) {
+                                Ok(Expr::FunctionCall(mut call)) => {
+                                    call.args = simplified_args;
+                                    return (FoldResult::Changed(Expr::FunctionCall(call)), None);
                                 }
-                                args_expr = original_args.into_iter().map(Option::unwrap).collect();
+                                Ok(func_expr) => return (FoldResult::Changed(func_expr), None),
+                                Err(_) => {
+                                    for (index, arg) in
+                                        simplified_indices.into_iter().zip(simplified_args)
+                                    {
+                                        original_args[index] =
+                                            Some(FoldResult::Unchanged(Cow::Owned(arg)));
+                                    }
+                                    args_expr =
+                                        original_args.into_iter().map(Option::unwrap).collect();
+                                }
                             }
                         }
                     }
@@ -823,54 +759,33 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     && args_expr
                         .iter()
                         .all(|arg| !arg.as_ref().data_type().is_nullable_or_null())
+                    && self.check_mutually_exclusive_ranges(&args_expr)
                 {
-                    if let Some(is_mutually_exclusive) =
-                        self.check_mutually_exclusive_ranges(&args_expr)
-                    {
-                        if is_mutually_exclusive {
-                            return (
-                                FoldResult::Changed(Expr::Constant(Constant {
-                                    span: call.span,
-                                    scalar: Scalar::Boolean(false),
-                                    data_type: DataType::Boolean,
-                                })),
-                                None,
-                            );
-                        }
-                    }
+                    return (
+                        FoldResult::Changed(Expr::Constant(Constant {
+                            span: call.span,
+                            scalar: Scalar::Boolean(false),
+                            data_type: DataType::Boolean,
+                        })),
+                        None,
+                    );
                 }
 
-                let (calc_domain, eval) = match &call.function.eval {
-                    FunctionEval::Scalar {
-                        calc_domain, eval, ..
-                    } => (calc_domain, eval),
-                    FunctionEval::SRF { .. } => {
-                        let result = node.finish_fold(args_expr, changed);
-                        return (result, None);
-                    }
-                };
+                if matches!(call.function.eval, FunctionEval::SRF { .. }) {
+                    let result = node.finish_fold(args_expr, changed);
+                    return (result, None);
+                }
 
                 let func_domain = args_domain.and_then(|domains: Vec<Domain>| {
-                    let res = calc_domain.domain_eval(self.func_ctx, &domains);
-                    let is_monotonic = self.is_monotonic(
-                        &call.function.signature.name,
-                        args_expr.len(),
+                    FoldRules::function_domain(
+                        self.func_ctx,
+                        self.fn_registry,
+                        &call.function,
+                        &call.generics,
+                        &call.return_type,
                         args_expr.first().map(|arg| arg.as_ref().data_type()),
                         &domains,
-                    );
-                    match (res, is_monotonic) {
-                        (FunctionDomain::MayThrow | FunctionDomain::Full, true) => self
-                            .calculate_monotonicity_domain(
-                                &call.return_type,
-                                args_expr[0].as_ref().data_type(),
-                                domains.first().unwrap(),
-                                &call.generics,
-                                eval.as_ref(),
-                            ),
-                        (FunctionDomain::MayThrow, _) => None,
-                        (FunctionDomain::Full, _) => Some(Domain::full(&call.return_type)),
-                        (FunctionDomain::Domain(domain), _) => Some(domain),
-                    }
+                    )
                 });
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
@@ -919,7 +834,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 (result, func_domain)
             }
             FoldNode::LambdaFunctionCall(node) => {
-                if node.args_len() > MAX_FUNCTION_ARGS_TO_FOLD {
+                if node.args_len() > FoldRules::MAX_FUNCTION_ARGS_TO_FOLD {
                     return (FoldResult::Unchanged(node.into_cow()), None);
                 }
                 let (node, args) = node.into_args();
@@ -973,14 +888,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         &self,
         expr: Cow<'e, Expr<Index>>,
     ) -> (Cow<'e, Expr<Index>>, bool) {
-        let block = DataBlock::empty_with_rows(1);
-        let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-        // Since the expression is constant, it is safe to change its column index type.
-        let projected_expr = expr
-            .as_ref()
-            .project_column_ref(|_| unreachable!())
-            .unwrap();
-        let Ok(Value::Scalar(scalar)) = evaluator.run(&projected_expr) else {
+        let Some(scalar) = FoldRules::eval_constant(self.func_ctx, self.fn_registry, expr.as_ref())
+        else {
             return (expr, false);
         };
         let span = expr.span();
@@ -996,185 +905,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             })),
             true,
         )
-    }
-
-    fn calculate_cast(
-        &self,
-        span: Span,
-        src_type: &DataType,
-        dest_type: &DataType,
-        domain: &Domain,
-    ) -> Option<Domain> {
-        if src_type == dest_type {
-            return Some(domain.clone());
-        }
-
-        if let Some(call) =
-            resolve_cast_function(span, false, src_type, dest_type, self.fn_registry)
-            && let Some(new_domain) = self.calculate_simple_cast(call, domain)
-        {
-            return new_domain;
-        }
-
-        match (src_type, dest_type) {
-            (DataType::Null, DataType::Nullable(_)) => Some(domain.clone()),
-            (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => {
-                let domain = domain.as_nullable().unwrap();
-                let value = match &domain.value {
-                    Some(value) => Some(Box::new(self.calculate_cast(
-                        span,
-                        inner_src_ty,
-                        inner_dest_ty,
-                        value,
-                    )?)),
-                    None => None,
-                };
-                Some(Domain::Nullable(NullableDomain {
-                    has_null: domain.has_null,
-                    value,
-                }))
-            }
-            (_, DataType::Nullable(inner_dest_ty)) => Some(Domain::Nullable(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(self.calculate_cast(
-                    span,
-                    src_type,
-                    inner_dest_ty,
-                    domain,
-                )?)),
-            })),
-
-            (DataType::EmptyArray, DataType::Array(_)) => Some(domain.clone()),
-            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => {
-                let inner_domain = match domain.as_array().unwrap() {
-                    Some(inner_domain) => Some(Box::new(self.calculate_cast(
-                        span,
-                        inner_src_ty,
-                        inner_dest_ty,
-                        inner_domain,
-                    )?)),
-                    None => None,
-                };
-                Some(Domain::Array(inner_domain))
-            }
-
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
-                if fields_src_ty.len() == fields_dest_ty.len() =>
-            {
-                Some(Domain::Tuple(
-                    domain
-                        .as_tuple()
-                        .unwrap()
-                        .iter()
-                        .zip(fields_src_ty)
-                        .zip(fields_dest_ty)
-                        .map(|((field_domain, src_ty), dest_ty)| {
-                            self.calculate_cast(span, src_ty, dest_ty, field_domain)
-                        })
-                        .collect::<Option<Vec<_>>>()?,
-                ))
-            }
-
-            _ => None,
-        }
-    }
-
-    fn calculate_try_cast(
-        &self,
-        span: Span,
-        src_type: &DataType,
-        dest_type: &DataType,
-        domain: &Domain,
-    ) -> Option<Domain> {
-        if src_type == dest_type {
-            return Some(domain.clone());
-        }
-
-        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
-        let inner_dest_type = &**dest_type.as_nullable().unwrap();
-
-        if let Some(call) = resolve_cast_function(span, true, src_type, dest_type, self.fn_registry)
-            && let Some(new_domain) = self.calculate_simple_cast(call, domain)
-        {
-            return new_domain;
-        }
-
-        match (src_type, inner_dest_type) {
-            (DataType::Null, _) => Some(domain.clone()),
-            (DataType::Nullable(inner_src_ty), _) => {
-                let nullable_domain = domain.as_nullable().unwrap();
-                match &nullable_domain.value {
-                    Some(value) => {
-                        let new_domain = self
-                            .calculate_try_cast(span, inner_src_ty, dest_type, value)?
-                            .into_nullable()
-                            .unwrap();
-                        Some(Domain::Nullable(NullableDomain {
-                            has_null: nullable_domain.has_null || new_domain.has_null,
-                            value: new_domain.value,
-                        }))
-                    }
-                    None => Some(domain.clone()),
-                }
-            }
-            (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => {
-                Some(Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(domain.clone())),
-                }))
-            }
-
-            (DataType::EmptyArray, DataType::Array(_)) => Some(Domain::Nullable(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(domain.clone())),
-            })),
-            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => {
-                let inner_domain = match domain.as_array().unwrap() {
-                    Some(inner_domain) => Some(Box::new(self.calculate_try_cast(
-                        span,
-                        inner_src_ty,
-                        inner_dest_ty,
-                        inner_domain,
-                    )?)),
-                    None => None,
-                };
-                Some(Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(Domain::Array(inner_domain))),
-                }))
-            }
-
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
-                if fields_src_ty.len() == fields_dest_ty.len() =>
-            {
-                let fields_domain = domain.as_tuple().unwrap();
-                let new_fields_domain = fields_domain
-                    .iter()
-                    .zip(fields_src_ty)
-                    .zip(fields_dest_ty)
-                    .map(|((domain, src_ty), dest_ty)| {
-                        self.calculate_try_cast(span, src_ty, dest_ty, domain)
-                    })
-                    .collect::<Option<_>>()?;
-                Some(Domain::Tuple(new_fields_domain))
-            }
-
-            _ => None,
-        }
-    }
-
-    fn calculate_simple_cast(&self, call: FunctionCall, domain: &Domain) -> Option<Option<Domain>> {
-        let cast_expr = Expr::FunctionCall(call);
-
-        let input_domains = [(0, domain.clone())].into_iter().collect();
-        let (_, output_domain) = ConstantFolder::fold_with_domain(
-            Cow::Owned(cast_expr),
-            &input_domains,
-            self.func_ctx,
-            self.fn_registry,
-        );
-
-        Some(output_domain)
     }
 
     #[cfg(test)]
