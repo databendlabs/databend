@@ -50,7 +50,6 @@ use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::pipelines::processors::transforms::aggregator::statistics::FinalAggregateFinishMode;
-use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
@@ -82,7 +81,10 @@ pub struct TransformFinalAggregate {
     stage: Stage,
     spilled_occurred: bool,
 
-    hashtable: HashTable,
+    // Created on the first non-empty input. With bucket shuffle there are many final
+    // processors and most of them may never receive rows, so an eagerly allocated
+    // hash table (and its hash index) per processor is pure overhead.
+    hashtable: Option<AggregateHashTable>,
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
     statistics: AggregationStatistics,
@@ -115,7 +117,6 @@ impl TransformFinalAggregate {
         let max_aggregate_spill_level =
             (settings.get_max_aggregate_spill_level()? as usize).min(max_partition_depth);
 
-        let hashtable = Self::create_hashtable(&params, base_consumed_bits, 0);
         let flush_state = PayloadFlushState::default();
 
         let spiller = AggregateSpiller::try_create(
@@ -139,7 +140,7 @@ impl TransformFinalAggregate {
             output_finished: WatchNotify::new(),
             stage: Stage::Input,
             spilled_occurred: false,
-            hashtable: HashTable::AggregateHashTable(hashtable),
+            hashtable: None,
             params,
             flush_state,
             statistics: AggregationStatistics::new("FinalAggregate"),
@@ -181,14 +182,23 @@ impl TransformFinalAggregate {
         )
     }
 
+    /// Drop the current hash table and switch to `spilled_depth`. The next hash
+    /// table is created by `hashtable_mut` when data arrives.
     fn reset_hashtable(&mut self, spilled_depth: usize) {
-        let partition_depth = spilled_depth.min(self.max_partition_depth);
-        self.hashtable = HashTable::AggregateHashTable(Self::create_hashtable(
-            &self.params,
-            self.base_consumed_bits,
-            partition_depth,
-        ));
-        self.current_partition_depth = partition_depth;
+        self.hashtable = None;
+        self.current_partition_depth = spilled_depth.min(self.max_partition_depth);
+    }
+
+    // Takes the fields separately so callers can still borrow `flush_state`.
+    fn hashtable_mut<'a>(
+        hashtable: &'a mut Option<AggregateHashTable>,
+        params: &Arc<AggregatorParams>,
+        base_consumed_bits: u64,
+        partition_depth: usize,
+    ) -> &'a mut AggregateHashTable {
+        hashtable.get_or_insert_with(|| {
+            Self::create_hashtable(params, base_consumed_bits, partition_depth)
+        })
     }
 
     // One final-aggregate processor handles both the original input stream and
@@ -198,9 +208,7 @@ impl TransformFinalAggregate {
     // `base_consumed_bits + spilled_depth * SPILL_BUCKET_BITS`.
     fn ensure_spill_depth(&mut self, spilled_depth: usize) {
         let partition_depth = spilled_depth.min(self.max_partition_depth);
-        if !matches!(&self.hashtable, HashTable::AggregateHashTable(_))
-            || self.current_partition_depth != partition_depth
-        {
+        if self.current_partition_depth != partition_depth {
             self.reset_hashtable(spilled_depth);
         }
     }
@@ -231,9 +239,13 @@ impl TransformFinalAggregate {
             Arc::new(Bump::new()),
         )?;
 
-        if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
-            ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
-        }
+        let ht = Self::hashtable_mut(
+            &mut self.hashtable,
+            &self.params,
+            self.base_consumed_bits,
+            self.current_partition_depth,
+        );
+        ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
 
         Ok(())
     }
@@ -247,7 +259,13 @@ impl TransformFinalAggregate {
         let bytes = payload.payload.memory_size();
         self.statistics.record_block(rows, bytes);
 
-        if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
+        if rows != 0 {
+            let ht = Self::hashtable_mut(
+                &mut self.hashtable,
+                &self.params,
+                self.base_consumed_bits,
+                self.current_partition_depth,
+            );
             ht.combine_payload(&payload.payload, &mut self.flush_state)?;
         }
 
@@ -317,14 +335,13 @@ impl TransformFinalAggregate {
 
     fn spill_out(&mut self) -> Result<()> {
         self.spilled_occurred = true;
-        if let HashTable::AggregateHashTable(v) = mem::take(&mut self.hashtable) {
+        // No hash table means nothing was aggregated since the last reset.
+        if let Some(v) = self.hashtable.take() {
             for (bucket, payload) in v.payload.into_non_empty_bucket_payloads() {
                 check_interrupt()?;
                 let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                 self.spiller.spill(bucket, data_block)?;
             }
-        } else {
-            unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
         }
         self.reset_hashtable(self.current_partition_depth);
         Ok(())
@@ -369,10 +386,8 @@ impl TransformFinalAggregate {
             )
         } else if self.spilled_occurred {
             let (output_rows, hash_index_resizes) = match &self.hashtable {
-                HashTable::AggregateHashTable(ht) => {
-                    (ht.payload.len(), ht.hash_index_resize_count())
-                }
-                _ => unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state before spill"),
+                Some(ht) => (ht.payload.len(), ht.hash_index_resize_count()),
+                None => (0, 0),
             };
             self.spill_finish(spilled_depth, tx)?;
             (
@@ -403,7 +418,7 @@ impl TransformFinalAggregate {
             finish_mode,
         );
         self.spilled_occurred = false;
-        let _ = mem::take(&mut self.hashtable);
+        self.hashtable = None;
         Ok(())
     }
 
@@ -411,8 +426,9 @@ impl TransformFinalAggregate {
         &mut self,
         mut output_stream: Option<BlockPartitionStream>,
     ) -> Result<(usize, usize)> {
-        let HashTable::AggregateHashTable(hashtable) = mem::take(&mut self.hashtable) else {
-            unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state before output")
+        // No hash table means nothing was aggregated, so there is nothing to output.
+        let Some(hashtable) = self.hashtable.take() else {
+            return Ok((0, 0));
         };
         let output_rows = hashtable.payload.len();
         let hash_index_resizes = hashtable.hash_index_resize_count();
@@ -617,13 +633,9 @@ mod tests {
     use super::*;
     use crate::test_kits::TestFixture;
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_finished_output_interrupts_final_aggregate_receive() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
-        let (tx, rx) = async_channel::unbounded();
+    fn create_params() -> Result<Arc<AggregatorParams>> {
         let key_type = DataType::Number(NumberDataType::UInt64);
-        let params = AggregatorParams::try_create(
+        AggregatorParams::try_create(
             Arc::new(DataSchema::new(vec![DataField::new(
                 "key",
                 key_type.clone(),
@@ -635,7 +647,15 @@ mod tests {
             false,
             1024,
             1024 * 1024,
-        )?;
+        )
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_finished_output_interrupts_final_aggregate_receive() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let (tx, rx) = async_channel::unbounded();
+        let params = create_params()?;
         let input = InputPort::create();
         let output = OutputPort::create();
         let downstream = InputPort::create();
@@ -671,6 +691,83 @@ mod tests {
             unsafe { processor.event(EventCause::Other)? },
             Event::Finished
         ));
+        drop(tx);
+        Ok(())
+    }
+
+    // Final processors that only receive empty payloads must not allocate a hash table.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_final_aggregate_without_rows_creates_no_hashtable() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let (tx, rx) = async_channel::unbounded();
+        let params = create_params()?;
+        let upstream = OutputPort::create();
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let downstream = InputPort::create();
+        // The ports are not yet used by a processor or executor.
+        unsafe {
+            connect(&input, &upstream);
+            connect(&downstream, &output);
+        }
+        downstream.set_need_data();
+        input.set_need_data();
+
+        let empty_payloads = AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            HashTableConfig::default().with_initial_radix_bits(2),
+            Arc::new(Bump::new()),
+        )
+        .payload
+        .into_bucket_payloads()
+        .map(|(bucket, payload)| AggregatePayload {
+            bucket: bucket as isize,
+            payload,
+            max_partition_count: 0,
+        })
+        .collect::<Vec<_>>();
+        upstream.push_data(Ok(DataBlock::empty_with_meta(
+            AggregateMeta::create_partitioned(
+                None,
+                PartitionedData::AggregatePayload(empty_payloads),
+            ),
+        )));
+        upstream.finish();
+
+        let mut processor = TransformFinalAggregate::try_create(
+            input,
+            output,
+            params,
+            0,
+            0,
+            ctx,
+            tx.clone(),
+            rx,
+            Arc::new(AtomicU64::new(1)),
+        )?;
+        let has_hashtable = |processor: &mut Box<dyn Processor>| {
+            processor
+                .as_any()
+                .downcast_mut::<TransformFinalAggregate>()
+                .unwrap()
+                .hashtable
+                .is_some()
+        };
+        assert!(!has_hashtable(&mut processor));
+
+        // Merge the empty payloads.
+        assert!(matches!(processor.event()?, Event::Sync));
+        processor.process()?;
+        assert!(!has_hashtable(&mut processor));
+
+        // Finish the input stage: nothing to output, then wait on the task channel.
+        assert!(matches!(processor.event()?, Event::Sync));
+        processor.process()?;
+        assert!(!has_hashtable(&mut processor));
+        assert!(matches!(processor.event()?, Event::Async));
+        assert!(!downstream.has_data());
         drop(tx);
         Ok(())
     }

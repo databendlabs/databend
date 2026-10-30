@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::PayloadFlushState;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::StringType;
@@ -47,6 +48,10 @@ pub struct TransformExchangeAggregateSerializer {
     options: IpcWriteOptions,
 
     params: Arc<AggregatorParams>,
+    // Reused across payloads. With bucket shuffle every block carries one payload
+    // per bucket, and a fresh flush state (over 100KB) for each of them dominates
+    // the cost when most payloads are small.
+    flush_state: PayloadFlushState,
 }
 
 impl TransformExchangeAggregateSerializer {
@@ -76,6 +81,7 @@ impl TransformExchangeAggregateSerializer {
                 options: IpcWriteOptions::default()
                     .try_with_compression(compression)
                     .unwrap(),
+                flush_state: PayloadFlushState::default(),
             },
         ))
     }
@@ -136,7 +142,12 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                             let mut payload_blocks = Vec::with_capacity(data.len());
 
                             for payload in data {
-                                let block = payload.payload.aggregate_flush_all()?;
+                                if payload.payload.len() == 0 {
+                                    continue;
+                                }
+                                let block = payload
+                                    .payload
+                                    .aggregate_flush_all_with_state(&mut self.flush_state)?;
                                 if block.num_rows() == 0 {
                                     continue;
                                 }

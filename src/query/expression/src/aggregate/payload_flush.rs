@@ -137,10 +137,25 @@ impl PartitionedPayload {
 
 impl Payload {
     pub fn aggregate_flush_all(&self) -> Result<DataBlock> {
+        // A PayloadFlushState is over 100KB, do not allocate one for an empty payload.
+        if self.len() == 0 {
+            return Ok(self.empty_block(0));
+        }
+
         let mut state = PayloadFlushState::default();
+        self.aggregate_flush_all_with_state(&mut state)
+    }
+
+    /// Same as `aggregate_flush_all`, but reuses the caller's flush state, so that
+    /// flushing many payloads does not allocate a new state for each of them.
+    pub fn aggregate_flush_all_with_state(
+        &self,
+        state: &mut PayloadFlushState,
+    ) -> Result<DataBlock> {
+        state.clear();
         let mut blocks = vec![];
 
-        while let Some(block) = self.aggregate_flush(&mut state)? {
+        while let Some(block) = self.aggregate_flush(state)? {
             blocks.push(block);
         }
 
@@ -182,6 +197,10 @@ impl Payload {
     }
 
     pub fn group_by_flush_all(&self) -> Result<DataBlock> {
+        if self.len() == 0 {
+            return Ok(self.empty_block(0));
+        }
+
         let mut state = PayloadFlushState::default();
         let mut blocks = vec![];
 
