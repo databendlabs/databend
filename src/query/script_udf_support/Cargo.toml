@@ -10,7 +10,19 @@ edition = { workspace = true }
 [features]
 default = []
 script-udf = ["dep:arrow-udf-runtime"]
-python-udf = ["script-udf", "arrow-udf-runtime/python", "dep:arrow-udf-python-worker", "dep:databend-common-users", "dep:databend-common-grpc", "dep:bytes", "dep:http", "dep:http-body-util", "dep:hyper", "dep:hyper-util", "dep:url"]
+python-udf = [
+    "script-udf",
+    "arrow-udf-runtime/python",
+    "dep:arrow-udf-python-worker",
+    "dep:databend-common-users",
+    "dep:databend-common-grpc",
+    "dep:bytes",
+    "dep:http",
+    "dep:http-body-util",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:url",
+]
 
 [dependencies]
 anyhow = { workspace = true }
