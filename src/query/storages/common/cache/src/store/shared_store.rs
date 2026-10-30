@@ -110,8 +110,8 @@ impl SharedStore {
     }
 
     fn evict_until(&self, pool: &PoolStore, cap: usize) {
-        while pool.usage().resident() > cap {
-            let excess = pool.usage().resident() - cap;
+        // Read once per round: values dropped by readers lower it between two reads.
+        while let Some(excess) = pool.usage().resident().checked_sub(cap).filter(|e| *e > 0) {
             let victims = pool.evict_batch(pool.next_cursor(), excess, true);
             if self.forget(pool, victims) == 0 {
                 break;
@@ -221,9 +221,11 @@ impl KindStore for SharedStore {
         let state = self.kind(kind);
         state.set_limit(limit);
         let pool = self.pool(kind.pool());
+        // Read once: concurrent inserts and evictions move it between two reads.
+        let in_cache = state.usage.in_cache();
         let excess = match limit.max_bytes {
             Some(0) => None,
-            Some(max) if state.usage.in_cache() > max => Some(state.usage.in_cache() - max),
+            Some(max) if in_cache > max => Some(in_cache - max),
             _ => return,
         };
         let removed = pool.remove_kind(kind, excess);

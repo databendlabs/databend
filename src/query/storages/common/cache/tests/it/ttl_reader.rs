@@ -24,12 +24,16 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachedItem;
+use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::PoolCaps;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::TTLReader;
 use databend_storages_common_cache::TTLValue;
+use databend_storages_common_cache::store::KindStore;
 use databend_storages_common_cache::store::LegacyCapacity;
 use databend_storages_common_cache::store::LegacyStore;
+use databend_storages_common_cache::store::SharedStore;
 
 const KIND: CacheKind = CacheKind::IcebergTable;
 
@@ -102,6 +106,10 @@ struct Fixture {
 
 fn fixture(sync_refresh: bool, ttl: Duration) -> Fixture {
     let store = Arc::new(LegacyStore::new([(KIND, LegacyCapacity::Items(10))]));
+    fixture_on(store, sync_refresh, ttl)
+}
+
+fn fixture_on(store: Arc<dyn KindStore>, sync_refresh: bool, ttl: Duration) -> Fixture {
     let cache = MemCache::new(store, KIND);
     let loads = Arc::new(AtomicUsize::new(0));
     let fail = Arc::new(AtomicBool::new(false));
@@ -172,6 +180,34 @@ async fn test_failed_refresh_drops_stale_value() -> Result<()> {
     assert!(f.reader.read("t").await.is_err());
     f.fail.store(false, Ordering::SeqCst);
     assert_eq!(f.reader.read("t").await?.generation, 2);
+    Ok(())
+}
+
+/// An explicit refresh the cache cannot admit next to the old value drops the old value, so
+/// the next read loads the new one.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_rejected_refresh_drops_old_value() -> Result<()> {
+    // The kind's limit fits one value but not the old one and its replacement together.
+    let bytes = size_of::<Value>();
+    let store = Arc::new(SharedStore::new(
+        PoolCaps {
+            meta: 1 << 20,
+            index: 0,
+            data: 0,
+        },
+        [(KIND, KindLimit::bytes(bytes * 3 / 2))],
+        1,
+    ));
+    let f = fixture_on(store, false, Duration::from_secs(600));
+    let old = f.reader.read("t").await?;
+    assert_eq!(old.generation, 1);
+    // The old value is still held, so the refreshed one (generation 2) does not fit.
+    f.reader.refresh("t").await?;
+    assert!(!f.cache.contains("t"));
+    drop(old);
+    // Not served stale: the next read loads again.
+    assert_eq!(f.reader.read("t").await?.generation, 3);
+    assert!(f.cache.contains("t"));
     Ok(())
 }
 
