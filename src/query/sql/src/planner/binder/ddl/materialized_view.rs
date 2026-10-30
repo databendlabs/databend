@@ -221,7 +221,17 @@ impl Binder {
                     .get(OPT_KEY_DATABASE_ID)
                     .ok_or_else(|| ErrorCode::Internal("materialized view database id is missing"))?
                     .parse::<u64>()?;
-                let mv_database = catalog.get_db_name_by_id(database_id).await?;
+                // A materialized view may live in a different database than its source. A dropped
+                // database keeps its id-to-name mapping until GC, so resolve only active databases
+                // and skip MVs in dropped ones instead of failing queries on the source table.
+                let Some(mv_database) = catalog
+                    .mget_database_names_by_ids(&tenant, &[database_id])
+                    .await?
+                    .pop()
+                    .flatten()
+                else {
+                    continue;
+                };
                 let Some(mv_name) = catalog.get_table_name_by_id(mv.mv_id).await? else {
                     continue;
                 };
@@ -550,20 +560,11 @@ impl Binder {
         let source_table_name = source_entry.name().to_string();
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
-        let source_database_id = source_table
-            .get_table_info()
-            .meta
-            .options
-            .get(OPT_KEY_DATABASE_ID)
-            .ok_or_else(|| {
-                ErrorCode::InvalidMaterializedView(format!(
-                    "source table id {source_table_id} does not record its database id"
-                ))
-            })?
-            .parse::<u64>()?;
-        if source_catalog_name != catalog_name || source_database_id != target_database_id {
+        // Refresh, read, and privilege checks resolve the source through its table id in the
+        // default catalog, so the source may live in any database of the target catalog.
+        if source_catalog_name != catalog_name {
             return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view and source table must belong to the same catalog and database: target '{}.{}', source '{}.{}'",
+                "materialized view and source table must belong to the same catalog: target '{}.{}', source '{}.{}'",
                 catalog_name, database_name, source_catalog_name, source_database
             )));
         }
