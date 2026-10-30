@@ -1,0 +1,92 @@
+# run-with-settings: enable_block_stream_write=1
+# run-with-settings: enable_block_stream_write=0
+
+# Issue #20200: use a tight Unicode successor for string max statistics.
+# Explicitly exercise both write paths in addition to the default pass.
+# A Parquet table without clustering/partitioning can use streaming writes;
+# hex keeps NUL padding visible.
+statement ok
+DROP TABLE IF EXISTS t_string_stats_successor;
+
+statement ok
+CREATE TABLE t_string_stats_successor (
+    ascii_value STRING STATS_TRUNCATE_LEN 4,
+    carry_value STRING STATS_TRUNCATE_LEN 4,
+    surrogate_gap STRING STATS_TRUNCATE_LEN 4
+) row_per_block=100 storage_format='parquet';
+
+# Use hexadecimal code points so the boundary cases are readable:
+# - U+10FFFF is the largest Unicode scalar; the two trailing scalars force
+#   the max-bound successor to carry into 'b': ab<MAX><MAX> -> ac\0\0.
+# - U+D7FF precedes the surrogate range U+D800..U+DFFF; its successor must
+#   skip that range and become U+E000: abc<U+D7FF> -> abc<U+E000>.
+statement ok
+INSERT INTO t_string_stats_successor
+SELECT 'abcd-suffix',
+       concat('ab', char(0x10FFFF), char(0x10FFFF), '-suffix'),
+       concat('abc', char(0xD7FF), '-suffix');
+
+# Read the persisted bounds as hex to make invisible characters unambiguous:
+# "abce" -> 61626365; "ac\0\0" -> 61630000;
+# "abc<U+E000>" -> 616263ee8080 (ee8080 is U+E000 encoded as UTF-8).
+query TT
+SELECT column_name, to_hex(statistics:max::string)
+FROM fuse_block_statistics('default', 't_string_stats_successor')
+ORDER BY column_id;
+----
+ascii_value 61626365
+carry_value 61630000
+surrogate_gap 616263ee8080
+
+# Both upper bounds now exclude thresholds admitted by the old U+10FFFF bound.
+query B
+SELECT statistics:max::string < 'abcf'
+FROM fuse_block_statistics('default', 't_string_stats_successor')
+WHERE column_name = 'ascii_value';
+----
+1
+
+query B
+SELECT statistics:max::string < 'ac0'
+FROM fuse_block_statistics('default', 't_string_stats_successor')
+WHERE column_name = 'carry_value';
+----
+1
+
+query II
+SELECT count_if(ascii_value >= 'abcf'), count_if(carry_value >= 'ac0')
+FROM t_string_stats_successor;
+----
+0 0
+
+# A carried successor must remain approximate: MIN/MAX must return the actual
+# value, not the truncated min or the synthetic "ac\0\0" max.
+query B
+SELECT MIN(carry_value) = concat('ab', char(0x10FFFF), char(0x10FFFF), '-suffix')
+FROM t_string_stats_successor;
+----
+1
+
+# Check MAX separately so an inexact MIN cannot prevent an otherwise unsafe
+# statistics-only MAX rewrite.
+query B
+SELECT MAX(carry_value) = concat('ab', char(0x10FFFF), char(0x10FFFF), '-suffix')
+FROM t_string_stats_successor;
+----
+1
+
+query BB
+SELECT MIN(surrogate_gap) = concat('abc', char(0xD7FF), '-suffix'),
+       MAX(surrogate_gap) = concat('abc', char(0xD7FF), '-suffix')
+FROM t_string_stats_successor;
+----
+1 1
+
+query I
+SELECT count(*) FROM t_string_stats_successor
+WHERE ascii_value >= 'abcf' OR carry_value >= 'ac0';
+----
+0
+
+statement ok
+DROP TABLE t_string_stats_successor;
