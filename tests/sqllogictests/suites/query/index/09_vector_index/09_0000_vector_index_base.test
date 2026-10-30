@@ -435,6 +435,44 @@ SELECT id FROM t_refine_desc WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) >
 ----
 4
 
+# A vector TopN reads only the TopN rows of each block once they fill the limit;
+# their scores must stay with their rows. With fewer scored rows than the limit,
+# rows without a score (NULL vectors) of the same blocks are still output, as
+# with a descending TopN, which scores every row.
+statement ok
+CREATE TABLE t_topn_rows(id Int NOT NULL, embedding Vector(4) NULL,
+  VECTOR INDEX idx(embedding) distance='l2' refine=true)
+
+statement ok
+INSERT INTO t_topn_rows VALUES (1,[1,0,0,0]), (2,NULL), (3,[3,0,0,0]), (4,NULL)
+
+statement ok
+INSERT INTO t_topn_rows VALUES (5,[2,0,0,0]), (6,[4,0,0,0])
+
+query IR
+SELECT id, l2_distance(embedding,[0,0,0,0]::Vector(4)) AS d FROM t_topn_rows ORDER BY d LIMIT 3
+----
+1 1.0
+5 2.0
+3 3.0
+
+query I
+SELECT count() FROM (SELECT id FROM t_topn_rows ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 5)
+----
+5
+
+query I
+SELECT count() FROM (SELECT id FROM t_topn_rows ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC LIMIT 6)
+----
+6
+
+# A filter on the scores only also reads only the TopN rows: 5, 3 and 6 pass it.
+query IR
+SELECT id, l2_distance(embedding,[0,0,0,0]::Vector(4)) AS d FROM t_topn_rows WHERE d > 1.5 ORDER BY d LIMIT 2
+----
+5 2.0
+3 3.0
+
 statement ok
 use default
 

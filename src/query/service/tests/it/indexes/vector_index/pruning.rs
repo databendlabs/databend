@@ -62,6 +62,7 @@ use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::test_kits::*;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::VectorScores;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -792,7 +793,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
             vector_index: Some(vector_index),
             ..Default::default()
         };
-        extras.push((Some(extra), result));
+        extras.push((Some(extra), result, false));
     }
 
     // Add a filter to test filter pushdown
@@ -1009,10 +1010,18 @@ async fn test_block_pruner() -> anyhow::Result<()> {
             vector_index: Some(vector_index),
             ..Default::default()
         };
-        extras.push((Some(extra), result));
+        extras.push((Some(extra), result, true));
     }
 
-    for (extra, expected_results) in extras {
+    for (extra, expected_results, filtered) in extras {
+        // The expected results of filtered queries are the scores of all rows of
+        // the blocks. Once the rows that pass the filter fill the limit, the pruner
+        // keeps only the TopN rows: the 5 lowest scores above 2.0.
+        let expected_results = if filtered {
+            filtered_topn(expected_results, |score| score > 2.0, 5)
+        } else {
+            expected_results
+        };
         let block_metas = apply_block_pruning(
             snapshot.clone(),
             table.get_table_info().schema(),
@@ -1027,10 +1036,21 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         for ((block_meta_index, _), expected_scores) in
             block_metas.iter().zip(expected_results.iter())
         {
-            assert!(block_meta_index.vector_scores.is_some());
-            let vector_scores = block_meta_index.vector_scores.clone().unwrap();
+            // TopN without filters keeps the TopN rows; with filters, every row is
+            // scored and kept.
+            let mut vector_scores: Vec<(usize, F32)> = match &block_meta_index.vector_scores {
+                Some(VectorScores::TopN(scores)) => scores
+                    .iter()
+                    .map(|&(row, score)| (row as usize, score))
+                    .collect(),
+                Some(VectorScores::All(scores)) => scores.iter().copied().enumerate().collect(),
+                None => panic!("missing vector scores"),
+            };
+            vector_scores.sort_by_key(|(row, _)| *row);
+            let mut expected_scores = expected_scores.clone();
+            expected_scores.sort_by_key(|expected| expected.vector_idx);
             assert_eq!(vector_scores.len(), expected_scores.len());
-            for (vector_score, expected_score) in vector_scores.iter().zip(expected_scores) {
+            for (vector_score, expected_score) in vector_scores.iter().zip(&expected_scores) {
                 assert_eq!(block_meta_index.segment_idx, expected_score.segment_idx);
                 assert_eq!(block_meta_index.block_idx, expected_score.block_idx);
                 assert_eq!(vector_score.0, expected_score.vector_idx);
@@ -1040,6 +1060,37 @@ async fn test_block_pruner() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// The rows of `blocks` among the `limit` lowest scores that pass `filter`, if
+/// they fill the limit; otherwise `blocks` unchanged. Blocks without such rows
+/// are removed.
+fn filtered_topn(
+    blocks: Vec<Vec<VectorScoreResult>>,
+    filter: impl Fn(f32) -> bool,
+    limit: usize,
+) -> Vec<Vec<VectorScoreResult>> {
+    let mut passed: Vec<f32> = blocks
+        .iter()
+        .flatten()
+        .map(|result| result.score)
+        .filter(|&score| filter(score))
+        .collect();
+    if passed.len() < limit {
+        return blocks;
+    }
+    passed.sort_by(f32::total_cmp);
+    let last = passed[limit - 1];
+    blocks
+        .into_iter()
+        .map(|block| {
+            block
+                .into_iter()
+                .filter(|result| filter(result.score) && result.score <= last)
+                .collect::<Vec<_>>()
+        })
+        .filter(|block| !block.is_empty())
+        .collect()
 }
 
 #[derive(Debug, Clone)]

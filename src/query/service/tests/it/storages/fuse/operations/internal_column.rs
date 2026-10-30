@@ -65,7 +65,8 @@ fn expected_data_block(
             inner: None,
             matched_rows: block_meta.matched_rows.clone(),
             matched_scores: block_meta.matched_scores.clone(),
-            vector_scores: block_meta.vector_scores.clone(),
+            // The table has no vector index.
+            vector_scores: None,
         };
         let block = DataBlock::empty_with_rows(num_rows);
         for internal_column in internal_columns {
