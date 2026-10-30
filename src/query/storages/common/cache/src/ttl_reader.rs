@@ -85,9 +85,19 @@ where
                             start.elapsed().as_millis() as u64,
                             cache.name(),
                         );
-                        cache.fill(&key, value);
+                        // A refresh replaces the entry, so it bypasses admission. If the
+                        // cache still rejects it, drop the stale entry: it is marked refreshing
+                        // and would otherwise be served forever.
+                        if cache.is_enabled() && !cache.put(&key, value).is_charged() {
+                            cache.evict(&key);
+                        }
                     }
-                    Err(e) => log::warn!("fail to refresh ttl value for key {}, {}", key, e),
+                    Err(e) => {
+                        log::warn!("fail to refresh ttl value for key {}, {}", key, e);
+                        // Not refreshed: the stale entry is dropped, so the next read loads
+                        // it again instead of serving it forever.
+                        cache.evict(&key);
+                    }
                 }
             });
         }

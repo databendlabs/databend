@@ -132,10 +132,30 @@ impl SharedStore {
         if bytes > cap / 4 {
             return Err(RejectReason::Oversized);
         }
-        if !limit.allows(self.kind(kind).usage.resident(), bytes) {
-            return Err(RejectReason::KindLimit);
-        }
         Ok(())
+    }
+
+    /// Reserves `bytes` of the kind's limit; concurrent inserts cannot overshoot it.
+    fn reserve_kind(&self, kind: CacheKind, bytes: usize) -> bool {
+        let usage = &self.kind(kind).usage;
+        match self.kind(kind).limit().max_bytes {
+            Some(max) => usage.try_reserve(bytes, max),
+            None => usage.try_reserve(bytes, usize::MAX),
+        }
+    }
+
+    /// Reserves `bytes` of the pool, evicting from `shard` on as long as that frees room.
+    fn reserve_pool(&self, pool: &PoolStore, shard: usize, bytes: usize) -> bool {
+        loop {
+            if pool.usage().try_reserve(bytes, pool.cap()) {
+                return true;
+            }
+            let excess = (pool.usage().resident() + bytes).saturating_sub(pool.cap());
+            let victims = pool.evict_batch(shard, excess.max(1), true);
+            if self.forget(pool, victims) == 0 {
+                return false;
+            }
+        }
     }
 }
 
@@ -173,17 +193,17 @@ impl KindStore for SharedStore {
             },
         };
 
-        let shard = pool.shard_of(key);
-        while pool.usage().resident() + bytes > pool.cap() {
-            let excess = pool.usage().resident() + bytes - pool.cap();
-            let victims = pool.evict_batch(shard, excess, true);
-            if self.forget(pool, victims) == 0 {
-                return InsertOutcome::Rejected(RejectReason::PoolFullPinned);
-            }
-        }
-
+        // Both budgets are reserved before the value goes in, so concurrent inserts cannot
+        // together exceed them; a rejected insert gives its reservation back.
         let state = self.kind(kind);
-        let reservation = Reservation::charge(pool.usage().clone(), state.usage.clone(), bytes);
+        if !self.reserve_kind(kind, bytes) {
+            return InsertOutcome::Rejected(RejectReason::KindLimit);
+        }
+        if !self.reserve_pool(pool, pool.shard_of(key), bytes) {
+            state.usage.release(bytes);
+            return InsertOutcome::Rejected(RejectReason::PoolFullPinned);
+        }
+        let reservation = Reservation::reserved(pool.usage().clone(), state.usage.clone(), bytes);
         pool.usage().enter(bytes);
         state.usage.enter(bytes);
         let replaced = pool.insert(key, Entry { value, bytes }, placement);

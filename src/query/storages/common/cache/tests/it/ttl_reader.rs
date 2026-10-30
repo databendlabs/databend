@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachedItem;
@@ -66,6 +67,7 @@ impl TTLValue for Value {
 #[derive(Default)]
 struct CountingReader {
     loads: Arc<AtomicUsize>,
+    fail: Arc<AtomicBool>,
     sync_refresh: bool,
 }
 
@@ -78,6 +80,9 @@ impl Reader for CountingReader {
     }
 
     async fn read(&self, _key: &String) -> Result<Value> {
+        if self.fail.load(Ordering::SeqCst) {
+            return Err(ErrorCode::StorageOther("test load failure"));
+        }
         let generation = self.loads.fetch_add(1, Ordering::SeqCst) + 1;
         Ok(Value {
             generation,
@@ -88,17 +93,34 @@ impl Reader for CountingReader {
     }
 }
 
-fn reader(sync_refresh: bool, ttl: Duration) -> (TTLReader<CountingReader>, Arc<AtomicUsize>) {
+struct Fixture {
+    reader: TTLReader<CountingReader>,
+    cache: MemCache<Value>,
+    loads: Arc<AtomicUsize>,
+    fail: Arc<AtomicBool>,
+}
+
+fn fixture(sync_refresh: bool, ttl: Duration) -> Fixture {
     let store = Arc::new(LegacyStore::new([(KIND, LegacyCapacity::Items(10))]));
+    let cache = MemCache::new(store, KIND);
     let loads = Arc::new(AtomicUsize::new(0));
+    let fail = Arc::new(AtomicBool::new(false));
     let reader = CountingReader {
         loads: loads.clone(),
+        fail: fail.clone(),
         sync_refresh,
     };
-    (
-        TTLReader::new(MemCache::new(store, KIND), reader, ttl),
+    Fixture {
+        reader: TTLReader::new(cache.clone(), reader, ttl),
+        cache,
         loads,
-    )
+        fail,
+    }
+}
+
+fn reader(sync_refresh: bool, ttl: Duration) -> (TTLReader<CountingReader>, Arc<AtomicUsize>) {
+    let f = fixture(sync_refresh, ttl);
+    (f.reader, f.loads)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -130,6 +152,26 @@ async fn test_expired_value_refreshes_in_background() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     assert_eq!(loads.load(Ordering::SeqCst), 2);
+    Ok(())
+}
+
+/// A failed background refresh drops the stale value, so the next read reloads it.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_failed_refresh_drops_stale_value() -> Result<()> {
+    let f = fixture(false, Duration::ZERO);
+    assert_eq!(f.reader.read("t").await?.generation, 1);
+    tokio::time::sleep(Duration::from_millis(1)).await;
+    f.fail.store(true, Ordering::SeqCst);
+    // Served stale while the refresh fails in the background.
+    assert_eq!(f.reader.read("t").await?.generation, 1);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while f.cache.contains("t") {
+        assert!(Instant::now() < deadline, "stale value was kept");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(f.reader.read("t").await.is_err());
+    f.fail.store(false, Ordering::SeqCst);
+    assert_eq!(f.reader.read("t").await?.generation, 2);
     Ok(())
 }
 

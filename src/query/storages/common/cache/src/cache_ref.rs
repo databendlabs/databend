@@ -54,6 +54,20 @@ impl Usage {
         self.in_cache.fetch_sub(bytes, Ordering::Relaxed);
         self.items.fetch_sub(1, Ordering::Relaxed);
     }
+
+    /// Adds `bytes` to `resident` if that keeps it within `max`; atomic against concurrent
+    /// reservations. Pair a success with `Reservation::reserved` or `release`.
+    pub(crate) fn try_reserve(&self, bytes: usize, max: usize) -> bool {
+        self.resident
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |resident| {
+                resident.checked_add(bytes).filter(|total| *total <= max)
+            })
+            .is_ok()
+    }
+
+    pub(crate) fn release(&self, bytes: usize) {
+        self.resident.fetch_sub(bytes, Ordering::Relaxed);
+    }
 }
 
 /// Charge for one admitted value, released when the last `CacheRef` drops.
@@ -67,6 +81,11 @@ impl Reservation {
         for usage in [&pool, &kind] {
             usage.resident.fetch_add(bytes, Ordering::Relaxed);
         }
+        Self::reserved(pool, kind, bytes)
+    }
+
+    /// For `bytes` already added to both `resident` counters, e.g. by `Usage::try_reserve`.
+    pub(crate) fn reserved(pool: Arc<Usage>, kind: Arc<Usage>, bytes: usize) -> Self {
         Reservation {
             usages: [pool, kind],
             bytes,

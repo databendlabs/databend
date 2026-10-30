@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use std::sync::Barrier;
+
+use databend_common_base::runtime::Thread;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::Pool;
@@ -135,4 +139,37 @@ fn test_pool_cap_by_name() {
     assert!(manager.set_capacity_by_name("all", 1).is_err());
     assert!(manager.set_capacity_by_name("pool:unknown", 1).is_err());
     assert!(manager.set_capacity_by_name("unknown", 1).is_err());
+}
+
+/// Concurrent inserts reserve the pool and kind budgets atomically: residency never exceeds
+/// either, however the inserts interleave.
+#[test]
+fn test_concurrent_inserts_stay_within_budgets() {
+    const THREADS: usize = 16;
+    let store = shared_store(10_000, 0, 0);
+    store.set_kind_limit(META, KindLimit::bytes(6_000));
+    let barrier = Arc::new(Barrier::new(THREADS));
+    let live = Live::default();
+    let threads: Vec<_> = (0..THREADS)
+        .map(|t| {
+            let (store, live, barrier) = (store.clone(), live.clone(), barrier.clone());
+            Thread::spawn(move || {
+                let cache = cache(&store, META);
+                // Every value is held, so eviction frees nothing.
+                let mut held = Vec::new();
+                barrier.wait();
+                for i in 0..200 {
+                    held.push(cache.put(&format!("{t}-{i}"), live.item(100)));
+                    let kind = store.kind_stats(META);
+                    assert!(kind.resident <= 6_000, "{kind:?}");
+                    let pool = store.pool_stats()[0];
+                    assert!(pool.resident <= 10_000, "{pool:?}");
+                }
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
+    assert_eq!(store.kind_stats(META).resident, 0);
 }
