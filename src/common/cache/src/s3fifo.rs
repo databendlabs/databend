@@ -196,7 +196,10 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
     }
 
     /// Pops the next victim, rotating entries for which `keep` returns true.
-    /// Gives up after examining `max_checks` live entries.
+    /// Gives up after `max_checks` entries were kept. Aging recently accessed entries (moving
+    /// them from small to main, or lowering their frequency) does not count: it is bounded by
+    /// `MAX_FREQ` per entry, and counting it could report no victim while every entry is
+    /// evictable.
     pub fn pop_evictable(
         &mut self,
         keep: impl Fn(&V) -> bool,
@@ -218,11 +221,12 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
             if slot.seq != seq {
                 continue;
             }
-            checks += 1;
 
             let freq = slot.freq.load(Ordering::Relaxed);
             if from_small {
-                if freq > 0 || keep(&slot.value) {
+                let kept = freq == 0 && keep(&slot.value);
+                if freq > 0 || kept {
+                    checks += usize::from(kept);
                     slot.in_main = true;
                     slot.freq.store(0, Ordering::Relaxed);
                     self.small_bytes -= slot.bytes;
@@ -238,6 +242,7 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
                 self.main.push_back((key, seq));
                 continue;
             } else if keep(&slot.value) {
+                checks += 1;
                 self.main.push_back((key, seq));
                 flip = !flip;
                 continue;

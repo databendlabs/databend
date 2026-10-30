@@ -196,3 +196,21 @@ fn test_removals_keep_queues_bounded() {
         Some(1)
     );
 }
+
+/// Entries that were all accessed recently are aged, not given up on: a victim is found
+/// within a small check budget when nothing is kept.
+#[test]
+fn test_aging_does_not_exhaust_checks() {
+    let mut c = fifo(1);
+    for k in 0..100 {
+        c.insert(k, k, 1);
+    }
+    for _ in 0..3 {
+        for k in 0..100 {
+            c.get(&k);
+        }
+    }
+    assert!(c.pop_evictable(|_| false, 1).is_some());
+    // Kept entries still count against the budget.
+    assert!(c.pop_evictable(|_| true, 8).is_none());
+}
