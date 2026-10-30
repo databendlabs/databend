@@ -288,6 +288,9 @@ where A: TypeCheckAdapter
             return unknown;
         };
         match &checked {
+            EExpr::FunctionCall(call) if Self::is_grouping(call) => {
+                ScalarFacts::computed_elsewhere(&call.return_type, false)
+            }
             EExpr::FunctionCall(call) => {
                 let arg_facts = self.call_arg_facts(call, args.iter().copied());
                 let deterministic = Self::is_call_deterministic(call, &arg_facts);
@@ -330,6 +333,14 @@ where A: TypeCheckAdapter
             .zip(args)
             .map(|(checked, (scalar, facts))| self.arg_facts(checked, scalar, facts))
             .collect()
+    }
+
+    /// `grouping` is a placeholder that the aggregate rewriter replaces with
+    /// a call over the grouping id, so it is computed by the aggregate
+    /// operator; evaluating the placeholder panics. It is not removable, so
+    /// that the rewriter still sees and validates it, e.g. `GROUPING()`.
+    fn is_grouping(call: &expr::FunctionCall<usize>) -> bool {
+        call.function.signature.name == "grouping"
     }
 
     pub(super) fn is_call_deterministic(
@@ -652,12 +663,10 @@ where A: TypeCheckAdapter
 
         let name = call.function.signature.name.as_str();
         let is_srf = matches!(call.function.eval, FunctionEval::SRF { .. });
+        let is_grouping = Self::is_grouping(&call);
         let all_removable = arg_facts.iter().all(|arg| arg.removable);
         let mut domain = None;
-        // `grouping` is a placeholder until the aggregate rewriter replaces
-        // it; evaluating it reaches a dummy implementation.
-        if !is_srf && name != "grouping" && call.args.len() <= FoldRules::MAX_FUNCTION_ARGS_TO_FOLD
-        {
+        if !is_srf && !is_grouping && call.args.len() <= FoldRules::MAX_FUNCTION_ARGS_TO_FOLD {
             if name == "if" && call.args.len() >= 3 && !call.args.len().is_multiple_of(2) {
                 match FoldRules::if_pruning(call.args.len(), |index| {
                     arg_facts[index].constant.as_ref()
@@ -821,12 +830,16 @@ where A: TypeCheckAdapter
             folded_args.swap(0, 1);
         }
 
-        let facts = ScalarFacts {
-            removable: all_removable && domain.is_some(),
-            domain,
-            deterministic,
-            column_free: folded_args.iter().all(|arg| arg.facts.column_free),
-            evaluable: !is_srf && folded_args.iter().all(|arg| arg.facts.evaluable),
+        let facts = if is_grouping {
+            ScalarFacts::computed_elsewhere(&call.return_type, false)
+        } else {
+            ScalarFacts {
+                removable: all_removable && domain.is_some(),
+                domain,
+                deterministic,
+                column_free: folded_args.iter().all(|arg| arg.facts.column_free),
+                evaluable: !is_srf && folded_args.iter().all(|arg| arg.facts.evaluable),
+            }
         };
         let return_type = call.return_type;
         Ok(BoundScalar {

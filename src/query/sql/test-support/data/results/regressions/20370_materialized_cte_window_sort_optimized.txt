@@ -4,7 +4,7 @@ Sequence(Sequence)
 │   ├── ref_count: 2
 │   ├── channel_size: None
 │   └── EvalScalar
-│       ├── scalars: [CAST('2026-01-01 00:00:01' AS Timestamp NULL) AS (#0), CAST('2026-01-01 00:00:02' AS Timestamp NULL) AS (#1)]
+│       ├── scalars: ['2026-01-01 00:00:01.000000' AS (#0), '2026-01-01 00:00:02.000000' AS (#1)]
 │       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
 └── Window
     ├── aggregate function: sum

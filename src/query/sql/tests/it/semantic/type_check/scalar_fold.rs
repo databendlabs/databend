@@ -206,7 +206,7 @@ async fn test_type_check_bind_time_folding() -> Result<()> {
             "With a nullable column, AND yields NULL or false, so it is kept.",
             "number > 10 AND number < 5",
         ),
-        // Non-deterministic calls and UDFs are kept.
+        // Non-deterministic calls, UDFs and grouping are kept.
         case(
             "non_deterministic_call_stays",
             "Non-deterministic calls are not evaluated.",
@@ -226,6 +226,16 @@ async fn test_type_check_bind_time_folding() -> Result<()> {
             "if_selects_udf_branch",
             "Selecting a branch keeps it even when it is a UDF.",
             "if(true, script_udf(text), 'x')",
+        ),
+        case(
+            "grouping_is_not_evaluated",
+            "grouping is computed by the aggregate operator, so a call over it is kept, even without arguments.",
+            "grouping() = 0",
+        ),
+        case(
+            "grouping_is_not_dropped_by_nullability",
+            "grouping is kept for the aggregate rewriter, even when its result is known not to be NULL.",
+            "is_not_null(grouping(number))",
         ),
     ];
 

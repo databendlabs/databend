@@ -604,10 +604,12 @@ struct ContainsNextvalVisitor {
 
 impl<'a> Visitor<'a> for CompileTimeEvaluableVisitor {
     fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
-        if BUILTIN_FUNCTIONS
-            .get_property(&func.func_name)
-            .map(|property| property.kind == FunctionKind::SRF)
-            .unwrap_or(false)
+        // `grouping` is a placeholder until the aggregate rewriter replaces it.
+        if func.func_name.eq_ignore_ascii_case("grouping")
+            || BUILTIN_FUNCTIONS
+                .get_property(&func.func_name)
+                .map(|property| property.kind == FunctionKind::SRF)
+                .unwrap_or(false)
         {
             self.evaluable = false;
         } else {
