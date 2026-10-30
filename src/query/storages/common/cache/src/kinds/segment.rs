@@ -24,6 +24,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOr
 
 use crate::CacheDef;
 use crate::CachedItem;
+use crate::KindLimit;
 use crate::Pool;
 use crate::size::block_meta;
 use crate::size::statistics;
@@ -47,13 +48,15 @@ impl CacheDef for ColumnOriented {
     const POOL: Pool = Pool::Meta;
 }
 
-/// Decoded block metas of a segment, by segment location.
+/// Decoded block metas of a segment, by segment location. Off unless sized, in both backends:
+/// decoded metas take several times the memory of the segment.
 pub struct BlockMetas;
 
 impl CacheDef for BlockMetas {
     type Value = Arc<Vec<Arc<BlockMeta>>>;
     const NAME: &'static str = "memory_cache_segment_block_metas";
     const POOL: Pool = Pool::Meta;
+    const SHARED_LIMIT: KindLimit = KindLimit::DISABLED;
 }
 
 /// Segment statistics, by location.

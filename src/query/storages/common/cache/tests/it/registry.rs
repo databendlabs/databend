@@ -22,6 +22,7 @@ use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::inverted;
+use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_cache::kinds::vector;
 
 use crate::fakes::Item;
@@ -61,8 +62,9 @@ fn test_builtin_kinds() {
     }
 }
 
-/// Meta kinds come first, then the index kinds; the column kinds are the data pool, and are off
-/// in the shared backend until sized.
+/// Meta kinds come first, then the index kinds; the column kinds are the data pool. The kinds
+/// off by default in the legacy backend, block metas and the column kinds, are off in the
+/// shared backend too until sized.
 #[test]
 fn test_pools_and_shared_limits() {
     let in_pool = |pool| {
@@ -78,7 +80,7 @@ fn test_pools_and_shared_limits() {
         "memory_cache_table_data"
     ]);
     for kind in CacheKind::all() {
-        let disabled = kind.pool() == Pool::Data;
+        let disabled = kind.pool() == Pool::Data || kind == CacheKind::of::<segment::BlockMetas>();
         assert_eq!(kind.info().shared_limit.is_disabled(), disabled, "{kind:?}");
         if !disabled {
             assert_eq!(kind.info().shared_limit, KindLimit::UNLIMITED);

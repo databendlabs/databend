@@ -282,6 +282,7 @@ fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
     assert_eq!(capacity(&manager, "memory_cache_column_data"), Some(5000));
     // Off unless given a limit.
     assert!(row(&manager, "memory_cache_table_data").is_none());
+    assert!(row(&manager, "memory_cache_segment_block_metas").is_none());
 
     // Pools can be resized; the payload size is not split as in the legacy backend.
     manager.set_cache_capacity("pool:index", 0)?;
