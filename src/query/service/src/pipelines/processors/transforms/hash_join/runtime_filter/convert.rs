@@ -40,6 +40,10 @@ use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 
+/// Target false positive probability of runtime bloom filters, used both to size the filter
+/// and to decide how far it can be folded after all hashes are inserted.
+const RUNTIME_BLOOM_FILTER_FPP: f64 = 0.01;
+
 /// # Note
 ///
 /// The key in the resulting [`HashMap`] is the scan_id, which identifies the scan operator
@@ -247,23 +251,28 @@ async fn build_bloom_filter(
     let total_items = bloom.len();
 
     if total_items < 3_000_000 {
-        let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
+        let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, RUNTIME_BLOOM_FILTER_FPP)
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
         filter.insert_hash_batch(&bloom);
+        filter.fold_to_target_fpp(RUNTIME_BLOOM_FILTER_FPP);
         return Ok(RuntimeFilterBloom {
             filter: Arc::new(filter),
         });
     }
 
     let start = std::time::Instant::now();
-    let builder = SbbfAtomic::new_with_ndv_fpp(total_items as u64, 0.01)
+    let builder = SbbfAtomic::new_with_ndv_fpp(total_items as u64, RUNTIME_BLOOM_FILTER_FPP)
         .map_err(|e| ErrorCode::Internal(e.to_string()))?
         .insert_hash_batch_parallel(bloom, max_threads);
-    let filter = builder.finish();
+    let mut filter = builder.finish();
+    let unfolded_size = filter.estimated_memory_size();
+    filter.fold_to_target_fpp(RUNTIME_BLOOM_FILTER_FPP);
     log::info!(
-        "filter_id: {}, build_time: {:?}",
+        "filter_id: {}, build_time: {:?}, size: {} -> {} bytes",
         filter_id,
-        start.elapsed()
+        start.elapsed(),
+        unfolded_size,
+        filter.estimated_memory_size()
     );
 
     Ok(RuntimeFilterBloom {
@@ -276,6 +285,7 @@ mod tests {
     use std::borrow::Cow;
     use std::collections::HashMap;
 
+    use databend_common_catalog::sbbf::Sbbf;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
@@ -296,6 +306,8 @@ mod tests {
     use databend_common_expression::types::NumberScalar;
     use databend_common_functions::BUILTIN_FUNCTIONS;
 
+    use super::RUNTIME_BLOOM_FILTER_FPP;
+    use super::build_bloom_filter;
     use super::build_inlist_filter;
     use super::build_min_max_filter;
     use super::build_runtime_filter_infos;
@@ -728,5 +740,33 @@ mod tests {
         println!(
             "✓ Large inlist filter test (1024 elements) passed - balanced binary tree working correctly"
         );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_build_bloom_filter_folds_low_cardinality_keys() {
+        fn mix_hash(mut value: u64) -> u64 {
+            value = value.wrapping_add(0x9e37_79b9_7f4a_7c15);
+            value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+            value ^ (value >> 31)
+        }
+
+        // 300K build rows with only 3K distinct keys: the filter is sized for 300K items.
+        let distinct = (0..3_000).map(mix_hash).collect::<Vec<_>>();
+        let bloom = (0..300_000)
+            .map(|row| distinct[row % distinct.len()])
+            .collect::<Vec<_>>();
+        let unfolded_size = Sbbf::new_with_ndv_fpp(bloom.len() as u64, RUNTIME_BLOOM_FILTER_FPP)
+            .unwrap()
+            .estimated_memory_size();
+
+        let bloom = build_bloom_filter(bloom, 1, 0).await.unwrap();
+
+        let folded_size = bloom.filter.estimated_memory_size();
+        assert!(
+            folded_size * 16 <= unfolded_size,
+            "folded {folded_size} bytes, unfolded {unfolded_size} bytes"
+        );
+        assert!(distinct.iter().all(|hash| bloom.filter.check_hash(*hash)));
     }
 }

@@ -18,12 +18,15 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::expr::*;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check::check_string;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -34,6 +37,17 @@ use databend_common_users::TableVisibilityTarget;
 use databend_common_users::filter_db_tables_by_visibility;
 use log::trace;
 use log::warn;
+
+pub(crate) async fn has_global_grant(ctx: &dyn TableContext) -> Result<bool> {
+    match ctx
+        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
+        .await
+    {
+        Ok(()) => Ok(true),
+        Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => Ok(false),
+        Err(err) => Err(err),
+    }
+}
 
 pub fn generate_default_catalog_meta() -> CatalogMeta {
     CatalogMeta {

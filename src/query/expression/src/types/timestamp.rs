@@ -40,13 +40,12 @@ use crate::values::Scalar;
 
 pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
 /// SQL TIMESTAMP and TIMESTAMP_TZ bounds, in UTC microseconds since 1970-01-01.
-/// Validate the final UTC instant after timezone resolution, not intermediate
-/// calendar fields. A valid instant may display in local year 0 or 10000.
-/// Converting that local date to SQL DATE must separately validate DATE_MIN/MAX.
-/// INTERVAL arithmetic reports out-of-range results; other paths retain their
-/// existing overflow policies. Display conversion clamps to these bounds.
-/// 0001-01-01 00:00:00.000000 UTC
-pub const TIMESTAMP_MIN: i64 = -62_135_596_800_000_000;
+/// One extra UTC day preserves local year-1 midnight after timezone resolution,
+/// including historical offsets. The upper bound and existing overflow policies
+/// are unchanged. Text parsing validates the final UTC instant rather than its
+/// local calendar year; SQL DATE retains its own, narrower bounds.
+/// 0000-12-31 00:00:00.000000 UTC
+pub const TIMESTAMP_MIN: i64 = -62_135_683_200_000_000;
 /// 9999-12-31 23:59:59.999999 UTC
 pub const TIMESTAMP_MAX: i64 = 253_402_300_799_999_999;
 
@@ -82,7 +81,7 @@ pub fn check_timestamp(micros: i64) -> Result<i64, String> {
     if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
         Ok(micros)
     } else {
-        Err("Invalid date: timestamp is out of range [0001-01-01, 9999-12-31] UTC".to_string())
+        Err("Invalid date: timestamp is out of range [0000-12-31, 9999-12-31] UTC".to_string())
     }
 }
 
@@ -110,8 +109,8 @@ impl SimpleType for CoreTimestamp {
     }
 
     #[inline]
-    fn from_for_raw(raw: i128) -> Option<Self::Scalar> {
-        raw.try_into().ok()
+    fn from_for_raw(raw: i128) -> Self::Scalar {
+        raw as i64
     }
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {

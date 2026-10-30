@@ -21,6 +21,52 @@ use goldenfile::Mint;
 use super::run_ast;
 
 #[test]
+fn test_decimal_round_overflow() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("decimal_round_overflow.txt").unwrap();
+    for precision in [18, 38, 76] {
+        for function in ["round", "truncate"] {
+            run_ast(
+                file,
+                format!("{function}(-1)('0.5'::DECIMAL({precision},{precision}))"),
+                &[],
+            );
+            run_ast(
+                file,
+                format!("{function}(-1)('95'::DECIMAL({precision},0))"),
+                &[],
+            );
+            run_ast(
+                file,
+                format!("{function}(-1)('-95'::DECIMAL({precision},0))"),
+                &[],
+            );
+            run_ast(
+                file,
+                format!("{function}(-9223372036854775808)('95'::DECIMAL({precision},0))"),
+                &[],
+            );
+        }
+    }
+    for expression in [
+        "round(-2)(99::DECIMAL(2,0))",
+        "round(-2)(-99::DECIMAL(2,0))",
+        "truncate(-2)(99::DECIMAL(2,0))",
+        "round(-1)('99999999999999999999999999999999999999'::DECIMAL(38,0))",
+        "round(9223372036854775807)(95::DECIMAL(3,0))",
+    ] {
+        run_ast(file, expression, &[]);
+    }
+    // A scalar overflow belongs to every visible row, even when row 0 is hidden.
+    let columns = [("active", BooleanType::from_data(vec![false, true, false]))];
+    run_ast(
+        file,
+        "if(active, round(-2)(99::DECIMAL(2,0)), NULL)",
+        &columns,
+    );
+}
+
+#[test]
 fn test_math() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("math.txt").unwrap();

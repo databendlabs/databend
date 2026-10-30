@@ -144,9 +144,8 @@ impl Function {
         }
     }
 
+    /// Convert evaluation errors to NULL, preserving any NULLs in the original result.
     pub fn error_to_null(self) -> Self {
-        debug_assert!(!self.signature.return_type.is_nullable_or_null());
-
         let mut signature = self.signature;
         let return_type = signature.return_type.wrap_nullable();
         signature.return_type = return_type.clone();
@@ -156,6 +155,9 @@ impl Function {
         let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
             let domain = calc_domain.domain_eval(ctx, domains);
             match domain {
+                FunctionDomain::Domain(domain @ Domain::Nullable(_)) => {
+                    FunctionDomain::Domain(domain)
+                }
                 FunctionDomain::Domain(domain) => {
                     let new_domain = NullableDomain {
                         has_null: false,
@@ -170,23 +172,16 @@ impl Function {
             }
         });
         let new_eval = Box::new(move |val: &[Value<AnyType>], ctx: &mut EvalContext| {
-            let num_rows = ctx.num_rows;
             let output = eval.eval(val, ctx);
             if let Some((validity, _)) = ctx.errors.take() {
                 match output {
                     Value::Scalar(_) => Value::Scalar(Scalar::Null),
                     Value::Column(column) => {
-                        Value::Column(NullableColumn::new_column(column, validity.into()))
+                        Value::Column(column.wrap_nullable(Some(validity.into())))
                     }
                 }
             } else {
-                match output {
-                    Value::Scalar(scalar) => Value::Scalar(scalar),
-                    Value::Column(column) => Value::Column(NullableColumn::new_column(
-                        column,
-                        Bitmap::new_constant(true, num_rows),
-                    )),
-                }
+                output.wrap_nullable(None)
             }
         });
 
@@ -277,11 +272,18 @@ where T: ScalarFunction
             None => Bitmap::new_trued(len),
         };
         if bitmap.null_count() > 0 {
-            ctx.validity = ctx.validity.as_ref().map(|validity| validity & &bitmap);
+            ctx.validity = Some(match ctx.validity.as_ref() {
+                Some(validity) => validity & &bitmap,
+                None => bitmap.clone(),
+            });
         }
         let results = self.0.eval(&nonull_args, ctx);
-        if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
-            // If the original value is NULL, we can ignore the error.
+        if let Some((error_bitmap, _)) = ctx.errors.as_mut()
+            && bitmap.null_count() != 0
+        {
+            // If the original value is NULL, we can ignore the error. Fully
+            // valid inputs need no merge: scalar inputs have a one-bit bitmap,
+            // while a broadcast error can refer to any row in the batch.
             let res = error_bitmap.clone().bitor(&bitmap.not());
             if res.null_count() == 0 {
                 ctx.errors = None;
@@ -350,5 +352,36 @@ impl FunctionFactoryHelper {
                 _ => None,
             }),
         })
+    }
+}
+
+#[cfg(test)]
+mod scalar_broadcast_tests {
+    use super::*;
+    use crate::types::NumberScalar;
+
+    #[test]
+    fn nullable_scalar_preserves_partial_batch_error_rows() {
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 3,
+            func_ctx: &func_ctx,
+            validity: Some([false, true, false].into_iter().collect()),
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+        let function = PassthroughNullable(|_: &[Value<AnyType>], ctx: &mut EvalContext| {
+            ctx.set_error(1, "active scalar error");
+            Value::Scalar(Scalar::Number(NumberScalar::Int64(1)))
+        });
+        function.eval(
+            &[Value::Scalar(Scalar::Number(NumberScalar::Int64(10)))],
+            &mut ctx,
+        );
+        let (valid, message) = ctx.errors.unwrap();
+        assert_eq!(message, "active scalar error");
+        assert_eq!(valid.iter().collect::<Vec<_>>(), vec![true, false, true]);
     }
 }

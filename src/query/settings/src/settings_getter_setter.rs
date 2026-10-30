@@ -1095,6 +1095,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_prune_cache")? == 1)
     }
 
+    pub fn get_vector_refine_factor(&self) -> Result<u64> {
+        self.try_get_u64("vector_refine_factor")
+    }
+
+    pub fn get_vector_search_ef(&self) -> Result<u64> {
+        self.try_get_u64("vector_search_ef")
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
@@ -1121,6 +1129,22 @@ impl Settings {
 
     pub fn get_hash_shuffle_bytes_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("hash_shuffle_bytes_threshold")? as usize)
+    }
+
+    pub fn get_hash_shuffle_send_buffer_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("hash_shuffle_send_buffer_bytes")? as usize)
+    }
+
+    pub fn get_exchange_frame_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("exchange_frame_bytes")? as usize)
+    }
+
+    pub fn get_exchange_send_queue_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("exchange_send_queue_bytes")? as usize)
+    }
+
+    pub fn get_exchange_recv_queue_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("exchange_recv_queue_bytes")? as usize)
     }
 
     pub fn get_network_policy(&self) -> Result<String> {

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::parser::mask_url;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -31,6 +32,8 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::utils::FromData;
 use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -171,6 +174,20 @@ impl UserFunctionsTable {
 
         Ok(user_functions_defined
             .into_iter()
+            .map(|mut user_function| {
+                // Calling a function does not require its server credentials.
+                if let UDFDefinition::UDFServer(UDFServer {
+                    headers, address, ..
+                })
+                | UDFDefinition::UDTFServer(UDTFServer {
+                    headers, address, ..
+                }) = &mut user_function.definition
+                {
+                    headers.values_mut().for_each(|v| *v = "***".to_string());
+                    *address = mask_url(address, false);
+                }
+                user_function
+            })
             .map(|user_function| UserFunction {
                 name: user_function.name,
                 is_aggregate: user_function.definition.is_aggregate(),

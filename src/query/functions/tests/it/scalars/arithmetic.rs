@@ -15,16 +15,27 @@
 use std::io::Write;
 
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
+use databend_common_expression::Evaluator;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::type_check;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::Decimal64Type;
+use databend_common_expression::types::Decimal128Type;
+use databend_common_expression::types::Decimal256Type;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
+use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::*;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 
 use super::TestContext;
@@ -391,6 +402,263 @@ fn test_bitwise_shift_right(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a2 >> 1", columns);
     run_ast(file, "a2 >> 2", columns);
     run_ast(file, "c >> 2", columns);
+}
+
+#[test]
+fn test_decimal_multiply() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint
+        .new_goldenfile("arithmetic_decimal_multiply.txt")
+        .unwrap();
+    let magnitude = 99_999_999_999_999_999;
+    let columns = [
+        (
+            "a",
+            Decimal64Type::from_data_with_size(
+                [magnitude, -magnitude, magnitude, -magnitude],
+                Some(DecimalSize::new_unchecked(17, 17)),
+            ),
+        ),
+        (
+            "b",
+            Decimal64Type::from_data_with_size(
+                [magnitude, magnitude, -magnitude, -magnitude],
+                Some(DecimalSize::new_unchecked(17, 17)),
+            ),
+        ),
+    ];
+    run_ast(file, "a * b", &columns);
+    run_ast(file, "a * '0.99999999999999999'::DECIMAL(17,17)", &columns);
+    run_ast(file, "'0.99999999999999999'::DECIMAL(17,17) * b", &columns);
+    run_ast(
+        file,
+        "'0.99999999999999999'::DECIMAL(17,17) * '0.99999999999999999'::DECIMAL(17,17)",
+        &[],
+    );
+    // Output precision below 38 does not make an unscaled i128 product safe.
+    run_ast(
+        file,
+        "'0.9999999999999999999999999999999999999'::DECIMAL(37,37) * '0.9999999999999999999999999999999999999'::DECIMAL(37,37)",
+        &[],
+    );
+    run_ast(
+        file,
+        "'-0.9999999999999999999999999999999999999'::DECIMAL(37,37) * '0.9999999999999999999999999999999999999'::DECIMAL(37,37)",
+        &[],
+    );
+    run_ast(file, "7::DECIMAL(8,0) * 3::DECIMAL(8,0)", &[]);
+    run_ast(file, "7::DECIMAL(19,0) * 3::DECIMAL(19,0)", &[]);
+    run_ast(file, "7::DECIMAL(39,0) * 3::DECIMAL(39,0)", &[]);
+    run_ast(
+        file,
+        "'99999999999999999999999999999999999999'::DECIMAL(38,0) * '99999999999999999999999999999999999999'::DECIMAL(38,0)",
+        &[],
+    );
+}
+
+#[test]
+fn test_decimal_similar_overflows() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint
+        .new_goldenfile("arithmetic_decimal_overflows.txt")
+        .unwrap();
+    let nines = "9".repeat(75);
+    for expression in [
+        // Unscaled Decimal256 product exceeds its native width, final result fits.
+        format!("'0.{nines}'::DECIMAL(75,75) * '0.{nines}'::DECIMAL(75,75)"),
+        // A large divisor must not be narrowed to the small quotient's type.
+        "1::DECIMAL(1,0) / '18446744073709551616'::DECIMAL(20,0)".to_owned(),
+        "-1::DECIMAL(1,0) / '-18446744073709551616'::DECIMAL(20,0)".to_owned(),
+        // Scaling fits, but the old add-half rounding intermediate overflowed.
+        format!("'5.5'::DECIMAL(76,75) / '{nines}.9'::DECIMAL(76,1)"),
+        // Alignment can exceed a decimal's precision before valid cancellation.
+        "1::DECIMAL(38,0) - '0.99999999999999999999999999999999999999'::DECIMAL(38,38)".to_owned(),
+        format!("1::DECIMAL(76,0) - '0.{}'::DECIMAL(76,76)", "9".repeat(76)),
+        format!("1::DECIMAL(76,0) + '-0.{}'::DECIMAL(76,76)", "9".repeat(76)),
+        // Remainders fit even if aligned operands need more than 76 digits.
+        "'0.1'::DECIMAL(76,76) % 1::DECIMAL(76,0)".to_owned(),
+        format!("1::DECIMAL(76,0) % '0.{}'::DECIMAL(76,76)", "9".repeat(76)),
+        // Native arithmetic overflow and decimal precision overflow are errors.
+        "'99999999999999999999999999999999999999'::DECIMAL(38,0) + '99999999999999999999999999999999999999'::DECIMAL(38,0)".to_owned(),
+        "'-99999999999999999999999999999999999999'::DECIMAL(38,0) - '99999999999999999999999999999999999999'::DECIMAL(38,0)".to_owned(),
+        "'99999999999999999999999999999999999999'::DECIMAL(38,0) / '0.1'::DECIMAL(1,1)".to_owned(),
+        "1::DECIMAL(38,0) / 0::DECIMAL(38,0)".to_owned(),
+    ] {
+        run_ast(file, expression, &[]);
+    }
+    // Domain calculation must rescale the product too; all rows round to zero.
+    let columns = [
+        (
+            "a",
+            Decimal64Type::from_data_with_size([1, 2], Some(DecimalSize::new_unchecked(13, 13))),
+        ),
+        (
+            "b",
+            Decimal64Type::from_data_with_size([1, 2], Some(DecimalSize::new_unchecked(13, 13))),
+        ),
+    ];
+    for expression in ["a * b", "(a * b) = 0", "a / b", "a % b", "a + b", "a - b"] {
+        run_ast(file, expression, &columns);
+    }
+    // A failed domain must not fold `is_not_null` to true and drop the error.
+    let nines = "9".repeat(76);
+    run_ast(
+        file,
+        format!("is_not_null(a * '{nines}'::DECIMAL(76,0))"),
+        &columns,
+    );
+    let nullable = |column| {
+        Column::Nullable(Box::new(NullableColumn {
+            column,
+            validity: [false, true, true].into_iter().collect(),
+        }))
+    };
+    let columns = [
+        (
+            "a",
+            nullable(Decimal64Type::from_data_with_size(
+                [0, 1, -1],
+                Some(DecimalSize::new_unchecked(13, 13)),
+            )),
+        ),
+        (
+            "b",
+            nullable(Decimal64Type::from_data_with_size(
+                [0, 1, 2],
+                Some(DecimalSize::new_unchecked(13, 13)),
+            )),
+        ),
+    ];
+    for expression in [
+        "a * b",
+        "a / b",
+        "a % b",
+        "a + b",
+        "a - b",
+        "if(false, a / (b - b), a)",
+    ] {
+        run_ast(file, expression, &columns);
+    }
+    // A masked payload need not fit its decimal precision. The narrow divisor
+    // path must not evaluate MIN / -1 in i64 on this inactive row.
+    let columns = [(
+        "masked",
+        nullable(Decimal64Type::from_data_with_size(
+            [i64::MIN, 1, -1],
+            Some(DecimalSize::new_unchecked(13, 13)),
+        )),
+    )];
+    run_ast(file, "masked / '-1'::DECIMAL(38,0)", &columns);
+    // A native prefix is not sufficient: one large value must prevent a
+    // whole-batch narrowing of the divisor column.
+    let columns = [
+        (
+            "numerator",
+            Decimal64Type::from_data_with_size([1, 1, 1], Some(DecimalSize::new_unchecked(1, 0))),
+        ),
+        (
+            "divisor",
+            Decimal256Type::from_data_with_size(
+                [i256::MINUS_ONE, i256::from_words(1, 0), i256::ONE],
+                Some(DecimalSize::new_unchecked(76, 0)),
+            ),
+        ),
+    ];
+    run_ast(file, "numerator / divisor", &columns);
+    // A scalar error belongs to every visible row, even when row 0 is hidden;
+    // a fully hidden batch reports none.
+    let columns = [("active", BooleanType::from_data(vec![false, true, false]))];
+    run_ast(
+        file,
+        "if(active, 1::DECIMAL(38,0) / 0::DECIMAL(38,0), NULL)",
+        &columns,
+    );
+    let columns = [("active", BooleanType::from_data(vec![false, false, false]))];
+    run_ast(
+        file,
+        "if(active, 1::DECIMAL(38,0) / 0::DECIMAL(38,0), NULL)",
+        &columns,
+    );
+    // An all-NULL operand domain stays NULL through domain calculation.
+    let a = NullableColumn::new_column(
+        Decimal64Type::from_data_with_size([0, 0], Some(DecimalSize::new_unchecked(4, 0))),
+        [false, false].into_iter().collect(),
+    );
+    let b = Decimal256Type::from_data_with_size(
+        [i256::ONE, i256::from(2)],
+        Some(DecimalSize::new_unchecked(76, 0)),
+    );
+    for expression in ["a / b", "a % b"] {
+        run_ast_with_context(file, expression, TestContext {
+            entries: &[("a", a.clone().into()), ("b", b.clone().into())],
+            input_domains: Some(&[
+                (
+                    "a",
+                    Domain::Nullable(NullableDomain {
+                        has_null: true,
+                        value: None,
+                    }),
+                ),
+                ("b", b.domain()),
+            ]),
+            ..TestContext::default()
+        });
+    }
+}
+
+// Rows hidden by validity may hold payloads beyond the precision, here i128
+// extremes the golden formatter cannot print. Both ways validity reaches a
+// decimal kernel, a NULL row and an IF branch, must keep such rows from
+// raising errors or disturbing visible rows.
+#[test]
+fn test_decimal_hidden_payloads() {
+    let size = DecimalSize::new_unchecked(20, 0);
+    let a = Decimal128Type::from_data_with_size([i128::MIN, 4, i128::MAX], Some(size));
+    let b = Decimal128Type::from_data_with_size([i128::MAX, 2, -1], Some(size));
+    let visible = [false, true, false];
+    let nullable =
+        |column: Column| NullableColumn::new_column(column, visible.into_iter().collect());
+    for (operation, expected) in [
+        ("a + b", 6),
+        ("a - b", 2),
+        ("a * b", 8),
+        ("a / b", 2),
+        ("a % b", 0),
+        ("round(-1)(a)", 0),
+    ] {
+        for (text, columns) in [
+            (operation.to_owned(), vec![
+                ("a", nullable(a.clone())),
+                ("b", nullable(b.clone())),
+            ]),
+            (format!("if(active, {operation}, NULL)"), vec![
+                ("a", a.clone()),
+                ("b", b.clone()),
+                ("active", BooleanType::from_data(visible.to_vec())),
+            ]),
+        ] {
+            let types = columns
+                .iter()
+                .map(|(name, column)| (*name, column.data_type()))
+                .collect::<Vec<_>>();
+            let raw = super::parser::parse_raw_expr(&text, &types, &BUILTIN_FUNCTIONS);
+            let expr = type_check::check(&raw, &BUILTIN_FUNCTIONS).unwrap();
+            let block = DataBlock::new_from_columns(columns.into_iter().map(|(_, c)| c).collect());
+            let context = FunctionContext::default();
+            let result = Evaluator::new(&block, &context, &BUILTIN_FUNCTIONS)
+                .run(&expr)
+                .unwrap_or_else(|error| panic!("{text}: {error}"));
+            let output = *expr.data_type().remove_nullable().as_decimal().unwrap();
+            let expected = i256::from(expected) * i256::e(output.scale());
+            match result.index(1).unwrap() {
+                ScalarRef::Decimal(row) => assert_eq!(row.as_decimal::<i256>(), expected, "{text}"),
+                other => panic!("{text}: {other:?}"),
+            }
+            for hidden in [0, 2] {
+                assert!(result.index(hidden).unwrap().is_null(), "{text}");
+            }
+        }
+    }
 }
 
 #[test]

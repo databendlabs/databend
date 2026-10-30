@@ -390,9 +390,10 @@ where
             }
         }
         None => {
-            for value in values {
+            sum = values.fold(sum, |mut sum, value| {
                 sum += value.as_();
-            }
+                sum
+            });
         }
     }
     sum
@@ -435,6 +436,13 @@ where
                     |i| unsafe { *buffer.get_unchecked(i) },
                     validity,
                 );
+            }
+            // Keep validity-aware iteration on the original path below.
+            column @ ColumnView::Encoded(_) if validity.is_none() => {
+                with_column_view_iter!(NumberType<T>, &column, |values| {
+                    self.value +=
+                        sum_selected(values, |i| unsafe { column.index_unchecked(i) }, None);
+                });
             }
             ColumnView::Encoded(view) => {
                 self.value += sum_selected(

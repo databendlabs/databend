@@ -64,6 +64,7 @@ use arrow_flight::sql::TicketStatementQuery;
 use arrow_flight::sql::server::FlightSqlService;
 use arrow_flight::sql::server::PeekableFlightDataStream;
 use arrow_ipc::writer::IpcWriteOptions;
+use databend_common_ast::parser::mask_log_sql_secrets;
 use databend_common_expression::DataSchema;
 use futures::Stream;
 use log::info;
@@ -215,7 +216,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
         query: CommandStatementQuery,
         request: Request<FlightDescriptor>,
     ) -> std::result::Result<Response<FlightInfo>, Status> {
-        info!("get_flight_info_sql_info(query={})", query.query);
+        info!(
+            "get_flight_info_sql_info(query={})",
+            mask_log_sql_secrets(&query.query)
+        );
         let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
     }
@@ -516,7 +520,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
     ) -> std::result::Result<i64, Status> {
         let session = self.get_session(&request)?;
         let query = ticket.query;
-        info!("do_put_statement_update with query = {query}");
+        info!(
+            "do_put_statement_update with query = {}",
+            mask_log_sql_secrets(&query)
+        );
 
         let (plan, plan_extras) = self
             .plan_sql(&session, &query)
@@ -604,7 +611,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .map_err(|e| status!("Error getting result schema", e))?;
         info!(
             "do_action_create_prepared_statement with handler={handle} query={:?}",
-            query.query
+            mask_log_sql_secrets(&query.query)
         );
         // JDBC client use call put when schema.fields == 0
         let data_schema = if plan.0.has_result_set() {
@@ -614,7 +621,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         };
         info!(
             "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={data_schema:?}",
-            query.query
+            mask_log_sql_secrets(&query.query)
         );
         let schema = (&*data_schema).into();
         self.statements.insert(handle, plan);

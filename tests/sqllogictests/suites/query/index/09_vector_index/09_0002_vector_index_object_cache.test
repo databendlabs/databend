@@ -59,7 +59,7 @@ select count() > 0 from system.caches where name = 'memory_cache_vector_index_fi
 ----
 1
 
-# The original cache name now reports decoded indexes; there is no additional memory budget.
+# Decoded indexes are reported under `memory_cache_vector_index_file`, not a new name.
 query I
 select count() from system.caches where name = 'memory_cache_vector_index';
 ----

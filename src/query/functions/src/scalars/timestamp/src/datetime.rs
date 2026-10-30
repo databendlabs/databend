@@ -769,7 +769,6 @@ fn string_to_format_datetime(
             "{timestamp} to datetime error {err}"
         )))
     })?;
-    check_input_year(local.year()).map_err(Box::new)?;
     let micro = local.and_utc().timestamp_subsec_micros();
 
     let micros = match parsed.offset() {

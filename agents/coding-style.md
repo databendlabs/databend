@@ -30,6 +30,19 @@
   `create_index_schema`).
 
 ## Tests and Fixtures
+- Rust unit tests go in a single `#[cfg(test)] mod tests { ... }` block at the
+  very end of the source file, after all production code. Never place a test
+  module, `#[test]` function, or test-only helper between `impl` blocks or in
+  the middle of the implementation. If a file needs more than one test module,
+  nest them inside the trailing `mod tests`.
+- Name the module `tests`, not `foo_tests` or `request_debug_tests`. Group by
+  nested module or by test function name if you need to distinguish topics.
+- Before adding a unit test, check whether the crate already has a
+  `tests/it/` directory. Most Databend crates keep their tests there; follow
+  the existing location and style for that crate instead of introducing an
+  inline module where none exists.
+- Check whether the behavior is already covered by an existing test before
+  adding a new one, and match the assertion and fixture style of nearby tests.
 - Keep SQL suite file prefixes consistent with the existing numeric ordering in `tests/suites/`.
 
 ## Python

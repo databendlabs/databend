@@ -59,14 +59,22 @@ macro_rules! impl_bincode_codec_for_meta {
             type Error = ErrorCode;
 
             fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
-                bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
-                    .map(|(v, len)| {
-                        assert_eq!(len, value.len());
-                        v
-                    })
-                    .map_err(|e| {
-                        ErrorCode::StorageOther(format!("failed to decode {} meta {:?}", $label, e))
-                    })
+                let (meta, len): (Self, usize) =
+                    bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
+                        .map_err(|e| {
+                            ErrorCode::StorageOther(format!(
+                                "failed to decode {} meta {:?}",
+                                $label, e
+                            ))
+                        })?;
+                if len != value.len() {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "failed to decode {} meta: length mismatch (consumed {len} of {} bytes)",
+                        $label,
+                        value.len()
+                    )));
+                }
+                Ok(meta)
             }
         }
     };
@@ -94,18 +102,25 @@ macro_rules! impl_bincode_codec_for_file {
             type Error = ErrorCode;
 
             fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
-                bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
-                    .map(|(v, len)| {
-                        assert_eq!(len, value.len());
-                        v
-                    })
-                    .map(|v: SerializableIndexFile| IndexFile {
-                        name: v.name,
-                        data: v.data.into(),
-                    })
-                    .map_err(|e| {
-                        ErrorCode::StorageOther(format!("failed to decode {} file {:?}", $label, e))
-                    })
+                let (file, len): (SerializableIndexFile, usize) =
+                    bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
+                        .map_err(|e| {
+                            ErrorCode::StorageOther(format!(
+                                "failed to decode {} file {:?}",
+                                $label, e
+                            ))
+                        })?;
+                if len != value.len() {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "failed to decode {} file: length mismatch (consumed {len} of {} bytes)",
+                        $label,
+                        value.len()
+                    )));
+                }
+                Ok(IndexFile {
+                    name: file.name,
+                    data: file.data.into(),
+                })
             }
         }
     };
@@ -157,5 +172,16 @@ impl TryFrom<ParquetMetaData> for IndexMeta {
             columns: index_columns_from_parquet_meta(&meta),
             metadata: user_metadata_from_parquet_meta(&meta),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cache_decode_rejects_trailing_bytes() {
+        // Empty name/data with a trailing byte must return an error, not panic.
+        assert!(IndexFile::try_from(Bytes::from_static(&[0, 0, 0])).is_err());
     }
 }

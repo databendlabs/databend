@@ -38,6 +38,7 @@ use itertools::Itertools;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::has_global_grant;
 
 pub struct UsersTable {
     table_info: TableInfo,
@@ -58,7 +59,14 @@ impl AsyncSystemTable for UsersTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let users = UserApiProvider::instance().get_users(&tenant).await?;
+        let view_all = has_global_grant(ctx.as_ref()).await?;
+        let current_user = ctx.get_current_user()?;
+        let mut users = UserApiProvider::instance().get_users(&tenant).await?;
+        if !view_all {
+            users.retain(|user| {
+                user.name == current_user.name && user.hostname == current_user.hostname
+            });
+        }
 
         let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
 
@@ -121,6 +129,9 @@ impl AsyncSystemTable for UsersTable {
         }
         let configured_users = UserApiProvider::instance().get_configured_users();
         for (name, auth_info) in configured_users {
+            if !view_all && (name != current_user.name || current_user.hostname != "%") {
+                continue;
+            }
             names.push(name.clone());
             hostnames.push("%".to_string());
             auth_types.push(auth_info.get_type().to_str().to_string());

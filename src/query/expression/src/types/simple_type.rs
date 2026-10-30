@@ -67,10 +67,15 @@ pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
 
     fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering;
 
-    /// A raw frame of reference value as a scalar, `None` if it is out of range. Always `None`
-    /// (the default) for types that are not frame of reference encodable.
-    fn from_for_raw(_raw: i128) -> Option<Self::Scalar> {
-        None
+    /// A raw frame of reference value as a scalar, truncated like `as`. Decoding calls it once
+    /// per row with values of the column, all of which `try_downcast_encoded` checked to fit
+    /// the type, so it must not check the range again (that would keep the loop from being
+    /// vectorized). Panics for types that are not frame of reference encodable (the default).
+    fn from_for_raw(_raw: i128) -> Self::Scalar {
+        unreachable!(
+            "{} is not frame of reference encodable",
+            std::any::type_name::<Self>()
+        )
     }
 
     #[inline(always)]
@@ -146,7 +151,7 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
 
     #[inline]
     fn for_scalar_ref<'a>(raw: i128) -> Self::ScalarRef<'a> {
-        T::from_for_raw(raw).expect("column type checked by try_downcast_encoded")
+        T::from_for_raw(raw)
     }
 
     fn column_len(buffer: &Buffer<Self::Scalar>) -> usize {
@@ -157,6 +162,8 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
         buffer.get(index).copied()
     }
 
+    // Dictionary decoding calls this once per row.
+    #[inline]
     unsafe fn index_column_unchecked(
         buffer: &Buffer<Self::Scalar>,
         index: usize,
@@ -300,6 +307,10 @@ impl<T: SimpleType> ReturnType for SimpleValueType<T> {
 
     fn column_from_vec(vec: Vec<Self::Scalar>, _: &GenericMap) -> Self::Column {
         vec.into()
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.collect::<Vec<_>>().into()
     }
 }
 

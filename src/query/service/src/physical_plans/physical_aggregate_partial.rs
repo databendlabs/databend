@@ -186,6 +186,7 @@ impl IPhysicalPlan for AggregatePartial {
         let cluster = &builder.ctx.get_cluster();
 
         let params = PipelineBuilder::build_aggregator_params(
+            &builder.ctx,
             self.input.output_schema()?,
             &self.group_by,
             &self.agg_funcs,

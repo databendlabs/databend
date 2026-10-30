@@ -39,6 +39,7 @@ use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_ast::parser::SqlSecrets;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -557,6 +558,11 @@ impl QueryContext {
 
     pub fn set_ua(&self, ua: String) {
         *self.shared.user_agent.write() = ua;
+    }
+
+    /// Credential values hidden from the query text, see `add_query_secrets`.
+    pub fn query_secrets(&self) -> SqlSecrets {
+        self.shared.query_secrets.read().clone()
     }
 
     pub fn get_ua(&self) -> String {

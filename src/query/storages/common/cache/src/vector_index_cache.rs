@@ -188,4 +188,106 @@ impl CacheAccessor for VectorIndexCache {
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::F32;
+    use databend_common_expression::types::VectorColumn;
+    use databend_storages_common_index::DistanceType;
+
+    use super::*;
+
+    const COUNT: usize = 8;
+
+    fn index_components(dim: usize) -> Vec<Vec<u8>> {
+        let values = (0..COUNT * dim)
+            .map(|i| F32::from((i as f32 * 0.17).sin()))
+            .collect::<Vec<_>>();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
+        let (_, entries) = HNSWIndex::build(4, 8, 0, column, DistanceType::L2).unwrap();
+        entries
+            .into_iter()
+            .map(|entry| match entry {
+                BlockEntry::Const(Scalar::Binary(bytes), _, _) => bytes,
+                _ => unreachable!("HNSW build must produce binary components"),
+            })
+            .collect()
+    }
+
+    fn index(components: &[Vec<u8>], dim: usize) -> CachedVectorIndex {
+        CachedVectorIndex::new(
+            HNSWIndex::open(DistanceType::L2, dim, COUNT, components, None).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_evicted_index_stays_charged_until_last_reader() {
+        let components = index_components(8);
+        let value = index(&components, 8);
+        let size = value.memory_size as u64;
+        let cache = VectorIndexCache::new(size as usize);
+        let reader = cache.insert("index".to_string(), value);
+        assert_eq!(cache.bytes_size(), size);
+        assert!(cache.evict("index"));
+        assert!(cache.is_empty());
+        assert_eq!(cache.bytes_size(), size);
+
+        // The pinned index stays usable across a visited-counter wraparound.
+        let query = [0.0; 8];
+        let expected = reader.index().search(COUNT, &query).unwrap();
+        for _ in 0..u8::MAX {
+            assert_eq!(reader.index().search(COUNT, &query).unwrap(), expected);
+        }
+        let another_reader = reader.clone();
+        drop(reader);
+        assert_eq!(cache.bytes_size(), size);
+        drop(another_reader);
+        assert_eq!(cache.bytes_size(), 0);
+    }
+
+    #[test]
+    fn test_oversized_index_does_not_evict_hot_index() {
+        let components = index_components(8);
+        let value = index(&components, 8);
+        let size = value.memory_size;
+        let cache = VectorIndexCache::new(size);
+        drop(cache.insert("hot".to_string(), value));
+
+        let large_components = index_components(256);
+        let large = index(&large_components, 256);
+        assert!(large.memory_size > size);
+        let reader = cache.insert("large".to_string(), large);
+        assert!(!cache.contains_key("large"));
+        assert!(cache.contains_key("hot"));
+        assert_eq!(cache.bytes_size(), size as u64);
+        drop(reader);
+        assert_eq!(cache.bytes_size(), size as u64);
+    }
+
+    #[test]
+    fn test_pinned_budget_bypasses_admission_then_allows_lru_eviction() {
+        let components = index_components(8);
+        let value = index(&components, 8);
+        let size = value.memory_size;
+        let cache = VectorIndexCache::new(size);
+        let pinned = cache.insert("first".to_string(), value);
+
+        let bypassed = cache.insert("second".to_string(), index(&components, 8));
+        assert!(cache.contains_key("first"));
+        assert!(!cache.contains_key("second"));
+        assert_eq!(cache.bytes_size(), size as u64);
+        drop(bypassed);
+        drop(pinned);
+
+        let second = cache.insert("second".to_string(), index(&components, 8));
+        assert!(!cache.contains_key("first"));
+        assert!(cache.contains_key("second"));
+        assert_eq!(cache.bytes_size(), size as u64);
+        cache.clear();
+        assert!(cache.is_empty());
+        assert_eq!(cache.bytes_size(), size as u64);
+        drop(second);
+        assert_eq!(cache.bytes_size(), 0);
+    }
+}

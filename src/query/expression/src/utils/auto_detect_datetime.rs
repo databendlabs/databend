@@ -28,6 +28,7 @@ use crate::types::date::clamp_date;
 use crate::types::date::string_to_date;
 use crate::types::timestamp::MICROS_PER_MILLI;
 use crate::types::timestamp::MICROS_PER_SEC;
+use crate::types::timestamp::check_timestamp;
 use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::string_to_timestamp;
 use crate::types::timestamp_tz::string_to_timestamp_tz;
@@ -106,7 +107,6 @@ impl ParsedDateTime {
         }
 
         let date = parsed.to_naive_date().ok()?;
-        check_input_year(chrono::Datelike::year(&date)).ok()?;
         let hour = match (parsed.hour_div_12(), parsed.hour_mod_12()) {
             (Some(half), Some(hour)) => half * 12 + hour,
             _ => 0,
@@ -142,7 +142,7 @@ fn try_parse_formats(
             continue;
         };
 
-        match parsed.offset_seconds {
+        let (micros, offset) = match parsed.offset_seconds {
             Some(offset) => {
                 check_timezone_offset(offset)?;
                 let Some(date) = parsed.naive_date() else {
@@ -157,7 +157,7 @@ fn try_parse_formats(
                 };
                 let micros = local.and_utc().timestamp() * MICROS_PER_SEC + parsed.micro as i64
                     - offset as i64 * MICROS_PER_SEC;
-                return Ok(Some((micros, offset)));
+                (micros, offset)
             }
             None => {
                 let Some(micros) = fast_timestamp_from_parsed(&parsed, tz) else {
@@ -166,9 +166,15 @@ fn try_parse_formats(
                 let Some(offset) = offset_seconds_at(tz, micros.div_euclid(MICROS_PER_SEC)) else {
                     continue;
                 };
-                return Ok(Some((micros, offset)));
+                (micros, offset)
             }
+        };
+        // The newly supported local years must resolve to a valid UTC instant.
+        // Legacy years keep the caller's existing clamp policy after matching.
+        if check_input_year(parsed.year).is_err() && check_timestamp(micros).is_err() {
+            return Ok(None);
         }
+        return Ok(Some((micros, offset)));
     }
     Ok(None)
 }
@@ -203,6 +209,9 @@ pub fn auto_detect_date(val: &str) -> Option<i32> {
         let Some(date) = parsed.naive_date() else {
             continue;
         };
+        if check_input_year(chrono::Datelike::year(&date)).is_err() {
+            continue;
+        }
         return Some(clamp_date(i64::from(crate::serialize::uniform_date(date))));
     }
     None
@@ -288,6 +297,59 @@ pub fn parse_timestamp_tz_with_auto(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extended_years_require_valid_utc_without_changing_legacy_clamp() {
+        use crate::types::timestamp::TIMESTAMP_MAX;
+        use crate::types::timestamp::TIMESTAMP_MIN;
+
+        for text in [
+            "0000-01-01 00:00:00",
+            "-0500-01-01 00:00:00",
+            "+10000-06-01 00:00:00",
+            "01-JAN-0000 00:00:00",
+            "01-JAN--0500 00:00:00",
+            "01-JUN-+10000 00:00:00",
+        ] {
+            assert!(
+                auto_detect_timestamp(text, &Tz::UTC).unwrap().is_none(),
+                "{text}"
+            );
+            assert!(
+                auto_detect_timestamp_tz(text, &Tz::UTC).unwrap().is_none(),
+                "{text}"
+            );
+            for auto_detect in [false, true] {
+                assert!(
+                    parse_timestamp_with_auto(text, &Tz::UTC, auto_detect).is_err(),
+                    "{text}"
+                );
+                assert!(
+                    parse_timestamp_tz_with_auto(text, &Tz::UTC, auto_detect).is_err(),
+                    "{text}"
+                );
+            }
+        }
+        let west = "Etc/GMT+8".parse::<Tz>().unwrap();
+        for (text, tz, expected) in [
+            ("31-DEC-0000 00:00:00", Tz::UTC, TIMESTAMP_MIN),
+            ("30-DEC-0000 16:00:00", west, TIMESTAMP_MIN),
+            (
+                "01-JAN-+10000 07:59:59.999999",
+                Tz::Asia__Shanghai,
+                TIMESTAMP_MAX,
+            ),
+            ("31-DEC-9999 23:59:59", west, TIMESTAMP_MIN),
+        ] {
+            assert_eq!(
+                auto_detect_timestamp(text, &tz).unwrap(),
+                Some(expected),
+                "{text}"
+            );
+            let value = auto_detect_timestamp_tz(text, &tz).unwrap().unwrap();
+            assert_eq!(value.timestamp(), expected, "{text}");
+        }
+    }
 
     #[test]
     fn test_parse_non_padded_iso_date_with_auto_detect() {

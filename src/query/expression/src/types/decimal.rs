@@ -43,7 +43,6 @@ use ethnum::u256;
 use itertools::Itertools;
 use micromarshal::Marshal;
 use num_bigint::BigInt;
-use num_traits::FromBytes;
 use num_traits::NumCast;
 use num_traits::ToPrimitive;
 use serde::Deserialize;
@@ -164,8 +163,8 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     }
 
     #[inline]
-    fn from_for_raw(raw: i128) -> Option<Self::Scalar> {
-        Num::from_i128(raw)
+    fn from_for_raw(raw: i128) -> Self::Scalar {
+        Num::from_i128_uncheck(raw)
     }
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
@@ -619,11 +618,6 @@ pub trait Decimal:
     fn checked_mul(self, rhs: Self) -> Option<Self>;
     fn checked_rem(self, rhs: Self) -> Option<Self>;
 
-    fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self>;
-
-    // mul two decimals and return a decimal with rounding option
-    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self>;
-
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
 
@@ -931,46 +925,6 @@ impl Decimal for i64 {
         self.checked_rem(rhs)
     }
 
-    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self> {
-        if shift_scale == 0 {
-            return Some(self);
-        }
-
-        if !overflow {
-            let div = i64::e(shift_scale as u8);
-            let res = if self.is_negative() == rhs.is_negative() {
-                (self * rhs + div / 2) / div
-            } else {
-                (self * rhs - div / 2) / div
-            };
-            return Some(res);
-        }
-
-        let div = i128::e(shift_scale as u8);
-        let res = if self.is_negative() == rhs.is_negative() {
-            (self as i128 * rhs as i128 + div / 2) / div
-        } else {
-            (self as i128 * rhs as i128 - div / 2) / div
-        };
-
-        if !(i64::DECIMAL_MIN as i128..=i64::DECIMAL_MAX as i128).contains(&res) {
-            None
-        } else {
-            Some(res as i64)
-        }
-    }
-
-    fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
-        let mul = i128::e(mul_scale as u8);
-        let rhs = rhs as i128;
-        let res = if self.is_negative() == rhs.is_negative() {
-            ((self as i128) * mul + rhs / 2) / rhs
-        } else {
-            ((self as i128) * mul - rhs / 2) / rhs
-        };
-        Some(res as i64)
-    }
-
     fn min_for_precision(precision: u8) -> Self {
         -(Self::e(precision) - 1)
     }
@@ -1195,47 +1149,6 @@ impl Decimal for i128 {
 
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
-    }
-
-    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self> {
-        if shift_scale == 0 {
-            return Some(self);
-        }
-
-        if !overflow {
-            let div = i128::e(shift_scale as u8);
-            let res = if self.is_negative() == rhs.is_negative() {
-                (self * rhs + div / 2) / div
-            } else {
-                (self * rhs - div / 2) / div
-            };
-
-            return Some(res);
-        }
-
-        let div = i256::e(shift_scale as u8);
-        let res = if self.is_negative() == rhs.is_negative() {
-            (i256::from(self) * i256::from(rhs) + div / i256::from(2)) / div
-        } else {
-            (i256::from(self) * i256::from(rhs) - div / i256::from(2)) / div
-        };
-
-        if !(i256::from(i128::MIN)..=i256::from(i128::MAX)).contains(&res) {
-            None
-        } else {
-            Some(res.as_i128())
-        }
-    }
-
-    fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
-        let mul = i256::e(mul_scale as u8);
-        let rhs = i256::from(rhs);
-        let res = if self.is_negative() == rhs.is_negative() {
-            (i256::from(self) * mul + rhs / i256::from(2)) / rhs
-        } else {
-            (i256::from(self) * mul - rhs / i256::from(2)) / rhs
-        };
-        Some(*res.low())
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -1517,69 +1430,6 @@ impl Decimal for i256 {
         self.0.checked_rem(rhs.0).map(Self)
     }
 
-    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self> {
-        if shift_scale == 0 {
-            return Some(self);
-        }
-
-        let div = i256::e(shift_scale as u8);
-        if !overflow {
-            let ret = if self.is_negative() == rhs.is_negative() {
-                (self * rhs + div / i256::from(2)) / div
-            } else {
-                (self * rhs - div / i256::from(2)) / div
-            };
-            return Some(ret);
-        }
-
-        let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
-            self.checked_mul(rhs)
-                .map(|x| (x + div / i256::from(2)) / div)
-        } else {
-            self.checked_mul(rhs)
-                .map(|x| (x - div / i256::from(2)) / div)
-        };
-
-        ret.or_else(|| {
-            let a = BigInt::from_le_bytes(&self.to_le_bytes());
-            let b = BigInt::from_le_bytes(&rhs.to_le_bytes());
-            let div = BigInt::from(10).pow(shift_scale);
-            if self.is_negative() == rhs.is_negative() {
-                Self::from_bigint((a * b + div.clone() / 2) / div)
-            } else {
-                Self::from_bigint((a * b - div.clone() / 2) / div)
-            }
-        })
-    }
-
-    fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
-        let fallback = || {
-            let a = BigInt::from_le_bytes(&self.to_le_bytes());
-            let b = BigInt::from_le_bytes(&rhs.to_le_bytes());
-            let mul = BigInt::from(10).pow(mul_scale);
-            if self.is_negative() == rhs.is_negative() {
-                Self::from_bigint((a * mul + b.clone() / 2) / b)
-            } else {
-                Self::from_bigint((a * mul - b.clone() / 2) / b)
-            }
-        };
-
-        if mul_scale >= i256::MAX_PRECISION as _ {
-            return fallback();
-        }
-
-        let mul = i256::e(mul_scale as u8);
-        let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
-            self.checked_mul(mul)
-                .map(|x| (x + rhs / i256::from(2)) / rhs)
-        } else {
-            self.checked_mul(mul)
-                .map(|x| (x - rhs / i256::from(2)) / rhs)
-        };
-
-        ret.or_else(fallback)
-    }
-
     fn min_for_precision(to_precision: u8) -> Self {
         MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
@@ -1639,7 +1489,7 @@ impl Decimal for i256 {
                 let m: u256 = u256::ONE << 255;
                 match ret.cmp(&m) {
                     Ordering::Less => Some(-i256::try_from(ret).unwrap()),
-                    Ordering::Equal => Some(i256::DECIMAL_MIN),
+                    Ordering::Equal => Some(i256::from_words(i128::MIN, 0)),
                     Ordering::Greater => None,
                 }
             }

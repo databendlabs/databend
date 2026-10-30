@@ -250,6 +250,7 @@ impl Binder {
                 imports,
                 packages,
             } => {
+                UDFValidator::is_udaf_script_allowed(&language.parse::<UDFLanguage>()?)?;
                 let definition = create_udf_definition_script(
                     arg_types,
                     Some(state_fields),
