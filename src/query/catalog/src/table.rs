@@ -45,7 +45,6 @@ use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
@@ -390,21 +389,6 @@ pub trait Table: Sync + Send {
 
         Err(ErrorCode::Unimplemented(format!(
             "The operation 'compact_segments' is not supported for the table '{}', which is using the '{}' engine.",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn compact_blocks(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        limits: CompactionLimits,
-    ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        let (_, _) = (ctx, limits);
-
-        Err(ErrorCode::Unimplemented(format!(
-            "The 'compact_blocks' operation is not supported for the table '{}'. Table engine: '{}'.",
             self.name(),
             self.get_table_info().engine(),
         )))

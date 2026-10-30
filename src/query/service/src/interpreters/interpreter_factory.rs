@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
-use databend_common_catalog::lock::LockTableOption;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -503,13 +502,9 @@ impl InterpreterFactory {
             Plan::OptimizeCompactSegment(compact_segment) => Ok(Arc::new(
                 OptimizeCompactSegmentInterpreter::try_create(ctx, *compact_segment.clone())?,
             )),
-            Plan::OptimizeCompactBlock { s_expr } => {
-                Ok(Arc::new(OptimizeCompactBlockInterpreter::try_create(
-                    ctx,
-                    *s_expr.clone(),
-                    LockTableOption::LockWithRetry,
-                )?))
-            }
+            Plan::OptimizeCompactBlock { s_expr } => Ok(Arc::new(
+                OptimizeCompactBlockInterpreter::try_create(ctx, *s_expr.clone(), true)?,
+            )),
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),

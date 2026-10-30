@@ -85,10 +85,9 @@ pub(crate) async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Res
         return Ok(());
     };
 
-    if desc.table_id.is_some() {
-        ctx.evict_table_from_cache(&desc.catalog, &desc.database, &desc.table)?;
-        ctx.clear_table_meta_timestamps_cache();
-    }
+    // Sync hooks reuse the write context too. Refresh must filter accumulated write and
+    // maintenance hints against the post-maintenance snapshot, not a cached source snapshot.
+    ctx.evict_table_from_cache(&desc.catalog, &desc.database, &desc.table)?;
 
     let table = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)

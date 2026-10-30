@@ -208,5 +208,49 @@ select count() > 1 from fuse_segment('i15760', 't5');
 ----
 1
 
+# ASYNC indexes are refreshed against the post-write snapshot, both without
+# Compact and after Compact replaces the original write segments.
+statement ok
+set enable_compact_after_write = 0;
+
+statement ok
+create table t_refresh(content string) row_per_block=1000 block_per_segment=1000;
+
+statement ok
+create async inverted index idx on t_refresh(content);
+
+statement ok
+insert into t_refresh values ('alpha');
+
+query BB
+select count(*) > 0, count_if(inverted_index_size > 0) = count(*)
+from fuse_block('i15760', 't_refresh');
+----
+1 1
+
+statement ok
+set enable_compact_after_write = 1;
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 1;
+
+statement ok
+insert into t_refresh values ('beta');
+
+query III
+select segment_count, block_count, row_count
+from fuse_snapshot('i15760', 't_refresh') limit 1;
+----
+1 1 2
+
+query BB
+select count(*) > 0, count_if(inverted_index_size > 0) = count(*)
+from fuse_block('i15760', 't_refresh');
+----
+1 1
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 0;
+
 statement ok
 drop database i15760;

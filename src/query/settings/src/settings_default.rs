@@ -944,7 +944,7 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enables distributed execution of table compaction.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1021,7 +1021,7 @@ impl DefaultSettings {
                     desc: "The maximum number of segments that can be reclustered automatically triggered after write.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(2..=128)),
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1105,7 +1105,7 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enable distributed execution of table recluster.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

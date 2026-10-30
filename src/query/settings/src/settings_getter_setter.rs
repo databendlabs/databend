@@ -696,6 +696,10 @@ impl Settings {
         self.try_get_u64("acquire_lock_timeout")
     }
 
+    pub fn set_acquire_lock_timeout(&self, timeout: u64) -> Result<()> {
+        self.try_set_u64("acquire_lock_timeout", timeout)
+    }
+
     pub fn get_enterprise_license(&self, version: BuildInfoRef) -> String {
         let license = unsafe {
             self.unchecked_try_get_string("enterprise_license")
@@ -734,10 +738,6 @@ impl Settings {
 
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
-    }
-
-    pub fn get_enable_distributed_compact(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_compact")? != 0)
     }
 
     pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
@@ -844,10 +844,6 @@ impl Settings {
 
     pub fn get_compact_max_block_selection(&self) -> Result<u64> {
         self.try_get_u64("compact_max_block_selection")
-    }
-
-    pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {

@@ -13,16 +13,17 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 use std::vec;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::RetainedBlockMeta;
 use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -32,7 +33,6 @@ use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use log::info;
@@ -58,14 +58,7 @@ use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
 
-type CompactTask = (usize, Vec<CompactBlock>, Option<VirtualColumnLayout>);
-
-#[derive(Clone)]
-struct CompactBlock {
-    block_meta: Arc<BlockMeta>,
-    hll: Option<RawBlockHLL>,
-    virtual_schema_index: usize,
-}
+type CompactTask = (usize, Vec<RetainedBlockMeta>, Option<VirtualColumnLayout>);
 
 #[derive(Clone)]
 pub struct BlockCompactMutator {
@@ -78,6 +71,7 @@ pub struct BlockCompactMutator {
     pub partition_key_count: usize,
     pub partition_key_id: Option<u32>,
     pub virtual_column_layout_policy: VirtualColumnLayoutPolicy,
+    pub claimed_segments: HashSet<String>,
 }
 
 impl BlockCompactMutator {
@@ -97,6 +91,7 @@ impl BlockCompactMutator {
             partition_key_count: 0,
             partition_key_id: None,
             virtual_column_layout_policy: Default::default(),
+            claimed_segments: HashSet::new(),
         }
     }
 
@@ -148,18 +143,24 @@ impl BlockCompactMutator {
         let mut lazy_parts = Vec::new();
         let chunk_size = max_threads * 4;
         for chunk in segment_locations.chunks(chunk_size) {
-            // Read the segments information in parallel.
+            let chunk_start = segment_idx;
+            let (indices, locations): (Vec<_>, Vec<_>) = chunk
+                .iter()
+                .enumerate()
+                .filter(|(_, location)| !self.claimed_segments.contains(&location.0))
+                .map(|(offset, location)| (chunk_start + offset, location.clone()))
+                .unzip();
+            segment_idx += chunk.len();
+            if locations.is_empty() {
+                continue;
+            }
+            // Read only unclaimed metadata and preserve snapshot indexes.
             let mut segment_infos = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+                .read_segments::<Arc<CompactSegmentInfo>>(&locations, false)
                 .await?
                 .into_iter()
-                .map(|sg| {
-                    sg.map(|v| {
-                        let idx = segment_idx;
-                        segment_idx += 1;
-                        (idx, v)
-                    })
-                })
+                .zip(indices)
+                .map(|(segment, idx)| segment.map(|segment| (idx, segment)))
                 .collect::<Result<Vec<_>>>()?;
 
             if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {
@@ -233,36 +234,33 @@ impl BlockCompactMutator {
         metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time.as_millis() as u64);
 
         let cluster = self.ctx.get_cluster();
-        let enable_distributed_compact = settings.get_enable_distributed_compact()?;
-        let partitions = if !enable_distributed_compact
-            || cluster.is_empty()
-            || lazy_parts.len() < cluster.nodes.len() * max_threads
-        {
-            Partitions::create(
-                PartitionsShuffleKind::Mod,
-                BlockCompactMutator::build_compact_tasks(
-                    self.ctx.clone(),
-                    self.operator.clone(),
-                    self.cluster_key_info.clone(),
-                    self.partition_key_count,
-                    self.partition_key_id,
-                    self.thresholds,
-                    self.virtual_column_layout_policy,
-                    lazy_parts,
+        let partitions =
+            if cluster.is_empty() || lazy_parts.len() < cluster.nodes.len() * max_threads {
+                Partitions::create(
+                    PartitionsShuffleKind::Mod,
+                    BlockCompactMutator::build_compact_tasks(
+                        self.ctx.clone(),
+                        self.operator.clone(),
+                        self.cluster_key_info.clone(),
+                        self.partition_key_count,
+                        self.partition_key_id,
+                        self.thresholds,
+                        self.virtual_column_layout_policy,
+                        lazy_parts,
+                    )
+                    .await?,
                 )
-                .await?,
-            )
-        } else {
-            Partitions::create(
-                PartitionsShuffleKind::Mod,
-                lazy_parts
-                    .into_iter()
-                    .map(|part| {
-                        CompactLazyPartInfo::create(part.segment_indices, part.compact_segments)
-                    })
-                    .collect(),
-            )
-        };
+            } else {
+                Partitions::create(
+                    PartitionsShuffleKind::Mod,
+                    lazy_parts
+                        .into_iter()
+                        .map(|part| {
+                            CompactLazyPartInfo::create(part.segment_indices, part.compact_segments)
+                        })
+                        .collect(),
+                )
+            };
         Ok(partitions)
     }
 
@@ -519,7 +517,7 @@ struct CompactTaskBuilder {
     thresholds: BlockThresholds,
     virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 
-    blocks: Vec<CompactBlock>,
+    blocks: Vec<RetainedBlockMeta>,
     total_rows: usize,
     total_size: usize,
     total_compressed: usize,
@@ -528,7 +526,7 @@ struct CompactTaskBuilder {
 
 enum TailMergeSource {
     None,
-    UnchangedBlock(CompactBlock),
+    UnchangedBlock(RetainedBlockMeta),
     CompactTask,
 }
 
@@ -560,14 +558,14 @@ impl CompactTaskBuilder {
         self.blocks.is_empty()
     }
 
-    fn take_blocks(&mut self) -> Vec<CompactBlock> {
+    fn take_blocks(&mut self) -> Vec<RetainedBlockMeta> {
         self.total_rows = 0;
         self.total_size = 0;
         self.total_compressed = 0;
         std::mem::take(&mut self.blocks)
     }
 
-    fn add(&mut self, block: &CompactBlock) -> (bool, bool) {
+    fn add(&mut self, block: &RetainedBlockMeta) -> (bool, bool) {
         let block_meta = &block.block_meta;
         let total_rows = self.total_rows + block_meta.row_count as usize;
         let total_size = self.total_size + block_meta.block_size as usize;
@@ -612,16 +610,16 @@ impl CompactTaskBuilder {
     fn build_task(
         &self,
         tasks: &mut VecDeque<CompactTask>,
-        unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
+        unchanged_blocks: &mut Vec<(BlockIndex, RetainedBlockMeta)>,
         block_idx: &mut BlockIndex,
-        blocks: Vec<CompactBlock>,
+        blocks: Vec<RetainedBlockMeta>,
     ) -> TailMergeSource {
         let index = *block_idx;
         *block_idx += 1;
 
         if blocks.len() == 1 {
             let block = blocks[0].clone();
-            unchanged_blocks.push((index, (block.block_meta.clone(), block.hll.clone())));
+            unchanged_blocks.push((index, block.clone()));
             TailMergeSource::UnchangedBlock(block)
         } else {
             let mut planner = VirtualColumnLayoutPlanner::create(self.virtual_column_layout_policy);
@@ -641,22 +639,10 @@ impl CompactTaskBuilder {
         }
     }
 
-    fn can_start_compact(&self, block_meta: &BlockMeta) -> bool {
-        let Some(cluster_key_info) = self.cluster_key_info.as_ref() else {
-            return true;
-        };
-        match block_meta.cluster_stats.as_ref() {
-            Some(stats) if stats.cluster_key_id == cluster_key_info.cluster_key_id() => {
-                stats.level == 0
-            }
-            _ => true,
-        }
-    }
-
     fn flush_pending(
         &mut self,
         tasks: &mut VecDeque<CompactTask>,
-        unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
+        unchanged_blocks: &mut Vec<(BlockIndex, RetainedBlockMeta)>,
         block_idx: &mut BlockIndex,
     ) -> TailMergeSource {
         if self.is_empty() {
@@ -732,9 +718,10 @@ impl CompactTaskBuilder {
                 blocks
                     .into_iter()
                     .enumerate()
-                    .map(move |(idx, block_meta)| CompactBlock {
+                    .map(move |(idx, block_meta)| RetainedBlockMeta {
                         block_meta,
                         hll: hlls.as_ref().and_then(|v| v.block_hlls.get(idx)).cloned(),
+                        top_n: hlls.as_ref().and_then(|v| v.block_top_ns.get(idx)).cloned(),
                         virtual_schema_index,
                     })
             })
@@ -775,17 +762,15 @@ impl CompactTaskBuilder {
             previous_partition = current_partition.map(<[Scalar]>::to_vec);
             seen_block = true;
 
-            if self.is_empty() {
-                if !self.can_start_compact(block_meta) {
-                    // Reclustered blocks can be carried by an existing compact group,
-                    // but they should not start one by themselves.
-                    let blocks = vec![block.clone()];
-                    tail_merge_source =
-                        self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
-                    continue;
-                }
+            if self.is_empty() && is_perfect_block(block_meta, self.thresholds) {
+                // Healthy blocks may join an existing group or be reused by tail merging.
+                let blocks = vec![block.clone()];
+                tail_merge_source =
+                    self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
+                continue;
             }
 
+            // Physical size, not clustering maturity, admits size-only work.
             let (unchanged, need_take) = self.add(block);
             if need_take {
                 tail_merge_source =
@@ -833,6 +818,15 @@ impl CompactTaskBuilder {
             }
         }
 
+        if tasks.is_empty() {
+            let target_segments =
+                (unchanged_blocks.len() / self.thresholds.block_per_segment).max(1);
+            if segment_indices.len() <= target_segments {
+                // Neither a data rewrite nor metadata reduction.
+                return Ok(Vec::new());
+            }
+        }
+
         let mut removed_segment_indexes = segment_indices;
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
@@ -850,14 +844,26 @@ impl CompactTaskBuilder {
             ))));
         }
 
+        if unchanged_blocks.is_empty() {
+            self.virtual_schemas.clear();
+        }
         partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactExtraInfo(
             CompactExtraInfo::create(
                 segment_idx,
                 unchanged_blocks,
+                std::mem::take(&mut self.virtual_schemas),
                 removed_segment_indexes,
                 removed_segment_summary,
             ),
         ))));
         Ok(partitions)
     }
+}
+
+fn is_perfect_block(block: &BlockMeta, thresholds: BlockThresholds) -> bool {
+    thresholds.check_perfect_block(
+        block.row_count as usize,
+        block.block_size as usize,
+        block.file_size as usize,
+    )
 }

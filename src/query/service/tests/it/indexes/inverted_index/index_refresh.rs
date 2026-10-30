@@ -30,6 +30,7 @@ use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::pruning::create_inverted_index_query;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
+use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::append_string_sample_data;
@@ -209,5 +210,80 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_setting("enable_compact_after_write".into(), "0".into())?;
+    fixture.create_default_database().await?;
+    let database = fixture.default_db_name();
+    let table_name = fixture.default_table_name();
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {database}.{table_name} (content STRING) \
+             ROW_PER_BLOCK = 1000 BLOCK_PER_SEGMENT = 1000"
+        ))
+        .await?;
+    for word in ["alpha", "beta", "gamma"] {
+        fixture
+            .execute_command(&format!(
+                "INSERT INTO {database}.{table_name} VALUES ('{word}')"
+            ))
+            .await?;
+    }
+    // Existing blocks lack the ASYNC index, so refresh must cover both untouched
+    // blocks and Compact outputs; the block writer cannot mask missing hints.
+    fixture
+        .execute_command(&format!(
+            "CREATE ASYNC INVERTED INDEX idx ON {database}.{table_name}(content)"
+        ))
+        .await?;
+    settings.set_setting("enable_compact_after_write".into(), "1".into())?;
+    settings.set_auto_compaction_imperfect_blocks_threshold(1)?;
+    let ctx = fixture.new_query_ctx().await?;
+    let table = ctx.get_table("default", &database, &table_name).await?;
+    let before = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_eq!(before.segments.len(), 3);
+    // Model accumulated write hints, as when async hooks coalesce writes.
+    ctx.written_segment_locations()
+        .extend(before.segments.iter().cloned());
+    // A threshold of 1 gives a two-block hint. Compact includes one boundary
+    // segment, rewriting three of the four segments and leaving one untouched.
+    TestFixture::execute_query_with_ctx(
+        ctx.clone(),
+        &format!("INSERT INTO {database}.{table_name} VALUES ('delta')"),
+    )
+    .await?
+    .try_collect::<Vec<_>>()
+    .await?;
+    assert_eq!(ctx.get_settings().get_acquire_lock_timeout()?, 1);
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    assert_eq!(snapshot.summary.row_count, 4);
+    assert_eq!(snapshot.summary.block_count, 2);
+    let reader = SegmentInfoReader::new(fuse_table.get_operator(), table.schema());
+    let mut block_rows = Vec::new();
+    for (location, version) in &snapshot.segments {
+        let segment = reader.read(&(location.clone(), *version)).await?;
+        for block in segment.block_metas()? {
+            block_rows.push(block.row_count);
+            assert!(
+                block
+                    .inverted_index_metas
+                    .as_deref()
+                    .is_some_and(|metas| { metas.iter().any(|meta| meta.index_name == "idx") })
+            );
+        }
+    }
+    block_rows.sort_unstable();
+    assert_eq!(block_rows, vec![1, 3]);
     Ok(())
 }
