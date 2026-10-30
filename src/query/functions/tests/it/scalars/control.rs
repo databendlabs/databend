@@ -98,6 +98,83 @@ fn test_if_accepts_non_strict_decimal_columns() {
     }
 }
 
+#[test]
+fn test_if_with_opaque_result() {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::Expr;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    // `Scalar::default_value` has no `Opaque` value: a branch that no enabled
+    // row reaches, and the inner value of a NULL branch, must not need one.
+    let column_ref = |id: usize, data_type: &DataType| {
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id,
+            data_type: data_type.clone(),
+            display_name: format!("c{id}"),
+        })
+    };
+    let data_type = DataType::Opaque(1);
+    let nullable_type = data_type.wrap_nullable();
+    let then_column = Column::random(&data_type, 4, None);
+    let else_column = Column::random(&data_type, 4, None);
+    let nullable_then =
+        NullableColumn::new_column(then_column.clone(), vec![true, true, false, true].into());
+    let null = Expr::constant(Scalar::Null, Some(nullable_type.clone()));
+
+    for cond in [
+        vec![true, true, true, true],
+        vec![false, false, false, false],
+        vec![true, false, true, false],
+    ] {
+        let block = DataBlock::new_from_columns(vec![
+            BooleanType::from_data(cond.clone()),
+            then_column.clone(),
+            else_column.clone(),
+            nullable_then.clone(),
+        ]);
+        let cases = [
+            (
+                vec![
+                    column_ref(0, &DataType::Boolean),
+                    column_ref(1, &data_type),
+                    column_ref(2, &data_type),
+                ],
+                then_column.clone(),
+                else_column.clone(),
+            ),
+            (
+                vec![
+                    column_ref(0, &DataType::Boolean),
+                    column_ref(3, &nullable_type),
+                    null.clone(),
+                ],
+                nullable_then.clone(),
+                Column::Null { len: 4 },
+            ),
+        ];
+        for (args, then_expected, else_expected) in cases {
+            let expr = check_function(None, "if", &[], &args, &BUILTIN_FUNCTIONS).unwrap();
+            let ctx = FunctionContext::default();
+            let result = Evaluator::new(&block, &ctx, &BUILTIN_FUNCTIONS)
+                .run(&expr)
+                .unwrap();
+            for (row, take_then) in cond.iter().enumerate() {
+                let expected = if *take_then {
+                    then_expected.index(row)
+                } else {
+                    else_expected.index(row)
+                };
+                assert_eq!(result.index(row), expected, "{cond:?} row {row}");
+            }
+        }
+    }
+}
+
 fn test_if(file: &mut impl Write) {
     run_ast(file, "if(false, 1, false, 2, NULL)", &[]);
     run_ast(file, "if(true, 1, NULL, 2, NULL)", &[]);

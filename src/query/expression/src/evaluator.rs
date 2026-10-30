@@ -1855,15 +1855,12 @@ impl<'a> Evaluator<'a> {
 
         // Evaluate the conditions in order and each result branch only for the
         // enabled rows that reach it. A branch that no enabled row reaches is not
-        // evaluated: with an all-unset validity it would run for nobody, so it
-        // could neither produce a selected value nor report an error.
+        // evaluated (`None`): with an all-unset validity it would run for nobody,
+        // so it could neither produce a selected value nor report an error.
         let mut validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, num_rows));
         let mut conds = Vec::new();
         let mut flags = Vec::new();
         let mut results = Vec::new();
-        // The branches that some enabled row reaches: an index into `results`,
-        // or `None` for the else branch.
-        let mut reached = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
             if validity.true_count() == 0 {
                 break;
@@ -1871,17 +1868,16 @@ impl<'a> Evaluator<'a> {
             let cond = self.partial_run(&args[cond_idx], Some(validity.clone()), options, false)?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
-                    results.push(Value::Scalar(Scalar::default_value(&generics[0])));
+                    results.push(None);
                     flags.push(Bitmap::new_constant(false, len.unwrap_or(1)));
                 }
                 Value::Scalar(Some(true)) => {
-                    reached.push(Some(results.len()));
-                    results.push(self.partial_run(
+                    results.push(Some(self.partial_run(
                         &args[cond_idx + 1],
                         Some(validity.clone()),
                         options,
                         false,
-                    )?);
+                    )?));
                     validity = Bitmap::new_constant(false, num_rows);
                     flags.push(Bitmap::new_constant(true, len.unwrap_or(1)));
                     break;
@@ -1890,15 +1886,14 @@ impl<'a> Evaluator<'a> {
                     let flag = (&cond.column) & (&cond.validity);
                     let branch_validity = (&validity) & (&flag);
                     if branch_validity.true_count() == 0 {
-                        results.push(Value::Scalar(Scalar::default_value(&generics[0])));
+                        results.push(None);
                     } else {
-                        reached.push(Some(results.len()));
-                        results.push(self.partial_run(
+                        results.push(Some(self.partial_run(
                             &args[cond_idx + 1],
                             Some(branch_validity),
                             options,
                             false,
-                        )?);
+                        )?));
                     }
                     validity = (&validity) & (&flag.not());
                     flags.push(flag);
@@ -1907,11 +1902,46 @@ impl<'a> Evaluator<'a> {
             conds.push(cond);
         }
         let else_result = if validity.true_count() == 0 {
-            Value::Scalar(Scalar::default_value(&generics[0]))
+            None
         } else {
-            reached.push(None);
-            self.partial_run(&args[args.len() - 1], Some(validity), options, false)?
+            Some(self.partial_run(&args[args.len() - 1], Some(validity), options, false)?)
         };
+
+        let (first_reached, single_branch) = {
+            let mut reached = results.iter().chain([&else_result]).flatten();
+            (reached.next().cloned(), reached.next().is_none())
+        };
+        let Some(first_reached) = first_reached else {
+            // No row is enabled, so every row of the result may hold any value.
+            let default = ColumnBuilder::repeat_default(&generics[0], len.unwrap_or(1));
+            return Ok(match len {
+                Some(_) => Value::Column(default.build()),
+                None => Value::Scalar(default.build_scalar()),
+            });
+        };
+
+        // When every enabled row reaches the same branch, that branch is the
+        // result: the rows that are not enabled may hold any value. A decimal
+        // carried with a non-strict width still goes through the selection,
+        // which converts it to the width of its precision.
+        if let Some(len) = len
+            && single_branch
+            && DecimalDataType::from_value(&first_reached).is_none_or(|(ty, _)| ty.is_strict())
+        {
+            return Ok(Value::Column(
+                first_reached.convert_to_full_column(&generics[0], len),
+            ));
+        }
+
+        // The selection reads a branch that no enabled row reaches only on rows
+        // that are not enabled, so any value of the result type can stand in for
+        // it. A reached branch is used because `Scalar::default_value` does not
+        // support every type.
+        let results = results
+            .into_iter()
+            .map(|result| result.unwrap_or_else(|| first_reached.clone()))
+            .collect::<Vec<_>>();
+        let else_result = else_result.unwrap_or(first_reached);
 
         // Assert that all the arguments have the same length.
         assert!(
@@ -1926,38 +1956,15 @@ impl<'a> Evaluator<'a> {
                 .all_equal()
         );
 
-        if let Some(len) = len {
-            // When every enabled row reaches the same branch, that branch is the
-            // result. Rows that are not enabled may hold any value. A decimal
-            // carried with a non-strict width still goes through the selection,
-            // which converts it to the width of its precision.
-            let single_branch = match reached.as_slice() {
-                [] => {
-                    let default = Value::<AnyType>::Scalar(Scalar::default_value(&generics[0]));
-                    return Ok(Value::Column(
-                        default.convert_to_full_column(&generics[0], len),
-                    ));
-                }
-                [Some(idx)] => Some(&results[*idx]),
-                [None] => Some(&else_result),
-                _ => None,
-            };
-            if let Some(value) = single_branch
-                && DecimalDataType::from_value(value).is_none_or(|(ty, _)| ty.is_strict())
-            {
-                return Ok(Value::Column(
-                    value.convert_to_full_column(&generics[0], len),
-                ));
-            }
-
-            if let ([flag], [then_result]) = (flags.as_slice(), results.as_slice()) {
-                return Ok(Value::Column(select_if_then_else(
-                    flag,
-                    then_result,
-                    &else_result,
-                    &generics[0],
-                )));
-            }
+        if len.is_some()
+            && let ([flag], [then_result]) = (flags.as_slice(), results.as_slice())
+        {
+            return Ok(Value::Column(select_if_then_else(
+                flag,
+                then_result,
+                &else_result,
+                &generics[0],
+            )));
         }
 
         // Pick the results from the result branches depending on the condition.

@@ -756,6 +756,7 @@ fn test_select_if_then_else() {
             DataType::Binary,
             DataType::Variant,
             DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
+            DataType::Opaque(1),
         ]
         .map(|ty| DataType::Nullable(Box::new(ty))),
     );
@@ -836,6 +837,7 @@ fn test_select_if_then_else_non_strict_decimal() {
     use databend_common_expression::Value;
     use databend_common_expression::select_if_then_else;
     use databend_common_expression::types::DecimalColumn;
+    use databend_common_expression::types::NullableColumn;
 
     // Decimal(10, 2) carried by a Decimal128 column is a non-strict
     // representation: the selection reads it at the strict Decimal64 width.
@@ -844,9 +846,27 @@ fn test_select_if_then_else_non_strict_decimal() {
     let non_strict = Column::Decimal(DecimalColumn::Decimal128(vec![1_i128, 2, 3].into(), size));
     let mask = Bitmap::from([true, false, true].as_slice());
     let zero = Value::Scalar(Scalar::Decimal(DecimalScalar::Decimal128(0, size)));
-    let result = select_if_then_else(&mask, &Value::Column(non_strict), &zero, &data_type);
+    let result = select_if_then_else(&mask, &Value::Column(non_strict.clone()), &zero, &data_type);
     assert_eq!(
         result,
         Column::Decimal(DecimalColumn::Decimal64(vec![1_i64, 0, 3].into(), size))
+    );
+
+    // The same column under a nullable type, with a NULL scalar on the other side.
+    let nullable_type = data_type.wrap_nullable();
+    let nullable =
+        NullableColumn::new_column(non_strict, Bitmap::from([true, true, false].as_slice()));
+    let result = select_if_then_else(
+        &mask,
+        &Value::Column(nullable),
+        &Value::Scalar(Scalar::Null),
+        &nullable_type,
+    );
+    assert_eq!(
+        result,
+        NullableColumn::new_column(
+            Column::Decimal(DecimalColumn::Decimal64(vec![1_i64, 2, 3].into(), size)),
+            Bitmap::from([true, false, false].as_slice()),
+        )
     );
 }

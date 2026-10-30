@@ -40,6 +40,7 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataKind;
+use crate::types::DecimalDataType;
 use crate::types::DecimalType;
 use crate::types::NullableColumn;
 use crate::types::NumberDataType;
@@ -82,10 +83,27 @@ fn select_typed(
 ) -> Option<Column> {
     match data_type {
         DataType::Nullable(inner) => {
-            let (then_inner, then_validity) = split_nullable(then_value, inner)?;
-            let (else_inner, else_validity) = split_nullable(else_value, inner)?;
+            let (then_inner, then_validity) = split_nullable(then_value)?;
+            let (else_inner, else_validity) = split_nullable(else_value)?;
             let validity = select_bitmap(mask, &then_validity, &else_validity);
-            let column = select_if_then_else(mask, &then_inner, &else_inner, inner);
+            // The inner value of a NULL row is never read, so when one side is a
+            // NULL scalar the other side provides the inner values of all rows.
+            let column = match (then_inner, else_inner) {
+                (Some(then_inner), Some(else_inner)) => {
+                    select_if_then_else(mask, &then_inner, &else_inner, inner)
+                }
+                (Some(inner_value), None) | (None, Some(inner_value))
+                    if DecimalDataType::from_value(&inner_value)
+                        .is_none_or(|(ty, _)| ty.is_strict()) =>
+                {
+                    inner_value.convert_to_full_column(inner, mask.len())
+                }
+                // A non-strict decimal is converted by the selection.
+                (Some(inner_value), None) | (None, Some(inner_value)) => {
+                    select_if_then_else(mask, &inner_value, &inner_value, inner)
+                }
+                (None, None) => ColumnBuilder::repeat_default(inner, mask.len()).build(),
+            };
             Some(NullableColumn::new_column(column, validity))
         }
         DataType::Boolean => {
@@ -127,20 +145,14 @@ fn select_typed(
     }
 }
 
-/// Splits a value of type `Nullable(inner)` into its inner value and validity.
-/// A NULL scalar becomes the default value of `inner` with validity `false`.
-fn split_nullable(
-    value: &Value<AnyType>,
-    inner: &DataType,
-) -> Option<(Value<AnyType>, Value<BooleanType>)> {
+/// Splits a value of type `Nullable(_)` into its inner value and validity. A
+/// NULL scalar has no inner value.
+fn split_nullable(value: &Value<AnyType>) -> Option<(Option<Value<AnyType>>, Value<BooleanType>)> {
     match value {
-        Value::Scalar(Scalar::Null) => Some((
-            Value::Scalar(Scalar::default_value(inner)),
-            Value::Scalar(false),
-        )),
-        Value::Scalar(scalar) => Some((Value::Scalar(scalar.clone()), Value::Scalar(true))),
+        Value::Scalar(Scalar::Null) => Some((None, Value::Scalar(false))),
+        Value::Scalar(scalar) => Some((Some(Value::Scalar(scalar.clone())), Value::Scalar(true))),
         Value::Column(Column::Nullable(column)) => Some((
-            Value::Column(column.column.clone()),
+            Some(Value::Column(column.column.clone())),
             Value::Column(column.validity.clone()),
         )),
         Value::Column(_) => None,
