@@ -522,6 +522,10 @@ impl QueryContext {
         self.shared.get_local_io_stats()
     }
 
+    pub fn get_perf_query_token(&self) -> u64 {
+        self.shared.get_perf_query_token()
+    }
+
     pub fn merge_remote_io_stats(&self, delta: &IoStatsSnapshot) {
         self.shared.merge_remote_io_stats(delta);
     }

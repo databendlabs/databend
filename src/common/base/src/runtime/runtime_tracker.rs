@@ -150,6 +150,10 @@ pub struct TrackingPayload {
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub processor_interrupt: Option<Arc<AtomicBool>>,
     pub perf_enabled: bool,
+    /// Identifies the query on this node for on-demand profiling, 0 if none
+    /// (see `QueryPerf::start_dynamic`). A plain integer so that cloning the
+    /// payload, done for every processor run, costs no atomic operation.
+    pub perf_query_token: u64,
     pub process_rows: AtomicUsize,
 }
 
@@ -355,6 +359,7 @@ impl Clone for TrackingPayload {
             workload_group_resource: self.workload_group_resource.clone(),
             processor_interrupt: self.processor_interrupt.clone(),
             perf_enabled: self.perf_enabled,
+            perf_query_token: self.perf_query_token,
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
             ),
@@ -386,7 +391,7 @@ impl Drop for TrackingGuard {
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
 
             // Sync perf flag when restoring the previous payload
-            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+            QueryPerf::sync_from_payload(&thread_tracker.payload);
         });
     }
 }
@@ -442,6 +447,7 @@ impl ThreadTracker {
                 workload_group_resource: None,
                 processor_interrupt: None,
                 perf_enabled: false,
+                perf_query_token: 0,
                 process_rows: AtomicUsize::new(0),
             }),
         }
@@ -474,7 +480,7 @@ impl ThreadTracker {
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
 
             // Sync perf flag from the new payload to thread_local PERF_FLAG
-            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+            QueryPerf::sync_from_payload(&thread_tracker.payload);
 
             guard
         })
@@ -589,6 +595,12 @@ impl ThreadTracker {
                 unsafe { std::mem::transmute(tracker.payload.io_stats.as_ref()) }
             })
             .unwrap_or(None)
+    }
+
+    pub fn perf_query_token() -> u64 {
+        TRACKER
+            .try_with(|tracker| tracker.borrow().payload.perf_query_token)
+            .unwrap_or(0)
     }
 
     pub fn capture_log_settings() -> Option<&'static Arc<CaptureLogSettings>> {

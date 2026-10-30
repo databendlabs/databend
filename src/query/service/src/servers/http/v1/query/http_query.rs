@@ -868,6 +868,7 @@ impl HttpQuery {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
         tracking_payload.io_stats = Some(query_context.get_local_io_stats());
+        tracking_payload.perf_query_token = query_context.get_perf_query_token();
 
         GlobalQueryRuntime::instance().runtime().spawn(
             tracking_payload.tracking(
