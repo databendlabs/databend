@@ -74,20 +74,12 @@ impl SyncSystemTable for CachesTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_node = ctx.get_cluster().local_id.clone();
         let cache_manager = CacheManager::instance();
-        let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
-        let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache();
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
         let inverted_index_lookup_cache = cache_manager.get_inverted_index_lookup_cache();
         let inverted_index_payload_cache = cache_manager.get_inverted_index_payload_cache();
         let inverted_index_full_payload_cache =
             cache_manager.get_inverted_index_full_payload_cache();
-        let vector_index_meta_cache = cache_manager.get_vector_index_meta_cache();
-        let vector_refine_data_cache = cache_manager.get_vector_refine_data_cache();
         let vector_index_cache = cache_manager.get_vector_index_cache();
-        let spatial_index_meta_cache = cache_manager.get_spatial_index_meta_cache();
-        let spatial_index_file_cache = cache_manager.get_spatial_index_file_cache();
-        let virtual_column_meta_cache = cache_manager.get_virtual_column_meta_cache();
-        let prune_partitions_cache = cache_manager.get_prune_partitions_cache();
         let parquet_meta_data_cache = cache_manager.get_parquet_meta_data_cache();
         let column_data_cache = cache_manager.get_column_data_cache();
         let table_column_array_cache = cache_manager.get_table_data_array_cache();
@@ -101,14 +93,6 @@ impl SyncSystemTable for CachesTable {
 
         if let Some(column_data_cache) = column_data_cache {
             Self::append_rows_of_hybrid_cache(&column_data_cache, &local_node, &mut columns);
-        }
-
-        if let Some(bloom_index_filter_cache) = bloom_index_filter_cache {
-            Self::append_rows_of_hybrid_cache(&bloom_index_filter_cache, &local_node, &mut columns);
-        }
-
-        if let Some(bloom_index_meta_cache) = bloom_index_meta_cache {
-            Self::append_rows_of_hybrid_cache(&bloom_index_meta_cache, &local_node, &mut columns);
         }
 
         if let Some(inverted_index_meta_cache) = inverted_index_meta_cache {
@@ -143,14 +127,6 @@ impl SyncSystemTable for CachesTable {
             );
         }
 
-        if let Some(vector_index_meta_cache) = vector_index_meta_cache {
-            Self::append_rows_of_hybrid_cache(&vector_index_meta_cache, &local_node, &mut columns);
-        }
-
-        if let Some(vector_refine_data_cache) = vector_refine_data_cache {
-            Self::append_rows_of_hybrid_cache(&vector_refine_data_cache, &local_node, &mut columns);
-        }
-
         if let Some(vector_index_cache) = vector_index_cache {
             Self::append_memory_cache_row(
                 &vector_index_cache,
@@ -158,26 +134,6 @@ impl SyncSystemTable for CachesTable {
                 &local_node,
                 &mut columns,
             );
-        }
-
-        if let Some(spatial_index_meta_cache) = spatial_index_meta_cache {
-            Self::append_rows_of_hybrid_cache(&spatial_index_meta_cache, &local_node, &mut columns);
-        }
-
-        if let Some(spatial_index_file_cache) = spatial_index_file_cache {
-            Self::append_rows_of_hybrid_cache(&spatial_index_file_cache, &local_node, &mut columns);
-        }
-
-        if let Some(virtual_column_meta_cache) = virtual_column_meta_cache {
-            Self::append_rows_of_hybrid_cache(
-                &virtual_column_meta_cache,
-                &local_node,
-                &mut columns,
-            );
-        }
-
-        if let Some(prune_partitions_cache) = prune_partitions_cache {
-            Self::append_row(&prune_partitions_cache, &local_node, &mut columns);
         }
 
         if let Some(parquet_meta_data_cache) = parquet_meta_data_cache {

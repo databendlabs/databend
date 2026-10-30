@@ -15,6 +15,8 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use bytes::Bytes;
@@ -42,12 +44,21 @@ use crate::store::KindStore;
 
 struct DiskTier<T> {
     cache: Arc<DiskCacheAccessor>,
+    /// Runtime switch shared by every disk tier (off when the license does not allow it).
+    allowed: Arc<AtomicBool>,
     encode: fn(&T) -> Result<Vec<u8>>,
     decode: fn(Bytes) -> Result<T>,
 }
 
 impl<T> DiskTier<T> {
+    fn allowed(&self) -> bool {
+        self.allowed.load(Ordering::Relaxed)
+    }
+
     fn read(&self, key: &str) -> Option<T> {
+        if !self.allowed() {
+            return None;
+        }
         let bytes = self.cache.get(key)?;
         match (self.decode)(bytes.as_ref().clone()) {
             Ok(value) => Some(value),
@@ -60,7 +71,7 @@ impl<T> DiskTier<T> {
     }
 
     fn write(&self, key: &str, value: &T) {
-        if self.cache.contains_key(key) {
+        if !self.allowed() || self.cache.contains_key(key) {
             return;
         }
         match (self.encode)(value) {
@@ -105,10 +116,11 @@ impl<T: CachedItem> MemCache<T> {
         }
     }
 
-    pub fn with_disk(mut self, cache: Arc<DiskCacheAccessor>) -> Self
+    pub fn with_disk(mut self, cache: Arc<DiskCacheAccessor>, allowed: Arc<AtomicBool>) -> Self
     where T: DiskCodec {
         self.disk = Some(Arc::new(DiskTier {
             cache,
+            allowed,
             encode: T::encode,
             decode: T::decode,
         }));
@@ -159,7 +171,7 @@ impl<T: CachedItem> MemCache<T> {
                 || self
                     .disk
                     .as_ref()
-                    .is_some_and(|d| d.cache.contains_key(key)))
+                    .is_some_and(|d| d.allowed() && d.cache.contains_key(key)))
     }
 
     pub async fn get<R: Reader<Item = T>>(&self, reader: &R, key: R::Key) -> Result<CacheRef<T>> {
@@ -203,7 +215,10 @@ impl<T: CachedItem> MemCache<T> {
     /// Removes the entry from every tier; readers still holding it keep it charged until they drop it.
     pub fn evict(&self, key: &str) -> bool {
         let in_memory = self.store.evict(self.kind, key);
-        let on_disk = self.disk.as_ref().is_some_and(|d| d.cache.evict(key));
+        let on_disk = self
+            .disk
+            .as_ref()
+            .is_some_and(|d| d.allowed() && d.cache.evict(key));
         in_memory || on_disk
     }
 

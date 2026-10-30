@@ -27,11 +27,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::DataType;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheValue;
-use databend_storages_common_cache::HybridCacheReader;
-use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache::Loader;
+use databend_storages_common_cache::CacheRef;
+use databend_storages_common_cache::CachedItem;
+use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -42,6 +41,10 @@ use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::parquet_to_arrow_field_levels;
 
+use crate::io::FuseCaches;
+use crate::io::IndexMetaCache;
+use crate::io::IndexMetaKey;
+use crate::io::IndexMetaReader;
 use crate::io::read::block::parquet::RowGroupImplBuilder;
 
 #[async_trait::async_trait]
@@ -66,31 +69,13 @@ where
     }
 }
 
-#[async_trait::async_trait]
-pub trait MetaRead<M>: Send + Sync {
-    async fn read_meta(&self, params: &LoadParams) -> Result<Arc<M>>;
-}
-
-#[async_trait::async_trait]
-impl<M, L> MetaRead<M> for HybridCacheReader<M, L>
-where
-    M: Send + Sync + 'static + TryFrom<Bytes, Error = ErrorCode>,
-    CacheValue<M>: From<M>,
-    for<'a> Vec<u8>: TryFrom<&'a M, Error = ErrorCode>,
-    L: Loader<M> + Send + Sync + 'static,
-{
-    async fn read_meta(&self, params: &LoadParams) -> Result<Arc<M>> {
-        self.read(params).await
-    }
-}
-
 pub trait IndexLoadSpec {
-    type Meta: Send + Sync + 'static;
-    type File: Send + Sync + 'static;
-    type FileCache: CacheAccessor<V = Self::File>;
+    type Meta: CachedItem;
+    type File: CachedItem;
 
-    fn meta_reader(dal: Operator) -> Box<dyn MetaRead<Self::Meta> + Send + Sync>;
-    fn file_cache() -> Self::FileCache;
+    fn meta_cache(caches: &IndexMetaCache) -> &MemCache<Arc<Self::Meta>>;
+    /// `None`: the file bytes are not cached.
+    fn file_cache(caches: &FuseCaches) -> Option<&MemCache<Self::File>>;
     fn meta_columns(meta: &Self::Meta) -> &Vec<(String, SingleColumnMeta)>;
     fn make_file(name: String, data: Bytes) -> Self::File;
     fn file_data(file: &Self::File) -> &Bytes;
@@ -100,20 +85,14 @@ pub trait IndexLoadSpec {
 }
 
 #[fastrace::trace]
-pub async fn load_index_meta<S: IndexLoadSpec>(dal: Operator, path: &str) -> Result<Arc<S::Meta>> {
-    let path_owned = path.to_owned();
+pub async fn load_index_meta<S: IndexLoadSpec>(dal: Operator, path: &str) -> Result<Arc<S::Meta>>
+where IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>> {
+    let cache = S::meta_cache(&FuseCaches::instance().index_metas).clone();
+    let key = (path.to_owned(), None);
     async move {
-        let reader = S::meta_reader(dal);
-        let version = 0;
-
-        let load_params = LoadParams {
-            location: path_owned,
-            len_hint: None,
-            ver: version,
-            put_cache: true,
-        };
-
-        reader.read_meta(&load_params).await
+        let reader = IndexMetaReader::<S::Meta>::new(dal);
+        let meta = cache.get(&reader, key).await?;
+        Ok(Arc::clone(&meta))
     }
     .execute_in_runtime(&GlobalIORuntime::instance())
     .await?
@@ -125,7 +104,10 @@ pub async fn load_index_files<S: IndexLoadSpec>(
     settings: &ReadSettings,
     column_names: &[String],
     location: &str,
-) -> Result<Vec<Column>> {
+) -> Result<Vec<Column>>
+where
+    IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>>,
+{
     let start = Instant::now();
 
     // 1. load index meta
@@ -159,13 +141,15 @@ pub async fn load_index_files<S: IndexLoadSpec>(
     let mut ranges = Vec::new();
     let mut names_map = HashMap::new();
     let mut column_data = HashMap::new();
-    let index_file_cache = S::file_cache();
+    let caches = FuseCaches::instance();
+    let index_file_cache = S::file_cache(&caches);
     for (i, (name, col_meta)) in column_indices
         .iter()
         .zip(projected_column_metas.into_iter())
     {
         let cache_key = cache_key_of_column(location, name);
-        if let Some(cache_file) = index_file_cache.get_sized(&cache_key, col_meta.len) {
+        let hit = index_file_cache.and_then(|cache| cache.lookup_sized(&cache_key, col_meta.len));
+        if let Some(cache_file) = hit {
             column_data.insert(*i, cache_file);
             continue;
         }
@@ -192,7 +176,10 @@ pub async fn load_index_files<S: IndexLoadSpec>(
             let file = S::make_file(name.clone(), data.to_vec().into());
 
             // add index file to cache
-            let file = index_file_cache.insert(cache_key, file);
+            let file = match index_file_cache {
+                Some(cache) => cache.fill(&cache_key, file),
+                None => CacheRef::new(file),
+            };
             column_data.insert(*i as usize, file);
         }
     }

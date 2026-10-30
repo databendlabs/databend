@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -60,6 +62,7 @@ pub struct CacheRow {
 pub struct CacheManager {
     store: Arc<dyn KindStore>,
     disks: HashMap<CacheKind, Arc<DiskCacheAccessor>>,
+    disk_allowed: Arc<AtomicBool>,
 }
 
 impl CacheManager {
@@ -67,7 +70,16 @@ impl CacheManager {
         store: Arc<dyn KindStore>,
         disks: HashMap<CacheKind, Arc<DiskCacheAccessor>>,
     ) -> Self {
-        CacheManager { store, disks }
+        CacheManager {
+            store,
+            disks,
+            disk_allowed: Arc::new(AtomicBool::new(true)),
+        }
+    }
+
+    /// Turns every disk tier on or off at runtime; memory tiers are unaffected.
+    pub fn set_disk_allowed(&self, allowed: bool) {
+        self.disk_allowed.store(allowed, Ordering::Relaxed);
     }
 
     pub fn mem_cache<T: CachedItem>(&self, kind: CacheKind) -> MemCache<T> {
@@ -78,7 +90,7 @@ impl CacheManager {
     pub fn hybrid_cache<T: CachedItem + DiskCodec>(&self, kind: CacheKind) -> MemCache<T> {
         let cache = self.mem_cache(kind);
         match self.disks.get(&kind) {
-            Some(disk) => cache.with_disk(disk.clone()),
+            Some(disk) => cache.with_disk(disk.clone(), self.disk_allowed.clone()),
             None => cache,
         }
     }
@@ -98,7 +110,7 @@ impl CacheManager {
         self.store.pool_stats()
     }
 
-    /// Rows for `system.caches`: every kind, its disk tier if any, then each pool.
+    /// Rows for `system.caches`: every kind, its disk tier if any and allowed, then each pool.
     pub fn rows(&self) -> Vec<CacheRow> {
         let mut rows = Vec::new();
         for stats in self.kind_stats() {
@@ -117,7 +129,8 @@ impl CacheManager {
                 hit: 0,
                 miss: 0,
             }));
-            if let Some(disk) = self.disks.get(&kind) {
+            let disk_allowed = self.disk_allowed.load(Ordering::Relaxed);
+            if let Some(disk) = self.disks.get(&kind).filter(|_| disk_allowed) {
                 rows.push(with_hits(CacheRow {
                     name: disk.name().to_string(),
                     kind: Some(kind),

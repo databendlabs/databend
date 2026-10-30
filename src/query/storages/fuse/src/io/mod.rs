@@ -21,6 +21,7 @@ mod snapshots;
 mod write;
 
 pub use cache::FuseCaches;
+pub use cache::IndexMetaCache;
 pub use cache::SegmentCache;
 pub use cache::SnapshotCache;
 pub use cache::SnapshotKey;
@@ -40,8 +41,9 @@ pub use read::FuseLowLevelColumnBatchReader;
 pub use read::FuseLowLevelColumnReader;
 pub use read::FuseLowLevelDataReader;
 pub use read::FuseLowLevelFullRowReader;
+pub use read::IndexMetaKey;
+pub use read::IndexMetaReader;
 pub use read::InvertedIndexReader;
-pub use read::MetaReaders;
 pub use read::RowSelection;
 pub use read::SegmentInfoReader;
 pub use read::SegmentStatsReader;

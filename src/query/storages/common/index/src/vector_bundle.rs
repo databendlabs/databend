@@ -290,7 +290,7 @@ impl VectorBundleFooter {
     }
 }
 
-/// Parsed metadata of a vector index file, cached in `VectorIndexMetaCache`.
+/// Parsed metadata of a vector index file, cached in `FuseCaches::index_metas.vector`.
 #[derive(Clone)]
 pub enum VectorIndexMeta {
     /// Legacy combined Parquet index file (all vector indexes of a block).

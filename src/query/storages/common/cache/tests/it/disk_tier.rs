@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -24,6 +25,7 @@ use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::DiskCacheAccessor;
 use databend_storages_common_cache::DiskCacheBuilder;
+use databend_storages_common_cache::DiskCodec;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::cache_manager::CacheManager;
 
@@ -38,23 +40,21 @@ impl CachedItem for Blob {
     }
 }
 
-impl TryFrom<&Blob> for Vec<u8> {
-    type Error = ErrorCode;
-
-    fn try_from(value: &Blob) -> Result<Self, ErrorCode> {
-        Ok(value.0.clone())
+impl DiskCodec for Blob {
+    fn encode(&self) -> databend_common_exception::Result<Vec<u8>> {
+        Ok(self.0.clone())
     }
-}
 
-impl TryFrom<Bytes> for Blob {
-    type Error = ErrorCode;
-
-    fn try_from(bytes: Bytes) -> Result<Self, ErrorCode> {
+    fn decode(bytes: Bytes) -> databend_common_exception::Result<Self> {
         if bytes.is_empty() {
             return Err(ErrorCode::Internal("empty"));
         }
         Ok(Blob(bytes.to_vec()))
     }
+}
+
+fn allowed() -> Arc<AtomicBool> {
+    Arc::new(AtomicBool::new(true))
 }
 
 fn wait_for(cond: impl Fn() -> bool) {
@@ -84,8 +84,8 @@ fn test_disk_tier_refills_memory() {
     let dir = tempfile::tempdir().unwrap();
     let disk = disk(&dir);
     let store = shared_store(0, 1 << 20, 0);
-    let cache =
-        MemCache::<Blob>::new(store.clone(), CacheKind::BloomFilter).with_disk(disk.clone());
+    let cache = MemCache::<Blob>::new(store.clone(), CacheKind::BloomFilter)
+        .with_disk(disk.clone(), allowed());
 
     cache.put("k", Blob(vec![1; 10]));
     wait_for(|| disk.contains_key("k"));
@@ -101,7 +101,7 @@ fn test_disk_decode_failure_evicts_disk_entry() {
     let dir = tempfile::tempdir().unwrap();
     let disk = disk(&dir);
     let cache = MemCache::<Blob>::new(shared_store(0, 1 << 20, 0), CacheKind::BloomFilter)
-        .with_disk(disk.clone());
+        .with_disk(disk.clone(), allowed());
 
     disk.insert("bad".to_string(), Bytes::new());
     wait_for(|| disk.contains_key("bad"));
@@ -114,8 +114,8 @@ fn test_disabled_kind_skips_disk() {
     let dir = tempfile::tempdir().unwrap();
     let disk = disk(&dir);
     let store = shared_store(0, 1 << 20, 0);
-    let cache =
-        MemCache::<Blob>::new(store.clone(), CacheKind::BloomFilter).with_disk(disk.clone());
+    let cache = MemCache::<Blob>::new(store.clone(), CacheKind::BloomFilter)
+        .with_disk(disk.clone(), allowed());
     cache.put("k", Blob(vec![1; 10]));
     wait_for(|| disk.contains_key("k"));
 
@@ -132,13 +132,24 @@ fn test_disabled_kind_skips_disk() {
 fn test_manager_attaches_disk_and_reports_it() {
     let dir = tempfile::tempdir().unwrap();
     let disk = disk(&dir);
+    let store = shared_store(0, 1 << 20, 0);
     let manager = CacheManager::new(
-        shared_store(0, 1 << 20, 0),
+        store.clone(),
         [(CacheKind::BloomFilter, disk.clone())].into(),
     );
     let cache = manager.hybrid_cache::<Blob>(CacheKind::BloomFilter);
     cache.put("k", Blob(vec![1; 10]));
     wait_for(|| disk.contains_key("k"));
+
+    // With disk tiers switched off, a memory miss does not fall back to disk.
+    manager.set_disk_allowed(false);
+    assert!(!manager.rows().iter().any(|r| r.name == "disk_cache_test"));
+    store.evict(CacheKind::BloomFilter, "k");
+    assert!(cache.lookup("k").is_none());
+    cache.put("other", Blob(vec![1; 10]));
+    assert!(!disk.contains_key("other"));
+    manager.set_disk_allowed(true);
+    assert!(cache.lookup("k").is_some());
 
     let rows = manager.rows();
     let disk_row = rows.iter().find(|r| r.name == "disk_cache_test").unwrap();

@@ -24,9 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::VectorRefineDataCache;
+use databend_storages_common_cache::MemCache;
 use databend_storages_common_index::VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE;
 use databend_storages_common_index::VECTOR_BUNDLE_TRAILER_SIZE;
 use databend_storages_common_index::VectorBundleFooter;
@@ -37,6 +35,8 @@ use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use opendal::Operator;
+
+use crate::io::FuseCaches;
 
 /// Cache key of one component (or page) of a bundle. Bundle locations are unique
 /// immutable objects, so the location and component name identify the bytes; no
@@ -54,9 +54,8 @@ pub async fn load_bundle_footer(
 ) -> Result<Arc<VectorBundleFooter>> {
     // Parsed footers live in the vector index meta cache, keyed by location (bundle
     // and legacy files have different paths), so hits need no I/O or parsing.
-    let cache = CacheManager::instance().get_vector_index_meta_cache();
-    let key = location.to_string();
-    if let Some(meta) = cache.get(&key) {
+    let cache = &FuseCaches::instance().index_metas.vector;
+    if let Some(meta) = cache.lookup(location) {
         return match meta.as_ref() {
             VectorIndexMeta::Bundle(footer) => Ok(footer.clone()),
             VectorIndexMeta::Legacy(_) => Err(ErrorCode::StorageOther(
@@ -96,7 +95,7 @@ pub async fn load_bundle_footer(
     };
     metrics_inc_block_vector_index_read_bytes(read_bytes as u64);
     let footer = Arc::new(VectorBundleFooter::decode(&footer_bytes, &trailer)?);
-    cache.insert(key, VectorIndexMeta::Bundle(footer.clone()));
+    cache.fill(location, Arc::new(VectorIndexMeta::Bundle(footer.clone())));
     Ok(footer)
 }
 
@@ -129,7 +128,7 @@ pub async fn load_bundle_reads(
     settings: &ReadSettings,
     location: &str,
     requests: Vec<(String, VectorBundlePageRead)>,
-    cache: Option<VectorRefineDataCache>,
+    cache: Option<MemCache<VectorIndexFile>>,
 ) -> Result<Vec<Bytes>> {
     if requests.is_empty() {
         return Ok(Vec::new());
@@ -151,14 +150,14 @@ async fn load_bundle_reads_inner(
     settings: &ReadSettings,
     location: &str,
     requests: &[(String, VectorBundlePageRead)],
-    cache: Option<VectorRefineDataCache>,
+    cache: Option<MemCache<VectorIndexFile>>,
 ) -> Result<Vec<Bytes>> {
     let start = std::time::Instant::now();
     let mut output = vec![None; requests.len()];
     let mut ranges = Vec::new();
     for (i, (name, entry)) in requests.iter().enumerate() {
         let hit = cache.as_ref().and_then(|cache| {
-            cache.get_sized(component_cache_key(location, name), entry.raw_length)
+            cache.lookup_sized(&component_cache_key(location, name), entry.raw_length)
         });
         if entry.length == 0 {
             output[i] = Some(entry.decode(Bytes::new())?);
@@ -183,15 +182,14 @@ async fn load_bundle_reads_inner(
             let index = *i as usize;
             let (name, entry) = &requests[index];
             let raw = entry.decode(bytes)?;
-            let raw = if let Some(cache) = cache.as_ref().filter(|cache| cache.bytes_capacity() > 0)
-            {
+            let raw = if let Some(cache) = cache.as_ref().filter(|cache| cache.is_enabled()) {
                 // The cache accounts for the page's byte length, not the merged
                 // buffer backing a Bytes slice. Detach before caching so a single
                 // retained page cannot pin the entire merged read. Return the same
                 // owned bytes to the caller as well.
                 let page = Bytes::copy_from_slice(&raw);
-                cache.insert(
-                    component_cache_key(location, name),
+                cache.fill(
+                    &component_cache_key(location, name),
                     VectorIndexFile::create(name.clone(), page.clone()),
                 );
                 page

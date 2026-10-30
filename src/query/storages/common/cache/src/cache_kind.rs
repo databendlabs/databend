@@ -121,11 +121,14 @@ impl CacheKind {
         }
     }
 
+    /// Accepts the kind name, the legacy memory cache name, and the legacy hybrid cache name
+    /// (the memory name without its `memory_` prefix, e.g. `cache_bloom_index_filter`).
     pub fn from_any_name(name: &str) -> Option<CacheKind> {
-        CacheKind::ALL
-            .iter()
-            .copied()
-            .find(|k| k.name() == name || k.legacy_name() == name)
+        CacheKind::ALL.iter().copied().find(|k| {
+            k.name() == name
+                || k.legacy_name() == name
+                || k.legacy_name().strip_prefix("memory_") == Some(name)
+        })
     }
 }
 
@@ -147,6 +150,10 @@ mod tests {
             assert_eq!(CacheKind::from_any_name(kind.name()), Some(*kind));
             assert_eq!(CacheKind::from_any_name(kind.legacy_name()), Some(*kind));
         }
+        assert_eq!(
+            CacheKind::from_any_name("cache_bloom_index_filter"),
+            Some(CacheKind::BloomFilter)
+        );
         assert_eq!(CacheKind::from_any_name("unknown"), None);
     }
 }

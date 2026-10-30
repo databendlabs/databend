@@ -28,8 +28,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::VectorRefineDataCache;
+use databend_storages_common_cache::MemCache;
 use databend_storages_common_index::VectorBundleEntry;
 use databend_storages_common_index::VectorBundleFooter;
 use databend_storages_common_index::VectorBundlePageRead;
@@ -46,9 +45,9 @@ use super::vector_index_bundle_loader::load_bundle_components;
 use super::vector_index_bundle_loader::load_bundle_footer;
 use super::vector_index_bundle_loader::load_bundle_reads;
 use crate::index::VectorIndexFile;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::IndexMetaCache;
 use crate::io::read::index_loader::IndexLoadSpec;
-use crate::io::read::index_loader::MetaRead;
 use crate::io::read::index_loader::load_index_files;
 use crate::io::read::index_loader::load_index_meta;
 
@@ -57,15 +56,14 @@ struct VectorIndexLoadSpec;
 impl IndexLoadSpec for VectorIndexLoadSpec {
     type Meta = VectorIndexMeta;
     type File = VectorIndexFile;
-    type FileCache = Option<VectorRefineDataCache>;
 
-    fn meta_reader(dal: Operator) -> Box<dyn MetaRead<Self::Meta> + Send + Sync> {
-        Box::new(MetaReaders::vector_index_meta_reader(dal))
+    fn meta_cache(caches: &IndexMetaCache) -> &MemCache<Arc<Self::Meta>> {
+        &caches.vector
     }
 
     // Raw HNSW component bytes are not cached: the decoded index is kept in
     // `VectorIndexCache`, so caching the bytes as well would store it twice.
-    fn file_cache() -> Self::FileCache {
+    fn file_cache(_caches: &FuseCaches) -> Option<&MemCache<Self::File>> {
         None
     }
 
@@ -284,8 +282,15 @@ impl RefineData {
             .iter()
             .map(|&page| self.page_request(page))
             .collect::<Result<Vec<_>>>()?;
-        let cache = CacheManager::instance().get_vector_refine_data_cache();
-        load_bundle_reads(self.operator.clone(), settings, &self.path, requests, cache).await
+        let cache = FuseCaches::instance().vector_refine_pages.clone();
+        load_bundle_reads(
+            self.operator.clone(),
+            settings,
+            &self.path,
+            requests,
+            Some(cache),
+        )
+        .await
     }
 }
 

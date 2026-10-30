@@ -26,12 +26,6 @@ pub use crate::cache_items::*;
 use crate::manager::CacheManager;
 use crate::providers::HybridCache;
 
-/// In memory object cache of bloom filter.
-/// For each indexed data block, the bloom xor8 filter of column is cached individually
-pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
-/// In memory object cache of parquet FileMetaData of bloom index data
-pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
-
 /// Count-limited cache of complete persisted raw-bundle footers.
 pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
 /// Byte-limited cache of term dictionaries and small fieldnorm/fast components.
@@ -43,18 +37,8 @@ pub type InvertedIndexPayloadCache = HybridCache<InvertedIndexPayloadBytes>;
 /// large full warmups cannot evict frequently accessed small posting ranges.
 pub type InvertedIndexFullPayloadCache = InMemoryLruCache<InvertedIndexPayloadBytes>;
 
-pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
-pub type VectorRefineDataCache = HybridCache<VectorIndexFile>;
-
-pub type SpatialIndexMetaCache = HybridCache<SpatialIndexMeta>;
-pub type SpatialIndexFileCache = HybridCache<SpatialIndexFile>;
-
-pub type VirtualColumnMetaCache = HybridCache<VirtualColumnFileMeta>;
-
 /// In memory object cache of parquet FileMetaData of external parquet rs files
 pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
-
-pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
 pub struct IcebergTableCacheValue {
     table: Arc<dyn Table>,
@@ -134,38 +118,10 @@ impl CachedObject<IcebergTableCacheValue> for IcebergTableCacheValue {
     }
 }
 
-impl CachedObject<BloomIndexMeta> for BloomIndexMeta {
-    type Cache = BloomIndexMetaCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_bloom_index_meta_cache()
-    }
-}
-
-impl CachedObject<(PartStatistics, Partitions)> for (PartStatistics, Partitions) {
-    type Cache = PrunePartitionsCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_prune_partitions_cache()
-    }
-}
-
-impl CachedObject<FilterImpl> for FilterImpl {
-    type Cache = BloomIndexFilterCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_bloom_index_filter_cache()
-    }
-}
-
 impl CachedObject<ParquetMetaData> for ParquetMetaData {
     type Cache = ParquetMetaDataCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_parquet_meta_data_cache()
-    }
-}
-
-impl CachedObject<VirtualColumnFileMeta> for VirtualColumnFileMeta {
-    type Cache = VirtualColumnMetaCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_virtual_column_meta_cache()
     }
 }
 
@@ -193,24 +149,6 @@ impl<T> CacheValue<T> {
 
 impl From<IcebergTableCacheValue> for CacheValue<IcebergTableCacheValue> {
     fn from(value: IcebergTableCacheValue) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<FilterImpl> for CacheValue<FilterImpl> {
-    fn from(value: FilterImpl) -> Self {
-        CacheValue {
-            mem_bytes: value.mem_bytes(),
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<BloomIndexMeta> for CacheValue<BloomIndexMeta> {
-    fn from(value: BloomIndexMeta) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,
@@ -254,53 +192,8 @@ impl From<InvertedIndexPayloadBytes> for CacheValue<InvertedIndexPayloadBytes> {
     }
 }
 
-impl From<IndexMeta> for CacheValue<IndexMeta> {
-    fn from(value: IndexMeta) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<VectorIndexMeta> for CacheValue<VectorIndexMeta> {
-    fn from(value: VectorIndexMeta) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<IndexFile> for CacheValue<IndexFile> {
-    fn from(value: IndexFile) -> Self {
-        CacheValue {
-            mem_bytes: std::mem::size_of::<IndexFile>() + value.data.len(),
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<VirtualColumnFileMeta> for CacheValue<VirtualColumnFileMeta> {
-    fn from(value: VirtualColumnFileMeta) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
 impl From<ParquetMetaData> for CacheValue<ParquetMetaData> {
     fn from(value: ParquetMetaData) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<(PartStatistics, Partitions)> for CacheValue<(PartStatistics, Partitions)> {
-    fn from(value: (PartStatistics, Partitions)) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

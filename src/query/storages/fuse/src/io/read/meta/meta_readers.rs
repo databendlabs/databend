@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::io::SeekFrom;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bytes::Buf;
@@ -21,10 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_FOOTER_READ_SIZE;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::HybridCacheReader;
-use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache::Loader;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::SpatialIndexMeta;
@@ -50,48 +47,8 @@ use parquet::file::metadata::ParquetMetaDataReader;
 pub use self::thrift_file_meta_read::read_thrift_file_metadata;
 use crate::io::SnapshotKey;
 
-pub type BloomIndexMetaReader = HybridCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
-pub type VectorIndexMetaReader = HybridCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
-pub type SpatialIndexMetaReader = HybridCacheReader<SpatialIndexMeta, LoaderWrapper<Operator>>;
-pub type VirtualColumnMetaReader =
-    HybridCacheReader<VirtualColumnFileMeta, LoaderWrapper<Operator>>;
-
-pub struct MetaReaders;
-
-impl MetaReaders {
-    pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
-        BloomIndexMetaReader::new(
-            CacheManager::instance().get_bloom_index_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn vector_index_meta_reader(dal: Operator) -> VectorIndexMetaReader {
-        VectorIndexMetaReader::new(
-            CacheManager::instance().get_vector_index_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn spatial_index_meta_reader(dal: Operator) -> SpatialIndexMetaReader {
-        SpatialIndexMetaReader::new(
-            CacheManager::instance().get_spatial_index_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn virtual_column_meta_reader(dal: Operator) -> VirtualColumnMetaReader {
-        VirtualColumnMetaReader::new(
-            CacheManager::instance().get_virtual_column_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-}
-
 // workaround for the orphan rules
 // Loader and types of table meta data are all defined outside (of this crate)
-pub struct LoaderWrapper<T>(T);
-
 /// Reads and decodes table snapshots. No caching; pair with `SnapshotCache`.
 #[derive(Clone)]
 pub struct SnapshotReader {
@@ -207,70 +164,59 @@ impl Reader for SegmentStatsReader {
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
-        // read the ThriftFileMetaData, omit unnecessary conversions
-        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
+/// Reads and decodes the parquet footer of an index file as `T`. No caching; pair with
+/// `FuseCaches::index_metas`. The key is the path and, when known, the file length.
+pub struct IndexMetaReader<T> {
+    operator: Operator,
+    _meta: PhantomData<fn() -> T>,
+}
+
+impl<T> IndexMetaReader<T> {
+    pub fn new(operator: Operator) -> Self {
+        IndexMetaReader {
+            operator,
+            _meta: PhantomData,
+        }
+    }
+
+    async fn read_footer(&self, (path, len): &IndexMetaKey) -> Result<ParquetMetaData> {
+        read_thrift_file_metadata(self.operator.clone(), path, *len)
             .await
             .map_err(|err| {
-                ErrorCode::StorageOther(format!(
-                    "read file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })?;
-
-        BloomIndexMeta::try_from(meta)
+                ErrorCode::StorageOther(format!("read file meta failed, {}, {:?}", path, err))
+            })
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<SpatialIndexMeta> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<SpatialIndexMeta> {
-        // read the ThriftFileMetaData, omit unnecessary conversions
-        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
-            .await
-            .map_err(|err| {
-                ErrorCode::StorageOther(format!(
-                    "read file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })?;
+pub type IndexMetaKey = (String, Option<u64>);
 
-        SpatialIndexMeta::try_from(meta)
-    }
+macro_rules! index_meta_reader {
+    ($ty:ty, |$meta:ident| $decode:expr) => {
+        impl Reader for IndexMetaReader<$ty> {
+            type Key = IndexMetaKey;
+            type Item = Arc<$ty>;
+
+            fn cache_key<'a>(&self, key: &'a IndexMetaKey) -> Cow<'a, str> {
+                Cow::Borrowed(&key.0)
+            }
+
+            #[async_backtrace::framed]
+            async fn read(&self, key: &IndexMetaKey) -> Result<Arc<$ty>> {
+                let $meta = self.read_footer(key).await?;
+                Ok(Arc::new($decode))
+            }
+        }
+    };
 }
 
-/// Only legacy Parquet index files go through this reader; bundle footers are
-/// loaded by the bundle loader and put into the same cache.
-#[async_trait::async_trait]
-impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<VectorIndexMeta> {
-        let meta = <Self as Loader<SpatialIndexMeta>>::load(self, params).await?;
-        Ok(VectorIndexMeta::Legacy(meta))
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<VirtualColumnFileMeta> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<VirtualColumnFileMeta> {
-        // read the ThriftFileMetaData, omit unnecessary conversions
-        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
-            .await
-            .map_err(|err| {
-                ErrorCode::StorageOther(format!(
-                    "read file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })?;
-
-        VirtualColumnFileMeta::try_from(meta)
-    }
-}
+index_meta_reader!(BloomIndexMeta, |meta| BloomIndexMeta::try_from(meta)?);
+index_meta_reader!(SpatialIndexMeta, |meta| SpatialIndexMeta::try_from(meta)?);
+index_meta_reader!(VectorIndexMeta, |meta| VectorIndexMeta::Legacy(
+    SpatialIndexMeta::try_from(meta)?
+));
+index_meta_reader!(VirtualColumnFileMeta, |meta| {
+    VirtualColumnFileMeta::try_from(meta)?
+});
 
 pub async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
     let reader = if let Some(len) = len_hint {

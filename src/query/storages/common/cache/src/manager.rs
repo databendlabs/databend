@@ -35,8 +35,6 @@ use crate::Unit;
 use crate::cache_kind::CacheKind;
 use crate::cache_manager::CacheManager as KindCacheManager;
 use crate::cache_manager::CacheRow;
-use crate::caches::BloomIndexFilterCache;
-use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
 use crate::caches::ColumnDataCache;
@@ -46,12 +44,6 @@ use crate::caches::InvertedIndexLookupCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::InvertedIndexPayloadCache;
 use crate::caches::ParquetMetaDataCache;
-use crate::caches::PrunePartitionsCache;
-use crate::caches::SpatialIndexFileCache;
-use crate::caches::SpatialIndexMetaCache;
-use crate::caches::VectorIndexMetaCache;
-use crate::caches::VectorRefineDataCache;
-use crate::caches::VirtualColumnMetaCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
 use crate::store::LegacyStore;
@@ -60,13 +52,21 @@ use crate::vector_index_cache::MEMORY_CACHE_VECTOR_INDEX;
 use crate::vector_index_cache::VectorIndexCache;
 
 /// Kinds already served by `KindCacheManager`; grows family by family until it covers all.
-const MIGRATED_KINDS: [CacheKind; 6] = [
+const MIGRATED_KINDS: [CacheKind; 14] = [
     CacheKind::TableSnapshot,
     CacheKind::TableSnapshotStats,
     CacheKind::SegmentInfo,
     CacheKind::ColumnOrientedSegment,
     CacheKind::SegmentStats,
     CacheKind::SegmentBlockMetas,
+    CacheKind::BloomIndexMeta,
+    CacheKind::BloomFilter,
+    CacheKind::VectorIndexMeta,
+    CacheKind::SpatialIndexMeta,
+    CacheKind::VirtualColumnMeta,
+    CacheKind::SpatialIndex,
+    CacheKind::VectorRefine,
+    CacheKind::PruneResult,
 ];
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
@@ -123,19 +123,11 @@ pub enum CacheClearanceLevel {
 pub struct CacheManager {
     /// Serves `MIGRATED_KINDS`, with the same capacities as before.
     kinds: Arc<KindCacheManager>,
-    bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
-    bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
     inverted_index_lookup_cache: CacheSlot<InvertedIndexLookupCache>,
     inverted_index_payload_cache: CacheSlot<InvertedIndexPayloadCache>,
     inverted_index_full_payload_cache: CacheSlot<InvertedIndexFullPayloadCache>,
-    vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
-    vector_refine_data_cache: CacheSlot<VectorRefineDataCache>,
     vector_index_cache: CacheSlot<VectorIndexCache>,
-    spatial_index_meta_cache: CacheSlot<SpatialIndexMetaCache>,
-    spatial_index_file_cache: CacheSlot<SpatialIndexFileCache>,
-    virtual_column_meta_cache: CacheSlot<VirtualColumnMetaCache>,
-    prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
 
@@ -244,29 +236,80 @@ impl CacheManager {
         let migrated = legacy_capacities(config, *max_server_memory_usage)
             .into_iter()
             .filter(|(kind, _)| MIGRATED_KINDS.contains(kind));
+        let mut disks = HashMap::new();
+        if config.enable_table_meta_cache {
+            // Disk tiers of the migrated hybrid kinds: same directories, sizes and names as before.
+            let disk_tiers = [
+                (
+                    CacheKind::BloomIndexMeta,
+                    "bloom_meta_v1",
+                    config.disk_cache_table_bloom_index_meta_size,
+                ),
+                (
+                    CacheKind::BloomFilter,
+                    "bloom_filter_v1",
+                    config.disk_cache_table_bloom_index_data_size,
+                ),
+                (
+                    CacheKind::VectorIndexMeta,
+                    "vector_index_meta_v1",
+                    config.disk_cache_vector_index_meta_size,
+                ),
+                (
+                    CacheKind::SpatialIndexMeta,
+                    "spatial_index_meta_v1",
+                    config.disk_cache_spatial_index_meta_size,
+                ),
+                (
+                    CacheKind::VirtualColumnMeta,
+                    "virtual_column_meta_v1",
+                    config.disk_cache_virtual_column_meta_size,
+                ),
+                (
+                    CacheKind::SpatialIndex,
+                    "spatial_index_file_v1",
+                    config.disk_cache_spatial_index_data_size,
+                ),
+                (
+                    CacheKind::VectorRefine,
+                    "vector_index_file_v1",
+                    config.disk_cache_vector_index_data_size,
+                ),
+            ];
+            for (kind, dir, bytes) in disk_tiers {
+                let hybrid_name = kind.legacy_name().trim_start_matches("memory_");
+                let path = PathBuf::from(&config.disk_cache_config.path)
+                    .join(tenant_id.clone())
+                    .join(dir);
+                if let Some(disk) = Self::new_on_disk_cache(
+                    format!("disk_{hybrid_name}"),
+                    &path,
+                    on_disk_cache_queue_size,
+                    bytes as usize,
+                    DiskCacheKeyReloadPolicy::Fuzzy,
+                    on_disk_cache_sync_data,
+                    ee_mode,
+                )? {
+                    disks.insert(kind, Arc::new(disk));
+                }
+            }
+        }
         let kinds = Arc::new(KindCacheManager::new(
             Arc::new(LegacyStore::new(migrated)),
-            HashMap::new(),
+            disks,
         ));
+        kinds.set_disk_allowed(ee_mode);
 
         let instance =
         // setup in-memory table meta cache
         if !config.enable_table_meta_cache {
             Self {
                 kinds,
-                bloom_index_filter_cache: CacheSlot::new(None),
-                bloom_index_meta_cache: CacheSlot::new(None),
                 inverted_index_meta_cache: CacheSlot::new(None),
                 inverted_index_lookup_cache: CacheSlot::new(None),
                 inverted_index_payload_cache: CacheSlot::new(None),
                 inverted_index_full_payload_cache: CacheSlot::new(None),
-                vector_index_meta_cache: CacheSlot::new(None),
-                vector_refine_data_cache: CacheSlot::new(None),
                 vector_index_cache: CacheSlot::new(None),
-                spatial_index_meta_cache: CacheSlot::new(None),
-                spatial_index_file_cache: CacheSlot::new(None),
-                virtual_column_meta_cache: CacheSlot::new(None),
-                prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
                 in_memory_table_data_cache,
                 column_data_cache,
@@ -274,40 +317,7 @@ impl CacheManager {
                 allows_on_disk_cache,
             }
         } else {
-            let bloom_index_filter_cache = {
-                let bloom_filter_on_disk_cache_path = PathBuf::from(&config.disk_cache_config.path)
-                    .join(tenant_id.clone())
-                    .join("bloom_filter_v1");
-                Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_BLOOM_INDEX_FILTER,
-                    config.table_bloom_index_filter_size as usize,
-                    Unit::Bytes,
-                    &bloom_filter_on_disk_cache_path,
-                    on_disk_cache_queue_size,
-                    config.disk_cache_table_bloom_index_data_size as usize,
-                    DiskCacheKeyReloadPolicy::Fuzzy,
-                    on_disk_cache_sync_data,
-                    ee_mode,
-                )?
-            };
 
-            let bloom_index_meta_cache = {
-                let bloom_filter_meta_on_disk_cache_path =
-                    PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("bloom_meta_v1");
-                Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA,
-                    config.table_bloom_index_meta_count as usize,
-                    Unit::Count,
-                    &bloom_filter_meta_on_disk_cache_path,
-                    on_disk_cache_queue_size,
-                    config.disk_cache_table_bloom_index_meta_size as usize,
-                    DiskCacheKeyReloadPolicy::Fuzzy,
-                    on_disk_cache_sync_data,
-                    ee_mode,
-                )?
-            };
 
             let inverted_index_meta_cache = {
                 let inverted_index_meta_on_disk_cache_path =
@@ -388,23 +398,6 @@ impl CacheManager {
                 )?
             };
 
-            let vector_index_meta_cache = {
-                let vector_index_meta_on_disk_cache_path =
-                    PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("vector_index_meta_v1");
-                Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA,
-                    config.vector_index_meta_count as usize,
-                    Unit::Count,
-                    &vector_index_meta_on_disk_cache_path,
-                    on_disk_cache_queue_size,
-                    config.disk_cache_vector_index_meta_size as usize,
-                    DiskCacheKeyReloadPolicy::Fuzzy,
-                    on_disk_cache_sync_data,
-                    ee_mode,
-                )?
-            };
 
             // Memory budget of the decoded HNSW object cache (`vector_index_cache` below).
             let vector_index_size = if config.vector_index_filter_memory_ratio != 0 {
@@ -414,96 +407,14 @@ impl CacheManager {
             } else {
                 config.vector_index_filter_size as usize
             };
-            // FP16 refine pages read per query. HNSW components and the validity
-            // are not cached here: they are kept decoded in `vector_index_cache`.
-            let vector_refine_data_cache = {
-                let vector_index_file_on_disk_cache_path =
-                    PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("vector_index_file_v1");
-                Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_VECTOR_INDEX_REFINE,
-                    config.vector_index_refine_size as usize,
-                    Unit::Bytes,
-                    &vector_index_file_on_disk_cache_path,
-                    on_disk_cache_queue_size,
-                    config.disk_cache_vector_index_data_size as usize,
-                    DiskCacheKeyReloadPolicy::Fuzzy,
-                    on_disk_cache_sync_data,
-                    ee_mode,
-                )?
-            };
 
             let vector_index_cache = CacheSlot::new(
                 (vector_index_size > 0).then(|| VectorIndexCache::new(vector_index_size)),
             );
 
-            let spatial_index_meta_cache = {
-                let spatial_index_meta_on_disk_cache_path =
-                    PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("spatial_index_meta_v1");
-                Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA,
-                    config.spatial_index_meta_count as usize,
-                    Unit::Count,
-                    &spatial_index_meta_on_disk_cache_path,
-                    on_disk_cache_queue_size,
-                    config.disk_cache_spatial_index_meta_size as usize,
-                    DiskCacheKeyReloadPolicy::Fuzzy,
-                    on_disk_cache_sync_data,
-                    ee_mode,
-                )?
-            };
 
-            // setup spatial index filter cache
-            let spatial_index_file_size = if config.spatial_index_filter_memory_ratio != 0 {
-                (*max_server_memory_usage as usize)
-                    * config.spatial_index_filter_memory_ratio as usize
-                    / 100
-            } else {
-                config.spatial_index_filter_size as usize
-            };
-            let spatial_index_file_cache = {
-                let spatial_index_file_on_disk_cache_path =
-                    PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("spatial_index_file_v1");
-                Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_SPATIAL_INDEX_FILE,
-                    spatial_index_file_size,
-                    Unit::Bytes,
-                    &spatial_index_file_on_disk_cache_path,
-                    on_disk_cache_queue_size,
-                    config.disk_cache_spatial_index_data_size as usize,
-                    DiskCacheKeyReloadPolicy::Fuzzy,
-                    on_disk_cache_sync_data,
-                    ee_mode,
-                )?
-            };
 
-            let virtual_column_meta_cache = {
-                let virtual_column_meta_on_disk_cache_path =
-                    PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.clone())
-                        .join("virtual_column_meta_v1");
-                Self::new_hybrid_cache_slot(
-                    HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA,
-                    config.virtual_column_meta_count as usize,
-                    Unit::Count,
-                    &virtual_column_meta_on_disk_cache_path,
-                    on_disk_cache_queue_size,
-                    config.disk_cache_virtual_column_meta_size as usize,
-                    DiskCacheKeyReloadPolicy::Fuzzy,
-                    on_disk_cache_sync_data,
-                    ee_mode,
-                )?
-            };
 
-            let prune_partitions_cache = Self::new_items_cache_slot(
-                MEMORY_CACHE_PRUNE_PARTITIONS,
-                config.table_prune_partitions_count as usize,
-            );
 
             let parquet_meta_data_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_PARQUET_META_DATA,
@@ -517,19 +428,11 @@ impl CacheManager {
 
             Self {
                 kinds,
-                bloom_index_filter_cache,
-                bloom_index_meta_cache,
                 inverted_index_meta_cache,
                 inverted_index_lookup_cache,
                 inverted_index_payload_cache,
                 inverted_index_full_payload_cache,
-                vector_index_meta_cache,
-                vector_refine_data_cache,
                 vector_index_cache,
-                spatial_index_meta_cache,
-                spatial_index_file_cache,
-                virtual_column_meta_cache,
-                prune_partitions_cache,
                 in_memory_table_data_cache,
                 parquet_meta_data_cache,
                 iceberg_table_meta_cache,
@@ -579,16 +482,12 @@ impl CacheManager {
             CacheManager::clear_cache(&me.inverted_index_full_payload_cache);
             CacheManager::clear_cache(&me.inverted_index_payload_cache);
             CacheManager::clear_cache(&me.vector_index_cache);
-            // Only the in-memory FP16 pages; the disk tier is kept.
-            CacheManager::clear_cache(&me.vector_refine_data_cache);
         }
 
         fn clear_extra_caches(me: &CacheManager) {
             // These caches are typically not memory usage heavy, and have more significant impact
             // for the query performance, consider clearing them when the memory pressure is
             // high.
-            CacheManager::clear_cache(&me.bloom_index_filter_cache);
-            CacheManager::clear_cache(&me.bloom_index_meta_cache);
             CacheManager::clear_cache(&me.inverted_index_lookup_cache);
             CacheManager::clear_cache(&me.inverted_index_meta_cache);
         }
@@ -618,25 +517,6 @@ impl CacheManager {
             MEMORY_CACHE_PARQUET_META_DATA => {
                 let cache = &self.parquet_meta_data_cache;
                 Self::set_items_capacity(cache, new_capacity, name)
-            }
-            MEMORY_CACHE_PRUNE_PARTITIONS => {
-                let cache = &self.prune_partitions_cache;
-                Self::set_items_capacity(cache, new_capacity, name)
-            }
-            HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA
-            | IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA => {
-                Self::set_hybrid_cache_items_capacity(
-                    &self.bloom_index_meta_cache,
-                    new_capacity,
-                    name,
-                );
-            }
-            HYBRID_CACHE_BLOOM_INDEX_FILTER | IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER => {
-                Self::set_hybrid_cache_bytes_capacity(
-                    &self.bloom_index_filter_cache,
-                    new_capacity,
-                    name,
-                );
             }
             HYBRID_CACHE_INVERTED_INDEX_META | IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_META => {
                 Self::set_hybrid_cache_items_capacity(
@@ -670,21 +550,6 @@ impl CacheManager {
                     "memory_cache_inverted_index_full_payload",
                 );
             }
-            HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA
-            | IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA => {
-                Self::set_hybrid_cache_items_capacity(
-                    &self.vector_index_meta_cache,
-                    new_capacity,
-                    name,
-                );
-            }
-            HYBRID_CACHE_VECTOR_INDEX_REFINE | IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_REFINE => {
-                Self::set_hybrid_cache_bytes_capacity(
-                    &self.vector_refine_data_cache,
-                    new_capacity,
-                    HYBRID_CACHE_VECTOR_INDEX_REFINE,
-                );
-            }
             // The decoded HNSW object cache. It is named `memory_cache_vector_index_file`;
             // `cache_vector_index_file` is accepted as well.
             HYBRID_CACHE_VECTOR_INDEX_FILE | MEMORY_CACHE_VECTOR_INDEX => {
@@ -697,29 +562,6 @@ impl CacheManager {
                     self.vector_index_cache
                         .set(Some(VectorIndexCache::new(capacity)));
                 }
-            }
-            HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA
-            | IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA => {
-                Self::set_hybrid_cache_items_capacity(
-                    &self.spatial_index_meta_cache,
-                    new_capacity,
-                    name,
-                );
-            }
-            HYBRID_CACHE_SPATIAL_INDEX_FILE | IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE => {
-                Self::set_hybrid_cache_bytes_capacity(
-                    &self.spatial_index_file_cache,
-                    new_capacity,
-                    name,
-                );
-            }
-            HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA
-            | IN_MEMORY_HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA => {
-                Self::set_hybrid_cache_items_capacity(
-                    &self.virtual_column_meta_cache,
-                    new_capacity,
-                    name,
-                );
             }
 
             HYBRID_CACHE_COLUMN_DATA | IN_MEMORY_HYBRID_CACHE_COLUMN_DATA => {
@@ -824,14 +666,6 @@ impl CacheManager {
         self.iceberg_table_meta_cache.get()
     }
 
-    pub fn get_bloom_index_filter_cache(&self) -> Option<BloomIndexFilterCache> {
-        self.get_hybrid_cache(self.bloom_index_filter_cache.get())
-    }
-
-    pub fn get_bloom_index_meta_cache(&self) -> Option<BloomIndexMetaCache> {
-        self.get_hybrid_cache(self.bloom_index_meta_cache.get())
-    }
-
     fn get_hybrid_cache<T>(&self, cache: Option<HybridCache<T>>) -> Option<HybridCache<T>>
     where CacheValue<T>: From<T> {
         if self.allows_on_disk_cache.load(Ordering::Relaxed) {
@@ -859,32 +693,8 @@ impl CacheManager {
         self.inverted_index_full_payload_cache.get()
     }
 
-    pub fn get_vector_index_meta_cache(&self) -> Option<VectorIndexMetaCache> {
-        self.get_hybrid_cache(self.vector_index_meta_cache.get())
-    }
-
-    pub fn get_vector_refine_data_cache(&self) -> Option<VectorRefineDataCache> {
-        self.get_hybrid_cache(self.vector_refine_data_cache.get())
-    }
-
     pub fn get_vector_index_cache(&self) -> Option<VectorIndexCache> {
         self.vector_index_cache.get()
-    }
-
-    pub fn get_spatial_index_meta_cache(&self) -> Option<SpatialIndexMetaCache> {
-        self.get_hybrid_cache(self.spatial_index_meta_cache.get())
-    }
-
-    pub fn get_spatial_index_file_cache(&self) -> Option<SpatialIndexFileCache> {
-        self.get_hybrid_cache(self.spatial_index_file_cache.get())
-    }
-
-    pub fn get_virtual_column_meta_cache(&self) -> Option<VirtualColumnMetaCache> {
-        self.get_hybrid_cache(self.virtual_column_meta_cache.get())
-    }
-
-    pub fn get_prune_partitions_cache(&self) -> Option<PrunePartitionsCache> {
-        self.prune_partitions_cache.get()
     }
 
     pub fn get_parquet_meta_data_cache(&self) -> Option<ParquetMetaDataCache> {
@@ -900,7 +710,8 @@ impl CacheManager {
     }
 
     pub fn set_allows_disk_cache(&self, flag: bool) {
-        self.allows_on_disk_cache.store(flag, Ordering::Relaxed)
+        self.allows_on_disk_cache.store(flag, Ordering::Relaxed);
+        self.kinds.set_disk_allowed(flag);
     }
 
     fn new_items_cache_slot<V: Into<CacheValue<V>>>(
@@ -1018,7 +829,6 @@ impl CacheManager {
 
 const MEMORY_CACHE_TABLE_DATA: &str = "memory_cache_table_data";
 const MEMORY_CACHE_PARQUET_META_DATA: &str = "memory_cache_parquet_meta_data";
-const MEMORY_CACHE_PRUNE_PARTITIONS: &str = "memory_cache_prune_partitions";
 const HYBRID_CACHE_INVERTED_INDEX_LOOKUP: &str = "cache_inverted_index_lookup";
 const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_LOOKUP: &str = "memory_cache_inverted_index_lookup";
 const HYBRID_CACHE_INVERTED_INDEX_PAYLOAD: &str = "cache_inverted_index_payload";
@@ -1030,29 +840,10 @@ const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_META: &str = "memory_cache_inverted_
 // name is `MEMORY_CACHE_VECTOR_INDEX`.
 const HYBRID_CACHE_VECTOR_INDEX_FILE: &str = "cache_vector_index_file";
 // Cache of FP16 refine pages.
-const HYBRID_CACHE_VECTOR_INDEX_REFINE: &str = "cache_vector_index_refine";
-const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_REFINE: &str = "memory_cache_vector_index_refine";
-const HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str = "cache_vector_index_file_meta_data";
-const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str =
-    "memory_cache_vector_index_file_meta_data";
 
-const HYBRID_CACHE_SPATIAL_INDEX_FILE: &str = "cache_spatial_index_file";
-const IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE: &str = "memory_cache_spatial_index_file";
-const HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA: &str = "cache_spatial_index_file_meta_data";
-const IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA: &str =
-    "memory_cache_spatial_index_file_meta_data";
-
-const HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA: &str = "cache_virtual_column_file_meta_data";
-const IN_MEMORY_HYBRID_CACHE_VIRTUAL_COLUMN_FILE_META_DATA: &str =
-    "memory_cache_virtual_column_file_meta_data";
-
-const HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "cache_bloom_index_file_meta_data";
 const HYBRID_CACHE_COLUMN_DATA: &str = "cache_column_data";
 const IN_MEMORY_HYBRID_CACHE_COLUMN_DATA: &str = "memory_cache_column_data";
 
-const IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_index_file_meta_data";
-const HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "cache_bloom_index_filter";
-const IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
 const MEMORY_CACHE_ICEBERG_TABLE: &str = "memory_cache_iceberg_table";
 
 #[cfg(test)]
@@ -1065,10 +856,6 @@ mod tests {
     use databend_common_config::CacheConfig;
     use databend_common_config::DiskCacheInnerConfig;
     use databend_common_expression::TableSchema;
-    use databend_storages_common_index::BloomIndexMeta;
-    use databend_storages_common_index::filters::FilterBuilder;
-    use databend_storages_common_index::filters::FilterImpl;
-    use databend_storages_common_index::filters::Xor8Builder;
     use databend_storages_common_table_meta::meta::Statistics;
     use databend_storages_common_table_meta::meta::TableMetaTimestamps;
     use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -1115,17 +902,20 @@ mod tests {
         }
     }
 
-    fn all_disk_cache_enabled(cache_manager: &CacheManager) -> bool {
+    /// Disk tiers of the migrated kinds, served by the new manager.
+    fn migrated_disk_tiers(cache_manager: &CacheManager) -> usize {
         cache_manager
-            .get_column_data_cache()
-            .on_disk_cache()
-            .is_some()
+            .kinds
+            .rows()
+            .iter()
+            .filter(|r| r.name.starts_with("disk_"))
+            .count()
+    }
+
+    fn all_disk_cache_enabled(cache_manager: &CacheManager) -> bool {
+        migrated_disk_tiers(cache_manager) == 7
             && cache_manager
-                .get_bloom_index_meta_cache()
-                .on_disk_cache()
-                .is_some()
-            && cache_manager
-                .get_bloom_index_filter_cache()
+                .get_column_data_cache()
                 .on_disk_cache()
                 .is_some()
             && cache_manager
@@ -1138,41 +928,14 @@ mod tests {
                 .is_some()
             && cache_manager
                 .get_inverted_index_payload_cache()
-                .on_disk_cache()
-                .is_some()
-            && cache_manager
-                .get_vector_index_meta_cache()
-                .on_disk_cache()
-                .is_some()
-            && cache_manager
-                .get_vector_refine_data_cache()
-                .on_disk_cache()
-                .is_some()
-            && cache_manager
-                .get_spatial_index_meta_cache()
-                .on_disk_cache()
-                .is_some()
-            && cache_manager
-                .get_spatial_index_file_cache()
-                .on_disk_cache()
-                .is_some()
-            && cache_manager
-                .get_virtual_column_meta_cache()
                 .on_disk_cache()
                 .is_some()
     }
 
     fn all_disk_cache_disabled(cache_manager: &CacheManager) -> bool {
-        cache_manager
-            .get_column_data_cache()
-            .on_disk_cache()
-            .is_none()
+        migrated_disk_tiers(cache_manager) == 0
             && cache_manager
-                .get_bloom_index_meta_cache()
-                .on_disk_cache()
-                .is_none()
-            && cache_manager
-                .get_bloom_index_filter_cache()
+                .get_column_data_cache()
                 .on_disk_cache()
                 .is_none()
             && cache_manager
@@ -1185,26 +948,6 @@ mod tests {
                 .is_none()
             && cache_manager
                 .get_inverted_index_payload_cache()
-                .on_disk_cache()
-                .is_none()
-            && cache_manager
-                .get_vector_index_meta_cache()
-                .on_disk_cache()
-                .is_none()
-            && cache_manager
-                .get_vector_refine_data_cache()
-                .on_disk_cache()
-                .is_none()
-            && cache_manager
-                .get_spatial_index_meta_cache()
-                .on_disk_cache()
-                .is_none()
-            && cache_manager
-                .get_spatial_index_file_cache()
-                .on_disk_cache()
-                .is_none()
-            && cache_manager
-                .get_virtual_column_meta_cache()
                 .on_disk_cache()
                 .is_none()
     }
@@ -1348,25 +1091,10 @@ mod tests {
             disk_cache.till_no_pending_items_in_queue();
         }
 
-        // ----- POPULATE EXTRA CACHES -----
-
-        // 1. Populate bloom index filter cache
-        let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache().unwrap();
-        let mut builder = Xor8Builder::create();
-        builder.add_key(&"what ever".to_string());
-        let xor8_filter = builder.build()?;
-        bloom_index_filter_cache.insert("not matter".to_string(), FilterImpl::Xor(xor8_filter));
-
-        // 2. Populate bloom index meta cache
-        let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache().unwrap();
-        bloom_index_meta_cache.insert("not matter".to_string(), BloomIndexMeta { columns: vec![] });
-
         // ----- VERIFY INITIAL CACHE STATE -----
         // Verify all caches are correctly populated
         assert!(!cache_manager.get_table_data_array_cache().is_empty());
         assert!(!cache_manager.get_column_data_cache().is_empty());
-        assert!(!cache_manager.get_bloom_index_filter_cache().is_empty());
-        assert!(!cache_manager.get_bloom_index_meta_cache().is_empty());
 
         // 4.
         // ----- TEST BASIC CLEARANCE LEVEL -----
@@ -1390,35 +1118,11 @@ mod tests {
                 .is_empty()
         );
 
-        // Verify extra caches remain intact after Basic clearance
-        assert!(!cache_manager.get_bloom_index_filter_cache().is_empty());
-        assert!(!cache_manager.get_bloom_index_meta_cache().is_empty());
-
         // 5.
         // ----- TEST DEEP CLEARANCE LEVEL -----
 
         // Clear caches with Deep clearance level
         cache_manager.release_cache_memory(CacheClearanceLevel::Deep);
-
-        // Verify in-memory part of hybrid bloom index meta caches are cleared
-        assert!(
-            cache_manager
-                .get_bloom_index_meta_cache()
-                .unwrap()
-                .in_memory_cache()
-                .unwrap()
-                .is_empty()
-        );
-
-        // Verify in-memory part of hybrid bloom index filter caches are cleared
-        assert!(
-            cache_manager
-                .get_bloom_index_filter_cache()
-                .unwrap()
-                .in_memory_cache()
-                .unwrap()
-                .is_empty()
-        );
 
         Ok(())
     }
@@ -1475,20 +1179,17 @@ mod tests {
             assert_eq!(cache.bytes_capacity(), capacity.unwrap_or_default());
             // The refine cache has its own memory budget, independent of the HNSW
             // cache. Non-EE mode: no disk tier (see `test_vector_refine_cache_tiers`).
-            let refine = manager.get_vector_refine_data_cache();
+            let rows = manager.migrated_cache_rows();
+            let refine = rows
+                .iter()
+                .find(|r| r.name == "memory_cache_vector_index_refine");
             assert_eq!(
-                refine.in_memory_cache().map(|c| c.bytes_capacity()),
+                refine.and_then(|r| r.capacity),
                 config
                     .enable_table_meta_cache
                     .then_some(config.vector_index_refine_size)
             );
-            assert!(refine.on_disk_cache().is_none());
-            if config.enable_table_meta_cache {
-                assert_eq!(
-                    manager.get_vector_index_meta_cache().items_capacity(),
-                    config.vector_index_meta_count
-                );
-            }
+            assert!(!rows.iter().any(|r| r.name.starts_with("disk_")));
         }
         Ok(())
     }
@@ -1553,25 +1254,26 @@ mod tests {
         Ok(())
     }
 
+    /// Refine pages are reclaimed under memory pressure, as `release_cache_memory(Basic)` did.
     #[test]
-    fn test_vector_refine_cache_memory_clearance() -> Result<()> {
+    fn test_vector_refine_pages_are_reclaimable() -> Result<()> {
         use crate::VectorIndexFile;
 
         let manager =
             CacheManager::try_new(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
-        let pages = manager.get_vector_refine_data_cache().unwrap();
-        for level in [CacheClearanceLevel::Basic, CacheClearanceLevel::Deep] {
-            pages.insert(
-                "a.index:0_fp16_data#bytes=0..9".to_string(),
-                VectorIndexFile::create(
-                    "0_fp16_data#bytes=0..9".to_string(),
-                    Bytes::from_static(b"fp16 page"),
-                ),
-            );
-            assert!(!pages.in_memory_cache().unwrap().is_empty());
-            manager.release_cache_memory(level);
-            assert!(pages.in_memory_cache().unwrap().is_empty());
-        }
+        let pages = manager
+            .kinds
+            .mem_cache::<VectorIndexFile>(CacheKind::VectorRefine);
+        pages.put(
+            "a.index:0_fp16_data#bytes=0..9",
+            VectorIndexFile::create(
+                "0_fp16_data#bytes=0..9".to_string(),
+                Bytes::from_static(b"fp16 page"),
+            ),
+        );
+        assert!(pages.contains("a.index:0_fp16_data#bytes=0..9"));
+        manager.kinds.shrink_for_pressure(&|| false);
+        assert!(!pages.contains("a.index:0_fp16_data#bytes=0..9"));
         Ok(())
     }
 
@@ -1592,15 +1294,21 @@ mod tests {
         );
         assert_eq!(CacheConfig::default().disk_cache_vector_index_data_size, 0);
 
+        let capacity_of = |manager: &CacheManager, name: &str| {
+            manager
+                .migrated_cache_rows()
+                .into_iter()
+                .find(|r| r.name == name)
+                .and_then(|r| r.capacity)
+        };
         for ee_mode in [true, false] {
             let manager = CacheManager::try_new(&config, &(1024 * 1024), "test", ee_mode)?;
-            let pages = manager.get_vector_refine_data_cache().unwrap();
             assert_eq!(
-                pages.in_memory_cache().unwrap().bytes_capacity(),
-                config.vector_index_refine_size
+                capacity_of(&manager, "memory_cache_vector_index_refine"),
+                Some(config.vector_index_refine_size)
             );
             assert_eq!(
-                pages.on_disk_cache().map(|c| c.bytes_capacity()),
+                capacity_of(&manager, "disk_cache_vector_index_refine"),
                 ee_mode.then_some(config.disk_cache_vector_index_data_size)
             );
         }
@@ -1610,25 +1318,25 @@ mod tests {
             ..CacheConfig::default()
         };
         let manager = CacheManager::try_new(&no_memory, &(1024 * 1024), "test", false)?;
-        assert!(
-            manager
-                .get_vector_refine_data_cache()
-                .in_memory_cache()
-                .is_none()
+        assert_eq!(
+            capacity_of(&manager, "memory_cache_vector_index_refine"),
+            None
         );
 
         // Resizing the HNSW object cache leaves cached pages alone.
         let manager =
             CacheManager::try_new(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
-        let pages = manager.get_vector_refine_data_cache().unwrap();
+        let pages = manager
+            .kinds
+            .mem_cache::<VectorIndexFile>(CacheKind::VectorRefine);
         let data = Bytes::from_static(b"fp16 page");
-        pages.insert(
-            "a.index:0_fp16_data#bytes=0..9".to_string(),
+        pages.put(
+            "a.index:0_fp16_data#bytes=0..9",
             VectorIndexFile::create("0_fp16_data#bytes=0..9".to_string(), data.clone()),
         );
         manager.set_cache_capacity(MEMORY_CACHE_VECTOR_INDEX, 0)?;
         assert_eq!(
-            pages.get("a.index:0_fp16_data#bytes=0..9").unwrap().data,
+            pages.lookup("a.index:0_fp16_data#bytes=0..9").unwrap().data,
             data
         );
         Ok(())

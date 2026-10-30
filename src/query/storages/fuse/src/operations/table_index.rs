@@ -42,8 +42,6 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::AsyncTransform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::FilterImpl;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_io::ReadSettings;
@@ -786,13 +784,12 @@ impl AsyncTransform for NgramIndexTransform {
             BlockWriter::write_down_bloom_index_state(&self.operator, Some(state)).await?;
 
             // remove old bloom index meta and filter
-            if let Some(cache) = CacheManager::instance().get_bloom_index_meta_cache() {
-                cache.evict(&index_path);
-            }
-            if let Some(cache) = CacheManager::instance().get_bloom_index_filter_cache() {
-                for old_ngram_name in old_ngram_names {
-                    cache.evict(&format!("{index_path}-{}", old_ngram_name));
-                }
+            let caches = FuseCaches::instance();
+            caches.index_metas.bloom.evict(&index_path);
+            for old_ngram_name in old_ngram_names {
+                caches
+                    .bloom_filters
+                    .evict(&format!("{index_path}-{}", old_ngram_name));
             }
         } else {
             return Err(ErrorCode::RefreshIndexError(
