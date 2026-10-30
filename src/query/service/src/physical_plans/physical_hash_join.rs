@@ -37,7 +37,6 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
@@ -52,6 +51,7 @@ use super::PhysicalPlanCast;
 use super::runtime_filter::PhysicalRuntimeFilters;
 use super::runtime_filter::RuntimeFilterProbeKey;
 use super::runtime_filter::canonical_equivalence_connector;
+use super::runtime_filter::resolve_runtime_filter_build_table_index;
 use super::runtime_filter::resolve_runtime_filter_probe_expr;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -785,6 +785,7 @@ impl PhysicalPlanBuilder {
     ///
     /// # Arguments
     /// * `join` - Join operation
+    /// * `build_side` - Build expression used to recover statistics provenance
     /// * `probe_schema` - Probe schema
     /// * `build_schema` - Build schema
     /// * `column_projections` - Column projections
@@ -795,6 +796,7 @@ impl PhysicalPlanBuilder {
     fn process_equi_conditions(
         &self,
         join: &Join,
+        build_side: &PExpr,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
         column_projections: &[Symbol],
@@ -824,20 +826,11 @@ impl PhysicalPlanBuilder {
             // Prepare runtime filter expression
             let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
 
-            let right_used_columns = right_condition.used_columns();
-            let build_table_index = if right_used_columns.len() == 1 {
-                let column_idx = *right_used_columns.iter().next().unwrap();
-                if matches!(
-                    self.metadata.read().column(column_idx),
-                    ColumnEntry::BaseTableColumn(_)
-                ) {
-                    self.metadata.read().column(column_idx).table_index()
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            let build_table_index = resolve_runtime_filter_build_table_index(
+                &self.metadata,
+                build_side,
+                right_condition,
+            );
 
             // Handle inner join column optimization
             if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
@@ -1315,6 +1308,7 @@ impl PhysicalPlanBuilder {
             build_table_indexes,
         ) = self.process_equi_conditions(
             join,
+            s_expr.build_side_child(),
             &probe_schema,
             &build_schema,
             &column_projections,

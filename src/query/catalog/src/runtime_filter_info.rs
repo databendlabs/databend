@@ -29,6 +29,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
@@ -437,10 +438,19 @@ pub struct RuntimeFilterBloom {
 #[derive(Default)]
 pub struct RuntimeFilterStats {
     bloom_time_ns: AtomicU64,
-    bloom_rows_filtered: AtomicU64,
+    // Shared only by workers consuming the same target entry. Keep the two
+    // counters together: independent atomics cannot provide a paired snapshot.
+    bloom_rows: Mutex<BloomRows>,
+    bloom_disabled: AtomicBool,
     inlist_min_max_time_ns: AtomicU64,
     min_max_rows_filtered: AtomicU64,
     min_max_partitions_pruned: AtomicU64,
+}
+
+#[derive(Default)]
+struct BloomRows {
+    checked: u64,
+    filtered: u64,
 }
 
 impl RuntimeFilterStats {
@@ -448,10 +458,35 @@ impl RuntimeFilterStats {
         Self::default()
     }
 
-    pub fn record_bloom(&self, time_ns: u64, rows_filtered: u64) {
+    pub fn bloom_sample_rows(build_rows: usize) -> u64 {
+        build_rows.saturating_mul(2).clamp(1_000_000, 8_000_000) as u64
+    }
+
+    pub fn bloom_disabled(&self) -> bool {
+        self.bloom_disabled.load(Ordering::Acquire)
+    }
+
+    /// Record a completed apply, including one already in flight when another
+    /// worker disabled Bloom. The caller must still use this batch's bitmap.
+    pub fn record_bloom(
+        &self,
+        time_ns: u64,
+        rows_filtered: u64,
+        rows_checked: u64,
+        sample_rows: u64,
+    ) {
         self.bloom_time_ns.fetch_add(time_ns, Ordering::Relaxed);
-        self.bloom_rows_filtered
-            .fetch_add(rows_filtered, Ordering::Relaxed);
+        if rows_checked == 0 {
+            return;
+        }
+        debug_assert!(rows_filtered <= rows_checked);
+        let mut rows = self.bloom_rows.lock();
+        rows.checked = rows.checked.saturating_add(rows_checked);
+        rows.filtered = rows.filtered.saturating_add(rows_filtered);
+        if rows.checked >= sample_rows && (rows.filtered as u128) * 100 < (rows.checked as u128) * 5
+        {
+            self.bloom_disabled.store(true, Ordering::Release);
+        }
     }
 
     pub fn record_inlist_min_max(&self, time_ns: u64, rows_filtered: u64, partitions_pruned: u64) {
@@ -464,9 +499,11 @@ impl RuntimeFilterStats {
     }
 
     pub fn snapshot(&self) -> RuntimeFilterStatsSnapshot {
+        let rows = self.bloom_rows.lock();
         RuntimeFilterStatsSnapshot {
             bloom_time_ns: self.bloom_time_ns.load(Ordering::Relaxed),
-            bloom_rows_filtered: self.bloom_rows_filtered.load(Ordering::Relaxed),
+            bloom_rows_filtered: rows.filtered,
+            bloom_rows_checked: rows.checked,
             inlist_min_max_time_ns: self.inlist_min_max_time_ns.load(Ordering::Relaxed),
             min_max_rows_filtered: self.min_max_rows_filtered.load(Ordering::Relaxed),
             min_max_partitions_pruned: self.min_max_partitions_pruned.load(Ordering::Relaxed),
@@ -478,6 +515,7 @@ impl RuntimeFilterStats {
 pub struct RuntimeFilterStatsSnapshot {
     pub bloom_time_ns: u64,
     pub bloom_rows_filtered: u64,
+    pub bloom_rows_checked: u64,
     pub inlist_min_max_time_ns: u64,
     pub min_max_rows_filtered: u64,
     pub min_max_partitions_pruned: u64,
@@ -751,6 +789,86 @@ mod tests {
         let order = filter.preferred_order().unwrap();
         let rank = order.rank(RuntimeScanStatistics::new(None, Some(&virtual_stats)));
         assert!(matches!(rank, RuntimeTopNRank::Value(value) if value == &int64(11)));
+    }
+
+    // Decide only after enough completed rows, and keep the 5% boundary.
+    #[test]
+    fn adaptive_bloom_sample_and_boundaries() {
+        assert_eq!(RuntimeFilterStats::bloom_sample_rows(0), 1_000_000);
+        assert_eq!(RuntimeFilterStats::bloom_sample_rows(600_000), 1_200_000);
+        assert_eq!(RuntimeFilterStats::bloom_sample_rows(4_000_000), 8_000_000);
+        assert_eq!(RuntimeFilterStats::bloom_sample_rows(usize::MAX), 8_000_000);
+
+        let stats = RuntimeFilterStats::new();
+        stats.record_bloom(0, 0, 0, 1000);
+        assert_eq!(stats.snapshot().bloom_rows_checked, 0);
+        assert!(!stats.bloom_disabled());
+        stats.record_bloom(0, 49, 999, 1000);
+        assert!(!stats.bloom_disabled());
+        stats.record_bloom(0, 0, 1, 1000);
+        assert!(stats.bloom_disabled());
+        stats.record_bloom(0, 1000, 1000, 1000);
+        assert!(stats.bloom_disabled()); // Never re-enable.
+
+        let boundary = RuntimeFilterStats::new();
+        boundary.record_bloom(0, 50, 1000, 1000);
+        assert!(!boundary.bloom_disabled());
+        boundary.record_bloom(0, 0, 1, 1000);
+        assert!(boundary.bloom_disabled()); // Reconsider as cumulative yield falls.
+    }
+
+    #[test]
+    fn adaptive_bloom_saturates_without_ratio_overflow() {
+        let stats = RuntimeFilterStats::new();
+        stats.record_bloom(0, u64::MAX, u64::MAX, 1);
+        stats.record_bloom(0, 1, 1, 1);
+        let snapshot = stats.snapshot();
+        assert_eq!(snapshot.bloom_rows_checked, u64::MAX);
+        assert_eq!(snapshot.bloom_rows_filtered, u64::MAX);
+        assert!(!stats.bloom_disabled());
+
+        let low_yield = RuntimeFilterStats::new();
+        low_yield.record_bloom(0, u64::MAX / 100, u64::MAX, 1);
+        assert!(low_yield.bloom_disabled());
+    }
+
+    #[test]
+    fn adaptive_bloom_workers_share_only_their_entry() {
+        let shared = Arc::new(RuntimeFilterStats::new());
+        let other = RuntimeFilterStats::new();
+        let barrier = Arc::new(std::sync::Barrier::new(3));
+        std::thread::scope(|scope| {
+            for _ in 0..2 {
+                let shared = shared.clone();
+                let barrier = barrier.clone();
+                scope.spawn(move || {
+                    barrier.wait();
+                    shared.record_bloom(0, 0, 500, 1000);
+                });
+            }
+            barrier.wait();
+        });
+        assert_eq!(shared.snapshot().bloom_rows_checked, 1000);
+        assert!(shared.bloom_disabled());
+        assert_eq!(other.snapshot().bloom_rows_checked, 0);
+        assert!(!other.bloom_disabled());
+
+        // Concurrent snapshots must never observe half of a recorded pair.
+        let paired = Arc::new(RuntimeFilterStats::new());
+        std::thread::scope(|scope| {
+            for _ in 0..2 {
+                let paired = paired.clone();
+                scope.spawn(move || {
+                    for _ in 0..1000 {
+                        paired.record_bloom(0, 1, 1, 1000);
+                        let snapshot = paired.snapshot();
+                        assert_eq!(snapshot.bloom_rows_checked, snapshot.bloom_rows_filtered);
+                    }
+                });
+            }
+        });
+        assert_eq!(paired.snapshot().bloom_rows_checked, 2000);
+        assert!(!paired.bloom_disabled());
     }
 
     #[test]

@@ -166,6 +166,10 @@ pub struct PhysicalRuntimeFilter {
 
     pub build_table_rows: Option<u64>,
 
+    /// Source table rows, only for one confirmed probe target.
+    #[serde(default)]
+    pub probe_table_rows: Option<u64>,
+
     /// Enable bloom filter for this runtime filter
     pub enable_bloom_runtime_filter: bool,
 
