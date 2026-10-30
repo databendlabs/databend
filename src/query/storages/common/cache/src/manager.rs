@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -32,6 +33,9 @@ use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
 use crate::SegmentStatisticsCache;
 use crate::Unit;
+use crate::cache_kind::CacheKind;
+use crate::cache_manager::CacheManager as KindCacheManager;
+use crate::cache_manager::CacheRow;
 use crate::caches::BlockMetaCache;
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
@@ -50,20 +54,23 @@ use crate::caches::PrunePartitionsCache;
 use crate::caches::SegmentBlockMetasCache;
 use crate::caches::SpatialIndexFileCache;
 use crate::caches::SpatialIndexMetaCache;
-use crate::caches::TableSnapshotCache;
-use crate::caches::TableSnapshotStatisticCache;
 use crate::caches::VectorIndexMetaCache;
 use crate::caches::VectorRefineDataCache;
 use crate::caches::VirtualColumnMetaCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
+use crate::store::LegacyStore;
+use crate::store::legacy_capacities;
 use crate::vector_index_cache::MEMORY_CACHE_VECTOR_INDEX;
 use crate::vector_index_cache::VectorIndexCache;
+
+/// Kinds already served by `KindCacheManager`; grows family by family until it covers all.
+const MIGRATED_KINDS: [CacheKind; 2] = [CacheKind::TableSnapshot, CacheKind::TableSnapshotStats];
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
 // The existing payload size is the total memory budget for page and full-component caches.
-fn inverted_index_payload_capacities(total: usize) -> (usize, usize) {
+pub(crate) fn inverted_index_payload_capacities(total: usize) -> (usize, usize) {
     let full = total / 4;
     (total - full, full)
 }
@@ -112,8 +119,8 @@ pub enum CacheClearanceLevel {
 
 /// Where all the caches reside
 pub struct CacheManager {
-    table_snapshot_cache: CacheSlot<TableSnapshotCache>,
-    table_statistic_cache: CacheSlot<TableSnapshotStatisticCache>,
+    /// Serves `MIGRATED_KINDS`, with the same capacities as before.
+    kinds: Arc<KindCacheManager>,
     segment_statistics_cache: CacheSlot<SegmentStatisticsCache>,
     compact_segment_info_cache: CacheSlot<CompactSegmentInfoCache>,
     column_oriented_segment_info_cache: CacheSlot<ColumnOrientedSegmentInfoCache>,
@@ -237,11 +244,19 @@ impl CacheManager {
         let in_memory_table_data_cache =
             Self::new_bytes_cache_slot(MEMORY_CACHE_TABLE_DATA, memory_cache_capacity);
 
+        let migrated = legacy_capacities(config, *max_server_memory_usage)
+            .into_iter()
+            .filter(|(kind, _)| MIGRATED_KINDS.contains(kind));
+        let kinds = Arc::new(KindCacheManager::new(
+            Arc::new(LegacyStore::new(migrated)),
+            HashMap::new(),
+        ));
+
         let instance =
         // setup in-memory table meta cache
         if !config.enable_table_meta_cache {
             Self {
-                table_snapshot_cache: CacheSlot::new(None),
+                kinds,
                 compact_segment_info_cache: CacheSlot::new(None),
                 bloom_index_filter_cache: CacheSlot::new(None),
                 bloom_index_meta_cache: CacheSlot::new(None),
@@ -258,7 +273,6 @@ impl CacheManager {
                 virtual_column_meta_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
-                table_statistic_cache: CacheSlot::new(None),
                 segment_statistics_cache: CacheSlot::new(None),
                 in_memory_table_data_cache,
                 segment_block_metas_cache: CacheSlot::new(None),
@@ -268,14 +282,6 @@ impl CacheManager {
                 allows_on_disk_cache,
             }
         } else {
-            let table_snapshot_cache = Self::new_items_cache_slot(
-                MEMORY_CACHE_TABLE_SNAPSHOT,
-                config.table_meta_snapshot_count as usize,
-            );
-            let table_statistic_cache = Self::new_items_cache_slot(
-                MEMORY_CACHE_TABLE_STATISTICS,
-                config.table_meta_statistic_count as usize,
-            );
             let segment_statistics_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_SEGMENT_STATISTICS,
                 config.segment_statistics_bytes as usize,
@@ -540,7 +546,7 @@ impl CacheManager {
             );
 
             Self {
-                table_snapshot_cache,
+                kinds,
                 compact_segment_info_cache,
                 column_oriented_segment_info_cache,
                 bloom_index_filter_cache,
@@ -556,7 +562,6 @@ impl CacheManager {
                 spatial_index_file_cache,
                 virtual_column_meta_cache,
                 prune_partitions_cache,
-                table_statistic_cache,
                 segment_statistics_cache,
                 in_memory_table_data_cache,
                 segment_block_metas_cache,
@@ -575,8 +580,18 @@ impl CacheManager {
         GlobalInstance::get()
     }
 
-    pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {
-        self.table_snapshot_cache.get()
+    /// Serves the kinds already migrated off this manager.
+    pub fn kind_manager(&self) -> &KindCacheManager {
+        &self.kinds
+    }
+
+    /// `system.caches` rows of the enabled `MIGRATED_KINDS`.
+    pub fn migrated_cache_rows(&self) -> Vec<CacheRow> {
+        self.kinds
+            .rows()
+            .into_iter()
+            .filter(|row| row.enabled && row.kind.is_some_and(|k| MIGRATED_KINDS.contains(&k)))
+            .collect()
     }
 
     /// Releases memory occupied by caches
@@ -626,6 +641,13 @@ impl CacheManager {
     }
 
     pub fn set_cache_capacity(&self, name: &str, new_capacity: u64) -> Result<()> {
+        if let Some(kind) = CacheKind::from_any_name(name)
+            && MIGRATED_KINDS.contains(&kind)
+        {
+            let capacity = usize::try_from(new_capacity)
+                .map_err(|_| ErrorCode::BadArguments("cache capacity exceeds this platform"))?;
+            return self.kinds.set_capacity_by_name(name, capacity);
+        }
         match name {
             MEMORY_CACHE_TABLE_DATA => {
                 let cache = &self.in_memory_table_data_cache;
@@ -739,12 +761,6 @@ impl CacheManager {
             }
             MEMORY_CACHE_COMPACT_SEGMENT_INFO => {
                 Self::set_bytes_capacity(&self.compact_segment_info_cache, new_capacity, name);
-            }
-            MEMORY_CACHE_TABLE_STATISTICS => {
-                Self::set_items_capacity(&self.table_statistic_cache, new_capacity, name);
-            }
-            MEMORY_CACHE_TABLE_SNAPSHOT => {
-                Self::set_items_capacity(&self.table_snapshot_cache, new_capacity, name);
             }
             MEMORY_CACHE_SEGMENT_BLOCK_METAS => {
                 Self::set_items_capacity(&self.segment_block_metas_cache, new_capacity, name);
@@ -861,10 +877,6 @@ impl CacheManager {
 
     pub fn get_iceberg_table_cache(&self) -> Option<IcebergTableCache> {
         self.iceberg_table_meta_cache.get()
-    }
-
-    pub fn get_table_snapshot_statistics_cache(&self) -> Option<TableSnapshotStatisticCache> {
-        self.table_statistic_cache.get()
     }
 
     pub fn get_segment_statistics_cache(&self) -> Option<SegmentStatisticsCache> {
@@ -1110,9 +1122,7 @@ const HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "cache_bloom_index_filter";
 const IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
 const MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT_INFO: &str = "memory_cache_column_oriented_segment_info";
-const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_SEGMENT_STATISTICS: &str = "memory_cache_segment_statistics";
-const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
 const MEMORY_CACHE_ICEBERG_TABLE: &str = "memory_cache_iceberg_table";
 
@@ -1127,6 +1137,7 @@ mod tests {
     use bytes::Bytes;
     use databend_common_config::CacheConfig;
     use databend_common_config::DiskCacheInnerConfig;
+    use databend_common_expression::TableSchema;
     use databend_storages_common_index::BloomIndexMeta;
     use databend_storages_common_index::filters::FilterBuilder;
     use databend_storages_common_index::filters::FilterImpl;
@@ -1136,6 +1147,9 @@ mod tests {
     use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::meta::MetaEncoding;
     use databend_storages_common_table_meta::meta::RawBlockMeta;
+    use databend_storages_common_table_meta::meta::Statistics;
+    use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+    use databend_storages_common_table_meta::meta::TableSnapshot;
     use tempfile::TempDir;
 
     use super::*;
@@ -1878,6 +1892,73 @@ mod tests {
             20
         );
 
+        Ok(())
+    }
+
+    fn empty_snapshot() -> TableSnapshot {
+        TableSnapshot::try_new(
+            None,
+            None,
+            TableSchema::empty(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+            TableMetaTimestamps::new(None, chrono::Duration::hours(1)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_migrated_snapshot_caches_keep_legacy_capacity() -> Result<()> {
+        let config = CacheConfig {
+            table_meta_snapshot_count: 2,
+            table_meta_statistic_count: 3,
+            ..Default::default()
+        };
+        let manager = CacheManager::try_new(&config, &(1 << 20), "test_tenant_id", false)?;
+        let rows = manager.migrated_cache_rows();
+        let names: Vec<_> = rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, [
+            "memory_cache_table_snapshot",
+            "memory_cache_table_statistics"
+        ]);
+        assert!(
+            rows.iter()
+                .all(|r| r.unit == Unit::Count && r.num_items == 0)
+        );
+        assert_eq!((rows[0].capacity, rows[1].capacity), (Some(2), Some(3)));
+
+        let snapshots = manager
+            .kinds
+            .mem_cache::<Arc<TableSnapshot>>(CacheKind::TableSnapshot);
+        for i in 0..3 {
+            snapshots.put(&i.to_string(), Arc::new(empty_snapshot()));
+        }
+        assert_eq!(manager.migrated_cache_rows()[0].num_items, 2);
+
+        // Legacy names resize in the legacy unit.
+        manager.set_cache_capacity("memory_cache_table_snapshot", 1)?;
+        let row = &manager.migrated_cache_rows()[0];
+        assert_eq!((row.num_items, row.capacity), (1, Some(1)));
+        assert!(manager.set_cache_capacity("no_such_cache", 1).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_migrated_snapshot_caches_follow_enable_table_meta_cache() -> Result<()> {
+        let config = CacheConfig {
+            enable_table_meta_cache: false,
+            ..Default::default()
+        };
+        let manager = CacheManager::try_new(&config, &(1 << 20), "test_tenant_id", false)?;
+        assert!(manager.migrated_cache_rows().is_empty());
+
+        // Enabling at runtime creates an item-bounded cache, as before.
+        manager.set_cache_capacity("memory_cache_table_snapshot", 4)?;
+        let rows = manager.migrated_cache_rows();
+        assert_eq!(rows.len(), 1);
+        assert_eq!((rows[0].capacity, rows[0].unit), (Some(4), Unit::Count));
         Ok(())
     }
 

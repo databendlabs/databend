@@ -40,11 +40,12 @@ use databend_common_storage::FaultKind;
 use databend_common_storage::FaultOp;
 use databend_common_storage::FaultRule;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
-use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::io::snapshot_history;
 use databend_enterprise_query::storages::fuse::operations::vacuum_table_v2::do_vacuum2;
 use databend_enterprise_query::table_ref::RealTableRefHandler;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -57,8 +58,6 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
 use databend_query::test_kits::query_count;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -588,8 +587,9 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let latest_location = fuse_table.snapshot_loc().unwrap();
     let snapshot_version = TableMetaLocationGenerator::snapshot_version(&latest_location);
-    let snapshots: Vec<_> = SnapshotHistoryReader::snapshot_history(
-        MetaReaders::table_snapshot_reader(fuse_table.get_operator()),
+    let snapshots: Vec<_> = snapshot_history(
+        &FuseCaches::instance().snapshots,
+        fuse_table.get_operator(),
         latest_location,
         snapshot_version,
         fuse_table.meta_location_generator().clone(),
@@ -1448,9 +1448,7 @@ async fn test_vacuum_incomplete_descendant_mark_does_not_sweep() -> anyhow::Resu
         fixture.execute_command(&sql).await?;
     }
     child.get_operator().delete(&anchor_location).await?;
-    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
-        cache.evict(&anchor_location);
-    }
+    FuseCaches::instance().snapshots.evict(&anchor_location);
     // Keep the lower bound below the missing anchor during the clone-aware mark.
     fixture
         .default_session()

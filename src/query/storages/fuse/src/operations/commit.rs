@@ -38,9 +38,6 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_meta_client::types::MatchSeq;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -62,8 +59,9 @@ use opendal::Operator;
 use super::TableMutationAggregator;
 use super::new_serialize_segment_processor;
 use crate::FuseTable;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
 use crate::io::MetaWriter;
+use crate::io::SnapshotStatsReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::SnapshotHintWriter;
 use crate::operations::common::AppendGenerator;
@@ -216,8 +214,10 @@ impl FuseTable {
             let table_statistics_location = table_statistics_location.unwrap();
             match &res {
                 Ok(_) => {
-                    TableSnapshotStatistics::cache()
-                        .insert(table_statistics_location, table_statistics.unwrap());
+                    FuseCaches::instance().snapshots.put_stats(
+                        &table_statistics_location,
+                        Arc::new(table_statistics.unwrap()),
+                    );
                 }
                 Err(e) => info!("update_table_meta failed. {}", e),
             }
@@ -306,7 +306,9 @@ impl FuseTable {
             .await?;
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
-        TableSnapshot::cache().insert(snapshot_location.clone(), snapshot);
+        FuseCaches::instance()
+            .snapshots
+            .put(&snapshot_location, Arc::new(snapshot));
         Self::write_last_snapshot_hint(
             ctx,
             operator,
@@ -398,23 +400,21 @@ impl FuseTable {
             (true, _) => {
                 if let Some(loc) = &prev_stats_location {
                     let ver = TableMetaLocationGenerator::table_statistics_version(loc);
-                    let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
-                    let load_params = LoadParams {
-                        location: loc.clone(),
-                        len_hint: None,
-                        ver,
-                        put_cache: true,
-                    };
-                    let prev_stats = reader.read(&load_params).await?;
+                    let caches = FuseCaches::instance();
+                    let reader = SnapshotStatsReader::new(self.get_operator());
+                    let prev_stats = caches
+                        .snapshots
+                        .get_stats(&reader, loc.clone(), ver)
+                        .await?;
                     if prev_stats.row_count == 0 {
                         // Fallback to snapshot for real row count
                         let snapshot_loc = self.meta_location_generator().gen_snapshot_location(
                             &prev_stats.snapshot_id,
                             TableSnapshot::VERSION,
                         )?;
-                        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-                        let prev_snapshot = FuseTable::read_table_snapshot_with_reader(
-                            reader,
+                        let prev_snapshot = FuseTable::read_table_snapshot_at(
+                            &caches.snapshots,
+                            self.get_operator(),
                             Some(snapshot_loc),
                             TableSnapshot::VERSION,
                         )

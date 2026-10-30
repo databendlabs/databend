@@ -31,14 +31,27 @@ parquet = { workspace = true }
 rayon = { workspace = true }
 rustix = { workspace = true }
 siphasher = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
+chrono = { workspace = true }
+databend-common-storage = { workspace = true }
 divan = { workspace = true }
+futures = { workspace = true }
 mockall = { workspace = true }
+rand = { workspace = true }
 tempfile = { workspace = true }
 
 [[bench]]
 name = "read_cache_content"
+harness = false
+
+[[bench]]
+name = "store"
+harness = false
+
+[[bench]]
+name = "pressure_shrink"
 harness = false
 
 [target.'cfg(unix)'.dependencies]

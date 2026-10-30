@@ -29,8 +29,10 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_statistics::Datum;
 use databend_common_storage::MetaHLL12;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::SnapshotStatsReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
 use databend_common_storages_fuse::operations::AnalyzeOptions;
@@ -488,13 +490,15 @@ async fn latest_statistics(
     let table = latest_fuse_table(ctx, name).await?;
     let snapshot = table.read_table_snapshot().await?.unwrap();
     let location = snapshot.table_statistics_location.as_ref().unwrap();
-    let statistics = MetaReaders::table_snapshot_statistics_reader(table.get_operator())
-        .read(&LoadParams {
-            location: location.clone(),
-            len_hint: None,
-            ver: TableMetaLocationGenerator::table_statistics_version(location),
-            put_cache: false,
-        })
+    let ver = TableMetaLocationGenerator::table_statistics_version(location);
+    let statistics = FuseCaches::instance()
+        .snapshots
+        .read_only()
+        .get_stats(
+            &SnapshotStatsReader::new(table.get_operator()),
+            location.clone(),
+            ver,
+        )
         .await?;
     Ok((table, snapshot, statistics.as_ref().clone()))
 }

@@ -32,7 +32,9 @@ use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SnapshotReader;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
@@ -105,16 +107,11 @@ async fn check_partitions(parts: &Vec<PartInfoPtr>, fixture: &TestFixture) -> Re
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-
-    let load_params = LoadParams {
-        location: snapshot_name.clone(),
-        len_hint: None,
-        ver: TableSnapshot::VERSION,
-        put_cache: true,
-    };
-
-    let snapshot = reader.read(&load_params).await?;
+    let reader = SnapshotReader::new(fuse_table.get_operator());
+    let snapshot = FuseCaches::instance()
+        .snapshots
+        .get(&reader, snapshot_name.clone(), TableSnapshot::VERSION)
+        .await?;
     for segment in &snapshot.segments {
         segment_name.insert(segment.0.clone());
 

@@ -12,4 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod cache_manager;
+mod disk_tier;
+mod fakes;
+mod mem_bytes_accuracy;
+mod mem_cache;
 mod providers;
+mod store;
+
+#[global_allocator]
+static ALLOCATOR: mem_bytes_accuracy::CountingAlloc = mem_bytes_accuracy::CountingAlloc;

@@ -40,10 +40,6 @@ pub type SegmentBlockMetasCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
 /// In-memory cache of individual BlockMeta.
 pub type BlockMetaCache = InMemoryLruCache<BlockMeta>;
 
-/// In memory object cache of TableSnapshot
-pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
-/// In memory object cache of TableSnapshotStatistics
-pub type TableSnapshotStatisticCache = InMemoryLruCache<TableSnapshotStatistics>;
 /// In memory object cache of SegmentStatistics
 pub type SegmentStatisticsCache = InMemoryLruCache<SegmentStatistics>;
 /// In memory object cache of bloom filter.
@@ -154,13 +150,6 @@ impl CachedObject<CompactSegmentInfo> for SegmentInfo {
     }
 }
 
-impl CachedObject<TableSnapshot> for TableSnapshot {
-    type Cache = TableSnapshotCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_table_snapshot_cache()
-    }
-}
-
 impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
     type Cache = SegmentBlockMetasCache;
     fn cache() -> Option<Self::Cache> {
@@ -172,13 +161,6 @@ impl CachedObject<IcebergTableCacheValue> for IcebergTableCacheValue {
     type Cache = IcebergTableCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_iceberg_table_cache()
-    }
-}
-
-impl CachedObject<TableSnapshotStatistics> for TableSnapshotStatistics {
-    type Cache = TableSnapshotStatisticCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_table_snapshot_statistics_cache()
     }
 }
 
@@ -285,24 +267,6 @@ impl From<BlockMeta> for CacheValue<BlockMeta> {
 
 impl From<IcebergTableCacheValue> for CacheValue<IcebergTableCacheValue> {
     fn from(value: IcebergTableCacheValue) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<TableSnapshot> for CacheValue<TableSnapshot> {
-    fn from(value: TableSnapshot) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<TableSnapshotStatistics> for CacheValue<TableSnapshotStatistics> {
-    fn from(value: TableSnapshotStatistics) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

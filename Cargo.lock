@@ -3067,6 +3067,7 @@ version = "0.1.0"
 dependencies = [
  "hashbrown 0.15.3",
  "hashlink",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -5926,6 +5927,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "bytes",
+ "chrono",
  "crc32fast",
  "crossbeam-channel",
  "databend-base",
@@ -5936,19 +5938,23 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-metrics",
+ "databend-common-storage",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "divan",
+ "futures",
  "hex",
  "libc",
  "log",
  "mockall",
  "parking_lot 0.12.3",
  "parquet",
+ "rand 0.8.5",
  "rayon",
  "rustix 0.38.44",
  "siphasher 0.3.11",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

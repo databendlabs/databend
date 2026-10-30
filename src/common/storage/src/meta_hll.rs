@@ -117,6 +117,10 @@ impl MetaHLL {
     pub fn num_empty_registers(&self) -> usize {
         self.registers.iter().filter(|x| **x == 0).count()
     }
+
+    pub fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.registers.capacity()
+    }
 }
 
 /// Helper function sigma as defined in

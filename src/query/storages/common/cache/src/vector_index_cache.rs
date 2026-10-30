@@ -55,6 +55,10 @@ impl CachedVectorIndex {
     pub fn index(&self) -> &HNSWIndex {
         &self.index
     }
+
+    pub fn memory_size(&self) -> usize {
+        self.memory_size
+    }
 }
 
 struct IndexReservation {

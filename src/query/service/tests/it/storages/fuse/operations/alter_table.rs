@@ -33,7 +33,9 @@ use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SnapshotReader;
 use databend_query::interpreters::AddTableColumnInterpreter;
 use databend_query::interpreters::DropTableColumnInterpreter;
 use databend_query::interpreters::Interpreter;
@@ -74,15 +76,12 @@ async fn check_segment_column_ids(
         .unwrap();
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-    let snapshot_reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let params = LoadParams {
-        location: snapshot_loc.clone(),
-        len_hint: None,
-        ver: TableSnapshot::VERSION,
-        put_cache: false,
-    };
-
-    let snapshot = snapshot_reader.read(&params).await?;
+    let reader = SnapshotReader::new(fuse_table.get_operator());
+    let snapshot = FuseCaches::instance()
+        .snapshots
+        .read_only()
+        .get(&reader, snapshot_loc.clone(), TableSnapshot::VERSION)
+        .await?;
     if let Some(expected_column_min_max) = expected_column_min_max {
         for (column_id, (min, max)) in &expected_column_min_max {
             if let Some(stat) = snapshot.summary.col_stats.get(column_id) {

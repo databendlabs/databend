@@ -36,6 +36,7 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -206,6 +207,7 @@ impl GlobalServices {
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
+        FuseCaches::init(CacheManager::instance().kind_manager());
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config

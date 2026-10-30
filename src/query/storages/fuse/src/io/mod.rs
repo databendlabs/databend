@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod cache;
 mod inverted_index_user_dictionary;
 mod locations;
 pub mod read;
@@ -19,6 +20,9 @@ mod segments;
 mod snapshots;
 mod write;
 
+pub use cache::FuseCaches;
+pub use cache::SnapshotCache;
+pub use cache::SnapshotKey;
 pub use inverted_index_user_dictionary::InvertedIndexUserDictionary;
 pub use inverted_index_user_dictionary::MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE;
 pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary;
@@ -39,12 +43,13 @@ pub use read::FuseLowLevelFullRowReader;
 pub use read::InvertedIndexReader;
 pub use read::MetaReaders;
 pub use read::RowSelection;
-pub use read::SnapshotHistoryReader;
-pub use read::TableSnapshotReader;
+pub use read::SnapshotReader;
+pub use read::SnapshotStatsReader;
 pub use read::VirtualBlockReadResult;
 pub use read::VirtualColumnReader;
 pub use read::build_columns_meta;
 pub use read::read_segment_stats;
+pub use read::snapshot_history;
 pub use segments::SegmentsIO;
 pub use segments::SerializedSegment;
 pub use snapshots::SnapshotLiteExtended;

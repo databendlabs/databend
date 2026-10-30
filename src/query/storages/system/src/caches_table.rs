@@ -39,6 +39,7 @@ use databend_storages_common_cache::DiskCacheAccessor;
 use databend_storages_common_cache::HybridCache;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::Unit;
+use databend_storages_common_cache::cache_manager::CacheRow;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
@@ -73,8 +74,6 @@ impl SyncSystemTable for CachesTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_node = ctx.get_cluster().local_id.clone();
         let cache_manager = CacheManager::instance();
-        let table_snapshot_cache = cache_manager.get_table_snapshot_cache();
-        let table_snapshot_statistic_cache = cache_manager.get_table_snapshot_statistics_cache();
         let segment_info_cache = cache_manager.get_table_segment_cache();
         let segment_statistics_cache = cache_manager.get_segment_statistics_cache();
         let column_oriented_segment_info_cache =
@@ -102,11 +101,8 @@ impl SyncSystemTable for CachesTable {
 
         let mut columns = CachesTableColumns::default();
 
-        if let Some(table_snapshot_cache) = table_snapshot_cache {
-            Self::append_row(&table_snapshot_cache, &local_node, &mut columns);
-        }
-        if let Some(table_snapshot_statistic_cache) = table_snapshot_statistic_cache {
-            Self::append_row(&table_snapshot_statistic_cache, &local_node, &mut columns);
+        for row in cache_manager.migrated_cache_rows() {
+            Self::append_cache_row(row, &local_node, &mut columns);
         }
 
         if let Some(segment_info_cache) = segment_info_cache {
@@ -306,6 +302,18 @@ impl CachesTable {
         columns.access.push(access);
         columns.hit.push(hit);
         columns.miss.push(miss);
+    }
+
+    fn append_cache_row(row: CacheRow, local_node: &str, columns: &mut CachesTableColumns) {
+        columns.nodes.push(local_node.to_string());
+        columns.names.push(row.name);
+        columns.num_items.push(row.num_items);
+        columns.size.push(row.size);
+        columns.capacity.push(row.capacity.unwrap_or(u64::MAX));
+        columns.unit.push(row.unit.to_string());
+        columns.access.push(row.access);
+        columns.hit.push(row.hit);
+        columns.miss.push(row.miss);
     }
 
     fn append_on_disk_cache_row(

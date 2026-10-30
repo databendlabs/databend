@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::SeekFrom;
+use std::sync::Arc;
 
 use bytes::Buf;
 use databend_common_exception::ErrorCode;
@@ -24,6 +26,7 @@ use databend_storages_common_cache::HybridCacheReader;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_index::VectorIndexMeta;
@@ -45,11 +48,9 @@ use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::ParquetMetaDataReader;
 
 pub use self::thrift_file_meta_read::read_thrift_file_metadata;
+use crate::io::SnapshotKey;
 
-pub type TableSnapshotStatisticsReader =
-    InMemoryCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
 pub type BloomIndexMetaReader = HybridCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
-pub type TableSnapshotReader = InMemoryCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type CompactSegmentInfoReader =
     InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 pub type VectorIndexMetaReader = HybridCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
@@ -73,24 +74,6 @@ impl MetaReaders {
         schema: TableSchemaRef,
     ) -> CompactSegmentInfoReader {
         CompactSegmentInfoReader::new(None, LoaderWrapper((dal, schema)))
-    }
-
-    pub fn table_snapshot_reader(dal: Operator) -> TableSnapshotReader {
-        TableSnapshotReader::new(
-            CacheManager::instance().get_table_snapshot_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn table_snapshot_reader_without_cache(dal: Operator) -> TableSnapshotReader {
-        TableSnapshotReader::new(None, LoaderWrapper(dal))
-    }
-
-    pub fn table_snapshot_statistics_reader(dal: Operator) -> TableSnapshotStatisticsReader {
-        TableSnapshotStatisticsReader::new(
-            CacheManager::instance().get_table_snapshot_statistics_cache(),
-            LoaderWrapper(dal),
-        )
     }
 
     pub fn segment_stats_reader(dal: Operator) -> SegmentStatsReader {
@@ -133,23 +116,59 @@ impl MetaReaders {
 // Loader and types of table meta data are all defined outside (of this crate)
 pub struct LoaderWrapper<T>(T);
 
-#[async_trait::async_trait]
-impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
-        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        let version = SnapshotVersion::try_from(params.ver)?;
-        version.read(reader.reader())
+/// Reads and decodes table snapshots. No caching; pair with `SnapshotCache`.
+#[derive(Clone)]
+pub struct SnapshotReader {
+    operator: Operator,
+}
+
+impl SnapshotReader {
+    pub fn new(operator: Operator) -> Self {
+        SnapshotReader { operator }
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
+impl Reader for SnapshotReader {
+    type Key = SnapshotKey;
+    type Item = Arc<TableSnapshot>;
+
+    fn cache_key<'a>(&self, key: &'a SnapshotKey) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
-        let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
-        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        version.read(reader.reader())
+    async fn read(&self, (location, ver): &SnapshotKey) -> Result<Arc<TableSnapshot>> {
+        let version = SnapshotVersion::try_from(*ver)?;
+        let buffer = bytes_reader(&self.operator, location, None).await?;
+        Ok(Arc::new(version.read(buffer.reader())?))
+    }
+}
+
+/// Reads and decodes table snapshot statistics. No caching; pair with `SnapshotCache`.
+#[derive(Clone)]
+pub struct SnapshotStatsReader {
+    operator: Operator,
+}
+
+impl SnapshotStatsReader {
+    pub fn new(operator: Operator) -> Self {
+        SnapshotStatsReader { operator }
+    }
+}
+
+impl Reader for SnapshotStatsReader {
+    type Key = SnapshotKey;
+    type Item = Arc<TableSnapshotStatistics>;
+
+    fn cache_key<'a>(&self, key: &'a SnapshotKey) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
+    #[async_backtrace::framed]
+    async fn read(&self, (location, ver): &SnapshotKey) -> Result<Arc<TableSnapshotStatistics>> {
+        let version = TableSnapshotStatisticsVersion::try_from(*ver)?;
+        let buffer = bytes_reader(&self.operator, location, None).await?;
+        Ok(Arc::new(version.read(buffer.reader())?))
     }
 }
 

@@ -17,15 +17,13 @@ use std::time::Duration;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
-use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_common_storages_fuse::io::FuseCaches;
+use databend_common_storages_fuse::io::snapshot_history;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextQueryState;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
@@ -75,18 +73,18 @@ async fn test_fuse_navigate() -> anyhow::Result<()> {
     // 2. grab the history
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
     let loc = fuse_table.snapshot_loc().unwrap();
     assert_eq!(second_snapshot, loc);
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());
-    let snapshots: Vec<_> = reader
-        .snapshot_history(
-            loc.clone(),
-            version,
-            fuse_table.meta_location_generator().clone(),
-        )
-        .try_collect()
-        .await?;
+    let snapshots: Vec<_> = snapshot_history(
+        &FuseCaches::instance().snapshots,
+        fuse_table.get_operator(),
+        loc.clone(),
+        version,
+        fuse_table.meta_location_generator().clone(),
+    )
+    .try_collect()
+    .await?;
 
     // 3. there should be two snapshots
     assert_eq!(2, snapshots.len());
@@ -208,9 +206,7 @@ async fn test_no_check_timestamp_maps_missing_prev_snapshot() -> anyhow::Result<
 
     // Simulate vacuum: remove the predecessor snapshot object and drop its cache entry.
     fuse_table.get_operator().delete(&first_snapshot).await?;
-    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
-        cache.evict(&first_snapshot);
-    }
+    FuseCaches::instance().snapshots.evict(&first_snapshot);
 
     // Navigate with NO_CHECK to a time between the two snapshots.
     // The path should list the second snapshot and try to load its prev_snapshot_id,
@@ -282,9 +278,7 @@ async fn test_stream_navigation_maps_missing_snapshot() -> anyhow::Result<()> {
 
     // Simulate vacuum: remove the base snapshot object and drop its cache entry.
     fuse_table.get_operator().delete(&base_snapshot).await?;
-    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
-        cache.evict(&base_snapshot);
-    }
+    FuseCaches::instance().snapshots.evict(&base_snapshot);
 
     let ctx = fixture.new_query_ctx().await?;
     let tbl_ctx: std::sync::Arc<dyn TableContext> = ctx.clone();
