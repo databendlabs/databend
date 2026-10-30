@@ -97,6 +97,14 @@ pub async fn load_bloom_filter_by_columns<'a>(
     index_path: &'a str,
     index_length: u64,
 ) -> Result<BlockFilter> {
+    // 0. Fast path: every requested filter is already cached. Serving them
+    // straight from the filter cache needs neither the index meta nor the
+    // index file, so a miss in the (count bounded) meta cache does not turn
+    // into a remote read of the index file on every query.
+    if let Some(block_filter) = load_cached_bloom_filters(index_path, column_needed) {
+        return Ok(block_filter);
+    }
+
     let whole_file =
         prepare_bloom_index_read_source(&dal, settings, index_path, index_length).await?;
 
@@ -156,6 +164,48 @@ pub async fn load_bloom_filter_by_columns<'a>(
 
     Ok(BlockFilter {
         filter_schema: Arc::new(filter_schema),
+        filters,
+    })
+}
+
+/// Returns the requested filters when all of them are present in the
+/// in-memory tier of the bloom filter cache, `None` otherwise (including when
+/// the cache is disabled).
+///
+/// Only the in-memory tier is probed, because this runs on the caller's
+/// thread. A hit in the on-disk tier needs a synchronous file read and
+/// decode, so such filters are left to the full load path, which reads them on
+/// the I/O runtime, concurrently across columns. For the same reason a memory
+/// hit here does not re-populate the on-disk tier (that serializes the
+/// filter); the full load path re-populates it once the filter is loaded
+/// again.
+///
+/// The returned filters keep the order of `column_needed` with duplicates
+/// removed, so callers that rewrite the index (e.g. ngram index refresh) get
+/// a deterministic column order.
+///
+/// A column that carries no filter in this index is never cached, so such a
+/// request falls through to the full load path, which keeps the behaviour of
+/// silently omitting it.
+fn load_cached_bloom_filters(index_path: &str, column_needed: &[String]) -> Option<BlockFilter> {
+    if column_needed.is_empty() {
+        return None;
+    }
+    let cache = FilterImpl::cache()?;
+    let memory_cache = cache.in_memory_cache()?;
+    let mut seen = HashSet::with_capacity(column_needed.len());
+    let mut fields = Vec::with_capacity(column_needed.len());
+    let mut filters = Vec::with_capacity(column_needed.len());
+    for name in column_needed {
+        if !seen.insert(name) {
+            continue;
+        }
+        let filter = memory_cache.get(BloomColumnFilterReader::cache_key(index_path, name))?;
+        fields.push(TableField::new(name, TableDataType::Binary));
+        filters.push(filter);
+    }
+    Some(BlockFilter {
+        filter_schema: Arc::new(TableSchema::new(fields)),
         filters,
     })
 }
@@ -324,6 +374,7 @@ mod tests {
     use databend_storages_common_index::BloomIndexBuilder;
     use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
+    use databend_storages_common_index::filters::Filter;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;
 
@@ -422,6 +473,101 @@ mod tests {
         assert_eq!(block_filter.filter_schema.num_fields(), 1);
         assert_eq!(block_filter.filter_schema.fields()[0].name(), &filter_name);
         assert_eq!(block_filter.filters.len(), 1);
+        Ok(())
+    }
+
+    /// Cached filters must be served without touching the index meta or the
+    /// index file: a miss in the meta cache (bounded by item count) used to
+    /// trigger a remote read of the index file on every query even though the
+    /// requested filters were still cached.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cached_filters_do_not_need_meta_or_index_file() -> Result<()> {
+        init_test_globals()?;
+
+        let (data, filter_name) = write_bloom_index_bytes()?;
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let path = "bloom_index_cached_only";
+        operator.write(path, data.clone()).await?;
+
+        let Some(filter_cache) = FilterImpl::cache() else {
+            // Nothing to verify without a filter cache.
+            return Ok(());
+        };
+        if let Some(cache) = BloomIndexMeta::cache() {
+            cache.evict(path);
+        }
+        let filter_key = BloomColumnFilterReader::cache_key(path, &filter_name);
+        filter_cache.evict(&filter_key);
+
+        let settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 0,
+            parquet_fast_read_bytes: data.len() as u64,
+        };
+
+        // Warm the filter cache.
+        load_bloom_filter_by_columns(
+            operator.clone(),
+            &settings,
+            &[filter_name.clone()],
+            path,
+            data.len() as u64,
+        )
+        .await?;
+        let cached = filter_cache.get(&filter_key).unwrap();
+
+        // Cache a second filter under another name, to check the order of the
+        // returned filters.
+        let other_name = format!("{filter_name}_other");
+        let (other_filter, _) = FilterImpl::from_bytes(&cached.to_bytes()?)?;
+        filter_cache.insert(
+            BloomColumnFilterReader::cache_key(path, &other_name),
+            other_filter,
+        );
+
+        // Simulate a meta-cache eviction and make any storage access fail.
+        if let Some(cache) = BloomIndexMeta::cache() {
+            cache.evict(path);
+        }
+        operator.delete(path).await?;
+
+        // Duplicates are removed and the request order is kept.
+        let block_filter = load_bloom_filter_by_columns(
+            operator.clone(),
+            &settings,
+            &[other_name.clone(), filter_name.clone(), other_name.clone()],
+            path,
+            data.len() as u64,
+        )
+        .await?;
+        let names = block_filter
+            .filter_schema
+            .fields()
+            .iter()
+            .map(|field| field.name().clone())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec![other_name.clone(), filter_name.clone()]);
+        assert_eq!(block_filter.filters.len(), 2);
+        assert!(Arc::ptr_eq(&block_filter.filters[1], &cached));
+
+        // A filter that is not cached still goes through the full path (and
+        // fails here because the file is gone), so the fast path is only taken
+        // when every requested filter is cached.
+        let missing = format!("{filter_name}_missing");
+        assert!(
+            load_bloom_filter_by_columns(
+                operator,
+                &settings,
+                &[filter_name.clone(), missing],
+                path,
+                data.len() as u64,
+            )
+            .await
+            .is_err()
+        );
+
+        filter_cache.evict(&filter_key);
+        filter_cache.evict(&BloomColumnFilterReader::cache_key(path, &other_name));
         Ok(())
     }
 }
