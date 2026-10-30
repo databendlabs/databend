@@ -30,6 +30,7 @@ crc32fast = { workspace = true }
 enquote = { workspace = true }
 futures = { workspace = true }
 hickory-resolver = { workspace = true }
+inferno = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 micromarshal = { workspace = true }

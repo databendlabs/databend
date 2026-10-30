@@ -95,24 +95,28 @@ pub trait Interpreter: Sync + Send {
     /// Build and run the pipeline with the given lifecycle hooks.
     /// All logging (start/finish) is handled here based on `hooks.log_finished`.
     ///
-    /// Runs inside a tracking scope whose `io_stats` is the query's own
-    /// counter, so the pipeline nodes built here (which capture the current
-    /// payload) attribute their storage IO to the query no matter which
-    /// handler called us. Handlers that already installed it see no change.
+    /// Runs inside a tracking scope whose `io_stats` and `perf_query_token` are the
+    /// query's own, so the pipeline nodes built here (which capture the current
+    /// payload) attribute their storage IO and on-demand profiling samples to
+    /// the query no matter which handler called us. Handlers that already
+    /// installed them see no change.
     async fn execute_with_hooks(
         &self,
         ctx: Arc<QueryContext>,
         hooks: QueryFinishHooks,
     ) -> Result<SendableDataBlockStream> {
         let query_io_stats = ctx.get_local_io_stats();
-        let already_tracked =
-            ThreadTracker::io_stats().is_some_and(|current| Arc::ptr_eq(current, &query_io_stats));
+        let query_perf_token = ctx.get_perf_query_token();
+        let already_tracked = ThreadTracker::io_stats()
+            .is_some_and(|current| Arc::ptr_eq(current, &query_io_stats))
+            && ThreadTracker::perf_query_token() == query_perf_token;
         if already_tracked {
             return self.execute_with_hooks_inner(ctx, hooks).await;
         }
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.io_stats = Some(query_io_stats);
+        tracking_payload.perf_query_token = query_perf_token;
         tracking_payload
             .tracking(self.execute_with_hooks_inner(ctx, hooks))
             .await

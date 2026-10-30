@@ -18,6 +18,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use pprof::protos::Message;
 
+use crate::runtime::ExclusiveProfilerGuard;
+
 pub struct Profiling {
     duration: Duration,
     frequency: i32,
@@ -32,11 +34,8 @@ impl Profiling {
     }
 
     pub async fn report(&self) -> Result<pprof::Report> {
-        let guard = pprof::ProfilerGuardBuilder::default()
-            .frequency(self.frequency)
-            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
-            .build()
-            .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
+        let guard = ExclusiveProfilerGuard::start(self.frequency, false)
+            .map_err(|e| ErrorCode::UnknownException(e.message()))?;
         tokio::time::sleep(self.duration).await;
         guard
             .report()

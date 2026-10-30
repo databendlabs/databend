@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+use std::fmt::Write;
+use std::ops::Deref;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
@@ -21,6 +28,7 @@ use regex::Regex;
 
 use crate::runtime::ThreadTracker;
 use crate::runtime::TrackingGuard;
+use crate::runtime::TrackingPayload;
 
 /// This flag need to be accessed in signal handler,
 /// so we use #[thread_local] and put it separately from ThreadTracker
@@ -30,7 +38,101 @@ use crate::runtime::TrackingGuard;
 #[thread_local]
 static mut PERF_FLAG: bool = false;
 
-pub type QueryPerfGuard = (TrackingGuard, ProfilerGuard<'static>);
+/// `perf_query_token` of the query profiled on demand, 0 if none. Payload
+/// switches compare it with `TrackingPayload.perf_query_token`, so the common
+/// path pays a single load of a static and payload clones stay plain copies.
+static DYNAMIC_PERF_TARGET: AtomicU64 = AtomicU64::new(0);
+
+/// Source of `perf_query_token`s, 0 means no query.
+static NEXT_PERF_QUERY_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+/// Set while an `ExclusiveProfilerGuard` is alive.
+static PROFILER_OWNED: AtomicBool = AtomicBool::new(false);
+
+pub type QueryPerfGuard = (TrackingGuard, ExclusiveProfilerGuard);
+
+/// The CPU profiler is process-wide. pprof-rs replaces the filter of a running
+/// profiler before it refuses to start a second one, which would silently
+/// change what the running profile samples, so every profiler of this process
+/// is started through `ExclusiveProfilerGuard::start`, which refuses first.
+pub struct ExclusiveProfilerGuard {
+    // Dropped before `_owner`: the profiler stops before it is released.
+    profiler_guard: ProfilerGuard<'static>,
+    _owner: ProfilerOwner,
+}
+
+struct ProfilerOwner;
+
+impl Drop for ProfilerOwner {
+    fn drop(&mut self) {
+        PROFILER_OWNED.store(false, Ordering::Release);
+    }
+}
+
+impl ExclusiveProfilerGuard {
+    /// Sample the threads whose `QueryPerf::flag()` is set, or every thread
+    /// if `query_threads_only` is false.
+    pub fn start(frequency: i32, query_threads_only: bool) -> Result<Self> {
+        if PROFILER_OWNED
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            return Err(ErrorCode::Internal(
+                "Another CPU profiler is running in this process (EXPLAIN PERF, admin perf API or /debug/pprof/profile)",
+            ));
+        }
+        let owner = ProfilerOwner;
+
+        let mut builder = ProfilerGuardBuilder::default()
+            .frequency(frequency)
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"]);
+        if query_threads_only {
+            builder = builder.set_filter_func(|| !QueryPerf::flag());
+        }
+        let profiler_guard = builder
+            .build()
+            .map_err(|e| ErrorCode::Internal(format!("Failed to create profiler, {e}")))?;
+        debug!("starting perf with frequency: {}", frequency);
+        Ok(ExclusiveProfilerGuard {
+            profiler_guard,
+            _owner: owner,
+        })
+    }
+}
+
+impl Deref for ExclusiveProfilerGuard {
+    type Target = ProfilerGuard<'static>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.profiler_guard
+    }
+}
+
+/// Profiles a running query or the whole process on demand.
+///
+/// For a query, threads sample only while the payload they run under carries
+/// the query's `perf_query_token`. A thread picks the change up at its next
+/// payload switch (the next processor `process()` or future poll), so enabling
+/// or disabling needs no cooperation from the running pipeline.
+pub struct DynamicPerfGuard {
+    query_token: Option<u64>,
+    profiler_guard: ExclusiveProfilerGuard,
+}
+
+impl DynamicPerfGuard {
+    /// The samples collected so far as folded stacks.
+    pub fn dump_folded(&self) -> Result<String> {
+        QueryPerf::dump_folded(&self.profiler_guard)
+    }
+}
+
+impl Drop for DynamicPerfGuard {
+    fn drop(&mut self) {
+        if self.query_token.is_some() {
+            DYNAMIC_PERF_TARGET.store(0, Ordering::Relaxed);
+        }
+    }
+}
 
 /// Dummy struct only used to provide all operations related to PERF_FLAG
 pub struct QueryPerf;
@@ -40,41 +142,101 @@ impl QueryPerf {
         unsafe { PERF_FLAG }
     }
 
-    /// Sync the thread local PERF_FLAG with the given value from TrackingPayload
+    /// Sync the thread local PERF_FLAG with the perf state of TrackingPayload
     /// This allows TrackingPayload to manage perf state while keeping thread_local flag
-    pub fn sync_from_payload(perf_enabled: bool) {
+    pub fn sync_from_payload(payload: &TrackingPayload) {
+        let enabled = payload.perf_enabled || {
+            let target = DYNAMIC_PERF_TARGET.load(Ordering::Relaxed);
+            target != 0 && target == payload.perf_query_token
+        };
         unsafe {
-            PERF_FLAG = perf_enabled;
+            PERF_FLAG = enabled;
         }
     }
 
     pub fn start(frequency: i32) -> Result<QueryPerfGuard> {
-        let filter_closure = || !QueryPerf::flag();
-        let profiler_guard = ProfilerGuardBuilder::default()
-            .frequency(frequency)
-            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
-            .set_filter_func(filter_closure)
-            .build()
-            .map_err(|e| ErrorCode::Internal(format!("Failed to create profiler, {e}")))?;
-        debug!("starting perf with frequency: {}", frequency);
+        let profiler_guard = ExclusiveProfilerGuard::start(frequency, true)?;
         let mut payload = ThreadTracker::new_tracking_payload();
         payload.perf_enabled = true;
         let flag_guard = ThreadTracker::tracking(payload);
         Ok((flag_guard, profiler_guard))
     }
 
+    /// A token identifying a query on this node, never 0.
+    pub fn next_query_token() -> u64 {
+        NEXT_PERF_QUERY_TOKEN.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Start sampling the threads that run under `query_token`. The profiler
+    /// is process-wide, so this fails while any other profiler is running.
+    pub fn start_dynamic(query_token: u64, frequency: i32) -> Result<DynamicPerfGuard> {
+        if query_token == 0 {
+            return Err(ErrorCode::Internal("Cannot profile query token 0"));
+        }
+        let profiler_guard = ExclusiveProfilerGuard::start(frequency, true)?;
+        DYNAMIC_PERF_TARGET.store(query_token, Ordering::Relaxed);
+        Ok(DynamicPerfGuard {
+            query_token: Some(query_token),
+            profiler_guard,
+        })
+    }
+
+    /// Start sampling every thread of the process.
+    pub fn start_process(frequency: i32) -> Result<DynamicPerfGuard> {
+        Ok(DynamicPerfGuard {
+            query_token: None,
+            profiler_guard: ExclusiveProfilerGuard::start(frequency, false)?,
+        })
+    }
+
+    /// The flamegraph SVG of the samples collected so far.
     pub fn dump(profiler_guard: &ProfilerGuard<'static>) -> Result<String> {
-        let reporter = profiler_guard
+        Self::render_flamegraph(&Self::dump_folded(profiler_guard)?)
+    }
+
+    /// The samples collected so far as folded stacks, the common input of
+    /// flamegraph tools: one `thread;outermost;...;innermost count` line per
+    /// distinct stack.
+    pub fn dump_folded(profiler_guard: &ProfilerGuard<'static>) -> Result<String> {
+        let report = profiler_guard
             .report()
             .frames_post_processor(frames_post_processor())
             .build()
             .map_err(|_e| ErrorCode::Internal("Failed to report profiler data"))?;
-        debug!("perf stop, begin to dump flamegraph");
-        let mut svg = Vec::new();
-        reporter
-            .flamegraph(&mut svg)
-            .map_err(|_e| ErrorCode::Internal("Failed to generate flamegraph SVG"))?;
+        debug!("begin to dump folded stacks");
 
+        let mut folded = String::new();
+        for (frames, count) in report.data.iter() {
+            folded.push_str(&Self::folded_frame(&frames.thread_name_or_id()));
+            for frame in frames.frames.iter().rev() {
+                for symbol in frame.iter().rev() {
+                    folded.push(';');
+                    folded.push_str(&Self::folded_frame(&symbol.name()));
+                }
+            }
+            let _ = writeln!(folded, " {count}");
+        }
+        Ok(folded)
+    }
+
+    /// A frame name for folded stacks. `;` separates frames, but Rust symbols
+    /// may contain it, e.g. `[u8; 32]`.
+    pub fn folded_frame(name: &str) -> Cow<'_, str> {
+        match name.contains(';') {
+            true => Cow::Owned(name.replace(';', ",")),
+            false => Cow::Borrowed(name),
+        }
+    }
+
+    /// Render folded stacks as a flamegraph SVG, empty without samples.
+    pub fn render_flamegraph(folded: &str) -> Result<String> {
+        if folded.is_empty() {
+            return Ok(String::new());
+        }
+        let mut svg = Vec::new();
+        let mut options = inferno::flamegraph::Options::default();
+        inferno::flamegraph::from_lines(&mut options, folded.lines(), &mut svg)
+            .map_err(|e| ErrorCode::Internal(format!("Failed to generate flamegraph SVG, {e}")))?;
         String::from_utf8(svg).map_err(|_e| ErrorCode::Internal("Failed to convert SVG to string"))
     }
 
@@ -173,9 +335,85 @@ fn frames_post_processor() -> impl Fn(&mut pprof::Frames) {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+
+    use super::DYNAMIC_PERF_TARGET;
+    use crate::runtime::ExclusiveProfilerGuard;
     use crate::runtime::QueryPerf;
     use crate::runtime::ThreadTracker;
     use crate::runtime::TrackingPayloadExt;
+
+    #[test]
+    fn test_folded_frame() {
+        assert_eq!(QueryPerf::folded_frame("process"), "process");
+        assert_eq!(
+            QueryPerf::folded_frame("drop_in_place<[u8; 32]>"),
+            "drop_in_place<[u8, 32]>"
+        );
+    }
+
+    #[test]
+    fn test_render_flamegraph() {
+        assert_eq!(QueryPerf::render_flamegraph("").unwrap(), "");
+
+        let folded = "threads;execute;process 3\nthreads;execute;drop<[u8, 1]> 1\n";
+        let svg = QueryPerf::render_flamegraph(folded).unwrap();
+        assert!(svg.starts_with("<?xml"));
+        assert!(svg.contains("process (3 samples, 75.00%)"));
+        assert!(svg.contains("drop&lt;[u8, 1]&gt; (1 samples, 25.00%)"));
+    }
+
+    #[test]
+    fn test_exclusive_profiler_guard() {
+        // Samples only threads with the perf flag, which no thread sets here.
+        let first = ExclusiveProfilerGuard::start(1, true).unwrap();
+
+        let err = ExclusiveProfilerGuard::start(1, false).err().unwrap();
+        assert!(err.message().contains("Another CPU profiler is running"));
+        let err = QueryPerf::start(1).err().unwrap();
+        assert!(err.message().contains("Another CPU profiler is running"));
+
+        drop(first);
+        let second = ExclusiveProfilerGuard::start(1, true);
+        assert!(second.is_ok(), "released when the first guard drops");
+    }
+
+    #[test]
+    fn test_tracking_payload_perf_query_token() {
+        ThreadTracker::init();
+
+        let token = QueryPerf::next_query_token();
+        assert_ne!(token, 0);
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.perf_query_token = token;
+        let payload = Arc::new(payload);
+
+        {
+            let _guard = ThreadTracker::tracking_inner(payload.clone());
+            assert!(!QueryPerf::flag(), "query is not profiled");
+        }
+
+        // Set by `QueryPerf::start_dynamic`, which also starts the process-wide
+        // profiler that this test does not need. A running query picks it up
+        // at its next payload switch.
+        DYNAMIC_PERF_TARGET.store(token, Ordering::Relaxed);
+        {
+            let _guard = ThreadTracker::tracking_inner(payload.clone());
+            assert!(QueryPerf::flag(), "query is profiled");
+
+            let inherited = ThreadTracker::tracking_function(QueryPerf::flag);
+            assert!(inherited(), "tracking function inherits the token");
+        }
+        assert!(!QueryPerf::flag(), "restored payload has no token");
+
+        DYNAMIC_PERF_TARGET.store(QueryPerf::next_query_token(), Ordering::Relaxed);
+        {
+            let _guard = ThreadTracker::tracking_inner(payload.clone());
+            assert!(!QueryPerf::flag(), "another query is profiled");
+        }
+        DYNAMIC_PERF_TARGET.store(0, Ordering::Relaxed);
+    }
 
     #[test]
     fn test_tracking_payload_perf_sync() {

@@ -3018,6 +3018,7 @@ dependencies = [
  "enquote",
  "futures",
  "hickory-resolver",
+ "inferno",
  "libc",
  "log",
  "micromarshal",
