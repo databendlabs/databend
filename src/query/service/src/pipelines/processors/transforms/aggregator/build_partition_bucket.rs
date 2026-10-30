@@ -24,84 +24,51 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::core::TransformPipeBuilder;
 
-use crate::clusters::ClusterHelper;
-use crate::physical_plans::AggregateShuffleMode;
-use crate::pipelines::processors::transforms::aggregator::AggregateBucketScatter;
-use crate::pipelines::processors::transforms::aggregator::AggregateRowScatter;
-use crate::pipelines::processors::transforms::aggregator::AggregateSpillReader;
+use crate::pipelines::processors::transforms::aggregator::AggregateScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::LocalScatter;
 use crate::pipelines::processors::transforms::aggregator::LocalScatterTransform;
-use crate::pipelines::processors::transforms::aggregator::RowShuffleReaderTransform;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
 use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 
+/// Build the final aggregates. Unless `global_shuffled`, where the hash shuffle already delivered
+/// to each output of `pipeline` the input of one final aggregate, the partial aggregate output is
+/// scattered here to the final aggregates of this node.
 pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     after_worker: usize,
     ctx: Arc<QueryContext>,
-    shuffle_mode: AggregateShuffleMode,
+    global_shuffled: bool,
 ) -> Result<()> {
-    let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
-    let base_consumed_bits = shuffle_mode.determine_radix_bits();
-    match shuffle_mode {
-        AggregateShuffleMode::Row => {
-            let schema = params.spill_schema();
-            pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
-                    input,
-                    output,
-                    AggregateSpillReader::try_create(ctx.clone(), schema.clone())?,
-                )))
-            })?;
+    let final_parallelism = if global_shuffled {
+        pipeline.output_len()
+    } else {
+        let final_parallelism = ctx.get_settings().get_max_threads()? as usize;
+        let scatter: Arc<Box<dyn LocalScatter>> = Arc::new(Box::new(AggregateScatter::local(
+            final_parallelism,
+            params.clone(),
+        )));
+        pipeline.add_transform(|input, output| {
+            Ok(LocalScatterTransform::create(
+                input,
+                output,
+                scatter.clone(),
+            ))
+        })?;
 
-            pipeline.add_transform(|input, output| {
-                Ok(LocalScatterTransform::create(
-                    input,
-                    output,
-                    Arc::new(Box::new(AggregateRowScatter {
-                        buckets: final_parallelism,
-                        aggregate_params: params.clone(),
-                    })),
-                ))
-            })?;
-        }
-        AggregateShuffleMode::Bucket(hint) => {
-            let hint = hint as usize;
-            final_parallelism = if params.cluster_aggregator {
-                let cluster = ctx.get_cluster();
-                let local_pos = cluster.ordered_index();
-                let nodes_num = cluster.nodes.len();
-                let base = hint / nodes_num;
-                let rem = hint % nodes_num;
-                if local_pos < rem { base + 1 } else { base }
-            } else {
-                hint
-            };
-
-            pipeline.add_transform(|input, output| {
-                Ok(LocalScatterTransform::create(
-                    input,
-                    output,
-                    Arc::new(Box::new(AggregateBucketScatter {
-                        buckets: final_parallelism,
-                    })),
-                ))
-            })?;
-        }
-    }
-
-    let input_len = pipeline.output_len();
-    let transform =
-        ExchangeShuffleTransform::create(input_len, final_parallelism, final_parallelism);
-    let inputs = transform.get_inputs();
-    let outputs = transform.get_outputs();
-    pipeline.add_pipe(Pipe::create(input_len, final_parallelism, vec![
-        PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
-    ]));
+        let input_len = pipeline.output_len();
+        let transform =
+            ExchangeShuffleTransform::create(input_len, final_parallelism, final_parallelism);
+        let inputs = transform.get_inputs();
+        let outputs = transform.get_outputs();
+        pipeline.add_pipe(Pipe::create(input_len, final_parallelism, vec![
+            PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
+        ]));
+        final_parallelism
+    };
 
     let mut builder = TransformPipeBuilder::create();
     let (tx, rx) = async_channel::unbounded();
@@ -114,7 +81,6 @@ pub fn build_partition_bucket(
             output_port.clone(),
             params.clone(),
             id,
-            base_consumed_bits,
             ctx.clone(),
             tx.clone(),
             rx.clone(),

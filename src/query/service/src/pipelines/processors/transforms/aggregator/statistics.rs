@@ -16,7 +16,6 @@ use std::time::Instant;
 
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
-use databend_common_expression::AggregateHashTable;
 
 #[derive(Debug)]
 pub enum FinalAggregateFinishMode {
@@ -59,12 +58,8 @@ impl AggregationStatistics {
         self.start = Instant::now();
     }
 
-    pub fn log_finish_statistics(&mut self, hashtable: &AggregateHashTable) {
-        self.log_finish(
-            hashtable.payload.len(),
-            hashtable.hash_index_resize_count(),
-            None,
-        );
+    pub fn log_partial_finish_statistics(&mut self, output_rows: usize, hash_index_resizes: usize) {
+        self.log_finish(output_rows, hash_index_resizes, None);
     }
 
     pub fn log_final_finish_statistics(

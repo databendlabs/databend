@@ -842,6 +842,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["before_partial".into(), "before_merge".into()])),
                 }),
+                ("partial_aggregate_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("auto")),
+                    desc: "Partial aggregation mode. 'auto' adapts per thread at runtime; 'bypass' forwards every row to the final aggregation.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["auto".into(), "bypass".into()])),
+                }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
@@ -1267,7 +1274,7 @@ impl DefaultSettings {
                 }),
                 ("hash_shuffle_send_buffer_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256 * 1024 * 1024),
-                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share. Each destination thread then gets about this value / (nodes x threads^2) bytes per send, so raise it on clusters with many nodes and threads: the memory of a node grows with it, but not with the number of nodes.",
+                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share, and buffers up to its share again while they are sending. Each destination thread then gets about this value / (nodes x threads^2) bytes per send, so raise it on clusters with many nodes and threads: the memory of a node grows with it, but not with the number of nodes.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
@@ -1804,13 +1811,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("force_aggregate_shuffle_mode", DefaultSettingValue {
-                    value: UserSettingValue::String(String::from("auto")),
-                    desc: "For testing only. Shuffle mode for aggregation. Options are 'auto', 'row', 'bucket'. Default is 'auto'.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
                 }),
             ]);
 

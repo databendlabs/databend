@@ -60,6 +60,7 @@ mod uniq;
 mod window_funnel;
 
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::aggregate_function::AggregateRegistry;
 
@@ -76,6 +77,10 @@ pub(super) fn register_functions(registry: &mut AggregateRegistry) {
 }
 
 fn serialized_scalar_at(state: &BlockEntry, row: usize, field: usize) -> ScalarRef<'_> {
+    // Index the field column alone: indexing the tuple builds a scalar of every field.
+    if let BlockEntry::Column(Column::Tuple(fields)) = state {
+        return fields[field].index(row).unwrap();
+    }
     let scalar = state.index(row).unwrap();
     match scalar {
         ScalarRef::Tuple(fields) => fields[field].clone(),

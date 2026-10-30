@@ -10,12 +10,17 @@ skipif mysql
 statement ok
 SET force_aggregate_data_spill = 1;
 
+# The final aggregate buffers its spill up to half of max_block_bytes per bucket and writes files
+# only beyond it, so the query spills enough to leave several temporary files.
+skipif mysql
+statement ok
+SET max_block_bytes = 1048576;
 
 skipif mysql
 query I
-SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string);
+SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(2000000) group by number::string);
 ----
-100000
+2000000
 
 skipif mysql
 query B
@@ -34,3 +39,7 @@ unset max_vacuum_temp_files_after_query;
 skipif mysql
 statement ok
 unset force_aggregate_data_spill;
+
+skipif mysql
+statement ok
+unset max_block_bytes;

@@ -19,7 +19,6 @@ use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use log::info;
-use strength_reduce::StrengthReducedU64;
 
 use super::AggrState;
 use super::BATCH_SIZE;
@@ -29,6 +28,7 @@ use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
+use super::group_hash_route_index;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
@@ -493,6 +493,45 @@ impl Payload {
         self.pages.append(other.pages.as_mut());
     }
 
+    /// Move the pages into payloads of at most `max_rows` rows and `max_bytes` bytes each,
+    /// without copying rows; a page over a limit makes a payload of its own. The payloads share
+    /// the arena of the states, which is freed with the last of them.
+    pub fn split_pages(mut self, max_rows: usize, max_bytes: usize) -> Vec<Payload> {
+        if self.total_rows <= max_rows && self.memory_size() <= max_bytes {
+            return vec![self];
+        }
+
+        let mut payloads = vec![];
+        let mut current = self.empty_like();
+        for page in std::mem::take(&mut self.pages) {
+            if page.rows == 0 {
+                continue;
+            }
+            let rows = current.total_rows + page.rows;
+            if current.total_rows != 0 && (rows > max_rows || rows * self.tuple_size > max_bytes) {
+                payloads.push(std::mem::replace(&mut current, self.empty_like()));
+            }
+            current.total_rows += page.rows;
+            current.pages.push(page);
+            current.current_write_page = current.pages.len();
+        }
+        if current.total_rows != 0 {
+            payloads.push(current);
+        }
+        self.total_rows = 0;
+        self.current_write_page = 0;
+        payloads
+    }
+
+    fn empty_like(&self) -> Payload {
+        Payload::new(
+            self.arena.clone(),
+            self.group_types.clone(),
+            self.aggrs.clone(),
+            self.row_layout.states_layout.clone(),
+        )
+    }
+
     pub(super) fn mark_min_cardinality(&mut self) {
         if self.min_cardinality.is_none() {
             self.min_cardinality = Some(self.total_rows);
@@ -568,12 +607,11 @@ impl Payload {
                 let state = &mut *flush_state.probe_state;
                 state.reset_partitions(partition_count);
 
-                let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
-
                 for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
                     *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
                     let hash = row_ptr.hash(&self.row_layout);
-                    let partition_idx = (hash % mods) as usize;
+                    let partition_idx =
+                        group_hash_route_index(hash, partition_count as u64) as usize;
 
                     let (count, sel) = &mut state.partition_entries[partition_idx];
                     sel[*count as usize] = idx.into();
@@ -586,6 +624,8 @@ impl Payload {
         }
     }
 
+    /// Split the rows into `buckets` payloads by `group_hash_route_index` of their group hash, the
+    /// routing of raw rows with the same group keys.
     pub fn scatter_into_buckets(mut self, buckets: usize) -> Vec<Payload> {
         if buckets == 0 {
             return vec![];
