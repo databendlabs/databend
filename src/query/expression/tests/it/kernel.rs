@@ -763,8 +763,12 @@ fn test_select_if_then_else() {
 
     for len in [0, 1, 63, 64, 65, 130, 700] {
         for shape in ["random", "runs", "all_set", "all_unset"] {
-            // A sliced mask exercises bit offsets that are not word aligned.
-            let offset = rng.gen_range(0..64);
+            // Byte-aligned masks are read with `BitChunksExact`, the others with
+            // `BitChunks`; a sliced mask has a bit offset that is not word aligned.
+            let offset = match shape {
+                "random" | "all_set" => 0,
+                _ => rng.gen_range(1..64),
+            };
             let mut run_left = 0;
             let mut bit = false;
             let bits = (0..offset + len)

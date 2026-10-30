@@ -27,6 +27,8 @@ use std::ops::Not;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::binary;
 use databend_common_column::bitmap::ternary;
+use databend_common_column::bitmap::utils::BitChunkIterExact;
+use databend_common_column::bitmap::utils::BitChunksExact;
 use databend_common_column::buffer::Buffer;
 
 use crate::Column;
@@ -443,13 +445,11 @@ fn for_each_segment(mask: &Bitmap, f: impl FnMut(Segment)) {
         start: 0,
         run: None,
     };
-    let mut chunks = mask.chunks::<u64>();
-    for word in chunks.by_ref() {
-        segments.push_word(word, 64);
-    }
-    let remainder_len = chunks.remainder_len();
-    if remainder_len > 0 {
-        segments.push_word(chunks.remainder(), remainder_len);
+    let (bytes, offset, len) = mask.as_slice();
+    if offset == 0 {
+        segments.push_chunks(BitChunksExact::<u64>::new(bytes, len));
+    } else {
+        segments.push_chunks(mask.chunks::<u64>());
     }
     segments.flush_run();
 }
@@ -463,6 +463,16 @@ struct SegmentBuilder<F: FnMut(Segment)> {
 }
 
 impl<F: FnMut(Segment)> SegmentBuilder<F> {
+    fn push_chunks(&mut self, mut chunks: impl BitChunkIterExact<u64>) {
+        for word in chunks.by_ref() {
+            self.push_word(word, 64);
+        }
+        let remainder_len = chunks.remainder_len();
+        if remainder_len > 0 {
+            self.push_word(chunks.remainder(), remainder_len);
+        }
+    }
+
     #[inline]
     fn push_word(&mut self, word: u64, len: usize) {
         let full = if len == 64 { u64::MAX } else { (1 << len) - 1 };
