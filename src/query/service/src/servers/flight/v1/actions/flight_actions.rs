@@ -30,6 +30,8 @@ use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 use crate::servers::flight::v1::actions::SYSTEM_ACTION;
+use crate::servers::flight::v1::actions::finish_query::FINISH_QUERY;
+use crate::servers::flight::v1::actions::finish_query::finish_query;
 use crate::servers::flight::v1::actions::get_running_query_dump::get_running_query_dump;
 use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
 use crate::servers::flight::v1::actions::init_query_env::init_query_env;
@@ -143,6 +145,7 @@ pub fn flight_actions() -> FlightActions {
         .action(INIT_QUERY_ENV, init_query_env)
         .action(INIT_QUERY_FRAGMENTS, init_query_fragments)
         .action(START_PREPARED_QUERY, start_prepared_query)
+        .action(FINISH_QUERY, finish_query)
         .action(TRUNCATE_TABLE, truncate_table)
         .action(KILL_QUERY, kill_query)
         .action(SET_PRIORITY, set_priority)

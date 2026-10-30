@@ -62,6 +62,7 @@ use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
 use futures::future::select;
+use futures::stream::FuturesUnordered;
 use log::error;
 use log::info;
 use log::warn;
@@ -181,7 +182,7 @@ impl ClusterHelper for Cluster {
             )))
         }
 
-        let mut response = HashMap::with_capacity(message.len());
+        let mut actions = Vec::with_capacity(message.len());
         for (id, message) in message {
             let node = get_node(&self.nodes, &id)?;
 
@@ -234,7 +235,7 @@ impl ClusterHelper for Cluster {
                         };
 
                         match result {
-                            Ok(result) => return Ok(result),
+                            Ok(result) => return Ok((id, result)),
                             Err(e)
                                 if e.code() == ErrorCode::CANNOT_CONNECT_NODE
                                     && attempt < flight_params.retry_times =>
@@ -250,7 +251,36 @@ impl ClusterHelper for Cluster {
                 }
             };
 
-            response.insert(id, do_action_with_retry.await?);
+            actions.push(do_action_with_retry);
+        }
+
+        let mut response = HashMap::with_capacity(actions.len());
+        if flight_params.concurrent {
+            // Each node only handles its own share of the request, so the calls are
+            // independent and can be in flight at the same time. On failure, still wait
+            // for every started call to settle before returning the first error: dropping
+            // a call does not revoke a request the node already received, and the caller
+            // usually cleans up right after, which must not race with a late request.
+            let mut pending = actions.into_iter().collect::<FuturesUnordered<_>>();
+            let mut first_error = None;
+            while let Some(result) = pending.next().await {
+                match result {
+                    Ok((id, result)) => {
+                        response.insert(id, result);
+                    }
+                    Err(cause) => {
+                        first_error.get_or_insert(cause);
+                    }
+                }
+            }
+            if let Some(cause) = first_error {
+                return Err(cause);
+            }
+        } else {
+            for action in actions {
+                let (id, result) = action.await?;
+                response.insert(id, result);
+            }
         }
 
         Ok(response)
@@ -1074,6 +1104,9 @@ pub struct FlightParams {
     pub keep_alive: FlightKeepAliveParams,
     /// Send the requests over a cached channel per node instead of a new connection.
     pub reuse_control_channel: bool,
+    /// Send the per-node requests of one `do_action` call concurrently instead of one
+    /// node after another. Only worth enabling for fan-out steps on the query hot path.
+    pub concurrent: bool,
 }
 
 #[derive(Clone)]

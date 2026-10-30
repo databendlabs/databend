@@ -57,6 +57,7 @@ use super::exchange_sink::ExchangeSink;
 use super::exchange_transform::ExchangeTransform;
 use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
+use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::physical_plans::PhysicalPlan;
@@ -75,8 +76,10 @@ use crate::servers::flight::FlightReceiver;
 use crate::servers::flight::FlightSender;
 use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
+use crate::servers::flight::v1::actions::FinishQueryPacket;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
+use crate::servers::flight::v1::actions::finish_query_on_nodes;
 use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
@@ -480,9 +483,11 @@ impl DataExchangeManager {
 
                 if let Some(query_info) = query_info.as_mut() {
                     let query_id = env.query_id.clone();
-                    // The coordinator sends INIT_QUERY_FRAGMENTS to nodes one by one and each
-                    // node may run heavy work (e.g. lazy block pruning of a large DELETE) before
-                    // START_PREPARED_QUERY is sent, so this timeout must be tunable per query.
+                    // START_PREPARED_QUERY is sent only after every node finished
+                    // INIT_QUERY_FRAGMENTS (one by one when
+                    // enable_concurrent_query_fragments_dispatch = 0), and each node may run
+                    // heavy work (e.g. lazy block pruning of a large DELETE) in it, so this
+                    // timeout must be tunable per query.
                     let leak_timeout =
                         Duration::from_secs(settings.get_flight_query_leak_timeout_secs()?);
                     query_info.remove_leak_query_worker =
@@ -865,12 +870,42 @@ impl DataExchangeManager {
             retry_interval: settings.get_flight_retry_interval()?,
             keep_alive: settings.get_flight_keep_alive_params()?,
             reuse_control_channel: settings.get_enable_flight_control_channel_reuse()?,
+            concurrent: settings.get_enable_concurrent_query_fragments_dispatch()?,
         };
+
+        let query_env = actions.get_query_env()?;
+        let query_id = ctx.get_id();
+        let cluster = ctx.get_cluster();
+
+        match self
+            .commit_actions_inner(ctx, &actions, &query_env, flight_params)
+            .await
+        {
+            Ok(build_res) => Ok(build_res),
+            Err(cause) => {
+                // Some nodes may already hold the query env or fragments. Release them
+                // now rather than leaving them to the leaked-query sweeper; this matters
+                // more with concurrent dispatch, where a failure on one node no longer
+                // prevents the requests to the other nodes from landing. The local node
+                // is released by the caller.
+                Self::finish_remote_query(&cluster, &query_env, &query_id, &cause, flight_params)
+                    .await;
+                Err(cause)
+            }
+        }
+    }
+
+    async fn commit_actions_inner(
+        &self,
+        ctx: Arc<QueryContext>,
+        actions: &QueryFragmentsActions,
+        query_env: &QueryEnv,
+        flight_params: FlightParams,
+    ) -> Result<PipelineBuildResult> {
         let mut root_fragment_ids = actions.get_root_fragment_ids()?;
         let conf = GlobalConfig::instance();
 
         // Initialize query env between cluster nodes
-        let query_env = actions.get_query_env()?;
         query_env.init(&ctx, flight_params).await?;
 
         // Submit distributed tasks to all nodes.
@@ -898,6 +933,37 @@ impl DataExchangeManager {
             .await?;
 
         Ok(build_res)
+    }
+
+    /// Best-effort release of a query that failed during `commit_actions` on every remote
+    /// node of its dataflow diagram. Nodes that never received the query ignore it.
+    async fn finish_remote_query(
+        cluster: &Cluster,
+        query_env: &QueryEnv,
+        query_id: &str,
+        cause: &ErrorCode,
+        flight_params: FlightParams,
+    ) {
+        let local_id = GlobalConfig::instance().query.node_id.clone();
+        let packet = FinishQueryPacket {
+            query_id: query_id.to_string(),
+            cause: cause.message(),
+        };
+
+        let remote_nodes = query_env
+            .dataflow_diagram
+            .node_weights()
+            .filter(|node| node.id != local_id)
+            .map(|node| node.id.clone());
+
+        for (node_id, finish_error) in
+            finish_query_on_nodes(cluster, remote_nodes, &packet, flight_params).await
+        {
+            warn!(
+                "Failed to finish query {} on node {} after commit failure: {}",
+                query_id, node_id, finish_error
+            );
+        }
     }
 
     fn get_root_pipeline(

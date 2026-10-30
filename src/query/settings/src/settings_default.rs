@@ -1598,6 +1598,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_concurrent_query_fragments_dispatch", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Dispatch the fragment init and start requests of a distributed query to all cluster nodes concurrently instead of one node after another. Set to 0 to restore sequential dispatch.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("network_policy", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Network policy for all users in the tenant",

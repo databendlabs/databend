@@ -12,5 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod cluster_do_action;
 mod control_channel;
 mod flight_service;
