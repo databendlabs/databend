@@ -23,7 +23,6 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::plans::JoinType;
 
 use super::runtime_filter::RuntimeFilterLocalBuilder;
 use super::runtime_filter::build_and_push_down_runtime_filter;
@@ -173,8 +172,16 @@ impl TransformHashJoinBuild {
 
     fn collect(&mut self) -> Result<Event> {
         if self.input_port.has_data() {
-            self.add_data_block(self.input_port.pull_data().unwrap()?);
-            if self.need_spill() {
+            let mut data_block = self.input_port.pull_data().unwrap()?;
+            if self.build_state.hash_join_state.is_row_count_build() {
+                // No build column is ever read; keep only the row count.
+                data_block = DataBlock::new(vec![], data_block.num_rows());
+            }
+            // A block without columns is only a row count: it holds no memory
+            // worth spilling, and Parquet could not preserve its row count.
+            let has_columns = data_block.num_columns() > 0;
+            self.add_data_block(data_block);
+            if has_columns && self.need_spill() {
                 return self.next_step(Step::Async(AsyncStep::Spill));
             }
         }
@@ -410,7 +417,7 @@ impl TransformHashJoinBuild {
     }
 
     fn has_unrestored_data(&self) -> bool {
-        if matches!(self.build_state.join_type(), JoinType::Cross) {
+        if self.build_state.hash_join_state.probes_all_pairs() {
             self.spiller.has_next_restore_file()
         } else {
             !self

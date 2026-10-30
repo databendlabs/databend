@@ -23,6 +23,7 @@ use databend_common_expression::KeyAccessor;
 use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
+use crate::pipelines::processors::transforms::hash_join::PendingProbe;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
@@ -43,7 +44,9 @@ impl HashJoinProbeState {
     {
         // Process States.
         let mut next_process_state = false;
-        let process_state = probe_state.process_state.as_mut().unwrap();
+        let Some(PendingProbe::Hash(process_state)) = &mut probe_state.pending else {
+            unreachable!()
+        };
 
         // Probe states.
         let max_block_size = probe_state.max_block_size;
@@ -173,7 +176,7 @@ impl HashJoinProbeState {
         }
 
         if !next_process_state {
-            probe_state.process_state = None;
+            probe_state.pending = None;
         }
 
         Ok(result_blocks)

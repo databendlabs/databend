@@ -17,7 +17,6 @@ use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
@@ -31,6 +30,7 @@ use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::JoinStream;
 use crate::pipelines::processors::transforms::NestedLoopDesc;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
+use crate::pipelines::processors::transforms::merge_with_constant_row;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 
 pub struct NestedLoopJoin<T> {
@@ -147,21 +147,8 @@ impl<'a> NestedLoopJoinStream<'a> {
     fn process_next_row(&mut self) -> Result<()> {
         let build_block = &self.build_blocks[self.build_block_index];
 
-        let probe_rows = self.probe_block.num_rows();
-        let entries = self
-            .probe_block
-            .columns()
-            .iter()
-            .cloned()
-            .chain(build_block.columns().iter().map(|entry| {
-                BlockEntry::Const(
-                    entry.index(self.build_row_index).unwrap().to_owned(),
-                    entry.data_type(),
-                    probe_rows,
-                )
-            }))
-            .collect();
-        let merged = DataBlock::new(entries, probe_rows);
+        let merged =
+            merge_with_constant_row(self.probe_block.clone(), build_block, self.build_row_index);
         let row_ptr = RowPtr {
             chunk_index: self.build_block_index as u32,
             row_index: self.build_row_index as u32,
