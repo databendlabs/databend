@@ -147,17 +147,19 @@ impl LegacyStore {
             return Ok(victims);
         }
 
-        let replacing = lru.peek(key).map(|e| e.bytes);
-        let extra_items = usize::from(replacing.is_none());
-        let extra_bytes = bytes.saturating_sub(replacing.unwrap_or(0));
-        while capacity.exceeded(lru, extra_items, extra_bytes) {
+        if matches!(capacity, LegacyCapacity::Bytes(max) if bytes > max) {
+            return Err(RejectReason::Oversized);
+        }
+        // The value being replaced makes room like any other; it is replaced either way.
+        if let Some(old) = lru.pop(key) {
+            victims.push(old);
+        }
+        // Fits once the LRU is empty: bytes are within the capacity, and an item capacity
+        // is at least 1 (0 is `Disabled`).
+        while capacity.exceeded(lru, 1, bytes) {
             match lru.pop_by_policy() {
-                Some((k, entry)) if k != key => victims.push(entry),
-                Some((k, entry)) => {
-                    lru.insert(k, entry);
-                    break;
-                }
-                None => return Err(RejectReason::Oversized),
+                Some((_, entry)) => victims.push(entry),
+                None => break,
             }
         }
         Ok(victims)

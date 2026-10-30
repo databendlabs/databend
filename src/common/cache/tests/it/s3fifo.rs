@@ -167,3 +167,32 @@ fn test_remove_if() {
     assert_eq!(c.len(), 5);
     assert_eq!(c.bytes(), 10);
 }
+
+/// Removals without capacity-driven eviction do not grow the queues without bound.
+#[test]
+fn test_removals_keep_queues_bounded() {
+    let mut c = fifo(1);
+    for round in 0..100u32 {
+        for k in 0..100 {
+            c.insert(round * 100 + k, k, 1);
+        }
+        for k in 0..100 {
+            assert!(c.remove(&(round * 100 + k)).is_some());
+        }
+    }
+    assert!(c.is_empty());
+    assert!(c.queue_len() <= 1024 + 100, "{}", c.queue_len());
+
+    for k in 0..5000 {
+        c.insert(k, k, 1);
+    }
+    c.remove_if(|_, _| true);
+    assert!(c.queue_len() <= 1024, "{}", c.queue_len());
+    // Entries inserted afterwards are still evicted in order.
+    c.insert(1, 1, 1);
+    c.insert(2, 2, 1);
+    assert_eq!(
+        c.pop_evictable(|_| false, usize::MAX).map(|(k, ..)| k),
+        Some(1)
+    );
+}

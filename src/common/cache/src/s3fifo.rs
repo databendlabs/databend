@@ -191,6 +191,7 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
     where Q: Hash + Equivalent<K> + ?Sized {
         let slot = self.map.remove(key)?;
         self.untrack(&slot);
+        self.compact_queues();
         Some(slot.value)
     }
 
@@ -254,13 +255,20 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
             .map
             .extract_if(|k, slot| pred(k, &slot.value))
             .collect();
-        removed
+        let removed = removed
             .into_iter()
             .map(|(k, slot)| {
                 self.untrack(&slot);
                 (k, slot.value, slot.bytes)
             })
-            .collect()
+            .collect::<Vec<_>>();
+        self.compact_queues();
+        removed
+    }
+
+    /// Queue positions, including stale ones left by removals.
+    pub fn queue_len(&self) -> usize {
+        self.small.len() + self.main.len()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&K, &V)> {
@@ -311,6 +319,20 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
             seq,
             in_main,
         });
+    }
+
+    /// Removals leave their queue positions behind, skipped when the queues reach them. Drops
+    /// them once they outnumber live entries, so the queues stay within twice the entries
+    /// (plus a constant) however often entries are removed. Amortized O(1) per removal.
+    fn compact_queues(&mut self) {
+        const SLACK: usize = 1024;
+        if self.queue_len() <= 2 * self.map.len() + SLACK {
+            return;
+        }
+        let map = &self.map;
+        let live = |(key, seq): &(K, u64)| map.get(key).is_some_and(|slot| slot.seq == *seq);
+        self.small.retain(live);
+        self.main.retain(live);
     }
 
     fn untrack(&mut self, slot: &Slot<V>) {

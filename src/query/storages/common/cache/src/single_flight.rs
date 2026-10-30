@@ -45,15 +45,71 @@ impl<V: Clone> SingleFlight<V> {
             .entry(key.to_string())
             .or_default()
             .clone();
-        let result = call.get_or_init(|| load).await.clone();
-        let mut calls = self.calls.lock();
-        if calls.get(key).is_some_and(|c| Arc::ptr_eq(c, &call)) {
-            calls.remove(key);
-        }
-        result
+        // Removes the entry when done, or when this caller is cancelled with no one else
+        // waiting; a waiter left behind takes over the load and removes it itself.
+        let _cleanup = Cleanup {
+            calls: &self.calls,
+            key,
+            call: call.clone(),
+        };
+        call.get_or_init(|| load).await.clone()
     }
 
     pub fn inflight(&self) -> usize {
         self.calls.lock().len()
+    }
+}
+
+struct Cleanup<'a, V> {
+    calls: &'a Mutex<HashMap<String, Call<V>>>,
+    key: &'a str,
+    call: Call<V>,
+}
+
+impl<V> Drop for Cleanup<'_, V> {
+    fn drop(&mut self) {
+        let mut calls = self.calls.lock();
+        let Some(current) = calls.get(self.key) else {
+            return;
+        };
+        // Callers clone the call under this lock: 3 counts are the map, `self.call` and the
+        // caller's own clone. More means another caller still waits on it.
+        let alone = Arc::strong_count(current) <= 3;
+        if Arc::ptr_eq(current, &self.call) && (self.call.initialized() || alone) {
+            calls.remove(self.key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::pending;
+    use std::time::Duration;
+
+    use super::*;
+
+    /// A cancelled load leaves no entry behind, unless another caller still waits on it.
+    #[tokio::test]
+    async fn test_cancelled_load_is_removed() {
+        let flight = Arc::new(SingleFlight::<u32>::default());
+        let cancelled =
+            tokio::time::timeout(Duration::from_millis(10), flight.run("k", pending())).await;
+        assert!(cancelled.is_err());
+        assert_eq!(flight.inflight(), 0);
+
+        // The first caller is cancelled while a second waits: the second takes over.
+        let first = databend_common_base::runtime::spawn({
+            let flight = flight.clone();
+            async move { flight.run("k", pending()).await }
+        });
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        let second = databend_common_base::runtime::spawn({
+            let flight = flight.clone();
+            async move { flight.run("k", async { Ok(7) }).await }
+        });
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        first.abort();
+        assert_eq!(second.await.unwrap().unwrap(), 7);
+        assert_eq!(flight.inflight(), 0);
     }
 }

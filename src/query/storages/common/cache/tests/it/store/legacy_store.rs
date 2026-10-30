@@ -64,6 +64,27 @@ fn test_bytes_capacity_evicts_even_held_values() {
     assert_eq!(store.kind_stats(CacheKind::BloomIndexMeta).resident, 200);
 }
 
+/// Growing the least recently used entry still keeps the kind within its byte capacity.
+#[test]
+fn test_replacing_lru_entry_stays_within_capacity() {
+    let store = legacy(&[(CacheKind::BloomIndexMeta, LegacyCapacity::Bytes(100))]);
+    let cache = cache(&store, CacheKind::BloomIndexMeta);
+    let live = Live::default();
+    cache.put("a", live.item(40));
+    cache.put("b", live.item(60));
+    assert!(cache.put("a", live.item(80)).is_charged());
+    assert!(cache.contains("a"));
+    assert!(!cache.contains("b"));
+    let stats = store.kind_stats(CacheKind::BloomIndexMeta);
+    assert_eq!((stats.items, stats.in_cache), (1, 80));
+
+    // A replacement larger than the whole capacity is not cached; nothing else is evicted.
+    cache.put("c", live.item(10));
+    assert!(!cache.put("c", live.item(200)).is_charged());
+    assert!(cache.contains("a"));
+    assert_eq!(store.kind_stats(CacheKind::BloomIndexMeta).in_cache, 90);
+}
+
 #[test]
 fn test_vector_index_keeps_held_values() {
     let store = legacy(&[(CacheKind::VectorIndex, LegacyCapacity::Bytes(200))]);
