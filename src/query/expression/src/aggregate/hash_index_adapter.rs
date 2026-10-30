@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::BATCH_SIZE;
 use super::PartitionedPayload;
 use super::ProbeState;
+use super::StateAddr;
 use super::payload_row::CompareState;
 use crate::ProjectedBlock;
 
@@ -31,11 +33,19 @@ pub(super) trait TableAdapter {
 pub(super) struct AdapterImpl<'a> {
     pub payload: &'a mut PartitionedPayload,
     pub group_columns: ProjectedBlock<'a>,
+    /// The states to copy into the new groups, see `AggregateHashTable::combine_payload`.
+    pub source_states: Option<&'a [StateAddr; BATCH_SIZE]>,
 }
 
 impl<'a> TableAdapter for AdapterImpl<'a> {
     fn append_rows(&mut self, state: &mut ProbeState, count: usize) {
-        self.payload.append_rows(state, count, self.group_columns);
+        if self.source_states.is_some() {
+            for row in &state.empty_vector[..count] {
+                state.new_groups[*row] = true;
+            }
+        }
+        self.payload
+            .append_rows(state, count, self.group_columns, self.source_states);
     }
 
     fn compare(

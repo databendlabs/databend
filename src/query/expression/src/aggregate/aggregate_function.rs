@@ -930,6 +930,14 @@ pub trait AggregateCall: fmt::Display + Send + Sync + 'static {
 
     fn merge_states(&self, state: AggrState<'_>, rhs: AggrState<'_>) -> Result<()>;
 
+    /// Merges the states at `rhs[i]` into `states[i]`, with a single dynamic call.
+    fn merge_states_keys(&self, states: AggregateStateSet<'_>, rhs: &[StateAddr]) -> Result<()> {
+        for (state, rhs) in states.iter().zip(rhs) {
+            self.merge_states(state, AggrState::new(*rhs, states.loc))?;
+        }
+        Ok(())
+    }
+
     fn merge_result(&self, state: AggrState<'_>, builder: &mut ColumnBuilder) -> Result<()>;
 
     fn merge_result_read_only(

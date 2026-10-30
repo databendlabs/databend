@@ -327,6 +327,7 @@ impl Payload {
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
         group_columns: ProjectedBlock,
+        source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
@@ -353,6 +354,7 @@ impl Payload {
             address,
             page_index,
             group_columns,
+            source_states,
         )
     }
 
@@ -363,6 +365,7 @@ impl Payload {
         address: &mut [RowMut; BATCH_SIZE],
         page_index: &mut [usize],
         group_columns: ProjectedBlock,
+        source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
         let mut write_offset = 0;
         // write validity
@@ -443,12 +446,13 @@ impl Payload {
         let states = self.row_layout.states_layout.as_ref().map(|states_layout| {
             (
                 states_layout.layout.repeat(select_vector.len()).unwrap(),
+                states_layout.layout.size(),
                 states_layout.states_loc.clone(),
                 self.aggrs.clone(),
             )
         });
 
-        if let Some(((array_layout, padded_size), states_loc, aggrs)) = states {
+        if let Some(((array_layout, padded_size), state_size, states_loc, aggrs)) = states {
             // write states
             // Bump only allocates but does not drop, so there is no use after free for any item.
             let place = self.arena.alloc_layout(array_layout);
@@ -461,8 +465,21 @@ impl Payload {
                 let place = StateAddr::from(place);
                 address[row].set_state_addr(&self.row_layout, &place);
                 let page = &mut self.pages[page_index[row]];
+                // Copying a state that needs no manual drop equals initializing it and merging
+                // the source state into it. The caller merges the other states.
+                if let Some(source_states) = source_states {
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            source_states[row].as_ptr(),
+                            place.as_ptr(),
+                            state_size,
+                        )
+                    };
+                }
                 for (aggr, loc) in aggrs.iter().zip(states_loc.iter()) {
-                    aggr.init_state(AggrState::new(place, loc));
+                    if source_states.is_none() || aggr.state().need_manual_drop() {
+                        aggr.init_state(AggrState::new(place, loc));
+                    }
                     page.state_offsets += 1;
                 }
             }
