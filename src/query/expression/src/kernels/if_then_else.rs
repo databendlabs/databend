@@ -71,8 +71,50 @@ pub fn select_if_then_else(
             assert_eq!(column.len(), mask.len());
         }
     }
+    if has_nested_decimal(data_type) {
+        return select_rows(mask, then_value, else_value, data_type);
+    }
     select_typed(mask, then_value, else_value, data_type)
         .unwrap_or_else(|| select_values::<AnyType>(mask, then_value, else_value, data_type))
+}
+
+/// Whether `data_type` has a decimal inside an array, map or tuple. A
+/// non-strict decimal (e.g. `Decimal(10, 2)` carried by `Decimal128`) nested
+/// there can only be converted to the strict width row by row, so such types
+/// skip the bulk paths.
+pub(crate) fn has_nested_decimal(data_type: &DataType) -> bool {
+    fn contains_decimal(data_type: &DataType) -> bool {
+        match data_type {
+            DataType::Decimal(_) => true,
+            DataType::Nullable(inner) | DataType::Array(inner) | DataType::Map(inner) => {
+                contains_decimal(inner)
+            }
+            DataType::Tuple(fields) => fields.iter().any(contains_decimal),
+            _ => false,
+        }
+    }
+    match data_type {
+        DataType::Nullable(inner) => has_nested_decimal(inner),
+        DataType::Array(inner) | DataType::Map(inner) => contains_decimal(inner),
+        DataType::Tuple(fields) => fields.iter().any(contains_decimal),
+        _ => false,
+    }
+}
+
+/// Pushes every row through the generic builder.
+fn select_rows(
+    mask: &Bitmap,
+    then_value: &Value<AnyType>,
+    else_value: &Value<AnyType>,
+    data_type: &DataType,
+) -> Column {
+    let mut builder = ColumnBuilder::with_capacity(data_type, mask.len());
+    for (row, take_then) in mask.iter().enumerate() {
+        let value = if take_then { then_value } else { else_value };
+        // SAFETY: `row` is a row of the mask, which has the length of every column.
+        builder.push(unsafe { value_item(value, row) });
+    }
+    builder.build()
 }
 
 /// Returns `None` when the values do not have the physical layout that the

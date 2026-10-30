@@ -39,6 +39,7 @@ use crate::block::DataBlock;
 use crate::expr::*;
 use crate::expression::Expr;
 use crate::function::EvalContext;
+use crate::kernels::has_nested_decimal;
 use crate::kernels::select_if_then_else;
 use crate::type_check::check_cast_function;
 use crate::type_check::format_function_argument_mismatch_hint;
@@ -1922,10 +1923,11 @@ impl<'a> Evaluator<'a> {
 
         // When every enabled row reaches the same branch, that branch is the
         // result: the rows that are not enabled may hold any value. A decimal
-        // carried with a non-strict width still goes through the selection,
-        // which converts it to the width of its precision.
+        // carried with a non-strict width, also inside a nested type, still goes
+        // through the selection, which converts it to the width of its precision.
         if let Some(len) = len
             && single_branch
+            && !has_nested_decimal(&generics[0])
             && DecimalDataType::from_value(&first_reached).is_none_or(|(ty, _)| ty.is_strict())
         {
             return Ok(Value::Column(

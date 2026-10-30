@@ -99,6 +99,67 @@ fn test_if_accepts_non_strict_decimal_columns() {
 }
 
 #[test]
+fn test_if_accepts_nested_non_strict_decimal_columns() {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::Expr;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    // A tuple field `Decimal(10, 2)` carried by a Decimal128 column: the result
+    // field uses the strict Decimal64 width, also when every row reaches the
+    // same branch.
+    let size = DecimalSize::new(10, 2).unwrap();
+    let tuple = |values: Vec<i128>| {
+        Column::Tuple(vec![
+            Column::Decimal(DecimalColumn::Decimal128(values.into(), size)),
+            Int16Type::from_data(vec![1_i16, 2]),
+        ])
+    };
+    let then_column = tuple(vec![123, 456]);
+    let else_column = tuple(vec![789, 1011]);
+    let data_type = then_column.data_type();
+    let column_ref = |id: usize, data_type: DataType| {
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id,
+            data_type,
+            display_name: format!("c{id}"),
+        })
+    };
+    for cond in [vec![true, true], vec![false, false], vec![true, false]] {
+        let block = DataBlock::new_from_columns(vec![
+            BooleanType::from_data(cond.clone()),
+            then_column.clone(),
+            else_column.clone(),
+        ]);
+        let args = [
+            column_ref(0, DataType::Boolean),
+            column_ref(1, data_type.clone()),
+            column_ref(2, data_type.clone()),
+        ];
+        let expr = check_function(None, "if", &[], &args, &BUILTIN_FUNCTIONS).unwrap();
+        let ctx = FunctionContext::default();
+        let result = Evaluator::new(&block, &ctx, &BUILTIN_FUNCTIONS)
+            .run(&expr)
+            .unwrap()
+            .into_column()
+            .unwrap();
+        let expected = cond
+            .iter()
+            .zip([(123, 789), (456, 1011)])
+            .map(|(take_then, (t, f))| if *take_then { t } else { f })
+            .collect::<Vec<i64>>();
+        assert_eq!(
+            result.as_tuple().unwrap()[0],
+            Column::Decimal(DecimalColumn::Decimal64(expected.into(), size)),
+            "{cond:?}"
+        );
+    }
+}
+
+#[test]
 fn test_if_with_opaque_result() {
     use databend_common_expression::ColumnRef;
     use databend_common_expression::DataBlock;

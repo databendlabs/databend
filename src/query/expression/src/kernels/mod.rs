@@ -33,6 +33,7 @@ pub use filter::FilterVisitor;
 pub use filter::IterationStrategy;
 pub use filter::SELECTIVITY_THRESHOLD;
 pub use group_by_hash::*;
+pub(crate) use if_then_else::has_nested_decimal;
 pub use if_then_else::select_if_then_else;
 pub use range_partition::TypedRangeBounds;
 pub use sort::*;

@@ -873,4 +873,36 @@ fn test_select_if_then_else_non_strict_decimal() {
             Bitmap::from([true, false, false].as_slice()),
         )
     );
+
+    // Inside a tuple, for all-set, all-unset and mixed masks.
+    let tuple_type = DataType::Tuple(vec![
+        data_type.clone(),
+        DataType::Number(NumberDataType::Int16),
+    ]);
+    let tuple = Column::Tuple(vec![
+        Column::Decimal(DecimalColumn::Decimal128(vec![1_i128, 2, 3].into(), size)),
+        Int16Type::from_data(vec![4_i16, 5, 6]),
+    ]);
+    let other = Column::Tuple(vec![
+        Column::Decimal(DecimalColumn::Decimal128(vec![7_i128, 8, 9].into(), size)),
+        Int16Type::from_data(vec![10_i16, 11, 12]),
+    ]);
+    for bits in [[true; 3], [false; 3], [true, false, true]] {
+        let mask = Bitmap::from(bits.as_slice());
+        let result = select_if_then_else(
+            &mask,
+            &Value::Column(tuple.clone()),
+            &Value::Column(other.clone()),
+            &tuple_type,
+        );
+        let expected = bits
+            .iter()
+            .zip([(1, 7), (2, 8), (3, 9)])
+            .map(|(take_then, (t, f))| if *take_then { t } else { f })
+            .collect::<Vec<i64>>();
+        assert_eq!(
+            result.as_tuple().unwrap()[0],
+            Column::Decimal(DecimalColumn::Decimal64(expected.into(), size))
+        );
+    }
 }
