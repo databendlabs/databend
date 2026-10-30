@@ -22,6 +22,9 @@ The `operator/` directory is organized by operator type:
 - **join/**: Optimizations specific to join operations
   - Includes transformations like converting single joins to inner joins
 
+- **window/**: Optimizations specific to window operations
+  - `narrowing_pushdown.rs`: Evaluates infallible narrowing extractions (JSON path access, `TRY_CAST`) over wide columns below the window so the wide column is pruned before the partition shuffle and spill
+
 ## Usage
 
 These operator-specific optimizers are typically used in the query optimization pipeline to transform logical plans into more efficient forms. They focus on the semantics and properties of specific operators rather than general transformation patterns.
