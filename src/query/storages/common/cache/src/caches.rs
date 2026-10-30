@@ -26,22 +26,6 @@ pub use crate::cache_items::*;
 use crate::manager::CacheManager;
 use crate::providers::HybridCache;
 
-/// In memory object cache of SegmentInfo
-pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
-
-/// In memory object cache of ColumnOrientedSegmentInfo
-pub type ColumnOrientedSegmentInfoCache = InMemoryLruCache<ColumnOrientedSegment>;
-
-/// Note that this cache may be memory-intensive, as each item of this cache
-/// contains ALL the BlockMeta of a segment, for well-compacted segment, the
-/// number of BlockMeta might be 1000 ~ 2000.
-pub type SegmentBlockMetasCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
-
-/// In-memory cache of individual BlockMeta.
-pub type BlockMetaCache = InMemoryLruCache<BlockMeta>;
-
-/// In memory object cache of SegmentStatistics
-pub type SegmentStatisticsCache = InMemoryLruCache<SegmentStatistics>;
 /// In memory object cache of bloom filter.
 /// For each indexed data block, the bloom xor8 filter of column is cached individually
 pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
@@ -143,31 +127,10 @@ pub trait CachedObject<T> {
     fn cache() -> Option<Self::Cache>;
 }
 
-impl CachedObject<CompactSegmentInfo> for SegmentInfo {
-    type Cache = CompactSegmentInfoCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_table_segment_cache()
-    }
-}
-
-impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
-    type Cache = SegmentBlockMetasCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_segment_block_metas_cache()
-    }
-}
-
 impl CachedObject<IcebergTableCacheValue> for IcebergTableCacheValue {
     type Cache = IcebergTableCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_iceberg_table_cache()
-    }
-}
-
-impl CachedObject<SegmentStatistics> for SegmentStatistics {
-    type Cache = SegmentStatisticsCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_segment_statistics_cache()
     }
 }
 
@@ -228,57 +191,11 @@ impl<T> CacheValue<T> {
     }
 }
 
-impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {
-    fn from(value: CompactSegmentInfo) -> Self {
-        CacheValue {
-            mem_bytes: std::mem::size_of::<CompactSegmentInfo>()
-                + value.raw_block_metas.bytes.len(),
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<ColumnOrientedSegment> for CacheValue<ColumnOrientedSegment> {
-    fn from(value: ColumnOrientedSegment) -> Self {
-        CacheValue {
-            mem_bytes: value.block_metas.memory_size()
-                + std::mem::size_of::<ColumnOrientedSegment>(),
-            inner: Arc::new(value),
-        }
-    }
-}
-impl From<Vec<Arc<BlockMeta>>> for CacheValue<Vec<Arc<BlockMeta>>> {
-    fn from(value: Vec<Arc<BlockMeta>>) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
-impl From<BlockMeta> for CacheValue<BlockMeta> {
-    fn from(value: BlockMeta) -> Self {
-        CacheValue {
-            inner: Arc::new(value),
-            mem_bytes: 0,
-        }
-    }
-}
-
 impl From<IcebergTableCacheValue> for CacheValue<IcebergTableCacheValue> {
     fn from(value: IcebergTableCacheValue) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,
-        }
-    }
-}
-
-impl From<SegmentStatistics> for CacheValue<SegmentStatistics> {
-    fn from(value: SegmentStatistics) -> Self {
-        CacheValue {
-            mem_bytes: value.memory_size(),
-            inner: Arc::new(value),
         }
     }
 }

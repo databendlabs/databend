@@ -127,6 +127,11 @@ impl<T: CachedItem> MemCache<T> {
         }
     }
 
+    /// Whether values of this kind can be cached at all; lets writers skip building them.
+    pub fn is_enabled(&self) -> bool {
+        self.store.is_enabled(self.kind)
+    }
+
     pub fn is_read_only(&self) -> bool {
         self.read_only
     }

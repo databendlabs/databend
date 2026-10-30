@@ -42,7 +42,7 @@ use databend_common_storage::FaultRule;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::snapshot_history;
@@ -58,7 +58,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
 use databend_query::test_kits::query_count;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
@@ -661,17 +661,10 @@ async fn inverted_index_locations(table: &FuseTable) -> Result<HashSet<String>> 
     let Some(snapshot) = table.read_table_snapshot().await? else {
         return Ok(HashSet::new());
     };
-    let reader = MetaReaders::segment_info_reader(table.get_operator(), table.schema());
+    let reader = SegmentInfoReader::new(table.get_operator(), table.schema());
     let mut locations = HashSet::new();
     for (location, ver) in &snapshot.segments {
-        let segment = reader
-            .read(&LoadParams {
-                location: location.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
-            .await?;
+        let segment = reader.read(&(location.clone(), *ver)).await?;
         for block in segment.block_metas()? {
             locations.extend(
                 block
@@ -948,16 +941,9 @@ async fn test_staged_clone_pins_only_selected_root_during_vacuum() -> anyhow::Re
         })
         .await?;
     let mut pinned_files = vec![pinned_location.clone()];
-    let reader = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema());
+    let reader = SegmentInfoReader::new(fuse.get_operator(), fuse.schema());
     for (location, ver) in &pinned.segments {
-        let segment = reader
-            .read(&LoadParams {
-                location: location.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
-            .await?;
+        let segment = reader.read(&(location.clone(), *ver)).await?;
         pinned_files.push(location.clone());
         pinned_files.extend(
             segment

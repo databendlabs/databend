@@ -23,7 +23,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_FOOTER_READ_SIZE;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::HybridCacheReader;
-use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_cache::Reader;
@@ -32,6 +31,7 @@ use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SegmentStatisticsVersion;
@@ -51,38 +51,14 @@ pub use self::thrift_file_meta_read::read_thrift_file_metadata;
 use crate::io::SnapshotKey;
 
 pub type BloomIndexMetaReader = HybridCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
-pub type CompactSegmentInfoReader =
-    InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 pub type VectorIndexMetaReader = HybridCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
 pub type SpatialIndexMetaReader = HybridCacheReader<SpatialIndexMeta, LoaderWrapper<Operator>>;
 pub type VirtualColumnMetaReader =
     HybridCacheReader<VirtualColumnFileMeta, LoaderWrapper<Operator>>;
-pub type SegmentStatsReader = InMemoryCacheReader<SegmentStatistics, LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> CompactSegmentInfoReader {
-        CompactSegmentInfoReader::new(
-            CacheManager::instance().get_table_segment_cache(),
-            LoaderWrapper((dal, schema)),
-        )
-    }
-
-    pub fn segment_info_reader_without_cache(
-        dal: Operator,
-        schema: TableSchemaRef,
-    ) -> CompactSegmentInfoReader {
-        CompactSegmentInfoReader::new(None, LoaderWrapper((dal, schema)))
-    }
-
-    pub fn segment_stats_reader(dal: Operator) -> SegmentStatsReader {
-        SegmentStatsReader::new(
-            CacheManager::instance().get_segment_statistics_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
     pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
         BloomIndexMetaReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
@@ -172,24 +148,62 @@ impl Reader for SnapshotStatsReader {
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<SegmentStatistics> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<SegmentStatistics> {
-        let version = SegmentStatisticsVersion::try_from(params.ver)?;
-        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        version.read(reader.reader())
+/// Reads and decodes row-oriented segments. No caching; pair with `SegmentCache`.
+#[derive(Clone)]
+pub struct SegmentInfoReader {
+    operator: Operator,
+    schema: TableSchemaRef,
+}
+
+impl SegmentInfoReader {
+    pub fn new(operator: Operator, schema: TableSchemaRef) -> Self {
+        SegmentInfoReader { operator, schema }
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
+impl Reader for SegmentInfoReader {
+    type Key = Location;
+    type Item = Arc<CompactSegmentInfo>;
+
+    fn cache_key<'a>(&self, key: &'a Location) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<CompactSegmentInfo> {
-        let version = SegmentInfoVersion::try_from(params.ver)?;
-        let LoaderWrapper((operator, schema)) = &self;
-        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        (version, schema.clone()).read(reader.reader())
+    async fn read(&self, (location, ver): &Location) -> Result<Arc<CompactSegmentInfo>> {
+        let version = SegmentInfoVersion::try_from(*ver)?;
+        let buffer = bytes_reader(&self.operator, location, None).await?;
+        Ok(Arc::new(
+            (version, self.schema.clone()).read(buffer.reader())?,
+        ))
+    }
+}
+
+/// Reads and decodes segment statistics. No caching; pair with `SegmentCache`.
+#[derive(Clone)]
+pub struct SegmentStatsReader {
+    operator: Operator,
+}
+
+impl SegmentStatsReader {
+    pub fn new(operator: Operator) -> Self {
+        SegmentStatsReader { operator }
+    }
+}
+
+impl Reader for SegmentStatsReader {
+    type Key = Location;
+    type Item = Arc<SegmentStatistics>;
+
+    fn cache_key<'a>(&self, key: &'a Location) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
+    #[async_backtrace::framed]
+    async fn read(&self, (location, ver): &Location) -> Result<Arc<SegmentStatistics>> {
+        let version = SegmentStatisticsVersion::try_from(*ver)?;
+        let buffer = bytes_reader(&self.operator, location, None).await?;
+        Ok(Arc::new(version.read(buffer.reader())?))
     }
 }
 

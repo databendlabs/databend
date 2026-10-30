@@ -33,13 +33,13 @@ use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::FuseCaches;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::SnapshotReader;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -115,17 +115,13 @@ async fn check_partitions(parts: &Vec<PartInfoPtr>, fixture: &TestFixture) -> Re
     for segment in &snapshot.segments {
         segment_name.insert(segment.0.clone());
 
-        let compact_segment_reader = MetaReaders::segment_info_reader(
+        let compact_segment_reader = SegmentInfoReader::new(
             fuse_table.get_operator(),
             TestFixture::default_table_schema(),
         );
-        let params = LoadParams {
-            location: segment.0.clone(),
-            len_hint: None,
-            ver: SegmentInfo::VERSION,
-            put_cache: false,
-        };
-        let compact_segment_info = compact_segment_reader.read(&params).await?;
+        let compact_segment_info = compact_segment_reader
+            .read(&(segment.0.clone(), SegmentInfo::VERSION))
+            .await?;
         let segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
         for block in &segment_info.blocks {

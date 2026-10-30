@@ -14,8 +14,8 @@
 
 mod meta_readers;
 
-pub use meta_readers::CompactSegmentInfoReader;
 pub use meta_readers::MetaReaders;
+pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::SegmentStatsReader;
 pub use meta_readers::SnapshotReader;
 pub use meta_readers::SnapshotStatsReader;

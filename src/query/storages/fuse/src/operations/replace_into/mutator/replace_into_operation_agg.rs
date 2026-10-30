@@ -44,10 +44,6 @@ use databend_common_metrics::storage::*;
 use databend_common_sql::StreamContext;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::OnConflictField;
-use databend_storages_common_cache::BlockMetaCache;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
@@ -65,8 +61,9 @@ use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
 use crate::io::BlockWriter;
-use crate::io::CompactSegmentInfoReader;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentCache;
+use crate::io::SegmentInfoReader;
 use crate::io::WriteSettings;
 use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
 use crate::operations::common::BlockMetaIndex;
@@ -96,12 +93,11 @@ pub(crate) struct AggregationContext {
     data_accessor: Operator,
     write_settings: WriteSettings,
     read_settings: ReadSettings,
-    segment_reader: CompactSegmentInfoReader,
+    segment_cache: SegmentCache,
+    segment_reader: SegmentInfoReader,
     block_builder: BlockBuilder,
     // generate stream columns if necessary
     stream_ctx: Option<StreamContext>,
-
-    block_meta_cache: Option<BlockMetaCache>,
 }
 
 struct ReplaceMutationBatch {
@@ -267,8 +263,7 @@ impl ReplaceIntoMutatorParams {
         let table_schema = table.schema_with_stream();
         let write_settings = table.get_write_settings();
 
-        let segment_reader =
-            MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
+        let segment_reader = SegmentInfoReader::new(data_accessor.clone(), table_schema.clone());
         let key_column_field_indexes: Vec<FieldIndex> = self
             .on_conflict_fields
             .iter()
@@ -325,10 +320,10 @@ impl ReplaceIntoMutatorParams {
             data_accessor,
             write_settings,
             read_settings: self.read_settings,
+            segment_cache: FuseCaches::instance().segments.clone(),
             segment_reader,
             block_builder: self.block_builder,
             stream_ctx,
-            block_meta_cache: CacheManager::instance().get_block_meta_cache(),
         }))
     }
 }
@@ -365,14 +360,10 @@ impl ReplaceIntoOperationAggregator {
             ReplaceIntoOperation::Delete(partitions) => {
                 for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
                     // segment level
-                    let load_param = LoadParams {
-                        location: path.clone(),
-                        len_hint: None,
-                        ver: *ver,
-                        put_cache: true,
-                    };
-                    let compact_segment_info =
-                        aggregation_ctx.segment_reader.read(&load_param).await?;
+                    let compact_segment_info = aggregation_ctx
+                        .segment_cache
+                        .get(&aggregation_ctx.segment_reader, (path.clone(), *ver))
+                        .await?;
                     let mut segment_info: Option<SegmentInfo> = None;
 
                     for DeletionByColumn {
@@ -430,8 +421,6 @@ impl ReplaceIntoOperationAggregator {
 impl ReplaceIntoOperationAggregator {
     #[async_backtrace::framed]
     pub(crate) async fn prepare_tasks(&mut self) -> Result<VecDeque<DataBlock>> {
-        let block_meta_cache = &self.aggregation_ctx.block_meta_cache;
-
         metrics_inc_replace_number_apply_deletion();
 
         // track number of segments and blocks after pruning (per merge action application)
@@ -467,37 +456,29 @@ impl ReplaceIntoOperationAggregator {
                     ))
                 })?;
 
-            let load_param = LoadParams {
-                location: segment_path.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: true,
+            // Block metas of the segment, decoded at most once per segment and shared through
+            // the segment block metas cache.
+            let block_metas = match aggregation_ctx
+                .segment_cache
+                .lookup_block_metas(segment_path)
+            {
+                Some(block_metas) => block_metas,
+                None => {
+                    let segment = aggregation_ctx
+                        .segment_cache
+                        .get(
+                            &aggregation_ctx.segment_reader,
+                            (segment_path.clone(), *ver),
+                        )
+                        .await?;
+                    aggregation_ctx
+                        .segment_cache
+                        .block_metas(segment_path, || segment.block_metas())?
+                }
             };
 
-            // Retain SegmentInfo to avoid repeatedly extracting it from CompactSegmentInfo later.
-            let mut opt_segment_info: Option<SegmentInfo> = None;
-
             for (block_index, keys) in block_deletion {
-                let block_cache_key = format!("{segment_path}-{block_index}");
-                let block_meta = match block_meta_cache.get(&block_cache_key) {
-                    Some(block_meta) => block_meta,
-                    None => {
-                        let block_meta = if let Some(segment_info) = &opt_segment_info {
-                            segment_info.blocks[block_index].clone()
-                        } else {
-                            let compact_segment_info =
-                                aggregation_ctx.segment_reader.read(&load_param).await?;
-                            let segment_info: SegmentInfo = compact_segment_info.try_into()?;
-                            let block_meta = segment_info.blocks[block_index].clone();
-                            opt_segment_info = Some(segment_info);
-                            block_meta
-                        };
-                        // A query node typically processes only a subset of the BlockMeta in a given segment.
-                        // Therefore, even though all BlockMeta of a segment are available here, not all are populated into the cache.
-                        block_meta_cache.insert(block_cache_key, block_meta.as_ref().clone());
-                        block_meta
-                    }
-                };
+                let block_meta = block_metas[block_index].clone();
 
                 num_rows_mutated += block_meta.row_count;
                 tasks.push((

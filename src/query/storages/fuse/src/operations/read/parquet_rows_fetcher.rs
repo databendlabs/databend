@@ -34,7 +34,6 @@ use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -52,8 +51,9 @@ use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
 use crate::io::BlockReader;
-use crate::io::CompactSegmentInfoReader;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentCache;
+use crate::io::SegmentInfoReader;
 
 struct AbortOnDropTasks<T> {
     inner: FuturesUnordered<JoinHandle<T>>,
@@ -125,7 +125,8 @@ pub(super) struct ParquetRowsFetcher {
     // query-wide count of concurrently-held chunks never exceeds the permit count.
     io_semaphore: Arc<Semaphore>,
 
-    segment_reader: CompactSegmentInfoReader,
+    segment_cache: SegmentCache,
+    segment_reader: SegmentInfoReader,
     block_meta_lru_cache: InMemoryLruCache<RowsFetchMetadataImpl>,
 }
 
@@ -148,15 +149,17 @@ impl RowsFetcher for ParquetRowsFetcher {
         let snapshot = self.snapshot.as_ref().unwrap();
 
         let (location, ver) = snapshot.segments[segment as usize].clone();
-        let segment_load_params = LoadParams {
-            ver,
-            location,
-            len_hint: None,
-            put_cache: true,
+        let blocks = match self.segment_cache.lookup_block_metas(&location) {
+            Some(blocks) => blocks,
+            None => {
+                let segment = self
+                    .segment_cache
+                    .get(&self.segment_reader, (location.clone(), ver))
+                    .await?;
+                self.segment_cache
+                    .block_metas(&location, || segment.block_metas())?
+            }
         };
-        let compact_segment_info = self.segment_reader.read(&segment_load_params).await?;
-
-        let blocks = compact_segment_info.block_metas()?;
         let block_idx = block_idx_in_segment(blocks.len(), block as usize);
 
         static PREFETCH_SIZE: usize = 10;
@@ -291,10 +294,11 @@ impl ParquetRowsFetcher {
     ) -> Self {
         let schema = table.schema();
         let operator = table.operator.clone();
-        let segment_reader = MetaReaders::segment_info_reader(operator, schema.clone());
+        let segment_reader = SegmentInfoReader::new(operator, schema.clone());
         ParquetRowsFetcher {
             table,
             snapshot: None,
+            segment_cache: FuseCaches::instance().segments.clone(),
             segment_reader,
             projection,
             schema,

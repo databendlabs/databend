@@ -22,8 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -44,6 +42,7 @@ use tokio::sync::SemaphorePermit;
 use tokio::task::JoinHandle;
 
 use crate::TableContext;
+use crate::io::FuseCaches;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::build_virtual_segment_schema;
@@ -598,8 +597,10 @@ impl MergeTasks {
                 let new_segment = SegmentInfo::new(blocks, statistics);
                 let segment_data = new_segment.to_bytes()?;
                 // Reuse the encoded blocks instead of encoding and compressing them again.
-                let cached_segment = SegmentInfo::cache()
-                    .map(|_| CompactSegmentInfo::from_reader(segment_data.as_slice()))
+                let cached_segment = FuseCaches::instance()
+                    .segments
+                    .is_enabled()
+                    .then(|| CompactSegmentInfo::from_reader(segment_data.as_slice()))
                     .transpose()?;
                 Ok((segment_data, cached_segment, stats_output, new_segment.summary))
             }).await?;
@@ -667,10 +668,10 @@ impl MergeTasks {
             // Same write-then-cache ordering as write_meta_through_cache; CPU
             // preparation stays local to compaction and outside the IO permit.
             operator.write(location, segment_data).await?;
-            if let Some(cached) = cached_segment
-                && let Some(cache) = SegmentInfo::cache()
-            {
-                cache.insert(location.to_owned(), cached);
+            if let Some(cached) = cached_segment {
+                FuseCaches::instance()
+                    .segments
+                    .put(location, Arc::new(cached));
             }
             Ok::<_, ErrorCode>(())
         };

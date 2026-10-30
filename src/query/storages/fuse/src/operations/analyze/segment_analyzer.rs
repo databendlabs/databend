@@ -31,10 +31,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_statistics::KllSketch;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::CompactSegmentInfo;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
@@ -62,10 +59,11 @@ use crate::io::BlockReader;
 use crate::io::BlockStats;
 use crate::io::BlockStatsBuilder;
 use crate::io::CachedMetaWriter;
-use crate::io::CompactSegmentInfoReader;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentCache;
+use crate::io::SegmentInfoReader;
+use crate::io::SegmentStatsReader;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::read::meta::SegmentStatsReader;
 use crate::operations::acquire_task_permit;
 use crate::operations::analyze::AnalyzeAccumulator;
 use crate::operations::analyze::AnalyzeOptions;
@@ -191,7 +189,8 @@ pub struct SegmentAnalyzer {
     dal: Operator,
     settings: ReadSettings,
     storage_format: FuseStorageFormat,
-    segment_reader: CompactSegmentInfoReader,
+    segment_cache: SegmentCache,
+    segment_reader: SegmentInfoReader,
     stats_reader: SegmentStatsReader,
     cluster_key_info: Option<ClusterKeyInfo>,
 }
@@ -214,8 +213,9 @@ impl SegmentAnalyzer {
             block_reader,
             settings: ReadSettings::from_ctx(ctx)?,
             storage_format: table.get_storage_format(),
-            segment_reader: MetaReaders::segment_info_reader(dal.clone(), table_schema),
-            stats_reader: MetaReaders::segment_stats_reader(dal.clone()),
+            segment_cache: FuseCaches::instance().segments.clone(),
+            segment_reader: SegmentInfoReader::new(dal.clone(), table_schema),
+            stats_reader: SegmentStatsReader::new(dal.clone()),
             dal,
             cluster_key_info: table.cluster_key_info(),
         }))
@@ -288,13 +288,8 @@ impl SegmentAnalyzer {
     }
 
     async fn read_segment(&self, location: &Location) -> Result<Arc<CompactSegmentInfo>> {
-        self.segment_reader
-            .read(&LoadParams {
-                location: location.0.clone(),
-                len_hint: None,
-                ver: location.1,
-                put_cache: true,
-            })
+        self.segment_cache
+            .get(&self.segment_reader, location.clone())
             .await
     }
 
@@ -306,13 +301,8 @@ impl SegmentAnalyzer {
         let mut stats = match segment.summary.additional_stats_loc() {
             Some((location, ver)) => {
                 let stats = self
-                    .stats_reader
-                    .read(&LoadParams {
-                        location,
-                        len_hint: None,
-                        ver,
-                        put_cache: true,
-                    })
+                    .segment_cache
+                    .get_stats(&self.stats_reader, (location, ver))
                     .await?;
                 SegmentStatistics::new(stats.block_hlls.clone(), stats.block_top_ns.clone())
             }
@@ -438,9 +428,7 @@ impl SegmentAnalyzer {
                 segment_loc,
             );
         self.dal.write(&stats_location, data).await?;
-        if let Some(cache) = SegmentStatistics::cache() {
-            cache.evict(&stats_location);
-        }
+        self.segment_cache.evict_stats(&stats_location);
 
         summary.additional_stats_meta = Some(AdditionalStatsMeta {
             size,

@@ -18,20 +18,28 @@ use databend_common_base::base::GlobalInstance;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::cache_manager::CacheManager;
 
+use crate::io::cache::SegmentCache;
 use crate::io::cache::SnapshotCache;
 
 /// Process-wide caches of fuse tables. Every kind is bound to its value type here.
 pub struct FuseCaches {
     pub snapshots: SnapshotCache,
+    pub segments: SegmentCache,
 }
 
 impl FuseCaches {
     pub fn new(manager: &CacheManager) -> Arc<Self> {
         Arc::new(FuseCaches {
-            snapshots: SnapshotCache::new(
-                manager.mem_cache(CacheKind::TableSnapshot),
-                manager.mem_cache(CacheKind::TableSnapshotStats),
-            ),
+            snapshots: SnapshotCache {
+                snapshots: manager.mem_cache(CacheKind::TableSnapshot),
+                stats: manager.mem_cache(CacheKind::TableSnapshotStats),
+            },
+            segments: SegmentCache {
+                segments: manager.mem_cache(CacheKind::SegmentInfo),
+                column_oriented: manager.mem_cache(CacheKind::ColumnOrientedSegment),
+                block_metas: manager.mem_cache(CacheKind::SegmentBlockMetas),
+                stats: manager.mem_cache(CacheKind::SegmentStats),
+            },
         })
     }
 
@@ -44,6 +52,7 @@ impl FuseCaches {
     pub fn read_only(&self) -> Arc<Self> {
         Arc::new(FuseCaches {
             snapshots: self.snapshots.read_only(),
+            segments: self.segments.read_only(),
         })
     }
 

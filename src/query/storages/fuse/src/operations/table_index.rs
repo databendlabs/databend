@@ -45,7 +45,6 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::FilterImpl;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -73,7 +72,8 @@ use crate::index::filters::Filter;
 use crate::io::BlockReader;
 use crate::io::BlockWriter;
 use crate::io::BloomIndexState;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentInfoReader;
 use crate::io::SpatialIndexBuilder;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VectorIndexBuilder;
@@ -139,7 +139,8 @@ pub async fn do_refresh_table_index(
     let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
 
     let meta_locations = fuse_table.meta_location_generator().clone();
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
+    let segment_cache = FuseCaches::instance().segments.read_only();
 
     if snapshot.segments.is_empty() {
         return Ok(0);
@@ -159,13 +160,8 @@ pub async fn do_refresh_table_index(
         {
             continue;
         }
-        let segment_info = segment_reader
-            .read(&LoadParams {
-                location: segment_loc.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment_info = segment_cache
+            .get(&segment_reader, (segment_loc.to_string(), *ver))
             .await?;
         let blocks = segment_info.block_metas()?;
         let stats = match segment_info.summary.additional_stats_loc() {

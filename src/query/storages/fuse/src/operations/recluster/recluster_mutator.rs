@@ -35,9 +35,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -60,7 +57,8 @@ use crate::FuseTable;
 use crate::MAX_RECLUSTER_DEPTH;
 use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentStatsReader;
 use crate::io::VirtualColumnLayoutPlanner;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
@@ -915,26 +913,18 @@ impl ReclusterMutator {
         decode_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<Vec<ReclusterBlock>>> {
         let segment_count = compact_segments.len();
-        let block_metas_cache = CacheManager::instance().get_segment_block_metas_cache();
+        let segment_cache = FuseCaches::instance().segments.clone();
         let tasks = compact_segments
             .into_iter()
             .map(|(segment_idx, location, v)| {
-                let block_metas_cache = block_metas_cache.clone();
+                let segment_cache = segment_cache.clone();
                 move |permit| {
                     async move {
                         let _permit = permit;
                         // Reuse immutable block metas decoded from the same segment path
                         // across probes and queries.
-                        let block_metas = match block_metas_cache
-                            .as_ref()
-                            .and_then(|cache| cache.get(location.0.as_str()))
-                        {
-                            Some(block_metas) => block_metas,
-                            None => match block_metas_cache.as_ref() {
-                                Some(cache) => cache.insert(location.0.clone(), v.block_metas()?),
-                                None => Arc::new(v.block_metas()?),
-                            },
-                        };
+                        let block_metas =
+                            segment_cache.block_metas(&location.0, || v.block_metas())?;
                         Ok::<_, ErrorCode>((segment_idx, block_metas))
                     }
                     .in_span(Span::enter_with_local_parent(func_path!()))
@@ -994,14 +984,12 @@ impl ReclusterMutator {
             .map(|(segment_idx, (loc, ver), block_count, blocks)| {
                 let dal = self.operator.clone();
                 async move {
-                    let reader = MetaReaders::segment_stats_reader(dal);
-                    let load_params = LoadParams {
-                        location: loc,
-                        len_hint: None,
-                        ver,
-                        put_cache: true,
-                    };
-                    let mut stats = Arc::unwrap_or_clone(reader.read(&load_params).await?);
+                    let reader = SegmentStatsReader::new(dal);
+                    let stats = FuseCaches::instance()
+                        .segments
+                        .get_stats(&reader, (loc, ver))
+                        .await?;
+                    let mut stats = Arc::unwrap_or_clone(stats);
                     stats.align_to_blocks(block_count)?;
                     Ok(blocks
                         .into_iter()

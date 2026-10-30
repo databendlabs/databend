@@ -74,14 +74,8 @@ impl SyncSystemTable for CachesTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_node = ctx.get_cluster().local_id.clone();
         let cache_manager = CacheManager::instance();
-        let segment_info_cache = cache_manager.get_table_segment_cache();
-        let segment_statistics_cache = cache_manager.get_segment_statistics_cache();
-        let column_oriented_segment_info_cache =
-            cache_manager.get_column_oriented_segment_info_cache();
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
         let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache();
-        let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache();
-        let block_meta_cache = cache_manager.get_block_meta_cache();
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
         let inverted_index_lookup_cache = cache_manager.get_inverted_index_lookup_cache();
         let inverted_index_payload_cache = cache_manager.get_inverted_index_payload_cache();
@@ -105,22 +99,6 @@ impl SyncSystemTable for CachesTable {
             Self::append_cache_row(row, &local_node, &mut columns);
         }
 
-        if let Some(segment_info_cache) = segment_info_cache {
-            Self::append_row(&segment_info_cache, &local_node, &mut columns);
-        }
-
-        if let Some(segment_statistics_cache) = segment_statistics_cache {
-            Self::append_row(&segment_statistics_cache, &local_node, &mut columns);
-        }
-
-        if let Some(column_oriented_segment_info_cache) = column_oriented_segment_info_cache {
-            Self::append_row(
-                &column_oriented_segment_info_cache,
-                &local_node,
-                &mut columns,
-            );
-        }
-
         if let Some(column_data_cache) = column_data_cache {
             Self::append_rows_of_hybrid_cache(&column_data_cache, &local_node, &mut columns);
         }
@@ -131,14 +109,6 @@ impl SyncSystemTable for CachesTable {
 
         if let Some(bloom_index_meta_cache) = bloom_index_meta_cache {
             Self::append_rows_of_hybrid_cache(&bloom_index_meta_cache, &local_node, &mut columns);
-        }
-
-        if let Some(segment_block_metas_cache) = segment_block_metas_cache {
-            Self::append_row(&segment_block_metas_cache, &local_node, &mut columns);
-        }
-
-        if let Some(block_meta_cache) = block_meta_cache {
-            Self::append_row(&block_meta_cache, &local_node, &mut columns);
         }
 
         if let Some(inverted_index_meta_cache) = inverted_index_meta_cache {

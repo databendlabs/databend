@@ -31,19 +31,15 @@ use crate::CacheAccessor;
 use crate::DiskCacheAccessor;
 use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
-use crate::SegmentStatisticsCache;
 use crate::Unit;
 use crate::cache_kind::CacheKind;
 use crate::cache_manager::CacheManager as KindCacheManager;
 use crate::cache_manager::CacheRow;
-use crate::caches::BlockMetaCache;
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
 use crate::caches::ColumnDataCache;
-use crate::caches::ColumnOrientedSegmentInfoCache;
-use crate::caches::CompactSegmentInfoCache;
 use crate::caches::IcebergTableCache;
 use crate::caches::InvertedIndexFullPayloadCache;
 use crate::caches::InvertedIndexLookupCache;
@@ -51,7 +47,6 @@ use crate::caches::InvertedIndexMetaCache;
 use crate::caches::InvertedIndexPayloadCache;
 use crate::caches::ParquetMetaDataCache;
 use crate::caches::PrunePartitionsCache;
-use crate::caches::SegmentBlockMetasCache;
 use crate::caches::SpatialIndexFileCache;
 use crate::caches::SpatialIndexMetaCache;
 use crate::caches::VectorIndexMetaCache;
@@ -65,7 +60,14 @@ use crate::vector_index_cache::MEMORY_CACHE_VECTOR_INDEX;
 use crate::vector_index_cache::VectorIndexCache;
 
 /// Kinds already served by `KindCacheManager`; grows family by family until it covers all.
-const MIGRATED_KINDS: [CacheKind; 2] = [CacheKind::TableSnapshot, CacheKind::TableSnapshotStats];
+const MIGRATED_KINDS: [CacheKind; 6] = [
+    CacheKind::TableSnapshot,
+    CacheKind::TableSnapshotStats,
+    CacheKind::SegmentInfo,
+    CacheKind::ColumnOrientedSegment,
+    CacheKind::SegmentStats,
+    CacheKind::SegmentBlockMetas,
+];
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
@@ -121,9 +123,6 @@ pub enum CacheClearanceLevel {
 pub struct CacheManager {
     /// Serves `MIGRATED_KINDS`, with the same capacities as before.
     kinds: Arc<KindCacheManager>,
-    segment_statistics_cache: CacheSlot<SegmentStatisticsCache>,
-    compact_segment_info_cache: CacheSlot<CompactSegmentInfoCache>,
-    column_oriented_segment_info_cache: CacheSlot<ColumnOrientedSegmentInfoCache>,
     bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
     bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
@@ -139,8 +138,6 @@ pub struct CacheManager {
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
-    segment_block_metas_cache: CacheSlot<SegmentBlockMetasCache>,
-    block_meta_cache: CacheSlot<BlockMetaCache>,
 
     column_data_cache: CacheSlot<ColumnDataCache>,
     // icebergs
@@ -257,10 +254,8 @@ impl CacheManager {
         if !config.enable_table_meta_cache {
             Self {
                 kinds,
-                compact_segment_info_cache: CacheSlot::new(None),
                 bloom_index_filter_cache: CacheSlot::new(None),
                 bloom_index_meta_cache: CacheSlot::new(None),
-                column_oriented_segment_info_cache: CacheSlot::new(None),
                 inverted_index_meta_cache: CacheSlot::new(None),
                 inverted_index_lookup_cache: CacheSlot::new(None),
                 inverted_index_payload_cache: CacheSlot::new(None),
@@ -273,27 +268,12 @@ impl CacheManager {
                 virtual_column_meta_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
-                segment_statistics_cache: CacheSlot::new(None),
                 in_memory_table_data_cache,
-                segment_block_metas_cache: CacheSlot::new(None),
-                block_meta_cache: CacheSlot::new(None),
                 column_data_cache,
                 iceberg_table_meta_cache: CacheSlot::new(None),
                 allows_on_disk_cache,
             }
         } else {
-            let segment_statistics_cache = Self::new_bytes_cache_slot(
-                MEMORY_CACHE_SEGMENT_STATISTICS,
-                config.segment_statistics_bytes as usize,
-            );
-            let compact_segment_info_cache = Self::new_bytes_cache_slot(
-                MEMORY_CACHE_COMPACT_SEGMENT_INFO,
-                config.table_meta_segment_bytes as usize,
-            );
-            let column_oriented_segment_info_cache = Self::new_bytes_cache_slot(
-                MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT_INFO,
-                config.table_meta_segment_bytes as usize,
-            );
             let bloom_index_filter_cache = {
                 let bloom_filter_on_disk_cache_path = PathBuf::from(&config.disk_cache_config.path)
                     .join(tenant_id.clone())
@@ -530,16 +510,6 @@ impl CacheManager {
                 DEFAULT_PARQUET_META_DATA_CACHE_ITEMS,
             );
 
-            let segment_block_metas_cache = Self::new_items_cache_slot(
-                MEMORY_CACHE_SEGMENT_BLOCK_METAS,
-                config.segment_block_metas_count as usize,
-            );
-
-            let block_meta_cache = Self::new_items_cache_slot(
-                MEMORY_CACHE_BLOCK_META,
-                config.block_meta_count as usize,
-            );
-
             let iceberg_table_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_ICEBERG_TABLE,
                 config.iceberg_table_meta_count as usize,
@@ -547,8 +517,6 @@ impl CacheManager {
 
             Self {
                 kinds,
-                compact_segment_info_cache,
-                column_oriented_segment_info_cache,
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
                 inverted_index_meta_cache,
@@ -562,11 +530,8 @@ impl CacheManager {
                 spatial_index_file_cache,
                 virtual_column_meta_cache,
                 prune_partitions_cache,
-                segment_statistics_cache,
                 in_memory_table_data_cache,
-                segment_block_metas_cache,
                 parquet_meta_data_cache,
-                block_meta_cache,
                 iceberg_table_meta_cache,
                 allows_on_disk_cache,
                 column_data_cache,
@@ -607,10 +572,8 @@ impl CacheManager {
         /// Clears basic caches that may consume a significant amount of memory
         fn clear_basic_caches(me: &CacheManager) {
             CacheManager::clear_cache(&me.in_memory_table_data_cache);
-            CacheManager::clear_cache(&me.segment_block_metas_cache);
             // Only the in-memory part of column_data_cache will be cleared
             CacheManager::clear_cache(&me.column_data_cache);
-            CacheManager::clear_cache(&me.block_meta_cache);
             // Clear both payload pools under basic memory pressure; footer and lookup caches
             // are retained until deep clearance.
             CacheManager::clear_cache(&me.inverted_index_full_payload_cache);
@@ -624,7 +587,6 @@ impl CacheManager {
             // These caches are typically not memory usage heavy, and have more significant impact
             // for the query performance, consider clearing them when the memory pressure is
             // high.
-            CacheManager::clear_cache(&me.compact_segment_info_cache);
             CacheManager::clear_cache(&me.bloom_index_filter_cache);
             CacheManager::clear_cache(&me.bloom_index_meta_cache);
             CacheManager::clear_cache(&me.inverted_index_lookup_cache);
@@ -759,15 +721,6 @@ impl CacheManager {
                     name,
                 );
             }
-            MEMORY_CACHE_COMPACT_SEGMENT_INFO => {
-                Self::set_bytes_capacity(&self.compact_segment_info_cache, new_capacity, name);
-            }
-            MEMORY_CACHE_SEGMENT_BLOCK_METAS => {
-                Self::set_items_capacity(&self.segment_block_metas_cache, new_capacity, name);
-            }
-            MEMORY_CACHE_BLOCK_META => {
-                Self::set_items_capacity(&self.block_meta_cache, new_capacity, name);
-            }
 
             HYBRID_CACHE_COLUMN_DATA | IN_MEMORY_HYBRID_CACHE_COLUMN_DATA => {
                 Self::set_hybrid_cache_bytes_capacity(&self.column_data_cache, new_capacity, name);
@@ -867,24 +820,8 @@ impl CacheManager {
         }
     }
 
-    pub fn get_segment_block_metas_cache(&self) -> Option<SegmentBlockMetasCache> {
-        self.segment_block_metas_cache.get()
-    }
-
-    pub fn get_block_meta_cache(&self) -> Option<BlockMetaCache> {
-        self.block_meta_cache.get()
-    }
-
     pub fn get_iceberg_table_cache(&self) -> Option<IcebergTableCache> {
         self.iceberg_table_meta_cache.get()
-    }
-
-    pub fn get_segment_statistics_cache(&self) -> Option<SegmentStatisticsCache> {
-        self.segment_statistics_cache.get()
-    }
-
-    pub fn get_table_segment_cache(&self) -> Option<CompactSegmentInfoCache> {
-        self.compact_segment_info_cache.get()
     }
 
     pub fn get_bloom_index_filter_cache(&self) -> Option<BloomIndexFilterCache> {
@@ -960,10 +897,6 @@ impl CacheManager {
 
     pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
         self.in_memory_table_data_cache.get()
-    }
-
-    pub fn get_column_oriented_segment_info_cache(&self) -> Option<ColumnOrientedSegmentInfoCache> {
-        self.column_oriented_segment_info_cache.get()
     }
 
     pub fn set_allows_disk_cache(&self, flag: bool) {
@@ -1120,13 +1053,7 @@ const IN_MEMORY_HYBRID_CACHE_COLUMN_DATA: &str = "memory_cache_column_data";
 const IN_MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_index_file_meta_data";
 const HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "cache_bloom_index_filter";
 const IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
-const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
-const MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT_INFO: &str = "memory_cache_column_oriented_segment_info";
-const MEMORY_CACHE_SEGMENT_STATISTICS: &str = "memory_cache_segment_statistics";
-const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
 const MEMORY_CACHE_ICEBERG_TABLE: &str = "memory_cache_iceberg_table";
-
-const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
 
 #[cfg(test)]
 mod tests {
@@ -1142,11 +1069,6 @@ mod tests {
     use databend_storages_common_index::filters::FilterBuilder;
     use databend_storages_common_index::filters::FilterImpl;
     use databend_storages_common_index::filters::Xor8Builder;
-    use databend_storages_common_table_meta::meta::BlockMeta;
-    use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-    use databend_storages_common_table_meta::meta::Compression;
-    use databend_storages_common_table_meta::meta::MetaEncoding;
-    use databend_storages_common_table_meta::meta::RawBlockMeta;
     use databend_storages_common_table_meta::meta::Statistics;
     use databend_storages_common_table_meta::meta::TableMetaTimestamps;
     use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -1404,11 +1326,7 @@ mod tests {
         let array: ArrayRef = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5]));
         in_memory_table_data_cache.insert("not matter".to_string(), (array.into(), 1));
 
-        // 2. Populate segment block metas cache
-        let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache().unwrap();
-        segment_block_metas_cache.insert("not matter".to_string(), vec![]);
-
-        // 3. Populate column data cache
+        // 2. Populate column data cache
         let column_data_cache = cache_manager.get_column_data_cache().unwrap();
         column_data_cache.insert(
             "not matter".to_string(),
@@ -1430,72 +1348,23 @@ mod tests {
             disk_cache.till_no_pending_items_in_queue();
         }
 
-        // 4. Populate block meta cache
-        let block_meta_cache = cache_manager.get_block_meta_cache().unwrap();
-        block_meta_cache.insert("not matter".to_string(), BlockMeta {
-            row_count: 0,
-            block_size: 0,
-            file_size: 0,
-            col_stats: Default::default(),
-            col_metas: Default::default(),
-            cluster_stats: None,
-            partition_stats: None,
-            location: ("".to_string(), 0),
-            bloom_filter_index_location: None,
-            bloom_filter_index_size: 0,
-            inverted_index_size: None,
-            inverted_index_metas: None,
-            ngram_filter_index_size: None,
-            vector_index_location: None,
-            vector_index_metas: None,
-            vector_index_size: None,
-            spatial_index_location: None,
-            spatial_index_size: None,
-            spatial_stats: None,
-            vector_stats: None,
-            virtual_path_statistics: None,
-            virtual_block_meta: None,
-            compression: Compression::Lz4,
-            create_on: None,
-        });
-
         // ----- POPULATE EXTRA CACHES -----
 
-        // 1. Populate compact segment info cache
-        let compact_segment_info_cache = cache_manager.get_table_segment_cache().unwrap();
-        compact_segment_info_cache.insert("not matter".to_string(), CompactSegmentInfo {
-            format_version: 0,
-            summary: Default::default(),
-            raw_block_metas: RawBlockMeta {
-                bytes: vec![],
-                encoding: MetaEncoding::Bincode,
-                compression: Default::default(),
-            },
-        });
-
-        // 2. Populate bloom index filter cache
+        // 1. Populate bloom index filter cache
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache().unwrap();
         let mut builder = Xor8Builder::create();
         builder.add_key(&"what ever".to_string());
         let xor8_filter = builder.build()?;
         bloom_index_filter_cache.insert("not matter".to_string(), FilterImpl::Xor(xor8_filter));
 
-        // 3. Populate bloom index meta cache
+        // 2. Populate bloom index meta cache
         let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache().unwrap();
         bloom_index_meta_cache.insert("not matter".to_string(), BloomIndexMeta { columns: vec![] });
 
         // ----- VERIFY INITIAL CACHE STATE -----
         // Verify all caches are correctly populated
         assert!(!cache_manager.get_table_data_array_cache().is_empty());
-        assert!(
-            !cache_manager
-                .get_segment_block_metas_cache()
-                .unwrap()
-                .is_empty()
-        );
         assert!(!cache_manager.get_column_data_cache().is_empty());
-        assert!(!cache_manager.get_block_meta_cache().is_empty());
-        assert!(!cache_manager.get_table_segment_cache().is_empty());
         assert!(!cache_manager.get_bloom_index_filter_cache().is_empty());
         assert!(!cache_manager.get_bloom_index_meta_cache().is_empty());
 
@@ -1507,13 +1376,6 @@ mod tests {
 
         // Verify basic caches are cleared
         assert!(in_memory_table_data_cache.is_empty());
-        assert!(
-            cache_manager
-                .get_segment_block_metas_cache()
-                .unwrap()
-                .is_empty()
-        );
-        assert!(cache_manager.get_block_meta_cache().is_empty());
 
         // Verify hybrid column data cache behavior:
         // - On-disk cache of table data should remain populated
@@ -1529,7 +1391,6 @@ mod tests {
         );
 
         // Verify extra caches remain intact after Basic clearance
-        assert!(!cache_manager.get_table_segment_cache().is_empty());
         assert!(!cache_manager.get_bloom_index_filter_cache().is_empty());
         assert!(!cache_manager.get_bloom_index_meta_cache().is_empty());
 
@@ -1538,9 +1399,6 @@ mod tests {
 
         // Clear caches with Deep clearance level
         cache_manager.release_cache_memory(CacheClearanceLevel::Deep);
-
-        // Verify extra caches are now cleared
-        assert!(cache_manager.get_table_segment_cache().is_empty());
 
         // Verify in-memory part of hybrid bloom index meta caches are cleared
         assert!(
@@ -1859,39 +1717,41 @@ mod tests {
     }
 
     #[test]
-    fn test_cache_manager_block_meta_config() -> Result<()> {
-        let max_server_memory_usage = 1024 * 1024;
-
+    fn test_segment_kinds_keep_legacy_capacity() -> Result<()> {
         let cache_config = CacheConfig {
-            enable_table_meta_cache: true,
             segment_block_metas_count: 10,
-            block_meta_count: 20,
+            table_meta_segment_bytes: 1000,
+            segment_statistics_bytes: 2000,
             ..Default::default()
         };
-
-        let ee_mode = false;
-        let cache_manager = CacheManager::try_new(
-            &cache_config,
-            &max_server_memory_usage,
-            "test_tenant_id",
-            ee_mode,
-        )?;
-
+        let manager = CacheManager::try_new(&cache_config, &(1 << 20), "test_tenant_id", false)?;
+        let rows = manager.migrated_cache_rows();
+        let capacity = |name: &str| {
+            let row = rows.iter().find(|r| r.name == name).unwrap();
+            (row.capacity, row.unit)
+        };
         assert_eq!(
-            cache_manager
-                .get_segment_block_metas_cache()
-                .unwrap()
-                .items_capacity(),
-            10
+            capacity("memory_cache_segment_block_metas"),
+            (Some(10), Unit::Count)
         );
         assert_eq!(
-            cache_manager
-                .get_block_meta_cache()
-                .unwrap()
-                .items_capacity(),
-            20
+            capacity("memory_cache_compact_segment_info"),
+            (Some(1000), Unit::Bytes)
         );
-
+        assert_eq!(
+            capacity("memory_cache_column_oriented_segment_info"),
+            (Some(1000), Unit::Bytes)
+        );
+        assert_eq!(
+            capacity("memory_cache_segment_statistics"),
+            (Some(2000), Unit::Bytes)
+        );
+        // The per-block meta cache is gone; its name is no longer adjustable.
+        assert!(
+            manager
+                .set_cache_capacity("memory_cache_block_meta", 1)
+                .is_err()
+        );
         Ok(())
     }
 
@@ -1917,7 +1777,7 @@ mod tests {
             ..Default::default()
         };
         let manager = CacheManager::try_new(&config, &(1 << 20), "test_tenant_id", false)?;
-        let rows = manager.migrated_cache_rows();
+        let rows: Vec<_> = manager.migrated_cache_rows().into_iter().take(2).collect();
         let names: Vec<_> = rows.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, [
             "memory_cache_table_snapshot",

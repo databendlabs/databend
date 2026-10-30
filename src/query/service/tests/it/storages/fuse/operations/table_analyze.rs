@@ -30,8 +30,8 @@ use databend_common_statistics::Datum;
 use databend_common_storage::MetaHLL12;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::FuseCaches;
-use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::SnapshotStatsReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
@@ -50,7 +50,7 @@ use databend_query::sessions::TableContextTableManagement;
 use databend_query::sql::Planner;
 use databend_query::sql::plans::Plan;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -255,18 +255,12 @@ async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
 
     // get segments summary
     let mut segment_summary = Statistics::default();
-    let segment_reader = MetaReaders::segment_info_reader(
+    let segment_reader = SegmentInfoReader::new(
         ctx.get_application_level_data_operator()?.operator(),
         TestFixture::default_table_schema(),
     );
     for segment in after_update.segments.iter() {
-        let param = LoadParams {
-            location: segment.0.clone(),
-            len_hint: None,
-            ver: segment.1,
-            put_cache: false,
-        };
-        let compact_segment = segment_reader.read(&param).await?;
+        let compact_segment = segment_reader.read(&(segment.0.clone(), segment.1)).await?;
         let segment_info = SegmentInfo::try_from(compact_segment)?;
         merge_statistics_mut(
             &mut segment_summary,
@@ -884,19 +878,11 @@ async fn test_analyze_does_not_publish_virtual_column_statistics() -> anyhow::Re
     let table = latest_fuse_table(&ctx, name).await?;
     let snapshot = table.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.segments.len(), 2);
-    let segment_reader =
-        MetaReaders::segment_info_reader(table.get_operator(), table.schema_with_stream());
+    let segment_reader = SegmentInfoReader::new(table.get_operator(), table.schema_with_stream());
     let mut segment_virtual_ids = Vec::new();
     let mut segment_paths = Vec::new();
     for (location, ver) in snapshot.segments.iter() {
-        let segment = segment_reader
-            .read(&LoadParams {
-                location: location.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
-            .await?;
+        let segment = segment_reader.read(&(location.clone(), *ver)).await?;
         let summary = SegmentInfo::try_from(segment)?.summary;
         let schema = summary
             .virtual_segment_schema

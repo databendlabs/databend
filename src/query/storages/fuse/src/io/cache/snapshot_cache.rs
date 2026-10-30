@@ -27,18 +27,11 @@ pub type SnapshotKey = (String, u64);
 /// the cache are not counted as pinned (see `CachedItem for Arc<T>`).
 #[derive(Clone)]
 pub struct SnapshotCache {
-    snapshots: MemCache<Arc<TableSnapshot>>,
-    stats: MemCache<Arc<TableSnapshotStatistics>>,
+    pub(super) snapshots: MemCache<Arc<TableSnapshot>>,
+    pub(super) stats: MemCache<Arc<TableSnapshotStatistics>>,
 }
 
 impl SnapshotCache {
-    pub fn new(
-        snapshots: MemCache<Arc<TableSnapshot>>,
-        stats: MemCache<Arc<TableSnapshotStatistics>>,
-    ) -> Self {
-        SnapshotCache { snapshots, stats }
-    }
-
     pub async fn get(
         &self,
         reader: &impl Reader<Key = SnapshotKey, Item = Arc<TableSnapshot>>,

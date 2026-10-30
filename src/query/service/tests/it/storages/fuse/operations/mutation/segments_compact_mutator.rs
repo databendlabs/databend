@@ -34,9 +34,8 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::CompactSegmentInfoReader;
-use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
@@ -59,7 +58,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_query::sessions::TableContextTelemetry;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -1286,18 +1285,13 @@ impl CompactSegmentTestFixture {
         case_name: &str,
         new_segment_paths: &[String],
         expected_num_blocks: &[usize],
-        compact_segment_reader: &CompactSegmentInfoReader,
+        compact_segment_reader: &SegmentInfoReader,
     ) -> Result<()> {
         // traverse the paths of new segments  in reversed order
         for (idx, x) in new_segment_paths.iter().rev().enumerate() {
-            let load_params = LoadParams {
-                location: x.to_string(),
-                len_hint: None,
-                ver: SegmentInfo::VERSION,
-                put_cache: false,
-            };
-
-            let compact_segment = compact_segment_reader.read(&load_params).await?;
+            let compact_segment = compact_segment_reader
+                .read(&(x.to_string(), SegmentInfo::VERSION))
+                .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             assert_eq!(
                 segment.blocks.len(),
@@ -1326,7 +1320,7 @@ impl CompactCase {
         limit: Option<usize>,
     ) -> Result<()> {
         // setup & run
-        let compact_segment_reader = MetaReaders::segment_info_reader(
+        let compact_segment_reader = SegmentInfoReader::new(
             ctx.get_application_level_data_operator()?.operator(),
             TestFixture::default_table_schema(),
         );
@@ -1372,14 +1366,9 @@ impl CompactCase {
 
         // 4. input blocks should be there and in the original order
         for location in output.iter().rev() {
-            let load_params = LoadParams {
-                location: location.0.clone(),
-                len_hint: None,
-                ver: location.1,
-                put_cache: false,
-            };
-
-            let compact_segment = compact_segment_reader.read(&load_params).await?;
+            let compact_segment = compact_segment_reader
+                .read(&(location.0.clone(), location.1))
+                .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary, None);
             block_num_of_output_segments.push(segment.blocks.len());
@@ -1447,8 +1436,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
 
-    let compact_segment_reader =
-        MetaReaders::segment_info_reader(data_accessor.clone(), schema.clone());
+    let compact_segment_reader = SegmentInfoReader::new(data_accessor.clone(), schema.clone());
 
     let mut rand = thread_rng();
 
@@ -1524,14 +1512,9 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
         let mut statistics_of_segments: Statistics = Statistics::default();
         let mut output_block_id = Vec::with_capacity(number_of_blocks);
         for location in output.iter().rev() {
-            let load_params = LoadParams {
-                location: location.0.clone(),
-                len_hint: None,
-                ver: location.1,
-                put_cache: false,
-            };
-
-            let compact_segment = compact_segment_reader.read(&load_params).await?;
+            let compact_segment = compact_segment_reader
+                .read(&(location.0.clone(), location.1))
+                .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             merge_statistics_mut(
                 &mut statistics_of_segments,

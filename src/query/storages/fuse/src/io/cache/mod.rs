@@ -13,8 +13,11 @@
 // limitations under the License.
 
 mod fuse_caches;
+mod segment_cache;
 mod snapshot_cache;
 
 pub use fuse_caches::FuseCaches;
+pub use segment_cache::BlockMetas;
+pub use segment_cache::SegmentCache;
 pub use snapshot_cache::SnapshotCache;
 pub use snapshot_cache::SnapshotKey;
