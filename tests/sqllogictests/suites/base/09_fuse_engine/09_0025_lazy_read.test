@@ -124,36 +124,37 @@ statement ok
 drop table t_17146
 
 # Rows fetched from many blocks of one segment: each block holds one result row,
-# and the blocks span several row fetch metadata windows.
+# and the blocks span several row fetch metadata windows. The order key is a
+# table column, so the TopN reads `a` and `b` through RowFetch.
 statement ok
-create or replace table t_row_fetch_segment(a int, b string) row_per_block = 2
+create or replace table t_row_fetch_segment(k int, a int, b string) row_per_block = 2
 
 statement ok
-insert into t_row_fetch_segment select number, concat('s', number::string) from numbers(30)
+insert into t_row_fetch_segment select number % 2 * 30 + number, number, concat('s', number::string) from numbers(30)
 
 query II
 select segment_count, block_count from fuse_snapshot('default', 't_row_fetch_segment')
 ----
 1 15
 
-query IT
-select * from t_row_fetch_segment order by a % 2, a limit 15
+query IIT
+select * from t_row_fetch_segment order by k limit 15
 ----
-0 s0
-2 s2
-4 s4
-6 s6
-8 s8
-10 s10
-12 s12
-14 s14
-16 s16
-18 s18
-20 s20
-22 s22
-24 s24
-26 s26
-28 s28
+0 0 s0
+2 2 s2
+4 4 s4
+6 6 s6
+8 8 s8
+10 10 s10
+12 12 s12
+14 14 s14
+16 16 s16
+18 18 s18
+20 20 s20
+22 22 s22
+24 24 s24
+26 26 s26
+28 28 s28
 
 statement ok
 drop table t_row_fetch_segment
