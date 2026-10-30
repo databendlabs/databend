@@ -181,24 +181,41 @@ pub fn convert_number_size(num: f64) -> String {
 pub fn short_sql(sql: String, max_length: u64) -> String {
     let keywords = ["INSERT"];
 
-    fn starts_with_any(query: &str, keywords: &[&str]) -> bool {
-        keywords
-            .iter()
-            .any(|&keyword| query.to_uppercase().starts_with(keyword))
+    /// Whether `query` starts with `keyword` (upper case ASCII), ignoring case.
+    /// Upper-casing only the first `keyword.len()` chars is enough: each char
+    /// upper-cases to at least one char, so the rest cannot change the prefix.
+    fn starts_with_keyword(query: &str, keyword: &str) -> bool {
+        let prefix: String = query
+            .chars()
+            .take(keyword.len())
+            .flat_map(char::to_uppercase)
+            .collect();
+        prefix.starts_with(keyword)
     }
 
+    let max_length = max_length as usize;
     let query = sql.trim_start();
-
-    // Graphemes represent user-perceived characters, which might be composed
-    // of multiple Unicode code points.
-    // This ensures that we handle complex characters like emojis or
-    // accented characters properly.
-    if query.graphemes(true).count() > max_length as usize && starts_with_any(query, &keywords) {
-        let truncated: String = query.graphemes(true).take(max_length as usize).collect();
+    // A query has no more graphemes than bytes, so only a long query that starts
+    // with a keyword is counted, and truncated if it has more than `max_length`.
+    let truncate = query.len() > max_length
+        && keywords
+            .iter()
+            .any(|keyword| starts_with_keyword(query, keyword));
+    if truncate {
+        // Graphemes represent user-perceived characters, which might be composed
+        // of multiple Unicode code points.
+        // This ensures that we handle complex characters like emojis or
+        // accented characters properly.
         let original_length = query.graphemes(true).count();
-        let remaining_length = original_length.saturating_sub(max_length as usize);
-        // Append the remaining length indicator
-        truncated + &format!("...[{} more characters]", remaining_length)
+        if original_length > max_length {
+            let truncated: String = query.graphemes(true).take(max_length).collect();
+            let remaining_length = original_length - max_length;
+            // Append the remaining length indicator
+            return truncated + &format!("...[{} more characters]", remaining_length);
+        }
+    }
+    if query.len() == sql.len() {
+        sql
     } else {
         query.to_string()
     }
