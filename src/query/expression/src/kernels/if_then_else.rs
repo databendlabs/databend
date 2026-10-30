@@ -86,9 +86,14 @@ pub fn select_if_then_else(
 }
 
 /// Whether `data_type` has a decimal inside an array, map or tuple (also
-/// through the physical type of an aggregate state). A non-strict decimal (e.g.
-/// `Decimal(10, 2)` carried by `Decimal128`) nested there can only be converted
-/// to the strict width row by row, so such types skip the bulk paths.
+/// through the physical type of an aggregate state).
+///
+/// This is a conservative, type-based fallback: the bulk paths cannot convert
+/// a non-strict decimal child (e.g. `Decimal(10, 2)` carried by `Decimal128`),
+/// and the check looks at the logical type, not at the child widths. So a
+/// result type with a nested decimal loses bulk selection and single-branch
+/// reuse even when its values are already strict. A layout-aware check or a
+/// recursive pre-normalization could keep the fast paths for such types.
 pub(crate) fn has_nested_decimal(data_type: &DataType) -> bool {
     fn contains_decimal(data_type: &DataType) -> bool {
         match data_type {

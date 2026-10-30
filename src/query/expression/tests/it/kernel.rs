@@ -877,7 +877,7 @@ fn test_select_if_then_else_non_strict_decimal() {
         );
         assert_eq!(
             result,
-            Column::Decimal(DecimalColumn::Decimal64(expected.into(), size))
+            Column::Decimal(DecimalColumn::Decimal64(expected.clone().into(), size))
         );
     }
 
@@ -899,18 +899,11 @@ fn test_select_if_then_else_non_strict_decimal() {
         )
     );
 
-    // Inside a tuple, for all-set, all-unset and mixed masks.
+    // Inside a tuple, for all-set, all-unset and mixed masks, and for two
+    // consecutive full-word runs that reach both branches.
     let tuple_type = DataType::Tuple(vec![
         data_type.clone(),
         DataType::Number(NumberDataType::Int16),
-    ]);
-    let tuple = Column::Tuple(vec![
-        Column::Decimal(DecimalColumn::Decimal128(vec![1_i128, 2, 3].into(), size)),
-        Int16Type::from_data(vec![4_i16, 5, 6]),
-    ]);
-    let other = Column::Tuple(vec![
-        Column::Decimal(DecimalColumn::Decimal128(vec![7_i128, 8, 9].into(), size)),
-        Int16Type::from_data(vec![10_i16, 11, 12]),
     ]);
     // The same tuple as the physical type of an aggregate state.
     let state_type = DataType::AggregateState(Box::new(AggregateStateDataType {
@@ -920,25 +913,45 @@ fn test_select_if_then_else_non_strict_decimal() {
         state_type: Box::new(tuple_type.clone()),
         state_version: 0,
     }));
+    let tuple = |base: i16, len: usize| {
+        Column::Tuple(vec![
+            Column::Decimal(DecimalColumn::Decimal128(
+                (0..len).map(|row| (base as i128) + row as i128).collect(),
+                size,
+            )),
+            Int16Type::from_data((0..len).map(|row| base + row as i16).collect::<Vec<_>>()),
+        ])
+    };
+    let masks = [
+        vec![true; 3],
+        vec![false; 3],
+        vec![true, false, true],
+        [vec![true; 64], vec![false; 64]].concat(),
+    ];
     for (ty, bits) in [&tuple_type, &state_type]
         .into_iter()
-        .flat_map(|ty| [[true; 3], [false; 3], [true, false, true]].map(|bits| (ty, bits)))
+        .flat_map(|ty| masks.iter().map(move |bits| (ty, bits)))
     {
-        let mask = Bitmap::from(bits.as_slice());
+        let len = bits.len();
+        let (then_column, else_column) = (tuple(1000, len), tuple(2000, len));
         let result = select_if_then_else(
-            &mask,
-            &Value::Column(tuple.clone()),
-            &Value::Column(other.clone()),
+            &Bitmap::from(bits.as_slice()),
+            &Value::Column(then_column.clone()),
+            &Value::Column(else_column.clone()),
             ty,
         );
         let expected = bits
             .iter()
-            .zip([(1, 7), (2, 8), (3, 9)])
-            .map(|(take_then, (t, f))| if *take_then { t } else { f })
+            .enumerate()
+            .map(|(row, take_then)| (if *take_then { 1000 } else { 2000 }) + row as i64)
             .collect::<Vec<i64>>();
         assert_eq!(
             result.as_tuple().unwrap()[0],
-            Column::Decimal(DecimalColumn::Decimal64(expected.into(), size))
+            Column::Decimal(DecimalColumn::Decimal64(expected.clone().into(), size))
+        );
+        assert_eq!(
+            result.as_tuple().unwrap()[1],
+            Int16Type::from_data(expected.iter().map(|v| *v as i16).collect::<Vec<_>>())
         );
     }
 }

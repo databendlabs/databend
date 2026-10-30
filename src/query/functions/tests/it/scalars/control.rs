@@ -109,17 +109,17 @@ fn test_if_accepts_nested_non_strict_decimal_columns() {
 
     // A tuple field `Decimal(10, 2)` carried by a Decimal128 column: the result
     // field uses the strict Decimal64 width, also when every row reaches the
-    // same branch.
+    // same branch, and when two full 64-row runs reach both branches.
     let size = DecimalSize::new(10, 2).unwrap();
-    let tuple = |values: Vec<i128>| {
+    let tuple = |base: i16, len: usize| {
         Column::Tuple(vec![
-            Column::Decimal(DecimalColumn::Decimal128(values.into(), size)),
-            Int16Type::from_data(vec![1_i16, 2]),
+            Column::Decimal(DecimalColumn::Decimal128(
+                (0..len).map(|row| (base as i128) + row as i128).collect(),
+                size,
+            )),
+            Int16Type::from_data((0..len).map(|row| base + row as i16).collect::<Vec<_>>()),
         ])
     };
-    let then_column = tuple(vec![123, 456]);
-    let else_column = tuple(vec![789, 1011]);
-    let data_type = then_column.data_type();
     let column_ref = |id: usize, data_type: DataType| {
         Expr::ColumnRef(ColumnRef {
             span: None,
@@ -128,7 +128,15 @@ fn test_if_accepts_nested_non_strict_decimal_columns() {
             display_name: format!("c{id}"),
         })
     };
-    for cond in [vec![true, true], vec![false, false], vec![true, false]] {
+    for cond in [
+        vec![true, true],
+        vec![false, false],
+        vec![true, false],
+        [vec![true; 64], vec![false; 64]].concat(),
+    ] {
+        let len = cond.len();
+        let (then_column, else_column) = (tuple(1000, len), tuple(2000, len));
+        let data_type = then_column.data_type();
         let block = DataBlock::new_from_columns(vec![
             BooleanType::from_data(cond.clone()),
             then_column.clone(),
@@ -148,13 +156,17 @@ fn test_if_accepts_nested_non_strict_decimal_columns() {
             .unwrap();
         let expected = cond
             .iter()
-            .zip([(123, 789), (456, 1011)])
-            .map(|(take_then, (t, f))| if *take_then { t } else { f })
+            .enumerate()
+            .map(|(row, take_then)| (if *take_then { 1000 } else { 2000 }) + row as i64)
             .collect::<Vec<i64>>();
         assert_eq!(
             result.as_tuple().unwrap()[0],
-            Column::Decimal(DecimalColumn::Decimal64(expected.into(), size)),
+            Column::Decimal(DecimalColumn::Decimal64(expected.clone().into(), size)),
             "{cond:?}"
+        );
+        assert_eq!(
+            result.as_tuple().unwrap()[1],
+            Int16Type::from_data(expected.iter().map(|v| *v as i16).collect::<Vec<_>>())
         );
     }
 }
