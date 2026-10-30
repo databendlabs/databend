@@ -158,18 +158,21 @@ impl FuseTable {
         is_delete: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         if is_lazy {
-            let segment_len = snapshot.segments.len();
             let mut segments = Vec::with_capacity(snapshot.segments.len());
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                 segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
             }
+            // `partitions_total` is in blocks: the whole-table count from the
+            // snapshot, published once by the coordinator. The lazy
+            // pruning on each node reports only `partitions_scanned`.
+            let block_count = snapshot.summary.block_count as usize;
             Ok((
                 PartStatistics::new_estimated(
                     None,
                     snapshot.summary.row_count as usize,
                     snapshot.summary.compressed_byte_size as usize,
-                    segment_len,
-                    segment_len,
+                    block_count,
+                    block_count,
                 ),
                 Partitions::create(PartitionsShuffleKind::Mod, segments),
             ))
@@ -228,7 +231,11 @@ impl FuseTable {
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
-        let (statistics, inner_parts) = self.read_partitions_with_metas(
+        // Partition counters are in blocks. `block_count` is the whole-table
+        // total when pruning in the planner and `None` for lazy pruning, whose
+        // publisher does not take a total. The scanned count is finalised
+        // below once whole deleted segments are added.
+        let (mut statistics, inner_parts) = self.read_partitions_with_metas(
             self.schema_with_stream(),
             None,
             &range_block_metas,
@@ -271,6 +278,7 @@ impl FuseTable {
                 ))));
         }
 
+        statistics.partitions_scanned = part_num;
         if let Some(block_count) = block_count {
             metrics_inc_deletion_block_range_pruned_nums(block_count as u64 - part_num as u64);
         }
@@ -347,6 +355,7 @@ impl FuseTable {
         filters: Option<Filters>,
         projection: Projection,
         segment_locations: Vec<SegmentLocation>,
+        plan_id: u32,
     ) -> Result<(Pipeline, Receiver<Result<PartInfoPtr>>)> {
         let pruner = self.create_mutation_pruner(ctx.clone(), filters, projection)?;
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -415,14 +424,16 @@ impl FuseTable {
         // Only the sinks may hold the senders, otherwise the channel is never closed.
         drop(part_info_tx);
 
-        let data_metrics = self.data_metrics.clone();
+        let on_finished_ctx = ctx.clone();
         prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
             if info.res.is_ok() {
                 let partitions_scanned = stats.partitions_scanned.load(Ordering::Relaxed);
                 let num_whole_block_mutation = stats.num_whole_block_mutation.load(Ordering::Relaxed);
                 let num_whole_segment_mutation =
                     stats.num_whole_segment_mutation.load(Ordering::Relaxed);
-                data_metrics.inc_partitions_scanned(partitions_scanned as u64);
+                let mut statistics = PartStatistics::default_exact();
+                statistics.partitions_scanned = partitions_scanned;
+                on_finished_ctx.publish_pruned_partitions(plan_id, statistics);
                 metrics_inc_deletion_block_range_pruned_whole_block_nums(
                     num_whole_block_mutation as u64,
                 );

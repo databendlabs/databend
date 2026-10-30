@@ -58,6 +58,7 @@ use crate::physical_plans::FormatContext;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::publish_planned_pruning_stats;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -695,6 +696,9 @@ impl ExplainInterpreter {
         plan: &mut PhysicalPlan,
         metadata: &MetadataRef,
     ) -> Result<()> {
+        // Plain EXPLAIN formats the plan without going through the pipeline
+        // entry points that publish planned statistics, so do it here.
+        publish_planned_pruning_stats(self.ctx.as_ref(), plan);
         let mut sources = vec![];
         plan.get_all_data_source(&mut sources);
         let mut pipelines = vec![];

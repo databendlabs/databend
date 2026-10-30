@@ -1,0 +1,332 @@
+# Lazy block pruning (pruning deferred from the planner to the pipeline):
+# when a table has more segments than the
+# cluster has nodes, `read_partitions` hands out segments as lazy parts and
+# block pruning runs inside the pipeline on each node, either in a dedicated
+# `FusePrune` stage (`enable_distributed_pruning`, the default) or in the
+# `TableScan` itself.
+#
+# The cluster suite runs on 3 nodes, so the table below needs at least 4
+# segments to take this path. Keep it that way: with 3 or fewer segments the
+# scan is eager and this file no longer tests what it claims to.
+#
+# `partitions total` is the table's block count in every output below; it is
+# not the segment count, and segments pruned without being read still count.
+
+statement ok
+create or replace database lazy_pruning
+
+statement ok
+use lazy_pruning
+
+# Each insert is one segment of 3 blocks: 4 segments, 12 blocks.
+statement ok
+create table t (a int) row_per_block=100 block_per_segment=10
+
+statement ok
+insert into t select number + 1000 from numbers(300)
+
+statement ok
+insert into t select number + 2000 from numbers(300)
+
+statement ok
+insert into t select number + 3000 from numbers(300)
+
+statement ok
+insert into t select number + 4000 from numbers(300)
+
+query III
+select count(), count(distinct _block_name), count(distinct _segment_name) from t
+----
+1200 12 4
+
+# Distributed pruning (default): the planner has pruned, so both `explain`
+# and `explain analyze` show the pruned counts. Segments [1000, 1300) and
+# [2000, 2300) are pruned whole; 6 of the 12 blocks remain.
+query T
+explain select * from t where a > 2500
+----
+Exchange
+├── output columns: [t.a (#0)]
+├── exchange type: Merge
+└── FuseBlockRead
+    └── Exchange
+        ├── output columns: []
+        ├── exchange type: Hash()
+        └── FusePrune
+            ├── table: default.lazy_pruning.t
+            ├── read rows: 600
+            ├── read size: 1.51 KiB
+            ├── partitions total: 12
+            ├── partitions scanned: 6
+            └── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+
+# Without distributed pruning the scan is a lazy TableScan. Plain `explain`
+# runs the prune pipeline to print the plan, so the counts match; `explain
+# analyze` and the query log go through the same pipeline.
+statement ok
+set enable_distributed_pruning = 0
+
+query T
+explain select * from t where a > 2500
+----
+Exchange
+├── output columns: [t.a (#0)]
+├── exchange type: Merge
+└── TableScan
+    ├── table: default.lazy_pruning.t
+    ├── scan id: 0
+    ├── output columns: [a (#0)]
+    ├── read rows: 600
+    ├── read size: 1.51 KiB
+    ├── partitions total: 12
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t.a (#0) > 2500)], limit: NONE]
+    └── estimated rows: 654.18
+
+query T
+explain analyze select * from t where a > 2500
+----
+Exchange
+├── output columns: [t.a (#0)]
+├── exchange type: Merge
+└── TableScan
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: 600
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.lazy_pruning.t
+    ├── scan id: 0
+    ├── output columns: [a (#0)]
+    ├── read rows: 600
+    ├── read size: 1.51 KiB
+    ├── partitions total: 12
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t.a (#0) > 2500)], limit: NONE]
+    └── estimated rows: 654.18
+
+statement ok
+unset enable_distributed_pruning
+
+# The lazy pruning publishes under the scan's *physical* plan id, which
+# is what `explain analyze` looks up. With an aggregate above the scan the
+# physical id differs from the logical `scan_id`, so a publisher keyed on the
+# wrong one shows `partitions scanned: 0` here. Column-oriented segments and
+# `enable_prune_pipeline = 0` each have their own publisher; cover both.
+statement ok
+create table tc (a int) row_per_block=100 block_per_segment=10 segment_format='column_oriented'
+
+statement ok
+insert into tc select number + 1000 from numbers(300)
+
+statement ok
+insert into tc select number + 2000 from numbers(300)
+
+statement ok
+insert into tc select number + 3000 from numbers(300)
+
+statement ok
+insert into tc select number + 4000 from numbers(300)
+
+query T
+explain analyze select a % 3, count() from tc where a > 2500 group by a % 3
+----
+Exchange
+├── output columns: [count() (#2), a % 3 (#3)]
+├── exchange type: Merge
+└── EvalScalar
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 3
+    ├── output bytes: <slt:ignore>
+    ├── output columns: [count() (#2), a % 3 (#3)]
+    ├── expressions: [group_item (#1)]
+    ├── estimated rows: 3.00
+    └── AggregateFinal
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── exchange bytes: <slt:ignore>
+        ├── output rows: 3
+        ├── output bytes: <slt:ignore>
+        ├── output columns: [count() (#2), a % 3 (#1)]
+        ├── group by: [a % 3]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 3.00
+        └── Exchange
+            ├── output columns: [count() (#2), a % 3 (#1)]
+            ├── exchange type: Hash(0)
+            └── AggregatePartial
+                ├── cpu time: <slt:ignore>
+                ├── output rows: <slt:ignore>
+                ├── output bytes: <slt:ignore>
+                ├── group by: [a % 3]
+                ├── aggregate functions: [count()]
+                ├── estimated rows: 3.00
+                └── EvalScalar
+                    ├── cpu time: <slt:ignore>
+                    ├── output rows: 600
+                    ├── output bytes: <slt:ignore>
+                    ├── output columns: [a % 3 (#1)]
+                    ├── expressions: [tc.a (#0) % 3]
+                    ├── estimated rows: 654.18
+                    └── FuseBlockRead
+                        ├── cpu time: <slt:ignore>
+                        ├── wait time: <slt:ignore>
+                        ├── exchange bytes: <slt:ignore>
+                        ├── output rows: 600
+                        ├── output bytes: <slt:ignore>
+                        ├── bytes scanned: <slt:ignore>
+                        ├── partitions scanned: 6
+                        ├── read from remote: <slt:ignore>
+                        ├── runtime filter bloom time: <slt:ignore>
+                        ├── runtime filter inlist/min-max time: <slt:ignore>
+                        └── Exchange
+                            ├── output columns: []
+                            ├── exchange type: Hash()
+                            └── FusePrune
+                                ├── cpu time: <slt:ignore>
+                                ├── wait time: <slt:ignore>
+                                ├── table: default.lazy_pruning.tc
+                                ├── read rows: 0
+                                ├── read size: 0
+                                ├── partitions total: 12
+                                ├── partitions scanned: 6
+                                └── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>]
+
+statement ok
+set enable_prune_pipeline = 0
+
+# Plain `explain` runs the prune pipeline it gets from `build_prune_pipeline`
+# to print real counts. The one-shot mode has to be such a pipeline too,
+# or `explain` shows the planner's total with `scanned: 0`.
+query T
+explain select a % 3, count() from t where a > 2500 group by a % 3
+----
+Exchange
+├── output columns: [count() (#2), a % 3 (#3)]
+├── exchange type: Merge
+└── EvalScalar
+    ├── output columns: [count() (#2), a % 3 (#3)]
+    ├── expressions: [group_item (#1)]
+    ├── estimated rows: 3.00
+    └── AggregateFinal
+        ├── output columns: [count() (#2), a % 3 (#1)]
+        ├── group by: [a % 3]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 3.00
+        └── Exchange
+            ├── output columns: [count() (#2), a % 3 (#1)]
+            ├── exchange type: Hash(0)
+            └── AggregatePartial
+                ├── group by: [a % 3]
+                ├── aggregate functions: [count()]
+                ├── estimated rows: 3.00
+                └── EvalScalar
+                    ├── output columns: [a % 3 (#1)]
+                    ├── expressions: [t.a (#0) % 3]
+                    ├── estimated rows: 654.18
+                    └── TableScan
+                        ├── table: default.lazy_pruning.t
+                        ├── scan id: 0
+                        ├── output columns: [a (#0)]
+                        ├── read rows: 600
+                        ├── read size: 1.51 KiB
+                        ├── partitions total: 12
+                        ├── partitions scanned: 6
+                        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+                        ├── push downs: [filters: [is_true(t.a (#0) > 2500)], limit: NONE]
+                        └── estimated rows: 654.18
+
+query T
+explain analyze select a % 3, count() from t where a > 2500 group by a % 3
+----
+Exchange
+├── output columns: [count() (#2), a % 3 (#3)]
+├── exchange type: Merge
+└── EvalScalar
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 3
+    ├── output bytes: <slt:ignore>
+    ├── output columns: [count() (#2), a % 3 (#3)]
+    ├── expressions: [group_item (#1)]
+    ├── estimated rows: 3.00
+    └── AggregateFinal
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── exchange bytes: <slt:ignore>
+        ├── output rows: 3
+        ├── output bytes: <slt:ignore>
+        ├── output columns: [count() (#2), a % 3 (#1)]
+        ├── group by: [a % 3]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 3.00
+        └── Exchange
+            ├── output columns: [count() (#2), a % 3 (#1)]
+            ├── exchange type: Hash(0)
+            └── AggregatePartial
+                ├── cpu time: <slt:ignore>
+                ├── output rows: <slt:ignore>
+                ├── output bytes: <slt:ignore>
+                ├── group by: [a % 3]
+                ├── aggregate functions: [count()]
+                ├── estimated rows: 3.00
+                └── EvalScalar
+                    ├── cpu time: <slt:ignore>
+                    ├── output rows: 600
+                    ├── output bytes: <slt:ignore>
+                    ├── output columns: [a % 3 (#1)]
+                    ├── expressions: [t.a (#0) % 3]
+                    ├── estimated rows: 654.18
+                    └── TableScan
+                        ├── cpu time: <slt:ignore>
+                        ├── wait time: <slt:ignore>
+                        ├── output rows: 600
+                        ├── output bytes: <slt:ignore>
+                        ├── bytes scanned: <slt:ignore>
+                        ├── read from remote: <slt:ignore>
+                        ├── runtime filter bloom time: <slt:ignore>
+                        ├── runtime filter inlist/min-max time: <slt:ignore>
+                        ├── table: default.lazy_pruning.t
+                        ├── scan id: 0
+                        ├── output columns: [a (#0)]
+                        ├── read rows: 600
+                        ├── read size: 1.51 KiB
+                        ├── partitions total: 12
+                        ├── partitions scanned: 6
+                        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+                        ├── push downs: [filters: [is_true(t.a (#0) > 2500)], limit: NONE]
+                        └── estimated rows: 654.18
+
+statement ok
+unset enable_prune_pipeline
+
+# A lazy `MutationSource` publishes its scanned count after pruning, and
+# `explain analyze` must apply it to the leaf like it does for `TableScan`;
+# otherwise the leaf keeps the planner's estimate. `explain analyze` does not
+# commit the delete.
+query T
+explain analyze delete from t where a > 2500
+----
+MutationSource(Delete)
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── partitions scanned: 2
+├── table: default.lazy_pruning.t
+├── output columns: [a (#0)]
+├── filters: [is_true(t.a (#0) > 2500)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 12
+└── partitions scanned: 6
+
+query I
+select count() from t
+----
+1200
+
+statement ok
+drop database lazy_pruning

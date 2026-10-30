@@ -17,16 +17,19 @@
 //! written_io_bytes`.
 //! These tests check that it reports the block IO of `SELECT`,
 //! `INSERT ... SELECT`, `REPLACE INTO` and `COPY INTO` regardless of how the
-//! interpreter was entered, and that the partition counters still come from
-//! the attached table. They also cover the segment pruning of a lazy
-//! distributed `DELETE`, at pipeline preparation or at query runtime.
+//! interpreter was entered, including the segment pruning of a lazy
+//! distributed `DELETE` at pipeline preparation or at query runtime. The
+//! partition counters are covered in `partition_stats.rs`, which shares the
+//! helpers below.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Pipeline;
@@ -38,6 +41,7 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::servers::flight::v1::packets::QueryFragments;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextPartitionStats;
 use databend_query::sessions::TableContextProgress;
 use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextSettings;
@@ -45,20 +49,48 @@ use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
 
-struct Observed {
-    io_stats: IoStatsSnapshot,
-    partitions_scanned: u64,
-    partitions_total: u64,
-    scan_bytes: usize,
-    write_bytes: usize,
+pub(super) struct Observed {
+    pub(super) io_stats: IoStatsSnapshot,
+    pub(super) partitions_scanned: u64,
+    pub(super) partitions_total: u64,
+    /// `pruned_partitions_stats` as `explain analyze` reads it.
+    pub(super) per_plan: HashMap<u32, PartStatistics>,
+    pub(super) scan_bytes: usize,
+    pub(super) write_bytes: usize,
 }
 
-/// Run `sql` on a fresh `QueryContext` created and executed *without* any
-/// tracking payload carrying `io_stats`, the way `FlightSQL` and other
-/// handlers that do not install one call the interpreter. The interpreter
-/// itself must bind the query's counter so the IO is attributed.
-async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
+impl Observed {
+    /// Every pruning path publishes under the physical id of its scan node,
+    /// and each value for that id is published by exactly one party. For a
+    /// single-scan statement that means: one entry in the per-plan map, and
+    /// the query-level sum equals it.
+    pub(super) fn assert_single_scan_published_once(&self) {
+        assert_eq!(
+            self.per_plan.len(),
+            1,
+            "a single-scan statement must publish under exactly one plan id, got {:?}",
+            self.per_plan.keys().collect::<Vec<_>>()
+        );
+        let (_, stat) = self.per_plan.iter().next().unwrap();
+        assert_eq!(
+            (self.partitions_total, self.partitions_scanned),
+            (stat.partitions_total as u64, stat.partitions_scanned as u64),
+            "query-level sum must equal the single plan entry"
+        );
+    }
+}
+
+pub(super) async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
+    run_and_observe_with(fixture, sql, |_| Ok(())).await
+}
+
+pub(super) async fn run_and_observe_with(
+    fixture: &TestFixture,
+    sql: &str,
+    configure: impl FnOnce(&Arc<QueryContext>) -> Result<()>,
+) -> Result<Observed> {
     let ctx = fixture.new_query_ctx().await?;
+    configure(&ctx)?;
     assert!(
         ThreadTracker::io_stats().is_none(),
         "test must run outside any io_stats tracking scope to exercise the unbound path"
@@ -70,11 +102,12 @@ async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
     let stream = interpreter.execute(ctx.clone()).await?;
     stream.try_collect::<Vec<DataBlock>>().await?;
 
-    let data_metrics = ctx.get_data_metrics();
+    let partition_stats = ctx.get_partition_stats();
     Ok(Observed {
         io_stats: ctx.get_io_stats(),
-        partitions_scanned: data_metrics.get_partitions_scanned(),
-        partitions_total: data_metrics.get_partitions_total(),
+        partitions_scanned: partition_stats.scanned,
+        partitions_total: partition_stats.total,
+        per_plan: ctx.get_pruned_partitions_stats(),
         scan_bytes: ctx.get_scan_progress_value().bytes,
         write_bytes: ctx.get_write_progress_value().bytes,
     })
@@ -100,7 +133,7 @@ fn assert_block_io_counted(what: &str, io_bytes: u64, progress: usize) {
     );
 }
 
-async fn setup() -> Result<(TestFixture, String, String)> {
+pub(super) async fn setup() -> Result<(TestFixture, String, String)> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();
@@ -142,11 +175,17 @@ async fn select_counts_block_reads() -> Result<()> {
         observed.scan_bytes,
     );
     assert_eq!(observed.io_stats.write_bytes, 0);
-    // Partition counters still come from pruning on the attached table.
     assert_eq!(observed.partitions_total, 1);
     assert_eq!(observed.partitions_scanned, 1);
     Ok(())
 }
+
+// No single-node test for `explain analyze delete` on a lazy `MutationSource`
+// (`MutationSource::set_pruning_stats`): a `DELETE` is lazy only on a cluster
+// with `segments >= nodes`, or on a column-oriented table — and the latter
+// fails in `do_mutation_block_pruning` with `unsupported encoding: 21` on
+// `main` too (row-oriented segment reader). The cluster sqllogictest
+// `mode/cluster/lazy_pruning.test` covers it.
 
 #[tokio::test(flavor = "multi_thread")]
 async fn insert_select_counts_block_reads_and_writes() -> Result<()> {
@@ -256,7 +295,7 @@ async fn handler_installed_io_stats_is_reused() -> Result<()> {
 /// `enable_prune_pipeline` decides when the lazy segments are pruned: while the
 /// pipeline is being prepared (`false`, `do_mutation_block_pruning`), or in a
 /// pruning pipeline once the query runs (`true`).
-async fn init_lazy_delete_fragments(
+pub(super) async fn init_lazy_delete_fragments(
     fixture: &TestFixture,
     enable_prune_pipeline: bool,
 ) -> Result<(Arc<QueryContext>, QueryFragments)> {
@@ -360,7 +399,7 @@ async fn init_lazy_delete_fragments(
 /// Executes `pipelines` the way `START_PREPARED_QUERY` does on a worker: the
 /// executor is created while the query's counter is bound to the tracking
 /// payload, which every processor of the pipelines then inherits.
-async fn execute_like_prepared_query(
+pub(super) async fn execute_like_prepared_query(
     ctx: &Arc<QueryContext>,
     pipelines: Vec<Pipeline>,
 ) -> Result<()> {

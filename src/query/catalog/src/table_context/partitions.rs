@@ -65,7 +65,19 @@ pub trait TableContextPartitionStats: Send + Sync {
         unimplemented!()
     }
 
-    fn set_pruned_partitions_stats(&self, _plan_id: u32, _stats: PartStatistics) {
+    /// Statistics a plan knows before it runs: everything for an eagerly
+    /// pruned source, `partitions_total` for a lazy one. Called once per
+    /// root plan on the node that owns the query.
+    fn publish_planned_pruning_stats(&self, _plan_id: u32, _stats: PartStatistics) {
+        unimplemented!()
+    }
+
+    /// What one pruning run actually kept, from the node that ran it: scanned
+    /// partitions, rows, bytes and the pruning statistics. Lazy pruning calls
+    /// this once per node. The total was published by
+    /// `publish_planned_pruning_stats`; whatever `partitions_total` the
+    /// argument carries is ignored.
+    fn publish_pruned_partitions(&self, _plan_id: u32, _stats: PartStatistics) {
         unimplemented!()
     }
 
