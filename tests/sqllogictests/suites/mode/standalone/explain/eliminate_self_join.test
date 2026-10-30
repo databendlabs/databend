@@ -762,7 +762,8 @@ order by t3.c1
 3 30
 
 # Volatile scan predicates: identical `rand()` filters on both branches still
-# sample different row sets, so the join must be preserved.
+# sample different row sets, so the join must be preserved. RF must not be
+# pushed below either random filter: it would change which rows are sampled.
 query T
 explain
 select t3.c1, t3.c2
@@ -788,8 +789,6 @@ HashJoin
 ├── probe keys: [t4.c1 (#3)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
-│   └── filter id:0, build key:t3.c1 (#0), probe targets:[t4.c1 (#3)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.30
 ├── Filter(Build)
 │   ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
@@ -834,7 +833,6 @@ HashJoin
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [rand() < 0.5], limit: NONE]
-            ├── apply join filters: [#0]
             └── estimated rows: 1.00
 
 # Same filter set written in a different AND order on the two branches:

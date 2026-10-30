@@ -40,8 +40,6 @@ Sequence
     ├── probe keys: [x.a (#4)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
-    │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 2.00
     ├── Filter(Build)
     │   ├── output columns: [cte_prune_t.a (#8), cte_prune_t.c (#10)]
@@ -87,8 +85,6 @@ Sequence
     ├── probe keys: [x.a (#4)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
-    │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 3.00
     ├── MaterializeCTERef(Build)
     │   ├── cte_name: cte
@@ -133,8 +129,6 @@ Sequence
     │       ├── probe keys: [x.a (#4)]
     │       ├── keys is null equal: [false]
     │       ├── filters: []
-    │       ├── build join filters:
-    │       │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
     │       ├── estimated rows: 3.00
     │       ├── MaterializeCTERef(Build)
     │       │   ├── cte_name: inner_cte
@@ -151,8 +145,6 @@ Sequence
         ├── probe keys: [x.a (#12)]
         ├── keys is null equal: [false]
         ├── filters: []
-        ├── build join filters:
-        │   └── filter id:1, build key:y.a (#20), probe targets:[x.a (#12)@scan3], filter type:bloom,inlist,min_max
         ├── estimated rows: 3.00
         ├── MaterializeCTERef(Build)
         │   ├── cte_name: outer_cte
@@ -208,8 +200,6 @@ Sequence
             ├── probe keys: [x.a (#5)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
-            │   └── filter id:0, build key:y.a (#10), probe targets:[x.a (#5)@scan1], filter type:bloom,inlist,min_max
             ├── estimated rows: 3.00
             ├── MaterializeCTERef(Build)
             │   ├── cte_name: inner_cte

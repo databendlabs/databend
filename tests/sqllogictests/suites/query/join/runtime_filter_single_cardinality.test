@@ -1,0 +1,78 @@
+# Keep the scalar result on the parent join's probe side. With reordering,
+# this small fixture swaps the sides and no longer exercises the unsafe path.
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+drop table if exists rf_single_input;
+
+statement ok
+drop table if exists rf_single_values;
+
+statement ok
+drop table if exists rf_single_keep;
+
+statement ok
+create table rf_single_input(k int);
+
+statement ok
+create table rf_single_values(k int, v int);
+
+statement ok
+create table rf_single_keep(k int);
+
+# Separate blocks let an old parent RF remove key 1 before its scalar check.
+statement ok
+insert into rf_single_input values (1);
+
+statement ok
+insert into rf_single_input values (2);
+
+statement ok
+insert into rf_single_values values (1,10), (1,20), (2,30);
+
+# Membership excludes 1, but the [0,2] range still includes it.
+statement ok
+insert into rf_single_keep values (0), (2);
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+# IS NOT NULL rewrites the scalar join to Inner, but it still checks for
+# multiple matches: both values 10 and 20 survive this predicate.
+query error 1001.*Scalar subquery can't return more than one row
+select q.k, q.v
+from (
+    select a.k, (select b.v from rf_single_values b where b.k = a.k) v
+    from rf_single_input a
+) q
+join rf_single_keep c on q.k = c.k
+where q.v is not null;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+# The same error must remain. The old RF hides it and returns (2,30).
+query error 1001.*Scalar subquery can't return more than one row
+select q.k, q.v
+from (
+    select a.k, (select b.v from rf_single_values b where b.k = a.k) v
+    from rf_single_input a
+) q
+join rf_single_keep c on q.k = c.k
+where q.v is not null;
+
+statement ok
+drop table rf_single_keep;
+
+statement ok
+drop table rf_single_values;
+
+statement ok
+drop table rf_single_input;
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;
