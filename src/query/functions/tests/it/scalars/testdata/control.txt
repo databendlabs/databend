@@ -137,6 +137,56 @@ evaluation (internal):
 +-----------+--------------------------------------------------------------------------------+
 
 
+ast            : if(cond_a, expr_true, expr_else)
+raw expr       : if(cond_a::Boolean, expr_true::Int64, expr_else::Int64)
+checked expr   : if<T0=Int64><Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), expr_true, expr_else)
+evaluation:
++--------+---------------+-----------+-----------+---------+
+|        | cond_a        | expr_true | expr_else | Output  |
++--------+---------------+-----------+-----------+---------+
+| Type   | Boolean       | Int64     | Int64     | Int64   |
+| Domain | {FALSE, TRUE} | {1..=4}   | {5..=8}   | {1..=8} |
+| Row 0  | true          | 1         | 5         | 1       |
+| Row 1  | false         | 2         | 6         | 6       |
+| Row 2  | true          | 3         | 7         | 3       |
+| Row 3  | false         | 4         | 8         | 8       |
++--------+---------------+-----------+-----------+---------+
+evaluation (internal):
++-----------+-------------------------------+
+| Column    | Data                          |
++-----------+-------------------------------+
+| cond_a    | Column(Boolean([0b____0101])) |
+| expr_true | Column(Int64([1, 2, 3, 4]))   |
+| expr_else | Column(Int64([5, 6, 7, 8]))   |
+| Output    | Int64([1, 6, 3, 8])           |
++-----------+-------------------------------+
+
+
+ast            : if(cond_a, expr_true, expr_else)
+raw expr       : if(cond_a::Boolean, expr_true::Decimal(15, 2), expr_else::Decimal(15, 2))
+checked expr   : if<T0=Decimal(15, 2)><Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), expr_true, expr_else)
+evaluation:
++--------+---------------+----------------+----------------+----------------+
+|        | cond_a        | expr_true      | expr_else      | Output         |
++--------+---------------+----------------+----------------+----------------+
+| Type   | Boolean       | Decimal(15, 2) | Decimal(15, 2) | Decimal(15, 2) |
+| Domain | {FALSE, TRUE} | {1.00..=4.00}  | {5.00..=8.00}  | {1.00..=8.00}  |
+| Row 0  | true          | 1.00           | 5.00           | 1.00           |
+| Row 1  | false         | 2.00           | 6.00           | 6.00           |
+| Row 2  | true          | 3.00           | 7.00           | 3.00           |
+| Row 3  | false         | 4.00           | 8.00           | 8.00           |
++--------+---------------+----------------+----------------+----------------+
+evaluation (internal):
++-----------+---------------------------------------------+
+| Column    | Data                                        |
++-----------+---------------------------------------------+
+| cond_a    | Column(Boolean([0b____0101]))               |
+| expr_true | Column(Decimal64([1.00, 2.00, 3.00, 4.00])) |
+| expr_else | Column(Decimal64([5.00, 6.00, 7.00, 8.00])) |
+| Output    | Decimal64([1.00, 6.00, 3.00, 8.00])         |
++-----------+---------------------------------------------+
+
+
 ast            : if(cond_a, expr_a, cond_b, expr_b, expr_else)
 raw expr       : if(cond_a::Boolean, expr_a::Int64, cond_b::Boolean NULL, expr_b::Int64, expr_else::Int64 NULL)
 checked expr   : if<T0=Int64 NULL><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), CAST<Int64>(expr_a AS Int64 NULL), cond_b, CAST<Int64>(expr_b AS Int64 NULL), expr_else)
