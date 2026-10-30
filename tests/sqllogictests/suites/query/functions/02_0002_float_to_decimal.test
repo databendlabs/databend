@@ -40,7 +40,16 @@ SELECT CAST('NaN'::DOUBLE AS DECIMAL(38,10))
 
 # Nullable columns and inactive rows keep their normal error/null semantics.
 query R
-SELECT TRY_CAST(a AS DECIMAL(38,18)) FROM (VALUES (1.1::DOUBLE), ((-1.1)::DOUBLE), (NULL::DOUBLE), ('NaN'::DOUBLE), ('inf'::DOUBLE)) AS t(a)
+SELECT TRY_CAST(a AS DECIMAL(38,18))
+FROM (
+  VALUES
+    (1, 1.1::DOUBLE),
+    (2, (-1.1)::DOUBLE),
+    (3, NULL::DOUBLE),
+    (4, 'NaN'::DOUBLE),
+    (5, 'inf'::DOUBLE)
+) AS t(id, a)
+ORDER BY id
 ----
 1.100000000000000089
 -1.100000000000000089
@@ -49,7 +58,7 @@ NULL
 NULL
 
 query R
-SELECT if(number = 0, NULL, CAST(if(number = 0, 'NaN'::DOUBLE, 415210.34::DOUBLE) AS DECIMAL(38,10))) FROM numbers(2)
+SELECT if(number = 0, NULL, CAST(if(number = 0, 'NaN'::DOUBLE, 415210.34::DOUBLE) AS DECIMAL(38,10))) FROM numbers(2) ORDER BY number
 ----
 NULL
 415210.3400000000
