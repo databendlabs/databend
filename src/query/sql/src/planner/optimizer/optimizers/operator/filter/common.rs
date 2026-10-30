@@ -65,12 +65,17 @@ pub fn check_float_range(min: f64, max: f64, value: &Scalar) -> (bool, f64) {
 
 pub fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr, ScalarExpr) {
     let (cast, span, value, cast_on_left) = match (&left, &right) {
-        (ScalarExpr::CastExpr(cast), ScalarExpr::ConstantExpr(ConstantExpr { span, value })) => {
-            (cast, span, value, true)
-        }
-        (ScalarExpr::ConstantExpr(ConstantExpr { span, value }), ScalarExpr::CastExpr(cast)) => {
-            (cast, span, value, false)
-        }
+        // The constant is converted to the column type, so only its value matters.
+        (
+            ScalarExpr::CastExpr(cast),
+            ScalarExpr::ConstantExpr(ConstantExpr { span, value })
+            | ScalarExpr::TypedConstantExpr(ConstantExpr { span, value }, _),
+        ) => (cast, span, value, true),
+        (
+            ScalarExpr::ConstantExpr(ConstantExpr { span, value })
+            | ScalarExpr::TypedConstantExpr(ConstantExpr { span, value }, _),
+            ScalarExpr::CastExpr(cast),
+        ) => (cast, span, value, false),
         _ => return (left, right),
     };
 

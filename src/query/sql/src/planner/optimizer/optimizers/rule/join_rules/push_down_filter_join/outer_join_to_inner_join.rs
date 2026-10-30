@@ -230,7 +230,7 @@ pub fn can_filter_null(
                     Ok(())
                 }
                 ScalarExpr::CastExpr(cast) => self.replace(&mut cast.argument),
-                ScalarExpr::ConstantExpr(_) => Ok(()),
+                ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => Ok(()),
                 _ => {
                     self.can_replace = false;
                     Ok(())
