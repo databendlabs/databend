@@ -132,7 +132,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let block_size_col = segment.block_size_col();
         let row_count_col = segment.row_count_col();
 
-        let pruning_runtime = &self.block_pruner.pruning_ctx.pruning_runtime;
+        let pruning_runtime = self.block_pruner.pruning_ctx.pruning_runtime()?;
         let pruning_semaphore = &self.block_pruner.pruning_ctx.pruning_semaphore;
 
         let mut pruning_tasks = Vec::with_capacity(block_num);
