@@ -41,8 +41,10 @@ select count(*) from @s_09_0043 (file_format => 'parquet');
 ----
 100
 
+# Summed over the nodes: in a cluster, system.caches has a row per node, and only the nodes
+# that read the files cache their footers.
 query B
-select hit > 0 and num_items > 0 from system.caches where name = 'memory_cache_parquet_meta_data';
+select sum(hit) > 0 and sum(num_items) > 0 from system.caches where name = 'memory_cache_parquet_meta_data';
 ----
 1
 
