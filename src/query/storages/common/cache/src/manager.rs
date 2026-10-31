@@ -162,10 +162,26 @@ impl CacheManager {
     /// Rows for `system.caches`: every kind, its disk tier while disk tiers are allowed, then
     /// each pool. Kinds turned off are listed with `enabled: false`.
     pub fn rows(&self) -> Vec<CacheRow> {
+        self.composition()
+            .into_iter()
+            .map(|row| {
+                if row.kind.is_some() {
+                    with_hits(row)
+                } else {
+                    row
+                }
+            })
+            .collect()
+    }
+
+    /// `rows` without the access, hit and miss counts, which live in metric families: reading
+    /// one the first time registers it with the global metrics registry. The metrics collector
+    /// runs under that registry's lock, so it reads this instead.
+    pub(crate) fn composition(&self) -> Vec<CacheRow> {
         let mut rows = Vec::new();
         for kind in CacheKind::all() {
             let stats = self.store.kind_stats(kind);
-            rows.push(with_hits(CacheRow {
+            rows.push(CacheRow {
                 name: kind.name().to_string(),
                 kind: Some(kind),
                 pool: Some(kind.pool()),
@@ -179,10 +195,10 @@ impl CacheManager {
                 hit: 0,
                 miss: 0,
                 events: stats.events,
-            }));
+            });
             let disk_allowed = self.disk_allowed.load(Ordering::Relaxed);
             if let Some(disk) = self.disks.get(&kind).filter(|_| disk_allowed) {
-                rows.push(with_hits(CacheRow {
+                rows.push(CacheRow {
                     name: disk.name().to_string(),
                     kind: Some(kind),
                     pool: None,
@@ -197,7 +213,7 @@ impl CacheManager {
                     hit: 0,
                     miss: 0,
                     events: None,
-                }));
+                });
             }
         }
         for stats in self.store.pool_stats() {

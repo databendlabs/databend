@@ -16,6 +16,11 @@
 //! metrics are scraped. The cache paths only bump plain atomics, which also keeps reclaim safe:
 //! it runs inside allocations, possibly while the allocating thread holds a metrics lock.
 //!
+//! The collector runs under the global metrics registry's lock, so it must not touch a metric:
+//! the first use of one registers it, which takes that lock again. It reads
+//! `CacheManager::composition`, which leaves out the access, hit and miss counts; those are
+//! exported by their own families.
+//!
 //! Gauges, per kind and per disk tier, labelled by `cache_name` and `pool` (`meta`, `index`,
 //! `data`, or `disk`): `cache_items`, `cache_resident_bytes` (charged, including values evicted
 //! but still held by queries), `cache_in_cache_bytes` (still in the cache), `cache_capacity` (in
@@ -281,7 +286,7 @@ impl Collector for CacheMetricsCollector {
             return Ok(());
         };
         let mut families = Families::new();
-        for row in manager.rows() {
+        for row in manager.composition() {
             match row.kind {
                 Some(_) => families.add_kind(&row),
                 None => families.add_pool(&row),
