@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 use std::sync::Barrier;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::Thread;
 use databend_storages_common_cache::CacheKind;
@@ -249,6 +251,53 @@ fn test_set_kind_limit_keeps_unit() {
     }
     let stats = store.kind_stats(CacheKind::of::<table::Snapshot>());
     assert_eq!((stats.items, stats.capacity), (2, Some(2)));
+}
+
+/// Inserts racing the kind being turned off or shrunk: once that is done and they stop,
+/// nothing is left past the new capacity. An insert that read the old capacity lands before
+/// the eviction, or reads the new one.
+#[test]
+fn test_capacity_change_racing_inserts() {
+    const THREADS: usize = 8;
+    let snapshot = CacheKind::of::<table::Snapshot>();
+    for round in 0..40 {
+        let store = legacy(&[(snapshot, LegacyCapacity::Items(1000))]);
+        let live = Live::default();
+        let stop = Arc::new(AtomicBool::new(false));
+        let barrier = Arc::new(Barrier::new(THREADS + 1));
+        let threads: Vec<_> = (0..THREADS)
+            .map(|t| {
+                let (store, live) = (store.clone(), live.clone());
+                let (stop, barrier) = (stop.clone(), barrier.clone());
+                Thread::spawn(move || {
+                    let cache = cache(&store, meta_kind());
+                    barrier.wait();
+                    let mut i = 0;
+                    while !stop.load(Ordering::Relaxed) {
+                        cache.put(&format!("{t}-{i}"), live.item(1));
+                        i += 1;
+                    }
+                })
+            })
+            .collect();
+        barrier.wait();
+        std::thread::yield_now();
+        let (limit, left) = match round % 2 {
+            0 => (KindLimit::DISABLED, 0),
+            _ => (KindLimit::bytes(5), 5),
+        };
+        store.set_kind_limit(snapshot, limit);
+        let after = store.kind_stats(snapshot).items;
+        stop.store(true, Ordering::Relaxed);
+        for t in threads {
+            t.join().unwrap();
+        }
+        assert!(after <= left, "round {round}: {after} items");
+        assert!(store.kind_stats(snapshot).items <= left, "round {round}");
+        if left == 0 {
+            assert_eq!(live.count(), 0, "round {round}");
+        }
+    }
 }
 
 /// The legacy backend is not shrunk under memory pressure, as before the refactor.

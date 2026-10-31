@@ -126,20 +126,19 @@ impl LegacyStore {
         &self.kinds[kind.index()]
     }
 
+    /// Under the LRU lock, as inserts read the capacity: an insert sees the new capacity, or
+    /// lands before the eviction down to it.
     fn set_limit(&self, kind: CacheKind, limit: KindLimit) {
         let state = self.kind(kind);
-        let capacity = {
-            let mut capacity = state.capacity.lock();
-            *capacity = match (limit.max_bytes, state.unit()) {
+        let removed: Vec<_> = {
+            let mut lru = state.lru.lock();
+            let capacity = match (limit.max_bytes, state.unit()) {
                 (Some(0), _) => LegacyCapacity::Disabled,
                 (Some(n), Unit::Count) => LegacyCapacity::Items(n),
                 (Some(n), Unit::Bytes) => LegacyCapacity::Bytes(n),
                 (None, _) => LegacyCapacity::Bytes(usize::MAX),
             };
-            *capacity
-        };
-        let removed: Vec<_> = {
-            let mut lru = state.lru.lock();
+            *state.capacity.lock() = capacity;
             let mut removed = Vec::new();
             while capacity.exceeded(&lru, 0, 0) {
                 match lru.pop_by_policy() {
@@ -231,13 +230,18 @@ impl KindStore for LegacyStore {
         bytes: usize,
     ) -> InsertOutcome {
         let state = self.kind(kind);
-        let capacity = *state.capacity.lock();
-        if capacity == LegacyCapacity::Disabled {
+        if !self.is_enabled(kind) {
             return InsertOutcome::Rejected(RejectReason::Disabled);
         }
         let pool = &self.pools[kind.pool().index()];
         let (victims, outcome) = {
             let mut lru = state.lru.lock();
+            // Read under the LRU lock, as `set_limit` changes it: a capacity being lowered is
+            // not passed by an insert that read the old one.
+            let capacity = *state.capacity.lock();
+            if capacity == LegacyCapacity::Disabled {
+                return InsertOutcome::Rejected(RejectReason::Disabled);
+            }
             let (mut victims, room) = self.make_room(kind, &mut lru, capacity, key, bytes);
             match room {
                 Err(reason) => (victims, Err(reason)),
