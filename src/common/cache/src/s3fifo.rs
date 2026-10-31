@@ -31,7 +31,9 @@ pub struct S3FifoConfig {
     pub small_ratio: f64,
     /// A key is cached on its `admit_after`-th admission attempt; earlier attempts only touch the ghost.
     pub admit_after: u8,
+    /// Bounds of the ghost: records, and bytes of the entries they stand for.
     pub ghost_entries: usize,
+    pub ghost_bytes: usize,
     /// Entries at least this large skip the small queue.
     pub large_entry_bytes: usize,
 }
@@ -42,6 +44,7 @@ impl Default for S3FifoConfig {
             small_ratio: 0.1,
             admit_after: 1,
             ghost_entries: 65536,
+            ghost_bytes: usize::MAX,
             large_entry_bytes: usize::MAX,
         }
     }
@@ -126,7 +129,7 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
             free: Vec::new(),
             small: List::EMPTY,
             main: List::EMPTY,
-            ghost: Ghost::new(config.ghost_entries),
+            ghost: Ghost::new(config.ghost_entries, config.ghost_bytes),
             hasher,
             config,
         }
@@ -159,7 +162,7 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
                 replaced: self.insert(key, value, bytes),
             };
         }
-        match self.admission(&key) {
+        match self.admission(&key, bytes) {
             Some(placement) => Admission::Admitted {
                 replaced: self.insert_at(key, value, bytes, placement),
             },
@@ -169,19 +172,19 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
 
     /// Admission decision for a key that is not cached. `None` means deferred: the access is
     /// only recorded in the ghost. Pair with `insert_at` when eviction must happen in between.
-    pub fn admission(&mut self, key: &K) -> Option<Placement> {
+    pub fn admission(&mut self, key: &K, bytes: usize) -> Option<Placement> {
         let hash = self.hasher.hash_one(key);
         match self.ghost.take(hash) {
             None if self.config.admit_after <= 1 => Some(Placement::Small),
             None => {
-                self.ghost.record(hash, 1);
+                self.ghost.record(hash, 1, bytes);
                 None
             }
             Some(seen) if seen.saturating_add(1) >= self.config.admit_after => {
                 Some(Placement::Main)
             }
             Some(seen) => {
-                self.ghost.record(hash, seen + 1);
+                self.ghost.record(hash, seen + 1, bytes);
                 None
             }
         }
@@ -271,8 +274,11 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
                     self.move_to_main(i);
                     continue;
                 }
-                self.ghost
-                    .record(node.hash, self.config.admit_after.saturating_sub(1));
+                self.ghost.record(
+                    node.hash,
+                    self.config.admit_after.saturating_sub(1),
+                    node.bytes,
+                );
             } else if freq > 0 {
                 node.freq.store(freq - 1, Ordering::Relaxed);
                 self.move_to_main(i);
@@ -336,8 +342,11 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
                     self.move_to_main(i);
                 } else {
                     if from_small {
-                        self.ghost
-                            .record(node.hash, self.config.admit_after.saturating_sub(1));
+                        self.ghost.record(
+                            node.hash,
+                            self.config.admit_after.saturating_sub(1),
+                            node.bytes,
+                        );
                     }
                     let node = self.take(i);
                     bytes += node.bytes;
@@ -403,6 +412,17 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
 
     pub fn ghost_len(&self) -> usize {
         self.ghost.len()
+    }
+
+    /// Bytes of the entries the ghost remembers.
+    pub fn ghost_bytes(&self) -> usize {
+        self.ghost.bytes()
+    }
+
+    /// Changes the ghost's byte bound, e.g. after the owner's capacity changed.
+    pub fn set_ghost_bytes(&mut self, bytes: usize) {
+        self.config.ghost_bytes = bytes;
+        self.ghost.set_byte_capacity(bytes);
     }
 
     fn pick_small(&self, flip: bool) -> bool {
@@ -639,7 +659,7 @@ mod tests {
                 entries: HashMap::new(),
                 small: VecDeque::new(),
                 main: VecDeque::new(),
-                ghost: Ghost::new(config.ghost_entries),
+                ghost: Ghost::new(config.ghost_entries, config.ghost_bytes),
                 hasher,
                 config,
             }
@@ -669,8 +689,9 @@ mod tests {
         fn evict(&mut self, key: u32, ghost: bool) -> (u32, u32, usize) {
             if ghost {
                 let hash = self.hasher.hash_one(key);
+                let bytes = self.entries[&key].bytes;
                 self.ghost
-                    .record(hash, self.config.admit_after.saturating_sub(1));
+                    .record(hash, self.config.admit_after.saturating_sub(1), bytes);
             }
             self.unqueue(key);
             let e = self.entries.remove(&key).unwrap();
@@ -691,18 +712,18 @@ mod tests {
             Some(e.value)
         }
 
-        fn admission(&mut self, key: u32) -> Option<Placement> {
+        fn admission(&mut self, key: u32, bytes: usize) -> Option<Placement> {
             let hash = self.hasher.hash_one(key);
             let admit_after = self.config.admit_after;
             match self.ghost.take(hash) {
                 None if admit_after <= 1 => Some(Placement::Small),
                 None => {
-                    self.ghost.record(hash, 1);
+                    self.ghost.record(hash, 1, bytes);
                     None
                 }
                 Some(seen) if seen.saturating_add(1) >= admit_after => Some(Placement::Main),
                 Some(seen) => {
-                    self.ghost.record(hash, seen + 1);
+                    self.ghost.record(hash, seen + 1, bytes);
                     None
                 }
             }
@@ -740,7 +761,7 @@ mod tests {
             if self.entries.contains_key(&key) {
                 return Some(self.insert(key, value, bytes));
             }
-            let placement = self.admission(key)?;
+            let placement = self.admission(key, bytes)?;
             Some(self.insert_at(key, value, bytes, placement))
         }
 
@@ -924,6 +945,11 @@ mod tests {
                 "{at}"
             );
             assert!(c.slots() <= 2 * c.len() + 1024, "{at} slab not compacted");
+            assert_eq!(
+                (c.ghost_len(), c.ghost_bytes()),
+                (m.ghost.len(), m.ghost.bytes()),
+                "{at} ghost"
+            );
         }
     }
 
@@ -943,6 +969,7 @@ mod tests {
             compare(seed, 3000, 64, S3FifoConfig {
                 admit_after: 2,
                 ghost_entries: 16,
+                ghost_bytes: 40,
                 large_entry_bytes: 7,
                 ..Default::default()
             });

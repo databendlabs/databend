@@ -385,6 +385,12 @@ fn check_quiescent(
             "{at}"
         );
         assert!(structure.ghost_entries <= structure.ghost_capacity, "{at}");
+        // A shard keeps its newest record even past its share of the byte bound. A value is
+        // at most a quarter of the cap it was recorded under, which is at most 4 times this one.
+        assert!(
+            structure.ghost_bytes <= structure.ghost_byte_capacity + structure.shards * stats.cap,
+            "{at}"
+        );
 
         let kinds: Vec<_> = kinds().into_iter().filter(|k| k.pool() == pool).collect();
         let kind_bytes: usize = kinds.iter().map(|k| store.kind_stats(*k).in_cache).sum();

@@ -48,6 +48,9 @@ pub struct PoolStructure {
     pub slots: usize,
     pub ghost_entries: usize,
     pub ghost_capacity: usize,
+    /// Bytes of the entries the ghosts remember, and their bound summed over the shards.
+    pub ghost_bytes: usize,
+    pub ghost_byte_capacity: usize,
 }
 
 /// One pool: sharded S3-FIFO queues under a single byte cap. Shards only spread lock contention.
@@ -62,15 +65,17 @@ pub(crate) struct PoolStore {
 
 impl PoolStore {
     pub fn new(pool: Pool, cap: usize, shards: usize) -> Self {
+        let shards = shards.max(1);
         let config = S3FifoConfig {
             admit_after: if pool == Pool::Data { 2 } else { 1 },
             ghost_entries: GHOST_ENTRIES_PER_SHARD,
+            ghost_bytes: ghost_bytes_per_shard(cap, shards),
             large_entry_bytes: large_entry_bytes(cap),
             ..Default::default()
         };
         PoolStore {
             pool,
-            shards: (0..shards.max(1))
+            shards: (0..shards)
                 .map(|_| RwLock::new(S3Fifo::new(config)))
                 .collect(),
             hasher: DefaultHashBuilder::default(),
@@ -94,10 +99,11 @@ impl PoolStore {
 
     pub fn set_cap(&self, bytes: usize) {
         self.cap.store(bytes, Ordering::Relaxed);
+        let ghost_bytes = ghost_bytes_per_shard(bytes, self.shards.len());
         for shard in self.shards.iter() {
-            shard
-                .write()
-                .set_large_entry_bytes(large_entry_bytes(bytes));
+            let mut shard = shard.write();
+            shard.set_large_entry_bytes(large_entry_bytes(bytes));
+            shard.set_ghost_bytes(ghost_bytes);
         }
     }
 
@@ -105,6 +111,8 @@ impl PoolStore {
         let mut structure = PoolStructure {
             shards: self.shards.len(),
             ghost_capacity: GHOST_ENTRIES_PER_SHARD * self.shards.len(),
+            ghost_byte_capacity: ghost_bytes_per_shard(self.cap(), self.shards.len())
+                * self.shards.len(),
             ..PoolStructure::default()
         };
         for shard in self.shards.iter() {
@@ -112,6 +120,7 @@ impl PoolStore {
             structure.entries += shard.len();
             structure.slots += shard.slots();
             structure.ghost_entries += shard.ghost_len();
+            structure.ghost_bytes += shard.ghost_bytes();
         }
         structure
     }
@@ -135,12 +144,13 @@ impl PoolStore {
         self.shards[self.shard_of(key)].read().contains(&key)
     }
 
-    pub fn admission(&self, key: KeyRef) -> Option<Placement> {
+    /// Admission of a value of `bytes` for `key`; see `S3Fifo::admission`.
+    pub fn admission(&self, key: KeyRef, bytes: usize) -> Option<Placement> {
         let mut shard = self.shards[self.shard_of(key)].write();
         if shard.contains(&key) {
             return Some(Placement::Small);
         }
-        shard.admission(&key.to_owned())
+        shard.admission(&key.to_owned(), bytes)
     }
 
     /// `placement: None` bypasses admission.
@@ -260,6 +270,13 @@ fn large_entry_bytes(cap: usize) -> usize {
     }
 }
 
+/// The ghosts of a pool remember about 0.9 times its cap in bytes, as libCacheSim's default
+/// ghost ratio, split over the shards. A record larger than its shard's share is still kept
+/// until the next one comes; a pool that is off (cap 0) remembers nothing.
+fn ghost_bytes_per_shard(cap: usize, shards: usize) -> usize {
+    ((cap - cap / 10) / shards).max(cap.min(1))
+}
+
 fn lock_shard<T>(lock: &RwLock<T>, blocking: bool) -> Option<RwLockWriteGuard<'_, T>> {
     if blocking {
         Some(lock.write())
@@ -302,6 +319,42 @@ mod tests {
         store.set_cap(640_000);
         store.insert(KeyRef::new(snapshot, "now small"), entry(1000), None);
         assert_eq!(small_bytes(&store), 1100);
+    }
+
+    /// The ghosts follow the cap in bytes: deferred values of a pool are remembered up to
+    /// about 0.9 times its cap, and a pool turned off forgets them.
+    #[test]
+    fn test_ghost_bytes_follow_the_cap() {
+        let column = CacheKind::of::<crate::kinds::column::Data>();
+        let store = PoolStore::new(Pool::Data, 10_000, 1);
+        // First reads are deferred and recorded, 1000 bytes each.
+        for i in 0..20 {
+            let key = i.to_string();
+            assert!(store.admission(KeyRef::new(column, &key), 1000).is_none());
+        }
+        let structure = store.structure();
+        assert_eq!(structure.ghost_byte_capacity, 9000);
+        assert_eq!((structure.ghost_entries, structure.ghost_bytes), (9, 9000));
+        // The newest are remembered: a second read is admitted, an old one deferred again.
+        assert!(store.admission(KeyRef::new(column, "19"), 1000).is_some());
+        assert!(store.admission(KeyRef::new(column, "0"), 1000).is_none());
+
+        store.set_cap(0);
+        assert_eq!(store.structure().ghost_bytes, 0);
+        store.set_cap(100_000);
+        assert_eq!(store.structure().ghost_byte_capacity, 90_000);
+        assert!(store.admission(KeyRef::new(column, "a"), 50_000).is_none());
+        assert!(store.admission(KeyRef::new(column, "a"), 50_000).is_some());
+    }
+
+    /// A value larger than its shard's ghost share is still admitted on a prompt second read.
+    #[test]
+    fn test_large_value_is_admitted_on_second_read() {
+        let column = CacheKind::of::<crate::kinds::column::Data>();
+        let store = PoolStore::new(Pool::Data, 10_000, 4);
+        let key = KeyRef::new(column, "large");
+        assert!(store.admission(key, 2500).is_none());
+        assert!(store.admission(key, 2500).is_some());
     }
 
     /// Held entries at the front of a shard do not end its eviction early.

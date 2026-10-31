@@ -313,7 +313,7 @@ impl KindStore for SharedStore {
         let key = KeyRef::new(kind, key);
         let placement = match mode {
             InsertMode::Put => None,
-            InsertMode::Fill => match pool.admission(key) {
+            InsertMode::Fill => match pool.admission(key, bytes) {
                 Some(placement) => Some(placement),
                 None => {
                     let deferred = &self.kind(kind).events.admission_deferred;
