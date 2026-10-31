@@ -213,6 +213,11 @@ impl PythonRuntime {
     }
 
     pub async fn call(self: &Arc<Self>, batch: &RecordBatch) -> Result<RecordBatch> {
+        decode_batch(&self.request(&encode_batch(batch)?).await?)
+    }
+
+    /// Send one request frame to a pooled worker and return its response.
+    pub(crate) async fn request(self: &Arc<Self>, request: &[u8]) -> Result<Vec<u8>> {
         let cancelled = self.query.cancel.notified();
         let failed = self.failed.notified();
         tokio::pin!(cancelled, failed);
@@ -231,14 +236,14 @@ impl PythonRuntime {
                 .await
                 .map_err(udf_error)?;
             let mut lease = self.checkout(minimum).await?;
-            let batch = tokio::time::timeout(
+            let response = tokio::time::timeout(
                 self.query.manager.config.execution_timeout,
-                lease.execute(batch),
+                lease.execute(request),
             )
             .await
             .map_err(|_| udf_error("execution timed out"))??;
             lease.complete()?;
-            Ok(batch)
+            Ok(response)
         };
         tokio::select! {
             // Preserve the original error when dropping a failed lease also
@@ -274,7 +279,7 @@ impl WorkerLease {
         }
     }
 
-    async fn execute(&mut self, batch: &RecordBatch) -> Result<RecordBatch> {
+    async fn execute(&mut self, request: &[u8]) -> Result<Vec<u8>> {
         if self.worker.is_none() {
             let runtime = &self.runtime;
             self.worker = Some(
@@ -293,9 +298,7 @@ impl WorkerLease {
             );
             self.reservation.take();
         }
-        let worker = self.worker.as_mut().unwrap();
-        worker.write_frame(&encode_batch(batch)?).await?;
-        decode_batch(&worker.read_response().await?)
+        self.worker.as_mut().unwrap().request(request).await
     }
 
     fn complete(mut self) -> Result<()> {

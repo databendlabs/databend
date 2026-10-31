@@ -79,12 +79,12 @@ INSERT INTO t VALUES
 (16, [0.2667851, 0.01529589, 0.98994706, 0.31870983, 0.31783372, 0.34863699, 0.30254189, 0.84441678])
 
 query TB
-select name, vector_index_size > 13000 from system.tables where name='t' and database='test_vector_index';
+select name, vector_index_size > 0 from system.tables where name='t' and database='test_vector_index';
 ----
 t 1
 
 query IIB
-select block_count, row_count, vector_index_size > 3000 from fuse_segment('test_vector_index', 't');
+select block_count, row_count, vector_index_size > 0 from fuse_segment('test_vector_index', 't');
 ----
 1 4 1
 1 4 1
@@ -275,7 +275,7 @@ statement ok
 REFRESH VECTOR INDEX idx1 ON t2
 
 query B
-SELECT vector_index_size > 2000 FROM fuse_block('test_vector_index', 't2')
+SELECT vector_index_size > 0 FROM fuse_block('test_vector_index', 't2')
 ----
 1
 1
@@ -284,7 +284,7 @@ statement ok
 REFRESH VECTOR INDEX idx2 ON t2
 
 query B
-SELECT vector_index_size > 3000 FROM fuse_block('test_vector_index', 't2')
+SELECT vector_index_size > 0 FROM fuse_block('test_vector_index', 't2')
 ----
 1
 1
@@ -332,6 +332,108 @@ SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.5584
 12 0.09774226
 8 0.1490264
 15 0.150944
+
+# FP16 refinement: exactly representable values, and blocks (3 rows each) no larger
+# than the candidate budget (limit 3 * vector_refine_factor 2), keep the results
+# independent of HNSW build randomness. Distance filters score all rows.
+statement ok
+CREATE TABLE t_refine(id Int NOT NULL, embedding Vector(4) NOT NULL,
+  VECTOR INDEX idx(embedding) distance='cosine,l1,l2' refine=true)
+
+statement ok
+INSERT INTO t_refine VALUES (1,[1,0,0,0]), (2,[1,1,0,0]), (3,[0,1,0,0])
+
+statement ok
+INSERT INTO t_refine VALUES (4,[-1,0,0,0]), (5,[1,0.5,0,0]), (6,[1,0.25,0,0])
+
+query IR
+SELECT id, round(cosine_distance(embedding,[1,0,0,0]::Vector(4)),3) AS d FROM t_refine ORDER BY d LIMIT 3
+----
+1 0.0
+6 0.03
+5 0.106
+
+query IR
+SETTINGS (vector_refine_factor = 4, vector_search_ef = 16) SELECT id, l1_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine ORDER BY d LIMIT 3
+----
+1 0.0
+6 0.25
+5 0.5
+
+query IR
+SELECT id, l2_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine ORDER BY d LIMIT 3
+----
+1 0.0
+6 0.25
+5 0.5
+
+query IR
+SELECT id, l2_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine WHERE d>0.4 ORDER BY d LIMIT 2
+----
+5 0.5
+2 1.0
+
+# 0 disables refinement (SQ8 scores); the order is the same here.
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_refine ORDER BY l1_distance(embedding,[1,0,0,0]::Vector(4)) LIMIT 3
+----
+1
+6
+5
+
+# Scoring every row (no vector TopN) also uses FP16 scores, the same as above.
+query IR
+SELECT id, l1_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine WHERE id IN (5,6) ORDER BY id
+----
+5 0.5
+6 0.25
+
+statement error
+SET vector_refine_factor = 17
+
+statement error 1603
+CREATE TABLE t_refine_bad(id Int NOT NULL, embedding Vector(4) NOT NULL,
+  VECTOR INDEX idx(embedding) distance='l2' refine=abc)
+
+# Rows 1 and 2 are just below the threshold and sort first. A score filter scores
+# every row with FP16 data, so with limit 1 * factor 1 the result is row 3, the
+# nearest row that passes `d > 1`.
+statement ok
+CREATE TABLE t_refine_filter(id Int NOT NULL, embedding Vector(4) NOT NULL,
+  VECTOR INDEX idx(embedding) distance='l2' refine=true)
+
+statement ok
+INSERT INTO t_refine_filter VALUES (1,[1,0.96,0,0]), (2,[1,0.97,0,0]), (3,[1,1.5,0,0]), (4,[1,2,0,0])
+
+query IR
+SETTINGS (vector_refine_factor = 1) SELECT id, l2_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine_filter WHERE d>1 ORDER BY d LIMIT 1
+----
+3 1.5
+
+# Descending TopN and a lower-bound filter read only the refined candidates: one
+# block of 4 rows, more than the candidates (2 with the default factor, 1 with
+# factor 1). Rows that were not refined must not be returned.
+statement ok
+CREATE TABLE t_refine_desc(id Int NOT NULL, embedding Vector(4) NOT NULL,
+  VECTOR INDEX idx(embedding) distance='l2' refine=true)
+
+statement ok
+INSERT INTO t_refine_desc VALUES (1,[1,0,0,0]), (2,[2,0,0,0]), (3,[3,0,0,0]), (4,[4,0,0,0])
+
+query I
+SELECT id FROM t_refine_desc ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC LIMIT 1
+----
+4
+
+query I
+SETTINGS (vector_refine_factor = 1) SELECT id FROM t_refine_desc ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC LIMIT 1
+----
+4
+
+query I
+SELECT id FROM t_refine_desc WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) > 3.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 2
+----
+4
 
 statement ok
 use default

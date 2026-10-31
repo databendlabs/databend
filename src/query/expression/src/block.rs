@@ -354,8 +354,8 @@ impl<T: ValueType> ColumnView<T> {
 
 /// Runs `body` with `iter` bound to an iterator over the values of `view` (a
 /// `&ColumnView<T>`), with a concrete iterator type per layout instead of [`ColumnViewIter`],
-/// which matches the layout on every row. Plain columns and each delta width of frame of
-/// reference columns get their own copy of `body`.
+/// which matches the layout on every row. Plain columns, each delta width of frame of
+/// reference columns and each key width of dictionary columns get their own copy of `body`.
 #[macro_export]
 macro_rules! with_column_view_iter {
     ($T:ty, $view:expr, | $iter:ident | $body:expr) => {{
@@ -370,6 +370,20 @@ macro_rules! with_column_view_iter {
                 $crate::with_narrow_buffer!(column.deltas(), |deltas| {
                     let $iter = deltas.iter().map(move |delta| {
                         <$T as $crate::types::AccessType>::for_scalar_ref(base + *delta as i128)
+                    });
+                    $body
+                })
+            }
+            $crate::ColumnView::Encoded($crate::types::EncodedView::Dict { keys, values }) => {
+                $crate::with_narrow_buffer!(keys, |keys| {
+                    let $iter = keys.iter().map(move |key| {
+                        // SAFETY: the keys of a dictionary are in bounds of its values.
+                        unsafe {
+                            <$T as $crate::types::AccessType>::index_column_unchecked(
+                                values,
+                                *key as usize,
+                            )
+                        }
                     });
                     $body
                 })

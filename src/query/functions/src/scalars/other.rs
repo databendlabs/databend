@@ -338,6 +338,12 @@ macro_rules! register_simple_domain_type_run_diff {
 }
 
 fn register_run_diff(registry: &mut FunctionRegistry) {
+    // Its value depends on preceding rows and block boundaries, not just the
+    // current row's argument. Do not move it across filters or cache its value.
+    registry.properties.insert(
+        "running_difference".to_string(),
+        FunctionProperty::default().non_deterministic(),
+    );
     register_simple_domain_type_run_diff!(registry, NumberType<i64>, NumberType<i64>, i64, 0);
     register_simple_domain_type_run_diff!(registry, DateType, NumberType<i32>, i32, 0);
     register_simple_domain_type_run_diff!(registry, TimestampType, NumberType<i64>, i64, 0);

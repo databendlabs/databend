@@ -105,7 +105,7 @@ Memo
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #1, cost: <slt:ignore>, children: []
 │   │   ├── { dist: Broadcast }: expr: #2, cost: <slt:ignore>, children: [{ dist: Any }]
-│   │   └── { dist: Hash(t_100.a (#2)::Int32 NULL) }: expr: #2, cost: <slt:ignore>, children: [{ dist: Any }]
+│   │   └── { dist: Hash(t_100.a (#2)::Int32 NULL) }: expr: #3, cost: <slt:ignore>, children: [{ dist: Any }]
 │   ├── #0 ~Scan []
 │   ├── #1 Scan []
 │   ├── #2 Exchange: (Broadcast) [#3]

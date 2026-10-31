@@ -190,6 +190,7 @@ arrow-select = { version = "58.4.0" }
 # `javascript-runtime` rather than `javascript`: the latter also pulls in `javascript-fetch`,
 # which requires reqwest (with native-tls by default) for a `fetch()` API we never enable —
 # `Runtime::enable_fetch()` is not called anywhere.
+arrow-udf-python-worker = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "83f98e348881e427df97301ffa1a05fbf9fba52b" }
 arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript-runtime", "wasm"] }
 async-backtrace = "0.2"
 async-channel = "2.3.1"
@@ -284,6 +285,7 @@ glob = "0.3.0"
 globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.9.4"
+half = "2.7.1"
 hashbrown = { version = "0.15.2", default-features = false }
 hashlink = "0.10"
 headers = "0.4.0"
@@ -295,6 +297,7 @@ humantime = "2.1.0"
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
 lru = "0.12"
+lz4_flex = { version = "0.13", default-features = false, features = ["std"] }
 perf-event2 = "0.7.4"
 proc-macro2 = "1.0"
 quote = "1.0"
@@ -475,7 +478,7 @@ thiserror = { version = "1" }
 thrift = "0.17.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
 tikv-jemalloc-sys = "0.6.0"
-tokio = { version = "1.52.3", features = ["full"] }
+tokio = { version = "1.54.1", features = ["full"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "ring", "tls12"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.13" }
@@ -636,7 +639,7 @@ arrow-select = { version = "=58.4.0" }
 
 [patch.crates-io]
 # Kept from main: crates.io 0.8.0 does not resolve here (pyo3 0.24 vs bendpy's 0.28).
-arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "c1de708add62ecd1afa2721b2e5c639f29be1f9d" }
+arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "83f98e348881e427df97301ffa1a05fbf9fba52b" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }

@@ -64,7 +64,7 @@ pub type InvertedIndexPayloadCache = HybridCache<InvertedIndexPayloadBytes>;
 pub type InvertedIndexFullPayloadCache = InMemoryLruCache<InvertedIndexPayloadBytes>;
 
 pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
-pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
+pub type VectorRefineDataCache = HybridCache<VectorIndexFile>;
 
 pub type SpatialIndexMetaCache = HybridCache<SpatialIndexMeta>;
 pub type SpatialIndexFileCache = HybridCache<SpatialIndexFile>;
@@ -375,6 +375,15 @@ impl From<InvertedIndexPayloadBytes> for CacheValue<InvertedIndexPayloadBytes> {
 
 impl From<IndexMeta> for CacheValue<IndexMeta> {
     fn from(value: IndexMeta) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<VectorIndexMeta> for CacheValue<VectorIndexMeta> {
+    fn from(value: VectorIndexMeta) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

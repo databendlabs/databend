@@ -569,9 +569,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrow-udf-python-worker"
+version = "0.1.0"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=83f98e348881e427df97301ffa1a05fbf9fba52b#83f98e348881e427df97301ffa1a05fbf9fba52b"
+dependencies = [
+ "anyhow",
+ "arrow-array",
+ "arrow-ipc",
+ "arrow-schema",
+ "arrow-select",
+ "arrow-udf-runtime",
+ "libc",
+ "log",
+ "pyo3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=c1de708add62ecd1afa2721b2e5c639f29be1f9d#c1de708add62ecd1afa2721b2e5c639f29be1f9d"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=83f98e348881e427df97301ffa1a05fbf9fba52b#83f98e348881e427df97301ffa1a05fbf9fba52b"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -3421,6 +3441,7 @@ dependencies = [
  "match-template",
  "md-5",
  "naive-cityhash",
+ "num-bigint",
  "num-traits",
  "proptest",
  "rand 0.8.5",
@@ -4830,7 +4851,9 @@ dependencies = [
  "databend-common-expression",
  "jsonb",
  "match-template",
+ "num-bigint",
  "num-traits",
+ "proptest",
  "uuid",
 ]
 
@@ -5731,6 +5754,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
+ "lz4_flex 0.13.0",
  "maplit",
  "match-template",
  "md-5",
@@ -5779,6 +5803,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
+ "zstd",
 ]
 
 [[package]]
@@ -5791,10 +5816,12 @@ dependencies = [
  "arrow-ipc",
  "arrow-schema",
  "arrow-select",
+ "arrow-udf-python-worker",
  "arrow-udf-runtime",
  "async-trait",
  "databend-common-base",
  "databend-common-cache",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-meta-app",
@@ -5805,8 +5832,6 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.12.3",
- "serde",
- "serde_json",
  "tokio",
  "toml 0.8.22",
  "uuid",
@@ -5933,6 +5958,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "arrow-buffer",
  "arrow-ipc",
  "arrow-schema",
  "async-trait",
@@ -5943,8 +5969,10 @@ dependencies = [
  "bytes",
  "cbordata",
  "cc",
+ "crc32fast",
  "databend-common-ast",
  "databend-common-base",
+ "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-expression-test-support",
@@ -5958,6 +5986,7 @@ dependencies = [
  "feistel-permutation-rs",
  "geo",
  "goldenfile",
+ "half",
  "itertools 0.13.0",
  "jsonb",
  "log",
@@ -5980,6 +6009,7 @@ dependencies = [
  "xorf",
  "xorfilter-rs",
  "zerocopy",
+ "zstd",
 ]
 
 [[package]]
@@ -10667,6 +10697,7 @@ version = "5.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f4779c6901a562440c3786d08192c6fbda7c1c2060edd10006b05ee35d10f2d"
 dependencies = [
+ "bytemuck",
  "num-traits",
 ]
 
@@ -15095,9 +15126,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.52.3"
+version = "1.54.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
+checksum = "b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3"
 dependencies = [
  "bytes",
  "libc",

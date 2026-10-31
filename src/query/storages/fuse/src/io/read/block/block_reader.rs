@@ -20,6 +20,7 @@ use arrow_schema::Field;
 use arrow_schema::Fields;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -54,6 +55,8 @@ pub struct BlockReader {
     /// `enable_encoded_columns`. Nested columns are never encoded. Fixed per reader, so computed
     /// once here and shared with [`BlockReadContext`], which builds the cache keys.
     pub(crate) column_encodings: Arc<HashMap<ColumnId, ColumnEncoding>>,
+    /// Config `cache.table_data_encoded_dictionary_ndv_ratio`, read once here.
+    pub(crate) dictionary_ndv_ratio: u64,
     /// Arrow fields the Parquet columns are read as, if they differ from the original schema,
     /// see [`dictionary_hint_fields`]. Fixed per reader, so computed once here.
     pub(crate) parquet_hint_fields: Option<Fields>,
@@ -167,6 +170,14 @@ impl BlockReader {
                 Some((field.column_id, encoding))
             })
             .collect::<HashMap<_, _>>();
+        let dictionary_ndv_ratio = if encode_columns {
+            GlobalConfig::instance()
+                .cache
+                .table_data_encoded_dictionary_ndv_ratio
+                .min(100)
+        } else {
+            0
+        };
         // Projected columns whose Parquet dictionary is kept.
         let parquet_hint_fields = dictionary_hint_fields(
             &original_schema,
@@ -194,6 +205,7 @@ impl BlockReader {
             all_field_default_vals,
             put_cache,
             column_encodings: Arc::new(column_encodings),
+            dictionary_ndv_ratio,
             parquet_hint_fields,
             original_schema,
         }))

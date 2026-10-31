@@ -40,7 +40,7 @@ pub fn serialize_group_columns(
     let columns: Vec<Column> = columns
         .iter()
         // Decoded once per block: rows are serialized one at a time.
-        .map(|entry| normalize_bitmap_in_column(entry.to_column().decode_encoded()))
+        .map(|entry| normalize_bitmap_in_column(entry.to_column().decode_owned()))
         .collect();
     let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
 

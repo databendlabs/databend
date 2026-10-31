@@ -1,0 +1,86 @@
+# Scalar projections must preserve values when dictionary entries map to the same result.
+statement ok
+CREATE OR REPLACE TABLE dictionary_scalar (s STRING NOT NULL) STORAGE_FORMAT = 'parquet';
+
+statement ok
+INSERT INTO dictionary_scalar SELECT CASE number % 4 WHEN 0 THEN 'https://a.com/x' WHEN 1 THEN 'https://a.com/y' WHEN 2 THEN 'https://b.com/z' ELSE 'https://a.com/y' END FROM numbers(4096);
+
+statement ok
+SET enable_encoded_columns = 1;
+
+query TII
+SELECT regexp_replace(s, '^https://([^/]+)/.*$', '$1') AS domain, count(*) AS n, sum(octet_length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))) AS bytes FROM dictionary_scalar GROUP BY domain ORDER BY domain;
+----
+a.com 3072 15360
+b.com 1024 5120
+
+query II
+SELECT count(DISTINCT regexp_replace(s, '^https://([^/]+)/.*$', '$1')), sum(length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))) FROM dictionary_scalar;
+----
+2 20480
+
+# Scan-pushed LIKE uses Evaluator rather than the Selector's dictionary fast path.
+query I
+SELECT count(*) FROM dictionary_scalar WHERE s LIKE '%a.com%';
+----
+3072
+
+# A projected LIKE over a dictionary returns a regular Boolean column: a Boolean dictionary
+# column failed the typed sort key of Top-N.
+query B
+SELECT s LIKE '%a.com%' AS m FROM dictionary_scalar ORDER BY m LIMIT 3;
+----
+0
+0
+0
+
+statement ok
+DROP TABLE dictionary_scalar;
+
+# Reuse dictionary hashes and code addresses across batches, including multiple keys
+# and the final short batch.
+statement ok
+SET max_threads = 1;
+
+statement ok
+CREATE OR REPLACE TABLE dictionary_group_hash (s STRING NOT NULL, t TINYINT NOT NULL, v BIGINT NOT NULL, x INTEGER NOT NULL) STORAGE_FORMAT = 'parquet';
+
+statement ok
+INSERT INTO dictionary_group_hash SELECT concat('key', to_string(number % 1025)), number % 2, number, (number % 1025) * 1000000 FROM numbers(32769);
+
+statement ok
+UNSET max_threads;
+
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT s, v % 3 AS k, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY s, k);
+----
+3075 32769 536887296
+
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT s, t, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY s, t);
+----
+2050 32769 536887296
+
+# Numeric projections retain the input keys; count that shared code dimension once.
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT x, x - 1, x % 3, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY x, x - 1, x % 3);
+----
+1025 32769 536887296
+
+# Different codes may map to equal computed values and must still merge normally.
+query III
+SELECT count(*), sum(n), sum(total) FROM (SELECT length(s) AS k, length(s) - 1 AS m, count(*) AS n, sum(v) AS total FROM dictionary_group_hash GROUP BY k, m);
+----
+4 32769 536887296
+
+# A FOR key must retain numeric order in descending rank-limit sorting.
+query II
+SELECT sum(v), sum(n) FROM (SELECT v, count(*) AS n FROM dictionary_group_hash GROUP BY v ORDER BY v DESC LIMIT 10);
+----
+327635 10
+
+statement ok
+DROP TABLE dictionary_group_hash;
+
+statement ok
+UNSET enable_encoded_columns;

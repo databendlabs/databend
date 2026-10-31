@@ -78,7 +78,7 @@ impl OutputFormat for CSVOutputFormat {
             .convert_to_full()
             .columns()
             .iter()
-            .map(|val| val.as_column().unwrap().clone().decode_encoded())
+            .map(|val| val.as_column().unwrap().clone().decode_owned())
             .collect();
 
         for row_index in 0..rows_size {
@@ -118,5 +118,81 @@ impl OutputFormat for CSVOutputFormat {
     }
     fn finalize(&mut self) -> Result<Vec<u8>> {
         Ok(vec![])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::Result;
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::StringType;
+    use databend_common_meta_app::principal::CsvFileFormatParams;
+    use databend_common_meta_app::principal::CsvQuoteStyle;
+    use databend_common_meta_app::principal::FileFormatParams;
+    use databend_common_meta_app::tenant::Tenant;
+    use databend_common_settings::Settings;
+
+    use crate::get_output_format;
+    use crate::output_format::test_utils::gen_schema_and_block;
+
+    #[test]
+    fn test_csv_output_ignores_escape() -> Result<()> {
+        let (schema, block) = gen_schema_and_block(
+            vec![TableField::new(r"path\name", TableDataType::String)],
+            vec![StringType::from_data(vec![
+                r"a\tb", r"a\b", "tail\\", "a,b\\", "a\"b\\", "a\nb\\", r"\N", "",
+            ])],
+        );
+        let settings = Settings::create(Tenant::new_literal("default"));
+        let cases = [
+            (
+                CsvQuoteStyle::QuoteMinimal,
+                "path\\name\n",
+                concat!(
+                    "a\\tb\n",
+                    "a\\b\n",
+                    "tail\\\n",
+                    "\"a,b\\\"\n",
+                    "\"a\"\"b\\\"\n",
+                    "\"a\nb\\\"\n",
+                    "\\N\n",
+                    "\n",
+                ),
+            ),
+            (
+                CsvQuoteStyle::QuoteNotNull,
+                "\"path\\name\"\n",
+                concat!(
+                    "\"a\\tb\"\n",
+                    "\"a\\b\"\n",
+                    "\"tail\\\"\n",
+                    "\"a,b\\\"\n",
+                    "\"a\"\"b\\\"\n",
+                    "\"a\nb\\\"\n",
+                    "\"\\N\"\n",
+                    "\"\"\n",
+                ),
+            ),
+        ];
+        for (quote_style, expected_header, expected_data) in cases {
+            for escape in ["", "\\"] {
+                let params = CsvFileFormatParams {
+                    escape: escape.to_string(),
+                    quote_style,
+                    output_header: true,
+                    ..Default::default()
+                };
+                let mut output = get_output_format(
+                    schema.clone(),
+                    FileFormatParams::Csv(params),
+                    settings.get_output_format_settings()?,
+                )?;
+                assert_eq!(output.serialize_prefix()?, expected_header.as_bytes());
+                assert_eq!(output.serialize_block(&block)?, expected_data.as_bytes());
+            }
+        }
+        Ok(())
     }
 }

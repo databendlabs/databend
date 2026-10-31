@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod vector_index_bundle_loader;
 mod vector_index_loader;
 mod vector_index_object_loader;
 mod vector_index_reader;
 
+pub use vector_index_loader::VectorIndexIdentity;
 pub use vector_index_loader::load_vector_index_files;
 pub use vector_index_loader::load_vector_index_meta;
 pub use vector_index_reader::VectorIndexReader;

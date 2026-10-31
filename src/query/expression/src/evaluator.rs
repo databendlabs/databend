@@ -44,13 +44,30 @@ use crate::type_check::format_function_argument_mismatch_hint;
 use crate::type_check::resolve_cast_function;
 use crate::types::BooleanType;
 use crate::types::DataType;
+use crate::types::Decimal64Type;
+use crate::types::Decimal128Type;
+use crate::types::Decimal256Type;
 use crate::types::DecimalColumn;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
+use crate::types::DictColumn;
+use crate::types::EncodedColumn;
 use crate::types::F32;
+use crate::types::Float32Type;
+use crate::types::Float64Type;
+use crate::types::Int8Type;
+use crate::types::Int16Type;
+use crate::types::Int32Type;
+use crate::types::Int64Type;
 use crate::types::NullableType;
+use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::ReturnType;
 use crate::types::StringType;
+use crate::types::UInt8Type;
+use crate::types::UInt16Type;
+use crate::types::UInt32Type;
+use crate::types::UInt64Type;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::types::VectorDataType;
@@ -177,6 +194,151 @@ fn expand_scalar_error(
         None => Bitmap::new_constant(false, num_rows).make_mut(),
     };
     *errors = Some((expanded, msg));
+}
+
+/// Selects the rows of a binary `if` through the concrete value type `T`,
+/// instead of pushing type-erased scalars into a generic `ColumnBuilder`.
+fn select_binary_if_typed<T: ValueType>(
+    flag: &Bitmap,
+    then_result: &Value<AnyType>,
+    else_result: &Value<AnyType>,
+    data_type: &DataType,
+    len: usize,
+) -> Result<Column> {
+    let then_result = then_result.try_downcast::<T>()?;
+    let else_result = else_result.try_downcast::<T>()?;
+    let mut output_builder = ColumnBuilder::with_capacity(data_type, len);
+
+    {
+        let mut output = T::downcast_builder(&mut output_builder);
+        match (&then_result, &else_result) {
+            (Value::Scalar(then_value), Value::Scalar(else_value)) => {
+                let then_value = T::to_scalar_ref(then_value);
+                let else_value = T::to_scalar_ref(else_value);
+                for take_then in flag.iter() {
+                    let value = if take_then {
+                        then_value.clone()
+                    } else {
+                        else_value.clone()
+                    };
+                    T::push_item_mut(&mut output, value);
+                }
+            }
+            (Value::Scalar(then_value), Value::Column(else_column)) => {
+                let then_value = T::to_scalar_ref(then_value);
+                for (row, take_then) in flag.iter().enumerate() {
+                    let value = if take_then {
+                        then_value.clone()
+                    } else {
+                        // SAFETY: `row` < `flag.len()`, which equals the column length.
+                        unsafe { T::index_column_unchecked(else_column, row) }
+                    };
+                    T::push_item_mut(&mut output, value);
+                }
+            }
+            (Value::Column(then_column), Value::Scalar(else_value)) => {
+                let else_value = T::to_scalar_ref(else_value);
+                for (row, take_then) in flag.iter().enumerate() {
+                    let value = if take_then {
+                        // SAFETY: `row` < `flag.len()`, which equals the column length.
+                        unsafe { T::index_column_unchecked(then_column, row) }
+                    } else {
+                        else_value.clone()
+                    };
+                    T::push_item_mut(&mut output, value);
+                }
+            }
+            (Value::Column(then_column), Value::Column(else_column)) => {
+                for (row, take_then) in flag.iter().enumerate() {
+                    // SAFETY: `row` < `flag.len()`, which equals both column lengths.
+                    let value = if take_then {
+                        unsafe { T::index_column_unchecked(then_column, row) }
+                    } else {
+                        unsafe { T::index_column_unchecked(else_column, row) }
+                    };
+                    T::push_item_mut(&mut output, value);
+                }
+            }
+        }
+    }
+
+    Ok(output_builder.build())
+}
+
+/// Typed row selection for a binary `if` whose result is a number or a decimal
+/// (optionally nullable). Returns `None` for other result types, which keep the
+/// generic selection.
+fn select_binary_numeric_if(
+    flag: &Bitmap,
+    then_result: &Value<AnyType>,
+    else_result: &Value<AnyType>,
+    data_type: &DataType,
+    len: usize,
+) -> Result<Option<Column>> {
+    macro_rules! select_plain {
+        ($type:ty) => {
+            select_binary_if_typed::<$type>(flag, then_result, else_result, data_type, len)
+        };
+    }
+    macro_rules! select_nullable {
+        ($type:ty) => {
+            select_binary_if_typed::<NullableType<$type>>(
+                flag,
+                then_result,
+                else_result,
+                data_type,
+                len,
+            )
+        };
+    }
+    macro_rules! select_number {
+        ($number_type:expr, $select:ident) => {
+            match $number_type {
+                NumberDataType::UInt8 => $select!(UInt8Type),
+                NumberDataType::UInt16 => $select!(UInt16Type),
+                NumberDataType::UInt32 => $select!(UInt32Type),
+                NumberDataType::UInt64 => $select!(UInt64Type),
+                NumberDataType::Int8 => $select!(Int8Type),
+                NumberDataType::Int16 => $select!(Int16Type),
+                NumberDataType::Int32 => $select!(Int32Type),
+                NumberDataType::Int64 => $select!(Int64Type),
+                NumberDataType::Float32 => $select!(Float32Type),
+                NumberDataType::Float64 => $select!(Float64Type),
+            }
+        };
+    }
+
+    // Old persisted values or callers using a non-strict decimal representation
+    // may carry more bits than the logical precision requires. The typed path
+    // requires an exact physical width; let the generic builder normalize these
+    // values instead of failing its downcast.
+    if data_type.remove_nullable().is_decimal()
+        && [then_result, else_result]
+            .into_iter()
+            .any(|value| DecimalDataType::from_value(value).is_some_and(|(ty, _)| !ty.is_strict()))
+    {
+        return Ok(None);
+    }
+
+    let column = match data_type {
+        DataType::Number(number_type) => select_number!(number_type, select_plain)?,
+        DataType::Decimal(size) => match size.data_kind() {
+            DecimalDataKind::Decimal64 => select_plain!(Decimal64Type)?,
+            DecimalDataKind::Decimal128 => select_plain!(Decimal128Type)?,
+            DecimalDataKind::Decimal256 => select_plain!(Decimal256Type)?,
+        },
+        DataType::Nullable(inner) => match inner.as_ref() {
+            DataType::Number(number_type) => select_number!(number_type, select_nullable)?,
+            DataType::Decimal(size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 => select_nullable!(Decimal64Type)?,
+                DecimalDataKind::Decimal128 => select_nullable!(Decimal128Type)?,
+                DecimalDataKind::Decimal256 => select_nullable!(Decimal256Type)?,
+            },
+            _ => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    Ok(Some(column))
 }
 
 pub struct Evaluator<'a> {
@@ -367,7 +529,7 @@ impl<'a> Evaluator<'a> {
         Ok(if keep_encoded {
             result
         } else {
-            result.decode_encoded()
+            result.decode_owned()
         })
     }
 
@@ -429,6 +591,32 @@ impl<'a> Evaluator<'a> {
         })
     }
 
+    fn take_dictionary_arg(args: &mut [Value<AnyType>]) -> Option<(usize, DictColumn)> {
+        let (index, arg) = args
+            .iter()
+            .enumerate()
+            .filter(|(_, arg)| matches!(arg, Value::Column(_)))
+            .exactly_one()
+            .ok()?;
+        let Value::Column(Column::Encoded(encoded)) = arg else {
+            return None;
+        };
+        let dict = encoded.as_dict()?;
+        if dict.is_empty() || dict.values.len() >= dict.len() {
+            return None;
+        }
+        let original = std::mem::replace(&mut args[index], Value::Scalar(Scalar::Null));
+        let Value::Column(Column::Encoded(encoded)) = original else {
+            args[index] = original;
+            return None;
+        };
+        let EncodedColumn::Dict(dict) = *encoded else {
+            args[index] = Value::Column(Column::Encoded(encoded));
+            return None;
+        };
+        Some((index, dict))
+    }
+
     fn eval_common_call(
         &self,
         call: &FunctionCall,
@@ -465,13 +653,28 @@ impl<'a> Evaluator<'a> {
             .eval
             .as_scalar()
             .is_some_and(|(_, _, eval)| eval.accepts_encoded_args());
+        let dictionary_eval = !accepts_encoded_args
+            && validity.is_none()
+            && options.selection.is_none()
+            && !options.suppress_error
+            && !function.signature.return_type.is_nullable_or_null()
+            && function
+                .signature
+                .args_type
+                .iter()
+                .all(|ty| !ty.is_nullable_or_null())
+            && self
+                .fn_registry
+                .properties
+                .get(&function.signature.name)
+                .is_some_and(|property| property.dictionary_eval && !property.non_deterministic);
         let mut args_value = Vec::with_capacity(args.len());
         for expr in args {
             match self.partial_run(
                 expr,
                 validity.clone(),
                 &mut child_option,
-                accepts_encoded_args,
+                accepts_encoded_args || dictionary_eval,
             ) {
                 Ok(value) => args_value.push(value),
                 Err(err) => {
@@ -484,7 +687,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
         }
-        let args = args_value;
+        let mut args = args_value;
 
         assert!(
             args.iter()
@@ -507,9 +710,28 @@ impl<'a> Evaluator<'a> {
         // would otherwise drop whenever row 0 is not enabled — then expand
         // the recorded error over the enabled rows.
         let all_scalar = args.iter().all(|arg| matches!(arg, Value::Scalar(_)));
+        let dictionary = dictionary_eval
+            .then(|| {
+                let Some((index, DictColumn { keys, values })) =
+                    Self::take_dictionary_arg(&mut args)
+                else {
+                    for arg in &mut args {
+                        if arg.is_encoded() {
+                            *arg =
+                                std::mem::replace(arg, Value::Scalar(Scalar::Null)).decode_owned();
+                        }
+                    }
+                    return None;
+                };
+                args[index] = Value::Column(values);
+                Some((index, keys))
+            })
+            .flatten();
         let mut ctx = EvalContext {
             generics,
-            num_rows: self.data_block.num_rows(),
+            num_rows: dictionary
+                .as_ref()
+                .map_or(self.data_block.num_rows(), |(index, _)| args[*index].len()),
             validity: if all_scalar { None } else { validity.clone() },
             errors,
             func_ctx: self.func_ctx,
@@ -518,7 +740,25 @@ impl<'a> Evaluator<'a> {
         };
 
         let (_, _, eval) = function.eval.as_scalar().unwrap();
-        let result = eval.eval(&args, &mut ctx);
+        let mut result = eval.eval(&args, &mut ctx);
+        if let Some((_, keys)) = dictionary {
+            if let Some((valids, message)) = ctx.errors.take()
+                && keys.iter().any(|key| !valids.get(key as usize))
+            {
+                return Err(ErrorCode::BadArguments(message).set_span(*span));
+            }
+            ctx.num_rows = self.data_block.num_rows();
+            if let Value::Column(values) = result {
+                let dict = DictColumn::new(keys, values);
+                // Consumers read dictionary columns through encoded views, which only some
+                // types support (e.g. not the Boolean result of LIKE): expand the others.
+                result = Value::Column(if DictColumn::supports(&dict.values.data_type()) {
+                    Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
+                } else {
+                    dict.decode()
+                });
+            }
+        }
 
         if all_scalar {
             expand_scalar_error(&mut ctx.errors, validity.as_ref(), ctx.num_rows);
@@ -1812,6 +2052,13 @@ impl<'a> Evaluator<'a> {
                 })
                 .all_equal()
         );
+
+        if let (Some(len), [flag], [then_result]) = (len, flags.as_slice(), results.as_slice())
+            && let Some(column) =
+                select_binary_numeric_if(flag, then_result, &else_result, &generics[0], len)?
+        {
+            return Ok(Value::Column(column));
+        }
 
         // Pick the results from the result branches depending on the condition.
         let mut output_builder = ColumnBuilder::with_capacity(&generics[0], len.unwrap_or(1));

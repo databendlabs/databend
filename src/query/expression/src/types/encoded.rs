@@ -140,6 +140,16 @@ impl NarrowBuffer {
         self.len() * self.byte_width()
     }
 
+    /// Same immutable code slice, including width and offset; does not compare values.
+    pub fn shares_storage(&self, other: &Self) -> bool {
+        self.byte_width() == other.byte_width()
+            && self.len() == other.len()
+            && std::ptr::eq(
+                with_narrow_buffer!(self, |b| b.as_slice().as_ptr().cast::<u8>()),
+                with_narrow_buffer!(other, |b| b.as_slice().as_ptr().cast::<u8>()),
+            )
+    }
+
     #[inline]
     pub fn get(&self, index: usize) -> Option<u64> {
         with_narrow_buffer!(self, |b| b.get(index).map(|v| widen(*v)))
@@ -957,7 +967,7 @@ impl EncodedColumn {
     /// Calls `f` with a regular column and the row in it that holds the value of `row`.
     ///
     /// A FOR row is decoded into a column of its own on every call, so consumers of many rows
-    /// (e.g. output formats) decode the column once with [`Column::decode_encoded`] instead.
+    /// (e.g. output formats) decode the column once with [`Column::decode_owned`] instead.
     pub fn with_row<R>(&self, row: usize, f: impl FnOnce(&Column, usize) -> R) -> R {
         match self {
             EncodedColumn::Dict(c) => f(&c.values, c.keys.get(row).unwrap() as usize),
@@ -1140,15 +1150,23 @@ impl<'a, T: AccessType> Iterator for EncodedViewIter<'a, T> {
 impl<T: AccessType> ExactSizeIterator for EncodedViewIter<'_, T> {}
 
 impl Column {
+    pub fn is_dict_encoded(&self) -> bool {
+        match self {
+            Column::Encoded(encoded) => encoded.as_dict().is_some(),
+            Column::Nullable(column) => column.column().is_dict_encoded(),
+            _ => false,
+        }
+    }
+
     /// Decodes an encoded column, also inside `Nullable`; other columns are returned unchanged.
     ///
     /// Row-at-a-time consumers (e.g. output formats) decode once per block instead of per row.
-    pub fn decode_encoded(self) -> Self {
+    pub fn decode_owned(self) -> Self {
         match self {
             Column::Encoded(c) => c.decode(),
             Column::Nullable(column) if column.column().is_encoded() => {
                 let (column, validity) = column.destructure();
-                column.decode_encoded().wrap_nullable(Some(validity))
+                column.decode_owned().wrap_nullable(Some(validity))
             }
             other => other,
         }
@@ -1157,9 +1175,9 @@ impl Column {
 
 impl Value<AnyType> {
     /// Decodes an encoded column value; other values are returned unchanged.
-    pub fn decode_encoded(self) -> Self {
+    pub fn decode_owned(self) -> Self {
         match self {
-            Value::Column(column) => Value::Column(column.decode_encoded()),
+            Value::Column(column) => Value::Column(column.decode_owned()),
             other => other,
         }
     }
@@ -1192,6 +1210,10 @@ impl Value<AnyType> {
 }
 
 impl BlockEntry {
+    pub fn is_dict_encoded(&self) -> bool {
+        matches!(self, BlockEntry::Column(column) if column.is_dict_encoded())
+    }
+
     pub fn decoded_value(&self) -> Value<AnyType> {
         match self {
             BlockEntry::Column(Column::Encoded(encoded)) => Value::Column(encoded.decode()),
