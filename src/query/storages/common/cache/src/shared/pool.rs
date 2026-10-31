@@ -39,6 +39,17 @@ const GHOST_ENTRIES_PER_SHARD: usize = 16 * 1024;
 
 pub(crate) type Removed = Vec<(EntryKey, Entry)>;
 
+/// Sizes of a pool's internal structures, for checking that they stay bounded.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PoolStructure {
+    pub shards: usize,
+    pub entries: usize,
+    /// Queue positions, including stale ones not compacted yet.
+    pub queue_positions: usize,
+    pub ghost_entries: usize,
+    pub ghost_capacity: usize,
+}
+
 /// One pool: sharded S3-FIFO queues under a single byte cap. Shards only spread lock contention.
 pub(crate) struct PoolStore {
     pool: Pool,
@@ -83,6 +94,21 @@ impl PoolStore {
 
     pub fn set_cap(&self, bytes: usize) {
         self.cap.store(bytes, Ordering::Relaxed);
+    }
+
+    pub fn structure(&self) -> PoolStructure {
+        let mut structure = PoolStructure {
+            shards: self.shards.len(),
+            ghost_capacity: GHOST_ENTRIES_PER_SHARD * self.shards.len(),
+            ..PoolStructure::default()
+        };
+        for shard in self.shards.iter() {
+            let shard = shard.read();
+            structure.entries += shard.len();
+            structure.queue_positions += shard.queue_len();
+            structure.ghost_entries += shard.ghost_len();
+        }
+        structure
     }
 
     pub fn shard_of(&self, key: KeyRef) -> usize {

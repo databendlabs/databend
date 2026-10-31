@@ -19,4 +19,5 @@ mod pool;
 mod store;
 
 pub use config::PoolCaps;
+pub use pool::PoolStructure;
 pub use store::SharedStore;

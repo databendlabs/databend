@@ -133,9 +133,15 @@ fn test_shared_store_counts_events() {
     assert_eq!(after_puts.evicted_for_capacity, 5);
     assert_eq!(after_puts.evicted_for_capacity_bytes, 500);
 
-    // Explicit evictions and replacements are not counted.
-    meta.evict("14");
-    meta.put("13", live.item(100));
+    // Explicit evictions and replacements are not counted. Which 10 keys are left depends on
+    // the shards they hash to, whose seed differs from run to run.
+    let cached: Vec<String> = (0..15)
+        .map(|i| i.to_string())
+        .filter(|key| meta.contains(key))
+        .collect();
+    assert_eq!(cached.len(), 10);
+    meta.evict(&cached[0]);
+    meta.put(&cached[1], live.item(100));
     assert_eq!(events(meta_kind()), after_puts);
 
     // Reclaimed under memory pressure.

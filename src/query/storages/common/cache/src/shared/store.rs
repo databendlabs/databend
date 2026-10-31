@@ -21,6 +21,7 @@ use std::time::Instant;
 use databend_common_exception::Result;
 
 use super::pool::PoolStore;
+use super::pool::PoolStructure;
 use super::pool::Removed;
 use crate::CacheKind;
 use crate::KindLimit;
@@ -163,6 +164,11 @@ impl SharedStore {
 
     fn pool(&self, pool: Pool) -> &PoolStore {
         &self.pools[pool.index()]
+    }
+
+    /// Sizes of the pool's internal structures; for tests that check they stay bounded.
+    pub fn pool_structure(&self, pool: Pool) -> PoolStructure {
+        self.pool(pool).structure()
     }
 
     fn kind(&self, kind: CacheKind) -> &KindState {

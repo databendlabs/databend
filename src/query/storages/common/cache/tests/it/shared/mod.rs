@@ -14,4 +14,6 @@
 
 mod deadlock;
 mod reclaim;
+mod soak;
+pub(crate) mod soak_engine;
 mod store;
