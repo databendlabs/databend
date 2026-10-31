@@ -571,7 +571,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-python-worker"
 version = "0.1.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=ccb8b79e075836acd1ce833aaf1c2e87b2c69b99#ccb8b79e075836acd1ce833aaf1c2e87b2c69b99"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=6a49de9d03e85722313f32b202edddb2456ca865#6a49de9d03e85722313f32b202edddb2456ca865"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -591,7 +591,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=ccb8b79e075836acd1ce833aaf1c2e87b2c69b99#ccb8b79e075836acd1ce833aaf1c2e87b2c69b99"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=6a49de9d03e85722313f32b202edddb2456ca865#6a49de9d03e85722313f32b202edddb2456ca865"
 dependencies = [
  "anyhow",
  "arrow-array",
