@@ -44,7 +44,6 @@ use databend_common_expression::types::Decimal;
 use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::array::ArrayColumn;
@@ -533,11 +532,7 @@ impl VirtualColumnBuilder {
             builder.commit_row();
             last_row += 1;
         }
-        let nullable_column = NullableColumn {
-            column: Column::Variant(builder.build()),
-            validity: bitmap.into(),
-        };
-        Column::Nullable(Box::new(nullable_column))
+        Column::Variant(builder.build()).wrap_nullable(Some(bitmap.into()))
     }
 
     fn build_direct_column(

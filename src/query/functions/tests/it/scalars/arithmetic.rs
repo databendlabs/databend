@@ -26,7 +26,6 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::Decimal128Type;
 use databend_common_expression::types::Decimal256Type;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::decimal::Decimal;
@@ -507,12 +506,8 @@ fn test_decimal_similar_overflows() {
         format!("is_not_null(a * '{nines}'::DECIMAL(76,0))"),
         &columns,
     );
-    let nullable = |column| {
-        Column::Nullable(Box::new(NullableColumn {
-            column,
-            validity: [false, true, true].into_iter().collect(),
-        }))
-    };
+    let nullable =
+        |column: Column| column.wrap_nullable(Some([false, true, true].into_iter().collect()));
     let columns = [
         (
             "a",
@@ -580,10 +575,8 @@ fn test_decimal_similar_overflows() {
         &columns,
     );
     // An all-NULL operand domain stays NULL through domain calculation.
-    let a = NullableColumn::new_column(
-        Decimal64Type::from_data_with_size([0, 0], Some(DecimalSize::new_unchecked(4, 0))),
-        [false, false].into_iter().collect(),
-    );
+    let a = Decimal64Type::from_data_with_size([0, 0], Some(DecimalSize::new_unchecked(4, 0)))
+        .wrap_nullable(Some([false, false].into_iter().collect()));
     let b = Decimal256Type::from_data_with_size(
         [i256::ONE, i256::from(2)],
         Some(DecimalSize::new_unchecked(76, 0)),
@@ -616,8 +609,7 @@ fn test_decimal_hidden_payloads() {
     let a = Decimal128Type::from_data_with_size([i128::MIN, 4, i128::MAX], Some(size));
     let b = Decimal128Type::from_data_with_size([i128::MAX, 2, -1], Some(size));
     let visible = [false, true, false];
-    let nullable =
-        |column: Column| NullableColumn::new_column(column, visible.into_iter().collect());
+    let nullable = |column: Column| column.wrap_nullable(Some(visible.into_iter().collect()));
     for (operation, expected) in [
         ("a + b", 6),
         ("a - b", 2),

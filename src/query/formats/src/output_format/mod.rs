@@ -56,7 +56,6 @@ mod test_utils {
     use databend_common_expression::types::DateType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
-    use databend_common_expression::types::nullable::NullableColumn;
     use databend_common_expression::types::number::Float64Type;
     use databend_common_expression::types::number::Int32Type;
     use databend_common_io::prelude::OutputFormatSettings;
@@ -122,7 +121,7 @@ mod test_utils {
                 .map(|(idx, (data_type, c))| {
                     let validity = Bitmap::new_constant(true, c.len());
                     (
-                        NullableColumn::new_column(c, validity),
+                        c.wrap_nullable(Some(validity)),
                         TableField::new(&format!("c{}", idx + 1), data_type.wrap_nullable()),
                     )
                 })

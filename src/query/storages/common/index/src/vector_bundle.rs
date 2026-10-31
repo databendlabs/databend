@@ -424,7 +424,7 @@ impl VectorBundleBuilder {
     pub fn add_fp16_data(&mut self, column_id: u32, column: &Column) -> Result<()> {
         let column = column
             .as_nullable()
-            .map_or(column, |nullable| &nullable.column);
+            .map_or(column, |nullable| nullable.column());
         let (values, dimension) = column
             .as_vector()
             .and_then(|vector| vector.as_float32())
@@ -540,7 +540,7 @@ mod tests {
         let mut builder = VectorBundleBuilder::new("vi".to_owned(), "v1".to_owned(), ROWS as u64);
         builder.add_hnsw("0-l2_graph_links".to_owned(), b"links")?;
         builder.add_hnsw("0-l2_encoded_u8_data".to_owned(), &sq8)?;
-        builder.add_validity(0, &column.as_nullable().unwrap().validity)?;
+        builder.add_validity(0, column.as_nullable().unwrap().validity())?;
         builder.add_fp16_data(0, &column)?;
         let bytes = builder.finish()?;
 

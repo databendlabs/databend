@@ -17,8 +17,6 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use databend_common_expression::types::ArrayColumn;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VectorColumn;
@@ -47,7 +45,7 @@ fn test_float_equality_class_keys() -> anyhow::Result<()> {
         ),
     ];
     for floats in classes.into_iter().flat_map(|(f32s, f64s)| [f32s, f64s]) {
-        let nullable = NullableColumn::new_column(floats.clone(), Bitmap::from([true; 3]));
+        let nullable = floats.clone().wrap_nullable(None);
         let array = Column::Array(Box::new(ArrayColumn::new(
             floats.clone(),
             vec![0, 1, 2, 3].into(),

@@ -877,6 +877,12 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
         )
     }
 
+    /// Whether this column already represents nullable or null values at the top level.
+    /// Types with a dynamic column representation must inspect the physical column.
+    fn column_is_nullable_or_null(_col: &Self::Column) -> bool {
+        false
+    }
+
     fn column_len(col: &Self::Column) -> usize;
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;
 

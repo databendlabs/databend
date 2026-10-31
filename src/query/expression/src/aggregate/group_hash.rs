@@ -204,23 +204,24 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
+        let (column, validity) = column.destructure();
         if IS_FIRST {
-            self.visit_column(column.column)?;
-            for (val, ok) in self.values.iter_mut().zip(column.validity.iter()) {
+            self.visit_column(column)?;
+            for (val, ok) in self.values.iter_mut().zip(validity.iter()) {
                 if !ok {
                     *val = NULL_HASH_VAL;
                 }
             }
         } else {
-            let mut values2 = vec![0; column.len()];
+            let mut values2 = vec![0; validity.len()];
             HashVisitor::<true> {
                 values: &mut values2,
             }
-            .visit_column(column.column)?;
+            .visit_column(column)?;
             for ((x, val), ok) in values2
                 .iter()
                 .zip(self.values.iter_mut())
-                .zip(column.validity.iter())
+                .zip(validity.iter())
             {
                 if ok {
                     *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ *x;
@@ -491,13 +492,14 @@ where I: Index
     }
 
     fn visit_nullable(&mut self, column: Box<crate::types::NullableColumn<AnyType>>) -> Result<()> {
+        let (column, validity) = column.destructure();
         let indices = self
             .indices
             .iter()
             .cloned()
             .filter(|&i| {
                 let i = i.to_usize();
-                let ok = column.validity.get(i).unwrap();
+                let ok = validity.get(i).unwrap();
                 if !ok {
                     let val = &mut self.target[i];
                     if IS_FIRST {
@@ -511,10 +513,10 @@ where I: Index
             .collect::<Vec<_>>();
         if IS_FIRST {
             let mut v = IndexHashVisitor::<true, _>::new(&indices, self.target);
-            v.visit_column(column.column)
+            v.visit_column(column)
         } else {
             let mut v = IndexHashVisitor::<false, _>::new(&indices, self.target);
-            v.visit_column(column.column)
+            v.visit_column(column)
         }
     }
 

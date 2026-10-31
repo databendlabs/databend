@@ -242,7 +242,7 @@ mod tests {
             let bytes = entry.as_scalar().unwrap().as_binary().unwrap();
             builder.add_hnsw(field.name().clone(), bytes)?;
         }
-        builder.add_validity(COLUMN_ID, &column.as_nullable().unwrap().validity)?;
+        builder.add_validity(COLUMN_ID, column.as_nullable().unwrap().validity())?;
         builder.add_fp16_data(COLUMN_ID, &column)?;
         let data = builder.finish()?;
         let path = "test_vector_index_reader/_i_v_v2/v1/h0.index".to_owned();

@@ -125,12 +125,12 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
                 }
             }
             Column::Nullable(c) => {
-                let valid = c.validity.get_bit(row);
+                let valid = c.validity().get_bit(row);
 
                 row_space.push_unchecked(valid as u8);
 
                 if valid {
-                    serialize_column_binary(&c.column, row, row_space);
+                    serialize_column_binary(c.column(), row, row_space);
                 }
             }
             Column::Tuple(fields) => {
@@ -160,10 +160,7 @@ fn normalize_bitmap_in_column(column: Column) -> Column {
         },
         Column::Nullable(deref!(nullable)) => {
             let (col, validity) = nullable.destructure();
-            Column::Nullable(Box::new(NullableColumn::<AnyType> {
-                column: normalize_bitmap_in_column(col),
-                validity,
-            }))
+            normalize_bitmap_in_column(col).wrap_nullable(Some(validity))
         }
         Column::Tuple(columns) => Column::Tuple(
             columns

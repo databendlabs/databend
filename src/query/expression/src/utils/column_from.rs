@@ -30,7 +30,7 @@ pub trait FromData<D> {
 
     fn from_data_with_validity(d: Vec<D>, valids: Vec<bool>) -> Column {
         let column = Self::from_data(d);
-        Column::Nullable(Box::new(NullableColumn::new(column, valids.into())))
+        column.wrap_nullable(Some(valids.into()))
     }
 
     fn from_opt_data(_: Vec<Option<D>>) -> Column;
@@ -141,6 +141,6 @@ impl<T: Decimal> DecimalType<T> {
             }
         }
         let col = Self::from_data_with_size(data, size);
-        NullableColumn::new_column(col, validity.into())
+        col.wrap_nullable(Some(validity.into()))
     }
 }

@@ -44,7 +44,6 @@ use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::i256;
-use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::with_number_mapped_type;
@@ -276,7 +275,7 @@ impl Payload {
             let b = self.flush_type_column::<BooleanType>(validity_offset, state);
             let validity = b.into_boolean().unwrap();
 
-            NullableColumn::new_column(col, validity)
+            col.wrap_nullable(Some(validity))
         } else {
             col
         }

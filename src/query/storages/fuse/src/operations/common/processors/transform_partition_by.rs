@@ -117,9 +117,9 @@ fn mark_decimal_boundaries(column: &DecimalColumn, changed: &mut [bool]) {
 
 fn mark_nullable_boundaries(column: &NullableColumn<AnyType>, changed: &mut [bool]) {
     let mut value_changed = vec![false; changed.len()];
-    mark_column_boundaries_inner(&column.column, &mut value_changed);
+    mark_column_boundaries_inner(column.column(), &mut value_changed);
 
-    let mut validity = column.validity.iter();
+    let mut validity = column.validity().iter();
     let Some(mut previous_valid) = validity.next() else {
         return;
     };

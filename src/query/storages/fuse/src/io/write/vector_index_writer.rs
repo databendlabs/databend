@@ -299,7 +299,7 @@ impl VectorIndexBuilder {
                 // Non-nullable and nullable-but-all-valid columns need no bitmap.
                 let validity = column
                     .as_nullable()
-                    .map(|nullable| &nullable.validity)
+                    .map(|nullable| nullable.validity())
                     .filter(|bitmap| bitmap.null_count() != 0);
                 if let Some(bitmap) = validity {
                     bundle.add_validity(column_id, bitmap)?;
@@ -385,16 +385,16 @@ fn vector_statistics_from_column(
     distance_type: DistanceType,
 ) -> Result<Option<VectorColumnStatistics>> {
     match column {
-        Column::Nullable(nullable_column) => match &nullable_column.column {
+        Column::Nullable(nullable_column) => match nullable_column.column() {
             Column::Vector(VectorColumn::Float32((values, dimension))) => {
-                let valid_rows = nullable_column.validity.true_count();
-                let null_rows = nullable_column.validity.null_count();
+                let valid_rows = nullable_column.validity().true_count();
+                let null_rows = nullable_column.validity().null_count();
                 if null_rows == 0 {
                     vector_statistics_from_vectors(values.as_slice(), *dimension, distance_type)
                 } else {
                     let mut valid_values = Vec::with_capacity(valid_rows * *dimension);
                     for (row, vector) in values.chunks_exact(*dimension).enumerate() {
-                        if nullable_column.validity.get_bit(row) {
+                        if nullable_column.validity().get_bit(row) {
                             valid_values.extend_from_slice(vector);
                         }
                     }

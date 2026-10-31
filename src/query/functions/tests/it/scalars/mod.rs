@@ -28,7 +28,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::Value;
 use databend_common_expression::type_check;
-use databend_common_expression::types::NullableColumn;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use itertools::Itertools;
@@ -294,11 +293,9 @@ fn test_arrow_conversion(col: &Column, strict: bool) {
     let col = if !strict {
         match col {
             Column::Decimal(decimal) => Column::Decimal(decimal.clone().strict_decimal()),
-            col @ Column::Nullable(nullable) => match &nullable.column {
-                Column::Decimal(decimal) => Column::Nullable(Box::new(NullableColumn {
-                    column: Column::Decimal(decimal.clone().strict_decimal()),
-                    validity: nullable.validity.clone(),
-                })),
+            col @ Column::Nullable(nullable) => match nullable.column() {
+                Column::Decimal(decimal) => Column::Decimal(decimal.clone().strict_decimal())
+                    .wrap_nullable(Some(nullable.validity().clone())),
                 _ => col.clone(),
             },
             col => col.clone(),
@@ -402,7 +399,7 @@ fn test_if_function() -> anyhow::Result<()> {
         .clone();
 
     let bm = Bitmap::from_iter([true, true]);
-    assert_eq!(result.validity, bm);
-    assert_eq!(result.column, Int64Type::from_data(vec![100, 2401]));
+    assert_eq!(result.validity(), &bm);
+    assert_eq!(result.column(), &Int64Type::from_data(vec![100, 2401]));
     Ok(())
 }

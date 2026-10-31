@@ -30,7 +30,6 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
@@ -223,13 +222,11 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 StringType::from_data(this.location.0),
                 UInt64Type::from_data(this.location.1),
             ]),
-            Column::Nullable(Box::new(NullableColumn::new(
-                Column::Tuple(vec![
-                    StringType::from_data(this.bloom_filter_index_location.locations),
-                    UInt64Type::from_data(this.bloom_filter_index_location.versions),
-                ]),
-                this.bloom_filter_index_location.validity.into(),
-            ))),
+            Column::Tuple(vec![
+                StringType::from_data(this.bloom_filter_index_location.locations),
+                UInt64Type::from_data(this.bloom_filter_index_location.versions),
+            ])
+            .wrap_nullable(Some(this.bloom_filter_index_location.validity.into())),
             UInt64Type::from_data(this.bloom_filter_index_size),
             UInt64Type::from_opt_data(this.inverted_index_size),
             BinaryType::from_opt_data(this.inverted_index_metas),

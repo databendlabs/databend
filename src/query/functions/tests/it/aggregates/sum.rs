@@ -21,7 +21,6 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -254,10 +253,8 @@ fn test_v2_sum_if_always_false_returns_null() -> Result<()> {
 
 #[test]
 fn test_v2_sum_if_suffix_names_are_case_insensitive() -> Result<()> {
-    let values = NullableColumn::new_column(
-        UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
-        Bitmap::from([true, false, true, true, true]),
-    );
+    let values = UInt64Type::from_data(vec![10, 20, 10, 40, 20])
+        .wrap_nullable(Some(Bitmap::from([true, false, true, true, true])));
     let conditions = BooleanType::from_data(vec![true, false, true, true, false]);
     let entries = [values.into(), conditions.into()];
 
@@ -266,10 +263,8 @@ fn test_v2_sum_if_suffix_names_are_case_insensitive() -> Result<()> {
 
 #[test]
 fn test_v2_sum_suffix_names_are_case_insensitive() -> Result<()> {
-    let values = NullableColumn::new_column(
-        UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
-        Bitmap::from([true, false, true, true, true]),
-    );
+    let values = UInt64Type::from_data(vec![10, 20, 10, 40, 20])
+        .wrap_nullable(Some(Bitmap::from([true, false, true, true, true])));
     let entries = [values.into()];
 
     assert_v2_direct_matches_serialized("Sum_State", &entries, 5)
@@ -277,10 +272,8 @@ fn test_v2_sum_suffix_names_are_case_insensitive() -> Result<()> {
 
 #[test]
 fn test_v2_sum_decorator_read_only_finalization_preserves_result() -> Result<()> {
-    let values = NullableColumn::new_column(
-        UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
-        Bitmap::from([true, false, true, true, true]),
-    );
+    let values = UInt64Type::from_data(vec![10, 20, 10, 40, 20])
+        .wrap_nullable(Some(Bitmap::from([true, false, true, true, true])));
     let values: BlockEntry = values.into();
     let if_values: BlockEntry = UInt64Type::from_data(vec![10, 20, 10, 40, 20]).into();
     let conditions: BlockEntry =

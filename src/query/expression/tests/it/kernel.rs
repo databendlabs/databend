@@ -622,7 +622,7 @@ fn test_estimated_scalar_repeat_size() {
         let col = NullableType::<IntervalType>::try_downcast_column(&col).unwrap();
         assert_eq!(
             scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.validity.as_slice().0.len()
+            col.validity().as_slice().0.len()
         );
     }
 

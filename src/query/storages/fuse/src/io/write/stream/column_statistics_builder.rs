@@ -299,12 +299,12 @@ where
         }
         let (column, validity) = match column {
             Column::Nullable(deref!(inner)) => {
-                let validity = if inner.validity.null_count() == 0 {
+                let validity = if inner.validity().null_count() == 0 {
                     None
                 } else {
-                    Some(&inner.validity)
+                    Some(inner.validity())
                 };
-                (&inner.column, validity)
+                (inner.column(), validity)
             }
             Column::Null { len } => {
                 self.null_count += *len;

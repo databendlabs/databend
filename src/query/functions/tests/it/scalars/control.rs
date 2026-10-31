@@ -54,7 +54,7 @@ fn test_if_accepts_non_strict_decimal_columns() {
             let legacy =
                 Column::Decimal(DecimalColumn::Decimal128(vec![123_i128, 456].into(), size));
             let column = if nullable {
-                NullableColumn::new_column(legacy, vec![true, false].into())
+                legacy.wrap_nullable(Some(vec![true, false].into()))
             } else {
                 legacy
             };

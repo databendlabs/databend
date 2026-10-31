@@ -75,13 +75,9 @@ impl Exchange for BlockIdPartitionExchange {
             {
                 let col = entry.to_column();
                 let nullable = col.into_nullable().unwrap();
-                let row_ids = nullable
-                    .column
-                    .into_number()
-                    .unwrap()
-                    .into_u_int64()
-                    .unwrap();
-                for (row_id, is_valid) in row_ids.iter().zip(nullable.validity.iter()) {
+                let (column, validity) = nullable.destructure();
+                let row_ids = column.into_number().unwrap().into_u_int64().unwrap();
+                for (row_id, is_valid) in row_ids.iter().zip(validity.iter()) {
                     if is_valid {
                         indices.push(Self::partition_index(*row_id, n));
                     } else {

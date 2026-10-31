@@ -27,7 +27,6 @@ use super::DataType;
 use super::DecimalColumn;
 use super::DecimalDataType;
 use super::DecimalScalar;
-use super::NullableColumn;
 use super::NumberColumn;
 use super::NumberDataType;
 use super::ValueType;
@@ -1154,7 +1153,7 @@ impl Column {
     pub fn is_dict_encoded(&self) -> bool {
         match self {
             Column::Encoded(encoded) => encoded.as_dict().is_some(),
-            Column::Nullable(column) => column.column.is_dict_encoded(),
+            Column::Nullable(column) => column.column().is_dict_encoded(),
             _ => false,
         }
     }
@@ -1165,11 +1164,9 @@ impl Column {
     pub fn decode_owned(self) -> Self {
         match self {
             Column::Encoded(c) => c.decode(),
-            Column::Nullable(mut column) => {
-                if let Column::Encoded(encoded) = &column.column {
-                    column.column = encoded.decode();
-                }
-                Column::Nullable(column)
+            Column::Nullable(column) if column.column().is_encoded() => {
+                let (column, validity) = column.destructure();
+                column.decode_owned().wrap_nullable(Some(validity))
             }
             other => other,
         }
@@ -1189,11 +1186,12 @@ impl Value<AnyType> {
         match self {
             Value::Column(Column::Encoded(encoded)) => Cow::Owned(Value::Column(encoded.decode())),
             Value::Column(Column::Nullable(column)) => {
-                if let Column::Encoded(encoded) = &column.column {
-                    Cow::Owned(Value::Column(NullableColumn::new_column(
-                        encoded.decode(),
-                        column.validity.clone(),
-                    )))
+                if let Column::Encoded(encoded) = column.column() {
+                    Cow::Owned(Value::Column(
+                        encoded
+                            .decode()
+                            .wrap_nullable(Some(column.validity().clone())),
+                    ))
                 } else {
                     Cow::Borrowed(self)
                 }
@@ -1205,7 +1203,7 @@ impl Value<AnyType> {
     pub fn is_encoded(&self) -> bool {
         match self {
             Value::Column(Column::Encoded(_)) => true,
-            Value::Column(Column::Nullable(c)) => c.column.is_encoded(),
+            Value::Column(Column::Nullable(c)) => c.column().is_encoded(),
             _ => false,
         }
     }
@@ -1220,11 +1218,12 @@ impl BlockEntry {
         match self {
             BlockEntry::Column(Column::Encoded(encoded)) => Value::Column(encoded.decode()),
             BlockEntry::Column(Column::Nullable(column)) => {
-                if let Column::Encoded(encoded) = &column.column {
-                    Value::Column(NullableColumn::new_column(
-                        encoded.decode(),
-                        column.validity.clone(),
-                    ))
+                if let Column::Encoded(encoded) = column.column() {
+                    Value::Column(
+                        encoded
+                            .decode()
+                            .wrap_nullable(Some(column.validity().clone())),
+                    )
                 } else {
                     self.value()
                 }

@@ -1,0 +1,45 @@
+# Construction/validity integration coverage: nullable casts, tuple fields and outer joins.
+# Scalar-returning nullable wrapper regressions are covered by expression API tests.
+statement ok
+DROP TABLE IF EXISTS nullable_construction_regression
+
+statement ok
+CREATE TABLE nullable_construction_regression (id INT, a BIGINT NULL, b STRING NULL) ENGINE = FUSE
+
+statement ok
+INSERT INTO nullable_construction_regression VALUES (1, 7, '10'), (2, NULL, 'bad'), (3, 9, NULL), (4, NULL, '30')
+
+query IIII
+SELECT id, to_nullable(to_nullable(a)), try_to_int64(b), get(1)(tuple(a, b)) FROM nullable_construction_regression ORDER BY id
+----
+1 7 10 7
+2 NULL NULL NULL
+3 9 NULL 9
+4 NULL 30 NULL
+
+query II
+SELECT id, get(2)(if(a IS NULL, NULL, tuple(a, try_to_int64(b)))) FROM nullable_construction_regression ORDER BY id
+----
+1 10
+2 NULL
+3 NULL
+4 NULL
+
+query III
+SELECT l.id, to_nullable(r.a), try_to_int64(r.b) FROM nullable_construction_regression l LEFT JOIN nullable_construction_regression r ON l.id = r.id AND r.a IS NOT NULL ORDER BY l.id
+----
+1 7 10
+2 NULL NULL
+3 9 NULL
+4 NULL NULL
+
+query II
+SELECT id, if(a IS NULL, 42, try_to_int64(b)) FROM nullable_construction_regression ORDER BY id
+----
+1 10
+2 42
+3 NULL
+4 42
+
+statement ok
+DROP TABLE nullable_construction_regression

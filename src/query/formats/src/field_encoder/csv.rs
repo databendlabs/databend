@@ -228,11 +228,11 @@ impl FieldEncoderCSV {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) -> Result<()> {
-        if !column.validity.get_bit(row_index) {
+        if !column.validity().get_bit(row_index) {
             self.simple.write_null(out_buf);
             Ok(())
         } else {
-            self.write_field(&column.column, row_index, out_buf)
+            self.write_field(column.column(), row_index, out_buf)
         }
     }
 

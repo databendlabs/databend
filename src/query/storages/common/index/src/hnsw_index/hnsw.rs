@@ -229,7 +229,7 @@ impl HNSWIndex {
         let num_vectors = column.len();
         let validity = column
             .as_nullable()
-            .map(|nullable| nullable.validity.clone())
+            .map(|nullable| nullable.validity().clone())
             .filter(|bitmap| bitmap.null_count() != 0);
 
         let column = column.remove_nullable();

@@ -34,7 +34,6 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::arrow::and_validities;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::Interval;
@@ -717,7 +716,7 @@ impl HashJoinProbeState {
             check_interrupt()?;
 
             let boolean_column = Column::Boolean(boolean_bit_map.into());
-            let marker_column = NullableColumn::new_column(boolean_column, validity.into());
+            let marker_column = boolean_column.wrap_nullable(Some(validity.into()));
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.hash_join_state.gather(
                 &build_indexes[0..build_indexes_idx],

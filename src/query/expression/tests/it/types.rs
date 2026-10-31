@@ -16,11 +16,13 @@ use std::borrow::Cow;
 
 use arrow_schema::Schema;
 use chrono_tz::Tz;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FromData;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RandomOptions;
 use databend_common_expression::Scalar;
@@ -36,6 +38,7 @@ use databend_common_expression::types::date::DATE_MAX;
 use databend_common_expression::types::date::DATE_MIN;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::date::clamp_date;
+use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp::check_timestamp;
@@ -367,5 +370,86 @@ fn test_convert_types() {
         let data = serialize_column(&c);
         let c2 = deserialize_column(&data).unwrap();
         assert_eq!(c, c2, "in {idx} | datatype: {}", c.data_type());
+    }
+}
+
+#[test]
+fn test_wrap_nullable_non_nullable() {
+    for len in [0, 4] {
+        let column = Int64Type::from_data(vec![1; len]);
+        for validity in [
+            None,
+            Some(Bitmap::new_constant(true, len)),
+            Some(Bitmap::new_constant(false, len)),
+            Some((0..len).map(|i| i % 2 == 0).collect::<Bitmap>()),
+        ] {
+            let wrapped = column.clone().wrap_nullable(validity.clone());
+            assert_eq!(wrapped.data_type(), column.data_type().wrap_nullable());
+            let Column::Nullable(wrapped) = wrapped else {
+                panic!("expected nullable column");
+            };
+            assert_eq!(wrapped.column(), &column);
+            assert_eq!(
+                wrapped.validity(),
+                &validity.unwrap_or_else(|| Bitmap::new_constant(true, len)),
+            );
+        }
+    }
+}
+
+#[test]
+fn test_wrap_nullable_merges_validity() {
+    for len in [0, 4] {
+        let column = Int64Type::from_data(vec![1; len]);
+        let bitmaps = [
+            Bitmap::new_constant(true, len),
+            Bitmap::new_constant(false, len),
+            (0..len).map(|i| i % 2 == 0).collect::<Bitmap>(),
+            (0..len).map(|i| i < 2).collect::<Bitmap>(),
+        ];
+        for inner in &bitmaps {
+            let nullable = column.clone().wrap_nullable(Some(inner.clone()));
+            assert_eq!(nullable.clone().wrap_nullable(None), nullable);
+            for outer in &bitmaps {
+                let wrapped = nullable.clone().wrap_nullable(Some(outer.clone()));
+                assert_eq!(wrapped.data_type(), nullable.data_type());
+                // Wrapping repeatedly must not add nullable layers or revive null rows.
+                assert_eq!(wrapped.clone().wrap_nullable(Some(outer.clone())), wrapped);
+                let Column::Nullable(wrapped) = wrapped else {
+                    panic!("expected nullable column");
+                };
+                assert_eq!(wrapped.column(), &column);
+                assert_eq!(wrapped.validity(), &(inner & outer));
+            }
+        }
+    }
+}
+
+#[test]
+fn test_wrap_nullable_null() {
+    for len in [0, 4] {
+        let column = Column::Null { len };
+        for validity in [
+            None,
+            Some(Bitmap::new_constant(true, len)),
+            Some(Bitmap::new_constant(false, len)),
+        ] {
+            assert_eq!(column.clone().wrap_nullable(validity), column);
+        }
+    }
+}
+
+#[test]
+fn test_wrap_nullable_rejects_mismatched_validity() {
+    let column = Int64Type::from_data(vec![1_i64, 2]);
+    for column in [column.clone(), column.wrap_nullable(None), Column::Null {
+        len: 2,
+    }] {
+        assert!(
+            databend_common_base::runtime::catch_unwind(|| {
+                column.wrap_nullable(Some(Bitmap::new_constant(true, 1)))
+            })
+            .is_err()
+        );
     }
 }
