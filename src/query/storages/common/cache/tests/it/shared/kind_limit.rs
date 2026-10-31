@@ -16,7 +16,9 @@
 //! instead of the kind refusing every new value and keeping what it first cached.
 
 use std::sync::Arc;
+use std::sync::Barrier;
 
+use databend_common_base::runtime::Thread;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::PoolCaps;
 use databend_storages_common_cache::backend::KindStore;
@@ -173,4 +175,38 @@ fn test_loaded_values_turn_over() {
     let events = store.kind_stats(data_kind()).events.unwrap();
     assert_eq!(events.rejected_kind_limit, 0);
     assert_eq!(store.kind_stats(data_kind()).in_cache, 1000);
+}
+
+/// Many threads filling a limited kind: it turns over without passing its limit, nothing is
+/// refused, and the counts agree once they are done.
+#[test]
+fn test_concurrent_turnover_stays_within_the_limit() {
+    const THREADS: usize = 16;
+    let store = shared_store(100_000, 0, 0);
+    store.set_kind_limit(meta_kind(), KindLimit::bytes(5_000));
+    let barrier = Arc::new(Barrier::new(THREADS));
+    let live = Live::default();
+    let threads: Vec<_> = (0..THREADS)
+        .map(|t| {
+            let (store, live, barrier) = (store.clone(), live.clone(), barrier.clone());
+            Thread::spawn(move || {
+                let cache = cache(&store, meta_kind());
+                barrier.wait();
+                for i in 0..500 {
+                    assert!(cache.put(&format!("{t}-{i}"), live.item(100)).is_charged());
+                    let kind = store.kind_stats(meta_kind());
+                    assert!(kind.resident <= 5_000, "{kind:?}");
+                }
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
+    let kind = store.kind_stats(meta_kind());
+    assert_eq!((kind.resident, kind.in_cache), (5_000, 5_000));
+    assert_eq!(live.count(), kind.items);
+    let events = kind.events.unwrap();
+    assert_eq!(events.rejected_kind_limit, 0);
+    assert_eq!(events.evicted_for_capacity, (THREADS * 500 - 50) as u64);
 }

@@ -101,7 +101,7 @@ fn soak_shared_backend() {
             };
             println!(
                 "phase {:4} {:8.0} ops/s  heap {:5} MiB  cached {:4} MiB  alive {:7}  \
-                 entries/queue/ghost meta {} index {} data {}  samples {}",
+                 entries/slots/ghost meta {} index {} data {}  samples {}",
                 report.phase,
                 report.ops_per_sec(),
                 heap_mib,
