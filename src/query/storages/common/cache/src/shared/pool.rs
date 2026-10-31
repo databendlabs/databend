@@ -44,8 +44,8 @@ pub(crate) type Removed = Vec<(EntryKey, Entry)>;
 pub struct PoolStructure {
     pub shards: usize,
     pub entries: usize,
-    /// Queue positions, including stale ones not compacted yet.
-    pub queue_positions: usize,
+    /// Slab slots, including free ones kept for reuse.
+    pub slots: usize,
     pub ghost_entries: usize,
     pub ghost_capacity: usize,
 }
@@ -110,7 +110,7 @@ impl PoolStore {
         for shard in self.shards.iter() {
             let shard = shard.read();
             structure.entries += shard.len();
-            structure.queue_positions += shard.queue_len();
+            structure.slots += shard.slots();
             structure.ghost_entries += shard.ghost_len();
         }
         structure

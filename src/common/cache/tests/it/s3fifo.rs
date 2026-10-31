@@ -168,9 +168,9 @@ fn test_remove_if() {
     assert_eq!(c.bytes(), 10);
 }
 
-/// Removals without capacity-driven eviction do not grow the queues without bound.
+/// Removals without capacity-driven eviction do not grow the slab without bound.
 #[test]
-fn test_removals_keep_queues_bounded() {
+fn test_removals_keep_slab_bounded() {
     let mut c = fifo(1);
     for round in 0..100u32 {
         for k in 0..100 {
@@ -181,13 +181,13 @@ fn test_removals_keep_queues_bounded() {
         }
     }
     assert!(c.is_empty());
-    assert!(c.queue_len() <= 1024 + 100, "{}", c.queue_len());
+    assert!(c.slots() <= 1024 + 100, "{}", c.slots());
 
     for k in 0..5000 {
         c.insert(k, k, 1);
     }
     c.remove_if(|_, _| true);
-    assert!(c.queue_len() <= 1024, "{}", c.queue_len());
+    assert!(c.slots() <= 1024, "{}", c.slots());
     // Entries inserted afterwards are still evicted in order.
     c.insert(1, 1, 1);
     c.insert(2, 2, 1);
@@ -303,9 +303,9 @@ fn test_evict_where_rotates_like_pop_evictable() {
     assert!(scoped.contains(&0) && scoped.contains(&1));
 }
 
-/// Repeated scoped evictions leave stale positions, which are compacted like removals.
+/// Repeated scoped evictions reuse slots; the slab stays bounded.
 #[test]
-fn test_evict_where_keeps_queues_bounded() {
+fn test_evict_where_keeps_slab_bounded() {
     let mut c = fifo(1);
     for round in 0..20_000u32 {
         c.insert(round, round, 1);
@@ -315,7 +315,7 @@ fn test_evict_where_keeps_queues_bounded() {
         }
     }
     assert_eq!(c.len(), 100);
-    assert!(c.queue_len() <= 2 * c.len() + 1024);
+    assert!(c.slots() <= 2 * c.len() + 1024);
 }
 
 #[test]

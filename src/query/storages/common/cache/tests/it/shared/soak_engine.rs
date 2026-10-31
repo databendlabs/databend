@@ -379,9 +379,9 @@ fn check_quiescent(
         assert_eq!(stats.resident, stats.in_cache, "{at}");
         assert!(stats.in_cache <= stats.cap, "{at}");
         assert_eq!(stats.items, structure.entries, "{at}");
-        // Stale positions are compacted past twice the entries plus a slack per shard.
+        // Free slots are released past twice the entries plus a slack per shard.
         assert!(
-            structure.queue_positions <= 2 * structure.entries + 1100 * structure.shards,
+            structure.slots <= 2 * structure.entries + 1100 * structure.shards,
             "{at}"
         );
         assert!(structure.ghost_entries <= structure.ghost_capacity, "{at}");

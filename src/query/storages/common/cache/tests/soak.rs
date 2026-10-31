@@ -97,7 +97,7 @@ fn soak_shared_backend() {
             let cached: usize = report.in_cache.iter().sum();
             let structure = |i: usize| {
                 let s = report.structures[i];
-                format!("{}/{}/{}", s.entries, s.queue_positions, s.ghost_entries)
+                format!("{}/{}/{}", s.entries, s.slots, s.ghost_entries)
             };
             println!(
                 "phase {:4} {:8.0} ops/s  heap {:5} MiB  cached {:4} MiB  alive {:7}  \
