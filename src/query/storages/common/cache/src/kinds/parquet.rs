@@ -35,4 +35,8 @@ impl CachedItem for ParquetMetaData {
     fn mem_bytes(&self) -> usize {
         self.memory_size()
     }
+
+    fn legacy_bytes(&self) -> usize {
+        0
+    }
 }

@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use databend_storages_common_cache::CacheMetricsCollector;
 use databend_storages_common_cache::CacheRow;
-use databend_storages_common_cache::kinds::table;
+use databend_storages_common_cache::kinds::segment;
 use futures::executor::block_on;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::registry::Registry;
@@ -65,10 +65,10 @@ fn kind_labels(row: &CacheRow) -> String {
 fn test_gauges_follow_cache_rows() {
     for backend in Backend::ALL {
         let manager = Arc::new(manager(&backend.config(MEMORY), MEMORY, false));
-        let snapshots = manager.cache::<table::Snapshot>();
-        let _held = snapshots.put("a", table::Snapshot::sample(1));
-        snapshots.put("b", table::Snapshot::sample(2));
-        snapshots.evict("a");
+        let segments = manager.cache::<segment::Info>();
+        let _held = segments.put("a", segment::Info::sample(1));
+        segments.put("b", segment::Info::sample(2));
+        segments.evict("a");
 
         let text = scrape(CacheMetricsCollector::of(manager.clone()));
         let rows = manager.rows();
@@ -107,13 +107,13 @@ fn test_gauges_follow_cache_rows() {
             assert_eq!(get("cache_pool_capacity_bytes"), row.capacity);
         }
 
-        // The held, evicted snapshot is charged but no longer cached.
-        let snapshot = rows
+        // The held, evicted segment is charged but no longer cached.
+        let segment = rows
             .iter()
-            .find(|row| row.name == "memory_cache_table_snapshot")
+            .find(|row| row.name == "memory_cache_compact_segment_info")
             .unwrap();
-        assert_eq!(snapshot.num_items, 1);
-        assert!(snapshot.size > snapshot.in_cache_size);
+        assert_eq!(segment.num_items, 1);
+        assert!(segment.size > segment.in_cache_size);
     }
 }
 

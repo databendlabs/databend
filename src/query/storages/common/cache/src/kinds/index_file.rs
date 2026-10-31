@@ -36,6 +36,10 @@ impl CachedItem for IndexMeta {
     fn mem_bytes(&self) -> usize {
         size_of::<Self>() + index_meta(self)
     }
+
+    fn legacy_bytes(&self) -> usize {
+        0
+    }
 }
 
 impl CachedItem for IndexFile {

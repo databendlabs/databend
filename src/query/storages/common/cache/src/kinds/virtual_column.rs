@@ -56,6 +56,10 @@ impl CachedItem for VirtualColumnFileMeta {
             })
             + hash_map(&self.virtual_column_nodes, |_, n| virtual_column_node(n))
     }
+
+    fn legacy_bytes(&self) -> usize {
+        0
+    }
 }
 
 impl DiskCodec for VirtualColumnFileMeta {

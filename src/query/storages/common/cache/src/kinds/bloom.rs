@@ -57,6 +57,10 @@ impl CachedItem for BloomIndexMeta {
     fn mem_bytes(&self) -> usize {
         size_of::<Self>() + vec(&self.columns, |(name, _)| name.capacity())
     }
+
+    fn legacy_bytes(&self) -> usize {
+        0
+    }
 }
 
 impl CachedItem for FilterImpl {

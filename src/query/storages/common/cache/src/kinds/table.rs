@@ -70,6 +70,10 @@ impl CachedItem for TableSnapshot {
             + option(&self.cluster_key_meta, |(_, expr)| expr.capacity())
             + option(&self.table_statistics_location, |s| s.capacity())
     }
+
+    fn legacy_bytes(&self) -> usize {
+        0
+    }
 }
 
 impl CachedItem for TableSnapshotStatistics {
@@ -82,6 +86,10 @@ impl CachedItem for TableSnapshotStatistics {
             + hash_map(&self.count_min_sketch, |_, cms| cms.memory_size())
             + hash_map(&self.histograms, |_, h| h.memory_size())
     }
+
+    fn legacy_bytes(&self) -> usize {
+        0
+    }
 }
 
 /// Partitions are opaque `dyn PartInfo`; this is the typical size of a fuse block part.
@@ -93,5 +101,9 @@ impl CachedItem for (PartStatistics, Partitions) {
         size_of::<Self>()
             + parts.capacity() * size_of::<PartInfoPtr>()
             + parts.len() * PART_INFO_BYTES
+    }
+
+    fn legacy_bytes(&self) -> usize {
+        0
     }
 }

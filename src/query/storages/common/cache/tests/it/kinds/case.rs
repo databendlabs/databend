@@ -50,8 +50,12 @@ pub trait KindCase: Send + Sync {
     fn kind(&self) -> CacheKind;
 
     /// Put, look up, replace, read-only lookups, loading and eviction in memory. `admit_after`
-    /// is the number of loads the backend needs before caching a read value.
-    fn memory_round_trip(&self, manager: &CacheManager, admit_after: usize);
+    /// is the number of loads the backend needs before caching a read value; `legacy` says the
+    /// backend charges `legacy_bytes`.
+    fn memory_round_trip(&self, manager: &CacheManager, admit_after: usize, legacy: bool);
+
+    /// `legacy_bytes` of a sample value.
+    fn legacy_bytes(&self) -> usize;
 
     /// The disk tier, for kinds that define one: the value survives encoding, and is read back
     /// from disk once the memory tier is off.
@@ -143,8 +147,15 @@ impl<K: Sample> KindCase for Case<K> {
         CacheKind::of::<K>()
     }
 
-    fn memory_round_trip(&self, manager: &CacheManager, admit_after: usize) {
+    fn memory_round_trip(&self, manager: &CacheManager, admit_after: usize, legacy: bool) {
         let name = K::NAME;
+        let charge = |value: &K::Value| {
+            if legacy {
+                value.legacy_bytes()
+            } else {
+                value.mem_bytes()
+            }
+        };
         let cache = manager.cache::<K>();
         assert!(cache.is_enabled(), "{name}");
 
@@ -152,11 +163,7 @@ impl<K: Sample> KindCase for Case<K> {
         assert!(first.is_charged(), "{name}");
         assert!(same(&first, &cache.lookup("a").unwrap()), "{name}");
         let stats = cache.stats();
-        assert_eq!(
-            (stats.items, stats.in_cache),
-            (1, first.mem_bytes()),
-            "{name}"
-        );
+        assert_eq!((stats.items, stats.in_cache), (1, charge(&first)), "{name}");
 
         // A replaced value stays charged while held; the cache holds the new one only.
         let second = cache.put("a", K::sample(2));
@@ -164,14 +171,10 @@ impl<K: Sample> KindCase for Case<K> {
         let stats = cache.stats();
         assert_eq!(
             (stats.items, stats.in_cache),
-            (1, second.mem_bytes()),
+            (1, charge(&second)),
             "{name}"
         );
-        assert_eq!(
-            stats.resident,
-            first.mem_bytes() + second.mem_bytes(),
-            "{name}"
-        );
+        assert_eq!(stats.resident, charge(&first) + charge(&second), "{name}");
 
         // A read-only view hits, but does not fill.
         let view = cache.read_only();
@@ -229,6 +232,10 @@ impl<K: Sample> KindCase for Case<K> {
         assert_eq!(disk.codec.encode(&read_back).unwrap(), encoded, "{name}");
         assert!(cache.evict("d"), "{name}");
         assert!(cache.lookup("d").is_none() && !on_disk(), "{name}");
+    }
+
+    fn legacy_bytes(&self) -> usize {
+        K::sample(5).legacy_bytes()
     }
 
     fn mem_bytes_ratio(&self) -> (f64, Accuracy) {

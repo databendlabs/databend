@@ -300,7 +300,11 @@ impl<T: CachedItem> MemCache<T> {
         if !self.memory_enabled() {
             return CacheRef::new(value);
         }
-        let bytes = value.mem_bytes();
+        let bytes = if self.store.charges_legacy_bytes() {
+            value.legacy_bytes()
+        } else {
+            value.mem_bytes()
+        };
         let value = CacheRef::new(value);
         if let InsertOutcome::Inserted(reservation) =
             self.store

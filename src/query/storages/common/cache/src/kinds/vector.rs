@@ -108,6 +108,10 @@ impl CachedItem for VectorIndexMeta {
                 }
             }
     }
+
+    fn legacy_bytes(&self) -> usize {
+        0
+    }
 }
 
 impl DiskCodec for VectorIndexMeta {

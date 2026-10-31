@@ -80,6 +80,10 @@ impl CachedItem for IcebergTableCacheValue {
     fn mem_bytes(&self) -> usize {
         size_of::<Self>() + 2 * table_schema(&self.table().get_table_info().meta.schema)
     }
+
+    fn legacy_bytes(&self) -> usize {
+        0
+    }
 }
 
 impl TTLValue for IcebergTableCacheValue {

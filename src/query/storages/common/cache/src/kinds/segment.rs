@@ -73,6 +73,10 @@ impl CachedItem for CompactSegmentInfo {
     fn mem_bytes(&self) -> usize {
         size_of::<Self>() + statistics(&self.summary) + self.raw_block_metas.bytes.capacity()
     }
+
+    fn legacy_bytes(&self) -> usize {
+        size_of::<Self>() + self.raw_block_metas.bytes.len()
+    }
 }
 
 impl CachedItem for ColumnOrientedSegment {
@@ -82,12 +86,20 @@ impl CachedItem for ColumnOrientedSegment {
             + statistics(&self.summary)
             + table_schema(&self.segment_schema)
     }
+
+    fn legacy_bytes(&self) -> usize {
+        size_of::<Self>() + self.block_metas.memory_size()
+    }
 }
 
 impl CachedItem for Vec<Arc<BlockMeta>> {
     fn mem_bytes(&self) -> usize {
         let arc_inner = size_of::<BlockMeta>() + 2 * size_of::<usize>();
         size_of::<Self>() + vec(self, |b| arc_inner + block_meta(b))
+    }
+
+    fn legacy_bytes(&self) -> usize {
+        0
     }
 }
 

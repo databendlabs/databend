@@ -176,6 +176,12 @@ pub trait KindStore: Send + Sync {
     fn reclaim_stats(&self) -> Option<ReclaimStats> {
         None
     }
+
+    /// Whether values are charged their pre-refactor estimate, `CachedItem::legacy_bytes`,
+    /// rather than `mem_bytes`.
+    fn charges_legacy_bytes(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

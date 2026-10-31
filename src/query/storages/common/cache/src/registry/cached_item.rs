@@ -15,7 +15,14 @@
 /// A value that can be cached. Its kind decides where it is cached; one type may be the value
 /// of several kinds.
 pub trait CachedItem: Send + Sync + 'static {
+    /// The bytes the value holds; what the shared backend charges.
     fn mem_bytes(&self) -> usize;
+
+    /// What the legacy backend charges: the pre-refactor estimate, so its caches hold as many
+    /// values as they did. Kinds bounded by an item count were charged nothing.
+    fn legacy_bytes(&self) -> usize {
+        self.mem_bytes()
+    }
 }
 
 /// For kinds whose values are handed out as `Arc<T>` beyond the cache. Holders of the inner
@@ -24,5 +31,9 @@ pub trait CachedItem: Send + Sync + 'static {
 impl<T: CachedItem> CachedItem for std::sync::Arc<T> {
     fn mem_bytes(&self) -> usize {
         T::mem_bytes(self)
+    }
+
+    fn legacy_bytes(&self) -> usize {
+        T::legacy_bytes(self)
     }
 }

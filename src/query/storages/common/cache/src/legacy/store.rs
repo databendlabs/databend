@@ -325,6 +325,12 @@ impl KindStore for LegacyStore {
         Vec::new()
     }
 
+    /// Capacities were tuned against the pre-refactor estimates; charging the same keeps each
+    /// cache holding as many values as before.
+    fn charges_legacy_bytes(&self) -> bool {
+        true
+    }
+
     /// Never reclaims: the pre-refactor caches were not shrunk under memory pressure, and the
     /// memory manager gets a reclaim handle only with the shared backend.
     fn shrink_for_pressure(&self, _relieved: &dyn Fn() -> bool) -> ShrinkReport {
