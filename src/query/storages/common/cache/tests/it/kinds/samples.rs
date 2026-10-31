@@ -164,31 +164,31 @@ impl Sample for segment::Info {
 }
 
 impl Sample for segment::ColumnOriented {
-    /// `mem_bytes` counts the block metas only, as before this backend: the schema and the
-    /// summary are left out, about 40% of a 64-block segment and under 5% of a full one.
-    const ACCURACY: Accuracy = Accuracy::Estimated;
-
-    /// A segment as cached: written, then read back with every column.
-    fn sample(seed: u32) -> Arc<ColumnOrientedSegment> {
-        let mut builder = ColumnOrientedSegmentBuilder::new(Arc::new(schema(4)), 64);
-        for i in (0..64).map(|i| i + seed % 1024 * 64) {
-            let mut meta = block_meta(4, i);
-            meta.create_on = Some(chrono::Utc::now());
-            builder.add_block(meta, VirtualBlockInput::None).unwrap();
-        }
-        let written = builder
-            .build(BlockThresholds::default(), None, None)
-            .unwrap();
-        let columns: HashSet<String> = written
-            .segment_schema
-            .fields()
-            .iter()
-            .map(|field| field.name().clone())
-            .collect();
-        let bytes = Bytes::from(written.serialize().unwrap());
-        drop(written);
+    /// A full segment as cached: read back with every column from a file written once. The
+    /// value keeps the read buffer, which `mem_bytes` does not see; it is a small part of a
+    /// full segment.
+    fn sample(_seed: u32) -> Arc<ColumnOrientedSegment> {
+        static FILE: OnceLock<(Vec<u8>, HashSet<String>)> = OnceLock::new();
+        let (file, columns) = FILE.get_or_init(|| {
+            let mut builder = ColumnOrientedSegmentBuilder::new(Arc::new(schema(4)), 1000);
+            for i in 0..1000 {
+                let mut meta = block_meta(4, i);
+                meta.create_on = Some(chrono::Utc::now());
+                builder.add_block(meta, VirtualBlockInput::None).unwrap();
+            }
+            let written = builder
+                .build(BlockThresholds::default(), None, None)
+                .unwrap();
+            let columns = written
+                .segment_schema
+                .fields()
+                .iter()
+                .map(|field| field.name().clone())
+                .collect();
+            (written.serialize().unwrap(), columns)
+        });
         let (block_metas, segment_schema, summary) =
-            deserialize_column_oriented_segment(bytes, &columns, true).unwrap();
+            deserialize_column_oriented_segment(Bytes::from(file.clone()), columns, true).unwrap();
         Arc::new(ColumnOrientedSegment {
             block_metas,
             summary: summary.unwrap(),

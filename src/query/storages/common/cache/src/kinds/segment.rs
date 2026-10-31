@@ -28,6 +28,7 @@ use crate::KindLimit;
 use crate::Pool;
 use crate::size::block_meta;
 use crate::size::statistics;
+use crate::size::table_schema;
 use crate::size::vec;
 
 /// Compact segments, by segment location.
@@ -76,7 +77,10 @@ impl CachedItem for CompactSegmentInfo {
 
 impl CachedItem for ColumnOrientedSegment {
     fn mem_bytes(&self) -> usize {
-        size_of::<Self>() + self.block_metas.memory_size()
+        size_of::<Self>()
+            + self.block_metas.memory_size()
+            + statistics(&self.summary)
+            + table_schema(&self.segment_schema)
     }
 }
 
