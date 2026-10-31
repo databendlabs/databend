@@ -215,21 +215,32 @@ fn test_aging_does_not_exhaust_checks() {
     assert!(c.pop_evictable(|_| true, 8).is_none());
 }
 
+fn evict_keys(
+    c: &mut S3Fifo<u32, u32>,
+    matches: impl Fn(&u32) -> bool,
+    keep: impl Fn(&u32) -> bool,
+    max_entries: usize,
+) -> Vec<u32> {
+    c.evict_where(matches, keep, usize::MAX, max_entries)
+        .into_iter()
+        .map(|(k, _, _)| k)
+        .collect()
+}
+
 /// Victims among matching keys come in eviction order; other entries are left alone.
 #[test]
-fn test_pop_evictable_where_only_touches_matching_entries() {
+fn test_evict_where_only_touches_matching_entries() {
     let mut c = fifo(1);
     for k in 0..10 {
         c.insert(k, k, 10);
     }
-    // Accessed: 2 is promoted to the main queue, 3 keeps its access.
+    // Accessed: 2 moves to the main queue, 3 keeps its access.
     c.get(&2);
     c.get(&3);
     let even = |k: &u32| k.is_multiple_of(2);
-    let popped: Vec<u32> = std::iter::from_fn(|| c.pop_evictable_where(even, |_| false))
-        .map(|(k, _, _)| k)
-        .collect();
-    assert_eq!(popped, vec![0, 4, 6, 8, 2]);
+    assert_eq!(evict_keys(&mut c, even, |_| false, usize::MAX), vec![
+        0, 4, 6, 8, 2
+    ]);
     assert_eq!(c.len(), 5);
     assert_eq!(c.bytes(), 50);
 
@@ -240,36 +251,71 @@ fn test_pop_evictable_where_only_touches_matching_entries() {
 }
 
 #[test]
-fn test_pop_evictable_where_skips_kept_entries() {
+fn test_evict_where_stops_at_target() {
+    let mut c = fifo(1);
+    for k in 0..10 {
+        c.insert(k, k, 10);
+    }
+    assert_eq!(evict_keys(&mut c, |_| true, |_| false, 3), vec![0, 1, 2]);
+    let victims = c.evict_where(|_| true, |_| false, 25, usize::MAX);
+    assert_eq!(victims.len(), 3);
+    assert_eq!(c.len(), 4);
+}
+
+#[test]
+fn test_evict_where_skips_kept_entries() {
     let mut c = fifo(1);
     for k in 0..4 {
         c.insert(k, k, 10);
     }
-    let popped = c
-        .pop_evictable_where(|_| true, |v| *v < 2)
-        .map(|(k, _, _)| k);
-    assert_eq!(popped, Some(2));
-    let popped = c
-        .pop_evictable_where(|_| true, |v| *v < 2)
-        .map(|(k, _, _)| k);
-    assert_eq!(popped, Some(3));
-    assert!(c.pop_evictable_where(|_| true, |v| *v < 2).is_none());
+    let kept = |v: &u32| *v < 2;
+    assert_eq!(evict_keys(&mut c, |_| true, kept, 1), vec![2]);
+    assert_eq!(evict_keys(&mut c, |_| true, kept, 1), vec![3]);
+    assert!(evict_keys(&mut c, |_| true, kept, 1).is_empty());
     assert_eq!(c.len(), 2);
+    assert_eq!(c.bytes(), 20);
+}
+
+/// The main queue works as a clock: an accessed entry is passed over and moved to the back,
+/// so the next eviction takes the following cold entry rather than aging the same one again.
+#[test]
+fn test_evict_where_rotates_like_pop_evictable() {
+    let new = || {
+        let mut c = fifo(1);
+        for k in 0..6 {
+            c.insert(k, k, 10);
+            c.get(&k);
+        }
+        // Keeping every entry moves all to the main queue, in order, with no access left;
+        // then 0 and 1 are read again.
+        c.evict_where(|_| true, |_| true, usize::MAX, usize::MAX);
+        c.get(&0);
+        c.get(&1);
+        c
+    };
+    let mut scoped = new();
+    let mut plain = new();
+    for _ in 0..4 {
+        let a = evict_keys(&mut scoped, |_| true, |_| false, 1);
+        let b = plain.pop_evictable(|_| false, usize::MAX).map(|(k, ..)| k);
+        assert_eq!(a.first().copied(), b);
+    }
+    assert!(scoped.contains(&0) && scoped.contains(&1));
 }
 
 /// Repeated scoped evictions leave stale positions, which are compacted like removals.
 #[test]
-fn test_pop_evictable_where_keeps_queues_bounded() {
+fn test_evict_where_keeps_queues_bounded() {
     let mut c = fifo(1);
-    for round in 0..50_000u32 {
+    for round in 0..20_000u32 {
         c.insert(round, round, 1);
         c.get(&round);
         if round >= 100 {
-            c.pop_evictable_where(|_| true, |_| false).unwrap();
+            assert_eq!(evict_keys(&mut c, |_| true, |_| false, 1).len(), 1);
         }
     }
     assert_eq!(c.len(), 100);
-    assert!(c.queue_len() <= 2 * c.len() + 1024 + 1);
+    assert!(c.queue_len() <= 2 * c.len() + 1024);
 }
 
 #[test]

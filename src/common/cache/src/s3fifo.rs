@@ -255,78 +255,71 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
         None
     }
 
-    /// Pops the next victim among the entries whose key `matches`, in eviction order: the small
-    /// queue first, then the main one. Other entries keep their place and their access counts.
-    /// Matching entries are aged as by `pop_evictable`: accessed ones in the small queue move to
-    /// the main queue, accessed ones in the main queue lose one access per pass; `keep` skips
-    /// entries that must stay. `None` once no matching entry can be evicted. Scans the queues,
-    /// so it costs up to their length per victim.
-    pub fn pop_evictable_where(
+    /// Evicts entries whose key `matches`, in eviction order, until `target` bytes or
+    /// `max_entries` entries are gone; entries for which `keep` returns true stay. Matching
+    /// entries are aged as by `pop_evictable`, clock-style: an accessed entry in the small
+    /// queue, or an entry kept, moves to the back of the main queue; an accessed entry in the
+    /// main queue loses one access and moves to its back. Other entries keep their place and
+    /// their access counts.
+    ///
+    /// Scans the small queue once and the main queue up to `MAX_FREQ + 1` times, each pass
+    /// only over the positions it started with, so it always ends. Skipping other keys costs
+    /// a step each: a call costs up to the queue length, once per batch rather than per victim.
+    pub fn evict_where(
         &mut self,
         matches: impl Fn(&K) -> bool,
         keep: impl Fn(&V) -> bool,
-    ) -> Option<(K, V, usize)> {
-        enum Seen<K> {
-            Skip,
-            Promote(K),
-            Evict(K),
-        }
-        // A pass over the main queue lowers each access count by one, so enough passes always
-        // reach an evictable entry if there is one.
+        target: usize,
+        max_entries: usize,
+    ) -> Vec<(K, V, usize)> {
+        let mut victims = Vec::new();
+        let mut bytes = 0;
+        // A main pass lowers each access count by one, so enough passes reach every entry
+        // that can be evicted.
         let passes = std::iter::once(true).chain(std::iter::repeat_n(false, MAX_FREQ as usize + 1));
-        for from_small in passes {
-            let mut i = 0;
-            loop {
-                let queue = if from_small { &self.small } else { &self.main };
-                let Some((key, seq)) = queue.get(i) else {
-                    break;
+        'passes: for from_small in passes {
+            self.drop_stale_front(from_small);
+            let end = self.queue(from_small).len();
+            for i in 0..end {
+                if victims.len() >= max_entries || bytes >= target {
+                    break 'passes;
+                }
+                let (key, seq) = &self.queue(from_small)[i];
+                let Some(slot) = self.map.get(key) else {
+                    continue;
                 };
-                i += 1;
-                let seen = match self.map.get(key) {
-                    Some(slot) if slot.seq == *seq && matches(key) => {
-                        let freq = slot.freq.load(Ordering::Relaxed);
-                        if from_small && freq > 0 {
-                            Seen::Promote(key.clone())
-                        } else if freq > 0 {
-                            slot.freq.store(freq - 1, Ordering::Relaxed);
-                            Seen::Skip
-                        } else if keep(&slot.value) {
-                            Seen::Skip
-                        } else {
-                            Seen::Evict(key.clone())
-                        }
-                    }
-                    _ => Seen::Skip,
-                };
-                match seen {
-                    Seen::Skip => {}
-                    Seen::Promote(key) => {
-                        // A new position in the main queue; the small one goes stale.
-                        let seq = self.next_seq;
-                        self.next_seq += 1;
-                        let slot = self.map.get_mut(&key)?;
-                        slot.seq = seq;
-                        slot.in_main = true;
-                        slot.freq.store(0, Ordering::Relaxed);
-                        self.small_bytes -= slot.bytes;
-                        self.main_bytes += slot.bytes;
-                        self.main.push_back((key, seq));
-                    }
-                    Seen::Evict(key) => {
-                        if from_small {
-                            let hash = self.map.hasher().hash_one(&key);
-                            self.ghost
-                                .record(hash, self.config.admit_after.saturating_sub(1));
-                        }
-                        let slot = self.map.remove(&key)?;
-                        self.untrack(&slot);
-                        self.compact_queues();
-                        return Some((key, slot.value, slot.bytes));
-                    }
+                if slot.seq != *seq || !matches(key) {
+                    continue;
+                }
+                let freq = slot.freq.load(Ordering::Relaxed);
+                let evict = freq == 0 && !keep(&slot.value);
+                if !evict {
+                    let aged = if from_small {
+                        0
+                    } else {
+                        freq.saturating_sub(1)
+                    };
+                    slot.freq.store(aged, Ordering::Relaxed);
+                }
+                let key = key.clone();
+                if !evict {
+                    self.requeue_main(key);
+                    continue;
+                }
+                if from_small {
+                    let hash = self.map.hasher().hash_one(&key);
+                    self.ghost
+                        .record(hash, self.config.admit_after.saturating_sub(1));
+                }
+                if let Some(slot) = self.map.remove(&key) {
+                    self.untrack(&slot);
+                    bytes += slot.bytes;
+                    victims.push((key, slot.value, slot.bytes));
                 }
             }
         }
-        None
+        self.compact_queues();
+        victims
     }
 
     /// Entries at least this large skip the small queue from now on, e.g. after the owner's
@@ -423,6 +416,41 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
         let live = |(key, seq): &(K, u64)| map.get(key).is_some_and(|slot| slot.seq == *seq);
         self.small.retain(live);
         self.main.retain(live);
+    }
+
+    fn queue(&self, small: bool) -> &VecDeque<(K, u64)> {
+        if small { &self.small } else { &self.main }
+    }
+
+    /// Pops positions of removed or moved entries off the front of a queue.
+    fn drop_stale_front(&mut self, small: bool) {
+        let queue = if small {
+            &mut self.small
+        } else {
+            &mut self.main
+        };
+        while let Some((key, seq)) = queue.front() {
+            if self.map.get(key).is_some_and(|slot| slot.seq == *seq) {
+                break;
+            }
+            queue.pop_front();
+        }
+    }
+
+    /// Moves an entry to the back of the main queue; its old position goes stale.
+    fn requeue_main(&mut self, key: K) {
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        let Some(slot) = self.map.get_mut(&key) else {
+            return;
+        };
+        if !slot.in_main {
+            slot.in_main = true;
+            self.small_bytes -= slot.bytes;
+            self.main_bytes += slot.bytes;
+        }
+        slot.seq = seq;
+        self.main.push_back((key, seq));
     }
 
     fn untrack(&mut self, slot: &Slot<V>) {

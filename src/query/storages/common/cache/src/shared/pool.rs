@@ -199,12 +199,13 @@ impl PoolStore {
         let mut bytes = 0;
         for step in 0..self.shards.len() {
             let mut shard = self.shards[(start + step) % self.shards.len()].write();
-            while victims.len() < BATCH_ENTRIES && bytes < target {
-                let Some((key, entry, size)) =
-                    shard.pop_evictable_where(|k| k.kind == kind, Entry::is_shared)
-                else {
-                    break;
-                };
+            let taken = shard.evict_where(
+                |k| k.kind == kind,
+                Entry::is_shared,
+                target - bytes,
+                BATCH_ENTRIES - victims.len(),
+            );
+            for (key, entry, size) in taken {
                 bytes += size;
                 victims.push((key, entry));
             }
@@ -224,11 +225,20 @@ impl PoolStore {
             let Some(mut shard) = lock_shard(lock, blocking) else {
                 continue;
             };
+            // A pop gives up after `CHECKS_PER_POP` held entries, rotated to the back; the
+            // shard is done only once as many checks as it has entries came back empty.
+            let mut checked = 0;
             while victims.len() < BATCH_ENTRIES && bytes < target {
                 let Some((key, entry, size)) =
                     shard.pop_evictable(Entry::is_shared, CHECKS_PER_POP)
                 else {
-                    break;
+                    checked += CHECKS_PER_POP;
+                    if checked >= shard.len() {
+                        break;
+                    }
+                    // Let readers in between two scans of a shard full of held entries.
+                    RwLockWriteGuard::bump(&mut shard);
+                    continue;
                 };
                 bytes += size;
                 victims.push((key, entry));
@@ -292,6 +302,31 @@ mod tests {
         store.set_cap(640_000);
         store.insert(KeyRef::new(snapshot, "now small"), entry(1000), None);
         assert_eq!(small_bytes(&store), 1100);
+    }
+
+    /// Held entries at the front of a shard do not end its eviction early.
+    #[test]
+    fn test_eviction_scans_past_held_entries() {
+        let snapshot = CacheKind::of::<table::Snapshot>();
+        let store = PoolStore::new(Pool::Meta, 100_000, 1);
+        let held: Vec<ErasedValue> = (0..CHECKS_PER_POP * 3)
+            .map(|i| {
+                let value: ErasedValue = Arc::new(());
+                let e = Entry {
+                    value: value.clone(),
+                    bytes: 10,
+                };
+                store.insert(KeyRef::new(snapshot, &i.to_string()), e, None);
+                value
+            })
+            .collect();
+        store.insert(KeyRef::new(snapshot, "free"), entry(10), None);
+        for blocking in [true, false] {
+            let victims = store.evict_batch(0, usize::MAX, blocking);
+            assert_eq!(victims.len(), usize::from(blocking), "blocking {blocking}");
+            assert!(victims.iter().all(|(key, _)| key.key == "free"));
+        }
+        assert_eq!(store.structure().entries, held.len());
     }
 
     /// Only entries of the kind leave, coldest first; others keep their place.
