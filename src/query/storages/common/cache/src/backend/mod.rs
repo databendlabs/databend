@@ -19,10 +19,12 @@ mod kind_store;
 
 pub use kind_store::InsertMode;
 pub use kind_store::InsertOutcome;
+pub use kind_store::KindEvents;
 pub use kind_store::KindLimit;
 pub use kind_store::KindStats;
 pub use kind_store::KindStore;
 pub use kind_store::PoolStats;
+pub use kind_store::ReclaimStats;
 pub use kind_store::RejectReason;
 pub use kind_store::ShrinkReport;
 pub use kind_store::Unit;

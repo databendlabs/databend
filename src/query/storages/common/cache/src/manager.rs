@@ -34,7 +34,9 @@ use crate::KindLimit;
 use crate::MemCache;
 use crate::Pool;
 use crate::Unit;
+use crate::backend::KindEvents;
 use crate::backend::KindStore;
+use crate::backend::ReclaimStats;
 use crate::backend::ShrinkReport;
 use crate::disk::disk_tiers;
 use crate::legacy::LegacyKinds;
@@ -61,6 +63,8 @@ pub struct CacheRow {
     pub access: u64,
     pub hit: u64,
     pub miss: u64,
+    /// Evictions and refusals of a kind's memory tier, by a backend that counts them.
+    pub events: Option<KindEvents>,
 }
 
 /// The process-wide caches: the backend chosen by `cache.shared_memory_enabled` and the disk
@@ -150,6 +154,11 @@ impl CacheManager {
         self.store.shrink_for_pressure(relieved)
     }
 
+    /// Totals of the reclaims under memory pressure; `None` with the legacy backend.
+    pub fn reclaim_stats(&self) -> Option<ReclaimStats> {
+        self.store.reclaim_stats()
+    }
+
     /// Rows for `system.caches`: every kind, its disk tier while disk tiers are allowed, then
     /// each pool. Kinds turned off are listed with `enabled: false`.
     pub fn rows(&self) -> Vec<CacheRow> {
@@ -169,6 +178,7 @@ impl CacheManager {
                 access: 0,
                 hit: 0,
                 miss: 0,
+                events: stats.events,
             }));
             let disk_allowed = self.disk_allowed.load(Ordering::Relaxed);
             if let Some(disk) = self.disks.get(&kind).filter(|_| disk_allowed) {
@@ -186,6 +196,7 @@ impl CacheManager {
                     access: 0,
                     hit: 0,
                     miss: 0,
+                    events: None,
                 }));
             }
         }
@@ -203,6 +214,7 @@ impl CacheManager {
                 access: 0,
                 hit: 0,
                 miss: 0,
+                events: None,
             });
         }
         rows

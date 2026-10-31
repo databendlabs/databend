@@ -317,6 +317,7 @@ impl KindStore for LegacyStore {
             in_cache: state.usage.in_cache(),
             capacity,
             unit,
+            events: None,
         }
     }
 

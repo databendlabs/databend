@@ -100,6 +100,32 @@ pub struct KindStats {
     /// `None`: bounded only by the pool. `Some(0)`: disabled.
     pub capacity: Option<usize>,
     pub unit: Unit,
+    /// Why entries left or were refused; `None` for a backend that does not count them.
+    pub events: Option<KindEvents>,
+}
+
+/// Counts, since the store was created, of entries of one kind leaving or not entering it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KindEvents {
+    /// Evicted for room in the pool, or because a pool cap or kind limit was lowered.
+    pub evicted_for_capacity: u64,
+    pub evicted_for_capacity_bytes: u64,
+    /// Reclaimed for queries under memory pressure.
+    pub evicted_for_pressure: u64,
+    pub evicted_for_pressure_bytes: u64,
+    /// Loaded values not cached yet: the key had not been read often enough.
+    pub admission_deferred: u64,
+    pub rejected_oversized: u64,
+    pub rejected_kind_limit: u64,
+    pub rejected_pool_full_pinned: u64,
+}
+
+/// Totals of the reclaims under memory pressure, since the store was created.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ReclaimStats {
+    pub count: u64,
+    pub freed_bytes: u64,
+    pub millis: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -145,6 +171,11 @@ pub trait KindStore: Send + Sync {
     /// is left to evict; the shared backend goes Data → Index → Meta, the legacy one frees
     /// nothing. Must not block on locks held by the calling thread.
     fn shrink_for_pressure(&self, relieved: &dyn Fn() -> bool) -> ShrinkReport;
+
+    /// `None` for a backend that never reclaims.
+    fn reclaim_stats(&self) -> Option<ReclaimStats> {
+        None
+    }
 }
 
 #[cfg(test)]
