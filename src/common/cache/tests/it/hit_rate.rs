@@ -66,7 +66,7 @@ impl Policy for Fifo {
         if self.0.get(&key).is_some() {
             return true;
         }
-        self.0.admit(key, (), 1);
+        self.0.insert(key, (), 1);
         while self.0.bytes() > CAPACITY {
             if self.0.pop_evictable(|_| false, usize::MAX).is_none() {
                 break;

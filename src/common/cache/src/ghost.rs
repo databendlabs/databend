@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 
 use hashbrown::HashMap;
 
-/// Bounded FIFO of key hashes with access counts. Remembers keys that are not cached.
+/// Bounded FIFO of the hashes of keys evicted from probation, which are no longer cached.
 ///
 /// Bounded by records and by the bytes of the entries they stand for, as libCacheSim and foyer
 /// size their ghosts in bytes: a ghost of large entries remembers about as much data as the
@@ -28,7 +28,7 @@ use hashbrown::HashMap;
 /// recorded with, so an old position never removes a newer record of the same hash.
 pub(crate) struct Ghost {
     /// Hash to its record.
-    counts: HashMap<u64, Record>,
+    records: HashMap<u64, Record>,
     order: VecDeque<(u64, u64)>,
     capacity: usize,
     byte_capacity: usize,
@@ -38,7 +38,6 @@ pub(crate) struct Ghost {
 }
 
 struct Record {
-    count: u8,
     bytes: usize,
     /// Sequence number of the live position.
     seq: u64,
@@ -47,7 +46,7 @@ struct Record {
 impl Ghost {
     pub(crate) fn new(capacity: usize, byte_capacity: usize) -> Self {
         Ghost {
-            counts: HashMap::new(),
+            records: HashMap::new(),
             order: VecDeque::new(),
             capacity,
             byte_capacity,
@@ -56,28 +55,30 @@ impl Ghost {
         }
     }
 
-    pub(crate) fn take(&mut self, hash: u64) -> Option<u8> {
-        let record = self.counts.remove(&hash)?;
+    /// True if `hash` was recorded, and forgets it.
+    pub(crate) fn take(&mut self, hash: u64) -> bool {
+        let Some(record) = self.records.remove(&hash) else {
+            return false;
+        };
         self.bytes -= record.bytes;
-        Some(record.count)
+        true
     }
 
-    /// Records an access to an entry of `bytes` that is not cached.
-    pub(crate) fn record(&mut self, hash: u64, count: u8, bytes: usize) {
+    /// Remembers an entry of `bytes` that is no longer cached.
+    pub(crate) fn record(&mut self, hash: u64, bytes: usize) {
         if self.capacity == 0 || self.byte_capacity == 0 {
             return;
         }
-        match self.counts.get_mut(&hash) {
-            // Still recorded: the count and size change, the position stays.
+        match self.records.get_mut(&hash) {
+            // Still recorded: the size changes, the position stays.
             Some(record) => {
                 self.bytes = self.bytes - record.bytes + bytes;
-                record.count = count;
                 record.bytes = bytes;
             }
             None => {
                 let seq = self.next_seq;
                 self.next_seq += 1;
-                self.counts.insert(hash, Record { count, bytes, seq });
+                self.records.insert(hash, Record { bytes, seq });
                 self.bytes += bytes;
                 self.order.push_back((hash, seq));
             }
@@ -89,7 +90,7 @@ impl Ghost {
     pub(crate) fn set_byte_capacity(&mut self, byte_capacity: usize) {
         self.byte_capacity = byte_capacity;
         if byte_capacity == 0 {
-            self.counts.clear();
+            self.records.clear();
             self.order.clear();
             self.bytes = 0;
         }
@@ -101,8 +102,8 @@ impl Ghost {
     }
 
     fn over(&self) -> bool {
-        self.counts.len() > self.capacity
-            || (self.bytes > self.byte_capacity && self.counts.len() > 1)
+        self.records.len() > self.capacity
+            || (self.bytes > self.byte_capacity && self.records.len() > 1)
     }
 
     fn trim(&mut self) {
@@ -115,18 +116,18 @@ impl Ghost {
         // Positions of taken records are dropped in bulk, so the queue stays within twice the
         // capacity.
         if self.order.len() > 2 * self.capacity {
-            let counts = &self.counts;
+            let records = &self.records;
             self.order
-                .retain(|(hash, seq)| counts.get(hash).is_some_and(|r| r.seq == *seq));
+                .retain(|(hash, seq)| records.get(hash).is_some_and(|r| r.seq == *seq));
         }
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.counts.len()
+        self.records.len()
     }
 
     fn remove_if_live(&mut self, hash: u64, seq: u64) {
-        if self.counts.get(&hash).is_some_and(|r| r.seq == seq) {
+        if self.records.get(&hash).is_some_and(|r| r.seq == seq) {
             self.take(hash);
         }
     }
@@ -142,41 +143,42 @@ mod tests {
         const N: u64 = 16_384;
         let mut ghost = Ghost::new(N as usize, usize::MAX);
         for hash in 0..N {
-            ghost.record(hash, 1, 1);
+            ghost.record(hash, 1);
         }
         for hash in 0..N {
-            assert_eq!(ghost.take(hash), Some(1));
+            assert!(ghost.take(hash));
         }
         for hash in 0..N {
-            ghost.record(hash, 2, 1);
+            ghost.record(hash, 2);
         }
         assert_eq!(ghost.len(), N as usize);
-        assert!((0..N).all(|hash| ghost.take(hash) == Some(2)));
+        assert_eq!(ghost.bytes(), 2 * N as usize);
+        assert!((0..N).all(|hash| ghost.take(hash)));
     }
 
     /// A key seen again goes to the back of the window: its first position evicts nothing.
     #[test]
     fn test_retaken_record_moves_to_the_back() {
         let mut ghost = Ghost::new(2, usize::MAX);
-        ghost.record(1, 1, 1);
-        ghost.record(2, 1, 1);
-        assert_eq!(ghost.take(1), Some(1));
-        ghost.record(1, 2, 1);
-        ghost.record(3, 1, 1);
+        ghost.record(1, 1);
+        ghost.record(2, 1);
+        assert!(ghost.take(1));
+        ghost.record(1, 1);
+        ghost.record(3, 1);
         // 2 is now the oldest record, not 1.
-        assert_eq!(ghost.take(2), None);
-        assert_eq!(ghost.take(1), Some(2));
-        assert_eq!(ghost.take(3), Some(1));
+        assert!(!ghost.take(2));
+        assert!(ghost.take(1));
+        assert!(ghost.take(3));
     }
 
     /// The queue does not grow with records that are taken and recorded again.
     #[test]
     fn test_queue_stays_bounded() {
         let mut ghost = Ghost::new(8, usize::MAX);
-        for round in 0..=255u8 {
+        for _ in 0..256 {
             for hash in 0..8 {
                 ghost.take(hash);
-                ghost.record(hash, round, 1);
+                ghost.record(hash, 1);
             }
             assert!(ghost.order.len() <= 16);
         }
@@ -188,11 +190,11 @@ mod tests {
     fn test_byte_capacity_drops_oldest() {
         let mut ghost = Ghost::new(100, 250);
         for hash in 0..5 {
-            ghost.record(hash, 1, 100);
+            ghost.record(hash, 100);
         }
         assert_eq!((ghost.len(), ghost.bytes()), (2, 200));
-        assert!(ghost.take(2).is_none());
-        assert_eq!(ghost.take(3), Some(1));
+        assert!(!ghost.take(2));
+        assert!(ghost.take(3));
         assert_eq!(ghost.bytes(), 100);
     }
 
@@ -200,13 +202,13 @@ mod tests {
     #[test]
     fn test_newest_record_is_kept_even_when_large() {
         let mut ghost = Ghost::new(100, 250);
-        ghost.record(1, 1, 10);
-        ghost.record(2, 1, 1000);
+        ghost.record(1, 10);
+        ghost.record(2, 1000);
         assert_eq!((ghost.len(), ghost.bytes()), (1, 1000));
-        assert_eq!(ghost.take(2), Some(1));
-        ghost.record(2, 1, 1000);
-        ghost.record(3, 1, 10);
-        assert!(ghost.take(2).is_none());
+        assert!(ghost.take(2));
+        ghost.record(2, 1000);
+        ghost.record(3, 10);
+        assert!(!ghost.take(2));
         assert_eq!(ghost.bytes(), 10);
     }
 
@@ -214,18 +216,18 @@ mod tests {
     #[test]
     fn test_bytes_follow_updates_and_bound_changes() {
         let mut ghost = Ghost::new(100, usize::MAX);
-        ghost.record(1, 1, 10);
-        ghost.record(1, 2, 30);
+        ghost.record(1, 10);
+        ghost.record(1, 30);
         assert_eq!((ghost.len(), ghost.bytes()), (1, 30));
         for hash in 2..10 {
-            ghost.record(hash, 1, 10);
+            ghost.record(hash, 10);
         }
         ghost.set_byte_capacity(50);
         assert_eq!((ghost.len(), ghost.bytes()), (5, 50));
-        assert!(ghost.take(1).is_none());
+        assert!(!ghost.take(1));
         ghost.set_byte_capacity(0);
         assert_eq!((ghost.len(), ghost.bytes()), (0, 0));
-        ghost.record(1, 1, 1);
+        ghost.record(1, 1);
         assert_eq!(ghost.len(), 0);
     }
 
@@ -242,9 +244,9 @@ mod tests {
             if x.is_multiple_of(3) {
                 ghost.take(hash);
             } else {
-                ghost.record(hash, 1, (x >> 20) as usize % 100 + 1);
+                ghost.record(hash, (x >> 20) as usize % 100 + 1);
             }
-            let sum: usize = ghost.counts.values().map(|r| r.bytes).sum();
+            let sum: usize = ghost.records.values().map(|r| r.bytes).sum();
             assert_eq!(ghost.bytes(), sum);
             assert!(ghost.len() <= 64);
             assert!(ghost.bytes() <= 2000 || ghost.len() == 1);

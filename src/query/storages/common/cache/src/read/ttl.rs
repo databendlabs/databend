@@ -84,9 +84,9 @@ where
                             start.elapsed().as_millis() as u64,
                             cache.name(),
                         );
-                        // A refresh replaces the entry, so it bypasses admission. If the
-                        // cache still rejects it, drop the stale entry: it is marked refreshing
-                        // and would otherwise be served forever.
+                        // A refresh replaces the entry, so it is a `put`, also on a read-only
+                        // view. If the cache rejects it, drop the stale entry: it is marked
+                        // refreshing and would otherwise be served forever.
                         if cache.is_enabled() && !cache.put(&key, value).is_charged() {
                             cache.evict(&key);
                         }
@@ -113,8 +113,8 @@ where
         self.cache.evict(key)
     }
 
-    /// With `replace`, the loaded value supersedes a cached one: it bypasses admission, and if
-    /// the cache still rejects it the old value is dropped, so it is not served afterwards.
+    /// With `replace`, the loaded value supersedes a cached one: it is a `put`, and if the cache
+    /// rejects it the old value is dropped, so it is not served afterwards.
     async fn load(&self, key: &str, replace: bool) -> Result<CacheRef<R::Item>> {
         let start = Instant::now();
         let value = self.reader.read(&key.to_string()).await?;

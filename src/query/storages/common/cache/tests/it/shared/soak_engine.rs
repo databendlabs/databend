@@ -17,7 +17,7 @@
 //! soak in `tests/soak.rs` both include it.
 //!
 //! Worker threads mix every operation on kinds of all three pools: puts, fills, lookups, loads
-//! through a reader (with the data pool's admission), evictions, held values, reclaims, and
+//! through a reader, evictions, held values, reclaims, and
 //! limit changes on one kind. A monitor checks, the whole time, that no pool and no kind with
 //! a fixed limit is ever charged more than its budget, held values included. Between phases
 //! the workers drop what they hold and stop; the accounting must then be exact, the internal

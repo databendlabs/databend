@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_cache::Admission;
 use databend_common_cache::S3Fifo;
 use databend_common_cache::S3FifoConfig;
 
-fn fifo(admit_after: u8) -> S3Fifo<u32, u32> {
-    S3Fifo::new(S3FifoConfig {
-        admit_after,
-        ..Default::default()
-    })
+fn fifo() -> S3Fifo<u32, u32> {
+    S3Fifo::new(S3FifoConfig::default())
 }
 
 fn evict_to(cache: &mut S3Fifo<u32, u32>, cap: usize) {
@@ -31,33 +27,18 @@ fn evict_to(cache: &mut S3Fifo<u32, u32>, cap: usize) {
     }
 }
 
-fn admitted<V>(a: Admission<V>) -> bool {
-    matches!(a, Admission::Admitted { .. })
-}
-
 #[test]
-fn test_admit_first_access() {
-    let mut c = fifo(1);
-    assert!(admitted(c.admit(1, 10, 1)));
+fn test_cached_on_first_insert() {
+    let mut c = fifo();
+    assert_eq!(c.insert(1, 10, 1), None);
     assert_eq!(c.get(&1), Some(&10));
     assert_eq!(c.len(), 1);
     assert_eq!(c.bytes(), 1);
 }
 
 #[test]
-fn test_admit_after_second_access() {
-    let mut c = fifo(2);
-    assert!(matches!(c.admit(1, 10, 1), Admission::Deferred(10)));
-    assert!(c.get(&1).is_none());
-    assert_eq!(c.ghost_len(), 1);
-    assert!(admitted(c.admit(1, 10, 1)));
-    assert_eq!(c.get(&1), Some(&10));
-    assert_eq!(c.ghost_len(), 0);
-}
-
-#[test]
-fn test_insert_bypasses_admission_and_replaces() {
-    let mut c = fifo(2);
+fn test_insert_replaces() {
+    let mut c = fifo();
     assert_eq!(c.insert(1, 10, 4), None);
     assert_eq!(c.get(&1), Some(&10));
     assert_eq!(c.insert(1, 11, 6), Some(10));
@@ -67,9 +48,9 @@ fn test_insert_bypasses_admission_and_replaces() {
 
 #[test]
 fn test_hot_keys_survive_scan() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for k in 0..10 {
-        c.admit(k, k, 1);
+        c.insert(k, k, 1);
     }
     for _ in 0..3 {
         for k in 0..10 {
@@ -77,7 +58,7 @@ fn test_hot_keys_survive_scan() {
         }
     }
     for k in 1000..2000 {
-        c.admit(k, k, 1);
+        c.insert(k, k, 1);
         evict_to(&mut c, 20);
     }
     for k in 0..10 {
@@ -87,14 +68,14 @@ fn test_hot_keys_survive_scan() {
 
 #[test]
 fn test_ghost_hit_goes_to_main() {
-    let mut c = fifo(1);
-    c.admit(1, 1, 1);
-    c.admit(2, 2, 1);
+    let mut c = fifo();
+    c.insert(1, 1, 1);
+    c.insert(2, 2, 1);
     let (k, _, _) = c.pop_evictable(|_| false, usize::MAX).unwrap();
     assert_eq!(k, 1);
-    c.admit(1, 1, 1);
+    c.insert(1, 1, 1);
     for k in 100..200 {
-        c.admit(k, k, 1);
+        c.insert(k, k, 1);
         evict_to(&mut c, 3);
     }
     assert!(c.contains(&1));
@@ -102,9 +83,9 @@ fn test_ghost_hit_goes_to_main() {
 
 #[test]
 fn test_pop_evictable_rotates_kept_entries() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for k in 0..4 {
-        c.admit(k, k, 1);
+        c.insert(k, k, 1);
     }
     assert!(c.pop_evictable(|_| true, 16).is_none());
     assert_eq!(c.len(), 4);
@@ -116,9 +97,9 @@ fn test_pop_evictable_rotates_kept_entries() {
 
 #[test]
 fn test_pop_evictable_respects_max_checks() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for k in 0..100 {
-        c.admit(k, k, 1);
+        c.insert(k, k, 1);
     }
     assert!(c.pop_evictable(|v| *v < 99, 10).is_none());
     assert!(c.pop_evictable(|v| *v < 99, 1000).is_some());
@@ -126,9 +107,9 @@ fn test_pop_evictable_respects_max_checks() {
 
 #[test]
 fn test_removed_keys_are_skipped() {
-    let mut c = fifo(1);
-    c.admit(1, 1, 1);
-    c.admit(2, 2, 1);
+    let mut c = fifo();
+    c.insert(1, 1, 1);
+    c.insert(2, 2, 1);
     assert_eq!(c.remove(&1), Some(1));
     c.insert(1, 11, 1);
     let (k, _, _) = c.pop_evictable(|_| false, usize::MAX).unwrap();
@@ -147,9 +128,9 @@ fn test_large_entries_skip_small_queue() {
             ..Default::default()
         });
         for k in 10..20 {
-            c.admit(k, k, 1);
+            c.insert(k, k, 1);
         }
-        c.admit(1, 1, 100);
+        c.insert(1, 1, 100);
         c.pop_evictable(|_| false, usize::MAX).unwrap().0
     };
     assert_eq!(fill(100), 1);
@@ -158,9 +139,9 @@ fn test_large_entries_skip_small_queue() {
 
 #[test]
 fn test_remove_if() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for k in 0..10 {
-        c.admit(k, k, 2);
+        c.insert(k, k, 2);
     }
     let removed = c.remove_if(|k, _| k % 2 == 0);
     assert_eq!(removed.len(), 5);
@@ -171,7 +152,7 @@ fn test_remove_if() {
 /// Removals without capacity-driven eviction do not grow the slab without bound.
 #[test]
 fn test_removals_keep_slab_bounded() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for round in 0..100u32 {
         for k in 0..100 {
             c.insert(round * 100 + k, k, 1);
@@ -201,7 +182,7 @@ fn test_removals_keep_slab_bounded() {
 /// within a small check budget when nothing is kept.
 #[test]
 fn test_aging_does_not_exhaust_checks() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for k in 0..100 {
         c.insert(k, k, 1);
     }
@@ -230,7 +211,7 @@ fn evict_keys(
 /// Victims among matching keys come in eviction order; other entries are left alone.
 #[test]
 fn test_evict_where_only_touches_matching_entries() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for k in 0..10 {
         c.insert(k, k, 10);
     }
@@ -252,7 +233,7 @@ fn test_evict_where_only_touches_matching_entries() {
 
 #[test]
 fn test_evict_where_stops_at_target() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for k in 0..10 {
         c.insert(k, k, 10);
     }
@@ -264,7 +245,7 @@ fn test_evict_where_stops_at_target() {
 
 #[test]
 fn test_evict_where_skips_kept_entries() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for k in 0..4 {
         c.insert(k, k, 10);
     }
@@ -281,7 +262,7 @@ fn test_evict_where_skips_kept_entries() {
 #[test]
 fn test_evict_where_rotates_like_pop_evictable() {
     let new = || {
-        let mut c = fifo(1);
+        let mut c = fifo();
         for k in 0..6 {
             c.insert(k, k, 10);
             c.get(&k);
@@ -306,7 +287,7 @@ fn test_evict_where_rotates_like_pop_evictable() {
 /// Repeated scoped evictions reuse slots; the slab stays bounded.
 #[test]
 fn test_evict_where_keeps_slab_bounded() {
-    let mut c = fifo(1);
+    let mut c = fifo();
     for round in 0..20_000u32 {
         c.insert(round, round, 1);
         c.get(&round);

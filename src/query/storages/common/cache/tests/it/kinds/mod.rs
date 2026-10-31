@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Every registered kind with a real value of its type, through the whole chain of both
-//! backends: handle, reader, admission, eviction, disk tier, and concurrent use.
+//! backends: handle, reader, caching on first read, eviction, disk tier, and concurrent use.
 
 mod case;
 mod chain;

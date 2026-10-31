@@ -29,8 +29,6 @@ const MAX_FREQ: u8 = 3;
 pub struct S3FifoConfig {
     /// Share of bytes kept in the small (probation) queue.
     pub small_ratio: f64,
-    /// A key is cached on its `admit_after`-th admission attempt; earlier attempts only touch the ghost.
-    pub admit_after: u8,
     /// Bounds of the ghost: records, and bytes of the entries they stand for.
     pub ghost_entries: usize,
     pub ghost_bytes: usize,
@@ -42,23 +40,11 @@ impl Default for S3FifoConfig {
     fn default() -> Self {
         S3FifoConfig {
             small_ratio: 0.1,
-            admit_after: 1,
             ghost_entries: 65536,
             ghost_bytes: usize::MAX,
             large_entry_bytes: usize::MAX,
         }
     }
-}
-
-pub enum Admission<V> {
-    Admitted { replaced: Option<V> },
-    Deferred(V),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Placement {
-    Small,
-    Main,
 }
 
 const NIL: usize = usize::MAX;
@@ -155,56 +141,10 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
         self.find(key).is_some()
     }
 
-    /// Read-path insertion, subject to the `admit_after` threshold.
-    pub fn admit(&mut self, key: K, value: V, bytes: usize) -> Admission<V> {
-        if self.contains(&key) {
-            return Admission::Admitted {
-                replaced: self.insert(key, value, bytes),
-            };
-        }
-        match self.admission(&key, bytes) {
-            Some(placement) => Admission::Admitted {
-                replaced: self.insert_at(key, value, bytes, placement),
-            },
-            None => Admission::Deferred(value),
-        }
-    }
-
-    /// Admission decision for a key that is not cached. `None` means deferred: the access is
-    /// only recorded in the ghost. Pair with `insert_at` when eviction must happen in between.
-    pub fn admission(&mut self, key: &K, bytes: usize) -> Option<Placement> {
-        let hash = self.hasher.hash_one(key);
-        match self.ghost.take(hash) {
-            None if self.config.admit_after <= 1 => Some(Placement::Small),
-            None => {
-                self.ghost.record(hash, 1, bytes);
-                None
-            }
-            Some(seen) if seen.saturating_add(1) >= self.config.admit_after => {
-                Some(Placement::Main)
-            }
-            Some(seen) => {
-                self.ghost.record(hash, seen + 1, bytes);
-                None
-            }
-        }
-    }
-
-    /// Write-path insertion, bypassing admission. Returns the replaced value.
+    /// Caches `value` under `key`, on its first insertion: on probation in the small queue, or
+    /// in the main queue when the ghost remembers the key (evicted from probation recently) or
+    /// the entry is large. An existing entry keeps its position. Returns the replaced value.
     pub fn insert(&mut self, key: K, value: V, bytes: usize) -> Option<V> {
-        let placement = if self.contains(&key) {
-            Placement::Small
-        } else {
-            match self.ghost.take(self.hasher.hash_one(&key)) {
-                Some(_) => Placement::Main,
-                None => Placement::Small,
-            }
-        };
-        self.insert_at(key, value, bytes, placement)
-    }
-
-    /// Inserts with a given placement; an existing entry keeps its position.
-    pub fn insert_at(&mut self, key: K, value: V, bytes: usize, placement: Placement) -> Option<V> {
         if let Some(i) = self.find(&key) {
             let node = self.slots[i].as_mut()?;
             let list = match node.queue {
@@ -215,8 +155,8 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
             node.bytes = bytes;
             return Some(std::mem::replace(&mut node.value, value));
         }
-        let in_main = placement == Placement::Main || bytes >= self.config.large_entry_bytes;
         let hash = self.hasher.hash_one(&key);
+        let in_main = self.ghost.take(hash) || bytes >= self.config.large_entry_bytes;
         let i = self.alloc(Node {
             key,
             value,
@@ -274,11 +214,7 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
                     self.move_to_main(i);
                     continue;
                 }
-                self.ghost.record(
-                    node.hash,
-                    self.config.admit_after.saturating_sub(1),
-                    node.bytes,
-                );
+                self.ghost.record(node.hash, node.bytes);
             } else if freq > 0 {
                 node.freq.store(freq - 1, Ordering::Relaxed);
                 self.move_to_main(i);
@@ -342,11 +278,7 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
                     self.move_to_main(i);
                 } else {
                     if from_small {
-                        self.ghost.record(
-                            node.hash,
-                            self.config.admit_after.saturating_sub(1),
-                            node.bytes,
-                        );
+                        self.ghost.record(node.hash, node.bytes);
                     }
                     let node = self.take(i);
                     bytes += node.bytes;
@@ -690,8 +622,7 @@ mod tests {
             if ghost {
                 let hash = self.hasher.hash_one(key);
                 let bytes = self.entries[&key].bytes;
-                self.ghost
-                    .record(hash, self.config.admit_after.saturating_sub(1), bytes);
+                self.ghost.record(hash, bytes);
             }
             self.unqueue(key);
             let e = self.entries.remove(&key).unwrap();
@@ -712,41 +643,13 @@ mod tests {
             Some(e.value)
         }
 
-        fn admission(&mut self, key: u32, bytes: usize) -> Option<Placement> {
-            let hash = self.hasher.hash_one(key);
-            let admit_after = self.config.admit_after;
-            match self.ghost.take(hash) {
-                None if admit_after <= 1 => Some(Placement::Small),
-                None => {
-                    self.ghost.record(hash, 1, bytes);
-                    None
-                }
-                Some(seen) if seen.saturating_add(1) >= admit_after => Some(Placement::Main),
-                Some(seen) => {
-                    self.ghost.record(hash, seen + 1, bytes);
-                    None
-                }
-            }
-        }
-
         fn insert(&mut self, key: u32, value: u32, bytes: usize) -> Option<u32> {
-            let placement = if self.entries.contains_key(&key) {
-                Placement::Small
-            } else {
-                match self.ghost.take(self.hasher.hash_one(key)) {
-                    Some(_) => Placement::Main,
-                    None => Placement::Small,
-                }
-            };
-            self.insert_at(key, value, bytes, placement)
-        }
-
-        fn insert_at(&mut self, key: u32, value: u32, bytes: usize, p: Placement) -> Option<u32> {
             if let Some(e) = self.entries.get_mut(&key) {
                 e.bytes = bytes;
                 return Some(std::mem::replace(&mut e.value, value));
             }
-            let main = p == Placement::Main || bytes >= self.config.large_entry_bytes;
+            let remembered = self.ghost.take(self.hasher.hash_one(key));
+            let main = remembered || bytes >= self.config.large_entry_bytes;
             self.entries.insert(key, ModelEntry {
                 value,
                 bytes,
@@ -755,14 +658,6 @@ mod tests {
             });
             self.queue(main).push_back(key);
             None
-        }
-
-        fn admit(&mut self, key: u32, value: u32, bytes: usize) -> Option<Option<u32>> {
-            if self.entries.contains_key(&key) {
-                return Some(self.insert(key, value, bytes));
-            }
-            let placement = self.admission(key, bytes)?;
-            Some(self.insert_at(key, value, bytes, placement))
         }
 
         fn remove(&mut self, key: u32) -> Option<u32> {
@@ -882,18 +777,11 @@ mod tests {
             let at = format!("seed {seed} op {op}");
             match rng.gen_range(0..100) {
                 0..25 => assert_eq!(c.get(&key).copied(), m.get(key), "{at} get"),
-                25..40 => assert_eq!(
+                25..55 => assert_eq!(
                     c.insert(key, value, bytes),
                     m.insert(key, value, bytes),
                     "{at} insert"
                 ),
-                40..55 => {
-                    let got = match c.admit(key, value, bytes) {
-                        Admission::Admitted { replaced } => Some(replaced),
-                        Admission::Deferred(_) => None,
-                    };
-                    assert_eq!(got, m.admit(key, value, bytes), "{at} admit");
-                }
                 55..62 => assert_eq!(c.remove(&key), m.remove(key), "{at} remove"),
                 62..80 => {
                     let checks = rng.gen_range(1..40);
@@ -954,7 +842,7 @@ mod tests {
     }
 
     #[test]
-    fn test_matches_model_admit_on_first_access() {
+    fn test_matches_model() {
         for seed in 0..8 {
             compare(seed, 3000, 64, S3FifoConfig {
                 ghost_entries: 32,
@@ -964,10 +852,9 @@ mod tests {
     }
 
     #[test]
-    fn test_matches_model_admit_on_second_access() {
+    fn test_matches_model_with_byte_bounded_ghost() {
         for seed in 100..108 {
             compare(seed, 3000, 64, S3FifoConfig {
-                admit_after: 2,
                 ghost_entries: 16,
                 ghost_bytes: 40,
                 large_entry_bytes: 7,
