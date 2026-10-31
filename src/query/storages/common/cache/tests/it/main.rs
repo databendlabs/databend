@@ -20,6 +20,7 @@ mod kinds;
 mod legacy;
 mod manager;
 mod mem_bytes_accuracy;
+mod metrics;
 mod registry;
 mod shared;
 mod ttl;

@@ -15,8 +15,13 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::time::Instant;
 
 use databend_common_exception::Result;
+use databend_common_metrics::cache::metrics_inc_cache_admission_deferred_count;
+use databend_common_metrics::cache::metrics_inc_cache_eviction;
+use databend_common_metrics::cache::metrics_inc_cache_insert_rejected_count;
+use databend_common_metrics::cache::metrics_inc_cache_memory_reclaim;
 
 use super::pool::PoolStore;
 use super::pool::Removed;
@@ -39,6 +44,34 @@ use crate::handle::cache_ref::Reservation;
 use crate::handle::cache_ref::Usage;
 
 const UNLIMITED: usize = usize::MAX;
+
+/// Why entries left the cache, as reported in the `cache_eviction_*` metrics.
+#[derive(Clone, Copy)]
+enum Evicted {
+    /// For room in the pool, or because a pool cap or kind limit was lowered.
+    Capacity,
+    /// Reclaimed for queries under memory pressure.
+    MemoryPressure,
+}
+
+impl Evicted {
+    fn label(self) -> &'static str {
+        match self {
+            Evicted::Capacity => "capacity",
+            Evicted::MemoryPressure => "memory_pressure",
+        }
+    }
+}
+
+fn reject_label(reason: RejectReason) -> Option<&'static str> {
+    match reason {
+        // Every fill of a kind that is off; not worth a metric.
+        RejectReason::Disabled => None,
+        RejectReason::KindLimit => Some("kind_limit"),
+        RejectReason::Oversized => Some("oversized"),
+        RejectReason::PoolFullPinned => Some("pool_full_pinned"),
+    }
+}
 
 struct KindState {
     usage: Arc<Usage>,
@@ -108,11 +141,36 @@ impl SharedStore {
         count
     }
 
+    /// `forget`, counting the entries as evicted for `reason`.
+    fn forget_evicted(&self, pool: &PoolStore, removed: Removed, reason: Evicted) -> usize {
+        if !removed.is_empty() {
+            let mut per_kind = vec![(0u64, 0u64); self.kinds.len()];
+            for (key, entry) in &removed {
+                let (count, bytes) = &mut per_kind[key.kind.index()];
+                *count += 1;
+                *bytes += entry.bytes as u64;
+            }
+            for (kind, (count, bytes)) in CacheKind::all().zip(per_kind) {
+                if count > 0 {
+                    metrics_inc_cache_eviction(kind.name(), reason.label(), count, bytes);
+                }
+            }
+        }
+        self.forget(pool, removed)
+    }
+
+    fn reject(kind: CacheKind, reason: RejectReason) -> InsertOutcome {
+        if let Some(label) = reject_label(reason) {
+            metrics_inc_cache_insert_rejected_count(kind.name(), label);
+        }
+        InsertOutcome::Rejected(reason)
+    }
+
     fn evict_until(&self, pool: &PoolStore, cap: usize) {
         // Read once per round: values dropped by readers lower it between two reads.
         while let Some(excess) = pool.usage().resident().checked_sub(cap).filter(|e| *e > 0) {
             let victims = pool.evict_batch(pool.next_cursor(), excess, true);
-            if self.forget(pool, victims) == 0 {
+            if self.forget_evicted(pool, victims, Evicted::Capacity) == 0 {
                 break;
             }
         }
@@ -151,10 +209,33 @@ impl SharedStore {
             }
             let excess = (pool.usage().resident() + bytes).saturating_sub(pool.cap());
             let victims = pool.evict_batch(shard, excess.max(1), true);
-            if self.forget(pool, victims) == 0 {
+            if self.forget_evicted(pool, victims, Evicted::Capacity) == 0 {
                 return false;
             }
         }
+    }
+
+    /// Evicts pool by pool, batch by batch, until `relieved` or nothing is left to evict.
+    fn reclaim(&self, relieved: &dyn Fn() -> bool) -> ShrinkReport {
+        let mut report = ShrinkReport::default();
+        for pool in Pool::RECLAIM_ORDER {
+            let store = self.pool(pool);
+            loop {
+                let before = store.usage().resident();
+                let victims = store.evict_batch(store.next_cursor(), usize::MAX, false);
+                let evicted = self.forget_evicted(store, victims, Evicted::MemoryPressure);
+                if evicted == 0 {
+                    break;
+                }
+                report.evicted += evicted;
+                report.batches += 1;
+                report.freed += before.saturating_sub(store.usage().resident());
+                if relieved() {
+                    return report;
+                }
+            }
+        }
+        report
     }
 }
 
@@ -180,7 +261,7 @@ impl KindStore for SharedStore {
         mode: InsertMode,
     ) -> InsertOutcome {
         if let Err(reason) = self.check_admissible(kind, bytes) {
-            return InsertOutcome::Rejected(reason);
+            return Self::reject(kind, reason);
         }
         let pool = self.pool(kind.pool());
         let key = KeyRef::new(kind, key);
@@ -188,7 +269,10 @@ impl KindStore for SharedStore {
             InsertMode::Put => None,
             InsertMode::Fill => match pool.admission(key) {
                 Some(placement) => Some(placement),
-                None => return InsertOutcome::Deferred,
+                None => {
+                    metrics_inc_cache_admission_deferred_count(kind.name());
+                    return InsertOutcome::Deferred;
+                }
             },
         };
 
@@ -196,11 +280,11 @@ impl KindStore for SharedStore {
         // together exceed them; a rejected insert gives its reservation back.
         let state = self.kind(kind);
         if !self.reserve_kind(kind, bytes) {
-            return InsertOutcome::Rejected(RejectReason::KindLimit);
+            return Self::reject(kind, RejectReason::KindLimit);
         }
         if !self.reserve_pool(pool, pool.shard_of(key), bytes) {
             state.usage.release(bytes);
-            return InsertOutcome::Rejected(RejectReason::PoolFullPinned);
+            return Self::reject(kind, RejectReason::PoolFullPinned);
         }
         let reservation = Reservation::reserved(pool.usage().clone(), state.usage.clone(), bytes);
         pool.usage().enter(bytes);
@@ -228,7 +312,7 @@ impl KindStore for SharedStore {
             _ => return,
         };
         let removed = pool.remove_kind(kind, excess);
-        self.forget(pool, removed);
+        self.forget_evicted(pool, removed, Evicted::Capacity);
     }
 
     fn set_pool_cap(&self, pool: Pool, bytes: usize) -> Result<()> {
@@ -236,7 +320,7 @@ impl KindStore for SharedStore {
         store.set_cap(bytes);
         if bytes == 0 {
             let removed = store.remove_all();
-            self.forget(store, removed);
+            self.forget_evicted(store, removed, Evicted::Capacity);
         } else {
             self.evict_until(store, bytes);
         }
@@ -269,24 +353,9 @@ impl KindStore for SharedStore {
     }
 
     fn shrink_for_pressure(&self, relieved: &dyn Fn() -> bool) -> ShrinkReport {
-        let mut report = ShrinkReport::default();
-        for pool in Pool::RECLAIM_ORDER {
-            let store = self.pool(pool);
-            loop {
-                let before = store.usage().resident();
-                let victims = store.evict_batch(store.next_cursor(), usize::MAX, false);
-                let evicted = self.forget(store, victims);
-                if evicted == 0 {
-                    break;
-                }
-                report.evicted += evicted;
-                report.batches += 1;
-                report.freed += before.saturating_sub(store.usage().resident());
-                if relieved() {
-                    return report;
-                }
-            }
-        }
+        let started = Instant::now();
+        let report = self.reclaim(relieved);
+        metrics_inc_cache_memory_reclaim(report.freed as u64, started.elapsed().as_millis() as u64);
         report
     }
 }

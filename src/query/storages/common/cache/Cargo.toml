@@ -28,6 +28,7 @@ hex = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
+prometheus-client = { workspace = true }
 rayon = { workspace = true }
 rustix = { workspace = true }
 siphasher = { workspace = true }

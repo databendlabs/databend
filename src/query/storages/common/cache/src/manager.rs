@@ -39,6 +39,7 @@ use crate::backend::ShrinkReport;
 use crate::disk::disk_tiers;
 use crate::legacy::LegacyKinds;
 use crate::legacy::LegacyStore;
+use crate::metrics::CacheMetricsCollector;
 use crate::shared::SharedStore;
 
 const POOL_PREFIX: &str = "pool:";
@@ -80,6 +81,7 @@ impl CacheManager {
     ) -> Result<()> {
         let manager = Self::try_new(config, max_server_memory_usage, tenant_id, ee_mode)?;
         GlobalInstance::set(Arc::new(manager));
+        CacheMetricsCollector::register_global();
         Ok(())
     }
 
