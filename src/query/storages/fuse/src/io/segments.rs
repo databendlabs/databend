@@ -21,7 +21,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -31,7 +30,8 @@ use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use super::read::SegmentReader;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentInfoReader;
 
 #[derive(Clone)]
 pub struct SerializedSegment {
@@ -63,18 +63,13 @@ impl SegmentsIO {
         table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Arc<CompactSegmentInfo>> {
-        let (path, ver) = segment_location;
-        let reader = MetaReaders::segment_info_reader(dal, table_schema);
-
-        // Keep in mind that segment_info_read must need a schema
-        let load_params = LoadParams {
-            location: path,
-            len_hint: None,
-            ver,
-            put_cache,
+        let caches = FuseCaches::instance();
+        let cache = match put_cache {
+            true => caches.segments.clone(),
+            false => caches.segments.read_only(),
         };
-
-        reader.read(&load_params).await
+        let reader = SegmentInfoReader::new(dal, table_schema);
+        cache.get(&reader, segment_location).await
     }
 
     // Read all segments information from s3 in concurrently.

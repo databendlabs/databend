@@ -13,24 +13,24 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_io::MergeIOReadResult;
 use enum_as_inner::EnumAsInner;
 use opendal::Buffer;
 
-type CachedColumnData = Vec<(ColumnId, Arc<ColumnData>)>;
-type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
+type CachedColumnData = Vec<(ColumnId, CacheRef<ColumnData>)>;
+type CachedColumnArray = Vec<(ColumnId, CacheRef<SizedColumnArray>)>;
 
 #[derive(EnumAsInner, Clone)]
 pub enum DataItem<'a> {
     RawData(Buffer),
-    ColumnArray(&'a Arc<SizedColumnArray>),
+    ColumnArray(&'a CacheRef<SizedColumnArray>),
 }
 
 pub struct BlockReadResult {

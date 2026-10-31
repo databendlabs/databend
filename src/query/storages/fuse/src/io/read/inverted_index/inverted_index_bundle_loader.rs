@@ -30,12 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::InvertedIndexFullPayloadCache;
-use databend_storages_common_cache::InvertedIndexLookupCache;
-use databend_storages_common_cache::InvertedIndexMetaCache;
-use databend_storages_common_cache::InvertedIndexPayloadCache;
+use databend_storages_common_cache::MemCache;
 use databend_storages_common_index::BundleExternalFiles;
 use databend_storages_common_index::BundleFileRanges;
 use databend_storages_common_index::FooterDirectory;
@@ -60,6 +55,8 @@ use tantivy::directory::error::DeleteError;
 use tantivy::directory::error::LockError;
 use tantivy::directory::error::OpenReadError;
 use tantivy::directory::error::OpenWriteError;
+
+use crate::io::FuseCaches;
 
 const CACHE_PAGE_SIZE: usize = 64 * 1024;
 const MAX_MERGED_READ_SIZE: usize = 1024 * 1024;
@@ -157,9 +154,9 @@ struct RemoteBundleDirectory {
     location: Arc<str>,
     file_ranges: BundleFileRanges,
     external_files: BundleExternalFiles,
-    lookup_cache: Option<InvertedIndexLookupCache>,
-    payload_cache: Option<InvertedIndexPayloadCache>,
-    full_payload_cache: Option<InvertedIndexFullPayloadCache>,
+    lookup_cache: MemCache<InvertedIndexLookupBytes>,
+    payload_cache: MemCache<InvertedIndexPayloadBytes>,
+    full_payload_cache: MemCache<InvertedIndexPayloadBytes>,
 }
 
 impl RemoteBundleDirectory {
@@ -204,9 +201,9 @@ struct RemoteBundleFileHandle {
     file_len: usize,
     file_id: usize,
     cache_policy: RangeCachePolicy,
-    lookup_cache: Option<InvertedIndexLookupCache>,
-    payload_cache: Option<InvertedIndexPayloadCache>,
-    full_payload_cache: Option<InvertedIndexFullPayloadCache>,
+    lookup_cache: MemCache<InvertedIndexLookupBytes>,
+    payload_cache: MemCache<InvertedIndexPayloadBytes>,
+    full_payload_cache: MemCache<InvertedIndexPayloadBytes>,
     path: PathBuf,
     component_name: String,
 }
@@ -252,9 +249,9 @@ impl RemoteBundleFileHandle {
     }
 
     fn cached_full_payload(&self) -> Option<Bytes> {
-        let cache = self.full_payload_cache.as_ref()?;
+        let cache = &self.full_payload_cache;
         let key = self.full_payload_key();
-        let data = cache.get(&key)?.data.clone();
+        let data = cache.lookup(&key)?.data.clone();
         if data.len() != self.len() {
             cache.evict(&key);
             return None;
@@ -277,8 +274,14 @@ impl RemoteBundleFileHandle {
         let key = self.page_key(kind, page_no);
         let expected_len = self.page_range(page_no)?.len();
         let data = match kind {
-            PageCacheKind::Lookup => self.lookup_cache.get(&key).map(|value| value.data.clone()),
-            PageCacheKind::Payload => self.payload_cache.get(&key).map(|value| value.data.clone()),
+            PageCacheKind::Lookup => self
+                .lookup_cache
+                .lookup(&key)
+                .map(|value| value.data.clone()),
+            PageCacheKind::Payload => self
+                .payload_cache
+                .lookup(&key)
+                .map(|value| value.data.clone()),
         };
         let Some(data) = data else {
             return Ok(None);
@@ -302,12 +305,12 @@ impl RemoteBundleFileHandle {
         match kind {
             PageCacheKind::Lookup => self
                 .lookup_cache
-                .insert(key, InvertedIndexLookupBytes::new(data))
+                .fill(&key, InvertedIndexLookupBytes::new(data))
                 .data
                 .clone(),
             PageCacheKind::Payload => self
                 .payload_cache
-                .insert(key, InvertedIndexPayloadBytes::new(data))
+                .fill(&key, InvertedIndexPayloadBytes::new(data))
                 .data
                 .clone(),
         }
@@ -386,24 +389,22 @@ impl RemoteBundleFileHandle {
         let data = self.fetch_range(0..self.len()).await?;
         // Full components are stored as one entry in a separate memory pool. Oversized files
         // are only pinned for this search; they must not evict hot payload pages.
-        if let Some(cache) = &self.full_payload_cache {
-            if data
-                .len()
-                .saturating_add(std::mem::size_of::<InvertedIndexPayloadBytes>())
-                <= cache.bytes_capacity() as usize
-            {
-                cache.insert(
-                    self.full_payload_key(),
-                    InvertedIndexPayloadBytes::new(data.clone()),
-                );
-            }
+        let cache = &self.full_payload_cache;
+        let bytes = data
+            .len()
+            .saturating_add(std::mem::size_of::<InvertedIndexPayloadBytes>());
+        if cache.is_enabled() && cache.stats().capacity.is_none_or(|cap| bytes <= cap) {
+            cache.fill(
+                &self.full_payload_key(),
+                InvertedIndexPayloadBytes::new(data.clone()),
+            );
         }
         Ok(OwnedBytes::new(Vec::<u8>::from(data)))
     }
 
     async fn read_cached_lookup_file(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
         let key = self.whole_lookup_key();
-        if let Some(value) = self.lookup_cache.get(&key)
+        if let Some(value) = self.lookup_cache.lookup(&key)
             && value.data.len() == self.len()
         {
             return Ok(OwnedBytes::new(value.data.slice(range).to_vec()));
@@ -413,7 +414,7 @@ impl RemoteBundleFileHandle {
         let _guard = fetch_lock.lock().await;
         // Recheck after waiting for another fetch. Only evict invalid entries under the lock,
         // so a stale lock-free lookup cannot remove a component just populated by another reader.
-        if let Some(value) = self.lookup_cache.get(&key) {
+        if let Some(value) = self.lookup_cache.lookup(&key) {
             if value.data.len() == self.len() {
                 return Ok(OwnedBytes::new(value.data.slice(range).to_vec()));
             }
@@ -422,7 +423,7 @@ impl RemoteBundleFileHandle {
 
         let data = self.fetch_range(0..self.len()).await?;
         self.lookup_cache
-            .insert(key, InvertedIndexLookupBytes::new(data.clone()));
+            .fill(&key, InvertedIndexLookupBytes::new(data.clone()));
         Ok(OwnedBytes::new(data.slice(range).to_vec()))
     }
 
@@ -439,7 +440,7 @@ impl RemoteBundleFileHandle {
         }
 
         match self.cache_policy {
-            RangeCachePolicy::LookupWhole if self.lookup_cache.is_some() => {
+            RangeCachePolicy::LookupWhole if self.lookup_cache.is_enabled() => {
                 return self.read_cached_lookup_file(range).await;
             }
             RangeCachePolicy::Pages(kind) => {
@@ -448,14 +449,14 @@ impl RemoteBundleFileHandle {
                         return Ok(OwnedBytes::new(data.slice(range).to_vec()));
                     }
                     if self.is_full_postings_read(&range)
-                        && (self.payload_cache.is_some() || self.full_payload_cache.is_some())
+                        && (self.payload_cache.is_enabled() || self.full_payload_cache.is_enabled())
                     {
                         return self.read_full_postings_file().await;
                     }
                 }
                 let pages_enabled = match kind {
-                    PageCacheKind::Lookup => self.lookup_cache.is_some(),
-                    PageCacheKind::Payload => self.payload_cache.is_some(),
+                    PageCacheKind::Lookup => self.lookup_cache.is_enabled(),
+                    PageCacheKind::Payload => self.payload_cache.is_enabled(),
                 };
                 if pages_enabled {
                     return self.read_pages(kind, range).await;
@@ -662,8 +663,8 @@ pub(crate) struct BundleSearchDirectory {
 }
 
 struct FooterCacheState {
-    meta_cache: Option<InvertedIndexMetaCache>,
-    lookup_cache: Option<InvertedIndexLookupCache>,
+    meta_cache: MemCache<InvertedIndexMeta>,
+    lookup_cache: MemCache<InvertedIndexLookupBytes>,
     meta_key: String,
     location: Arc<str>,
     object_size: u64,
@@ -673,8 +674,8 @@ impl FooterCacheState {
     fn new(
         location: &str,
         object_size: u64,
-        meta_cache: Option<InvertedIndexMetaCache>,
-        lookup_cache: Option<InvertedIndexLookupCache>,
+        meta_cache: MemCache<InvertedIndexMeta>,
+        lookup_cache: MemCache<InvertedIndexLookupBytes>,
     ) -> Self {
         Self {
             meta_cache,
@@ -686,7 +687,7 @@ impl FooterCacheState {
     }
 
     fn load(&self) -> Option<InvertedIndexBundleFooter> {
-        let metadata = self.meta_cache.get(&self.meta_key)?;
+        let metadata = self.meta_cache.lookup(&self.meta_key)?;
         if metadata.object_size != self.object_size {
             self.meta_cache.evict(&self.meta_key);
             return None;
@@ -705,8 +706,8 @@ impl FooterCacheState {
     }
 
     fn store(&self, footer_bytes: Bytes) {
-        self.meta_cache.insert(
-            self.meta_key.clone(),
+        self.meta_cache.fill(
+            &self.meta_key,
             InvertedIndexMeta::new(self.object_size, footer_bytes),
         );
     }
@@ -719,7 +720,7 @@ impl FooterCacheState {
     ) {
         // Only whole Lookup files that are fully covered by this tail are stored. `.idx` / `.pos`
         // / `.store` stay uncached even when the tail already contains them.
-        if self.lookup_cache.is_none() {
+        if !self.lookup_cache.is_enabled() {
             return;
         }
         for (file_id, (path, range)) in footer.file_ranges.files.iter().enumerate() {
@@ -743,8 +744,8 @@ impl FooterCacheState {
                 continue;
             };
             let key = whole_lookup_cache_key(&self.location, component, file_id);
-            self.lookup_cache.insert(
-                key,
+            self.lookup_cache.fill(
+                &key,
                 InvertedIndexLookupBytes::new(Bytes::copy_from_slice(data)),
             );
         }
@@ -758,7 +759,7 @@ impl FooterCacheState {
         if let Some(footer) = self.load() {
             return Ok(footer);
         }
-        if self.meta_cache.is_none() {
+        if !self.meta_cache.is_enabled() {
             return self.fetch_and_store(operator, location).await;
         }
 
@@ -842,13 +843,12 @@ pub(crate) async fn load_bundle_search_directory(
     location: &str,
     object_size: u64,
 ) -> Result<BundleSearchDirectory> {
-    let cache_manager = CacheManager::instance();
-    let lookup_cache = cache_manager.get_inverted_index_lookup_cache();
+    let caches = &FuseCaches::instance().inverted;
     let cache_state = FooterCacheState::new(
         location,
         object_size,
-        cache_manager.get_inverted_index_meta_cache(),
-        lookup_cache.clone(),
+        caches.meta.clone(),
+        caches.lookup.clone(),
     );
     let footer = cache_state.load_or_fetch(operator, location).await?;
 
@@ -857,9 +857,9 @@ pub(crate) async fn load_bundle_search_directory(
         location: Arc::from(location),
         file_ranges: footer.file_ranges.clone(),
         external_files: footer.external_files.clone(),
-        lookup_cache,
-        payload_cache: cache_manager.get_inverted_index_payload_cache(),
-        full_payload_cache: cache_manager.get_inverted_index_full_payload_cache(),
+        lookup_cache: caches.lookup.clone(),
+        payload_cache: caches.payload.clone(),
+        full_payload_cache: caches.full_payload.clone(),
     };
     let search_pin = SearchPinDirectory::new(Arc::new(remote));
     let directory = FooterDirectory::new(search_pin, footer);
@@ -870,8 +870,11 @@ pub(crate) async fn load_bundle_search_directory(
 mod tests {
     use std::collections::BTreeMap;
 
-    use databend_storages_common_cache::HybridCache;
-    use databend_storages_common_cache::InMemoryLruCache;
+    use databend_storages_common_cache::CacheKind;
+    use databend_storages_common_cache::CachedItem;
+    use databend_storages_common_cache::kinds::inverted;
+    use databend_storages_common_cache::legacy::LegacyCapacity;
+    use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_index::BundleOpenSlice;
     use opendal::raw::Access;
     use opendal::raw::Layer;
@@ -948,21 +951,38 @@ mod tests {
         }
     }
 
-    fn payload_cache(capacity: usize) -> Option<InvertedIndexPayloadCache> {
-        HybridCache::new(
-            "payload".to_string(),
-            Some(InMemoryLruCache::with_bytes_capacity(
-                "memory_payload".to_string(),
-                capacity,
-            )),
-            None,
+    /// A cache of its own, so tests do not share process-wide state.
+    fn local_cache<T: CachedItem>(kind: CacheKind, capacity: LegacyCapacity) -> MemCache<T> {
+        MemCache::new(Arc::new(LegacyStore::new([(kind, capacity)])), kind)
+    }
+
+    fn lookup_cache(capacity: usize) -> MemCache<InvertedIndexLookupBytes> {
+        local_cache(
+            CacheKind::of::<inverted::Lookup>(),
+            LegacyCapacity::Bytes(capacity),
         )
     }
 
-    fn full_payload_cache(capacity: usize) -> Option<InvertedIndexFullPayloadCache> {
-        (capacity > 0).then(|| {
-            InMemoryLruCache::with_bytes_capacity("memory_full_payload".to_string(), capacity)
-        })
+    fn no_lookup_cache() -> MemCache<InvertedIndexLookupBytes> {
+        local_cache(
+            CacheKind::of::<inverted::Lookup>(),
+            LegacyCapacity::Disabled,
+        )
+    }
+
+    fn payload_cache(capacity: usize) -> MemCache<InvertedIndexPayloadBytes> {
+        local_cache(
+            CacheKind::of::<inverted::Payload>(),
+            LegacyCapacity::Bytes(capacity),
+        )
+    }
+
+    fn full_payload_cache(capacity: usize) -> MemCache<InvertedIndexPayloadBytes> {
+        let capacity = match capacity {
+            0 => LegacyCapacity::Disabled,
+            n => LegacyCapacity::Bytes(n),
+        };
+        local_cache(CacheKind::of::<inverted::FullPayload>(), capacity)
     }
 
     async fn payload_file_handle_with_full_capacity(
@@ -983,7 +1003,7 @@ mod tests {
                 file_len: data.len(),
                 file_id: 0,
                 cache_policy: RangeCachePolicy::Pages(PageCacheKind::Payload),
-                lookup_cache: None,
+                lookup_cache: no_lookup_cache(),
                 payload_cache: payload_cache(data.len() * 2),
                 full_payload_cache: full_payload_cache(full_capacity),
                 path: PathBuf::from("segment.idx"),
@@ -1019,22 +1039,8 @@ mod tests {
     }
 
     fn cache_state(location: &str, object_size: u64) -> FooterCacheState {
-        let meta_cache = HybridCache::new(
-            "meta".to_string(),
-            Some(InMemoryLruCache::with_items_capacity(
-                "memory_meta".to_string(),
-                10,
-            )),
-            None,
-        );
-        let lookup_cache = HybridCache::new(
-            "lookup".to_string(),
-            Some(InMemoryLruCache::with_bytes_capacity(
-                "memory_lookup".to_string(),
-                4 * MAX_FULL_LOOKUP_CACHE_SIZE,
-            )),
-            None,
-        );
+        let meta_cache = local_cache(CacheKind::of::<inverted::Meta>(), LegacyCapacity::Items(10));
+        let lookup_cache = lookup_cache(4 * MAX_FULL_LOOKUP_CACHE_SIZE);
         FooterCacheState::new(location, object_size, meta_cache, lookup_cache)
     }
 
@@ -1054,14 +1060,7 @@ mod tests {
             if kind == PageCacheKind::Lookup {
                 file.path = PathBuf::from("segment.term");
                 file.component_name = "term".to_owned();
-                file.lookup_cache = HybridCache::new(
-                    "lookup".to_string(),
-                    Some(InMemoryLruCache::with_bytes_capacity(
-                        "memory_lookup".to_string(),
-                        data.len() * 2,
-                    )),
-                    None,
-                );
+                file.lookup_cache = lookup_cache(data.len() * 2);
             }
             for _ in 0..2 {
                 assert_eq!(
@@ -1184,7 +1183,7 @@ mod tests {
                 location: Arc::from(location),
                 file_ranges: footer.file_ranges.clone(),
                 external_files: footer.external_files.clone(),
-                lookup_cache: None,
+                lookup_cache: no_lookup_cache(),
                 payload_cache: payload_cache(16 * 1024 * 1024),
                 full_payload_cache: full_payload_cache(16 * 1024 * 1024),
             },
@@ -1287,13 +1286,8 @@ mod tests {
             let mut remote = fixture.clone();
             remote.payload_cache = payload_cache(16 * 1024 * 1024);
             remote.full_payload_cache = full_payload_cache(16 * 1024 * 1024);
-            let full_cache = remote.full_payload_cache.as_ref().unwrap();
-            let page_cache = remote
-                .payload_cache
-                .as_ref()
-                .unwrap()
-                .in_memory_cache()
-                .unwrap();
+            let full_cache = remote.full_payload_cache.clone();
+            let page_cache = remote.payload_cache.clone();
             ranges.lock().unwrap().clear();
 
             let rows =
@@ -1307,11 +1301,11 @@ mod tests {
                 .collect::<Vec<_>>();
             assert_eq!(rows, expected, "{text}");
             assert_eq!(
-                full_cache.len(),
+                full_cache.stats().items,
                 if with_positions { 2 } else { 1 },
                 "{text}"
             );
-            assert_eq!(page_cache.len(), 0, "{text}");
+            assert_eq!(page_cache.stats().items, 0, "{text}");
 
             let payload_reads = || {
                 let mut reads = ranges
@@ -1347,7 +1341,7 @@ mod tests {
                 (0..4000u32).filter(|row| row % 2 == 0).collect::<Vec<_>>(),
             );
             assert_eq!(payload_reads(), first_reads, "partial query after {text}");
-            assert_eq!(page_cache.len(), 0, "{text}");
+            assert_eq!(page_cache.stats().items, 0, "{text}");
         }
         Ok(())
     }
@@ -1373,10 +1367,7 @@ mod tests {
             assert_eq!(file.read_range(0..data.len()).await?.as_ref(), data);
             if !oversized {
                 assert!(file.cached_full_payload().is_some());
-                file.full_payload_cache
-                    .as_ref()
-                    .unwrap()
-                    .evict(&file.full_payload_key());
+                file.full_payload_cache.evict(&file.full_payload_key());
             }
             assert!(file.cached_full_payload().is_none());
             assert!(file.cached_page(PageCacheKind::Payload, 0)?.is_some());
@@ -1408,17 +1399,10 @@ mod tests {
         file.path = PathBuf::from("segment.term");
         file.component_name = "term".to_owned();
         file.cache_policy = RangeCachePolicy::LookupWhole;
-        file.lookup_cache = HybridCache::new(
-            "lookup".to_string(),
-            Some(InMemoryLruCache::with_bytes_capacity(
-                "memory_lookup".to_string(),
-                data.len() * 2,
-            )),
-            None,
-        );
+        file.lookup_cache = lookup_cache(data.len() * 2);
         let key = file.whole_lookup_key();
-        file.lookup_cache.insert(
-            key.clone(),
+        file.lookup_cache.put(
+            &key,
             InvertedIndexLookupBytes::new(Bytes::from_static(b"invalid length")),
         );
 
@@ -1430,7 +1414,7 @@ mod tests {
         )?;
         assert_eq!(first.as_ref(), &data[first_range]);
         assert_eq!(second.as_ref(), &data[second_range]);
-        assert_eq!(file.lookup_cache.get(&key).unwrap().data, data);
+        assert_eq!(file.lookup_cache.lookup(&key).unwrap().data, data);
         assert_eq!(*ranges.lock().unwrap(), vec![0..data.len() as u64]);
         Ok(())
     }
@@ -1508,10 +1492,9 @@ mod tests {
             ),
         ] {
             let state = cache_state(name, size);
-            state.meta_cache.insert(
-                state.meta_key.clone(),
-                InvertedIndexMeta::new(object_size, bytes),
-            );
+            state
+                .meta_cache
+                .put(&state.meta_key, InvertedIndexMeta::new(object_size, bytes));
             if valid {
                 let cached = state.load().unwrap();
                 assert_eq!(cached.file_ranges, footer.file_ranges);
@@ -1521,11 +1504,7 @@ mod tests {
             } else {
                 assert!(state.load().is_none());
             }
-            assert_eq!(
-                state.meta_cache.contains_key(&state.meta_key),
-                valid,
-                "{name}"
-            );
+            assert_eq!(state.meta_cache.contains(&state.meta_key), valid, "{name}");
         }
     }
 
@@ -1553,7 +1532,7 @@ mod tests {
         let state = cache_state("index", object_size);
         for _ in 0..2 {
             let footer = state.load_or_fetch(&operator, "index").await?;
-            assert!(state.meta_cache.contains_key(&state.meta_key));
+            assert!(state.meta_cache.contains(&state.meta_key));
             for (path, bytes) in files {
                 let file_id = footer
                     .file_ranges
@@ -1564,7 +1543,7 @@ mod tests {
                 let component = component_name(Path::new(path));
                 let entry = state
                     .lookup_cache
-                    .get(whole_lookup_cache_key("index", component, file_id));
+                    .lookup(&whole_lookup_cache_key("index", component, file_id));
                 if matches!(component, "term" | "fast" | "fieldnorm") {
                     assert_eq!(entry.unwrap().data.as_ref(), bytes);
                 } else {
@@ -1598,7 +1577,7 @@ mod tests {
         let footer = state.load_or_fetch(&operator, "index").await?;
 
         assert_eq!(footer.managed_json.as_ref(), managed_json);
-        let metadata = state.meta_cache.get(&state.meta_key).unwrap();
+        let metadata = state.meta_cache.lookup(&state.meta_key).unwrap();
         assert_eq!(
             metadata.footer_bytes.len(),
             usize::try_from(object_size - footer.footer_start).unwrap()
@@ -1635,7 +1614,7 @@ mod tests {
             location: Arc::from("index"),
             file_ranges: footer.file_ranges.clone(),
             external_files: footer.external_files.clone(),
-            lookup_cache: None,
+            lookup_cache: no_lookup_cache(),
             payload_cache: payload_cache(postings.len() * 2),
             full_payload_cache: full_payload_cache(postings.len() * 2),
         };

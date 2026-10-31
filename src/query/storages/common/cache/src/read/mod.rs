@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cached_reader;
-mod cached_ttl_reader;
-mod loader;
-mod readers;
+mod reader;
+mod single_flight;
+mod ttl;
 
-pub use cached_reader::CacheReader;
-pub use loader::CacheKey;
-pub use loader::LoadParams;
-pub use loader::Loader;
-pub use readers::HybridCacheReader;
-pub use readers::InMemoryCacheReader;
-pub use readers::InMemoryCacheTTLReader;
+pub use reader::Reader;
+pub use single_flight::SingleFlight;
+pub use ttl::TTLReader;
+pub use ttl::TTLValue;

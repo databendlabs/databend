@@ -31,14 +31,14 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use futures_util::TryStreamExt;
 
 fn build_block(rows: &[(u64, &str, &str)]) -> Result<DataBlock> {
@@ -208,17 +208,12 @@ async fn check_index_data(
     let snapshot = new_fuse_table.read_table_snapshot().await?.unwrap();
     let dal = new_fuse_table.get_operator_ref();
     let segment_reader =
-        MetaReaders::segment_info_reader(new_fuse_table.get_operator(), new_fuse_table.schema());
+        SegmentInfoReader::new(new_fuse_table.get_operator(), new_fuse_table.schema());
 
     let mut block_metas = Vec::new();
     for (segment_loc, ver) in &snapshot.segments {
         let segment_info = segment_reader
-            .read(&LoadParams {
-                location: segment_loc.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+            .read(&(segment_loc.to_string(), *ver))
             .await?;
         for block_meta in segment_info.block_metas()? {
             block_metas.push(block_meta);

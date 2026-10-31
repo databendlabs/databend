@@ -62,6 +62,17 @@ impl<T: fmt::Debug> fmt::Debug for TypedHistogram<T> {
 }
 
 impl<T> TypedHistogram<T> {
+    /// Heap and inline bytes, with `bound_heap` giving the heap bytes owned by one bound.
+    pub fn memory_size(&self, bound_heap: impl Fn(&T) -> usize) -> usize {
+        std::mem::size_of::<Self>()
+            + self.buckets.capacity() * std::mem::size_of::<TypedHistogramBucket<T>>()
+            + self
+                .buckets
+                .iter()
+                .map(|b| bound_heap(&b.lower_bound) + bound_heap(&b.upper_bound))
+                .sum::<usize>()
+    }
+
     pub fn new(buckets: Vec<TypedHistogramBucket<T>>) -> Self {
         Self {
             row_scale: 1.0,

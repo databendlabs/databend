@@ -24,14 +24,14 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -234,17 +234,12 @@ async fn check_index_data(
     // Get block metas to check vector index data
     let table_schema = new_fuse_table.schema();
     let segment_reader =
-        MetaReaders::segment_info_reader(new_fuse_table.get_operator(), table_schema.clone());
+        SegmentInfoReader::new(new_fuse_table.get_operator(), table_schema.clone());
 
     let mut block_metas = vec![];
     for (segment_loc, ver) in &new_snapshot.segments {
         let segment_info = segment_reader
-            .read(&LoadParams {
-                location: segment_loc.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+            .read(&(segment_loc.to_string(), *ver))
             .await?;
         for block_meta in segment_info.block_metas()? {
             block_metas.push(block_meta);

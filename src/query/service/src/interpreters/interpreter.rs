@@ -219,7 +219,7 @@ async fn build_pipeline_before_execute(
         }
     };
 
-    CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
+    CacheManager::instance().set_disk_allowed(allow_disk_cache);
 
     let mut build_res = interpreter.execute2().await?;
 

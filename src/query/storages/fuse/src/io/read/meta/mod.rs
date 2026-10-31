@@ -14,9 +14,11 @@
 
 mod meta_readers;
 
-pub use meta_readers::CompactSegmentInfoReader;
-pub use meta_readers::MetaReaders;
+pub use meta_readers::IndexMetaKey;
+pub use meta_readers::IndexMetaReader;
+pub use meta_readers::SegmentInfoReader;
 pub use meta_readers::SegmentStatsReader;
-pub use meta_readers::TableSnapshotReader;
+pub use meta_readers::SnapshotReader;
+pub use meta_readers::SnapshotStatsReader;
 pub use meta_readers::bytes_reader;
 pub use meta_readers::read_thrift_file_metadata;

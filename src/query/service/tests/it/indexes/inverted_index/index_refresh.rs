@@ -25,7 +25,7 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::pruning::create_inverted_index_query;
 use databend_query::interpreters::Interpreter;
@@ -34,7 +34,7 @@ use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::InvertedIndexBundleFooter;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
@@ -118,17 +118,12 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     let index_version = table_index.version.clone();
 
     let segment_reader =
-        MetaReaders::segment_info_reader(new_fuse_table.get_operator(), table_schema.clone());
+        SegmentInfoReader::new(new_fuse_table.get_operator(), table_schema.clone());
 
     let mut block_metas = vec![];
     for (segment_loc, ver) in &new_snapshot.segments {
         let segment_info = segment_reader
-            .read(&LoadParams {
-                location: segment_loc.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+            .read(&(segment_loc.to_string(), *ver))
             .await?;
         for block_meta in segment_info.block_metas()? {
             block_metas.push(block_meta);

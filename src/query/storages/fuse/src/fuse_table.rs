@@ -93,7 +93,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
 use databend_common_storage::init_operator_with_policy_scope;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::Files;
@@ -156,10 +156,12 @@ use crate::Table;
 use crate::TableStatistics;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
 use crate::io::SegmentsIO;
+use crate::io::SnapshotCache;
+use crate::io::SnapshotReader;
+use crate::io::SnapshotStatsReader;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::TableSnapshotReader;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
@@ -504,17 +506,10 @@ impl FuseTable {
     ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
         if let Some(snapshot) = snapshot {
             if let Some(loc) = &snapshot.table_statistics_location {
-                let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
-
+                let reader = SnapshotStatsReader::new(self.get_operator());
                 let ver = TableMetaLocationGenerator::table_statistics_version(loc);
-                let load_params = LoadParams {
-                    location: loc.clone(),
-                    len_hint: None,
-                    ver,
-                    put_cache: true,
-                };
-
-                return Ok(Some(reader.read(&load_params).await?));
+                let cache = &FuseCaches::instance().snapshots;
+                return Ok(Some(cache.get_stats(&reader, loc.clone(), ver).await?));
             }
         }
         Ok(None)
@@ -523,10 +518,8 @@ impl FuseTable {
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        let loc = self.snapshot_loc();
-        let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        self.read_table_snapshot_with_location(self.snapshot_loc())
+            .await
     }
 
     #[fastrace::trace]
@@ -535,35 +528,45 @@ impl FuseTable {
         &self,
         loc: Option<String>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        let cache = &FuseCaches::instance().snapshots;
+        Self::read_table_snapshot_at(cache, self.get_operator(), loc, ver).await
     }
 
     #[fastrace::trace]
     #[async_backtrace::framed]
+    /// Reads the current snapshot from storage, bypassing the cache.
     pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
         let loc = self.snapshot_loc();
         let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        Self::read_table_snapshot_from_storage(self.get_operator(), loc, ver).await
     }
 
-    pub async fn read_table_snapshot_with_reader(
-        reader: TableSnapshotReader,
+    pub async fn read_table_snapshot_at(
+        cache: &SnapshotCache,
+        operator: Operator,
         snapshot_location: Option<String>,
         ver: u64,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(location) = snapshot_location {
-            let params = LoadParams {
-                location,
-                len_hint: None,
-                ver,
-                put_cache: true,
-            };
-            Ok(Some(reader.read(&params).await?))
-        } else {
-            Ok(None)
+        match snapshot_location {
+            Some(location) => {
+                let reader = SnapshotReader::new(operator);
+                Ok(Some(cache.get(&reader, location, ver).await?))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn read_table_snapshot_from_storage(
+        operator: Operator,
+        snapshot_location: Option<String>,
+        ver: u64,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        match snapshot_location {
+            Some(location) => Ok(Some(
+                SnapshotReader::new(operator).read(&(location, ver)).await?,
+            )),
+            None => Ok(None),
         }
     }
 
@@ -929,10 +932,10 @@ impl FuseTable {
 
                     // refresh table schema by loading the snapshot
                     let begin = Instant::now();
-                    let reader = MetaReaders::table_snapshot_reader_without_cache(operator.clone());
                     let ver = TableMetaLocationGenerator::snapshot_version(loc.as_str());
                     let snapshot =
-                        Self::read_table_snapshot_with_reader(reader, Some(loc), ver).await?;
+                        Self::read_table_snapshot_from_storage(operator.clone(), Some(loc), ver)
+                            .await?;
                     info!(
                         "[FUSE-TABLE] Table snapshot refreshed, elapsed: {:?}",
                         begin.elapsed()

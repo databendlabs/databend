@@ -614,6 +614,10 @@ impl ColumnCountMinSketch {
         }
     }
 
+    pub fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.counters.capacity() * std::mem::size_of::<u64>()
+    }
+
     pub fn with_error_rate(error_rate: f64) -> Result<Self> {
         Ok(Self::new(
             Self::width_for_error_rate(error_rate)?,

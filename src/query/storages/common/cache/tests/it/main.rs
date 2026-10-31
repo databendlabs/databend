@@ -12,4 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod providers;
+mod disk;
+mod fakes;
+mod handle;
+mod invariants;
+mod kinds;
+mod legacy;
+mod manager;
+mod mem_bytes_accuracy;
+mod metrics;
+mod registry;
+mod shared;
+mod ttl;
+
+#[global_allocator]
+static ALLOCATOR: mem_bytes_accuracy::CountingAlloc = mem_bytes_accuracy::CountingAlloc;

@@ -48,7 +48,9 @@ pub(crate) mod test_utils {
         INIT.get_or_init(|| {
             GlobalInstance::init_production();
             GlobalIORuntime::init(1)?;
-            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)
+            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
+            crate::io::FuseCaches::init(&CacheManager::instance());
+            Ok(())
         })
         .clone()
     }

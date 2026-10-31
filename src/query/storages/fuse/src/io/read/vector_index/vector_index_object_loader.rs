@@ -19,10 +19,9 @@ use std::sync::LazyLock;
 use std::sync::Weak;
 
 use databend_common_exception::Result;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::CachedVectorIndex;
-use databend_storages_common_cache::VectorIndexCache;
+use databend_storages_common_cache::MemCache;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_index::hnsw_component_names;
@@ -39,6 +38,7 @@ use uuid::Uuid;
 use super::VectorIndexIdentity;
 use super::vector_index_loader::check_index_current;
 use super::vector_index_loader::load_hnsw;
+use crate::io::FuseCaches;
 
 // OpenDAL's scheme/name/root do not identify the endpoint (e.g. S3 name is just the bucket).
 // Assign a non-reused identity to each live backend info instead. Unlike the outer accessor,
@@ -112,11 +112,11 @@ impl VectorIndexLoader {
         &self,
         row_count: usize,
         location: &IndexFileLocation,
-    ) -> Result<Arc<CachedVectorIndex>> {
+    ) -> Result<CacheRef<CachedVectorIndex>> {
         // Checked on every load, not only on a cache miss: the key does not include
         // the index version, and a legacy file may hold an outdated version.
         check_index_current(&self.operator, location, &self.identity).await?;
-        let cache = CacheManager::instance().get_vector_index_cache();
+        let cache = FuseCaches::instance().vector_indexes.clone();
         let key = self.cache_key(location.path());
         load_cached_index(cache, key, || {
             let loader = self.clone();
@@ -145,7 +145,7 @@ impl VectorIndexLoader {
     }
 }
 
-type IndexLoadResult = Result<Arc<CachedVectorIndex>>;
+type IndexLoadResult = Result<CacheRef<CachedVectorIndex>>;
 type IndexLoadFuture = Shared<BoxFuture<'static, IndexLoadResult>>;
 static INDEX_LOADS: LazyLock<Mutex<HashMap<String, Weak<IndexLoad>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -172,7 +172,7 @@ impl Drop for IndexLoad {
 /// deduplicates oversized or temporarily uncached objects. Weak registry entries do not retain
 /// completed objects. Dropping one waiter leaves the others running; dropping all cancels the load.
 async fn load_cached_index<F, Fut>(
-    cache: Option<VectorIndexCache>,
+    cache: MemCache<CachedVectorIndex>,
     key: String,
     load: F,
 ) -> IndexLoadResult
@@ -180,7 +180,7 @@ where
     F: FnOnce() -> Fut + Send,
     Fut: Future<Output = Result<HNSWIndex>> + Send + 'static,
 {
-    if let Some(index) = cache.get(&key) {
+    if let Some(index) = cache.lookup(&key) {
         return Ok(index);
     }
 
@@ -190,14 +190,14 @@ where
             flight
         } else {
             // An earlier flight could have populated the cache before we acquired the map.
-            if let Some(index) = cache.get(&key) {
+            if let Some(index) = cache.lookup(&key) {
                 return Ok(index);
             }
             let load_key = key.clone();
             let source = load();
             let future = async move {
                 let index = CachedVectorIndex::new(source.await?);
-                Ok(cache.insert(load_key, index))
+                Ok(cache.fill(&load_key, index))
             }
             .boxed()
             .shared();
@@ -221,9 +221,27 @@ mod tests {
     use databend_common_expression::Scalar;
     use databend_common_expression::types::F32;
     use databend_common_expression::types::VectorColumn;
+    use databend_storages_common_cache::CacheKind;
+    use databend_storages_common_cache::kinds::vector;
+    use databend_storages_common_cache::legacy::LegacyCapacity;
+    use databend_storages_common_cache::legacy::LegacyStore;
     use futures::future::join_all;
 
     use super::*;
+
+    /// A cache of its own, so tests do not share process-wide state.
+    fn local_cache(capacity: LegacyCapacity) -> MemCache<CachedVectorIndex> {
+        let kind = CacheKind::of::<vector::Index>();
+        MemCache::new(Arc::new(LegacyStore::new([(kind, capacity)])), kind)
+    }
+
+    fn no_cache() -> MemCache<CachedVectorIndex> {
+        local_cache(LegacyCapacity::Disabled)
+    }
+
+    fn same(a: &CacheRef<CachedVectorIndex>, b: &CacheRef<CachedVectorIndex>) -> bool {
+        std::ptr::eq::<CachedVectorIndex>(&**a, &**b)
+    }
 
     fn index_components() -> Result<Vec<Vec<u8>>> {
         let values = (0..64)
@@ -249,9 +267,9 @@ mod tests {
         let components = index_components()?;
         // Admitted, too large to admit, and no cache.
         for (i, cache) in [
-            Some(VectorIndexCache::new(1024 * 1024)),
-            Some(VectorIndexCache::new(1)),
-            None,
+            local_cache(LegacyCapacity::Bytes(1024 * 1024)),
+            local_cache(LegacyCapacity::Bytes(1)),
+            no_cache(),
         ]
         .into_iter()
         .enumerate()
@@ -272,13 +290,14 @@ mod tests {
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
             assert_eq!(opens.load(Ordering::Relaxed), 1);
-            assert!(results.iter().all(|index| Arc::ptr_eq(index, &results[0])));
+            assert!(results.iter().all(|index| same(index, &results[0])));
+            assert_eq!(results[0].is_charged(), i == 0);
             if i == 0 {
                 let hit = load_cached_index(cache, key, || async {
                     panic!("warm cache must not reopen the index")
                 })
                 .await?;
-                assert!(Arc::ptr_eq(&hit, &results[0]));
+                assert!(same(&hit, &results[0]));
             }
         }
         Ok(())
@@ -288,7 +307,7 @@ mod tests {
     async fn test_shared_failure_can_be_retried() -> Result<()> {
         let key = "test_shared_failure_can_be_retried".to_owned();
         let failures = join_all((0..4).map(|_| {
-            load_cached_index(None, key.clone(), || async {
+            load_cached_index(no_cache(), key.clone(), || async {
                 tokio::task::yield_now().await;
                 Err(ErrorCode::StorageOther("test load failure"))
             })
@@ -297,7 +316,7 @@ mod tests {
         assert!(failures.iter().all(|failure| failure.is_err()));
         assert!(!INDEX_LOADS.lock().contains_key(&key));
         let components = index_components()?;
-        load_cached_index(None, key, || async move { open(components) }).await?;
+        load_cached_index(no_cache(), key, || async move { open(components) }).await?;
         Ok(())
     }
 }

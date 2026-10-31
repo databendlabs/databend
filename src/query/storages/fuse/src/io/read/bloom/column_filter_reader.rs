@@ -18,12 +18,7 @@ use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_metrics::storage::metrics_inc_block_index_read_bytes;
-use databend_storages_common_cache::BloomIndexFilterCache;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheKey;
-use databend_storages_common_cache::CachedObject;
-use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache::Loader;
+use databend_storages_common_cache::MemCache;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -35,15 +30,16 @@ use parquet::basic::Compression as ParquetCompression;
 use parquet::schema::types::SchemaDescPtr;
 
 use super::BloomIndexColumnOrdinal;
+use crate::io::FuseCaches;
 use crate::io::read::block::parquet::RowGroupImplBuilder;
 
 /// Load the filter of a given bloom index column. Also
 /// - generates the proper cache key
 /// - takes cares of getting the correct cache instance from [CacheManager]
 pub struct BloomColumnFilterReader {
-    cache: Option<BloomIndexFilterCache>,
+    cache: MemCache<Arc<FilterImpl>>,
     loader: BloomFilterLoader,
-    param: LoadParams,
+    index_path: String,
 }
 
 impl BloomColumnFilterReader {
@@ -73,41 +69,26 @@ impl BloomColumnFilterReader {
             column_ordinal,
         };
 
-        let param = LoadParams {
-            location: index_path,
-            len_hint: None,
-            ver: 0,
-            put_cache: true,
-        };
-
         BloomColumnFilterReader {
-            cache: FilterImpl::cache(),
+            cache: FuseCaches::instance().bloom_filters.clone(),
             loader,
-            param,
+            index_path,
         }
     }
 
     #[async_backtrace::framed]
     pub async fn read(&self, whole_file: Option<&Arc<Bytes>>) -> Result<Arc<FilterImpl>> {
-        let cache_key = self.loader.cache_key(&self.param);
-
-        if let Some(cache) = &self.cache {
-            if let Some(item) = cache.get(&cache_key) {
-                return Ok(item);
-            }
+        let cache_key = &self.loader.cache_key;
+        if let Some(item) = self.cache.lookup(cache_key) {
+            return Ok(Arc::clone(&item));
         }
 
         let filter = if let Some(data) = whole_file {
             self.loader.load_from_source(data.as_ref())?
         } else {
-            self.loader.load(&self.param).await?
+            self.loader.load(&self.index_path).await?
         };
-
-        if let Some(cache) = &self.cache {
-            Ok(cache.insert(cache_key, filter))
-        } else {
-            Ok(Arc::new(filter))
-        }
+        Ok(Arc::clone(&self.cache.fill(cache_key, Arc::new(filter))))
     }
 }
 
@@ -122,24 +103,17 @@ pub struct BloomFilterLoader {
     pub operator: Operator,
 }
 
-#[async_trait::async_trait]
-impl Loader<FilterImpl> for BloomFilterLoader {
+impl BloomFilterLoader {
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<FilterImpl> {
+    async fn load(&self, path: &str) -> Result<FilterImpl> {
         let chunk = self
             .operator
-            .read_with(&params.location)
+            .read_with(path)
             .range(self.offset..self.offset + self.len)
             .await?;
         self.decode_filter(chunk.to_bytes())
     }
 
-    fn cache_key(&self, _params: &LoadParams) -> CacheKey {
-        self.cache_key.clone()
-    }
-}
-
-impl BloomFilterLoader {
     fn load_from_source(&self, data: &Bytes) -> Result<FilterImpl> {
         let chunk = data.slice(self.offset as usize..(self.offset + self.len) as usize);
         self.decode_filter(chunk)

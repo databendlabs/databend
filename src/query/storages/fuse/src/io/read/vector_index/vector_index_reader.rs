@@ -228,8 +228,9 @@ mod tests {
     }
 
     /// A bundle as the writer produces it. Row `r` is `[r * 0.01; DIM]`; every 10th
-    /// row is NULL.
-    async fn write_bundle(operator: &Operator) -> Result<IndexFileLocation> {
+    /// row is NULL. HNSW builds differ run to run and index metas are cached by path
+    /// process-wide, so each test writes its own `name`.
+    async fn write_bundle(operator: &Operator, name: &str) -> Result<IndexFileLocation> {
         let values = (0..ROWS * DIM)
             .map(|i| F32::from((i / DIM) as f32 * 0.01))
             .collect::<Vec<_>>();
@@ -245,7 +246,7 @@ mod tests {
         builder.add_validity(COLUMN_ID, &column.as_nullable().unwrap().validity)?;
         builder.add_fp16_data(COLUMN_ID, &column)?;
         let data = builder.finish()?;
-        let path = "test_vector_index_reader/_i_v_v2/v1/h0.index".to_owned();
+        let path = format!("test_vector_index_reader/{name}/_i_v_v2/v1/h0.index");
         let size = data.len() as u64;
         operator.write(&path, data).await?;
         Ok(IndexFileLocation::Bundle { path, size })
@@ -255,7 +256,7 @@ mod tests {
     async fn test_bundle_search_scores_and_refine() -> Result<()> {
         crate::test_utils::init_test_globals()?;
         let operator = Operator::new(Memory::default())?.finish();
-        let location = write_bundle(&operator).await?;
+        let location = write_bundle(&operator, "search").await?;
         let index = reader(operator)?;
         let is_null = |idx: u32| idx.is_multiple_of(10);
 
@@ -294,7 +295,7 @@ mod tests {
     async fn test_refine_pages_follow_reader_page_size() -> Result<()> {
         crate::test_utils::init_test_globals()?;
         let operator = Operator::new(Memory::default())?.finish();
-        let location = write_bundle(&operator).await?;
+        let location = write_bundle(&operator, "pages").await?;
         let identity = VectorIndexIdentity {
             name: "vi".to_owned(),
             version: "v1".to_owned(),

@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::SeekFrom;
+use std::marker::PhantomData;
+use std::sync::Arc;
 
 use bytes::Buf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_FOOTER_READ_SIZE;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::HybridCacheReader;
-use databend_storages_common_cache::InMemoryCacheReader;
-use databend_storages_common_cache::LoadParams;
-use databend_storages_common_cache::Loader;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SegmentStatisticsVersion;
@@ -45,199 +45,178 @@ use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::ParquetMetaDataReader;
 
 pub use self::thrift_file_meta_read::read_thrift_file_metadata;
-
-pub type TableSnapshotStatisticsReader =
-    InMemoryCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
-pub type BloomIndexMetaReader = HybridCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
-pub type TableSnapshotReader = InMemoryCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
-pub type CompactSegmentInfoReader =
-    InMemoryCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
-pub type VectorIndexMetaReader = HybridCacheReader<VectorIndexMeta, LoaderWrapper<Operator>>;
-pub type SpatialIndexMetaReader = HybridCacheReader<SpatialIndexMeta, LoaderWrapper<Operator>>;
-pub type VirtualColumnMetaReader =
-    HybridCacheReader<VirtualColumnFileMeta, LoaderWrapper<Operator>>;
-pub type SegmentStatsReader = InMemoryCacheReader<SegmentStatistics, LoaderWrapper<Operator>>;
-
-pub struct MetaReaders;
-
-impl MetaReaders {
-    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> CompactSegmentInfoReader {
-        CompactSegmentInfoReader::new(
-            CacheManager::instance().get_table_segment_cache(),
-            LoaderWrapper((dal, schema)),
-        )
-    }
-
-    pub fn segment_info_reader_without_cache(
-        dal: Operator,
-        schema: TableSchemaRef,
-    ) -> CompactSegmentInfoReader {
-        CompactSegmentInfoReader::new(None, LoaderWrapper((dal, schema)))
-    }
-
-    pub fn table_snapshot_reader(dal: Operator) -> TableSnapshotReader {
-        TableSnapshotReader::new(
-            CacheManager::instance().get_table_snapshot_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn table_snapshot_reader_without_cache(dal: Operator) -> TableSnapshotReader {
-        TableSnapshotReader::new(None, LoaderWrapper(dal))
-    }
-
-    pub fn table_snapshot_statistics_reader(dal: Operator) -> TableSnapshotStatisticsReader {
-        TableSnapshotStatisticsReader::new(
-            CacheManager::instance().get_table_snapshot_statistics_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn segment_stats_reader(dal: Operator) -> SegmentStatsReader {
-        SegmentStatsReader::new(
-            CacheManager::instance().get_segment_statistics_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
-        BloomIndexMetaReader::new(
-            CacheManager::instance().get_bloom_index_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn vector_index_meta_reader(dal: Operator) -> VectorIndexMetaReader {
-        VectorIndexMetaReader::new(
-            CacheManager::instance().get_vector_index_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn spatial_index_meta_reader(dal: Operator) -> SpatialIndexMetaReader {
-        SpatialIndexMetaReader::new(
-            CacheManager::instance().get_spatial_index_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-
-    pub fn virtual_column_meta_reader(dal: Operator) -> VirtualColumnMetaReader {
-        VirtualColumnMetaReader::new(
-            CacheManager::instance().get_virtual_column_meta_cache(),
-            LoaderWrapper(dal),
-        )
-    }
-}
+use crate::io::SnapshotKey;
 
 // workaround for the orphan rules
 // Loader and types of table meta data are all defined outside (of this crate)
-pub struct LoaderWrapper<T>(T);
+/// Reads and decodes table snapshots. No caching; pair with `SnapshotCache`.
+#[derive(Clone)]
+pub struct SnapshotReader {
+    operator: Operator,
+}
 
-#[async_trait::async_trait]
-impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
-        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        let version = SnapshotVersion::try_from(params.ver)?;
-        version.read(reader.reader())
+impl SnapshotReader {
+    pub fn new(operator: Operator) -> Self {
+        SnapshotReader { operator }
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
+impl Reader for SnapshotReader {
+    type Key = SnapshotKey;
+    type Item = Arc<TableSnapshot>;
+
+    fn cache_key<'a>(&self, key: &'a SnapshotKey) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<TableSnapshotStatistics> {
-        let version = TableSnapshotStatisticsVersion::try_from(params.ver)?;
-        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        version.read(reader.reader())
+    async fn read(&self, (location, ver): &SnapshotKey) -> Result<Arc<TableSnapshot>> {
+        let version = SnapshotVersion::try_from(*ver)?;
+        let buffer = bytes_reader(&self.operator, location, None).await?;
+        Ok(Arc::new(version.read(buffer.reader())?))
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<SegmentStatistics> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<SegmentStatistics> {
-        let version = SegmentStatisticsVersion::try_from(params.ver)?;
-        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
-        version.read(reader.reader())
+/// Reads and decodes table snapshot statistics. No caching; pair with `SnapshotCache`.
+#[derive(Clone)]
+pub struct SnapshotStatsReader {
+    operator: Operator,
+}
+
+impl SnapshotStatsReader {
+    pub fn new(operator: Operator) -> Self {
+        SnapshotStatsReader { operator }
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
+impl Reader for SnapshotStatsReader {
+    type Key = SnapshotKey;
+    type Item = Arc<TableSnapshotStatistics>;
+
+    fn cache_key<'a>(&self, key: &'a SnapshotKey) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<CompactSegmentInfo> {
-        let version = SegmentInfoVersion::try_from(params.ver)?;
-        let LoaderWrapper((operator, schema)) = &self;
-        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        (version, schema.clone()).read(reader.reader())
+    async fn read(&self, (location, ver): &SnapshotKey) -> Result<Arc<TableSnapshotStatistics>> {
+        let version = TableSnapshotStatisticsVersion::try_from(*ver)?;
+        let buffer = bytes_reader(&self.operator, location, None).await?;
+        Ok(Arc::new(version.read(buffer.reader())?))
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
+/// Reads and decodes row-oriented segments. No caching; pair with `SegmentCache`.
+#[derive(Clone)]
+pub struct SegmentInfoReader {
+    operator: Operator,
+    schema: TableSchemaRef,
+}
+
+impl SegmentInfoReader {
+    pub fn new(operator: Operator, schema: TableSchemaRef) -> Self {
+        SegmentInfoReader { operator, schema }
+    }
+}
+
+impl Reader for SegmentInfoReader {
+    type Key = Location;
+    type Item = Arc<CompactSegmentInfo>;
+
+    fn cache_key<'a>(&self, key: &'a Location) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<BloomIndexMeta> {
-        // read the ThriftFileMetaData, omit unnecessary conversions
-        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
+    async fn read(&self, (location, ver): &Location) -> Result<Arc<CompactSegmentInfo>> {
+        let version = SegmentInfoVersion::try_from(*ver)?;
+        let buffer = bytes_reader(&self.operator, location, None).await?;
+        Ok(Arc::new(
+            (version, self.schema.clone()).read(buffer.reader())?,
+        ))
+    }
+}
+
+/// Reads and decodes segment statistics. No caching; pair with `SegmentCache`.
+#[derive(Clone)]
+pub struct SegmentStatsReader {
+    operator: Operator,
+}
+
+impl SegmentStatsReader {
+    pub fn new(operator: Operator) -> Self {
+        SegmentStatsReader { operator }
+    }
+}
+
+impl Reader for SegmentStatsReader {
+    type Key = Location;
+    type Item = Arc<SegmentStatistics>;
+
+    fn cache_key<'a>(&self, key: &'a Location) -> Cow<'a, str> {
+        Cow::Borrowed(&key.0)
+    }
+
+    #[async_backtrace::framed]
+    async fn read(&self, (location, ver): &Location) -> Result<Arc<SegmentStatistics>> {
+        let version = SegmentStatisticsVersion::try_from(*ver)?;
+        let buffer = bytes_reader(&self.operator, location, None).await?;
+        Ok(Arc::new(version.read(buffer.reader())?))
+    }
+}
+
+/// Reads and decodes the parquet footer of an index file as `T`. No caching; pair with
+/// `FuseCaches::index_metas`. The key is the path and, when known, the file length.
+pub struct IndexMetaReader<T> {
+    operator: Operator,
+    _meta: PhantomData<fn() -> T>,
+}
+
+impl<T> IndexMetaReader<T> {
+    pub fn new(operator: Operator) -> Self {
+        IndexMetaReader {
+            operator,
+            _meta: PhantomData,
+        }
+    }
+
+    async fn read_footer(&self, (path, len): &IndexMetaKey) -> Result<ParquetMetaData> {
+        read_thrift_file_metadata(self.operator.clone(), path, *len)
             .await
             .map_err(|err| {
-                ErrorCode::StorageOther(format!(
-                    "read file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })?;
-
-        BloomIndexMeta::try_from(meta)
+                ErrorCode::StorageOther(format!("read file meta failed, {}, {:?}", path, err))
+            })
     }
 }
 
-#[async_trait::async_trait]
-impl Loader<SpatialIndexMeta> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<SpatialIndexMeta> {
-        // read the ThriftFileMetaData, omit unnecessary conversions
-        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
-            .await
-            .map_err(|err| {
-                ErrorCode::StorageOther(format!(
-                    "read file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })?;
+pub type IndexMetaKey = (String, Option<u64>);
 
-        SpatialIndexMeta::try_from(meta)
-    }
+macro_rules! index_meta_reader {
+    ($ty:ty, |$meta:ident| $decode:expr) => {
+        impl Reader for IndexMetaReader<$ty> {
+            type Key = IndexMetaKey;
+            type Item = Arc<$ty>;
+
+            fn cache_key<'a>(&self, key: &'a IndexMetaKey) -> Cow<'a, str> {
+                Cow::Borrowed(&key.0)
+            }
+
+            #[async_backtrace::framed]
+            async fn read(&self, key: &IndexMetaKey) -> Result<Arc<$ty>> {
+                let $meta = self.read_footer(key).await?;
+                Ok(Arc::new($decode))
+            }
+        }
+    };
 }
 
-/// Only legacy Parquet index files go through this reader; bundle footers are
-/// loaded by the bundle loader and put into the same cache.
-#[async_trait::async_trait]
-impl Loader<VectorIndexMeta> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<VectorIndexMeta> {
-        let meta = <Self as Loader<SpatialIndexMeta>>::load(self, params).await?;
-        Ok(VectorIndexMeta::Legacy(meta))
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<VirtualColumnFileMeta> for LoaderWrapper<Operator> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<VirtualColumnFileMeta> {
-        // read the ThriftFileMetaData, omit unnecessary conversions
-        let meta = read_thrift_file_metadata(self.0.clone(), &params.location, params.len_hint)
-            .await
-            .map_err(|err| {
-                ErrorCode::StorageOther(format!(
-                    "read file meta failed, {}, {:?}",
-                    params.location, err
-                ))
-            })?;
-
-        VirtualColumnFileMeta::try_from(meta)
-    }
-}
+index_meta_reader!(BloomIndexMeta, |meta| BloomIndexMeta::try_from(meta)?);
+index_meta_reader!(SpatialIndexMeta, |meta| SpatialIndexMeta::try_from(meta)?);
+index_meta_reader!(VectorIndexMeta, |meta| VectorIndexMeta::Legacy(
+    SpatialIndexMeta::try_from(meta)?
+));
+index_meta_reader!(VirtualColumnFileMeta, |meta| {
+    VirtualColumnFileMeta::try_from(meta)?
+});
 
 pub async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
     let reader = if let Some(len) = len_hint {

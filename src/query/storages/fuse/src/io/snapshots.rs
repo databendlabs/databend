@@ -27,7 +27,6 @@ use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -42,9 +41,10 @@ use log::warn;
 use opendal::EntryMode;
 use opendal::Operator;
 
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
+use crate::io::SnapshotReader;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::snapshot_history;
 
 #[derive(Clone, Debug)]
 pub struct SnapshotLiteExtended {
@@ -80,16 +80,9 @@ impl SnapshotsIO {
         data_accessor: Operator,
         put_cache: bool,
     ) -> Result<(Arc<TableSnapshot>, FormatVersion)> {
-        let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver: u64 = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
-        let load_params = LoadParams {
-            location: snapshot_location,
-            len_hint: None,
-            ver,
-            put_cache,
-        };
-        info!("Reading snapshot with parameters: {:?}", load_params);
-        let snapshot = reader.read(&load_params).await?;
+        info!("Reading snapshot {snapshot_location}, version {ver}, put_cache {put_cache}");
+        let snapshot = read_cached_snapshot(snapshot_location, data_accessor, put_cache).await?;
         Ok((snapshot, ver))
     }
 
@@ -99,15 +92,8 @@ impl SnapshotsIO {
         data_accessor: Operator,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> Result<TableSnapshotLite> {
-        let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
-        let load_params = LoadParams {
-            location: snapshot_location,
-            len_hint: None,
-            ver,
-            put_cache: false,
-        };
-        let snapshot = reader.read(&load_params).await?;
+        let snapshot = read_cached_snapshot(snapshot_location, data_accessor, false).await?;
 
         if snapshot.timestamp > min_snapshot_timestamp {
             // filter out snapshots which have larger (artificial)timestamp , they are
@@ -225,13 +211,18 @@ impl SnapshotsIO {
         root_snapshot: String,
         limit: Option<usize>,
     ) -> Result<Vec<TableSnapshotLite>> {
-        let table_snapshot_reader = MetaReaders::table_snapshot_reader(dal);
         let format_version = TableMetaLocationGenerator::snapshot_version(root_snapshot.as_str());
-        let lite_snapshot_stream = table_snapshot_reader
-            .snapshot_history(root_snapshot, format_version, location_generator)
-            .map_ok(|(snapshot, format_version)| {
-                TableSnapshotLite::from((snapshot.as_ref(), format_version))
-            });
+        let cache = &FuseCaches::instance().snapshots;
+        let lite_snapshot_stream = snapshot_history(
+            cache,
+            dal,
+            root_snapshot,
+            format_version,
+            location_generator,
+        )
+        .map_ok(|(snapshot, format_version)| {
+            TableSnapshotLite::from((snapshot.as_ref(), format_version))
+        });
         if let Some(l) = limit {
             lite_snapshot_stream.take(l).try_collect::<Vec<_>>().await
         } else {
@@ -246,15 +237,8 @@ impl SnapshotsIO {
         root_snapshot: Arc<SnapshotLiteExtended>,
         ignore_timestamp: bool,
     ) -> Result<SnapshotLiteExtended> {
-        let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
-        let load_params = LoadParams {
-            location: snapshot_location,
-            len_hint: None,
-            ver,
-            put_cache: false,
-        };
-        let snapshot = reader.read(&load_params).await?;
+        let snapshot = read_cached_snapshot(snapshot_location, data_accessor, false).await?;
 
         if !ignore_timestamp && snapshot.timestamp >= root_snapshot.timestamp {
             // filter out snapshots which have larger (artificial)timestamp , they are
@@ -426,16 +410,7 @@ impl SnapshotsIO {
         operator: Operator,
         location: &str,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader(operator);
-        let ver = TableMetaLocationGenerator::snapshot_version(location);
-        let params = LoadParams {
-            location: location.to_string(),
-            len_hint: None,
-            ver,
-            put_cache: true,
-        };
-
-        match reader.read(&params).await {
+        match read_cached_snapshot(location.to_string(), operator, true).await {
             Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
                 // Concurrent gc: someone else has already collected this snapshot
                 Ok(None)
@@ -444,4 +419,21 @@ impl SnapshotsIO {
             Ok(v) => Ok(Some(v)),
         }
     }
+}
+
+/// Reads a snapshot through the cache. With `put_cache = false`, a miss is not cached.
+async fn read_cached_snapshot(
+    location: String,
+    operator: Operator,
+    put_cache: bool,
+) -> Result<Arc<TableSnapshot>> {
+    let caches = FuseCaches::instance();
+    let cache = match put_cache {
+        true => caches.snapshots.clone(),
+        false => caches.snapshots.read_only(),
+    };
+    let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
+    cache
+        .get(&SnapshotReader::new(operator), location, ver)
+        .await
 }

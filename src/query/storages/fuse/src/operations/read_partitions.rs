@@ -57,8 +57,6 @@ use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::NgramArgs;
@@ -99,6 +97,7 @@ use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexRebuilder;
+use crate::io::FuseCaches;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
@@ -535,8 +534,6 @@ impl FuseTable {
 
         let dal = self.operator.clone();
 
-        type CacheItem = (PartStatistics, Partitions);
-
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
         let derterministic_cache_key = match &push_downs {
             Some(push_downs) if enable_prune_cache => {
@@ -643,10 +640,11 @@ impl FuseTable {
         };
 
         if enable_prune_cache && let Some(cache_key) = derterministic_cache_key {
-            if let Some(cache) = CacheItem::cache() {
+            let cache = &FuseCaches::instance().prune_results;
+            if cache.is_enabled() {
                 let mut cache_statistics = result.0.clone();
                 cache_statistics.pruning_stats = PruningStatistics::default();
-                cache.insert(cache_key, (cache_statistics, result.1.clone()));
+                cache.fill(&cache_key, (cache_statistics, result.1.clone()));
             }
         }
         Ok(result)
@@ -1131,16 +1129,9 @@ impl FuseTable {
     pub fn check_prune_cache(
         derterministic_cache_key: &Option<String>,
     ) -> Option<(PartStatistics, Partitions)> {
-        type CacheItem = (PartStatistics, Partitions);
-
-        if let Some(cache_key) = derterministic_cache_key.as_ref() {
-            if let Some(cache) = CacheItem::cache() {
-                if let Some(data) = cache.get(cache_key) {
-                    return Some((data.0.clone(), data.1.clone()));
-                }
-            }
-        }
-        None
+        let cache_key = derterministic_cache_key.as_ref()?;
+        let data = FuseCaches::instance().prune_results.lookup(cache_key)?;
+        Some((data.0.clone(), data.1.clone()))
     }
 
     pub fn read_partitions_with_metas(
