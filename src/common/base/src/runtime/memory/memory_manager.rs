@@ -31,6 +31,8 @@ use std::time::Instant;
 use crate::runtime::MemStat;
 use crate::runtime::OutOfLimit;
 use crate::runtime::memory::mem_stat::ParentMemStat;
+use crate::runtime::memory::stat_buffer_global::GlobalStatBuffer;
+use crate::runtime::memory::stat_buffer_mem_stat::MemStatBuffer;
 
 pub static GLOBAL_QUERIES_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
 
@@ -176,7 +178,14 @@ impl QueriesMemoryManager {
         let Some(global) = Self::global_of(mem_stat) else {
             return false;
         };
-        if global.recheck_limit().is_ok() {
+        // Memory freed on this thread may still sit in its stat buffers, below their flush
+        // threshold; without flushing them the limit would look exceeded after a reclaim that
+        // freed enough.
+        let under_limit = || {
+            flush_thread_stat_buffers();
+            global.recheck_limit().is_ok()
+        };
+        if under_limit() {
             return false;
         }
         let Some(handler) = self.reclaim_handler.read().clone() else {
@@ -184,12 +193,11 @@ impl QueriesMemoryManager {
         };
         let _reclaiming = self.reclaiming.lock();
         // Another thread may have reclaimed while this one waited.
-        if global.recheck_limit().is_ok() {
+        if under_limit() {
             return true;
         }
-        let relieved = || global.recheck_limit().is_ok();
-        handler(&relieved);
-        relieved()
+        handler(&under_limit);
+        under_limit()
     }
 
     fn global_of(mem_stat: &MemStat) -> Option<&MemStat> {
@@ -470,6 +478,13 @@ impl QueriesMemoryManager {
     }
 }
 
+/// Applies this thread's buffered allocation statistics to their memory stats. Runs inside
+/// `wait_memory`, where the limit is not enforced, so it neither fails nor waits.
+fn flush_thread_stat_buffers() {
+    let _ = MemStatBuffer::current().flush::<false>(0);
+    let _ = GlobalStatBuffer::current().flush::<false>(0);
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -488,6 +503,8 @@ mod tests {
     use crate::runtime::memory::memory_manager::KILLING;
     use crate::runtime::memory::memory_manager::QueriesMemoryManager;
     use crate::runtime::memory::memory_manager::RUNNING;
+    use crate::runtime::memory::stat_buffer_global::GlobalStatBuffer;
+    use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
 
     fn mock_exceeded_memory(mem_stat: &MemStat, set_water_height: bool) {
         mem_stat.set_limit(257 * 1024 * 1024, set_water_height);
@@ -791,6 +808,41 @@ mod tests {
             assert!(relieved());
             EXCEEDED as usize
         });
+    }
+
+    /// Memory a reclaim frees on the allocating thread is buffered there below the flush
+    /// threshold; the reclaim must still see the limit relieved.
+    #[test]
+    fn test_reclaim_counts_frees_still_buffered() {
+        static TEST_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
+        static TEST_GLOBAL_MEM_STAT: MemStat = MemStat::global(&TEST_MANAGER);
+
+        // Over the limit by less than one buffer's worth.
+        TEST_GLOBAL_MEM_STAT.set_limit(257 * 1024 * 1024, false);
+        TEST_GLOBAL_MEM_STAT
+            .used
+            .fetch_add(258 * 1024 * 1024, Ordering::Relaxed);
+        let mut buffer = GlobalStatBuffer::empty(&TEST_GLOBAL_MEM_STAT);
+        std::mem::swap(GlobalStatBuffer::current(), &mut buffer);
+
+        let freed = 2 * 1024 * 1024;
+        assert!(freed < MEM_STAT_BUFFER_SIZE);
+        TEST_MANAGER.set_reclaim_handle(move |relieved| {
+            GlobalStatBuffer::current().dealloc(freed);
+            assert!(relieved());
+            freed as usize
+        });
+        let mem_stat = mock_mem_stat(
+            "test_reclaim_counts_frees_still_buffered".to_string(),
+            1,
+            ParentMemStat::StaticRef(&TEST_GLOBAL_MEM_STAT),
+            &TEST_MANAGER,
+        );
+        let relieved = TEST_MANAGER.reclaim(&mem_stat);
+
+        std::mem::swap(GlobalStatBuffer::current(), &mut buffer);
+        assert!(relieved);
+        assert!(TEST_GLOBAL_MEM_STAT.recheck_limit().is_ok());
     }
 
     #[test]
