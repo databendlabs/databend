@@ -38,7 +38,6 @@ use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
-use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -1983,19 +1982,15 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateUDF(plan) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
                     .await?;
-                if let UDFDefinition::UDFServer(server) = &plan.udf.definition {
-                    for name in &server.external_access_integrations {
-                        self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
-                    }
+                for name in plan.udf.definition.external_access_integrations() {
+                    self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
                 }
             }
             Plan::AlterUDF(plan) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
                     .await?;
-                if let UDFDefinition::UDFServer(server) = &plan.udf.definition {
-                    for name in &server.external_access_integrations {
-                        self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
-                    }
+                for name in plan.udf.definition.external_access_integrations() {
+                    self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
                 }
             }
             Plan::DropUDF(plan) => {

@@ -49,18 +49,19 @@ use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
+#[cfg(feature = "python-udf")]
 use databend_common_sql::plans::UDFType;
 use databend_common_storage::init_stage_operator;
 
 use self::venv::TempDir;
-#[cfg(feature = "python-udf")]
-use super::python_worker::python_function;
 #[cfg(feature = "python-udf")]
 use super::python_worker::PythonQueryWorkers;
 #[cfg(feature = "python-udf")]
 use super::python_worker::PythonRuntime;
 #[cfg(feature = "python-udf")]
 use super::python_worker::PythonWorkerManager;
+#[cfg(feature = "python-udf")]
+use super::python_worker::python_function;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
 use super::script_udf_limits::ScriptUdfLimits;
@@ -84,9 +85,17 @@ impl ScriptRuntime {
         _temp_dir: Option<TempDir>,
         #[cfg(feature = "python-udf")] query: &Arc<PythonQueryWorkers>,
     ) -> Result<Self> {
-        let UDFType::Script(deref!(UDFScriptCode { language, code, .. })) = &func.udf_type else {
-            unreachable!()
-        };
+        let UDFScriptCode {
+            language,
+            code,
+            external_access_integrations,
+            ..
+        } = func.udf_type.script_code().expect("script UDF");
+        if !external_access_integrations.is_empty() && *language != UDFLanguage::Python {
+            return Err(ErrorCode::InvalidArgument(
+                "External access requires a Python worker",
+            ));
+        }
         match language {
             UDFLanguage::JavaScript => {
                 let builder = JsRuntimeBuilder {
@@ -101,12 +110,12 @@ impl ScriptRuntime {
             UDFLanguage::WebAssembly => {
                 let start = std::time::Instant::now();
                 let config = wasm_runtime_config(&ScriptUdfLimits::current());
-                let runtime = arrow_udf_runtime::wasm::Runtime::with_config(code, config)
-                    .map_err(|err| {
-                    ErrorCode::UDFRuntimeError(format!(
-                        "Failed to create WASM runtime for module: {err}"
-                    ))
-                })?;
+                let runtime =
+                    arrow_udf_runtime::wasm::Runtime::with_config(code, config).map_err(|err| {
+                        ErrorCode::UDFRuntimeError(format!(
+                            "Failed to create WASM runtime for module: {err}"
+                        ))
+                    })?;
                 log::info!(
                     "Init WebAssembly UDF runtime for {:?} took: {:?}",
                     func.name,
@@ -173,6 +182,7 @@ impl ScriptRuntime {
                     function,
                     query.clone(),
                     _temp_dir,
+                    external_access_integrations.clone(),
                 )?))
             }
             #[cfg(not(feature = "python-udf"))]
@@ -286,6 +296,12 @@ impl ScriptRuntime {
     fn collect_stage_sys_paths(func: &ScriptUdfFunctionDesc, temp_dir: &TempDir) -> Vec<String> {
         match &func.udf_type {
             UDFType::Script(
+                deref!(UDFScriptCode {
+                    imports_stage_info,
+                    ..
+                }),
+            )
+            | UDFType::ScriptWithExternalAccess(
                 deref!(UDFScriptCode {
                     imports_stage_info,
                     ..
@@ -793,20 +809,17 @@ impl TransformUdfScript {
     ) -> Result<RuntimeTimeRes> {
         let mut script_runtimes = BTreeMap::new();
         for func in funcs {
-            let code = match &func.udf_type {
-                UDFType::Script(deref!(script_code)) => script_code,
-                _ => continue,
+            let Some(code) = func.udf_type.script_code() else {
+                continue;
             };
 
-            let temp_dir = match &func.udf_type {
-                UDFType::Script(
-                    deref!(UDFScriptCode {
-                        language: UDFLanguage::Python,
-                        packages,
-                        imports_stage_info,
-                        ..
-                    }),
-                ) => tokio::task::block_in_place(|| -> Result<Option<TempDir>> {
+            let temp_dir = match code {
+                UDFScriptCode {
+                    language: UDFLanguage::Python,
+                    packages,
+                    imports_stage_info,
+                    ..
+                } => tokio::task::block_in_place(|| -> Result<Option<TempDir>> {
                     // Pipeline construction is synchronous, but runs on query workers.
                     // Tell Tokio before waiting on an environment or doing pip/zip I/O.
                     let code_str = String::from_utf8(code.code.to_vec())?;
@@ -1282,9 +1295,10 @@ pub(super) mod venv {
             let Some((extras, tail)) = extras.split_once(']') else {
                 return invalid();
             };
-            if !extras.chars().all(|c| {
-                c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ',' | ' ')
-            }) {
+            if !extras
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ',' | ' '))
+            {
                 return invalid();
             }
             rest = tail.trim_start();
@@ -1336,7 +1350,9 @@ pub(super) mod venv {
         command.arg("--").args(deps.iter().map(|dep| dep.trim()));
         let status = command
             .env_clear()
-            .envs(allowed_env(&[PYTHON_ENV, PIP_ENV].concat(), &["LC_", "PIP_"]))
+            .envs(allowed_env(&[PYTHON_ENV, PIP_ENV].concat(), &[
+                "LC_", "PIP_",
+            ]))
             .current_dir(temp_dir_path)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())

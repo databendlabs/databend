@@ -10,7 +10,19 @@ edition = { workspace = true }
 [features]
 default = []
 script-udf = ["dep:arrow-udf-runtime"]
-python-udf = ["script-udf", "arrow-udf-runtime/python", "dep:arrow-udf-python-worker"]
+python-udf = [
+    "script-udf",
+    "arrow-udf-runtime/python",
+    "dep:arrow-udf-python-worker",
+    "dep:databend-common-users",
+    "dep:databend-common-grpc",
+    "dep:bytes",
+    "dep:http",
+    "dep:http-body-util",
+    "dep:hyper",
+    "dep:hyper-util",
+    "dep:url",
+]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -22,25 +34,35 @@ arrow-select = { workspace = true }
 arrow-udf-python-worker = { workspace = true, optional = true }
 arrow-udf-runtime = { workspace = true, optional = true }
 async-trait = { workspace = true }
+bytes = { workspace = true, optional = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
+databend-common-grpc = { workspace = true, optional = true }
 databend-common-meta-app = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-users = { workspace = true, optional = true }
 futures = { workspace = true }
+http = { workspace = true, optional = true }
+http-body-util = { workspace = true, optional = true }
+hyper = { workspace = true, optional = true, features = ["http1", "client", "server"] }
+hyper-util = { workspace = true, optional = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
+url = { workspace = true, optional = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]
+databend-common-version = { workspace = true }
+databend-meta-client = { workspace = true }
 # Same allocator as the query binary: jemalloc background threads must not
 # defeat the single-threaded sandbox entry.
 databend-common-base = { workspace = true, features = ["jemalloc"] }
@@ -51,6 +73,11 @@ tokio = { workspace = true, features = ["test-util"] }
 name = "python_worker_process"
 path = "tests/python_worker_process.rs"
 harness = false
+required-features = ["python-udf"]
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
 required-features = ["python-udf"]
 
 [lints]

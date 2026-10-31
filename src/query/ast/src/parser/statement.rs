@@ -6555,12 +6555,10 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             external_access_integrations,
         )| {
             if address_or_code.1 {
-                if external_access_integrations.is_some() {
-                    return Err(nom::Err::Failure(ErrorKind::other(
-                        "EXTERNAL_ACCESS_INTEGRATIONS requires a remote UDF ADDRESS",
-                    )));
-                }
                 Ok(UDFDefinition::UDFScript {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     return_type,
                     code: address_or_code.0,
@@ -6652,6 +6650,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
+            ~ (EXTERNAL_ACCESS_INTEGRATIONS ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
         },
         |(
             arg_types,
@@ -6667,9 +6666,13 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             packages,
             headers,
             address_or_code,
+            external_access_integrations,
         )| {
             if address_or_code.1 {
                 Ok(UDFDefinition::UDAFScript {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     state_fields: state_types,
                     return_type,
@@ -6686,6 +6689,11 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     runtime_version: "".to_string(),
                 })
             } else {
+                if external_access_integrations.is_some() {
+                    return Err(nom::Err::Failure(ErrorKind::other(
+                        "Remote aggregate UDF integrations are not supported",
+                    )));
+                }
                 Ok(UDFDefinition::UDAFServer {
                     arg_types,
                     state_fields: state_types,

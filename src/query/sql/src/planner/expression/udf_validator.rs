@@ -45,6 +45,7 @@ pub struct UdfValidationConfig {
     pub enable_udf_wasm_script: bool,
     pub enable_udf_sandbox: bool,
     pub enable_udf_server: bool,
+    pub enable_python_udf_external_access: bool,
     pub udf_server_allow_insecure: bool,
     pub udf_server_allow_list: Vec<String>,
 }
@@ -58,6 +59,7 @@ impl UdfValidationConfig {
             enable_udf_wasm_script: common.enable_udf_wasm_script,
             enable_udf_sandbox: common.enable_udf_sandbox,
             enable_udf_server: common.enable_udf_server,
+            enable_python_udf_external_access: common.enable_python_udf_external_access,
             udf_server_allow_insecure: common.udf_server_allow_insecure,
             udf_server_allow_list: common.udf_server_allow_list.clone(),
         }
@@ -201,6 +203,22 @@ impl UDFValidator {
                 other
             ))),
         }
+    }
+
+    pub fn is_python_udf_external_access_allowed_with_config(
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
+        if !config.enable_python_udf_external_access {
+            return Err(ErrorCode::InvalidConfig(
+                "Python UDF external access requires 'enable_python_udf_external_access = true' in query node config",
+            ));
+        }
+        if config.enable_udf_sandbox {
+            return Err(ErrorCode::InvalidArgument(
+                "Python UDF external access is not supported when 'enable_udf_sandbox' is enabled",
+            ));
+        }
+        Ok(())
     }
 
     pub fn is_udf_cloud_script_allowed(lang: &UDFLanguage) -> Result<()> {
@@ -425,6 +443,25 @@ mod tests {
                 &config
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn python_external_access_is_operator_opt_in_and_local_only() {
+        let mut config = UdfValidationConfig::default();
+        assert!(!config.enable_python_udf_external_access);
+        // The remote transport switch must not opt Python workers in.
+        config.enable_udf_server = true;
+        assert!(UDFValidator::is_python_udf_external_access_allowed_with_config(&config).is_err());
+        config.enable_python_udf_external_access = true;
+        config.enable_udf_server = false;
+        UDFValidator::is_python_udf_external_access_allowed_with_config(&config).unwrap();
+        config.enable_udf_sandbox = true;
+        assert!(
+            UDFValidator::is_python_udf_external_access_allowed_with_config(&config)
+                .unwrap_err()
+                .message()
+                .contains("enable_udf_sandbox")
         );
     }
 

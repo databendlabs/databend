@@ -183,3 +183,4 @@ mod v188_partition_key;
 mod v189_table_clone;
 mod v190_external_access;
 mod v191_masking_where_unmasked_value;
+mod v192_script_external_access;

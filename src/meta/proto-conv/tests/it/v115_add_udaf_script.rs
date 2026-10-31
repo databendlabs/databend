@@ -52,6 +52,7 @@ fn test_decode_v115_add_udaf_script() -> anyhow::Result<()> {
         name: "my_fn".to_string(),
         description: "This is a description".to_string(),
         definition: UDFDefinition::UDAFScript(UDAFScript {
+            external_access_integrations: vec![],
             code: "some code".to_string(),
             language: "javascript".to_string(),
             arg_types: vec![DataType::Number(NumberDataType::Int32)],
