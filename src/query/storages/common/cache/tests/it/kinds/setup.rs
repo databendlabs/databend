@@ -16,9 +16,7 @@
 
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
-use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::Pool;
 use tempfile::TempDir;
 
 const MIB: u64 = 1 << 20;
@@ -86,14 +84,6 @@ impl Backend {
                 table_data_deserialized_data_bytes: 256 << 10,
                 ..config
             },
-        }
-    }
-
-    /// Loads before a read value of `kind` is cached.
-    pub fn admit_after(self, kind: CacheKind) -> usize {
-        match (self, kind.pool()) {
-            (Backend::Shared, Pool::Data) => 2,
-            _ => 1,
         }
     }
 }

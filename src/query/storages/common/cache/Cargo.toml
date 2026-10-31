@@ -32,7 +32,6 @@ prometheus-client = { workspace = true }
 rayon = { workspace = true }
 rustix = { workspace = true }
 siphasher = { workspace = true }
-sys-info = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]

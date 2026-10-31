@@ -36,7 +36,6 @@ use crate::Codec;
 use crate::DiskCacheAccessor;
 use crate::Reader;
 use crate::SingleFlight;
-use crate::backend::InsertMode;
 use crate::backend::InsertOutcome;
 use crate::backend::KindStats;
 use crate::backend::KindStore;
@@ -83,7 +82,8 @@ impl<T> DiskTier<T> {
 }
 
 /// Typed handle to one kind: memory tier in the store, optional disk tier, single-flight loads.
-/// Cheap to clone; clones share in-flight loads.
+/// Cheap to clone; clones share in-flight loads, and so do all handles of a kind from one
+/// `CacheManager`.
 pub struct MemCache<T: CachedItem> {
     kind: CacheKind,
     store: Arc<dyn KindStore>,
@@ -115,6 +115,12 @@ impl<T: CachedItem> MemCache<T> {
             flight: Arc::new(SingleFlight::default()),
             read_only: false,
         }
+    }
+
+    /// Shares in-flight loads through `flight`, e.g. with every handle of the kind.
+    pub(crate) fn with_flight(mut self, flight: Arc<SingleFlight<CacheRef<T>>>) -> Self {
+        self.flight = flight;
+        self
     }
 
     pub fn with_disk(
@@ -220,14 +226,14 @@ impl<T: CachedItem> MemCache<T> {
         Ok(self.fill(key, compute()?))
     }
 
-    /// Read-path refill: subject to admission; a no-op in read-only mode.
+    /// Read-path refill; a no-op in read-only mode.
     pub fn fill(&self, key: &str, value: T) -> CacheRef<T> {
-        self.store_value(key, value, InsertMode::Fill, true)
+        self.store_value(key, value, true, true)
     }
 
-    /// Write-path insertion: bypasses admission and applies in read-only mode.
+    /// Write-path insertion; applies in read-only mode too.
     pub fn put(&self, key: &str, value: T) -> CacheRef<T> {
-        self.store_value(key, value, InsertMode::Put, true)
+        self.store_value(key, value, false, true)
     }
 
     /// Removes the entry from every tier; readers still holding it keep it charged until they drop it.
@@ -287,11 +293,12 @@ impl<T: CachedItem> MemCache<T> {
     /// hits and bytes.
     fn lookup_disk(&self, key: &str) -> Option<CacheRef<T>> {
         let value = self.disk.as_ref().and_then(|d| d.read(key))?;
-        Some(self.store_value(key, value, InsertMode::Fill, false))
+        Some(self.store_value(key, value, true, false))
     }
 
-    fn store_value(&self, key: &str, value: T, mode: InsertMode, to_disk: bool) -> CacheRef<T> {
-        if mode == InsertMode::Fill && self.read_only {
+    /// `fill`: a read-path refill, skipped in read-only mode.
+    fn store_value(&self, key: &str, value: T, fill: bool, to_disk: bool) -> CacheRef<T> {
+        if fill && self.read_only {
             return CacheRef::new(value);
         }
         if to_disk && let Some(disk) = &self.disk {
@@ -307,8 +314,7 @@ impl<T: CachedItem> MemCache<T> {
         };
         let value = CacheRef::new(value);
         if let InsertOutcome::Inserted(reservation) =
-            self.store
-                .insert(self.kind, key, value.erase(), bytes, mode)
+            self.store.insert(self.kind, key, value.erase(), bytes)
         {
             value.attach(reservation);
         }

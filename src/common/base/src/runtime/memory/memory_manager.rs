@@ -175,7 +175,19 @@ impl QueriesMemoryManager {
 
     /// True if reclaiming cache memory brought the global memory usage back under its limit.
     fn reclaim(&self, mem_stat: &MemStat) -> bool {
-        let Some(global) = Self::global_of(mem_stat) else {
+        Self::global_of(mem_stat).is_some_and(|global| self.reclaim_global(global))
+    }
+
+    /// The global memory usage is over its limit for an allocation outside any query, where
+    /// nothing waits or fails at the limit: reclaims cache memory, so that the cache shrinks
+    /// even when no query allocates.
+    pub(crate) fn reclaim_outside_queries(&self, global: &MemStat) {
+        self.reclaim_global(global);
+    }
+
+    fn reclaim_global(&self, global: &MemStat) -> bool {
+        // Without a handler nothing is done, not even flushing the stat buffers.
+        let Some(handler) = self.reclaim_handler.read().clone() else {
             return false;
         };
         // Memory freed on this thread may still sit in its stat buffers, below their flush
@@ -188,9 +200,6 @@ impl QueriesMemoryManager {
         if under_limit() {
             return false;
         }
-        let Some(handler) = self.reclaim_handler.read().clone() else {
-            return false;
-        };
         let _reclaiming = self.reclaiming.lock();
         // Another thread may have reclaimed while this one waited.
         if under_limit() {
@@ -917,6 +926,43 @@ mod tests {
         assert!(killed.load(Ordering::Relaxed));
         let state = TEST_MANAGER.get_state();
         assert_eq!(state.resources[&tag].state.load(Ordering::Acquire), KILLING);
+    }
+
+    /// An allocation outside any query over the global limit reclaims cache memory, and is not
+    /// refused; under the limit, or without a reclaim handler, nothing is reclaimed.
+    #[test]
+    fn test_allocation_outside_queries_reclaims() {
+        static TEST_MANAGER: QueriesMemoryManager = QueriesMemoryManager::create();
+        static TEST_GLOBAL_MEM_STAT: MemStat = MemStat::global(&TEST_MANAGER);
+        static NO_HANDLER: QueriesMemoryManager = QueriesMemoryManager::create();
+        static NO_HANDLER_GLOBAL: MemStat = MemStat::global(&NO_HANDLER);
+
+        let limit = 512 * 1024 * 1024;
+        for global in [&TEST_GLOBAL_MEM_STAT, &NO_HANDLER_GLOBAL] {
+            global.set_limit(limit, false);
+        }
+        let calls = Arc::new(AtomicU64::new(0));
+        reclaim_on_nth_call(&TEST_MANAGER, &TEST_GLOBAL_MEM_STAT, 1, calls.clone());
+        let alloc = |global: &'static MemStat| {
+            let mut buffer = GlobalStatBuffer::empty(global);
+            std::mem::swap(GlobalStatBuffer::current(), &mut buffer);
+            let result = GlobalStatBuffer::current().alloc(MEM_STAT_BUFFER_SIZE + 1);
+            std::mem::swap(GlobalStatBuffer::current(), &mut buffer);
+            result
+        };
+
+        assert!(alloc(&TEST_GLOBAL_MEM_STAT).is_ok());
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "under the limit");
+
+        TEST_GLOBAL_MEM_STAT
+            .used
+            .fetch_add(limit, Ordering::Relaxed);
+        assert!(alloc(&TEST_GLOBAL_MEM_STAT).is_ok());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(TEST_GLOBAL_MEM_STAT.recheck_limit().is_ok());
+
+        NO_HANDLER_GLOBAL.used.fetch_add(limit, Ordering::Relaxed);
+        assert!(alloc(&NO_HANDLER_GLOBAL).is_ok());
     }
 
     /// Exceeding only a workload group limit does not reclaim cache memory.

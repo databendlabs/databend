@@ -32,8 +32,6 @@
 //! - `cache_eviction_count` and `cache_eviction_bytes` per kind, by `reason`: `capacity` (room in
 //!   the pool, a lowered cap or limit) or `memory_pressure` (reclaimed for queries). Explicit
 //!   evictions and replacements are not counted.
-//! - `cache_admission_deferred_count` per kind: loaded values not cached yet, because the key
-//!   had not been read often enough.
 //! - `cache_insert_rejected_count` per kind, by `reason`: `oversized`, `kind_limit` or
 //!   `pool_full_pinned`.
 //! - `cache_memory_reclaim_count`, `cache_memory_reclaim_bytes` (freed) and
@@ -173,7 +171,6 @@ struct Families {
     pool_capacity: Family,
     evicted: Family,
     evicted_bytes: Family,
-    deferred: Family,
     rejected: Family,
 }
 
@@ -202,10 +199,6 @@ impl Families {
             evicted_bytes: Family::counter(
                 "cache_eviction_bytes",
                 "Bytes of entries evicted, by reason.",
-            ),
-            deferred: Family::counter(
-                "cache_admission_deferred_count",
-                "Loaded values not cached yet: the key had not been read often enough.",
             ),
             rejected: Family::counter("cache_insert_rejected_count", "Values refused, by reason."),
         }
@@ -250,8 +243,6 @@ impl Families {
             self.evicted.push(labels.clone(), count);
             self.evicted_bytes.push(labels, bytes);
         }
-        self.deferred
-            .push(labels.clone(), events.admission_deferred);
         for (reason, count) in [
             ("oversized", events.rejected_oversized),
             ("kind_limit", events.rejected_kind_limit),
@@ -274,7 +265,6 @@ impl Families {
             self.pool_capacity,
             self.evicted,
             self.evicted_bytes,
-            self.deferred,
             self.rejected,
         ]
     }

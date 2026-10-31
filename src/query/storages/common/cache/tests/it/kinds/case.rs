@@ -49,10 +49,13 @@ use crate::mem_bytes_accuracy::measure;
 pub trait KindCase: Send + Sync {
     fn kind(&self) -> CacheKind;
 
-    /// Put, look up, replace, read-only lookups, loading and eviction in memory. `admit_after`
-    /// is the number of loads the backend needs before caching a read value; `legacy` says the
-    /// backend charges `legacy_bytes`.
-    fn memory_round_trip(&self, manager: &CacheManager, admit_after: usize, legacy: bool);
+    /// Put, look up, replace, read-only lookups, loading and eviction in memory. `legacy` says
+    /// the backend charges `legacy_bytes`.
+    fn memory_round_trip(&self, manager: &CacheManager, legacy: bool);
+
+    /// Concurrent misses on one key through separate handles of the kind, as callers that make
+    /// a handle per call do, load once.
+    fn shared_loads(&self, manager: &CacheManager);
 
     /// `legacy_bytes` of a sample value.
     fn legacy_bytes(&self) -> usize;
@@ -108,6 +111,8 @@ struct Case<K>(PhantomData<fn() -> K>);
 /// Loads sample values, counting the loads.
 struct SampleReader<K> {
     reads: AtomicUsize,
+    /// Returns to the executor once before loading, so that other callers get to wait on it.
+    yields: bool,
     kind: PhantomData<fn() -> K>,
 }
 
@@ -115,7 +120,15 @@ impl<K> SampleReader<K> {
     fn new() -> Self {
         SampleReader {
             reads: AtomicUsize::new(0),
+            yields: false,
             kind: PhantomData,
+        }
+    }
+
+    fn yielding() -> Self {
+        SampleReader {
+            yields: true,
+            ..Self::new()
         }
     }
 
@@ -133,9 +146,25 @@ impl<K: Sample> Reader for SampleReader<K> {
     }
 
     async fn read(&self, key: &String) -> Result<K::Value> {
+        if self.yields {
+            yield_once().await;
+        }
         self.reads.fetch_add(1, Ordering::Relaxed);
         Ok(K::sample(key.len() as u32))
     }
+}
+
+/// Pending once, then ready.
+async fn yield_once() {
+    let mut yielded = false;
+    std::future::poll_fn(|cx| {
+        if std::mem::replace(&mut yielded, true) {
+            return std::task::Poll::Ready(());
+        }
+        cx.waker().wake_by_ref();
+        std::task::Poll::Pending
+    })
+    .await
 }
 
 fn same<T>(a: &CacheRef<T>, b: &CacheRef<T>) -> bool {
@@ -147,7 +176,7 @@ impl<K: Sample> KindCase for Case<K> {
         CacheKind::of::<K>()
     }
 
-    fn memory_round_trip(&self, manager: &CacheManager, admit_after: usize, legacy: bool) {
+    fn memory_round_trip(&self, manager: &CacheManager, legacy: bool) {
         let name = K::NAME;
         let charge = |value: &K::Value| {
             if legacy {
@@ -182,13 +211,13 @@ impl<K: Sample> KindCase for Case<K> {
         view.fill("b", K::sample(3));
         assert!(!cache.contains("b"), "{name}");
 
-        // Loaded through a reader until admitted, then served from the cache.
+        // Loaded through a reader and cached on the first read, then served from the cache.
         let reader = SampleReader::<K>::new();
         let mut loaded = Vec::new();
-        for _ in 0..=admit_after {
+        for _ in 0..2 {
             loaded.push(block_on(cache.get(&reader, "c".to_string())).unwrap());
         }
-        assert_eq!(reader.reads(), admit_after, "{name}");
+        assert_eq!(reader.reads(), 1, "{name}");
         assert!(
             same(loaded.last().unwrap(), &cache.lookup("c").unwrap()),
             "{name}"
@@ -232,6 +261,21 @@ impl<K: Sample> KindCase for Case<K> {
         assert_eq!(disk.codec.encode(&read_back).unwrap(), encoded, "{name}");
         assert!(cache.evict("d"), "{name}");
         assert!(cache.lookup("d").is_none() && !on_disk(), "{name}");
+    }
+
+    fn shared_loads(&self, manager: &CacheManager) {
+        let name = K::NAME;
+        let (first, second) = (manager.cache::<K>(), manager.cache::<K>());
+        let reader = SampleReader::<K>::yielding();
+        let key = || "shared".to_string();
+        let (a, b) = block_on(futures::future::join(
+            first.get(&reader, key()),
+            second.get(&reader, key()),
+        ));
+        let (a, b) = (a.unwrap(), b.unwrap());
+        assert_eq!(reader.reads(), 1, "{name}");
+        assert!(same(&a, &b), "{name}");
+        assert!(first.evict("shared"), "{name}");
     }
 
     fn legacy_bytes(&self) -> usize {

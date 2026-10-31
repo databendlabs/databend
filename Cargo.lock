@@ -5956,7 +5956,6 @@ dependencies = [
  "rayon",
  "rustix 0.38.44",
  "siphasher 0.3.11",
- "sys-info",
  "tempfile",
  "tokio",
 ]

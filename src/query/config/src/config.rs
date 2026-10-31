@@ -3545,8 +3545,9 @@ pub struct CacheConfig {
 
     /// Use the shared cache backend: three memory pools (meta, index and data), each sized as a
     /// percentage of the server memory limit, evicted with S3-FIFO and shrunk under memory
-    /// pressure before queries are killed. The per-cache capacity options above and
-    /// `enable_table_meta_cache` are then ignored; disk cache options still apply.
+    /// pressure before queries are killed. Requires a server memory limit
+    /// (`max_memory_limit_enabled` and `max_server_memory_usage`). The per-cache capacity options
+    /// above and `enable_table_meta_cache` are then ignored; disk cache options still apply.
     #[clap(
         long = "cache-shared-memory-enabled",
         value_name = "VALUE",

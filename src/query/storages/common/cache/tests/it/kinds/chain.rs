@@ -45,7 +45,17 @@ fn test_memory_round_trip() {
         let manager = manager(&backend.config(MEMORY), MEMORY, false);
         for case in cases() {
             let legacy = backend == Backend::Legacy;
-            case.memory_round_trip(&manager, backend.admit_after(case.kind()), legacy);
+            case.memory_round_trip(&manager, legacy);
+        }
+    }
+}
+
+#[test]
+fn test_handles_share_loads() {
+    for backend in Backend::ALL {
+        let manager = manager(&backend.config(MEMORY), MEMORY, false);
+        for case in cases() {
+            case.shared_loads(&manager);
         }
     }
 }

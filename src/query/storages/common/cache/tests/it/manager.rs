@@ -311,6 +311,14 @@ fn test_shared_backend_rejects_bad_config() {
         };
         assert!(CacheManager::try_new(&unknown, &1_000_000, "test", false).is_err());
     }
+    // Without a server memory limit the pools would be neither bounded nor reclaimed.
+    assert!(CacheManager::try_new(&shared_config(), &0, "test", false).is_err());
+    // The legacy backend keeps working without one.
+    let legacy = CacheConfig {
+        shared_memory_enabled: false,
+        ..shared_config()
+    };
+    assert!(CacheManager::try_new(&legacy, &0, "test", false).is_ok());
 }
 
 fn find<'a>(rows: &'a [CacheRow], name: &str) -> &'a CacheRow {

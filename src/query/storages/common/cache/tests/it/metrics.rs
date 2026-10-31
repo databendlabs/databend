@@ -157,14 +157,12 @@ fn test_shared_store_counts_events() {
     assert!(!meta.put("big", live.item(251)).is_charged());
     assert_eq!(events(meta_kind()).rejected_oversized, 1);
 
-    // A data value is cached on its second read; the first is deferred.
+    // A data value is cached on its first read.
     let data = cache(&store, data_kind());
     let reader = FakeReader::new(100);
     block_on(data.get(&reader, "k".to_string())).unwrap();
-    assert_eq!(events(data_kind()).admission_deferred, 1);
-    block_on(data.get(&reader, "k".to_string())).unwrap();
     assert!(data.contains("k"));
-    assert_eq!(events(data_kind()).admission_deferred, 1);
+    assert_eq!(reader.reads(), 1);
 }
 
 /// The counters reach the metrics, per kind and reason; the legacy backend has none.

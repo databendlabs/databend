@@ -62,17 +62,8 @@ impl KindLimit {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InsertMode {
-    /// Read-path refill, subject to admission.
-    Fill,
-    /// Write-path insertion, bypassing admission.
-    Put,
-}
-
 pub enum InsertOutcome {
     Inserted(Reservation),
-    Deferred,
     Rejected(RejectReason),
 }
 
@@ -114,8 +105,6 @@ pub struct KindEvents {
     /// Reclaimed for queries under memory pressure.
     pub evicted_for_pressure: u64,
     pub evicted_for_pressure_bytes: u64,
-    /// Loaded values not cached yet: the key had not been read often enough.
-    pub admission_deferred: u64,
     pub rejected_oversized: u64,
     pub rejected_kind_limit: u64,
     pub rejected_pool_full_pinned: u64,
@@ -147,14 +136,8 @@ pub trait KindStore: Send + Sync {
 
     fn contains(&self, kind: CacheKind, key: &str) -> bool;
 
-    fn insert(
-        &self,
-        kind: CacheKind,
-        key: &str,
-        value: ErasedValue,
-        bytes: usize,
-        mode: InsertMode,
-    ) -> InsertOutcome;
+    fn insert(&self, kind: CacheKind, key: &str, value: ErasedValue, bytes: usize)
+    -> InsertOutcome;
 
     fn evict(&self, kind: CacheKind, key: &str) -> bool;
 

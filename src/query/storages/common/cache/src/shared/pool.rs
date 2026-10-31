@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_cache::DefaultHashBuilder;
-use databend_common_cache::Placement;
 use databend_common_cache::S3Fifo;
 use databend_common_cache::S3FifoConfig;
 use parking_lot::RwLock;
@@ -67,7 +66,6 @@ impl PoolStore {
     pub fn new(pool: Pool, cap: usize, shards: usize) -> Self {
         let shards = shards.max(1);
         let config = S3FifoConfig {
-            admit_after: if pool == Pool::Data { 2 } else { 1 },
             ghost_entries: GHOST_ENTRIES_PER_SHARD,
             ghost_bytes: ghost_bytes_per_shard(cap, shards),
             large_entry_bytes: large_entry_bytes(cap),
@@ -144,24 +142,14 @@ impl PoolStore {
         self.shards[self.shard_of(key)].read().contains(&key)
     }
 
-    /// Admission of a value of `bytes` for `key`; see `S3Fifo::admission`.
-    pub fn admission(&self, key: KeyRef, bytes: usize) -> Option<Placement> {
-        let mut shard = self.shards[self.shard_of(key)].write();
-        if shard.contains(&key) {
-            return Some(Placement::Small);
-        }
-        shard.admission(&key.to_owned(), bytes)
-    }
-
-    /// `placement: None` bypasses admission.
-    pub fn insert(&self, key: KeyRef, entry: Entry, placement: Option<Placement>) -> Removed {
+    /// Caches `entry` on its first insertion: on probation in the small queue, or in the main
+    /// queue when the ghost remembers the key or the entry is large.
+    pub fn insert(&self, key: KeyRef, entry: Entry) -> Removed {
         let bytes = entry.bytes;
         let owned = key.to_owned();
-        let mut shard = self.shards[self.shard_of(key)].write();
-        let replaced = match placement {
-            Some(placement) => shard.insert_at(owned, entry, bytes, placement),
-            None => shard.insert(owned, entry, bytes),
-        };
+        let replaced = self.shards[self.shard_of(key)]
+            .write()
+            .insert(owned, entry, bytes);
         replaced.map(|e| (key.to_owned(), e)).into_iter().collect()
     }
 
@@ -199,8 +187,6 @@ impl PoolStore {
         removed
     }
 
-    /// Pops unreferenced entries until `target` bytes or one batch, visiting shards from `start`.
-    /// With `blocking == false`, busy shards are skipped.
     /// Evicts entries of `kind` only, in eviction order, from shard `start` on, until `target`
     /// bytes or a batch; held entries stay. Entries of other kinds keep their place.
     pub fn evict_kind_batch(&self, kind: CacheKind, start: usize, target: usize) -> Removed {
@@ -317,51 +303,41 @@ mod tests {
         let snapshot = CacheKind::of::<table::Snapshot>();
         let store = PoolStore::new(Pool::Meta, 0, 1);
         store.set_cap(64_000);
-        store.insert(KeyRef::new(snapshot, "small"), entry(100), None);
+        store.insert(KeyRef::new(snapshot, "small"), entry(100));
         assert_eq!(small_bytes(&store), 100);
         // A 64th of the cap or more skips the small queue.
-        store.insert(KeyRef::new(snapshot, "large"), entry(1000), None);
+        store.insert(KeyRef::new(snapshot, "large"), entry(1000));
         assert_eq!(small_bytes(&store), 100);
 
         store.set_cap(640_000);
-        store.insert(KeyRef::new(snapshot, "now small"), entry(1000), None);
+        store.insert(KeyRef::new(snapshot, "now small"), entry(1000));
         assert_eq!(small_bytes(&store), 1100);
     }
 
-    /// The ghosts follow the cap in bytes: deferred values of a pool are remembered up to
-    /// about 0.9 times its cap, and a pool turned off forgets them.
+    /// The ghosts follow the cap in bytes: entries evicted from probation are remembered up to
+    /// about 0.9 times the cap, and a pool turned off forgets them.
     #[test]
     fn test_ghost_bytes_follow_the_cap() {
         let column = CacheKind::of::<crate::kinds::column::Data>();
         let store = PoolStore::new(Pool::Data, 10_000, 1);
-        // First reads are deferred and recorded, 1000 bytes each.
-        for i in 0..20 {
-            let key = i.to_string();
-            assert!(store.admission(KeyRef::new(column, &key), 1000).is_none());
+        let key = |i: usize| i.to_string();
+        for i in 0..200 {
+            store.insert(KeyRef::new(column, &key(i)), entry(100));
         }
+        while !store.evict_batch(0, usize::MAX, true).is_empty() {}
         let structure = store.structure();
         assert_eq!(structure.ghost_byte_capacity, 9000);
-        assert_eq!((structure.ghost_entries, structure.ghost_bytes), (9, 9000));
-        // The newest are remembered: a second read is admitted, an old one deferred again.
-        assert!(store.admission(KeyRef::new(column, "19"), 1000).is_some());
-        assert!(store.admission(KeyRef::new(column, "0"), 1000).is_none());
+        assert_eq!((structure.ghost_entries, structure.ghost_bytes), (90, 9000));
+        // A recently evicted key comes back into the main queue, an old one on probation.
+        store.insert(KeyRef::new(column, &key(199)), entry(100));
+        assert_eq!(small_bytes(&store), 0);
+        store.insert(KeyRef::new(column, &key(0)), entry(100));
+        assert_eq!(small_bytes(&store), 100);
 
         store.set_cap(0);
         assert_eq!(store.structure().ghost_bytes, 0);
         store.set_cap(100_000);
         assert_eq!(store.structure().ghost_byte_capacity, 90_000);
-        assert!(store.admission(KeyRef::new(column, "a"), 50_000).is_none());
-        assert!(store.admission(KeyRef::new(column, "a"), 50_000).is_some());
-    }
-
-    /// A value larger than its shard's ghost share is still admitted on a prompt second read.
-    #[test]
-    fn test_large_value_is_admitted_on_second_read() {
-        let column = CacheKind::of::<crate::kinds::column::Data>();
-        let store = PoolStore::new(Pool::Data, 10_000, 4);
-        let key = KeyRef::new(column, "large");
-        assert!(store.admission(key, 2500).is_none());
-        assert!(store.admission(key, 2500).is_some());
     }
 
     /// Held entries at the front of a shard do not end its eviction early.
@@ -376,11 +352,11 @@ mod tests {
                     value: value.clone(),
                     bytes: 10,
                 };
-                store.insert(KeyRef::new(snapshot, &i.to_string()), e, None);
+                store.insert(KeyRef::new(snapshot, &i.to_string()), e);
                 value
             })
             .collect();
-        store.insert(KeyRef::new(snapshot, "free"), entry(10), None);
+        store.insert(KeyRef::new(snapshot, "free"), entry(10));
         for blocking in [true, false] {
             let victims = store.evict_batch(0, usize::MAX, blocking);
             assert_eq!(victims.len(), usize::from(blocking), "blocking {blocking}");
@@ -399,8 +375,8 @@ mod tests {
         let store = PoolStore::new(Pool::Meta, 100_000, 2);
         for i in 0..10 {
             let key = i.to_string();
-            store.insert(KeyRef::new(snapshot, &key), entry(10), None);
-            store.insert(KeyRef::new(segment, &key), entry(10), None);
+            store.insert(KeyRef::new(snapshot, &key), entry(10));
+            store.insert(KeyRef::new(segment, &key), entry(10));
         }
         let victims = store.evict_kind_batch(snapshot, 0, 30);
         assert_eq!(victims.len(), 3);
@@ -414,7 +390,6 @@ mod tests {
         store.insert(
             KeyRef::new(CacheKind::of::<table::Snapshot>(), "a"),
             entry(10),
-            None,
         );
         let guard = store.shards[0].write();
         assert!(store.evict_batch(0, usize::MAX, false).is_empty());
@@ -430,7 +405,6 @@ mod tests {
             store.insert(
                 KeyRef::new(CacheKind::of::<table::Snapshot>(), &key),
                 entry(10),
-                None,
             );
         }
         assert_eq!(store.evict_batch(0, 25, true).len(), 3);

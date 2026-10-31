@@ -201,6 +201,14 @@ impl GlobalServices {
             &config.query.common.share_endpoint_auth_token_file,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
+        // The shared pools are reclaimed when the server memory limit is reached; without an
+        // enforced limit they never would be.
+        if config.cache.shared_memory_enabled && !config.query.common.max_memory_limit_enabled {
+            return Err(ErrorCode::InvalidConfig(
+                "cache.shared_memory_enabled requires a server memory limit: set \
+                 query.max_memory_limit_enabled and query.max_server_memory_usage",
+            ));
+        }
         CacheManager::init(
             &config.cache,
             &config.query.common.max_server_memory_usage,

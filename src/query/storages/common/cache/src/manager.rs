@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
@@ -29,10 +31,13 @@ use log::warn;
 use crate::CacheAccessor;
 use crate::CacheDef;
 use crate::CacheKind;
+use crate::CacheRef;
+use crate::CachedItem;
 use crate::DiskCacheAccessor;
 use crate::KindLimit;
 use crate::MemCache;
 use crate::Pool;
+use crate::SingleFlight;
 use crate::Unit;
 use crate::backend::KindEvents;
 use crate::backend::KindStore;
@@ -74,6 +79,9 @@ pub struct CacheManager {
     disks: HashMap<CacheKind, Arc<DiskCacheAccessor>>,
     /// Runtime switch of every disk tier; off when the license does not allow them.
     disk_allowed: Arc<AtomicBool>,
+    /// In-flight loads of each kind, by kind index: every handle of a kind shares them, so
+    /// concurrent misses on one key load once even through handles made per call.
+    flights: Box<[OnceLock<Arc<dyn Any + Send + Sync>>]>,
 }
 
 impl CacheManager {
@@ -127,19 +135,31 @@ impl CacheManager {
             store,
             disks,
             disk_allowed: Arc::new(AtomicBool::new(true)),
+            flights: CacheKind::all().map(|_| OnceLock::new()).collect(),
         }
     }
 
     /// The cache of kind `D`, with its disk tier when `D` defines one and the config enables it.
     pub fn cache<D: CacheDef>(&self) -> MemCache<D::Value> {
         let kind = CacheKind::of::<D>();
-        let cache = MemCache::new(self.store.clone(), kind);
+        let cache =
+            MemCache::new(self.store.clone(), kind).with_flight(self.flight::<D::Value>(kind));
         match (D::DISK, self.disks.get(&kind)) {
             (Some(disk), Some(tier)) => {
                 cache.with_disk(tier.clone(), self.disk_allowed.clone(), disk.codec)
             }
             _ => cache,
         }
+    }
+
+    fn flight<T: CachedItem>(&self, kind: CacheKind) -> Arc<SingleFlight<CacheRef<T>>> {
+        let flight = self.flights[kind.index()]
+            .get_or_init(|| Arc::new(SingleFlight::<CacheRef<T>>::default()));
+        // A kind has one value type, its `CacheDef::Value`.
+        flight
+            .clone()
+            .downcast()
+            .unwrap_or_else(|_| panic!("cache {} read as another value type", kind.name()))
     }
 
     /// Turns every disk tier on or off at runtime; memory tiers are unaffected.

@@ -84,12 +84,11 @@ async fn test_read_only_load_shared_with_full_cache_does_not_fill() -> Result<()
     Ok(())
 }
 
+/// Data is cached on its first read, as every other pool.
 #[test]
-fn test_data_pool_admits_on_second_access() {
+fn test_data_pool_admits_on_first_access() {
     let cache = cache(&shared_store(0, 0, 1 << 20), data_kind());
     let live = Live::default();
-    assert!(!cache.fill("k", live.item(10)).is_charged());
-    assert!(!cache.contains("k"));
     assert!(cache.fill("k", live.item(10)).is_charged());
     assert!(cache.contains("k"));
     assert!(cache.put("p", live.item(10)).is_charged());

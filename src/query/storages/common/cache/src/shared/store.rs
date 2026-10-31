@@ -28,7 +28,6 @@ use crate::KindLimit;
 use crate::Pool;
 use crate::PoolCaps;
 use crate::Unit;
-use crate::backend::InsertMode;
 use crate::backend::InsertOutcome;
 use crate::backend::KindEvents;
 use crate::backend::KindStats;
@@ -60,7 +59,6 @@ enum Evicted {
 struct EventCounters {
     evicted: [AtomicU64; 2],
     evicted_bytes: [AtomicU64; 2],
-    admission_deferred: AtomicU64,
     rejected_oversized: AtomicU64,
     rejected_kind_limit: AtomicU64,
     rejected_pool_full_pinned: AtomicU64,
@@ -93,7 +91,6 @@ impl EventCounters {
             evicted_for_capacity_bytes: get(&self.evicted_bytes[capacity]),
             evicted_for_pressure: get(&self.evicted[pressure]),
             evicted_for_pressure_bytes: get(&self.evicted_bytes[pressure]),
-            admission_deferred: get(&self.admission_deferred),
             rejected_oversized: get(&self.rejected_oversized),
             rejected_kind_limit: get(&self.rejected_kind_limit),
             rejected_pool_full_pinned: get(&self.rejected_pool_full_pinned),
@@ -266,7 +263,8 @@ impl SharedStore {
         let mut report = ShrinkReport::default();
         for pool in Pool::RECLAIM_ORDER {
             let store = self.pool(pool);
-            loop {
+            // Reclaims run on every allocation over the limit: an empty pool is not scanned.
+            while store.usage().in_cache() > 0 {
                 let before = store.usage().resident();
                 let victims = store.evict_batch(store.next_cursor(), usize::MAX, false);
                 let evicted = self.forget_evicted(store, victims, Evicted::MemoryPressure);
@@ -304,24 +302,12 @@ impl KindStore for SharedStore {
         key: &str,
         value: ErasedValue,
         bytes: usize,
-        mode: InsertMode,
     ) -> InsertOutcome {
         if let Err(reason) = self.check_admissible(kind, bytes) {
             return self.reject(kind, reason);
         }
         let pool = self.pool(kind.pool());
         let key = KeyRef::new(kind, key);
-        let placement = match mode {
-            InsertMode::Put => None,
-            InsertMode::Fill => match pool.admission(key, bytes) {
-                Some(placement) => Some(placement),
-                None => {
-                    let deferred = &self.kind(kind).events.admission_deferred;
-                    deferred.fetch_add(1, Ordering::Relaxed);
-                    return InsertOutcome::Deferred;
-                }
-            },
-        };
 
         // Both budgets are reserved before the value goes in, so concurrent inserts cannot
         // together exceed them; a rejected insert gives its reservation back.
@@ -336,7 +322,7 @@ impl KindStore for SharedStore {
         let reservation = Reservation::reserved(pool.usage().clone(), state.usage.clone(), bytes);
         pool.usage().enter(bytes);
         state.usage.enter(bytes);
-        let replaced = pool.insert(key, Entry { value, bytes }, placement);
+        let replaced = pool.insert(key, Entry { value, bytes });
         self.forget(pool, replaced);
         InsertOutcome::Inserted(reservation)
     }

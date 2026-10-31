@@ -17,7 +17,6 @@
 pub(crate) mod entry;
 mod kind_store;
 
-pub use kind_store::InsertMode;
 pub use kind_store::InsertOutcome;
 pub use kind_store::KindEvents;
 pub use kind_store::KindLimit;

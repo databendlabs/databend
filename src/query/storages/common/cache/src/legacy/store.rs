@@ -26,7 +26,6 @@ use crate::CacheKind;
 use crate::KindLimit;
 use crate::Pool;
 use crate::Unit;
-use crate::backend::InsertMode;
 use crate::backend::InsertOutcome;
 use crate::backend::KindStats;
 use crate::backend::KindStore;
@@ -239,7 +238,6 @@ impl KindStore for LegacyStore {
         key: &str,
         value: ErasedValue,
         bytes: usize,
-        _mode: InsertMode,
     ) -> InsertOutcome {
         let state = self.kind(kind);
         let capacity = *state.capacity.lock();

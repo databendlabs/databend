@@ -15,6 +15,7 @@
 mod deadlock;
 mod kind_limit;
 mod reclaim;
+mod scan_resistance;
 mod soak;
 pub(crate) mod soak_engine;
 mod store;

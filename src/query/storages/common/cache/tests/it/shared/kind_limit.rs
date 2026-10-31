@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2026 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -159,7 +159,7 @@ fn test_lowering_the_limit_keeps_hot_entries() {
     assert!(keys(0..5).iter().all(|k| !cache.contains(k)));
 }
 
-/// Values loaded through a reader, with the data pool's admission, also turn over.
+/// Values loaded through a reader also turn over.
 #[test]
 fn test_loaded_values_turn_over() {
     let store = shared_store(0, 0, 100_000);
@@ -167,11 +167,10 @@ fn test_loaded_values_turn_over() {
     let cache = cache(&store, data_kind());
     let reader = FakeReader::new(100);
     for key in keys(0..20) {
-        // The second load of a key is admitted.
-        block_on(cache.get(&reader, key.clone())).unwrap();
         block_on(cache.get(&reader, key.clone())).unwrap();
         assert!(cache.contains(&key), "{key}");
     }
+    assert_eq!(reader.reads(), 20);
     let events = store.kind_stats(data_kind()).events.unwrap();
     assert_eq!(events.rejected_kind_limit, 0);
     assert_eq!(store.kind_stats(data_kind()).in_cache, 1000);
