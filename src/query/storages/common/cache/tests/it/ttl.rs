@@ -75,6 +75,8 @@ impl TTLValue for Value {
 struct CountingReader {
     loads: Arc<AtomicUsize>,
     fail: Arc<AtomicBool>,
+    /// Loads wait while set, so a test can look at the cache before a background load lands.
+    hold: Arc<AtomicBool>,
     sync_refresh: bool,
 }
 
@@ -87,6 +89,9 @@ impl Reader for CountingReader {
     }
 
     async fn read(&self, _key: &String) -> Result<Value> {
+        while self.hold.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
         if self.fail.load(Ordering::SeqCst) {
             return Err(ErrorCode::StorageOther("test load failure"));
         }
@@ -105,6 +110,7 @@ struct Fixture {
     cache: MemCache<Value>,
     loads: Arc<AtomicUsize>,
     fail: Arc<AtomicBool>,
+    hold: Arc<AtomicBool>,
 }
 
 fn fixture(sync_refresh: bool, ttl: Duration) -> Fixture {
@@ -116,9 +122,11 @@ fn fixture_on(store: Arc<dyn KindStore>, sync_refresh: bool, ttl: Duration) -> F
     let cache = MemCache::new(store, kind());
     let loads = Arc::new(AtomicUsize::new(0));
     let fail = Arc::new(AtomicBool::new(false));
+    let hold = Arc::new(AtomicBool::new(false));
     let reader = CountingReader {
         loads: loads.clone(),
         fail: fail.clone(),
+        hold: hold.clone(),
         sync_refresh,
     };
     Fixture {
@@ -126,6 +134,7 @@ fn fixture_on(store: Arc<dyn KindStore>, sync_refresh: bool, ttl: Duration) -> F
         cache,
         loads,
         fail,
+        hold,
     }
 }
 
@@ -148,21 +157,27 @@ async fn test_fresh_value_is_served_from_cache() -> Result<()> {
     Ok(())
 }
 
-/// An expired value is served once more while a single background load replaces it.
+/// An expired value is served while a single background load replaces it.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_expired_value_refreshes_in_background() -> Result<()> {
-    let (reader, loads) = reader(false, Duration::ZERO);
-    assert_eq!(reader.read("t").await?.generation, 1);
-    tokio::time::sleep(Duration::from_millis(1)).await;
-    assert_eq!(reader.read("t").await?.generation, 1);
-    assert_eq!(reader.read("t").await?.generation, 1);
+    let f = fixture(false, Duration::ZERO);
+    assert_eq!(f.reader.read("t").await?.generation, 1);
+    tokio::time::sleep(Duration::from_millis(5)).await;
 
+    // Until the background load lands, every read gets the stale value and starts no other load.
+    f.hold.store(true, Ordering::SeqCst);
+    for _ in 0..3 {
+        assert_eq!(f.reader.read("t").await?.generation, 1);
+    }
+    f.hold.store(false, Ordering::SeqCst);
+
+    // Watched through the cache, not the reader: a read would find the new value expired too.
     let deadline = Instant::now() + Duration::from_secs(10);
-    while loads.load(Ordering::SeqCst) < 2 || reader.read("t").await?.generation == 1 {
+    while f.cache.lookup("t").map(|v| v.generation) != Some(2) {
         assert!(Instant::now() < deadline, "background refresh did not land");
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    assert_eq!(loads.load(Ordering::SeqCst), 2);
+    assert_eq!(f.loads.load(Ordering::SeqCst), 2);
     Ok(())
 }
 
