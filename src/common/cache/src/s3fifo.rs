@@ -255,6 +255,91 @@ impl<K: Hash + Eq + Clone, V, S: BuildHasher> S3Fifo<K, V, S> {
         None
     }
 
+    /// Pops the next victim among the entries whose key `matches`, in eviction order: the small
+    /// queue first, then the main one. Other entries keep their place and their access counts.
+    /// Matching entries are aged as by `pop_evictable`: accessed ones in the small queue move to
+    /// the main queue, accessed ones in the main queue lose one access per pass; `keep` skips
+    /// entries that must stay. `None` once no matching entry can be evicted. Scans the queues,
+    /// so it costs up to their length per victim.
+    pub fn pop_evictable_where(
+        &mut self,
+        matches: impl Fn(&K) -> bool,
+        keep: impl Fn(&V) -> bool,
+    ) -> Option<(K, V, usize)> {
+        enum Seen<K> {
+            Skip,
+            Promote(K),
+            Evict(K),
+        }
+        // A pass over the main queue lowers each access count by one, so enough passes always
+        // reach an evictable entry if there is one.
+        let passes = std::iter::once(true).chain(std::iter::repeat_n(false, MAX_FREQ as usize + 1));
+        for from_small in passes {
+            let mut i = 0;
+            loop {
+                let queue = if from_small { &self.small } else { &self.main };
+                let Some((key, seq)) = queue.get(i) else {
+                    break;
+                };
+                i += 1;
+                let seen = match self.map.get(key) {
+                    Some(slot) if slot.seq == *seq && matches(key) => {
+                        let freq = slot.freq.load(Ordering::Relaxed);
+                        if from_small && freq > 0 {
+                            Seen::Promote(key.clone())
+                        } else if freq > 0 {
+                            slot.freq.store(freq - 1, Ordering::Relaxed);
+                            Seen::Skip
+                        } else if keep(&slot.value) {
+                            Seen::Skip
+                        } else {
+                            Seen::Evict(key.clone())
+                        }
+                    }
+                    _ => Seen::Skip,
+                };
+                match seen {
+                    Seen::Skip => {}
+                    Seen::Promote(key) => {
+                        // A new position in the main queue; the small one goes stale.
+                        let seq = self.next_seq;
+                        self.next_seq += 1;
+                        let slot = self.map.get_mut(&key)?;
+                        slot.seq = seq;
+                        slot.in_main = true;
+                        slot.freq.store(0, Ordering::Relaxed);
+                        self.small_bytes -= slot.bytes;
+                        self.main_bytes += slot.bytes;
+                        self.main.push_back((key, seq));
+                    }
+                    Seen::Evict(key) => {
+                        if from_small {
+                            let hash = self.map.hasher().hash_one(&key);
+                            self.ghost
+                                .record(hash, self.config.admit_after.saturating_sub(1));
+                        }
+                        let slot = self.map.remove(&key)?;
+                        self.untrack(&slot);
+                        self.compact_queues();
+                        return Some((key, slot.value, slot.bytes));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Entries at least this large skip the small queue from now on, e.g. after the owner's
+    /// capacity changed.
+    pub fn set_large_entry_bytes(&mut self, bytes: usize) {
+        self.config.large_entry_bytes = bytes;
+    }
+
+    /// Bytes of the entries in the small (probation) queue.
+    pub fn small_bytes(&self) -> usize {
+        self.small_bytes
+    }
+
     pub fn remove_if(&mut self, mut pred: impl FnMut(&K, &V) -> bool) -> Vec<(K, V, usize)> {
         let removed: Vec<_> = self
             .map

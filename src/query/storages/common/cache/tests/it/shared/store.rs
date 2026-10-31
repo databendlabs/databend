@@ -101,7 +101,9 @@ fn test_kind_limit() {
     store.set_kind_limit(CacheKind::of::<table::Snapshot>(), KindLimit::bytes(200));
     cache.put("a", live.item(100));
     cache.put("b", live.item(100));
-    assert!(!cache.put("c", live.item(100)).is_charged());
+    // At its limit the kind turns over: an older entry makes room.
+    assert!(cache.put("c", live.item(100)).is_charged());
+    assert_eq!(["a", "b"].iter().filter(|k| cache.contains(k)).count(), 1);
 
     store.set_kind_limit(CacheKind::of::<table::Snapshot>(), KindLimit::bytes(100));
     assert_eq!(

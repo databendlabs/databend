@@ -224,12 +224,26 @@ impl SharedStore {
         Ok(())
     }
 
-    /// Reserves `bytes` of the kind's limit; concurrent inserts cannot overshoot it.
-    fn reserve_kind(&self, kind: CacheKind, bytes: usize) -> bool {
+    /// Reserves `bytes` of the kind's limit, evicting the kind's own entries, coldest first,
+    /// as long as that frees room: a kind at its limit turns over like a pool at its cap
+    /// rather than refusing new values. Concurrent inserts cannot overshoot the limit.
+    fn reserve_kind(&self, kind: CacheKind, pool: &PoolStore, shard: usize, bytes: usize) -> bool {
         let usage = &self.kind(kind).usage;
-        match self.kind(kind).limit().max_bytes {
-            Some(max) => usage.try_reserve(bytes, max),
-            None => usage.try_reserve(bytes, usize::MAX),
+        let Some(max) = self.kind(kind).limit().max_bytes else {
+            return usage.try_reserve(bytes, usize::MAX);
+        };
+        if bytes > max {
+            return false;
+        }
+        loop {
+            if usage.try_reserve(bytes, max) {
+                return true;
+            }
+            let excess = (usage.resident() + bytes).saturating_sub(max);
+            let victims = pool.evict_kind_batch(kind, shard, excess.max(1));
+            if self.forget_evicted(pool, victims, Evicted::Capacity) == 0 {
+                return false;
+            }
         }
     }
 
@@ -312,7 +326,7 @@ impl KindStore for SharedStore {
         // Both budgets are reserved before the value goes in, so concurrent inserts cannot
         // together exceed them; a rejected insert gives its reservation back.
         let state = self.kind(kind);
-        if !self.reserve_kind(kind, bytes) {
+        if !self.reserve_kind(kind, pool, pool.shard_of(key), bytes) {
             return self.reject(kind, RejectReason::KindLimit);
         }
         if !self.reserve_pool(pool, pool.shard_of(key), bytes) {
@@ -344,8 +358,23 @@ impl KindStore for SharedStore {
             Some(max) if in_cache > max => Some(in_cache - max),
             _ => return,
         };
-        let removed = pool.remove_kind(kind, excess);
-        self.forget_evicted(pool, removed, Evicted::Capacity);
+        let Some(excess) = excess else {
+            let removed = pool.remove_kind(kind, None);
+            self.forget_evicted(pool, removed, Evicted::Capacity);
+            return;
+        };
+        // Coldest first, as when the kind turns over; held entries go last, out of order.
+        let mut left = excess;
+        while left > 0 {
+            let victims = pool.evict_kind_batch(kind, pool.next_cursor(), left);
+            let freed: usize = victims.iter().map(|(_, e)| e.bytes).sum();
+            if self.forget_evicted(pool, victims, Evicted::Capacity) == 0 {
+                let removed = pool.remove_kind(kind, Some(left));
+                self.forget_evicted(pool, removed, Evicted::Capacity);
+                return;
+            }
+            left = left.saturating_sub(freed);
+        }
     }
 
     fn set_pool_cap(&self, pool: Pool, bytes: usize) -> Result<()> {

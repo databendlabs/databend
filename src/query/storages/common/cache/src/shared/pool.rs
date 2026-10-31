@@ -65,7 +65,7 @@ impl PoolStore {
         let config = S3FifoConfig {
             admit_after: if pool == Pool::Data { 2 } else { 1 },
             ghost_entries: GHOST_ENTRIES_PER_SHARD,
-            large_entry_bytes: (cap / 64).max(1),
+            large_entry_bytes: large_entry_bytes(cap),
             ..Default::default()
         };
         PoolStore {
@@ -94,6 +94,11 @@ impl PoolStore {
 
     pub fn set_cap(&self, bytes: usize) {
         self.cap.store(bytes, Ordering::Relaxed);
+        for shard in self.shards.iter() {
+            shard
+                .write()
+                .set_large_entry_bytes(large_entry_bytes(bytes));
+        }
     }
 
     pub fn structure(&self) -> PoolStructure {
@@ -186,6 +191,30 @@ impl PoolStore {
 
     /// Pops unreferenced entries until `target` bytes or one batch, visiting shards from `start`.
     /// With `blocking == false`, busy shards are skipped.
+    /// Evicts entries of `kind` only, in eviction order, from shard `start` on, until `target`
+    /// bytes or a batch; held entries stay. Entries of other kinds keep their place.
+    pub fn evict_kind_batch(&self, kind: CacheKind, start: usize, target: usize) -> Removed {
+        let target = target.min(BATCH_BYTES);
+        let mut victims = Vec::new();
+        let mut bytes = 0;
+        for step in 0..self.shards.len() {
+            let mut shard = self.shards[(start + step) % self.shards.len()].write();
+            while victims.len() < BATCH_ENTRIES && bytes < target {
+                let Some((key, entry, size)) =
+                    shard.pop_evictable_where(|k| k.kind == kind, Entry::is_shared)
+                else {
+                    break;
+                };
+                bytes += size;
+                victims.push((key, entry));
+            }
+            if victims.len() >= BATCH_ENTRIES || bytes >= target {
+                break;
+            }
+        }
+        victims
+    }
+
     pub fn evict_batch(&self, start: usize, target: usize, blocking: bool) -> Removed {
         let target = target.min(BATCH_BYTES);
         let mut victims = Vec::new();
@@ -212,6 +241,15 @@ impl PoolStore {
     }
 }
 
+/// Entries this large skip the small queue: a 64th of the cap. Follows the cap, so a pool that
+/// starts off (cap 0) does not later send every entry past probation.
+fn large_entry_bytes(cap: usize) -> usize {
+    match cap / 64 {
+        0 => usize::MAX,
+        bytes => bytes,
+    }
+}
+
 fn lock_shard<T>(lock: &RwLock<T>, blocking: bool) -> Option<RwLockWriteGuard<'_, T>> {
     if blocking {
         Some(lock.write())
@@ -232,6 +270,47 @@ mod tests {
             value: Arc::new(()),
             bytes,
         }
+    }
+
+    fn small_bytes(store: &PoolStore) -> usize {
+        store.shards.iter().map(|s| s.read().small_bytes()).sum()
+    }
+
+    /// A pool that starts off and is sized later still puts new entries on probation, and the
+    /// large-entry threshold follows the cap.
+    #[test]
+    fn test_large_entry_threshold_follows_the_cap() {
+        let snapshot = CacheKind::of::<table::Snapshot>();
+        let store = PoolStore::new(Pool::Meta, 0, 1);
+        store.set_cap(64_000);
+        store.insert(KeyRef::new(snapshot, "small"), entry(100), None);
+        assert_eq!(small_bytes(&store), 100);
+        // A 64th of the cap or more skips the small queue.
+        store.insert(KeyRef::new(snapshot, "large"), entry(1000), None);
+        assert_eq!(small_bytes(&store), 100);
+
+        store.set_cap(640_000);
+        store.insert(KeyRef::new(snapshot, "now small"), entry(1000), None);
+        assert_eq!(small_bytes(&store), 1100);
+    }
+
+    /// Only entries of the kind leave, coldest first; others keep their place.
+    #[test]
+    fn test_kind_eviction_leaves_other_kinds() {
+        let (snapshot, segment) = (
+            CacheKind::of::<table::Snapshot>(),
+            CacheKind::of::<crate::kinds::segment::Info>(),
+        );
+        let store = PoolStore::new(Pool::Meta, 100_000, 2);
+        for i in 0..10 {
+            let key = i.to_string();
+            store.insert(KeyRef::new(snapshot, &key), entry(10), None);
+            store.insert(KeyRef::new(segment, &key), entry(10), None);
+        }
+        let victims = store.evict_kind_batch(snapshot, 0, 30);
+        assert_eq!(victims.len(), 3);
+        assert!(victims.iter().all(|(key, _)| key.kind == snapshot));
+        assert!((0..10).all(|i| store.contains(KeyRef::new(segment, &i.to_string()))));
     }
 
     #[test]

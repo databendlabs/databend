@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod deadlock;
+mod kind_limit;
 mod reclaim;
 mod soak;
 pub(crate) mod soak_engine;

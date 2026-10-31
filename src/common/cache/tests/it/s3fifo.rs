@@ -214,3 +214,73 @@ fn test_aging_does_not_exhaust_checks() {
     // Kept entries still count against the budget.
     assert!(c.pop_evictable(|_| true, 8).is_none());
 }
+
+/// Victims among matching keys come in eviction order; other entries are left alone.
+#[test]
+fn test_pop_evictable_where_only_touches_matching_entries() {
+    let mut c = fifo(1);
+    for k in 0..10 {
+        c.insert(k, k, 10);
+    }
+    // Accessed: 2 is promoted to the main queue, 3 keeps its access.
+    c.get(&2);
+    c.get(&3);
+    let even = |k: &u32| k.is_multiple_of(2);
+    let popped: Vec<u32> = std::iter::from_fn(|| c.pop_evictable_where(even, |_| false))
+        .map(|(k, _, _)| k)
+        .collect();
+    assert_eq!(popped, vec![0, 4, 6, 8, 2]);
+    assert_eq!(c.len(), 5);
+    assert_eq!(c.bytes(), 50);
+
+    // 3 still has its access: a plain eviction moves it to the main queue and takes 1 first.
+    let (first, _, _) = c.pop_evictable(|_| false, usize::MAX).unwrap();
+    assert_eq!(first, 1);
+    assert!(c.contains(&3));
+}
+
+#[test]
+fn test_pop_evictable_where_skips_kept_entries() {
+    let mut c = fifo(1);
+    for k in 0..4 {
+        c.insert(k, k, 10);
+    }
+    let popped = c
+        .pop_evictable_where(|_| true, |v| *v < 2)
+        .map(|(k, _, _)| k);
+    assert_eq!(popped, Some(2));
+    let popped = c
+        .pop_evictable_where(|_| true, |v| *v < 2)
+        .map(|(k, _, _)| k);
+    assert_eq!(popped, Some(3));
+    assert!(c.pop_evictable_where(|_| true, |v| *v < 2).is_none());
+    assert_eq!(c.len(), 2);
+}
+
+/// Repeated scoped evictions leave stale positions, which are compacted like removals.
+#[test]
+fn test_pop_evictable_where_keeps_queues_bounded() {
+    let mut c = fifo(1);
+    for round in 0..50_000u32 {
+        c.insert(round, round, 1);
+        c.get(&round);
+        if round >= 100 {
+            c.pop_evictable_where(|_| true, |_| false).unwrap();
+        }
+    }
+    assert_eq!(c.len(), 100);
+    assert!(c.queue_len() <= 2 * c.len() + 1024 + 1);
+}
+
+#[test]
+fn test_large_entry_threshold_can_change() {
+    let mut c = S3Fifo::<u32, u32>::new(S3FifoConfig {
+        large_entry_bytes: 1,
+        ..Default::default()
+    });
+    c.insert(1, 1, 100);
+    assert_eq!(c.small_bytes(), 0);
+    c.set_large_entry_bytes(1000);
+    c.insert(2, 2, 100);
+    assert_eq!(c.small_bytes(), 100);
+}

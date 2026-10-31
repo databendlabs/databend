@@ -79,6 +79,7 @@ pub enum InsertOutcome {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RejectReason {
     Disabled,
+    /// Larger than the kind's limit, or the kind is at its limit with every entry held.
     KindLimit,
     Oversized,
     PoolFullPinned,
