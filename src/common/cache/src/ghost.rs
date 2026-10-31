@@ -64,7 +64,8 @@ impl Ghost {
         true
     }
 
-    /// Remembers an entry of `bytes` that is no longer cached.
+    /// Remembers an entry of `bytes` that is no longer cached; forgets it instead if there is
+    /// no memory for the record.
     pub(crate) fn record(&mut self, hash: u64, bytes: usize) {
         if self.capacity == 0 || self.byte_capacity == 0 {
             return;
@@ -76,6 +77,12 @@ impl Ghost {
                 record.bytes = bytes;
             }
             None => {
+                // Room first, and without failing: evictions record here, also under memory
+                // pressure, where a record is not worth an allocation failure. Both in, or
+                // neither.
+                if self.records.try_reserve(1).is_err() || self.order.try_reserve(1).is_err() {
+                    return;
+                }
                 let seq = self.next_seq;
                 self.next_seq += 1;
                 self.records.insert(hash, Record { bytes, seq });

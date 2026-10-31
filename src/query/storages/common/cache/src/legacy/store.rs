@@ -126,16 +126,6 @@ impl LegacyStore {
         &self.kinds[kind.index()]
     }
 
-    fn forget(&self, kind: CacheKind, removed: Vec<Entry>) -> usize {
-        let count = removed.len();
-        for entry in &removed {
-            self.pools[kind.pool().index()].leave(entry.bytes);
-            self.kind(kind).usage.leave(entry.bytes);
-        }
-        drop(removed);
-        count
-    }
-
     fn set_limit(&self, kind: CacheKind, limit: KindLimit) {
         let state = self.kind(kind);
         let capacity = {
@@ -159,7 +149,8 @@ impl LegacyStore {
             }
             removed
         };
-        self.forget(kind, removed);
+        // Dropped once the LRU is unlocked.
+        drop(removed);
     }
 
     fn make_room(
@@ -256,29 +247,29 @@ impl KindStore for LegacyStore {
                     // Its victims are unreferenced, so they are released first: `resident`
                     // then never exceeds the capacity, not even briefly.
                     if state.counts_held_values() {
-                        self.forget(kind, std::mem::take(&mut victims));
+                        drop(std::mem::take(&mut victims));
                     }
-                    let reservation = Reservation::charge(pool.clone(), state.usage.clone(), bytes);
+                    let reservation =
+                        Reservation::new(pool.charge(bytes), state.usage.charge(bytes));
                     let replaced = lru.insert(key.to_string(), Entry { value, bytes });
-                    pool.enter(bytes);
-                    state.usage.enter(bytes);
                     (victims, Ok((reservation, replaced)))
                 }
             }
         };
-        self.forget(kind, victims);
+        drop(victims);
         match outcome {
             Err(reason) => InsertOutcome::Rejected(reason),
             Ok((reservation, replaced)) => {
-                self.forget(kind, replaced.into_iter().collect());
+                drop(replaced);
                 InsertOutcome::Inserted(reservation)
             }
         }
     }
 
     fn evict(&self, kind: CacheKind, key: &str) -> bool {
+        // Dropped once the LRU is unlocked.
         let removed = self.kind(kind).lru.lock().pop(key);
-        self.forget(kind, removed.into_iter().collect()) > 0
+        removed.is_some()
     }
 
     /// The bound is interpreted in the kind's legacy unit (bytes or items). A kind sharing its
@@ -308,11 +299,15 @@ impl KindStore for LegacyStore {
             LegacyCapacity::Items(n) => (Some(n), Unit::Count),
             LegacyCapacity::Disabled => (Some(0), state.unit()),
         };
+        let (items, in_cache) = {
+            let lru = state.lru.lock();
+            (lru.len(), lru.bytes_size() as usize)
+        };
         KindStats {
             kind,
-            items: state.usage.items(),
+            items,
             resident: state.usage.resident(),
-            in_cache: state.usage.in_cache(),
+            in_cache,
             capacity,
             unit,
             events: None,

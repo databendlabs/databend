@@ -196,34 +196,46 @@ fn test_aging_does_not_exhaust_checks() {
     assert!(c.pop_evictable(|_| true, 8).is_none());
 }
 
+/// Two classes: even keys in class 0, odd keys in class 1.
+fn classed() -> S3Fifo<u32, u32> {
+    S3Fifo::new(S3FifoConfig {
+        classes: 2,
+        ..Default::default()
+    })
+}
+
+fn insert_classed(c: &mut S3Fifo<u32, u32>, k: u32, bytes: usize) {
+    c.insert_in((k % 2) as usize, k, k, bytes);
+}
+
 fn evict_keys(
     c: &mut S3Fifo<u32, u32>,
-    matches: impl Fn(&u32) -> bool,
+    class: usize,
     keep: impl Fn(&u32) -> bool,
     max_entries: usize,
 ) -> Vec<u32> {
-    c.evict_where(matches, keep, usize::MAX, max_entries)
+    c.evict_class(class, keep, usize::MAX, max_entries)
         .into_iter()
         .map(|(k, _, _)| k)
         .collect()
 }
 
-/// Victims among matching keys come in eviction order; other entries are left alone.
+/// Victims of a class come in eviction order; entries of other classes are left alone.
 #[test]
-fn test_evict_where_only_touches_matching_entries() {
-    let mut c = fifo();
+fn test_evict_class_only_touches_its_entries() {
+    let mut c = classed();
     for k in 0..10 {
-        c.insert(k, k, 10);
+        insert_classed(&mut c, k, 10);
     }
     // Accessed: 2 moves to the main queue, 3 keeps its access.
     c.get(&2);
     c.get(&3);
-    let even = |k: &u32| k.is_multiple_of(2);
-    assert_eq!(evict_keys(&mut c, even, |_| false, usize::MAX), vec![
+    assert_eq!(evict_keys(&mut c, 0, |_| false, usize::MAX), vec![
         0, 4, 6, 8, 2
     ]);
-    assert_eq!(c.len(), 5);
-    assert_eq!(c.bytes(), 50);
+    assert_eq!((c.len(), c.bytes()), (5, 50));
+    assert_eq!((c.class_len(0), c.class_bytes(0)), (0, 0));
+    assert_eq!((c.class_len(1), c.class_bytes(1)), (5, 50));
 
     // 3 still has its access: a plain eviction moves it to the main queue and takes 1 first.
     let (first, _, _) = c.pop_evictable(|_| false, usize::MAX).unwrap();
@@ -232,27 +244,27 @@ fn test_evict_where_only_touches_matching_entries() {
 }
 
 #[test]
-fn test_evict_where_stops_at_target() {
+fn test_evict_class_stops_at_target() {
     let mut c = fifo();
     for k in 0..10 {
         c.insert(k, k, 10);
     }
-    assert_eq!(evict_keys(&mut c, |_| true, |_| false, 3), vec![0, 1, 2]);
-    let victims = c.evict_where(|_| true, |_| false, 25, usize::MAX);
+    assert_eq!(evict_keys(&mut c, 0, |_| false, 3), vec![0, 1, 2]);
+    let victims = c.evict_class(0, |_| false, 25, usize::MAX);
     assert_eq!(victims.len(), 3);
     assert_eq!(c.len(), 4);
 }
 
 #[test]
-fn test_evict_where_skips_kept_entries() {
+fn test_evict_class_skips_kept_entries() {
     let mut c = fifo();
     for k in 0..4 {
         c.insert(k, k, 10);
     }
     let kept = |v: &u32| *v < 2;
-    assert_eq!(evict_keys(&mut c, |_| true, kept, 1), vec![2]);
-    assert_eq!(evict_keys(&mut c, |_| true, kept, 1), vec![3]);
-    assert!(evict_keys(&mut c, |_| true, kept, 1).is_empty());
+    assert_eq!(evict_keys(&mut c, 0, kept, 1), vec![2]);
+    assert_eq!(evict_keys(&mut c, 0, kept, 1), vec![3]);
+    assert!(evict_keys(&mut c, 0, kept, 1).is_empty());
     assert_eq!(c.len(), 2);
     assert_eq!(c.bytes(), 20);
 }
@@ -260,7 +272,7 @@ fn test_evict_where_skips_kept_entries() {
 /// The main queue works as a clock: an accessed entry is passed over and moved to the back,
 /// so the next eviction takes the following cold entry rather than aging the same one again.
 #[test]
-fn test_evict_where_rotates_like_pop_evictable() {
+fn test_evict_class_rotates_like_pop_evictable() {
     let new = || {
         let mut c = fifo();
         for k in 0..6 {
@@ -269,7 +281,7 @@ fn test_evict_where_rotates_like_pop_evictable() {
         }
         // Keeping every entry moves all to the main queue, in order, with no access left;
         // then 0 and 1 are read again.
-        c.evict_where(|_| true, |_| true, usize::MAX, usize::MAX);
+        c.evict_class(0, |_| true, usize::MAX, usize::MAX);
         c.get(&0);
         c.get(&1);
         c
@@ -277,22 +289,51 @@ fn test_evict_where_rotates_like_pop_evictable() {
     let mut scoped = new();
     let mut plain = new();
     for _ in 0..4 {
-        let a = evict_keys(&mut scoped, |_| true, |_| false, 1);
+        let a = evict_keys(&mut scoped, 0, |_| false, 1);
         let b = plain.pop_evictable(|_| false, usize::MAX).map(|(k, ..)| k);
         assert_eq!(a.first().copied(), b);
     }
     assert!(scoped.contains(&0) && scoped.contains(&1));
 }
 
-/// Repeated scoped evictions reuse slots; the slab stays bounded.
+/// Evicting a sparse class leaves the many entries of another class intact. This checks
+/// membership, not traversal complexity.
 #[test]
-fn test_evict_where_keeps_slab_bounded() {
+fn test_evict_sparse_class_preserves_other_entries() {
+    let mut c = classed();
+    for k in 0..100_000 {
+        c.insert_in(0, k, k, 1);
+    }
+    c.insert_in(1, 100_000, 100_000, 1);
+    let victims = c.evict_class(1, |_| false, usize::MAX, usize::MAX);
+    assert_eq!(victims, vec![(100_000, 100_000, 1)]);
+    assert_eq!((c.class_len(0), c.class_len(1)), (100_000, 0));
+}
+
+/// Held or not, every entry of a class is removed; other classes stay.
+#[test]
+fn test_remove_class() {
+    let mut c = classed();
+    for k in 0..10 {
+        insert_classed(&mut c, k, 10);
+    }
+    c.get(&3);
+    let mut removed: Vec<u32> = c.remove_class(1).into_iter().map(|(k, ..)| k).collect();
+    removed.sort_unstable();
+    assert_eq!(removed, vec![1, 3, 5, 7, 9]);
+    assert_eq!((c.class_len(1), c.class_bytes(1)), (0, 0));
+    assert_eq!((c.len(), c.bytes()), (5, 50));
+}
+
+/// Repeated class evictions reuse slots; the slab stays bounded.
+#[test]
+fn test_evict_class_keeps_slab_bounded() {
     let mut c = fifo();
     for round in 0..20_000u32 {
         c.insert(round, round, 1);
         c.get(&round);
         if round >= 100 {
-            assert_eq!(evict_keys(&mut c, |_| true, |_| false, 1).len(), 1);
+            assert_eq!(evict_keys(&mut c, 0, |_| false, 1).len(), 1);
         }
     }
     assert_eq!(c.len(), 100);

@@ -38,6 +38,8 @@ impl CacheDef for Info {
     type Value = Arc<CompactSegmentInfo>;
     const NAME: &'static str = "memory_cache_compact_segment_info";
     const POOL: Pool = Pool::Meta;
+    // ANALYZE rewrites this location and puts the new segment under the same key.
+    // A miss must not join a load started before that write.
 }
 
 /// Column-oriented segments, by segment location.
@@ -60,7 +62,8 @@ impl CacheDef for BlockMetas {
     const SHARED_LIMIT: KindLimit = KindLimit::DISABLED;
 }
 
-/// Segment statistics, by location.
+/// Segment statistics, by location. Loads are not shared: `ANALYZE` rewrites the file in
+/// place and evicts it.
 pub struct Stats;
 
 impl CacheDef for Stats {

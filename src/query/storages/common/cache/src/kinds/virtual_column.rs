@@ -40,6 +40,8 @@ impl CacheDef for Meta {
     const DISK: Option<Disk<Self::Value>> = Some(Disk::new("virtual_column_meta_v1", |c| {
         c.disk_cache_virtual_column_meta_size
     }));
+    /// Virtual column files are written once, under new locations.
+    const SHARE_LOADS: bool = true;
 }
 
 fn virtual_column_node(n: &VirtualColumnNode) -> usize {

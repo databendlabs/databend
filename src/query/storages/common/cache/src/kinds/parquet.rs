@@ -29,6 +29,8 @@ impl CacheDef for Meta {
     type Value = Arc<ParquetMetaData>;
     const NAME: &'static str = "memory_cache_parquet_meta_data";
     const POOL: Pool = Pool::Meta;
+    /// Nothing evicts these footers: a joined load is as fresh as a cached value.
+    const SHARE_LOADS: bool = true;
 }
 
 impl CachedItem for ParquetMetaData {

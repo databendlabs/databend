@@ -13,8 +13,20 @@
 // limitations under the License.
 
 use std::cell::Cell;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::time::Duration;
 
+use databend_common_base::runtime::Thread;
+use databend_storages_common_cache::CachedItem;
+use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::PoolCaps;
+use databend_storages_common_cache::backend::KindStore;
+use databend_storages_common_cache::shared::SharedStore;
 
 use crate::fakes::Live;
 use crate::fakes::cache;
@@ -85,4 +97,77 @@ fn test_relieved_is_checked_after_each_batch() {
     });
     assert_eq!(report.freed, 1000);
     assert_eq!(report.batches, checks.get());
+}
+
+/// Test-only scheduling point: pause one reclaim after it removes its batch but before its
+/// values have finished dropping, allowing another reclaim's charges to be released first.
+struct DropPause {
+    armed: AtomicBool,
+    started: mpsc::Sender<()>,
+    resume: Mutex<mpsc::Receiver<()>>,
+}
+
+struct PausedValue(Arc<DropPause>);
+
+impl CachedItem for PausedValue {
+    fn mem_bytes(&self) -> usize {
+        100
+    }
+}
+
+impl Drop for PausedValue {
+    fn drop(&mut self) {
+        if self.0.armed.swap(false, Ordering::Relaxed) {
+            self.0.started.send(()).unwrap();
+            self.0
+                .resume
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .expect("reclaim was not resumed");
+        }
+    }
+}
+
+#[test]
+fn test_concurrent_reclaims_count_only_their_own_charges() {
+    let store = Arc::new(SharedStore::new(
+        PoolCaps {
+            meta: 100_000,
+            index: 0,
+            data: 0,
+        },
+        [],
+        1,
+    ));
+    let cache = MemCache::new(store.clone(), meta_kind());
+    let (started, waiting) = mpsc::channel();
+    let (resume, resumed) = mpsc::channel();
+    let pause = Arc::new(DropPause {
+        armed: AtomicBool::new(false),
+        started,
+        resume: Mutex::new(resumed),
+    });
+    for i in 0..128 {
+        cache.put(&i.to_string(), PausedValue(pause.clone()));
+    }
+    pause.armed.store(true, Ordering::Relaxed);
+    let (finished, result) = mpsc::channel();
+    let first_store = store.clone();
+    let thread = Thread::spawn(move || {
+        finished
+            .send(first_store.shrink_for_pressure(&|| true))
+            .unwrap();
+    });
+    waiting.recv_timeout(Duration::from_secs(10)).unwrap();
+    let second = store.shrink_for_pressure(&|| true);
+    resume.send(()).unwrap();
+    let first = result.recv_timeout(Duration::from_secs(10)).unwrap();
+    thread.join().unwrap();
+
+    assert!(first.evicted > 0 && second.evicted > 0);
+    assert_eq!(first.evicted + second.evicted, 128);
+    assert_eq!(first.freed + second.freed, 128 * 100);
+    assert_eq!(store.reclaim_stats().unwrap().freed_bytes, 128 * 100);
+    assert_eq!(store.kind_stats(meta_kind()).resident, 0);
 }

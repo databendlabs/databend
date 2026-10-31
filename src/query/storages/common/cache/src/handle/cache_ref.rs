@@ -22,81 +22,66 @@ use std::sync::atomic::Ordering;
 
 pub type ErasedValue = Arc<dyn Any + Send + Sync>;
 
-/// Byte counters shared by a pool or a kind.
+/// The budget of a pool or a kind: bytes charged by the values it admitted that are still
+/// alive, in the cache or held by readers after their eviction. What is in the cache, the
+/// backends count from their own structures.
 #[derive(Default, Debug)]
 pub struct Usage {
     resident: AtomicUsize,
-    in_cache: AtomicUsize,
-    items: AtomicUsize,
 }
 
 impl Usage {
-    /// Bytes of admitted values still alive, including those already evicted but held by readers.
     pub fn resident(&self) -> usize {
         self.resident.load(Ordering::Relaxed)
     }
 
-    /// Bytes of values currently held by the cache.
-    pub fn in_cache(&self) -> usize {
-        self.in_cache.load(Ordering::Relaxed)
+    /// Charges `bytes`, given back when the charge drops.
+    pub(crate) fn charge(self: &Arc<Self>, bytes: usize) -> Charge {
+        self.resident.fetch_add(bytes, Ordering::Relaxed);
+        Charge {
+            usage: self.clone(),
+            bytes,
+        }
     }
 
-    pub fn items(&self) -> usize {
-        self.items.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn enter(&self, bytes: usize) {
-        self.in_cache.fetch_add(bytes, Ordering::Relaxed);
-        self.items.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub(crate) fn leave(&self, bytes: usize) {
-        self.in_cache.fetch_sub(bytes, Ordering::Relaxed);
-        self.items.fetch_sub(1, Ordering::Relaxed);
-    }
-
-    /// Adds `bytes` to `resident` if that keeps it within `max`; atomic against concurrent
-    /// reservations. Pair a success with `Reservation::reserved` or `release`.
-    pub(crate) fn try_reserve(&self, bytes: usize, max: usize) -> bool {
+    /// Charges `bytes` if that keeps `resident` within `max`; atomic against concurrent
+    /// charges.
+    pub(crate) fn try_charge(self: &Arc<Self>, bytes: usize, max: usize) -> Option<Charge> {
         self.resident
             .try_update(Ordering::Relaxed, Ordering::Relaxed, |resident| {
                 resident.checked_add(bytes).filter(|total| *total <= max)
             })
-            .is_ok()
-    }
-
-    pub(crate) fn release(&self, bytes: usize) {
-        self.resident.fetch_sub(bytes, Ordering::Relaxed);
+            .ok()?;
+        Some(Charge {
+            usage: self.clone(),
+            bytes,
+        })
     }
 }
 
-/// Charge for one admitted value, released when the last `CacheRef` drops.
-pub struct Reservation {
-    usages: [Arc<Usage>; 2],
+/// Bytes charged to one `Usage`, given back on drop: a charge is owned from the moment it is
+/// taken, so an insert that fails or unwinds halfway leaks nothing.
+pub(crate) struct Charge {
+    usage: Arc<Usage>,
     bytes: usize,
 }
 
-impl Reservation {
-    pub(crate) fn charge(pool: Arc<Usage>, kind: Arc<Usage>, bytes: usize) -> Self {
-        for usage in [&pool, &kind] {
-            usage.resident.fetch_add(bytes, Ordering::Relaxed);
-        }
-        Self::reserved(pool, kind, bytes)
-    }
-
-    /// For `bytes` already added to both `resident` counters, e.g. by `Usage::try_reserve`.
-    pub(crate) fn reserved(pool: Arc<Usage>, kind: Arc<Usage>, bytes: usize) -> Self {
-        Reservation {
-            usages: [pool, kind],
-            bytes,
-        }
+impl Drop for Charge {
+    fn drop(&mut self) {
+        self.usage.resident.fetch_sub(self.bytes, Ordering::Relaxed);
     }
 }
 
-impl Drop for Reservation {
-    fn drop(&mut self) {
-        for usage in &self.usages {
-            usage.resident.fetch_sub(self.bytes, Ordering::Relaxed);
+/// Charge for one admitted value, to its pool and its kind, released when the last
+/// `CacheRef` drops.
+pub struct Reservation {
+    _charges: [Charge; 2],
+}
+
+impl Reservation {
+    pub(crate) fn new(pool: Charge, kind: Charge) -> Self {
+        Reservation {
+            _charges: [pool, kind],
         }
     }
 }
@@ -163,13 +148,24 @@ mod tests {
         let pool = Arc::new(Usage::default());
         let kind = Arc::new(Usage::default());
         let value = CacheRef::new(7u32);
-        value.attach(Reservation::charge(pool.clone(), kind.clone(), 100));
+        value.attach(Reservation::new(pool.charge(100), kind.charge(100)));
         let held = value.clone();
         assert_eq!((pool.resident(), kind.resident()), (100, 100));
         drop(value);
         assert_eq!(pool.resident(), 100);
         drop(held);
         assert_eq!((pool.resident(), kind.resident()), (0, 0));
+    }
+
+    #[test]
+    fn test_try_charge_stays_within_max() {
+        let usage = Arc::new(Usage::default());
+        let first = usage.try_charge(60, 100).unwrap();
+        assert!(usage.try_charge(50, 100).is_none());
+        assert_eq!(usage.resident(), 60);
+        drop(first);
+        assert!(usage.try_charge(100, 100).is_some());
+        assert_eq!(usage.resident(), 0);
     }
 
     #[test]

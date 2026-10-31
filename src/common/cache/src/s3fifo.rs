@@ -34,6 +34,9 @@ pub struct S3FifoConfig {
     pub ghost_bytes: usize,
     /// Entries at least this large skip the small queue.
     pub large_entry_bytes: usize,
+    /// Classes entries belong to, e.g. kinds sharing one cache, numbered from 0. Each class
+    /// keeps its own entries in queue order as well, so `evict_class` walks that class only.
+    pub classes: usize,
 }
 
 impl Default for S3FifoConfig {
@@ -43,6 +46,7 @@ impl Default for S3FifoConfig {
             ghost_entries: 65536,
             ghost_bytes: usize::MAX,
             large_entry_bytes: usize::MAX,
+            classes: 1,
         }
     }
 }
@@ -51,8 +55,25 @@ const NIL: usize = usize::MAX;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Queue {
-    Small,
-    Main,
+    Small = 0,
+    Main = 1,
+}
+
+/// The two lists an entry is linked into: its queue, and its class's share of that queue.
+const QUEUE: usize = 0;
+const CLASS: usize = 1;
+
+#[derive(Clone, Copy)]
+struct Link {
+    prev: usize,
+    next: usize,
+}
+
+impl Link {
+    const NONE: Link = Link {
+        prev: NIL,
+        next: NIL,
+    };
 }
 
 struct Node<K, V> {
@@ -62,11 +83,12 @@ struct Node<K, V> {
     bytes: usize,
     freq: AtomicU8,
     queue: Queue,
-    prev: usize,
-    next: usize,
+    class: usize,
+    /// Indexed by `QUEUE` and `CLASS`.
+    links: [Link; 2],
 }
 
-/// A doubly linked queue threaded through the slots.
+/// A doubly linked list threaded through the slots.
 #[derive(Clone, Copy)]
 struct List {
     head: usize,
@@ -88,7 +110,14 @@ impl List {
 ///
 /// Entries live in a slab of slots, linked into the small and the main queue by slot index,
 /// as in quick_cache's linked slab: removing or moving an entry is O(1) and leaves nothing
-/// behind. Hits only bump an atomic counter, so lookups need `&self`.
+/// behind. Each entry is also linked into its class's list of its queue, in the same order.
+/// Hits only bump an atomic counter, so lookups need `&self`.
+///
+/// Changes allocate, if at all, before they modify anything: an allocation failure, which
+/// panics in Databend, leaves the structure consistent. An operation on several entries may
+/// stop between two of them. Removals and evictions do not allocate, except for the entries
+/// they return and the ghost, which gives up a record rather than fail; that keeps them usable
+/// under memory pressure. The free list has room for every slot, reserved as the slab grows.
 pub struct S3Fifo<K, V, S = DefaultHashBuilder> {
     /// Slot index of each entry, found by the entry's hash and key.
     table: HashTable<usize>,
@@ -96,6 +125,8 @@ pub struct S3Fifo<K, V, S = DefaultHashBuilder> {
     free: Vec<usize>,
     small: List,
     main: List,
+    /// Per class, indexed by `Queue`.
+    class_lists: Box<[[List; 2]]>,
     ghost: Ghost,
     hasher: S,
     config: S3FifoConfig,
@@ -115,6 +146,7 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
             free: Vec::new(),
             small: List::EMPTY,
             main: List::EMPTY,
+            class_lists: vec![[List::EMPTY; 2]; config.classes.max(1)].into_boxed_slice(),
             ghost: Ghost::new(config.ghost_entries, config.ghost_bytes),
             hasher,
             config,
@@ -141,21 +173,41 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
         self.find(key).is_some()
     }
 
-    /// Caches `value` under `key`, on its first insertion: on probation in the small queue, or
-    /// in the main queue when the ghost remembers the key (evicted from probation recently) or
-    /// the entry is large. An existing entry keeps its position. Returns the replaced value.
+    /// `insert_in` class 0.
     pub fn insert(&mut self, key: K, value: V, bytes: usize) -> Option<V> {
+        self.insert_in(0, key, value, bytes)
+    }
+
+    /// Caches `value` under `key` in `class`, on its first insertion: on probation in the small
+    /// queue, or in the main queue when the ghost remembers the key (evicted from probation
+    /// recently) or the entry is large. An existing entry keeps its position and its class.
+    /// Returns the replaced value.
+    pub fn insert_in(&mut self, class: usize, key: K, value: V, bytes: usize) -> Option<V> {
         if let Some(i) = self.find(&key) {
-            let node = self.slots[i].as_mut()?;
-            let list = match node.queue {
-                Queue::Small => &mut self.small,
-                Queue::Main => &mut self.main,
+            let (queue, class, old) = {
+                let node = self.node(i);
+                (node.queue, node.class, node.bytes)
             };
-            list.bytes = list.bytes - node.bytes + bytes;
+            for which in [QUEUE, CLASS] {
+                let list = self.list_mut(which, queue, class);
+                list.bytes = list.bytes - old + bytes;
+            }
+            let node = self.node_mut(i);
             node.bytes = bytes;
             return Some(std::mem::replace(&mut node.value, value));
         }
+        assert!(
+            class < self.class_lists.len(),
+            "class {class} of {}",
+            self.class_lists.len()
+        );
         let hash = self.hasher.hash_one(&key);
+        let slots = &self.slots;
+        self.table.reserve(1, |&j| Self::slot_hash(slots, j));
+        if self.free.is_empty() {
+            self.slots.reserve(1);
+            self.free.reserve(self.slots.capacity());
+        }
         let in_main = self.ghost.take(hash) || bytes >= self.config.large_entry_bytes;
         let i = self.alloc(Node {
             key,
@@ -164,8 +216,8 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
             bytes,
             freq: AtomicU8::new(0),
             queue: if in_main { Queue::Main } else { Queue::Small },
-            prev: NIL,
-            next: NIL,
+            class,
+            links: [Link::NONE; 2],
         });
         let slots = &self.slots;
         self.table
@@ -192,9 +244,36 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
         keep: impl Fn(&V) -> bool,
         max_checks: usize,
     ) -> Option<(K, V, usize)> {
+        let mut unbounded = usize::MAX;
+        let victim = self.pop(keep, max_checks, &mut unbounded, true);
+        self.compact();
+        victim
+    }
+
+    /// `pop_evictable` for memory pressure: also gives up once it looked at `steps` entries,
+    /// kept, aged or evicted, lowering `steps` by those, a budget the caller may share between
+    /// pops. Does not allocate: neither compacts the slab nor updates the ghost. Pressure
+    /// eviction need not remember probation entries at the cost of growing or scanning it.
+    pub fn pop_evictable_bounded(
+        &mut self,
+        keep: impl Fn(&V) -> bool,
+        max_checks: usize,
+        steps: &mut usize,
+    ) -> Option<(K, V, usize)> {
+        self.pop(keep, max_checks, steps, false)
+    }
+
+    fn pop(
+        &mut self,
+        keep: impl Fn(&V) -> bool,
+        max_checks: usize,
+        steps: &mut usize,
+        record_ghost: bool,
+    ) -> Option<(K, V, usize)> {
         let mut checks = 0;
         let mut flip = false;
-        while checks < max_checks {
+        while checks < max_checks && *steps > 0 {
+            *steps -= 1;
             let from_small = self.pick_small(flip);
             let i = if from_small {
                 self.small.head
@@ -214,7 +293,9 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
                     self.move_to_main(i);
                     continue;
                 }
-                self.ghost.record(node.hash, node.bytes);
+                if record_ghost {
+                    self.ghost.record(node.hash, node.bytes);
+                }
             } else if freq > 0 {
                 node.freq.store(freq - 1, Ordering::Relaxed);
                 self.move_to_main(i);
@@ -226,58 +307,52 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
                 continue;
             }
             let node = self.take(i);
-            self.compact();
             return Some((node.key, node.value, node.bytes));
         }
         None
     }
 
-    /// Evicts entries whose key `matches`, in eviction order, until `target` bytes or
-    /// `max_entries` entries are gone; entries for which `keep` returns true stay. Matching
-    /// entries are aged as by `pop_evictable`, clock-style: an accessed entry in the small
-    /// queue, or an entry kept, moves to the back of the main queue; an accessed entry in the
-    /// main queue loses one access and moves to its back. Other entries keep their place and
-    /// their access counts.
+    /// Evicts entries of `class`, in eviction order, until `target` bytes or `max_entries`
+    /// entries are gone; entries for which `keep` returns true stay. They are aged as by
+    /// `pop_evictable`, clock-style: an accessed entry in the small queue, or an entry kept,
+    /// moves to the back of the main queue; an accessed entry in the main queue loses one
+    /// access and moves to its back. Entries of other classes keep their place and their
+    /// access counts.
     ///
-    /// Walks the small queue once and the main queue up to `MAX_FREQ + 1` times, each pass
-    /// over the entries it started with, so it always ends. Passing other keys costs a step
-    /// each: a call costs up to the queue length, once per batch rather than per victim.
-    pub fn evict_where(
+    /// Walks the class's small queue once and its main queue up to `MAX_FREQ + 1` times, each
+    /// pass over the entries it started with: the cost is in entries of the class only.
+    pub fn evict_class(
         &mut self,
-        matches: impl Fn(&K) -> bool,
+        class: usize,
         keep: impl Fn(&V) -> bool,
         target: usize,
         max_entries: usize,
     ) -> Vec<(K, V, usize)> {
-        let mut victims = Vec::new();
+        let mut victims = Vec::with_capacity(max_entries.min(self.class_len(class)));
         let mut bytes = 0;
         // A main pass lowers each access count by one, so enough passes reach every entry
         // that can be evicted.
-        let passes = std::iter::once(true).chain(std::iter::repeat_n(false, MAX_FREQ as usize + 1));
-        'passes: for from_small in passes {
-            let list = if from_small { self.small } else { self.main };
+        let passes = std::iter::once(Queue::Small)
+            .chain(std::iter::repeat_n(Queue::Main, MAX_FREQ as usize + 1));
+        'passes: for queue in passes {
+            let list = self.class_lists[class][queue as usize];
             let mut i = list.head;
             for _ in 0..list.len {
                 if victims.len() >= max_entries || bytes >= target {
                     break 'passes;
                 }
                 let node = self.node(i);
-                let next = node.next;
-                if !matches(&node.key) {
-                    i = next;
-                    continue;
-                }
+                let next = node.links[CLASS].next;
                 let freq = node.freq.load(Ordering::Relaxed);
                 if freq > 0 || keep(&node.value) {
-                    let aged = if from_small {
-                        0
-                    } else {
-                        freq.saturating_sub(1)
+                    let aged = match queue {
+                        Queue::Small => 0,
+                        Queue::Main => freq.saturating_sub(1),
                     };
                     node.freq.store(aged, Ordering::Relaxed);
                     self.move_to_main(i);
                 } else {
-                    if from_small {
+                    if queue == Queue::Small {
                         self.ghost.record(node.hash, node.bytes);
                     }
                     let node = self.take(i);
@@ -291,15 +366,20 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
         victims
     }
 
-    /// Entries at least this large skip the small queue from now on, e.g. after the owner's
-    /// capacity changed.
-    pub fn set_large_entry_bytes(&mut self, bytes: usize) {
-        self.config.large_entry_bytes = bytes;
-    }
-
-    /// Bytes of the entries in the small (probation) queue.
-    pub fn small_bytes(&self) -> usize {
-        self.small.bytes
+    /// Removes every entry of `class`.
+    pub fn remove_class(&mut self, class: usize) -> Vec<(K, V, usize)> {
+        let mut removed = Vec::with_capacity(self.class_len(class));
+        for queue in [Queue::Small, Queue::Main] {
+            let mut i = self.class_lists[class][queue as usize].head;
+            while i != NIL {
+                let next = self.node(i).links[CLASS].next;
+                let node = self.take(i);
+                removed.push((node.key, node.value, node.bytes));
+                i = next;
+            }
+        }
+        self.compact();
+        removed
     }
 
     pub fn remove_if(&mut self, mut pred: impl FnMut(&K, &V) -> bool) -> Vec<(K, V, usize)> {
@@ -310,15 +390,24 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
                     .is_some_and(|node| pred(&node.key, &node.value))
             })
             .collect();
-        let removed = matched
-            .into_iter()
-            .map(|i| {
-                let node = self.take(i);
-                (node.key, node.value, node.bytes)
-            })
-            .collect();
+        let mut removed = Vec::with_capacity(matched.len());
+        for i in matched {
+            let node = self.take(i);
+            removed.push((node.key, node.value, node.bytes));
+        }
         self.compact();
         removed
+    }
+
+    /// Entries at least this large skip the small queue from now on, e.g. after the owner's
+    /// capacity changed.
+    pub fn set_large_entry_bytes(&mut self, bytes: usize) {
+        self.config.large_entry_bytes = bytes;
+    }
+
+    /// Bytes of the entries in the small (probation) queue.
+    pub fn small_bytes(&self) -> usize {
+        self.small.bytes
     }
 
     /// Slots allocated for entries, including free ones kept for reuse.
@@ -340,6 +429,16 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
 
     pub fn bytes(&self) -> usize {
         self.small.bytes + self.main.bytes
+    }
+
+    pub fn class_len(&self, class: usize) -> usize {
+        let [small, main] = &self.class_lists[class];
+        small.len + main.len
+    }
+
+    pub fn class_bytes(&self, class: usize) -> usize {
+        let [small, main] = &self.class_lists[class];
+        small.bytes + main.bytes
     }
 
     pub fn ghost_len(&self) -> usize {
@@ -388,13 +487,16 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
         slots[i].as_ref().map_or(0, |node| node.hash)
     }
 
-    fn list_mut(&mut self, queue: Queue) -> &mut List {
-        match queue {
-            Queue::Small => &mut self.small,
-            Queue::Main => &mut self.main,
+    /// The `QUEUE` list of `queue`, or `class`'s `CLASS` list of it.
+    fn list_mut(&mut self, which: usize, queue: Queue, class: usize) -> &mut List {
+        match (which, queue) {
+            (QUEUE, Queue::Small) => &mut self.small,
+            (QUEUE, Queue::Main) => &mut self.main,
+            _ => &mut self.class_lists[class][queue as usize],
         }
     }
 
+    /// Fills a free slot, or a new one within the capacity reserved by the caller.
     fn alloc(&mut self, node: Node<K, V>) -> usize {
         match self.free.pop() {
             Some(i) => {
@@ -408,8 +510,10 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
         }
     }
 
-    /// Unlinks and frees slot `i`, dropping it from the table.
+    /// Unlinks and frees slot `i`, dropping it from the table. Does not allocate: the free
+    /// list has room for every slot.
     fn take(&mut self, i: usize) -> Node<K, V> {
+        debug_assert!(self.free.len() < self.free.capacity());
         self.unlink(i);
         let hash = self.node(i).hash;
         if let Ok(entry) = self.table.find_entry(hash, |&j| j == i) {
@@ -420,45 +524,49 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
     }
 
     fn link_back(&mut self, i: usize) {
-        let (queue, bytes) = {
+        let (queue, class, bytes) = {
             let node = self.node(i);
-            (node.queue, node.bytes)
+            (node.queue, node.class, node.bytes)
         };
-        let tail = self.list_mut(queue).tail;
-        {
-            let node = self.node_mut(i);
-            node.prev = tail;
-            node.next = NIL;
+        for which in [QUEUE, CLASS] {
+            let tail = self.list_mut(which, queue, class).tail;
+            self.node_mut(i).links[which] = Link {
+                prev: tail,
+                next: NIL,
+            };
+            if tail == NIL {
+                self.list_mut(which, queue, class).head = i;
+            } else {
+                self.node_mut(tail).links[which].next = i;
+            }
+            let list = self.list_mut(which, queue, class);
+            list.tail = i;
+            list.len += 1;
+            list.bytes += bytes;
         }
-        if tail == NIL {
-            self.list_mut(queue).head = i;
-        } else {
-            self.node_mut(tail).next = i;
-        }
-        let list = self.list_mut(queue);
-        list.tail = i;
-        list.len += 1;
-        list.bytes += bytes;
     }
 
     fn unlink(&mut self, i: usize) {
-        let (queue, bytes, prev, next) = {
+        let (queue, class, bytes, links) = {
             let node = self.node(i);
-            (node.queue, node.bytes, node.prev, node.next)
+            (node.queue, node.class, node.bytes, node.links)
         };
-        if prev == NIL {
-            self.list_mut(queue).head = next;
-        } else {
-            self.node_mut(prev).next = next;
+        for which in [QUEUE, CLASS] {
+            let Link { prev, next } = links[which];
+            if prev == NIL {
+                self.list_mut(which, queue, class).head = next;
+            } else {
+                self.node_mut(prev).links[which].next = next;
+            }
+            if next == NIL {
+                self.list_mut(which, queue, class).tail = prev;
+            } else {
+                self.node_mut(next).links[which].prev = prev;
+            }
+            let list = self.list_mut(which, queue, class);
+            list.len -= 1;
+            list.bytes -= bytes;
         }
-        if next == NIL {
-            self.list_mut(queue).tail = prev;
-        } else {
-            self.node_mut(next).prev = prev;
-        }
-        let list = self.list_mut(queue);
-        list.len -= 1;
-        list.bytes -= bytes;
     }
 
     /// Moves entry `i` to the back of the main queue.
@@ -471,39 +579,61 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
     /// Free slots are reused, so the slab only grows to the most entries held at once. Once
     /// free slots outnumber the entries, rebuilds the slab in queue order and releases the
     /// rest, so it stays within twice the entries (plus a constant) after the entries shrink.
-    /// Amortized O(1) per removal.
-    fn compact(&mut self) {
+    /// Amortized O(1) per removal. The new slab, table and free list are allocated before the
+    /// old ones are touched. Pressure eviction leaves compaction to normal removals.
+    pub fn compact(&mut self) {
         const SLACK: usize = 1024;
         if self.slots.len() <= 2 * self.len() + SLACK {
             return;
         }
-        let mut old = std::mem::take(&mut self.slots);
-        let mut slots = Vec::with_capacity(self.len());
-        for list in [&mut self.small, &mut self.main] {
-            let mut i = list.head;
+        let mut slots: Vec<Option<Node<K, V>>> = Vec::with_capacity(self.len());
+        let mut table = HashTable::with_capacity(self.len());
+        let free = Vec::with_capacity(self.len());
+        for lists in self.class_lists.iter_mut() {
+            *lists = [List::EMPTY; 2];
+        }
+        for queue in [Queue::Small, Queue::Main] {
+            let mut i = self.list_mut(QUEUE, queue, 0).head;
             let first = slots.len();
             while i != NIL {
-                let mut node = old[i].take().expect("linked slot holds an entry");
-                i = node.next;
+                let mut node = self.slots[i].take().expect("linked slot holds an entry");
+                i = node.links[QUEUE].next;
                 let at = slots.len();
-                node.prev = if at == first { NIL } else { at - 1 };
-                node.next = if i == NIL { NIL } else { at + 1 };
+                node.links[QUEUE] = Link {
+                    prev: if at == first { NIL } else { at - 1 },
+                    next: if i == NIL { NIL } else { at + 1 },
+                };
+                let class = &mut self.class_lists[node.class][queue as usize];
+                node.links[CLASS] = Link {
+                    prev: class.tail,
+                    next: NIL,
+                };
+                match class.tail {
+                    NIL => class.head = at,
+                    tail => {
+                        if let Some(prev) = slots[tail].as_mut() {
+                            prev.links[CLASS].next = at;
+                        }
+                    }
+                }
+                class.tail = at;
+                class.len += 1;
+                class.bytes += node.bytes;
                 slots.push(Some(node));
             }
+            let list = self.list_mut(QUEUE, queue, 0);
             (list.head, list.tail) = match slots.len() {
                 end if end == first => (NIL, NIL),
                 end => (first, end - 1),
             };
         }
-        self.table.clear();
         for (i, slot) in slots.iter().enumerate() {
             let hash = slot.as_ref().map_or(0, |node| node.hash);
-            self.table
-                .insert_unique(hash, i, |&j| Self::slot_hash(&slots, j));
+            table.insert_unique(hash, i, |&j| Self::slot_hash(&slots, j));
         }
-        self.table.shrink_to_fit(|&j| Self::slot_hash(&slots, j));
         self.slots = slots;
-        self.free = Vec::new();
+        self.table = table;
+        self.free = free;
     }
 }
 
@@ -518,29 +648,51 @@ mod tests {
 
     use super::*;
 
-    /// The slab's links, counts and table agree with each other.
+    /// Slots linked into `list` through their `which` links, checking the back links, the
+    /// queue and class of each, and the list's counts.
+    fn walk<K: Hash + Eq + std::fmt::Debug, V, S: BuildHasher>(
+        c: &S3Fifo<K, V, S>,
+        list: List,
+        which: usize,
+        queue: Queue,
+        class: Option<usize>,
+    ) -> Vec<usize> {
+        let (mut slots, mut i, mut prev, mut bytes) = (Vec::new(), list.head, NIL, 0);
+        while i != NIL {
+            let node = c.node(i);
+            assert!(node.queue == queue, "slot {i} linked into the wrong queue");
+            assert!(
+                class.is_none_or(|class| node.class == class),
+                "slot {i}: class"
+            );
+            assert_eq!(node.links[which].prev, prev, "slot {i}: prev link");
+            assert_eq!(node.hash, c.hasher.hash_one(&node.key));
+            assert_eq!(c.find(&node.key), Some(i), "{:?} not at its slot", node.key);
+            slots.push(i);
+            bytes += node.bytes;
+            (prev, i) = (i, node.links[which].next);
+        }
+        assert_eq!(list.tail, prev, "tail");
+        assert_eq!((list.len, list.bytes), (slots.len(), bytes), "list counts");
+        slots
+    }
+
+    /// The slab's links, counts and table agree with each other; each class lists its entries
+    /// of each queue in queue order.
     fn check_structure<K: Hash + Eq + std::fmt::Debug, V, S: BuildHasher>(c: &S3Fifo<K, V, S>) {
         let mut linked = 0;
         for (queue, list) in [(Queue::Small, c.small), (Queue::Main, c.main)] {
-            let (mut i, mut prev, mut len, mut bytes) = (list.head, NIL, 0, 0);
-            while i != NIL {
-                let node = c.node(i);
-                assert!(node.queue == queue, "slot {i} linked into the wrong queue");
-                assert_eq!(node.prev, prev, "slot {i}: prev link");
-                assert_eq!(node.hash, c.hasher.hash_one(&node.key));
-                assert_eq!(
-                    c.find(&node.key),
-                    Some(i),
-                    "{:?} not found at its slot",
-                    node.key
-                );
-                (prev, i) = (i, node.next);
-                len += 1;
-                bytes += node.bytes;
+            let slots = walk(c, list, QUEUE, queue, None);
+            for (class, lists) in c.class_lists.iter().enumerate() {
+                let in_class: Vec<usize> = slots
+                    .iter()
+                    .copied()
+                    .filter(|&i| c.node(i).class == class)
+                    .collect();
+                let listed = walk(c, lists[queue as usize], CLASS, queue, Some(class));
+                assert_eq!(listed, in_class, "class {class} out of queue order");
             }
-            assert_eq!(list.tail, prev, "tail");
-            assert_eq!((list.len, list.bytes), (len, bytes), "queue counts");
-            linked += len;
+            linked += slots.len();
         }
         let live = c.slots.iter().flatten().count();
         assert_eq!((linked, live, c.table.len()), (live, c.len(), live));
@@ -554,6 +706,7 @@ mod tests {
             c.slots.len(),
             "a slot neither live nor free"
         );
+        assert!(c.free.capacity() >= c.slots.len(), "no room to free a slot");
     }
 
     fn order<K: Clone, V, S>(c: &S3Fifo<K, V, S>, list: List) -> Vec<K> {
@@ -562,7 +715,7 @@ mod tests {
         while i != NIL {
             let node = c.slots[i].as_ref().unwrap();
             keys.push(node.key.clone());
-            i = node.next;
+            i = node.links[QUEUE].next;
         }
         keys
     }
@@ -682,9 +835,12 @@ mod tests {
             &mut self,
             keep: impl Fn(u32) -> bool,
             max_checks: usize,
+            mut steps: usize,
+            record_ghost: bool,
         ) -> Option<(u32, u32, usize)> {
             let (mut checks, mut flip) = (0, false);
-            while checks < max_checks {
+            while checks < max_checks && steps > 0 {
+                steps -= 1;
                 let from_small = self.pick_small(flip);
                 let key = *self.queue(!from_small).front()?;
                 let e = &self.entries[&key];
@@ -696,7 +852,7 @@ mod tests {
                         self.move_back(key);
                         continue;
                     }
-                    return Some(self.evict(key, true));
+                    return Some(self.evict(key, record_ghost));
                 }
                 if freq > 0 {
                     self.entries.get_mut(&key).unwrap().freq = freq - 1;
@@ -761,9 +917,20 @@ mod tests {
         v
     }
 
+    const CLASSES: u32 = 3;
+
+    fn class(key: u32) -> usize {
+        (key % CLASSES) as usize
+    }
+
     /// Runs random operations on the slab and on the model; every result, the queues in order,
-    /// the byte counts and the structure must agree after each one.
+    /// the byte counts and the structure must agree after each one. Keys are in class
+    /// `key % CLASSES`.
     fn compare(seed: u64, ops: usize, keys: u32, config: S3FifoConfig) {
+        let config = S3FifoConfig {
+            classes: CLASSES as usize,
+            ..config
+        };
         let mut rng = SmallRng::seed_from_u64(seed);
         let hasher = DefaultHashBuilder::default();
         let mut c = S3Fifo::<u32, u32>::with_hasher(config, hasher);
@@ -778,27 +945,43 @@ mod tests {
             match rng.gen_range(0..100) {
                 0..25 => assert_eq!(c.get(&key).copied(), m.get(key), "{at} get"),
                 25..55 => assert_eq!(
-                    c.insert(key, value, bytes),
+                    c.insert_in(class(key), key, value, bytes),
                     m.insert(key, value, bytes),
                     "{at} insert"
                 ),
                 55..62 => assert_eq!(c.remove(&key), m.remove(key), "{at} remove"),
-                62..80 => {
+                62..72 => {
                     let checks = rng.gen_range(1..40);
                     let got = c.pop_evictable(|v| *v < held, checks);
-                    assert_eq!(got, m.pop_evictable(|v| v < held, checks), "{at} pop");
+                    let want = m.pop_evictable(|v| v < held, checks, usize::MAX, true);
+                    assert_eq!(got, want, "{at} pop");
                 }
-                80..95 => {
-                    let modulo = rng.gen_range(1..4);
+                72..80 => {
+                    let checks = rng.gen_range(1..40);
+                    let steps = rng.gen_range(0..20);
+                    let mut left = steps;
+                    let got = c.pop_evictable_bounded(|v| *v < held, checks, &mut left);
+                    let want = m.pop_evictable(|v| v < held, checks, steps, false);
+                    assert_eq!(got, want, "{at} bounded pop");
+                    c.compact();
+                }
+                80..94 => {
+                    let class_of = rng.gen_range(0..CLASSES as usize);
                     let target = rng.gen_range(1..64);
                     let max = rng.gen_range(1..16);
-                    let matches = |k: u32| k.is_multiple_of(modulo);
-                    let got = c.evict_where(|k| matches(*k), |v| *v < held, target, max);
+                    let matches = |k: u32| class(k) == class_of;
+                    let got = c.evict_class(class_of, |v| *v < held, target, max);
                     assert_eq!(
                         got,
                         m.evict_where(matches, |v| v < held, target, max),
-                        "{at} evict_where"
+                        "{at} evict_class"
                     );
+                }
+                94..95 => {
+                    let class_of = rng.gen_range(0..CLASSES as usize);
+                    let got = sorted(c.remove_class(class_of));
+                    let want = sorted(m.remove_if(|k, _| class(k) == class_of));
+                    assert_eq!(got, want, "{at} remove_class");
                 }
                 95..99 => {
                     let modulo = rng.gen_range(1..5);
@@ -812,7 +995,7 @@ mod tests {
                 _ => {
                     // Fill up, so that removals shrink the slab and compaction runs.
                     for k in keys..keys + 3000 {
-                        assert_eq!(c.insert(k, value, 1), m.insert(k, value, 1));
+                        assert_eq!(c.insert_in(class(k), k, value, 1), m.insert(k, value, 1));
                     }
                 }
             }
@@ -884,7 +1067,10 @@ mod tests {
         assert_eq!(c.slots(), c.len(), "not compacted");
         loop {
             let got = c.pop_evictable(|_| false, usize::MAX);
-            assert_eq!(got, m.pop_evictable(|_| false, usize::MAX));
+            assert_eq!(
+                got,
+                m.pop_evictable(|_| false, usize::MAX, usize::MAX, true)
+            );
             check_structure(&c);
             if got.is_none() {
                 break;

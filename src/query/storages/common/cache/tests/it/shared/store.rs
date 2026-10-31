@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 use std::sync::Barrier;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::Thread;
 use databend_storages_common_cache::CacheKind;
@@ -150,6 +152,54 @@ fn test_pool_cap_by_name() {
     assert!(manager.set_cache_capacity("all", 1).is_err());
     assert!(manager.set_cache_capacity("pool:unknown", 1).is_err());
     assert!(manager.set_cache_capacity("unknown", 1).is_err());
+}
+
+/// Inserts racing the pool or the kind being turned off: once it is off and they are done,
+/// nothing is cached or charged. An insert that saw the old bounds is waited for, and removed
+/// with the rest; later ones are refused.
+#[test]
+fn test_disable_racing_inserts_leaves_nothing() {
+    const THREADS: usize = 8;
+    for round in 0..40 {
+        let store = shared_store(1 << 20, 0, 0);
+        let live = Live::default();
+        let stop = Arc::new(AtomicBool::new(false));
+        let barrier = Arc::new(Barrier::new(THREADS + 1));
+        let threads: Vec<_> = (0..THREADS)
+            .map(|t| {
+                let (store, live) = (store.clone(), live.clone());
+                let (stop, barrier) = (stop.clone(), barrier.clone());
+                Thread::spawn(move || {
+                    let cache = cache(&store, meta_kind());
+                    barrier.wait();
+                    for i in 0.. {
+                        if stop.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        cache.put(&format!("{t}-{i}"), live.item(100));
+                    }
+                })
+            })
+            .collect();
+        barrier.wait();
+        std::thread::yield_now();
+        if round % 2 == 0 {
+            store.set_pool_cap(Pool::Meta, 0).unwrap();
+        } else {
+            store.set_kind_limit(meta_kind(), KindLimit::DISABLED);
+        }
+        stop.store(true, Ordering::Relaxed);
+        for t in threads {
+            t.join().unwrap();
+        }
+        let kind = store.kind_stats(meta_kind());
+        assert_eq!(
+            (kind.items, kind.in_cache, kind.resident),
+            (0, 0, 0),
+            "round {round}"
+        );
+        assert_eq!(live.count(), 0, "round {round}");
+    }
 }
 
 /// Concurrent inserts reserve the pool and kind budgets atomically: residency never exceeds

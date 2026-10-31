@@ -38,11 +38,16 @@ use crate::backend::RejectReason;
 use crate::backend::ShrinkReport;
 use crate::backend::entry::Entry;
 use crate::backend::entry::KeyRef;
+use crate::handle::cache_ref::Charge;
 use crate::handle::cache_ref::ErasedValue;
 use crate::handle::cache_ref::Reservation;
 use crate::handle::cache_ref::Usage;
 
 const UNLIMITED: usize = usize::MAX;
+
+/// Entries one reclaim looks at, over every pool: it runs on an allocating thread, so its work
+/// is bounded whatever the pools hold.
+const RECLAIM_STEPS: usize = 64 * 1024;
 
 /// Why entries left the cache.
 #[derive(Clone, Copy)]
@@ -172,22 +177,13 @@ impl SharedStore {
         &self.kinds[kind.index()]
     }
 
-    fn forget(&self, pool: &PoolStore, removed: Removed) -> usize {
-        let count = removed.len();
-        for (key, entry) in &removed {
-            pool.usage().leave(entry.bytes);
-            self.kind(key.kind).usage.leave(entry.bytes);
-        }
-        drop(removed);
-        count
-    }
-
-    /// `forget`, counting the entries as evicted for `reason`.
-    fn forget_evicted(&self, pool: &PoolStore, removed: Removed, reason: Evicted) -> usize {
+    /// Counts entries taken out of a pool as evicted for `reason`, and drops them, outside the
+    /// shard locks; returns how many.
+    fn evicted(&self, removed: Removed, reason: Evicted) -> usize {
         for (key, entry) in &removed {
             self.kind(key.kind).events.evicted(reason, entry.bytes);
         }
-        self.forget(pool, removed)
+        removed.len()
     }
 
     fn reject(&self, kind: CacheKind, reason: RejectReason) -> InsertOutcome {
@@ -195,11 +191,12 @@ impl SharedStore {
         InsertOutcome::Rejected(reason)
     }
 
+    /// Evicts unheld entries until the pool's budget is back within `cap`.
     fn evict_until(&self, pool: &PoolStore, cap: usize) {
         // Read once per round: values dropped by readers lower it between two reads.
         while let Some(excess) = pool.usage().resident().checked_sub(cap).filter(|e| *e > 0) {
-            let victims = pool.evict_batch(pool.next_cursor(), excess, true);
-            if self.forget_evicted(pool, victims, Evicted::Capacity) == 0 {
+            let victims = pool.evict_batch(pool.next_cursor(), excess);
+            if self.evicted(victims, Evicted::Capacity) == 0 {
                 break;
             }
         }
@@ -221,59 +218,68 @@ impl SharedStore {
         Ok(())
     }
 
-    /// Reserves `bytes` of the kind's limit, evicting the kind's own entries, coldest first,
+    /// Charges `bytes` to the kind's limit, evicting the kind's own entries, coldest first,
     /// as long as that frees room: a kind at its limit turns over like a pool at its cap
     /// rather than refusing new values. Concurrent inserts cannot overshoot the limit.
-    fn reserve_kind(&self, kind: CacheKind, pool: &PoolStore, shard: usize, bytes: usize) -> bool {
+    fn reserve_kind(
+        &self,
+        kind: CacheKind,
+        pool: &PoolStore,
+        shard: usize,
+        bytes: usize,
+    ) -> Option<Charge> {
         let usage = &self.kind(kind).usage;
         let Some(max) = self.kind(kind).limit().max_bytes else {
-            return usage.try_reserve(bytes, usize::MAX);
+            return Some(usage.charge(bytes));
         };
         if bytes > max {
-            return false;
+            return None;
         }
         loop {
-            if usage.try_reserve(bytes, max) {
-                return true;
+            if let Some(charge) = usage.try_charge(bytes, max) {
+                return Some(charge);
             }
             let excess = (usage.resident() + bytes).saturating_sub(max);
             let victims = pool.evict_kind_batch(kind, shard, excess.max(1));
-            if self.forget_evicted(pool, victims, Evicted::Capacity) == 0 {
-                return false;
+            if self.evicted(victims, Evicted::Capacity) == 0 {
+                return None;
             }
         }
     }
 
-    /// Reserves `bytes` of the pool, evicting from `shard` on as long as that frees room.
-    fn reserve_pool(&self, pool: &PoolStore, shard: usize, bytes: usize) -> bool {
+    /// Charges `bytes` to the pool, evicting from `shard` on as long as that frees room.
+    fn reserve_pool(&self, pool: &PoolStore, shard: usize, bytes: usize) -> Option<Charge> {
         loop {
-            if pool.usage().try_reserve(bytes, pool.cap()) {
-                return true;
+            if let Some(charge) = pool.usage().try_charge(bytes, pool.cap()) {
+                return Some(charge);
             }
             let excess = (pool.usage().resident() + bytes).saturating_sub(pool.cap());
-            let victims = pool.evict_batch(shard, excess.max(1), true);
-            if self.forget_evicted(pool, victims, Evicted::Capacity) == 0 {
-                return false;
+            let victims = pool.evict_batch(shard, excess.max(1));
+            if self.evicted(victims, Evicted::Capacity) == 0 {
+                return None;
             }
         }
     }
 
-    /// Evicts pool by pool, batch by batch, until `relieved` or nothing is left to evict.
+    /// Evicts pool by pool, batch by batch, until `relieved`, nothing is left to evict, or
+    /// `RECLAIM_STEPS` entries were looked at.
     fn reclaim(&self, relieved: &dyn Fn() -> bool) -> ShrinkReport {
         let mut report = ShrinkReport::default();
+        let mut steps = RECLAIM_STEPS;
         for pool in Pool::RECLAIM_ORDER {
             let store = self.pool(pool);
-            // Reclaims run on every allocation over the limit: an empty pool is not scanned.
-            while store.usage().in_cache() > 0 {
-                let before = store.usage().resident();
-                let victims = store.evict_batch(store.next_cursor(), usize::MAX, false);
-                let evicted = self.forget_evicted(store, victims, Evicted::MemoryPressure);
+            while steps > 0 {
+                let victims = store.reclaim_batch(store.next_cursor(), &mut steps);
+                // These entries were unheld when removed under their shard locks. Count only
+                // their charges, not changes made by concurrent reclaims or readers.
+                let freed: usize = victims.iter().map(|(_, entry)| entry.bytes).sum();
+                let evicted = self.evicted(victims, Evicted::MemoryPressure);
                 if evicted == 0 {
                     break;
                 }
                 report.evicted += evicted;
                 report.batches += 1;
-                report.freed += before.saturating_sub(store.usage().resident());
+                report.freed += freed;
                 if relieved() {
                     return report;
                 }
@@ -303,72 +309,67 @@ impl KindStore for SharedStore {
         value: ErasedValue,
         bytes: usize,
     ) -> InsertOutcome {
+        let pool = self.pool(kind.pool());
+        // From the first look at the bounds until the entry is in: a resize waits for this
+        // insert, or this insert sees the new bounds.
+        let _admitting = pool.admitting();
         if let Err(reason) = self.check_admissible(kind, bytes) {
             return self.reject(kind, reason);
         }
-        let pool = self.pool(kind.pool());
         let key = KeyRef::new(kind, key);
-
-        // Both budgets are reserved before the value goes in, so concurrent inserts cannot
-        // together exceed them; a rejected insert gives its reservation back.
-        let state = self.kind(kind);
-        if !self.reserve_kind(kind, pool, pool.shard_of(key), bytes) {
+        let shard = pool.shard_of(key);
+        // Both budgets are charged before the value goes in, so concurrent inserts cannot
+        // together exceed them. A charge is given back when dropped, also on a rejection.
+        let Some(kind_charge) = self.reserve_kind(kind, pool, shard, bytes) else {
             return self.reject(kind, RejectReason::KindLimit);
-        }
-        if !self.reserve_pool(pool, pool.shard_of(key), bytes) {
-            state.usage.release(bytes);
+        };
+        let Some(pool_charge) = self.reserve_pool(pool, shard, bytes) else {
             return self.reject(kind, RejectReason::PoolFullPinned);
-        }
-        let reservation = Reservation::reserved(pool.usage().clone(), state.usage.clone(), bytes);
-        pool.usage().enter(bytes);
-        state.usage.enter(bytes);
+        };
+        let reservation = Reservation::new(pool_charge, kind_charge);
         let replaced = pool.insert(key, Entry { value, bytes });
-        self.forget(pool, replaced);
+        drop(replaced);
         InsertOutcome::Inserted(reservation)
     }
 
     fn evict(&self, kind: CacheKind, key: &str) -> bool {
-        let pool = self.pool(kind.pool());
-        let removed = pool.remove(KeyRef::new(kind, key));
-        self.forget(pool, removed) > 0
+        self.pool(kind.pool())
+            .remove(KeyRef::new(kind, key))
+            .is_some()
     }
 
+    /// Evicts down to the new limit in `resident`, what inserts are checked against, coldest
+    /// first. Held entries stay: evicting them frees nothing, and the kind admits nothing new
+    /// until enough of them are dropped. A limit of 0 removes every entry.
     fn set_kind_limit(&self, kind: CacheKind, limit: KindLimit) {
+        let pool = self.pool(kind.pool());
+        let _resizing = pool.resizing();
         let state = self.kind(kind);
         state.set_limit(limit);
-        let pool = self.pool(kind.pool());
-        // Read once: concurrent inserts and evictions move it between two reads.
-        let in_cache = state.usage.in_cache();
-        let excess = match limit.max_bytes {
-            Some(0) => None,
-            Some(max) if in_cache > max => Some(in_cache - max),
-            _ => return,
-        };
-        let Some(excess) = excess else {
-            let removed = pool.remove_kind(kind, None);
-            self.forget_evicted(pool, removed, Evicted::Capacity);
-            return;
-        };
-        // Coldest first, as when the kind turns over; held entries go last, out of order.
-        let mut left = excess;
-        while left > 0 {
-            let victims = pool.evict_kind_batch(kind, pool.next_cursor(), left);
-            let freed: usize = victims.iter().map(|(_, e)| e.bytes).sum();
-            if self.forget_evicted(pool, victims, Evicted::Capacity) == 0 {
-                let removed = pool.remove_kind(kind, Some(left));
-                self.forget_evicted(pool, removed, Evicted::Capacity);
-                return;
+        match limit.max_bytes {
+            None => {}
+            Some(0) => {
+                self.evicted(pool.remove_kind(kind), Evicted::Capacity);
             }
-            left = left.saturating_sub(freed);
+            Some(max) => {
+                // Read once per round: values dropped by readers lower it between two reads.
+                while let Some(excess) = state.usage.resident().checked_sub(max).filter(|e| *e > 0)
+                {
+                    let victims = pool.evict_kind_batch(kind, pool.next_cursor(), excess);
+                    if self.evicted(victims, Evicted::Capacity) == 0 {
+                        break;
+                    }
+                }
+            }
         }
     }
 
     fn set_pool_cap(&self, pool: Pool, bytes: usize) -> Result<()> {
         let store = self.pool(pool);
+        let _resizing = store.resizing();
         store.set_cap(bytes);
         if bytes == 0 {
-            let removed = store.remove_all();
-            self.forget_evicted(store, removed, Evicted::Capacity);
+            self.evicted(store.remove_all(), Evicted::Capacity);
         } else {
             self.evict_until(store, bytes);
         }
@@ -377,11 +378,12 @@ impl KindStore for SharedStore {
 
     fn kind_stats(&self, kind: CacheKind) -> KindStats {
         let state = self.kind(kind);
+        let (items, in_cache) = self.pool(kind.pool()).kind_in_cache(kind);
         KindStats {
             kind,
-            items: state.usage.items(),
+            items,
             resident: state.usage.resident(),
-            in_cache: state.usage.in_cache(),
+            in_cache,
             capacity: state.limit().max_bytes,
             unit: Unit::Bytes,
             events: Some(state.events.snapshot()),
@@ -391,12 +393,15 @@ impl KindStore for SharedStore {
     fn pool_stats(&self) -> Vec<PoolStats> {
         self.pools
             .iter()
-            .map(|p| PoolStats {
-                pool: p.pool(),
-                cap: p.cap(),
-                items: p.usage().items(),
-                resident: p.usage().resident(),
-                in_cache: p.usage().in_cache(),
+            .map(|p| {
+                let (items, in_cache) = p.in_cache();
+                PoolStats {
+                    pool: p.pool(),
+                    cap: p.cap(),
+                    items,
+                    resident: p.usage().resident(),
+                    in_cache,
+                }
             })
             .collect()
     }

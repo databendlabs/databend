@@ -81,14 +81,15 @@ impl<T> DiskTier<T> {
     }
 }
 
-/// Typed handle to one kind: memory tier in the store, optional disk tier, single-flight loads.
-/// Cheap to clone; clones share in-flight loads, and so do all handles of a kind from one
-/// `CacheManager`.
+/// Typed handle to one kind: memory tier in the store, optional disk tier, optionally shared
+/// loads. Cheap to clone; clones share in-flight loads, and so do all handles of a kind from
+/// one `CacheManager`, for kinds that share loads (`CacheDef::SHARE_LOADS`).
 pub struct MemCache<T: CachedItem> {
     kind: CacheKind,
     store: Arc<dyn KindStore>,
     disk: Option<Arc<DiskTier<T>>>,
-    flight: Arc<SingleFlight<CacheRef<T>>>,
+    /// `None`: every miss loads on its own.
+    flight: Option<Arc<SingleFlight<CacheRef<T>>>>,
     read_only: bool,
 }
 
@@ -105,20 +106,22 @@ impl<T: CachedItem> Clone for MemCache<T> {
 }
 
 impl<T: CachedItem> MemCache<T> {
-    /// A handle binding `T` to `kind` as given. `CacheManager::cache` derives both, and the disk
-    /// tier, from the kind's `CacheDef`; this one is for tests and benchmarks.
+    /// A handle binding `T` to `kind` as given, sharing loads among its clones.
+    /// `CacheManager::cache` derives both, the disk tier and the shared loads from the kind's
+    /// `CacheDef`; this one is for tests and benchmarks.
     pub fn new(store: Arc<dyn KindStore>, kind: CacheKind) -> Self {
         MemCache {
             kind,
             store,
             disk: None,
-            flight: Arc::new(SingleFlight::default()),
+            flight: Some(Arc::new(SingleFlight::default())),
             read_only: false,
         }
     }
 
-    /// Shares in-flight loads through `flight`, e.g. with every handle of the kind.
-    pub(crate) fn with_flight(mut self, flight: Arc<SingleFlight<CacheRef<T>>>) -> Self {
+    /// Shares in-flight loads through `flight`, e.g. with every handle of the kind; with
+    /// `None`, every miss loads on its own.
+    pub(crate) fn with_flight(mut self, flight: Option<Arc<SingleFlight<CacheRef<T>>>>) -> Self {
         self.flight = flight;
         self
     }
@@ -204,18 +207,28 @@ impl<T: CachedItem> MemCache<T> {
             return Ok(hit);
         }
         let cache_key = cache_key.into_owned();
+        let load = async {
+            let start = Instant::now();
+            let value = reader.read(&key).await?;
+            if self.is_enabled() {
+                let millis = start.elapsed().as_millis() as u64;
+                metrics_inc_cache_miss_load_millisecond(millis, self.name());
+            }
+            Ok(self.fill(&cache_key, value))
+        };
         // Type-erased so the reader's future does not nest into every caller's future type,
         // as `async_trait` loaders did before. Allocates only on a miss, next to the IO.
         let load: Pin<Box<dyn Future<Output = Result<CacheRef<T>>> + Send + '_>> =
-            Box::pin(self.flight.run(&cache_key, async {
-                let start = Instant::now();
-                let value = reader.read(&key).await?;
-                if self.is_enabled() {
-                    let millis = start.elapsed().as_millis() as u64;
-                    metrics_inc_cache_miss_load_millisecond(millis, self.name());
-                }
-                Ok(self.fill(&cache_key, value))
-            }));
+            match &self.flight {
+                None => Box::pin(load),
+                Some(flight) => Box::pin(flight.run(&cache_key, async {
+                    // A load that completed between the miss and joining the flight.
+                    match self.memory_hit(&cache_key) {
+                        Some(hit) => Ok(hit),
+                        None => load.await,
+                    }
+                })),
+            };
         load.await
     }
 
@@ -246,27 +259,30 @@ impl<T: CachedItem> MemCache<T> {
         in_memory || on_disk
     }
 
+    /// The value in the memory tier, without counting an access.
+    fn memory_hit(&self, key: &str) -> Option<CacheRef<T>> {
+        let erased = self.store.get(self.kind, key)?;
+        let hit = CacheRef::from_erased(erased);
+        // A kind is bound to one value type; a mismatch means two `MemCache`s with different
+        // `T` share a kind. Treated as a miss, and the refill overwrites it.
+        debug_assert!(
+            hit.is_some(),
+            "cache kind {:?} bound to two types",
+            self.kind
+        );
+        if hit.is_none() {
+            warn!("cache kind {:?} holds a value of another type", self.kind);
+        }
+        hit
+    }
+
     fn lookup_tiers(&self, key: &str, len: Option<u64>) -> Option<CacheRef<T>> {
         if !self.memory_enabled() {
             return self.lookup_disk(key);
         }
         let name = self.name();
         metrics_inc_cache_access_count(1, name);
-        let hit = self.store.get(self.kind, key).and_then(|erased| {
-            let hit = CacheRef::from_erased(erased);
-            // A kind is bound to one value type; a mismatch means two `MemCache`s with
-            // different `T` share a kind. Treated as a miss, and the refill overwrites it.
-            debug_assert!(
-                hit.is_some(),
-                "cache kind {:?} bound to two types",
-                self.kind
-            );
-            if hit.is_none() {
-                warn!("cache kind {:?} holds a value of another type", self.kind);
-            }
-            hit
-        });
-        if let Some(hit) = hit {
+        if let Some(hit) = self.memory_hit(key) {
             metrics_inc_cache_hit_count(1, name);
             if let Some(len) = len {
                 Profile::record_usize_profile(

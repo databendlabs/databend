@@ -42,6 +42,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::CacheDef;
 use databend_storages_common_cache::CachedColumnArray;
+use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::CachedVectorIndex;
 use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::IcebergTableCacheValue;
@@ -382,4 +383,30 @@ impl Sample for column::Array {
         let size = array.get_array_memory_size();
         (CachedColumnArray::Arrow(array), size)
     }
+}
+
+/// A regression for the retained JSON, not a calibration of parsed Iceberg metadata: the
+/// table remains opaque here, and the real table's parsed representation is only estimated.
+#[test]
+fn test_iceberg_estimate_grows_with_metadata_json() {
+    let value = |len: usize| {
+        let json = format!(
+            r#"{{"properties":{{"description":"{}"}}}}"#,
+            "x".repeat(len)
+        );
+        let mut info = TableInfo::default();
+        info.meta
+            .engine_options
+            .insert("iceberg.metadata".to_string(), json);
+        IcebergTableCacheValue::new(Arc::new(FakeTable(info)), None)
+    };
+    let (small, large) = (value(1024), value(128 * 1024));
+    let growth = large.mem_bytes() - small.mem_bytes();
+    let json_growth = 127 * 1024;
+    assert!(growth >= json_growth, "metadata JSON is not charged");
+    assert!(
+        growth <= 3 * json_growth,
+        "unexpected estimate growth: {growth}"
+    );
+    assert_eq!((small.legacy_bytes(), large.legacy_bytes()), (0, 0));
 }

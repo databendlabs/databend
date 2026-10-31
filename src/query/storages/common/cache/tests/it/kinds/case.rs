@@ -54,7 +54,7 @@ pub trait KindCase: Send + Sync {
     fn memory_round_trip(&self, manager: &CacheManager, legacy: bool);
 
     /// Concurrent misses on one key through separate handles of the kind, as callers that make
-    /// a handle per call do, load once.
+    /// a handle per call do, load once if the kind shares loads, else once each.
     fn shared_loads(&self, manager: &CacheManager);
 
     /// `legacy_bytes` of a sample value.
@@ -273,8 +273,12 @@ impl<K: Sample> KindCase for Case<K> {
             second.get(&reader, key()),
         ));
         let (a, b) = (a.unwrap(), b.unwrap());
-        assert_eq!(reader.reads(), 1, "{name}");
-        assert!(same(&a, &b), "{name}");
+        if K::SHARE_LOADS {
+            assert_eq!(reader.reads(), 1, "{name}");
+            assert!(same(&a, &b), "{name}");
+        } else {
+            assert_eq!(reader.reads(), 2, "{name}");
+        }
         assert!(first.evict("shared"), "{name}");
     }
 

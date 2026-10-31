@@ -17,6 +17,7 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -41,6 +42,8 @@ impl CacheDef for Snapshot {
     type Value = Arc<TableSnapshot>;
     const NAME: &'static str = "memory_cache_table_snapshot";
     const POOL: Pool = Pool::Meta;
+    /// Snapshot files are written once, under new locations.
+    const SHARE_LOADS: bool = true;
 }
 
 /// Table statistics (HLL, histograms, ...) of snapshots, by location.
@@ -50,6 +53,8 @@ impl CacheDef for SnapshotStats {
     type Value = Arc<TableSnapshotStatistics>;
     const NAME: &'static str = "memory_cache_table_statistics";
     const POOL: Pool = Pool::Meta;
+    /// Statistics files are written once, under new locations.
+    const SHARE_LOADS: bool = true;
 }
 
 /// Pruning results of deterministic scans (`enable_prune_cache`).
@@ -92,15 +97,17 @@ impl CachedItem for TableSnapshotStatistics {
     }
 }
 
-/// Partitions are opaque `dyn PartInfo`; this is the typical size of a fuse block part.
-const PART_INFO_BYTES: usize = 512;
-
+/// Each part is an `Arc` (two counts and a `Box`) of a `dyn PartInfo`, which counts itself.
 impl CachedItem for (PartStatistics, Partitions) {
     fn mem_bytes(&self) -> usize {
+        const ARC_OF_BOX: usize = 2 * size_of::<usize>() + size_of::<Box<dyn PartInfo>>();
         let parts = &self.1.partitions;
         size_of::<Self>()
             + parts.capacity() * size_of::<PartInfoPtr>()
-            + parts.len() * PART_INFO_BYTES
+            + parts
+                .iter()
+                .map(|p| ARC_OF_BOX + p.mem_bytes())
+                .sum::<usize>()
     }
 
     fn legacy_bytes(&self) -> usize {

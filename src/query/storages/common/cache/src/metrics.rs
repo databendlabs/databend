@@ -34,7 +34,7 @@
 //!   evictions and replacements are not counted.
 //! - `cache_insert_rejected_count` per kind, by `reason`: `oversized`, `kind_limit` or
 //!   `pool_full_pinned`.
-//! - `cache_memory_reclaim_count`, `cache_memory_reclaim_bytes` (freed) and
+//! - `cache_memory_reclaim_count`, `cache_memory_reclaim_bytes` (charges released) and
 //!   `cache_memory_reclaim_milliseconds` (spent).
 
 use std::fmt::Debug;
@@ -292,7 +292,7 @@ impl Collector for CacheMetricsCollector {
                 ),
                 (
                     "cache_memory_reclaim_bytes",
-                    "Bytes freed by reclaims.",
+                    "Estimated bytes of value charges released by reclaims, not physical memory.",
                     stats.freed_bytes,
                 ),
                 (

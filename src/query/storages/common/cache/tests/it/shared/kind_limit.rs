@@ -159,6 +159,53 @@ fn test_lowering_the_limit_keeps_hot_entries() {
     assert!(keys(0..5).iter().all(|k| !cache.contains(k)));
 }
 
+/// Lowering the limit evicts what that frees; held entries stay, and the kind admits nothing
+/// new until they are released, since the limit counts them.
+#[test]
+fn test_lowering_the_limit_keeps_held_entries() {
+    let store = one_shard_store(10_000);
+    let cache = cache(&store, meta_kind());
+    let live = Live::default();
+    let held: Vec<_> = keys(0..5)
+        .iter()
+        .map(|k| cache.put(k, live.item(100)))
+        .collect();
+    for key in keys(5..10) {
+        cache.put(&key, live.item(100));
+    }
+    store.set_kind_limit(meta_kind(), KindLimit::bytes(300));
+    let kind = store.kind_stats(meta_kind());
+    assert_eq!((kind.items, kind.resident, kind.in_cache), (5, 500, 500));
+    assert!(keys(0..5).iter().all(|k| cache.contains(k)));
+    assert!(!cache.put("new", live.item(100)).is_charged());
+
+    drop(held);
+    assert!(cache.put("new", live.item(100)).is_charged());
+    let kind = store.kind_stats(meta_kind());
+    assert_eq!((kind.resident, kind.in_cache), (300, 300));
+}
+
+/// Evicted values still held by readers consume the new limit even though they are absent
+/// from the queues. Shrinking only `in_cache` would leave 900 bytes resident here.
+#[test]
+fn test_lowering_limit_counts_evicted_held_values() {
+    let store = one_shard_store(10_000);
+    let cache = cache(&store, meta_kind());
+    let live = Live::default();
+    let retired = cache.put("retired", live.item(400));
+    assert!(cache.evict("retired"));
+    for key in keys(0..6) {
+        cache.put(&key, live.item(100));
+    }
+    store.set_kind_limit(meta_kind(), KindLimit::bytes(500));
+    let kind = store.kind_stats(meta_kind());
+    assert_eq!((kind.resident, kind.in_cache, kind.items), (500, 100, 1));
+    assert!(!cache.put("too-large", live.item(200)).is_charged());
+    drop(retired);
+    assert!(cache.put("new", live.item(200)).is_charged());
+    assert!(store.kind_stats(meta_kind()).resident <= 500);
+}
+
 /// Values loaded through a reader also turn over.
 #[test]
 fn test_loaded_values_turn_over() {

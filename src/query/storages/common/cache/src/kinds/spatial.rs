@@ -30,6 +30,8 @@ impl CacheDef for Meta {
     type Value = Arc<SpatialIndexMeta>;
     const NAME: &'static str = "memory_cache_spatial_index_file_meta_data";
     const POOL: Pool = Pool::Meta;
+    /// Index files are written once, under new locations.
+    const SHARE_LOADS: bool = true;
     const DISK: Option<Disk<Self::Value>> = Some(Disk::new("spatial_index_meta_v1", |c| {
         c.disk_cache_spatial_index_meta_size
     }));

@@ -78,6 +78,7 @@ pub enum RejectReason {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ShrinkReport {
+    /// Estimated value charges released by this call, not physical memory or RSS.
     pub freed: usize,
     pub evicted: usize,
     pub batches: usize,
@@ -114,6 +115,7 @@ pub struct KindEvents {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReclaimStats {
     pub count: u64,
+    /// Sum of the value charges released by each reclaim, without counting other callers.
     pub freed_bytes: u64,
     pub millis: u64,
 }

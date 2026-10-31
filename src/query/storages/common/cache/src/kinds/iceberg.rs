@@ -25,6 +25,7 @@ use crate::CacheDef;
 use crate::CachedItem;
 use crate::Pool;
 use crate::TTLValue;
+use crate::size::btree_map;
 use crate::size::table_schema;
 
 /// Iceberg tables, by `{catalog}\u{1f}{database}\u{1f}{table}`; refreshed after a TTL.
@@ -75,10 +76,14 @@ impl IcebergTableCacheValue {
     }
 }
 
-/// The table is opaque `dyn Table`; its schema is the part that grows with the table.
+/// The table is opaque `dyn Table`. What grows with it is in its info: the schema, counted
+/// twice as the iceberg table keeps its own, and the engine options, which carry the table
+/// metadata as JSON; the parsed metadata the iceberg table keeps is taken as large again.
 impl CachedItem for IcebergTableCacheValue {
     fn mem_bytes(&self) -> usize {
-        size_of::<Self>() + 2 * table_schema(&self.table().get_table_info().meta.schema)
+        let meta = &self.table.get_table_info().meta;
+        let options = btree_map(&meta.engine_options, |k, v| k.capacity() + v.capacity());
+        size_of::<Self>() + 2 * table_schema(&meta.schema) + 2 * options
     }
 
     fn legacy_bytes(&self) -> usize {

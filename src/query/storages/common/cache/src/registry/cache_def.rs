@@ -35,4 +35,9 @@ pub trait CacheDef: 'static {
 
     /// Disk tier, for kinds that have one.
     const DISK: Option<Disk<Self::Value>> = None;
+
+    /// Whether concurrent misses on one key share a load (`MemCache::get`). Only for kinds no
+    /// writer invalidates, by `evict` or a `put` under the same key: a reader coming after an
+    /// invalidation could join a load started before it, and get the old value.
+    const SHARE_LOADS: bool = false;
 }

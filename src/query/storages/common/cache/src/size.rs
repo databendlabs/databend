@@ -31,11 +31,11 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Statistics;
 
-pub(crate) fn vec<T>(v: &Vec<T>, heap: impl Fn(&T) -> usize) -> usize {
+pub fn vec<T>(v: &Vec<T>, heap: impl Fn(&T) -> usize) -> usize {
     v.capacity() * size_of::<T>() + v.iter().map(heap).sum::<usize>()
 }
 
-pub(crate) fn hash_map<K, V, S>(m: &HashMap<K, V, S>, heap: impl Fn(&K, &V) -> usize) -> usize {
+pub fn hash_map<K, V, S>(m: &HashMap<K, V, S>, heap: impl Fn(&K, &V) -> usize) -> usize {
     let buckets = if m.capacity() == 0 {
         0
     } else {
@@ -44,22 +44,22 @@ pub(crate) fn hash_map<K, V, S>(m: &HashMap<K, V, S>, heap: impl Fn(&K, &V) -> u
     buckets * (size_of::<(K, V)>() + 1) + m.iter().map(|(k, v)| heap(k, v)).sum::<usize>()
 }
 
-pub(crate) fn btree_map<K, V>(m: &BTreeMap<K, V>, heap: impl Fn(&K, &V) -> usize) -> usize {
+pub fn btree_map<K, V>(m: &BTreeMap<K, V>, heap: impl Fn(&K, &V) -> usize) -> usize {
     const NODE_CAPACITY: usize = 11;
     let nodes = m.len().div_ceil(NODE_CAPACITY * 2 / 3);
     let node_bytes = NODE_CAPACITY * (size_of::<K>() + size_of::<V>()) + 2 * size_of::<usize>();
     nodes * node_bytes + m.iter().map(|(k, v)| heap(k, v)).sum::<usize>()
 }
 
-pub(crate) fn option<T>(o: &Option<T>, heap: impl Fn(&T) -> usize) -> usize {
+pub fn option<T>(o: &Option<T>, heap: impl Fn(&T) -> usize) -> usize {
     o.as_ref().map_or(0, heap)
 }
 
-pub(crate) fn none<T>(_: &T) -> usize {
+pub fn none<T>(_: &T) -> usize {
     0
 }
 
-pub(crate) fn scalar(s: &Scalar) -> usize {
+pub fn scalar(s: &Scalar) -> usize {
     match s {
         Scalar::String(v) => v.capacity(),
         Scalar::Binary(v) | Scalar::Bitmap(v) | Scalar::Variant(v) | Scalar::Geometry(v) => {
@@ -74,11 +74,11 @@ pub(crate) fn scalar(s: &Scalar) -> usize {
     }
 }
 
-pub(crate) fn location(l: &Location) -> usize {
+pub fn location(l: &Location) -> usize {
     l.0.capacity()
 }
 
-pub(crate) fn column_statistics(c: &ColumnStatistics) -> usize {
+pub fn column_statistics(c: &ColumnStatistics) -> usize {
     scalar(&c.min) + scalar(&c.max)
 }
 

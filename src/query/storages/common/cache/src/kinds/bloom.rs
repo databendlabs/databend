@@ -36,6 +36,8 @@ impl CacheDef for IndexMeta {
     type Value = Arc<BloomIndexMeta>;
     const NAME: &'static str = "memory_cache_bloom_index_file_meta_data";
     const POOL: Pool = Pool::Meta;
+    /// Index files are written once, under new locations.
+    const SHARE_LOADS: bool = true;
     const DISK: Option<Disk<Self::Value>> = Some(Disk::new("bloom_meta_v1", |c| {
         c.disk_cache_table_bloom_index_meta_size
     }));

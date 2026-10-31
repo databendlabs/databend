@@ -37,7 +37,7 @@ mod metrics;
 mod read;
 mod registry;
 pub mod shared;
-mod size;
+pub mod size;
 mod temp_dir;
 
 pub use accessor::CacheAccessor;

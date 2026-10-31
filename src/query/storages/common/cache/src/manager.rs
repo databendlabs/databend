@@ -79,8 +79,8 @@ pub struct CacheManager {
     disks: HashMap<CacheKind, Arc<DiskCacheAccessor>>,
     /// Runtime switch of every disk tier; off when the license does not allow them.
     disk_allowed: Arc<AtomicBool>,
-    /// In-flight loads of each kind, by kind index: every handle of a kind shares them, so
-    /// concurrent misses on one key load once even through handles made per call.
+    /// In-flight loads of each kind sharing loads, by kind index: every handle of a kind shares
+    /// them, so concurrent misses on one key load once even through handles made per call.
     flights: Box<[OnceLock<Arc<dyn Any + Send + Sync>>]>,
 }
 
@@ -142,8 +142,8 @@ impl CacheManager {
     /// The cache of kind `D`, with its disk tier when `D` defines one and the config enables it.
     pub fn cache<D: CacheDef>(&self) -> MemCache<D::Value> {
         let kind = CacheKind::of::<D>();
-        let cache =
-            MemCache::new(self.store.clone(), kind).with_flight(self.flight::<D::Value>(kind));
+        let flight = D::SHARE_LOADS.then(|| self.flight::<D::Value>(kind));
+        let cache = MemCache::new(self.store.clone(), kind).with_flight(flight);
         match (D::DISK, self.disks.get(&kind)) {
             (Some(disk), Some(tier)) => {
                 cache.with_disk(tier.clone(), self.disk_allowed.clone(), disk.codec)

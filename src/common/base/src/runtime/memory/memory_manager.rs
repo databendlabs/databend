@@ -28,6 +28,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::runtime::LimitMemGuard;
 use crate::runtime::MemStat;
 use crate::runtime::OutOfLimit;
 use crate::runtime::memory::mem_stat::ParentMemStat;
@@ -147,8 +148,6 @@ impl ExceededMemoryState {
 pub struct QueriesMemoryManager {
     state: OnceLock<Mutex<ExceededMemoryState>>,
     reclaim_handler: parking_lot::RwLock<Option<ReclaimHandler>>,
-    /// One thread reclaims at a time; the others recheck the limit once it is done.
-    reclaiming: parking_lot::Mutex<()>,
 }
 
 impl QueriesMemoryManager {
@@ -156,7 +155,6 @@ impl QueriesMemoryManager {
         QueriesMemoryManager {
             state: OnceLock::new(),
             reclaim_handler: parking_lot::RwLock::new(None),
-            reclaiming: parking_lot::Mutex::new(()),
         }
     }
 
@@ -165,7 +163,8 @@ impl QueriesMemoryManager {
     /// under the limit. Exceeding only a workload group limit does not reclaim.
     ///
     /// The handler runs on the allocating thread, which may hold any lock: it must not block on
-    /// locks of its own, and it must not wait for other threads.
+    /// locks of its own, and it must not wait for other threads. Threads over the limit at once
+    /// each run it; none waits for another's reclaim.
     pub fn set_reclaim_handle<F: Fn(&dyn Fn() -> bool) -> usize + Send + Sync + 'static>(
         &self,
         f: F,
@@ -186,8 +185,9 @@ impl QueriesMemoryManager {
     }
 
     fn reclaim_global(&self, global: &MemStat) -> bool {
-        // Without a handler nothing is done, not even flushing the stat buffers.
-        let Some(handler) = self.reclaim_handler.read().clone() else {
+        // Without a handler nothing is done, not even flushing the stat buffers. Not waiting
+        // for the lock either: it is only written while the handler is registered.
+        let Some(handler) = self.reclaim_handler.try_read().and_then(|h| h.clone()) else {
             return false;
         };
         // Memory freed on this thread may still sit in its stat buffers, below their flush
@@ -199,11 +199,6 @@ impl QueriesMemoryManager {
         };
         if under_limit() {
             return false;
-        }
-        let _reclaiming = self.reclaiming.lock();
-        // Another thread may have reclaimed while this one waited.
-        if under_limit() {
-            return true;
         }
         handler(&under_limit);
         under_limit()
@@ -221,11 +216,13 @@ impl QueriesMemoryManager {
     }
 
     pub fn set_gc_handle<F: Fn(&ResourceTag, bool) -> bool + Send + Sync + 'static>(&self, f: F) {
+        let _guard = LimitMemGuard::enter_unlimited();
         let mut state = self.get_state();
         state.memory_gc_handler = Some(Arc::new(f));
     }
 
     pub fn request_exceeded_memory(&self, mem_stat: &MemStat, tag: Option<&ResourceTag>) {
+        let _guard = LimitMemGuard::enter_unlimited();
         let Some(resource_tag) = tag else {
             return;
         };
@@ -314,6 +311,7 @@ impl QueriesMemoryManager {
         tag: Option<&ResourceTag>,
         cause: OutOfLimit,
     ) -> Result<(), OutOfLimit> {
+        let _guard = LimitMemGuard::enter_unlimited();
         let Some(waiting_id) = tag else {
             return Ok(());
         };
@@ -453,6 +451,7 @@ impl QueriesMemoryManager {
     }
 
     pub fn release_memory(&self, tag: Option<&ResourceTag>) {
+        let _guard = LimitMemGuard::enter_unlimited();
         let Some(terminate_id) = tag else {
             return;
         };
@@ -462,6 +461,10 @@ impl QueriesMemoryManager {
     }
 
     pub fn drop_memory_stat(&self, tag: Option<&ResourceTag>) {
+        // A cached allocation can own the last reference to a query's MemStat. Updating
+        // these maps may allocate: do not reenter reclaim while holding `state`, since
+        // reclaim can drop another MemStat and need the same lock.
+        let _guard = LimitMemGuard::enter_unlimited();
         let Some(drop_id) = tag else {
             return;
         };

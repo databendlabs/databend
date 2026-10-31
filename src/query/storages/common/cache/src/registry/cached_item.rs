@@ -14,6 +14,11 @@
 
 /// A value that can be cached. Its kind decides where it is cached; one type may be the value
 /// of several kinds.
+///
+/// The shared backend reclaims values on the allocating thread, which may hold application
+/// locks. Custom value destructors must not acquire those locks or wait for other threads.
+/// Allocation-tracker cleanup can also run during deallocation; the memory manager guards
+/// its bookkeeping against recursively starting another reclaim.
 pub trait CachedItem: Send + Sync + 'static {
     /// The bytes the value holds; what the shared backend charges.
     fn mem_bytes(&self) -> usize;
