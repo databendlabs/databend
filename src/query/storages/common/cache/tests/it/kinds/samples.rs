@@ -390,10 +390,13 @@ impl Sample for column::Array {
 #[test]
 fn test_iceberg_estimate_grows_with_metadata_json() {
     let value = |len: usize| {
-        let json = format!(
+        // Sized exactly: `format!` grows its string by doubling, and the estimate counts the
+        // allocation, not the length.
+        let mut json = format!(
             r#"{{"properties":{{"description":"{}"}}}}"#,
             "x".repeat(len)
         );
+        json.shrink_to_fit();
         let mut info = TableInfo::default();
         info.meta
             .engine_options
