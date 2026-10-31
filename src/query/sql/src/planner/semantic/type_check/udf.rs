@@ -1112,6 +1112,9 @@ where A: UdfAdapter
     ) -> Result<UdfResolveResult> {
         let language = udf_definition.language.parse()?;
         let config = self.udf_adapter.validation_config()?;
+        if !udf_definition.external_access_integrations.is_empty() {
+            UDFValidator::is_python_udf_external_access_allowed_with_config(&config)?;
+        }
         let use_cloud = matches!(language, UDFLanguage::Python) && config.enable_udf_sandbox;
         if !udf_definition.external_access_integrations.is_empty()
             && (language != UDFLanguage::Python || use_cloud)
@@ -1178,6 +1181,8 @@ where A: UdfAdapter
                 name,
                 handler,
                 headers: BTreeMap::default(),
+                // Script bindings live in UDFScriptCode, which also selects the
+                // fail-closed distributed-plan variant. This field is remote-only.
                 external_access_integrations: Vec::new(),
                 display_name,
                 arg_types,
@@ -1209,10 +1214,11 @@ where A: UdfAdapter
             packages,
         } = udf_definition;
         let language = language.parse()?;
-        UDFValidator::is_udaf_script_allowed_with_config(
-            &language,
-            &self.udf_adapter.validation_config()?,
-        )?;
+        let config = self.udf_adapter.validation_config()?;
+        UDFValidator::is_udaf_script_allowed_with_config(&language, &config)?;
+        if !external_access_integrations.is_empty() {
+            UDFValidator::is_python_udf_external_access_allowed_with_config(&config)?;
+        }
         let code_blob = self.udf_adapter.load_udf_code(code)?.into_boxed_slice();
         let imports_stage_info = self.udf_adapter.load_stage_locations(&imports)?;
 

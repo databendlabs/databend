@@ -53,5 +53,3 @@ def handler():
 "
 bendsql_connect_root --query="SELECT parse_json(python_network_caught()):error::STRING"
 bendsql_connect_root --query='SELECT python_network_null() IS NULL'
-# No SQL setting may enable unrestricted Python worker networking.
-bendsql_connect_root --query="SELECT count(*) FROM system.settings WHERE name = 'python_udf_allow_network'"

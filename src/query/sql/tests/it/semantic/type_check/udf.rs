@@ -500,6 +500,50 @@ async fn test_udaf_script_loads_code_and_marks_runtime_state() -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_bound_python_scripts_recheck_operator_config_before_loading_code() -> Result<()> {
+    for (mut udf, sql) in [
+        (cloud_udf(), "cloud_udf(number)"),
+        (udaf_script_with_language("udaf", "python"), "udaf(text)"),
+    ] {
+        match &mut udf.definition {
+            UDFDefinition::UDFScript(script) => {
+                script.external_access_integrations = vec!["access".into()]
+            }
+            UDFDefinition::UDAFScript(script) => {
+                script.external_access_integrations = vec!["access".into()]
+            }
+            _ => unreachable!(),
+        }
+        for (enabled, sandboxed) in [(false, false), (true, false), (true, true)] {
+            let mut udf_adapter = TestUdfAdapter::with_definitions([udf.clone()]);
+            udf_adapter
+                .validation_config
+                .enable_python_udf_external_access = enabled;
+            udf_adapter.validation_config.enable_udf_sandbox = sandboxed;
+            let adapter =
+                TestTypeCheckAdapter::new(test_settings()).with_udf_adapter(udf_adapter.clone());
+            let mut bind_context = test_bind_context(ExprContext::Unknown);
+            let result = resolve_type_check_sql(sql, adapter, &mut bind_context);
+            if enabled && !sandboxed {
+                result?;
+                assert_eq!(udf_adapter.code_load_count(), 1);
+            } else {
+                let error = result.unwrap_err();
+                let option = if sandboxed {
+                    "enable_udf_sandbox"
+                } else {
+                    "enable_python_udf_external_access"
+                };
+                assert!(error.message().contains(option), "{error}");
+                assert_eq!(udf_adapter.code_load_count(), 0);
+            }
+            assert_eq!(udf_adapter.cloud_script_count(), 0);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_udaf_script_language_is_validated() -> Result<()> {
     let resolve = |udf_adapter: TestUdfAdapter| {
         let adapter = TestTypeCheckAdapter::new(test_settings()).with_udf_adapter(udf_adapter);

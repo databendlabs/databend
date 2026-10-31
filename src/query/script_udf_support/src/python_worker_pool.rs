@@ -290,7 +290,7 @@ impl WorkerLease {
                     self.reservation.as_ref().unwrap().clone(),
                     runtime.directory.clone(),
                     &runtime.function,
-                    super::python_egress::PythonEgressProxy::for_bindings(
+                    crate::python_udf_network_proxy(
                         &runtime.query.tenant,
                         &runtime.external_access_integrations,
                     )?,

@@ -12,11 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This binary owns a meta/global registry. Keep it separate from the worker
-// unit tests, which deliberately run without query-service global singletons.
-// Include private implementation without widening the production API for tests.
 #[cfg(target_os = "linux")]
-mod implementation {
-    include!("../src/python_egress.rs");
-    include!("fixtures/python_egress.rs");
-}
+mod python_egress;

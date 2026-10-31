@@ -142,7 +142,23 @@ non-Linux platforms refuse to run Python UDFs.
 ### Integration-bound HTTP(S) access
 
 Local Python scalar and aggregate scripts can bind the existing SQL-managed
-`NETWORK RULE` / `EXTERNAL ACCESS INTEGRATION` objects used by remote UDFs:
+`NETWORK RULE` / `EXTERNAL ACCESS INTEGRATION` objects used by remote UDFs.
+The operator must explicitly opt in on every executing query node (default is
+`false`); this is not a tenant SQL setting and never enables native sockets:
+
+```toml
+[query]
+enable_python_udf_external_access = true
+# Optional hostname ceiling. Non-public destinations additionally require their
+# exact IP literal here; trusting a hostname alone never bypasses the IP check.
+udf_server_allow_list = ['https://api.example.com']
+```
+
+Without this opt-in, CREATE/ALTER with Python external-access bindings and worker
+startup with existing bindings fail closed. Missing query config also fails closed.
+`enable_udf_sandbox = true` continues to select the external scalar sandbox route;
+CREATE/ALTER rejects external-access bindings on that unsupported route rather
+than changing routing or accepting a function that cannot run.
 
 ```sql
 CREATE NETWORK RULE events_rule TYPE = HOST_PORT MODE = EGRESS
@@ -172,8 +188,9 @@ already-bound function. Disable/drop an integration or change/drop its network
 rules to revoke egress. All named integrations must remain present and enabled;
 their rules form a union, matching exact canonical HOST_PORT values. An omitted
 rule port means 443. A nonempty operator `udf_server_allow_list` remains the same
-hostname-only ceiling used for remote UDFs. Remote-only transport flags do not
-turn Script HTTP access on or off; an explicit rule must authorize its port.
+hostname-only ceiling used for remote UDFs; a tenant rule must authorize the port.
+`enable_udf_server` and `udf_server_allow_insecure` control remote UDF transport,
+not the separate Python operator opt-in.
 
 The worker still cannot create Internet sockets. Proxy-aware synchronous clients
 such as `urllib.request` and `requests` use a private host-controlled transport;
@@ -184,8 +201,24 @@ HTTP Upgrade and arbitrary TCP/UDP/native-socket clients are unsupported. HTTPS
 is end-to-end: the proxy does not decrypt TLS or implement application-level
 hostname/SNI filtering inside a CONNECT tunnel. CONNECT approval grants an
 opaque byte stream to the approved endpoint, not a guarantee that its payload is
-TLS or HTTP. Rule authors must trust approved hostnames and their DNS; HOST_PORT
-rules do not impose a separate public-IP-only policy.
+TLS or HTTP. The host validates every actual DNS result before connecting, then
+connects only to those checked addresses (no second hostname lookup). By default,
+only globally routable unicast IPs are accepted: loopback, link-local/metadata,
+unspecified, private, shared, reserved and multicast addresses are rejected for
+both IPv4 and IPv6, including IPv4-mapped IPv6. Deprecated IPv4-compatible,
+site-local and well-known IPv6 translation ranges also require an IP exception.
+Mixed public/non-public DNS answers fail closed. An operator may explicitly permit a non-public IP by adding
+that exact IP literal to `udf_server_allow_list`; an allowed hostname resolving
+to that IP is insufficient. This IP exception retains the list's hostname-only
+semantics, so the operator entry covers all ports but a tenant HOST_PORT rule
+must still authorize the actual port. Tenant admins cannot grant IP exceptions.
+
+An empty ceiling delegates public-host selection to tenant rules only after
+operator opt-in; it never removes the non-public-IP guard. In multi-tenant
+Cloud, the operator controls opt-in and IP exceptions, not the tenant admin.
+Use only trusted endpoints: authorization of a host/IP does not constrain its
+application behavior or prevent an explicitly approved endpoint acting as a
+relay. Endpoint rules are not application-payload or TLS SNI enforcement.
 
 Each active HTTP connection and CONNECT tunnel rechecks policy every second,
 including while idle between batches. A failed/denied check closes the connection;
@@ -193,8 +226,11 @@ each check has a five-second deadline. Revocation follows the existing remote-UD
 asynchronous meta-watch propagation, plus this check interval/deadline; there is
 no instantaneous cross-node revocation guarantee. Workers need not restart to
 see rule changes. Query cancellation/completion closes their proxy streams.
-Connections have a five-minute maximum lifetime, five-second header/connect
-limits and at most 32 concurrent host streams per worker. Plain HTTP requests
+Connections have a five-minute maximum lifetime and at most 32 concurrent host
+streams per worker. Worker-to-proxy request headers have a five-second read
+deadline; DNS plus TCP connect has a separate five-second deadline. Upstream
+response headers have no separate deadline and are bounded by the overall
+five-minute lifetime (and client/query cancellation). Plain HTTP requests
 and responses are streamed with a 16 MiB body limit; opaque CONNECT tunnels have
 no application-body inspection. Large downloads may require multiple requests.
 
@@ -231,16 +267,14 @@ Landlock (filesystem; default policy):
 - everything else is denied, including query configuration and data
   directories, `/proc/<query pid>/environ` and other processes' `/proc` entries.
   Path lookup is not restricted: `stat` still reveals whether a path exists.
-- on ABI 4+ TCP bind/connect (connect only under the default deny-network policy)
-  and on ABI 6+ signals and abstract Unix sockets outside the worker are denied
-  by Landlock as well.
+- on ABI 4+ TCP bind/connect and on ABI 6+ signals and abstract Unix sockets
+  outside the worker are denied by Landlock as well, including proxy-bound workers.
 
 seccomp (deny list, EPERM unless noted):
 
-- `socket` (EACCES by default): no network and no Unix sockets of other local
-  services. With the administrator exception, only IPv4/IPv6 stream/datagram
-  sockets are allowed; `bind`/`listen` remain denied. The IPC connection is created
-  before the filter;
+- `socket` (EACCES): no IPv4/IPv6 sockets and no Unix sockets to other local
+  services; `bind`/`listen` remain denied. The IPC connection and private proxy
+  transport are created before the filter;
 - `execve`/`execveat`: `subprocess`/`os.system` cannot start programs;
 - `fork`/`vfork` and `clone` without `CLONE_THREAD`: no child processes, so
   user code cannot escape the per-worker process accounting or fork-bomb;

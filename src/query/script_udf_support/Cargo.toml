@@ -76,7 +76,8 @@ harness = false
 required-features = ["python-udf"]
 
 [[test]]
-name = "python_egress"
+name = "it"
+path = "tests/it/main.rs"
 required-features = ["python-udf"]
 
 [lints]

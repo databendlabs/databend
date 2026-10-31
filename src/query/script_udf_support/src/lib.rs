@@ -14,13 +14,15 @@
 
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
+#![cfg_attr(feature = "python-udf", feature(ip))]
+
+#[cfg(feature = "python-udf")]
+mod python_egress;
+#[cfg(feature = "python-udf")]
+pub use python_egress::python_udf_network_proxy;
 
 #[cfg(feature = "script-udf")]
 mod script_udf {
-    #[cfg(feature = "python-udf")]
-    mod python_egress {
-        include!("python_egress.rs");
-    }
     #[cfg(feature = "python-udf")]
     pub mod python_worker {
         include!("python_worker.rs");

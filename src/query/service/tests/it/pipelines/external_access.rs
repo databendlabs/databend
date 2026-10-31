@@ -91,6 +91,7 @@ fn policy_udf_plan_rejects_legacy_executor() -> anyhow::Result<()> {
 async fn script_external_access_requires_usage_on_create_and_alter() -> anyhow::Result<()> {
     let mut config = ConfigBuilder::create().config();
     config.query.common.enable_udf_python_script = true;
+    config.query.common.enable_python_udf_external_access = true;
     let fixture = TestFixture::setup_with_config(&config).await?;
     fixture.execute_command("CREATE NETWORK RULE script_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com:443')").await?;
     fixture.execute_command("CREATE EXTERNAL ACCESS INTEGRATION script_access ALLOWED_NETWORK_RULES = (script_rule) ENABLED = TRUE").await?;
@@ -188,6 +189,56 @@ async fn script_external_access_requires_usage_on_create_and_alter() -> anyhow::
             .message()
             .contains("only supported for Python")
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn script_external_access_requires_operator_opt_in_at_create_and_alter() -> anyhow::Result<()>
+{
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.enable_udf_python_script = true;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    for verb in ["CREATE", "ALTER"] {
+        for definition in [
+            "(INT) RETURNS INT LANGUAGE python HANDLER = 'handler' AS $$def handler(x): return x$$",
+            "(INT) STATE {s INT} RETURNS INT LANGUAGE python AS $$pass$$",
+        ] {
+            // ALTER must reach binding validation, not fail on a missing UDF.
+            fixture
+                .execute_command(&format!(
+                    "CREATE OR REPLACE FUNCTION disabled_access {definition}"
+                ))
+                .await?;
+            let error = fixture.execute_command(&format!(
+                "{verb} FUNCTION disabled_access {definition} EXTERNAL_ACCESS_INTEGRATIONS = (access)"
+            )).await.unwrap_err();
+            assert!(
+                error
+                    .message()
+                    .contains("enable_python_udf_external_access"),
+                "{error}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn script_external_access_rejects_sandbox_route_at_create_and_alter() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.enable_udf_python_script = true;
+    config.query.common.enable_python_udf_external_access = true;
+    config.query.common.enable_udf_sandbox = true;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    fixture.execute_command(
+        "CREATE FUNCTION sandbox_access(INT) RETURNS INT LANGUAGE python HANDLER = 'handler' AS $$def handler(x): return x$$"
+    ).await?;
+    for verb in ["CREATE", "ALTER"] {
+        let error = fixture.execute_command(&format!(
+            "{verb} FUNCTION sandbox_access(INT) RETURNS INT LANGUAGE python HANDLER = 'handler' AS $$def handler(x): return x$$ EXTERNAL_ACCESS_INTEGRATIONS = (access)"
+        )).await.unwrap_err();
+        assert!(error.message().contains("enable_udf_sandbox"), "{error}");
+    }
     Ok(())
 }
 

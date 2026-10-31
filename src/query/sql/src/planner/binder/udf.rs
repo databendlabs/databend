@@ -124,6 +124,11 @@ impl Binder {
                 "EXTERNAL_ACCESS_INTEGRATIONS is only supported for Python scripts",
             ));
         }
+        if !names.is_empty() {
+            UDFValidator::is_python_udf_external_access_allowed_with_config(
+                &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+            )?;
+        }
         *bindings = names
             .iter()
             .map(|name| normalize_identifier(name, &self.name_resolution_ctx).name)
