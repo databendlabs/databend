@@ -226,6 +226,9 @@ impl PoolStore {
         victims
     }
 
+    /// Evicts from shard `start` on, until `target` bytes or a batch; held entries stay.
+    /// Non-blocking (reclaim, which may run inside any allocation) never waits for a shard
+    /// lock: each shard is tried once and kept until its scan is done.
     pub fn evict_batch(&self, start: usize, target: usize, blocking: bool) -> Removed {
         let target = target.min(BATCH_BYTES);
         let mut victims = Vec::new();
@@ -246,8 +249,12 @@ impl PoolStore {
                     if checked >= shard.len() {
                         break;
                     }
-                    // Let readers in between two scans of a shard full of held entries.
-                    RwLockWriteGuard::bump(&mut shard);
+                    // Let readers in between two scans of a shard full of held entries. Not
+                    // when reclaiming (non-blocking): bump takes the lock back by waiting, and
+                    // a writer let in may itself be waiting for the reclaim in progress.
+                    if blocking {
+                        RwLockWriteGuard::bump(&mut shard);
+                    }
                     continue;
                 };
                 bytes += size;
