@@ -39,7 +39,7 @@ body:
       description: >
         Describe the behavior you want, concisely and in your own words.
         Do not paste AI-generated essays - submissions with bloated,
-        repetitive, or pasted content are closed by the description gate.
+        repetitive, or pasted content are closed by the automated quality gate.
     validations:
       required: true
 

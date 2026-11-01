@@ -7,7 +7,7 @@ Briefly describe what this PR aims to solve. Include background context that wil
 
 Write for humans, in your own words: the concrete problem, why it matters, how you validated it.
 Do NOT paste model transcripts, long logs, or stack traces here - link a gist or use <details>.
-The automated description-gate check rejects bloated, repetitive, or template-placeholder descriptions.
+The automated PR Assistant checks reject bloated, repetitive, or template-placeholder descriptions.
 
 - fixes: #[Link the issue here]
 -->
