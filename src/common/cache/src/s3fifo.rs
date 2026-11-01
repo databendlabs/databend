@@ -155,7 +155,20 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
 
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where Q: Hash + Equivalent<K> + ?Sized {
-        let node = self.node(self.find(key)?);
+        self.get_hashed(self.hasher.hash_one(key), key)
+    }
+
+    /// The hash the lookups by hash take, for an owner that hashes a key once, e.g. to pick a
+    /// shard too. Built from the hasher given to `with_hasher`.
+    pub fn hash_of<Q: Hash + ?Sized>(&self, key: &Q) -> u64 {
+        self.hasher.hash_one(key)
+    }
+
+    /// `get` by `hash`, the key's `hash_of`.
+    pub fn get_hashed<Q>(&self, hash: u64, key: &Q) -> Option<&V>
+    where Q: Hash + Equivalent<K> + ?Sized {
+        debug_assert_eq!(hash, self.hasher.hash_one(key), "hash of another hasher");
+        let node = self.node(self.find_hashed(hash, key)?);
         let freq = node.freq.load(Ordering::Relaxed);
         if freq < MAX_FREQ {
             node.freq.store(freq + 1, Ordering::Relaxed);
@@ -171,6 +184,13 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
     pub fn contains<Q>(&self, key: &Q) -> bool
     where Q: Hash + Equivalent<K> + ?Sized {
         self.find(key).is_some()
+    }
+
+    /// `contains` by `hash`, the key's `hash_of`.
+    pub fn contains_hashed<Q>(&self, hash: u64, key: &Q) -> bool
+    where Q: Hash + Equivalent<K> + ?Sized {
+        debug_assert_eq!(hash, self.hasher.hash_one(key), "hash of another hasher");
+        self.find_hashed(hash, key).is_some()
     }
 
     /// `insert_in` class 0.
@@ -469,7 +489,11 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
 
     fn find<Q>(&self, key: &Q) -> Option<usize>
     where Q: Hash + Equivalent<K> + ?Sized {
-        let hash = self.hasher.hash_one(key);
+        self.find_hashed(self.hasher.hash_one(key), key)
+    }
+
+    fn find_hashed<Q>(&self, hash: u64, key: &Q) -> Option<usize>
+    where Q: Equivalent<K> + ?Sized {
         self.table
             .find(hash, |&i| key.equivalent(&self.node(i).key))
             .copied()

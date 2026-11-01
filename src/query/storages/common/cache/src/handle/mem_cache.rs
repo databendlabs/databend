@@ -22,10 +22,7 @@ use std::time::Instant;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
-use databend_common_metrics::cache::metrics_inc_cache_access_count;
-use databend_common_metrics::cache::metrics_inc_cache_hit_count;
-use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
-use databend_common_metrics::cache::metrics_inc_cache_miss_count;
+use databend_common_metrics::cache::CacheLookupCounters;
 use databend_common_metrics::cache::metrics_inc_cache_miss_load_millisecond;
 use log::warn;
 
@@ -90,6 +87,8 @@ pub struct MemCache<T: CachedItem> {
     disk: Option<Arc<DiskTier<T>>>,
     /// `None`: every miss loads on its own.
     flight: Option<Arc<SingleFlight<CacheRef<T>>>>,
+    /// Counted on every lookup, so looked up once.
+    counters: Arc<CacheLookupCounters>,
     read_only: bool,
 }
 
@@ -100,6 +99,7 @@ impl<T: CachedItem> Clone for MemCache<T> {
             store: self.store.clone(),
             disk: self.disk.clone(),
             flight: self.flight.clone(),
+            counters: self.counters.clone(),
             read_only: self.read_only,
         }
     }
@@ -110,20 +110,27 @@ impl<T: CachedItem> MemCache<T> {
     /// `CacheManager::cache` derives both, the disk tier and the shared loads from the kind's
     /// `CacheDef`; this one is for tests and benchmarks.
     pub fn new(store: Arc<dyn KindStore>, kind: CacheKind) -> Self {
+        let counters = Arc::new(CacheLookupCounters::new(kind.name()));
+        let flight = Some(Arc::new(SingleFlight::default()));
+        Self::with_shared(store, kind, counters, flight)
+    }
+
+    /// A handle sharing the kind's lookup counters and, with `Some`, in-flight loads with the
+    /// other handles of the kind; with `None`, every miss loads on its own.
+    pub(crate) fn with_shared(
+        store: Arc<dyn KindStore>,
+        kind: CacheKind,
+        counters: Arc<CacheLookupCounters>,
+        flight: Option<Arc<SingleFlight<CacheRef<T>>>>,
+    ) -> Self {
         MemCache {
             kind,
             store,
             disk: None,
-            flight: Some(Arc::new(SingleFlight::default())),
+            flight,
+            counters,
             read_only: false,
         }
-    }
-
-    /// Shares in-flight loads through `flight`, e.g. with every handle of the kind; with
-    /// `None`, every miss loads on its own.
-    pub(crate) fn with_flight(mut self, flight: Option<Arc<SingleFlight<CacheRef<T>>>>) -> Self {
-        self.flight = flight;
-        self
     }
 
     pub fn with_disk(
@@ -280,10 +287,9 @@ impl<T: CachedItem> MemCache<T> {
         if !self.memory_enabled() {
             return self.lookup_disk(key);
         }
-        let name = self.name();
-        metrics_inc_cache_access_count(1, name);
+        self.counters.access();
         if let Some(hit) = self.memory_hit(key) {
-            metrics_inc_cache_hit_count(1, name);
+            self.counters.hit();
             if let Some(len) = len {
                 Profile::record_usize_profile(
                     ProfileStatisticsName::ScanBytesFromDataCache,
@@ -295,12 +301,12 @@ impl<T: CachedItem> MemCache<T> {
             }
             return Some(hit);
         }
-        metrics_inc_cache_miss_count(1, name);
+        self.counters.miss();
         let hit = self.lookup_disk(key);
         if hit.is_none()
             && let Some(len) = len
         {
-            metrics_inc_cache_miss_bytes(len, name);
+            self.counters.miss_bytes(len);
         }
         hit
     }

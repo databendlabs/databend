@@ -23,6 +23,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::cache::CacheLookupCounters;
 use databend_common_metrics::cache::get_cache_access_count;
 use databend_common_metrics::cache::get_cache_hit_count;
 use databend_common_metrics::cache::get_cache_miss_count;
@@ -82,6 +83,9 @@ pub struct CacheManager {
     /// In-flight loads of each kind sharing loads, by kind index: every handle of a kind shares
     /// them, so concurrent misses on one key load once even through handles made per call.
     flights: Box<[OnceLock<Arc<dyn Any + Send + Sync>>]>,
+    /// Lookup counters of each kind, by kind index, shared by its handles: callers that make a
+    /// handle per lookup do not look the counters up each time.
+    counters: Box<[OnceLock<Arc<CacheLookupCounters>>]>,
 }
 
 impl CacheManager {
@@ -136,6 +140,7 @@ impl CacheManager {
             disks,
             disk_allowed: Arc::new(AtomicBool::new(true)),
             flights: CacheKind::all().map(|_| OnceLock::new()).collect(),
+            counters: CacheKind::all().map(|_| OnceLock::new()).collect(),
         }
     }
 
@@ -143,7 +148,10 @@ impl CacheManager {
     pub fn cache<D: CacheDef>(&self) -> MemCache<D::Value> {
         let kind = CacheKind::of::<D>();
         let flight = D::SHARE_LOADS.then(|| self.flight::<D::Value>(kind));
-        let cache = MemCache::new(self.store.clone(), kind).with_flight(flight);
+        let counters = self.counters[kind.index()]
+            .get_or_init(|| Arc::new(CacheLookupCounters::new(kind.name())))
+            .clone();
+        let cache = MemCache::with_shared(self.store.clone(), kind, counters, flight);
         match (D::DISK, self.disks.get(&kind)) {
             (Some(disk), Some(tier)) => {
                 cache.with_disk(tier.clone(), self.disk_allowed.clone(), disk.codec)

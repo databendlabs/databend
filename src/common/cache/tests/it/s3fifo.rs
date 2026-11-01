@@ -340,6 +340,23 @@ fn test_evict_class_keeps_slab_bounded() {
     assert!(c.slots() <= 2 * c.len() + 1024);
 }
 
+/// Lookups by a hash taken once agree with the plain ones, and count as accesses.
+#[test]
+fn test_lookups_by_hash() {
+    let mut c = fifo();
+    c.insert(1, 10, 1);
+    c.insert(2, 20, 1);
+    let hash = c.hash_of(&1);
+    assert_eq!(c.get_hashed(hash, &1), Some(&10));
+    assert!(c.contains_hashed(hash, &1));
+    assert!(!c.contains_hashed(c.hash_of(&3), &3));
+    // 1 was accessed: it moves to the main queue, and 2 goes first.
+    assert_eq!(
+        c.pop_evictable(|_| false, usize::MAX).map(|(k, ..)| k),
+        Some(2)
+    );
+}
+
 #[test]
 fn test_large_entry_threshold_can_change() {
     let mut c = S3Fifo::<u32, u32>::new(S3FifoConfig {

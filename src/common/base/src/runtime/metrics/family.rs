@@ -19,6 +19,8 @@ use std::fmt::Error;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use parking_lot::RwLock;
 use prometheus_client::collector::Collector;
@@ -56,6 +58,10 @@ pub struct Family<S: FamilyLabels, M: FamilyMetric> {
     metrics: Arc<RwLock<HashMap<S, Arc<M>>>>,
 
     family_metric_creator: Arc<Box<dyn FamilyMetricCreator<S, M>>>,
+
+    /// Bumped, under the `metrics` lock, whenever label sets are removed, so that a
+    /// `FamilyMember` knows its metric may no longer be listed.
+    generation: Arc<AtomicU64>,
 }
 
 impl<S: FamilyLabels, M: FamilyMetric> Debug for Family<S, M> {
@@ -72,6 +78,7 @@ impl<S: FamilyLabels, M: FamilyMetric> Clone for Family<S, M> {
             index: self.index,
             metrics: self.metrics.clone(),
             family_metric_creator: self.family_metric_creator.clone(),
+            generation: self.generation.clone(),
         }
     }
 }
@@ -82,6 +89,7 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
             index,
             metrics: Arc::new(RwLock::new(Default::default())),
             family_metric_creator: Arc::new(Box::new(f)),
+            generation: Default::default(),
         }
     }
 }
@@ -107,6 +115,27 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
         }
     }
 
+    /// The metric of `label_set`, looked up once for repeated use; see `FamilyMember`.
+    pub fn member(&self, label_set: S) -> FamilyMember<S, M> {
+        let mut metrics = self.metrics.write();
+        let generation = self.generation.load(Ordering::Relaxed);
+        let metric = metrics
+            .entry(label_set.clone())
+            .or_insert_with(|| {
+                Arc::new(
+                    self.family_metric_creator
+                        .create(self.index, label_set.clone()),
+                )
+            })
+            .clone();
+        FamilyMember {
+            family: self.clone(),
+            label_set,
+            metric,
+            generation: AtomicU64::new(generation),
+        }
+    }
+
     pub fn get(&self, label_set: &S) -> Option<Arc<M>> {
         self.metrics.read().get(label_set).cloned()
     }
@@ -116,7 +145,14 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
             m.metrics.write().remove(label_set);
         });
 
-        self.metrics.write().remove(label_set).is_some()
+        let mut metrics = self.metrics.write();
+        let removed = metrics.remove(label_set);
+        if let Some(metric) = &removed {
+            // A member holding it keeps counting from zero once it is listed again.
+            metric.reset_metric();
+            self.generation.fetch_add(1, Ordering::Release);
+        }
+        removed.is_some()
     }
 
     pub fn clear(&self) {
@@ -125,7 +161,53 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
         });
 
         // TODO: clear scoped registry
-        self.metrics.write().clear()
+        let mut metrics = self.metrics.write();
+        // Members holding them keep counting from zero once they are listed again.
+        for metric in metrics.values() {
+            metric.reset_metric();
+        }
+        metrics.clear();
+        self.generation.fetch_add(1, Ordering::Release);
+    }
+}
+
+/// The metric of one label set, looked up once: using it skips building the label set and
+/// finding it in the family, for metrics updated on hot paths.
+///
+/// Survives the family being cleared (`TRUNCATE system.metrics`): the next use lists its
+/// metric again, counting from zero. If the label set was created anew in between, through
+/// `get_or_create`, that metric is used instead, looked up on each use.
+pub struct FamilyMember<S: FamilyLabels, M: FamilyMetric> {
+    family: Family<S, M>,
+    label_set: S,
+    metric: Arc<M>,
+    /// The family's generation when `metric` was last known to be listed.
+    generation: AtomicU64,
+}
+
+impl<S: FamilyLabels, M: FamilyMetric> FamilyMember<S, M> {
+    /// Runs `f` on the metric listed for the label set.
+    pub fn with<R>(&self, f: impl FnOnce(&M) -> R) -> R {
+        if self.family.generation.load(Ordering::Acquire) == self.generation.load(Ordering::Relaxed)
+        {
+            return f(&self.metric);
+        }
+        self.relist(f)
+    }
+
+    #[cold]
+    fn relist<R>(&self, f: impl FnOnce(&M) -> R) -> R {
+        let mut metrics = self.family.metrics.write();
+        let generation = self.family.generation.load(Ordering::Relaxed);
+        let listed = metrics
+            .entry(self.label_set.clone())
+            .or_insert_with(|| self.metric.clone())
+            .clone();
+        drop(metrics);
+        if Arc::ptr_eq(&listed, &self.metric) {
+            self.generation.store(generation, Ordering::Relaxed);
+        }
+        f(&listed)
     }
 }
 

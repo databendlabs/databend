@@ -83,12 +83,15 @@ impl PoolStore {
             classes: CacheKind::all().count(),
             ..Default::default()
         };
+        // One hasher for the pool and its shards: a key is hashed once to pick its shard and to
+        // find it there.
+        let hasher = DefaultHashBuilder::default();
         PoolStore {
             pool,
             shards: (0..shards)
-                .map(|_| RwLock::new(S3Fifo::new(config)))
+                .map(|_| RwLock::new(S3Fifo::with_hasher(config, hasher)))
                 .collect(),
-            hasher: DefaultHashBuilder::default(),
+            hasher,
             cap: AtomicUsize::new(cap),
             usage: Arc::new(Usage::default()),
             cursor: AtomicUsize::new(0),
@@ -168,7 +171,13 @@ impl PoolStore {
     }
 
     pub fn shard_of(&self, key: KeyRef) -> usize {
-        self.hasher.hash_one(key) as usize % self.shards.len()
+        self.shard_of_hash(self.hasher.hash_one(key))
+    }
+
+    /// By the high half of the hash: a shard's table picks buckets by the low bits, which
+    /// would otherwise be alike for every key of the shard.
+    fn shard_of_hash(&self, hash: u64) -> usize {
+        (hash >> 32) as usize % self.shards.len()
     }
 
     pub fn next_cursor(&self) -> usize {
@@ -176,14 +185,18 @@ impl PoolStore {
     }
 
     pub fn get(&self, key: KeyRef) -> Option<ErasedValue> {
-        self.shards[self.shard_of(key)]
+        let hash = self.hasher.hash_one(key);
+        self.shards[self.shard_of_hash(hash)]
             .read()
-            .get(&key)
+            .get_hashed(hash, &key)
             .map(|e| e.value.clone())
     }
 
     pub fn contains(&self, key: KeyRef) -> bool {
-        self.shards[self.shard_of(key)].read().contains(&key)
+        let hash = self.hasher.hash_one(key);
+        self.shards[self.shard_of_hash(hash)]
+            .read()
+            .contains_hashed(hash, &key)
     }
 
     /// Caches `entry` on its first insertion: on probation in the small queue, or in the main
@@ -528,6 +541,29 @@ mod tests {
         let _admitting = store.admitting();
         assert_eq!(store.cap(), 0);
         assert!(!store.contains(KeyRef::new(kind, "old-bounds")));
+    }
+
+    /// The shard is picked from the hash its table uses, by other bits: within a shard, the
+    /// bits the table picks buckets by still differ between keys.
+    #[test]
+    fn test_shard_bits_leave_the_table_bits_free() {
+        let snapshot = CacheKind::of::<table::Snapshot>();
+        let store = PoolStore::new(Pool::Meta, 1 << 30, 16);
+        let keys: Vec<String> = (0..4096).map(|i| i.to_string()).collect();
+        let mut low_bits = vec![std::collections::HashSet::new(); 16];
+        for key in &keys {
+            let key = KeyRef::new(snapshot, key);
+            let hash = store.hasher.hash_one(key);
+            assert_eq!(hash, store.shards[0].read().hash_of(&key));
+            low_bits[store.shard_of(key)].insert(hash & 0xff);
+            store.insert(key, entry(1));
+        }
+        let distinct: Vec<usize> = low_bits.iter().map(|bits| bits.len()).collect();
+        assert!(distinct.iter().all(|n| *n > 64), "{distinct:?}");
+        assert!(
+            keys.iter()
+                .all(|k| store.get(KeyRef::new(snapshot, k)).is_some())
+        );
     }
 
     #[test]
