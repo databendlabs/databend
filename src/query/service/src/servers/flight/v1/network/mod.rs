@@ -22,7 +22,7 @@
 //! | Block delivery | [`BlockSender`](outbound::BlockSender), implemented by [`LocalBlockSender`](outbound::LocalBlockSender), [`RemoteBlockSender`](outbound::RemoteBlockSender), and [`RoundRobinBlockSender`](outbound::RoundRobinBlockSender) | One `DataBlock`; the round-robin implementation selects one thread sender. |
 //! | Hash shuffle delivery | [`HashShuffleDispatcher`](outbound::HashShuffleDispatcher) | Deliver one node's already-partitioned blocks locally or encode and enqueue them remotely. |
 //! | Send buffering | [`ExchangeSendBuffer`](outbound::ExchangeSendBuffer) | Encoded items for a remote node; shared byte quota, per-node FIFO queues, and frame batching. |
-//! | Transport | [`PingPongTransport`] | One Flight frame per request, with at most one request in flight per connection. |
+//! | Transport | [`PingPongTransport`] | One Flight frame per request, with up to [`MAX_FRAMES_IN_FLIGHT`] requests in flight per connection. |
 //! | Frame routing | [`ExchangeFrameRouter`](inbound::ExchangeFrameRouter) | Split incoming frames, acquire connection receive quota, and route items by thread ID. |
 //! | Receive buffering | Per-thread channels assembled by [`ExchangeReceiveChannels`](inbound::ExchangeReceiveChannels) | Queue local blocks and remote encoded items for the same consumer. |
 //! | Block consumption | [`ExchangeQueueReceiver`](inbound::ExchangeQueueReceiver) | Return local blocks directly and decode remote items when consumed. |
@@ -65,8 +65,8 @@
 //! outside that buffer's accounting.
 //!
 //! On the receiver, `do_exchange` replies only after `ExchangeFrameRouter` has
-//! routed the frame's items through the connection's receive quota. A pong permits
-//! the next frame; it does not mean a downstream operator has consumed the rows.
+//! routed the frame's items through the connection's receive quota. A pong frees a
+//! slot for another frame; it does not mean a downstream operator has consumed the rows.
 //! Local and remote receive permits are released when items are taken from their
 //! queues for delivery/decoding, rather than being held by downstream operators.
 //!
@@ -94,6 +94,7 @@ pub mod wire_format;
 
 pub use databend_common_pipeline::core::SyncTaskHandle;
 pub use databend_common_pipeline::core::SyncTaskSet;
+pub use ping_pong_transport::MAX_FRAMES_IN_FLIGHT;
 pub use ping_pong_transport::PingPongCallback;
 pub use ping_pong_transport::PingPongResponse;
 pub use ping_pong_transport::PingPongTransport;

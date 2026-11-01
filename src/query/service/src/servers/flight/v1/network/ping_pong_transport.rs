@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
@@ -34,6 +35,15 @@ use tonic::Status;
 pub const REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE: &str =
     "Aborted query, because the remote flight channel is closed.";
 
+/// Frames a do_exchange connection may have awaiting their responses.
+///
+/// Every response is sent by a task on each side that only runs when the OS
+/// schedules it. With one frame in flight the link idles for every such delay,
+/// which grows to milliseconds when executor threads saturate the cores. Several
+/// smaller frames in flight keep the link busy during those delays without
+/// raising the bytes in flight.
+pub const MAX_FRAMES_IN_FLIGHT: usize = 4;
+
 /// Response from a ping-pong exchange.
 pub struct PingPongResponse {
     pub data: Result<FlightData, Status>,
@@ -48,19 +58,23 @@ pub trait PingPongCallback: Send + Sync + 'static {
 }
 
 pub struct PingPongTransportInner {
-    in_flight: AtomicBool,
-    send_time: Mutex<Option<Instant>>,
+    /// Requests awaiting their responses, at most `max_in_flight`.
+    in_flight: AtomicUsize,
+    /// The request channel's capacity, so a held slot always fits in it.
+    max_in_flight: usize,
+    /// Send times of the requests in flight; responses arrive in request order.
+    send_times: Mutex<VecDeque<Instant>>,
     send_tx: Sender<FlightData>,
     local_node_id: String,
     remote_node_id: String,
     pub shutdown: WatchNotify,
 }
 
-/// Transport Flight frames with at most one request in flight per connection.
+/// Transport Flight frames with a bounded number of requests in flight per connection.
 ///
-/// This exchange guarantees that at most one request is in-flight at any time.
-/// When a request is sent, subsequent sends will return the data back to the caller
-/// until a response is received.
+/// A request holds one of the connection's slots from sending until its response.
+/// While all slots are held, subsequent sends return the data back to the caller.
+/// The number of slots is the capacity of the request channel.
 pub struct PingPongTransport {
     pub num_threads: usize,
     inner: Arc<PingPongTransportInner>,
@@ -83,9 +97,9 @@ impl std::ops::Deref for PingPongTransport {
 
 impl PingPongTransportInner {
     pub fn get_rtt(&self) -> Duration {
-        self.send_time
+        self.send_times
             .lock()
-            .take()
+            .pop_front()
             .map(|t| t.elapsed())
             .unwrap_or_default()
     }
@@ -93,37 +107,45 @@ impl PingPongTransportInner {
     ///
     /// Returns:
     /// - `Ok(None)`: Data was sent successfully
-    /// - `Ok(Some(data))`: A request is already in-flight, data is returned to caller
+    /// - `Ok(Some(data))`: All slots are in flight, data is returned to caller
     /// - `Err(status)`: The exchange is closed
     pub fn try_send_frame(&self, data: FlightData) -> Result<Option<FlightData>, Status> {
-        if self.in_flight.fetch_or(true, Ordering::SeqCst) {
+        if !self.try_acquire_send_slot() {
             return Ok(Some(data));
         }
 
         self.send_frame(data).map(|()| None)
     }
 
-    /// Claim the single in-flight slot without sending. On success the caller must
-    /// follow up with `send_frame` or `release_send_slot`.
+    /// Claim an in-flight slot without sending. On success the caller must follow
+    /// up with `send_frame` or `release_send_slot`.
     pub(crate) fn try_acquire_send_slot(&self) -> bool {
-        !self.in_flight.fetch_or(true, Ordering::SeqCst)
+        self.in_flight
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |held| {
+                (held < self.max_in_flight).then_some(held + 1)
+            })
+            .is_ok()
     }
 
-    /// Send a frame after acquiring the in-flight slot, or fail the exchange.
-    /// The previous response proves its request was consumed, so a full request
-    /// queue while holding the slot is a protocol invariant violation.
+    /// Send a frame after acquiring an in-flight slot, or fail the exchange.
+    /// Each queued request holds a slot and the queue holds one request per slot,
+    /// so a full request queue while holding a slot is a protocol invariant violation.
     pub(crate) fn send_frame(&self, data: FlightData) -> Result<(), Status> {
-        *self.send_time.lock() = Some(Instant::now());
+        // The lock orders the send time with the request, as responses follow requests.
+        let mut send_times = self.send_times.lock();
         match self.send_tx.try_send(data) {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                send_times.push_back(Instant::now());
+                Ok(())
+            }
             Err(TrySendError::Closed(_)) => {
-                *self.send_time.lock() = None;
-                self.in_flight.store(false, Ordering::SeqCst);
+                drop(send_times);
+                self.release_send_slot();
                 Err(Status::aborted(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE))
             }
             Err(TrySendError::Full(_)) => {
-                *self.send_time.lock() = None;
-                self.in_flight.store(false, Ordering::SeqCst);
+                drop(send_times);
+                self.release_send_slot();
                 Err(Status::internal(
                     "Flight request queue is full while holding the send slot",
                 ))
@@ -132,11 +154,13 @@ impl PingPongTransportInner {
     }
 
     pub fn release_send_slot(&self) {
-        self.in_flight.store(false, Ordering::SeqCst);
+        self.in_flight.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
 impl PingPongTransport {
+    /// Wrap a do_exchange connection. A request channel of capacity `n` allows
+    /// `n` requests in flight.
     pub fn from_stream(
         num_threads: usize,
         send_tx: async_channel::Sender<FlightData>,
@@ -145,8 +169,9 @@ impl PingPongTransport {
         remote_node_id: impl Into<String>,
     ) -> Self {
         let inner = Arc::new(PingPongTransportInner {
-            in_flight: AtomicBool::new(false),
-            send_time: Mutex::new(None),
+            in_flight: AtomicUsize::new(0),
+            max_in_flight: send_tx.capacity().unwrap_or(1).max(1),
+            send_times: Mutex::new(VecDeque::new()),
             send_tx,
             local_node_id: local_node_id.into(),
             remote_node_id: remote_node_id.into(),
@@ -338,6 +363,37 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[tokio::test]
+    async fn test_ping_pong_slots_follow_request_channel_capacity() {
+        let (send_tx, send_rx) = async_channel::bounded(3);
+        let (_pong_tx, pong_rx) = async_channel::unbounded::<Result<FlightData, Status>>();
+        let exchange = PingPongTransport::from_stream(1, send_tx, pong_rx, "local", "remote");
+
+        for len in 1..=3 {
+            assert!(
+                exchange
+                    .try_send_frame(make_flight_data(len))
+                    .unwrap()
+                    .is_none()
+            );
+        }
+        let returned = exchange.try_send_frame(make_flight_data(4)).unwrap();
+        assert_eq!(returned.unwrap().data_body.len(), 4);
+
+        // A response releases one slot; frames arrive in send order.
+        assert_eq!(send_rx.recv().await.unwrap().data_body.len(), 1);
+        exchange.release_send_slot();
+        assert!(
+            exchange
+                .try_send_frame(make_flight_data(5))
+                .unwrap()
+                .is_none()
+        );
+        for len in [2, 3, 5] {
+            assert_eq!(send_rx.recv().await.unwrap().data_body.len(), len);
+        }
     }
 
     #[tokio::test]
