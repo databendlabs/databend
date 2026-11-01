@@ -25,18 +25,16 @@ use crate::CacheDef;
 use crate::CachedItem;
 use crate::Disk;
 use crate::DiskCodec;
-use crate::KindLimit;
 use crate::Pool;
 
-/// Raw column bytes, by `TableDataCacheKey` without the type. Off in the shared backend
-/// unless `cache.kind_max_bytes` sizes it; its disk tier is the table data cache.
+/// Raw column bytes, by `TableDataCacheKey` without the type; its disk tier is the table data
+/// cache. Off by default in the legacy backend, as on `main`.
 pub struct Data;
 
 impl CacheDef for Data {
     type Value = ColumnData;
     const NAME: &'static str = "memory_cache_column_data";
     const POOL: Pool = Pool::Data;
-    const SHARED_LIMIT: KindLimit = KindLimit::DISABLED;
     const DISK: Option<Disk<Self::Value>> = Some(
         Disk::new("v1", |c| match c.data_cache_storage {
             CacheStorageTypeInnerConfig::Disk => c.disk_cache_config.max_bytes,
@@ -46,15 +44,14 @@ impl CacheDef for Data {
     );
 }
 
-/// Deserialized columns, by `TableDataCacheKey` with the type. Off in the shared backend
-/// unless `cache.kind_max_bytes` sizes it.
+/// Deserialized columns, by `TableDataCacheKey` with the type. Off by default in the legacy
+/// backend, as on `main`.
 pub struct Array;
 
 impl CacheDef for Array {
     type Value = SizedColumnArray;
     const NAME: &'static str = "memory_cache_table_data";
     const POOL: Pool = Pool::Data;
-    const SHARED_LIMIT: KindLimit = KindLimit::DISABLED;
 }
 
 pub struct ColumnData(Bytes);

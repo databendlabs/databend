@@ -266,7 +266,7 @@ impl CacheManager {
 
     /// Accepts `all` (0 only) and `pool:<meta|index|data>` with the shared backend, and a kind
     /// name (`memory_cache_*` or `cache_*`). The legacy backend reads the capacity in the
-    /// kind's legacy unit, items or bytes; the shared backend reads bytes.
+    /// kind's legacy unit, items or bytes; the shared backend reads bytes. 0 turns a kind off.
     pub fn set_cache_capacity(&self, name: &str, capacity: u64) -> Result<()> {
         let capacity = usize::try_from(capacity)
             .map_err(|_| ErrorCode::BadArguments("cache capacity exceeds this platform"))?;
@@ -285,14 +285,32 @@ impl CacheManager {
                 .ok_or_else(|| ErrorCode::BadArguments(format!("unknown cache pool '{pool}'")))?;
             return self.store.set_pool_cap(pool, capacity);
         }
-        let kind = CacheKind::from_name(name).ok_or_else(|| {
-            ErrorCode::BadArguments(format!(
-                "cache {name} not found, or not allowed to be adjusted"
-            ))
-        })?;
-        self.store.set_kind_limit(kind, KindLimit::bytes(capacity));
+        self.store
+            .set_kind_limit(adjustable_kind(name)?, KindLimit::bytes(capacity));
         Ok(())
     }
+
+    /// Capacity `default` of a kind: on and bounded only by its pool, the state of a kind
+    /// without a `cache.kind_max_bytes` entry. The legacy backend has no pools; its kinds always
+    /// have a capacity.
+    pub fn set_cache_capacity_default(&self, name: &str) -> Result<()> {
+        let kind = adjustable_kind(name)?;
+        if !self.store.has_pools() {
+            return Err(ErrorCode::Unimplemented(
+                "capacity 'default' requires the shared cache backend",
+            ));
+        }
+        self.store.set_kind_limit(kind, KindLimit::UNLIMITED);
+        Ok(())
+    }
+}
+
+fn adjustable_kind(name: &str) -> Result<CacheKind> {
+    CacheKind::from_name(name).ok_or_else(|| {
+        ErrorCode::BadArguments(format!(
+            "cache {name} not found, or not allowed to be adjusted"
+        ))
+    })
 }
 
 fn with_hits(row: CacheRow) -> CacheRow {

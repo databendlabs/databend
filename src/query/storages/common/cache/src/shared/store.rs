@@ -146,14 +146,10 @@ impl SharedStore {
         shards: usize,
     ) -> Self {
         let kinds: Box<[KindState]> = CacheKind::all()
-            .map(|kind| {
-                let state = KindState {
-                    usage: Arc::new(Usage::default()),
-                    limit: AtomicUsize::new(UNLIMITED),
-                    events: EventCounters::default(),
-                };
-                state.set_limit(kind.info().shared_limit);
-                state
+            .map(|_| KindState {
+                usage: Arc::new(Usage::default()),
+                limit: AtomicUsize::new(UNLIMITED),
+                events: EventCounters::default(),
             })
             .collect();
         for (kind, limit) in kind_limits {

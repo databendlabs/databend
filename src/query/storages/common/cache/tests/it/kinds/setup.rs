@@ -43,14 +43,6 @@ impl Backend {
             },
             Backend::Shared => CacheConfig {
                 shared_memory_enabled: true,
-                // The kinds off until sized.
-                kind_max_bytes: [
-                    "memory_cache_segment_block_metas",
-                    "memory_cache_column_data",
-                    "memory_cache_table_data",
-                ]
-                .map(|name| (name.to_string(), room))
-                .into(),
                 ..CacheConfig::default()
             },
         }

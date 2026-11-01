@@ -322,6 +322,10 @@ impl KindStore for LegacyStore {
         Vec::new()
     }
 
+    fn has_pools(&self) -> bool {
+        false
+    }
+
     /// Capacities were tuned against the pre-refactor estimates; charging the same keeps each
     /// cache holding as many values as before.
     fn charges_legacy_bytes(&self) -> bool {

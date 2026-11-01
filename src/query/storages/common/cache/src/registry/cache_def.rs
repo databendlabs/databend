@@ -14,7 +14,6 @@
 
 use crate::CachedItem;
 use crate::Disk;
-use crate::KindLimit;
 use crate::Pool;
 
 /// Definition of one cache kind: what it caches, and how the shared backend and the disk tier
@@ -28,10 +27,6 @@ pub trait CacheDef: 'static {
 
     /// Pool of the shared backend.
     const POOL: Pool;
-
-    /// Limit in the shared backend unless `cache.kind_max_bytes` sets one; by default the kind
-    /// is bounded only by its pool.
-    const SHARED_LIMIT: KindLimit = KindLimit::UNLIMITED;
 
     /// Disk tier, for kinds that have one.
     const DISK: Option<Disk<Self::Value>> = None;

@@ -271,9 +271,13 @@ fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
         Some(1234)
     );
     assert_eq!(capacity(&manager, "memory_cache_column_data"), Some(5000));
-    // Off unless given a limit.
-    assert!(row(&manager, "memory_cache_table_data").is_none());
-    assert!(row(&manager, "memory_cache_segment_block_metas").is_none());
+    // On without an entry, bounded only by the pool.
+    for name in [
+        "memory_cache_table_data",
+        "memory_cache_segment_block_metas",
+    ] {
+        assert_eq!(row(&manager, name).unwrap().capacity, None, "{name}");
+    }
 
     // Pools can be resized; the payload size is not split as in the legacy backend.
     manager.set_cache_capacity("pool:index", 0)?;
@@ -293,6 +297,35 @@ fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
     assert!(manager.set_cache_capacity("all", 1).is_err());
     manager.set_cache_capacity("all", 0)?;
     assert!(!manager.rows().iter().any(|r| r.enabled && r.pool.is_some()));
+    Ok(())
+}
+
+/// A kind is turned off by 0, sized by bytes, and put back to its default, bounded only by its
+/// pool, by `default`; the legacy backend has no pools, hence no such default.
+#[test]
+fn test_capacity_default() -> Result<()> {
+    let shared = CacheManager::try_new(&shared_config(), &1_000_000, "test", false)?;
+    let name = "memory_cache_table_data";
+    shared.set_cache_capacity(name, 0)?;
+    assert!(row(&shared, name).is_none());
+    shared.set_cache_capacity_default(name)?;
+    assert_eq!(row(&shared, name).unwrap().capacity, None);
+    shared.set_cache_capacity(name, 5000)?;
+    assert_eq!(capacity(&shared, name), Some(5000));
+    shared.set_cache_capacity_default(name)?;
+    assert_eq!(row(&shared, name).unwrap().capacity, None);
+    for other in ["all", "pool:data", "no_such_cache"] {
+        assert!(shared.set_cache_capacity_default(other).is_err(), "{other}");
+    }
+
+    let legacy = manager(&CacheConfig::default(), false);
+    assert!(
+        legacy
+            .set_cache_capacity_default("memory_cache_table_snapshot")
+            .is_err()
+    );
+    let snapshot = row(&legacy, "memory_cache_table_snapshot").unwrap();
+    assert_eq!(snapshot.capacity, Some(256));
     Ok(())
 }
 

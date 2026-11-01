@@ -143,7 +143,8 @@ pub trait KindStore: Send + Sync {
 
     fn evict(&self, kind: CacheKind, key: &str) -> bool;
 
-    /// `KindLimit::DISABLED` clears the kind; a lower limit evicts down to it.
+    /// `KindLimit::DISABLED` clears the kind; a lower limit evicts down to it;
+    /// `KindLimit::UNLIMITED` leaves it bounded by its pool, if `has_pools`.
     fn set_kind_limit(&self, kind: CacheKind, limit: KindLimit);
 
     /// A cap of 0 clears and disables every kind of the pool.
@@ -161,6 +162,11 @@ pub trait KindStore: Send + Sync {
     /// `None` for a backend that never reclaims.
     fn reclaim_stats(&self) -> Option<ReclaimStats> {
         None
+    }
+
+    /// Whether kinds are bounded by a pool, and so can do without a limit of their own.
+    fn has_pools(&self) -> bool {
+        true
     }
 
     /// Whether values are charged their pre-refactor estimate, `CachedItem::legacy_bytes`,

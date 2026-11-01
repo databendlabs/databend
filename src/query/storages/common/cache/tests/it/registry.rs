@@ -17,12 +17,10 @@ use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_storages_common_cache::CacheDef;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheRegistry;
-use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::inverted;
-use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_cache::kinds::vector;
 
 use crate::fakes::Item;
@@ -62,11 +60,9 @@ fn test_builtin_kinds() {
     }
 }
 
-/// Meta kinds come first, then the index kinds; the column kinds are the data pool. The kinds
-/// off by default in the legacy backend, block metas and the column kinds, are off in the
-/// shared backend too until sized.
+/// Meta kinds come first, then the index kinds; the column kinds are the data pool.
 #[test]
-fn test_pools_and_shared_limits() {
+fn test_pools() {
     let in_pool = |pool| {
         CacheKind::all()
             .filter(|k| k.pool() == pool)
@@ -79,13 +75,6 @@ fn test_pools_and_shared_limits() {
         "memory_cache_column_data",
         "memory_cache_table_data"
     ]);
-    for kind in CacheKind::all() {
-        let disabled = kind.pool() == Pool::Data || kind == CacheKind::of::<segment::BlockMetas>();
-        assert_eq!(kind.info().shared_limit.is_disabled(), disabled, "{kind:?}");
-        if !disabled {
-            assert_eq!(kind.info().shared_limit, KindLimit::UNLIMITED);
-        }
-    }
 }
 
 /// Disk tiers keep their pre-refactor directories, so a restart reuses their files.
@@ -183,7 +172,6 @@ impl CacheDef for Second {
     type Value = Item;
     const NAME: &'static str = "memory_cache_second";
     const POOL: Pool = Pool::Data;
-    const SHARED_LIMIT: KindLimit = KindLimit::bytes(10);
 }
 
 /// A kind with the name of a registered one.
@@ -206,10 +194,7 @@ fn test_register_numbers_kinds_in_order() {
     ]);
     assert_eq!(second.index(), 1);
     let info = registry.info(second);
-    assert_eq!(
-        (info.name, info.pool, info.shared_limit),
-        ("memory_cache_second", Pool::Data, KindLimit::bytes(10))
-    );
+    assert_eq!((info.name, info.pool), ("memory_cache_second", Pool::Data));
     assert!(info.disk.is_none());
     assert_eq!(registry.find("cache_second"), Some(second));
 }

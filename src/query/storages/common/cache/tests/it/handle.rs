@@ -255,33 +255,21 @@ fn test_data_pool_admits_on_first_access() {
     assert!(cache.put("p", live.item(10)).is_charged());
 }
 
+/// The kinds off by default in the legacy backend, as on `main`, are on in the shared one,
+/// bounded only by their pool.
 #[test]
-fn test_column_kinds_are_disabled_by_default() {
-    use databend_storages_common_cache::PoolCaps;
-    use databend_storages_common_cache::shared::SharedStore;
-
-    let store = SharedStore::new(
-        PoolCaps {
-            meta: 0,
-            index: 0,
-            data: 1 << 20,
-        },
-        [],
-        1,
-    );
-    let store: std::sync::Arc<dyn databend_storages_common_cache::backend::KindStore> =
-        std::sync::Arc::new(store);
-    let cache = cache(&store, data_kind());
+fn test_shared_backend_enables_every_kind_by_default() {
+    let store = shared_store(1 << 20, 0, 1 << 20);
     let live = Live::default();
-    assert!(!cache.put("k", live.item(10)).is_charged());
-    assert!(!cache.contains("k"));
-    assert_eq!(
-        CacheKind::of::<column::Data>()
-            .info()
-            .shared_limit
-            .max_bytes,
-        Some(0)
-    );
+    for kind in [
+        CacheKind::of::<column::Data>(),
+        CacheKind::of::<column::Array>(),
+        CacheKind::of::<segment::BlockMetas>(),
+    ] {
+        let cache = cache(&store, kind);
+        assert!(cache.put("k", live.item(10)).is_charged(), "{kind:?}");
+        assert!(cache.contains("k"), "{kind:?}");
+    }
 }
 
 #[test]

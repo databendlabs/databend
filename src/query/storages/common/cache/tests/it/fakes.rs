@@ -22,7 +22,6 @@ use std::time::Instant;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachedItem;
-use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
 use databend_storages_common_cache::Reader;
@@ -136,16 +135,9 @@ impl Reader for FakeReader {
     }
 }
 
-/// Shared store with the given pool caps; column kinds enabled for testing the Data pool.
+/// Shared store with the given pool caps, every kind bounded only by its pool.
 pub fn shared_store(meta: usize, index: usize, data: usize) -> Arc<dyn KindStore> {
-    Arc::new(SharedStore::new(
-        PoolCaps { meta, index, data },
-        [
-            (CacheKind::of::<column::Data>(), KindLimit::UNLIMITED),
-            (CacheKind::of::<column::Array>(), KindLimit::UNLIMITED),
-        ],
-        4,
-    ))
+    Arc::new(SharedStore::new(PoolCaps { meta, index, data }, [], 4))
 }
 
 /// Waits up to 10 s for `cond`, e.g. for a disk tier written in the background.
