@@ -13,10 +13,13 @@
 // limitations under the License.
 
 //! Metrics of what the cache holds and why entries leave it, read from the cache manager when
-//! metrics are scraped. The cache paths touch no metric statics, so a reclaim, which runs inside
-//! allocations, possibly while the allocating thread holds a metrics lock, never takes one. The
-//! collector reads in-cache counts under the shard read locks; a reclaim on another thread
-//! only tries those locks and skips the busy shards.
+//! metrics are scraped. A reclaim, which runs inside allocations, possibly while the allocating
+//! thread holds a metrics lock, touches no metric: evictions are counted in plain atomics. A
+//! lookup counts its access, hit or miss through `CacheLookupCounters`, an atomic addition
+//! unless the counters were cleared (`TRUNCATE system.metrics`); then it takes the family's
+//! lock once, and an allocation under it may reclaim, which takes no metric lock. The collector
+//! reads in-cache counts under the shard read locks; a reclaim on another thread only tries
+//! those locks and skips the busy shards.
 //!
 //! The collector runs under the global metrics registry's lock, so it must not touch a metric:
 //! the first use of one registers it, which takes that lock again. It reads

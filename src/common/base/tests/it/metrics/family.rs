@@ -49,10 +49,10 @@ fn test_member_is_listed_again_after_clear() {
     assert_eq!(listed(&family), Some(4));
 }
 
-/// If the label set was created anew before the member's next use, the member counts into
-/// that metric.
+/// If the label set is listed again through `get_or_create` before the member's next use, it is
+/// listed with the member's metric, which keeps its fast path.
 #[test]
-fn test_member_uses_a_label_set_created_after_clear() {
+fn test_label_set_listed_again_takes_the_member_metric() {
     let family = register_counter_family::<Labels>(&GlobalUniq::unique());
     let member = family.member(vec![("label", 1)]);
     member.inc_by(7);
@@ -61,4 +61,24 @@ fn test_member_uses_a_label_set_created_after_clear() {
     member.inc_by(1);
     member.inc_by(1);
     assert_eq!((member.get(), listed(&family)), (4, Some(4)));
+    member.with(|metric| {
+        let listed = family.get(&vec![("label", 1)]).unwrap();
+        assert!(std::ptr::eq(metric, &*listed));
+    });
+}
+
+/// Members of one label set share its metric, also when created while it is not listed.
+#[test]
+fn test_members_of_a_label_set_share_its_metric() {
+    let family = register_counter_family::<Labels>(&GlobalUniq::unique());
+    let first = family.member(vec![("label", 1)]);
+    first.inc_by(1);
+    family.clear();
+    let second = family.member(vec![("label", 1)]);
+    second.inc_by(2);
+    first.inc_by(3);
+    assert_eq!(
+        (first.get(), second.get(), listed(&family)),
+        (5, 5, Some(5))
+    );
 }

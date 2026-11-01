@@ -65,13 +65,26 @@ fn class(key: u32) -> usize {
     key as usize % CLASSES
 }
 
+const ALLOCATION_FAILED: &str = "allocation failed";
+
 /// A failed allocation panics instead of aborting the process, quietly: the tests expect it.
-/// Process-wide, so installed once however the tests are ordered.
+/// Other panics, such as failed assertions, are reported as usual. Process-wide, so installed
+/// once however the tests are ordered.
 fn panic_on_allocation_failure() {
     static HOOKS: std::sync::Once = std::sync::Once::new();
     HOOKS.call_once(|| {
-        std::alloc::set_alloc_error_hook(|_| panic!("allocation failed"));
-        std::panic::set_hook(Box::new(|_| {}));
+        std::alloc::set_alloc_error_hook(|_| panic!("{ALLOCATION_FAILED}"));
+        let report = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let payload = info.payload();
+            let message = payload
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| payload.downcast_ref::<&str>().copied());
+            if message != Some(ALLOCATION_FAILED) {
+                report(info);
+            }
+        }));
     });
 }
 

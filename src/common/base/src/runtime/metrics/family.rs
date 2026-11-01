@@ -19,9 +19,11 @@ use std::fmt::Error;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use prometheus_client::collector::Collector;
 use prometheus_client::encoding::DescriptorEncoder;
@@ -62,6 +64,11 @@ pub struct Family<S: FamilyLabels, M: FamilyMetric> {
     /// Bumped, under the `metrics` lock, whenever label sets are removed, so that a
     /// `FamilyMember` knows its metric may no longer be listed.
     generation: Arc<AtomicU64>,
+
+    /// The metric of each label set some `FamilyMember` holds. A label set listed again, after
+    /// a `clear` or `remove`, gets that metric back rather than a new one, so a member's metric
+    /// is the listed one whenever its label set is listed. Locked after `metrics`.
+    members: Arc<Mutex<HashMap<S, Weak<M>>>>,
 }
 
 impl<S: FamilyLabels, M: FamilyMetric> Debug for Family<S, M> {
@@ -79,6 +86,7 @@ impl<S: FamilyLabels, M: FamilyMetric> Clone for Family<S, M> {
             metrics: self.metrics.clone(),
             family_metric_creator: self.family_metric_creator.clone(),
             generation: self.generation.clone(),
+            members: self.members.clone(),
         }
     }
 }
@@ -90,6 +98,7 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
             metrics: Arc::new(RwLock::new(Default::default())),
             family_metric_creator: Arc::new(Box::new(f)),
             generation: Default::default(),
+            members: Default::default(),
         }
     }
 }
@@ -104,30 +113,35 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
 
         match write_guard.entry(label_set.clone()) {
             Entry::Occupied(v) => v.get().clone(),
-            Entry::Vacant(v) => {
-                let metric = Arc::new(
-                    self.family_metric_creator
-                        .create(self.index, label_set.clone()),
-                );
-                v.insert(metric.clone());
-                metric
-            }
+            Entry::Vacant(v) => v.insert(self.metric_for(label_set)).clone(),
         }
+    }
+
+    /// The metric to list for `label_set`, not listed: a member's, or a new one. Called under
+    /// the `metrics` write lock.
+    fn metric_for(&self, label_set: &S) -> Arc<M> {
+        let member = self.members.lock().get(label_set).and_then(Weak::upgrade);
+        member.unwrap_or_else(|| {
+            Arc::new(
+                self.family_metric_creator
+                    .create(self.index, label_set.clone()),
+            )
+        })
     }
 
     /// The metric of `label_set`, looked up once for repeated use; see `FamilyMember`.
     pub fn member(&self, label_set: S) -> FamilyMember<S, M> {
         let mut metrics = self.metrics.write();
         let generation = self.generation.load(Ordering::Relaxed);
-        let metric = metrics
-            .entry(label_set.clone())
-            .or_insert_with(|| {
-                Arc::new(
-                    self.family_metric_creator
-                        .create(self.index, label_set.clone()),
-                )
-            })
-            .clone();
+        let metric = match metrics.entry(label_set.clone()) {
+            Entry::Occupied(v) => v.get().clone(),
+            Entry::Vacant(v) => v.insert(self.metric_for(&label_set)).clone(),
+        };
+        let mut members = self.members.lock();
+        members.retain(|_, member| member.strong_count() > 0);
+        members.insert(label_set.clone(), Arc::downgrade(&metric));
+        drop(members);
+        drop(metrics);
         FamilyMember {
             family: self.clone(),
             label_set,
@@ -175,8 +189,8 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
 /// finding it in the family, for metrics updated on hot paths.
 ///
 /// Survives the family being cleared (`TRUNCATE system.metrics`): the next use lists its
-/// metric again, counting from zero. If the label set was created anew in between, through
-/// `get_or_create`, that metric is used instead, looked up on each use.
+/// metric again, counting from zero, unless `get_or_create` listed it first. Either way, a label
+/// set with a live member is always listed with the member's metric.
 pub struct FamilyMember<S: FamilyLabels, M: FamilyMetric> {
     family: Family<S, M>,
     label_set: S,
@@ -201,13 +215,14 @@ impl<S: FamilyLabels, M: FamilyMetric> FamilyMember<S, M> {
         let generation = self.family.generation.load(Ordering::Relaxed);
         let listed = metrics
             .entry(self.label_set.clone())
-            .or_insert_with(|| self.metric.clone())
-            .clone();
+            .or_insert_with(|| self.metric.clone());
+        debug_assert!(
+            Arc::ptr_eq(listed, &self.metric),
+            "listed without its member"
+        );
         drop(metrics);
-        if Arc::ptr_eq(&listed, &self.metric) {
-            self.generation.store(generation, Ordering::Relaxed);
-        }
-        f(&listed)
+        self.generation.store(generation, Ordering::Relaxed);
+        f(&self.metric)
     }
 }
 

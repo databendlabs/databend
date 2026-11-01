@@ -158,8 +158,8 @@ impl<K: Hash + Eq, V, S: BuildHasher> S3Fifo<K, V, S> {
         self.get_hashed(self.hasher.hash_one(key), key)
     }
 
-    /// The hash the lookups by hash take, for an owner that hashes a key once, e.g. to pick a
-    /// shard too. Built from the hasher given to `with_hasher`.
+    /// The hash the lookups by hash take, from the hasher given to `with_hasher`. An owner that
+    /// hashes keys itself, e.g. to pick a shard too, must build the same; this checks it does.
     pub fn hash_of<Q: Hash + ?Sized>(&self, key: &Q) -> u64 {
         self.hasher.hash_one(key)
     }
