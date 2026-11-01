@@ -18,6 +18,8 @@
 use std::cell::Cell;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use bytes::Bytes;
 use databend_storages_common_cache::CacheAccessor;
@@ -56,8 +58,12 @@ fn value() -> ColumnData {
     ColumnData::from_bytes(Bytes::from(vec![0u8; VALUE_BYTES]))
 }
 
+static THREAD_START: AtomicUsize = AtomicUsize::new(0);
+
 thread_local! {
-    static NEXT: Cell<usize> = const { Cell::new(0) };
+    /// Each thread starts at its own place of the key sequence, as queries hit different keys:
+    /// threads walking the same keys in step would take turns on each entry's cache lines.
+    static NEXT: Cell<usize> = Cell::new(THREAD_START.fetch_add(1237, Ordering::Relaxed));
 }
 
 fn next_key() -> &'static str {
