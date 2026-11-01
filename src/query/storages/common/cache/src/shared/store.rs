@@ -46,7 +46,9 @@ use crate::handle::cache_ref::Usage;
 const UNLIMITED: usize = usize::MAX;
 
 /// Entries one reclaim looks at, over every pool: it runs on an allocating thread, so its work
-/// is bounded whatever the pools hold.
+/// is bounded whatever the pools hold. With every entry held, each allocation over the limit
+/// spends up to this many steps before the memory manager falls back to killing a query; the
+/// reclaims of several threads run at once, on different shards.
 const RECLAIM_STEPS: usize = 64 * 1024;
 
 /// Why entries left the cache.

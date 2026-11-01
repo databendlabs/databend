@@ -65,12 +65,21 @@ fn class(key: u32) -> usize {
     key as usize % CLASSES
 }
 
+/// A failed allocation panics instead of aborting the process, quietly: the tests expect it.
+/// Process-wide, so installed once however the tests are ordered.
+fn panic_on_allocation_failure() {
+    static HOOKS: std::sync::Once = std::sync::Once::new();
+    HOOKS.call_once(|| {
+        std::alloc::set_alloc_error_hook(|_| panic!("allocation failed"));
+        std::panic::set_hook(Box::new(|_| {}));
+    });
+}
+
 /// Runs `op` on a cache built by `build`, failing its 1st, 2nd, ... allocation until it
 /// completes without reaching it. After each failure the cache must be consistent and stay
 /// usable.
 fn fail_each_allocation(build: impl Fn() -> Fifo, op: impl Fn(&mut Fifo)) {
-    std::alloc::set_alloc_error_hook(|_| panic!("allocation failed"));
-    std::panic::set_hook(Box::new(|_| {}));
+    panic_on_allocation_failure();
     for nth in 1.. {
         let mut c = build();
         FAIL_IN.with(|n| n.set(nth));
@@ -86,7 +95,6 @@ fn fail_each_allocation(build: impl Fn() -> Fifo, op: impl Fn(&mut Fifo)) {
             break;
         }
     }
-    let _ = std::panic::take_hook();
 }
 
 /// Lookups, counts and the eviction order agree; then the cache still takes entries and
@@ -175,6 +183,7 @@ fn test_allocation_failures_leave_s3fifo_consistent() {
 /// allocations could succeed under the memory manager's unlimited guard.
 #[test]
 fn test_pressure_eviction_does_not_allocate() {
+    panic_on_allocation_failure();
     let mut c = filled(3000);
     let slots = c.slots();
     let mut steps = 30_000;

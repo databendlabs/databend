@@ -13,8 +13,10 @@
 // limitations under the License.
 
 //! Metrics of what the cache holds and why entries leave it, read from the cache manager when
-//! metrics are scraped. The cache paths only bump plain atomics, which also keeps reclaim safe:
-//! it runs inside allocations, possibly while the allocating thread holds a metrics lock.
+//! metrics are scraped. The cache paths touch no metric statics, so a reclaim, which runs inside
+//! allocations, possibly while the allocating thread holds a metrics lock, never takes one. The
+//! collector reads in-cache counts under the shard read locks; a reclaim on another thread
+//! only tries those locks and skips the busy shards.
 //!
 //! The collector runs under the global metrics registry's lock, so it must not touch a metric:
 //! the first use of one registers it, which takes that lock again. It reads

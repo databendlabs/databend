@@ -197,6 +197,9 @@ fn exercise() {
         flush();
         // No Weak: allocator metadata requires MemStat to have no weak references. After
         // dropping this handle, only allocations retained by the cache own the finished stat.
+        // The count is exactly 2 because the 1 MiB buffer is the only allocation above the
+        // tracker's 512-byte threshold made under `owner`: the queue's slot was allocated
+        // above, and `Charged<Blob>` and the key are smaller. A change to either moves it.
         assert_eq!(
             Arc::strong_count(&owner),
             2,
