@@ -300,8 +300,8 @@ fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
     Ok(())
 }
 
-/// A kind is turned off by 0, sized by bytes, and put back to its default, bounded only by its
-/// pool, by `default`; the legacy backend has no pools, hence no such default.
+/// A kind is turned off by 0, sized by bytes, and put back to its default by `default`: bounded
+/// only by its pool, or off for raw column data. The legacy backend has no such default.
 #[test]
 fn test_capacity_default() -> Result<()> {
     let shared = CacheManager::try_new(&shared_config(), &1_000_000, "test", false)?;
@@ -314,6 +314,12 @@ fn test_capacity_default() -> Result<()> {
     assert_eq!(capacity(&shared, name), Some(5000));
     shared.set_cache_capacity_default(name)?;
     assert_eq!(row(&shared, name).unwrap().capacity, None);
+    let column_data = "memory_cache_column_data";
+    assert!(row(&shared, column_data).is_none());
+    shared.set_cache_capacity(column_data, 5000)?;
+    assert_eq!(capacity(&shared, column_data), Some(5000));
+    shared.set_cache_capacity_default(column_data)?;
+    assert!(row(&shared, column_data).is_none());
     for other in ["all", "pool:data", "no_such_cache"] {
         assert!(shared.set_cache_capacity_default(other).is_err(), "{other}");
     }

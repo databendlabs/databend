@@ -18,6 +18,7 @@ use std::sync::LazyLock;
 
 use crate::CacheDef;
 use crate::DiskInfo;
+use crate::KindLimit;
 use crate::Pool;
 
 /// A registered cache kind: its position in the registry.
@@ -70,6 +71,7 @@ impl fmt::Debug for CacheKind {
 pub struct KindInfo {
     pub name: &'static str,
     pub pool: Pool,
+    pub shared_default: KindLimit,
     pub disk: Option<DiskInfo>,
     def: TypeId,
 }
@@ -98,6 +100,7 @@ impl CacheRegistry {
         self.kinds.push(KindInfo {
             name: D::NAME,
             pool: D::POOL,
+            shared_default: D::SHARED_DEFAULT,
             disk: D::DISK.map(|disk| disk.info),
             def: TypeId::of::<D>(),
         });

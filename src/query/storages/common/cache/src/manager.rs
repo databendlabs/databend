@@ -290,17 +290,15 @@ impl CacheManager {
         Ok(())
     }
 
-    /// Capacity `default` of a kind: on and bounded only by its pool, the state of a kind
-    /// without a `cache.kind_max_bytes` entry. The legacy backend has no pools; its kinds always
-    /// have a capacity.
+    /// Capacity `default` of a kind: back to the limit it started with, from the kind's
+    /// `CacheDef::SHARED_DEFAULT` or `cache.kind_max_bytes`. Shared backend only: the legacy
+    /// backend has no pools to bound a kind without a capacity.
     pub fn set_cache_capacity_default(&self, name: &str) -> Result<()> {
         let kind = adjustable_kind(name)?;
-        if !self.store.has_pools() {
-            return Err(ErrorCode::Unimplemented(
-                "capacity 'default' requires the shared cache backend",
-            ));
-        }
-        self.store.set_kind_limit(kind, KindLimit::UNLIMITED);
+        let limit = self.store.default_limit(kind).ok_or_else(|| {
+            ErrorCode::Unimplemented("capacity 'default' requires the shared cache backend")
+        })?;
+        self.store.set_kind_limit(kind, limit);
         Ok(())
     }
 }

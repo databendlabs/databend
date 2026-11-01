@@ -43,6 +43,8 @@ impl Backend {
             },
             Backend::Shared => CacheConfig {
                 shared_memory_enabled: true,
+                // Off by default.
+                kind_max_bytes: [("memory_cache_column_data".to_string(), room)].into(),
                 ..CacheConfig::default()
             },
         }

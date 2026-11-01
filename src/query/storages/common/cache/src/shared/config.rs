@@ -79,23 +79,20 @@ impl SharedStore {
             config.index_max_ratio,
             config.data_max_ratio,
         )?;
-        let limits = config
-            .kind_max_bytes
-            .iter()
-            .map(|(name, bytes)| {
-                let kind = CacheKind::from_name(name).ok_or_else(|| {
-                    ErrorCode::InvalidConfig(format!(
-                        "unknown cache '{name}' in cache.kind_max_bytes"
-                    ))
-                })?;
-                let bytes = usize::try_from(*bytes).map_err(|_| {
-                    ErrorCode::InvalidConfig(format!(
-                        "cache.kind_max_bytes.{name} exceeds this platform"
-                    ))
-                })?;
-                Ok((kind, KindLimit::bytes(bytes)))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        // Each kind's `CacheDef::SHARED_DEFAULT`, then the configured limits over them.
+        let defaults = CacheKind::all().map(|kind| Ok((kind, kind.info().shared_default)));
+        let configured = config.kind_max_bytes.iter().map(|(name, bytes)| {
+            let kind = CacheKind::from_name(name).ok_or_else(|| {
+                ErrorCode::InvalidConfig(format!("unknown cache '{name}' in cache.kind_max_bytes"))
+            })?;
+            let bytes = usize::try_from(*bytes).map_err(|_| {
+                ErrorCode::InvalidConfig(format!(
+                    "cache.kind_max_bytes.{name} exceeds this platform"
+                ))
+            })?;
+            Ok((kind, KindLimit::bytes(bytes)))
+        });
+        let limits = defaults.chain(configured).collect::<Result<Vec<_>>>()?;
         let shards = std::thread::available_parallelism().map_or(8, |n| n.get().max(8));
         info!(
             "[CacheManager] Shared cache pools: meta {} bytes, index {} bytes, data {} bytes",

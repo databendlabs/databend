@@ -136,10 +136,13 @@ impl KindState {
 pub struct SharedStore {
     pools: [PoolStore; 3],
     kinds: Box<[KindState]>,
+    /// The limit of each kind at construction, by kind index: what `default_limit` restores.
+    defaults: Box<[KindLimit]>,
     reclaims: ReclaimCounters,
 }
 
 impl SharedStore {
+    /// Kinds without an entry in `kind_limits` are bounded only by their pool.
     pub fn new(
         caps: PoolCaps,
         kind_limits: impl IntoIterator<Item = (CacheKind, KindLimit)>,
@@ -152,12 +155,16 @@ impl SharedStore {
                 events: EventCounters::default(),
             })
             .collect();
+        let mut defaults: Box<[KindLimit]> =
+            CacheKind::all().map(|_| KindLimit::UNLIMITED).collect();
         for (kind, limit) in kind_limits {
             kinds[kind.index()].set_limit(limit);
+            defaults[kind.index()] = limit;
         }
         SharedStore {
             pools: Pool::ALL.map(|pool| PoolStore::new(pool, caps.get(pool), shards)),
             kinds,
+            defaults,
             reclaims: ReclaimCounters::default(),
         }
     }
@@ -416,6 +423,10 @@ impl KindStore for SharedStore {
             .millis
             .fetch_add(started.elapsed().as_millis() as u64, Ordering::Relaxed);
         report
+    }
+
+    fn default_limit(&self, kind: CacheKind) -> Option<KindLimit> {
+        Some(self.defaults[kind.index()])
     }
 
     fn reclaim_stats(&self) -> Option<ReclaimStats> {

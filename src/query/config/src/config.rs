@@ -3583,8 +3583,9 @@ pub struct CacheConfig {
     pub data_max_ratio: u64,
 
     /// Shared backend: byte limits of single caches within their pool, keyed by their name in
-    /// `system.caches` (e.g. `memory_cache_column_data`); 0 turns a cache off. A cache without
-    /// an entry is on, bounded only by its pool. Config file only: `[cache.kind_max_bytes]`.
+    /// `system.caches` (e.g. `memory_cache_table_data`); 0 turns a cache off. A cache without an
+    /// entry is on, bounded only by its pool, except `memory_cache_column_data`, off. Config
+    /// file only: `[cache.kind_max_bytes]`.
     #[clap(skip)]
     pub kind_max_bytes: BTreeMap<String, u64>,
 

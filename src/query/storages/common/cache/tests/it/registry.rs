@@ -17,6 +17,7 @@ use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_storages_common_cache::CacheDef;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheRegistry;
+use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
@@ -60,9 +61,10 @@ fn test_builtin_kinds() {
     }
 }
 
-/// Meta kinds come first, then the index kinds; the column kinds are the data pool.
+/// Meta kinds come first, then the index kinds; the column kinds are the data pool. In the
+/// shared backend every kind starts bounded only by its pool, except raw column data, off.
 #[test]
-fn test_pools() {
+fn test_pools_and_shared_defaults() {
     let in_pool = |pool| {
         CacheKind::all()
             .filter(|k| k.pool() == pool)
@@ -75,6 +77,13 @@ fn test_pools() {
         "memory_cache_column_data",
         "memory_cache_table_data"
     ]);
+    for kind in CacheKind::all() {
+        let expected = match kind == CacheKind::of::<column::Data>() {
+            true => KindLimit::DISABLED,
+            false => KindLimit::UNLIMITED,
+        };
+        assert_eq!(kind.info().shared_default, expected, "{kind:?}");
+    }
 }
 
 /// Disk tiers keep their pre-refactor directories, so a restart reuses their files.

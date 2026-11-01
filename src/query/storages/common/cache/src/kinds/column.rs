@@ -25,16 +25,20 @@ use crate::CacheDef;
 use crate::CachedItem;
 use crate::Disk;
 use crate::DiskCodec;
+use crate::KindLimit;
 use crate::Pool;
 
 /// Raw column bytes, by `TableDataCacheKey` without the type; its disk tier is the table data
-/// cache. Off by default in the legacy backend, as on `main`.
+/// cache. Off by default in both backends: a hit still decompresses and decodes, so it only
+/// saves the read from the disk tier, and it takes room in the data pool from `Array`, which
+/// serves re-reads decoded.
 pub struct Data;
 
 impl CacheDef for Data {
     type Value = ColumnData;
     const NAME: &'static str = "memory_cache_column_data";
     const POOL: Pool = Pool::Data;
+    const SHARED_DEFAULT: KindLimit = KindLimit::DISABLED;
     const DISK: Option<Disk<Self::Value>> = Some(
         Disk::new("v1", |c| match c.data_cache_storage {
             CacheStorageTypeInnerConfig::Disk => c.disk_cache_config.max_bytes,
