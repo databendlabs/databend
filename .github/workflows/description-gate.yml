@@ -1,0 +1,37 @@
+name: description-gate
+
+# Enforces the description bar from AI_POLICY.md on every issue and PR.
+# PRs get a failing `description-gate` commit status (blocks merge once the
+# check is marked required in branch protection). Issues from non-members are
+# labelled and closed while below the bar; fixing the description reopens them.
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: description-gate-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # pull_request_target / issues events check out the base repository,
+      # never the PR author's code, so this is safe for fork PRs.
+      - uses: actions/checkout@v4
+      - name: Validate description
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Set the repo variable DESCRIPTION_GATE_CLOSE_ISSUES=false to only
+          # label + comment on bad issues instead of closing them.
+          GATE_CLOSE_ISSUES: ${{ vars.DESCRIPTION_GATE_CLOSE_ISSUES || 'true' }}
+        run: python3 .github/scripts/check_description.py
