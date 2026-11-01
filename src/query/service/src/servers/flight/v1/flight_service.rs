@@ -46,6 +46,7 @@ use crate::servers::flight::request_builder::RequestGetter;
 use crate::servers::flight::v1::actions::FlightActions;
 use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::network::MAX_FRAMES_IN_FLIGHT;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -162,7 +163,8 @@ impl FlightService for DatabendQueryFlightService {
         )?;
 
         let mut stream = req.into_inner();
-        let (tx, rx) = async_channel::bounded(1);
+        // A response per request in flight.
+        let (tx, rx) = async_channel::bounded(MAX_FRAMES_IN_FLIGHT);
 
         GlobalIORuntime::instance().spawn(async move {
             while let Some(result) = stream.next().await {
@@ -176,7 +178,7 @@ impl FlightService for DatabendQueryFlightService {
                 }
 
                 // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
+                if tx.send(Ok(FlightData::default())).await.is_err() {
                     break;
                 }
             }
