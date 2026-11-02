@@ -274,13 +274,14 @@ impl VectorIndexPruner {
             results = self.refine_candidates(results, candidates).await?;
         }
 
-        // Keep the global TopK rows, attached to their blocks.
-        let mut top_queue = FixedLengthPriorityQueue::new(limit);
-        for score in results.iter().flat_map(|result| result.scores.iter()) {
-            top_queue.push(score.clone());
-        }
+        // Keep the global TopK rows and their ties, attached to their blocks.
+        let all_scores = || {
+            results
+                .iter()
+                .flat_map(|result| result.scores.iter().cloned())
+        };
         let mut top_rows: HashMap<usize, Vec<(usize, F32)>> = HashMap::new();
-        for score in top_queue.into_sorted_vec() {
+        for score in topn_with_ties(all_scores, limit) {
             top_rows
                 .entry(score.index)
                 .or_default()
@@ -323,15 +324,11 @@ impl VectorIndexPruner {
             .await?;
 
         let passed = self.eval_score_filters(param.filter_expr.as_ref(), &results)?;
-        let mut top_queue = FixedLengthPriorityQueue::new(param.limit);
-        for score in ranked_scores(&results, &passed, param.asc) {
-            top_queue.push(score);
-        }
-        let top_blocks: HashSet<usize> = top_queue
-            .into_sorted_vec()
-            .iter()
-            .map(|score| score.index)
-            .collect();
+        let top_blocks: HashSet<usize> =
+            topn_with_ties(|| ranked_scores(&results, &passed, param.asc), param.limit)
+                .iter()
+                .map(|score| score.index)
+                .collect();
         Ok(results
             .into_iter()
             .filter(|result| top_blocks.contains(&result.block_idx))
@@ -647,6 +644,41 @@ fn ranked_scores<'a>(
         })
 }
 
+/// The `limit` lowest scores of `scores` (callers negate scores for descending
+/// order), plus the rows that tie with the last of them. Another sort key, such as
+/// `id` in `ORDER BY d, id`, may choose any tied row, so all of them are kept.
+fn topn_with_ties<I: Iterator<Item = VectorScore>>(
+    scores: impl Fn() -> I,
+    limit: usize,
+) -> Vec<VectorScore> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let mut queue = FixedLengthPriorityQueue::new(limit);
+    for score in scores() {
+        queue.push(score);
+    }
+    let mut top_scores = queue.into_sorted_vec();
+    // With fewer rows than the limit, every row is already selected.
+    if top_scores.len() < limit {
+        return top_scores;
+    }
+    let Some(last) = top_scores.iter().map(|score| score.score).max() else {
+        return top_scores;
+    };
+    let selected: HashSet<(usize, u32)> = top_scores
+        .iter()
+        .filter(|score| score.score == last)
+        .map(|score| (score.index, score.row_idx))
+        .collect();
+    top_scores.extend(
+        scores().filter(|score| {
+            score.score == last && !selected.contains(&(score.index, score.row_idx))
+        }),
+    );
+    top_scores
+}
+
 /// Keeps the `candidate_limit` lowest scores (callers negate scores for descending
 /// order) and groups their row ids by block.
 fn select_refine_candidates(
@@ -755,5 +787,32 @@ mod tests {
             select_refine_candidates(scores, 2),
             HashMap::from([(0, vec![17]), (1, vec![42])])
         );
+    }
+
+    #[test]
+    fn test_topn_with_ties() {
+        let scores = [(0, 1, 0.1_f32), (0, 7, 0.2), (1, 5, 0.2), (1, 3, 0.3)]
+            .into_iter()
+            .map(|(index, row_idx, score)| VectorScore {
+                index,
+                row_idx,
+                score: F32::from(score),
+            })
+            .collect::<Vec<_>>();
+        let rows = |limit| {
+            let mut rows = topn_with_ties(|| scores.iter().cloned(), limit)
+                .into_iter()
+                .map(|score| (score.index, score.row_idx))
+                .collect::<Vec<_>>();
+            rows.sort();
+            rows
+        };
+        // The rows of both blocks with the last score 0.2 are kept.
+        assert_eq!(rows(2), vec![(0, 1), (0, 7), (1, 5)]);
+        assert_eq!(rows(3), vec![(0, 1), (0, 7), (1, 5)]);
+        // No tie at the last score, or fewer rows than the limit.
+        assert_eq!(rows(1), vec![(0, 1)]);
+        assert_eq!(rows(5), vec![(0, 1), (0, 7), (1, 3), (1, 5)]);
+        assert_eq!(rows(0), vec![]);
     }
 }
