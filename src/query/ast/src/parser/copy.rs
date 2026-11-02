@@ -40,6 +40,7 @@ use crate::parser::expr::expr;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::expr::literal_u64;
+use crate::parser::query::order_by_expr;
 use crate::parser::query::query;
 use crate::parser::query::with_options;
 use crate::parser::stage::file_format_clause;
@@ -52,11 +53,14 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let copy_into_table_source = alt((
         map(file_location, CopyIntoTableSource::Location),
         map(
-            rule! { "(" ~ SELECT ~ #comma_separated_list1(select_target) ~ FROM ~ #file_location ~  #alias_name? ~ ")" },
-            |(_, _, select_list, _, from, alias_name, _)| CopyIntoTableSource::Query {
+            rule! { "(" ~ SELECT ~ #comma_separated_list1(select_target) ~ FROM ~ #file_location ~  #alias_name? ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )? ~ ")" },
+            |(_, _, select_list, _, from, alias_name, order_by, _)| CopyIntoTableSource::Query {
                 select_list,
                 from,
                 alias_name,
+                order_by: order_by
+                    .map(|(_, _, order_by)| order_by)
+                    .unwrap_or_default(),
             },
         ),
     ));

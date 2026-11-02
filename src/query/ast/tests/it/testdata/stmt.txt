@@ -22928,6 +22928,7 @@ CopyIntoTable(
                     ident_type: None,
                 },
             ),
+            order_by: [],
         },
         catalog: None,
         database: None,
@@ -23049,6 +23050,7 @@ CopyIntoTable(
                 "my_stage/data.csv",
             ),
             alias_name: None,
+            order_by: [],
         },
         catalog: None,
         database: None,
@@ -23061,6 +23063,244 @@ CopyIntoTable(
             ident_type: None,
         },
         dst_columns: None,
+        hints: None,
+        file_format: FileFormatOptions {
+            options: {
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
+        },
+        files: None,
+        pattern: None,
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            max_files: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            column_match_mode: None,
+            schema_evolution: None,
+            size_limit: 0,
+            split_size: 0,
+            validation_mode: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable (sym, ts, v)
+    FROM (
+        SELECT $1, $2 AS ts, $3 + 1
+        FROM @my_stage/data.csv
+        ORDER BY $1, ts DESC NULLS LAST, 3
+    )
+    FILE_FORMAT = (TYPE = CSV);
+---------- Output ---------
+COPY INTO mytable(sym,ts,v) FROM (SELECT $1, $2 AS ts, $3 + 1 FROM '@my_stage/data.csv' ORDER BY $1, ts DESC NULLS LAST, 3) FILE_FORMAT = (type = CSV)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+---------- AST ------------
+CopyIntoTable(
+    CopyIntoTableStmt {
+        with: None,
+        src: Query {
+            select_list: [
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            57..59,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Position(
+                                ColumnPosition {
+                                    span: Some(
+                                        57..59,
+                                    ),
+                                    pos: 1,
+                                    name: "$1",
+                                },
+                            ),
+                        },
+                    },
+                    alias: None,
+                },
+                AliasedExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            61..63,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Position(
+                                ColumnPosition {
+                                    span: Some(
+                                        61..63,
+                                    ),
+                                    pos: 2,
+                                    name: "$2",
+                                },
+                            ),
+                        },
+                    },
+                    alias: Some(
+                        Identifier {
+                            span: Some(
+                                67..69,
+                            ),
+                            name: "ts",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+                AliasedExpr {
+                    expr: BinaryOp {
+                        span: Some(
+                            74..75,
+                        ),
+                        op: Plus,
+                        left: ColumnRef {
+                            span: Some(
+                                71..73,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Position(
+                                    ColumnPosition {
+                                        span: Some(
+                                            71..73,
+                                        ),
+                                        pos: 3,
+                                        name: "$3",
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                76..77,
+                            ),
+                            value: UInt64(
+                                1,
+                            ),
+                        },
+                    },
+                    alias: None,
+                },
+            ],
+            from: Stage(
+                "my_stage/data.csv",
+            ),
+            alias_name: None,
+            order_by: [
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            127..129,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Position(
+                                ColumnPosition {
+                                    span: Some(
+                                        127..129,
+                                    ),
+                                    pos: 1,
+                                    name: "$1",
+                                },
+                            ),
+                        },
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+                OrderByExpr {
+                    expr: ColumnRef {
+                        span: Some(
+                            131..133,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        131..133,
+                                    ),
+                                    name: "ts",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                    asc: Some(
+                        false,
+                    ),
+                    nulls_first: Some(
+                        false,
+                    ),
+                },
+                OrderByExpr {
+                    expr: Literal {
+                        span: Some(
+                            151..152,
+                        ),
+                        value: UInt64(
+                            3,
+                        ),
+                    },
+                    asc: None,
+                    nulls_first: None,
+                },
+            ],
+        },
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                10..17,
+            ),
+            name: "mytable",
+            quote: None,
+            ident_type: None,
+        },
+        dst_columns: Some(
+            [
+                Identifier {
+                    span: Some(
+                        19..22,
+                    ),
+                    name: "sym",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        24..26,
+                    ),
+                    name: "ts",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        28..29,
+                    ),
+                    name: "v",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+        ),
         hints: None,
         file_format: FileFormatOptions {
             options: {

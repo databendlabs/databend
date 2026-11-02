@@ -16,3 +16,29 @@ select * from it order by a
 1 NULL
 2 b
 3 c
+
+# A column only ORDER BY refers to is read from the stage too.
+statement ok
+set max_threads = 1
+
+statement ok
+drop table if exists it_order
+
+statement ok
+create table it_order(a int null)
+
+query ?????
+copy into it_order from (select $1 from @data/csv t2 order by $2 desc nulls last) files=('select.csv') file_format = (type = CSV)
+----
+csv/select.csv 3 0 NULL NULL
+
+query I
+select * from it_order
+----
+3
+2
+1
+
+statement ok
+unset max_threads
+

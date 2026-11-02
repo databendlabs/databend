@@ -74,3 +74,119 @@ select * from ii order by id
 2 3
 5 6
 5 6
+
+# ORDER BY in the transform: the rows are written in that order. One thread
+# reads the single block of each table back in storage order.
+statement ok
+create or replace stage parquet_order
+
+statement ok
+remove @parquet_order
+
+statement ok
+copy into @parquet_order from (select * from (values (3, 'c'), (1, 'a'), (2, 'b'), (5, NULL), (4, 'd')) as t(a, b)) file_format = (type = parquet) single = true
+
+statement ok
+set max_threads = 1
+
+statement ok
+create or replace table order_t(a int, b string)
+
+statement ok
+copy into order_t from (select a, b from @parquet_order order by a) file_format = (type = parquet)
+
+query IT
+select * from order_t
+----
+1 a
+2 b
+3 c
+4 d
+5 NULL
+
+statement ok
+truncate table order_t
+
+statement ok
+copy into order_t from (select a, b from @parquet_order order by a desc) file_format = (type = parquet) force = true
+
+query IT
+select * from order_t
+----
+5 NULL
+4 d
+3 c
+2 b
+1 a
+
+# a select-list alias, a position, a direction and NULLS handling
+statement ok
+truncate table order_t
+
+statement ok
+copy into order_t from (select a as x, b from @parquet_order order by b desc nulls last, x) file_format = (type = parquet) force = true
+
+query IT
+select * from order_t
+----
+4 d
+3 c
+2 b
+1 a
+5 NULL
+
+statement ok
+truncate table order_t
+
+statement ok
+copy into order_t from (select a, b from @parquet_order order by 2 nulls last) file_format = (type = parquet) force = true
+
+query IT
+select * from order_t
+----
+1 a
+2 b
+3 c
+4 d
+5 NULL
+
+# an expression, and a column that only ORDER BY uses
+statement ok
+truncate table order_t
+
+statement ok
+copy into order_t from (select a + 10, b from @parquet_order order by a desc) file_format = (type = parquet) force = true
+
+query IT
+select * from order_t
+----
+15 NULL
+14 d
+13 c
+12 b
+11 a
+
+statement ok
+create or replace table order_b(b string)
+
+statement ok
+copy into order_b from (select b from @parquet_order order by a) file_format = (type = parquet) force = true
+
+query T
+select * from order_b
+----
+a
+b
+c
+d
+NULL
+
+statement ok
+unset max_threads
+
+statement ok
+remove @parquet_order
+
+statement ok
+drop stage parquet_order
+

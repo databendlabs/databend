@@ -777,6 +777,15 @@ SELECT * from s;"#,
                 FILE_FORMAT = (TYPE = CSV);
         "#,
         r#"
+            COPY INTO mytable (sym, ts, v)
+                FROM (
+                    SELECT $1, $2 AS ts, $3 + 1
+                    FROM @my_stage/data.csv
+                    ORDER BY $1, ts DESC NULLS LAST, 3
+                )
+                FILE_FORMAT = (TYPE = CSV);
+        "#,
+        r#"
             COPY INTO mytable
                 FROM @~/mybucket/data.csv
                 FILE_FORMAT = (

@@ -30,6 +30,7 @@ use crate::Result;
 use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
+use crate::ast::OrderByExpr;
 use crate::ast::Query;
 use crate::ast::SelectTarget;
 use crate::ast::With;
@@ -401,6 +402,8 @@ pub enum CopyIntoTableSource {
         from: FileLocation,
         // no need to support this, for compatible only
         alias_name: Option<Identifier>,
+        /// `ORDER BY`: the order the transformed rows are written in
+        order_by: Vec<OrderByExpr>,
     },
 }
 
@@ -412,12 +415,17 @@ impl Display for CopyIntoTableSource {
                 select_list,
                 from,
                 alias_name,
+                order_by,
             } => {
                 write!(f, "(SELECT ")?;
                 write_comma_separated_list(f, select_list)?;
                 write!(f, " FROM {from}")?;
                 if let Some(a) = alias_name {
                     write!(f, " AS {}", a.name)?;
+                }
+                if !order_by.is_empty() {
+                    write!(f, " ORDER BY ")?;
+                    write_comma_separated_list(f, order_by)?;
                 }
                 write!(f, ")")?;
                 Ok(())

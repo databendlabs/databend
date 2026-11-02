@@ -1270,6 +1270,29 @@ SELECT to_int64(count(*) > 0) FROM b x, b y WHERE x.n < y.n AND x.p = y.p AND x.
 ----
 1
 
+# An unordered file copied with an ORDER BY on the cluster key is written in
+# that order: the partitions' blocks do not overlap either.
+statement ok
+COPY INTO @s_09_0054/unordered/ FROM (SELECT number % 40 AS k, number AS v FROM numbers(400000) ORDER BY v) FILE_FORMAT = (TYPE = PARQUET) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+statement ok
+CREATE TABLE hash_copy_order_by(k INT NOT NULL, v INT NOT NULL) PARTITION BY (v % 2) CLUSTER BY (k) ROW_PER_BLOCK = 10000 WRITE_DISTRIBUTION_MODE = 'hash'
+
+statement ok
+SET enable_compact_after_write = 0
+
+statement ok
+COPY INTO hash_copy_order_by FROM (SELECT k, v FROM @s_09_0054/unordered/ ORDER BY k, v) FILE_FORMAT = (TYPE = PARQUET)
+
+statement ok
+UNSET enable_compact_after_write
+
+query I
+WITH b AS (SELECT _block_name n, min(v % 2) p, min(k) lo, max(k) hi FROM hash_copy_order_by GROUP BY _block_name)
+SELECT count(*) FROM b x, b y WHERE x.n < y.n AND x.p = y.p AND x.lo < y.hi AND y.lo < x.hi
+----
+0
+
 statement ok
 REMOVE @s_09_0054
 

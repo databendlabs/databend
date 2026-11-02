@@ -4,9 +4,6 @@ copy into t1 from(select * from (select 1))
 statement error unexpected `where`
 copy into t1 from (select a from @s1 where a > 1)
 
-statement error unexpected `order`
-copy into t1 from (select a from @s1 order by a)
-
 statement error unexpected `,`
 copy into t1 from (select a, b from '@s1', t2)
 
@@ -31,3 +28,17 @@ copy into t1 from (select sum($1::int) as c1 from @s1) file_format=(type=csv);
 
 statement error can't contain aggregate|flatten|window functions
 copy into t1 from (select rank() OVER (ORDER BY $1), $1 from @s1) file_format=(type=csv);
+
+# ORDER BY is the order the rows are written in; the select list's rules apply
+# to it as well.
+statement error can't contain aggregate|flatten|window functions
+copy into t1 from (select $1 from @s1 order by sum($1::int)) file_format=(type=csv);
+
+statement error doesn't exist
+copy into t1 from (select $1 from @s1 order by no_such_column) file_format=(type=csv);
+
+statement error ORDER BY position 2 is not in select list
+copy into t1 from (select $1 from @s1 order by 2) file_format=(type=csv);
+
+statement error unexpected `limit`
+copy into t1 from (select $1 from @s1 order by $1 limit 1) file_format=(type=csv);
