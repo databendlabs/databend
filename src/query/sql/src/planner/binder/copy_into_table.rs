@@ -32,6 +32,8 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::Walk;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
@@ -68,6 +70,7 @@ use crate::NameResolutionContext;
 use crate::binder::Binder;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
+use crate::binder::aggregate_prepass::is_window_expr;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::parse_file_format;
 use crate::binder::validate_stage_files_path_traversal;
@@ -75,6 +78,18 @@ use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
 use crate::plans::ValidationMode;
+
+const COPY_UNSUPPORTED_EXPR: &str =
+    "copy into <table> can't contain aggregate|flatten|window functions";
+
+struct ContainsWindow(bool);
+
+impl Visitor for ContainsWindow {
+    fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
+        self.0 |= is_window_expr(expr);
+        Ok(VisitControl::Continue)
+    }
+}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -547,10 +562,7 @@ impl Binder {
         for item in select_list.items.iter() {
             if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
-                return Err(ErrorCode::SemanticError(
-                    "copy into <table> can't contain aggregate|flatten|window functions"
-                        .to_string(),
-                ));
+                return Err(ErrorCode::SemanticError(COPY_UNSUPPORTED_EXPR.to_string()));
             };
         }
         let mut select_info = self.analyze_projection(&from_context, &select_list)?;
@@ -568,6 +580,16 @@ impl Binder {
         let order_items = if order_by.is_empty() {
             None
         } else {
+            // analyze_order_items cannot prepare a window function here: COPY
+            // does not collect them.
+            let mut window = ContainsWindow(false);
+            for item in order_by {
+                item.expr.walk(&mut window)?;
+            }
+            if window.0 {
+                return Err(ErrorCode::SemanticError(COPY_UNSUPPORTED_EXPR.to_string()));
+            }
+
             let aliases = select_list.alias_catalog();
             let order_items = self.analyze_order_items(
                 &mut from_context,
@@ -580,10 +602,7 @@ impl Binder {
             // ORDER BY may add expressions of its own to the projection.
             for item in select_info.source_scalars.values() {
                 if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
-                    return Err(ErrorCode::SemanticError(
-                        "copy into <table> can't contain aggregate|flatten|window functions"
-                            .to_string(),
-                    ));
+                    return Err(ErrorCode::SemanticError(COPY_UNSUPPORTED_EXPR.to_string()));
                 }
             }
             Some(order_items)

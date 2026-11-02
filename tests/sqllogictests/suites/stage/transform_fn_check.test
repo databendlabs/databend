@@ -34,6 +34,15 @@ copy into t1 from (select rank() OVER (ORDER BY $1), $1 from @s1) file_format=(t
 statement error can't contain aggregate|flatten|window functions
 copy into t1 from (select $1 from @s1 order by sum($1::int)) file_format=(type=csv);
 
+statement error can't contain aggregate|flatten|window functions
+copy into t1 from (select $1 from @s1 order by count(*)) file_format=(type=csv);
+
+statement error can't contain aggregate|flatten|window functions
+copy into t1 from (select $1 from @s1 order by row_number() over (order by $1)) file_format=(type=csv);
+
+statement error can't contain aggregate|flatten|window functions
+copy into t1 from (select $1 from @s1 order by count(*) over ()) file_format=(type=csv);
+
 statement error doesn't exist
 copy into t1 from (select $1 from @s1 order by no_such_column) file_format=(type=csv);
 
