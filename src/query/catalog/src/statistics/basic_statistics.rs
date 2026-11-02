@@ -29,10 +29,11 @@ pub struct BasicColumnStatistics {
     pub null_count: u64,
     // Memory size of the column
     pub in_memory_size: u64,
-    /// Set when `ndv` was not collected over all current rows and may
+    /// Set when `ndv` was not collected over exactly the current rows and may
     /// overstate their distinct count: `merge` summed the NDVs of several
     /// parts, or `get_useful_stat` filled it from the row count or the value
-    /// domain, or extrapolated it from statistics collected over fewer rows.
+    /// domain, or derived it from statistics collected over a different
+    /// number of rows.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub ndv_is_inferred: bool,
 }
@@ -121,11 +122,12 @@ impl BasicColumnStatistics {
         let max = self.max.clone().unwrap();
         // Without a collected NDV, or with legacy HLL metadata that has no
         // sample size, the NDV below comes from the row count or the domain.
-        // With statistics collected over fewer rows, it is extrapolated.
+        // With statistics collected over fewer rows, it is extrapolated; over
+        // more rows, it is capped at the current row count, which may still
+        // exceed the distinct count of those rows.
         let ndv_is_inferred = self.ndv_is_inferred
             || matches!(self.ndv, None | Some(0))
-            || stats_row_count == 0
-            || stats_row_count < num_rows;
+            || stats_row_count != num_rows;
         let ndv = Self::adjust_ndv_by_min_max(self.ndv, min.clone(), max.clone());
         let ndv = match ndv {
             None => num_rows,
@@ -214,10 +216,12 @@ mod tests {
     #[test]
     fn test_inferred_ndv_is_marked() {
         // 1_000 current rows. An NDV of 100 over 100 sampled rows is
-        // extrapolated to 1_000 and only looks unique.
+        // extrapolated to 1_000, and an NDV of 1_500 over 2_000 rows is capped
+        // at 1_000; both only look unique.
         for (ndv, sampled_rows, expected_ndv, inferred) in [
             (Some(500), 1_000, 500, false),
-            (Some(500), 2_000, 500, false),
+            (Some(500), 2_000, 500, true),
+            (Some(1_500), 2_000, 1_000, true),
             (Some(100), 100, 1_000, true),
             (Some(50), 100, 163, true),
             (None, 1_000, 1_000, true),
