@@ -25,6 +25,7 @@ use databend_common_expression::types::NumberScalar;
 
 use super::DerivedColumnScope;
 use super::FlattenPlanResult;
+use super::scalar_aggregate::empty_aggregate_value;
 use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::Metadata;
@@ -47,6 +48,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
+use crate::plans::JoinType;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::ProjectSet;
@@ -67,6 +69,18 @@ use crate::plans::WindowFuncType;
 use crate::plans::WindowGroup;
 use crate::plans::WindowPartition;
 
+/// How to treat filter aliases inherited by an operator, see
+/// [`SubqueryDecorrelatorOptimizer::filter_alias_action`].
+enum FilterAliasAction {
+    /// The aliases are valid for the operator and its input.
+    Keep,
+    /// Drop the aliases and materialize the outer input below the operator.
+    Materialize,
+    /// The operator computes these alias targets. Hide them from its input and restore
+    /// them above the operator.
+    Hide(ColumnSet),
+}
+
 impl SubqueryDecorrelatorOptimizer {
     fn secure_scan_columns(scan: &Scan) -> ColumnSet {
         let mut columns = scan.columns.clone();
@@ -84,6 +98,133 @@ impl SubqueryDecorrelatorOptimizer {
     ) -> Result<()> {
         for pred in secure_preds.iter_mut() {
             pred.replace_columns(|old| Ok(derived_columns.resolve_or_self(old)))?;
+        }
+        Ok(())
+    }
+
+    /// A filter above this operator may have resolved a correlated column to an
+    /// inner alias (`s.a = t1.a` lets `s.a` stand for `t1.a`). The alias is only
+    /// valid where that filter could be pushed down unchanged:
+    /// - the alias must already be produced by this operator's inputs, not computed
+    ///   here (`t2.a + 1 AS a`, an aggregate or a set-returning function output);
+    /// - the operator must not depend on which inner rows reach it per outer row,
+    ///   which rules out an effective LIMIT/OFFSET and window functions.
+    fn filter_alias_action(
+        subquery: &SExpr,
+        correlated_columns: &ColumnSet,
+        derived_columns: &DerivedColumnScope,
+    ) -> Result<FilterAliasAction> {
+        let aliases = correlated_columns
+            .iter()
+            .filter_map(|old| derived_columns.resolve(*old))
+            .collect::<ColumnSet>();
+        if aliases.is_empty() || subquery.arity() == 0 {
+            return Ok(FilterAliasAction::Keep);
+        }
+        let defined_here = match subquery.plan() {
+            RelOperator::Limit(limit) if limit.limit.is_some() || limit.offset != 0 => None,
+            RelOperator::Window(_) | RelOperator::WindowGroup(_) => None,
+            _ => {
+                let rel_expr = RelExpr::with_s_expr(subquery);
+                let mut input_columns = ColumnSet::new();
+                for index in 0..subquery.arity() {
+                    input_columns.extend(
+                        rel_expr
+                            .derive_relational_prop_child(index)?
+                            .output_columns
+                            .iter()
+                            .copied(),
+                    );
+                }
+                let defined_here = aliases
+                    .difference(&input_columns)
+                    .copied()
+                    .collect::<ColumnSet>();
+                if defined_here.is_empty() {
+                    return Ok(FilterAliasAction::Keep);
+                }
+                Some(defined_here)
+            }
+        };
+        // A projection computing the alias only invalidates the alias below itself. If
+        // nothing below needs every correlated column, the alias can be hidden from the
+        // input and restored above the projection, where it is defined.
+        if let Some(defined_here) = defined_here
+            && matches!(subquery.plan(), RelOperator::EvalScalar(_))
+            && !Self::needs_all_correlated_columns(subquery.unary_child())?
+        {
+            return Ok(FilterAliasAction::Hide(defined_here));
+        }
+        Self::check_scalar_aggregate_alias(subquery, &aliases)?;
+        Ok(FilterAliasAction::Materialize)
+    }
+
+    /// Whether the correlated part of `subquery` contains an operator that groups,
+    /// limits or unions rows per outer row, and so needs every correlated column.
+    fn needs_all_correlated_columns(subquery: &SExpr) -> Result<bool> {
+        let mut stack = vec![subquery];
+        while let Some(expr) = stack.pop() {
+            if expr.derive_relational_prop()?.outer_columns.is_empty() {
+                continue;
+            }
+            if matches!(
+                expr.plan(),
+                RelOperator::Aggregate(_)
+                    | RelOperator::Limit(_)
+                    | RelOperator::Window(_)
+                    | RelOperator::WindowGroup(_)
+                    | RelOperator::UnionAll(_)
+                    | RelOperator::ProjectSet(_)
+            ) {
+                return Ok(true);
+            }
+            stack.extend(expr.children());
+        }
+        Ok(false)
+    }
+
+    /// Materializing the outer input groups correlated aggregates by the outer columns. An
+    /// aggregate that returns a row for an empty input (no GROUP BY, or an empty grouping
+    /// set) then returns nothing for an outer row without input rows. That is only
+    /// equivalent when the alias filter would reject the empty-input row anyway: the alias
+    /// is the output of a plain aggregate without GROUP BY at this operator, and every
+    /// aliased aggregate returns NULL for an empty input. Otherwise, e.g. for `count`, for
+    /// a value computed from the aggregate, or for such an aggregate under a window or a
+    /// join, the empty-input row would be silently lost, so reject the query instead of
+    /// returning wrong results.
+    fn check_scalar_aggregate_alias(subquery: &SExpr, aliases: &ColumnSet) -> Result<()> {
+        let mut stack = vec![subquery];
+        while let Some(expr) = stack.pop() {
+            if expr.derive_relational_prop()?.outer_columns.is_empty() {
+                continue;
+            }
+            if let RelOperator::Aggregate(aggregate) = expr.plan() {
+                let returns_row_for_empty_input = aggregate.group_items.is_empty()
+                    || aggregate
+                        .grouping_sets
+                        .as_ref()
+                        .is_some_and(|grouping_sets| grouping_sets.sets.iter().any(Vec::is_empty));
+                // The empty-input value must be known to be NULL. A UDAF can return any
+                // value for an empty input even if its declared type is nullable.
+                let aliases_null_on_empty_input = std::ptr::eq(expr, subquery)
+                    && aggregate.group_items.is_empty()
+                    && aggregate.grouping_sets.is_none()
+                    && aggregate
+                        .aggregate_functions
+                        .iter()
+                        .filter(|item| aliases.contains(&item.index))
+                        .all(|item| match &item.scalar {
+                            ScalarExpr::AggregateFunction(func) => empty_aggregate_value(func)
+                                .is_some_and(|(value, _)| value == Scalar::Null),
+                            _ => false,
+                        });
+                if returns_row_for_empty_input && !aliases_null_on_empty_input {
+                    return Err(ErrorCode::Unimplemented(
+                        "Unsupported correlated subquery: an outer column is compared with a value derived from a correlated aggregate that returns a row for empty input",
+                    ));
+                }
+            }
+            stack.extend(expr.children());
         }
         Ok(())
     }
@@ -126,6 +267,49 @@ impl SubqueryDecorrelatorOptimizer {
             };
         }
 
+        match Self::filter_alias_action(subquery, correlated_columns, derived_columns)? {
+            FilterAliasAction::Keep => self.flatten_operator(
+                outer,
+                subquery,
+                correlated_columns,
+                flatten_info,
+                need_cross_join,
+                derived_columns,
+            ),
+            // Drop the aliases and materialize the outer input instead, as
+            // `flatten_sub_filter` does for predicates that cannot reuse inner columns.
+            FilterAliasAction::Materialize => self.flatten_operator(
+                outer,
+                subquery,
+                correlated_columns,
+                flatten_info,
+                true,
+                &DerivedColumnScope::default(),
+            ),
+            FilterAliasAction::Hide(defined_here) => {
+                let (plan, mut scope) = self.flatten_operator(
+                    outer,
+                    subquery,
+                    correlated_columns,
+                    flatten_info,
+                    need_cross_join,
+                    &derived_columns.without_targets(&defined_here),
+                )?;
+                scope.restore_targets(derived_columns, &defined_here);
+                Ok((plan, scope))
+            }
+        }
+    }
+
+    fn flatten_operator(
+        &mut self,
+        outer: &SExpr,
+        subquery: &SExpr,
+        correlated_columns: &ColumnSet,
+        flatten_info: &mut FlattenInfo,
+        need_cross_join: bool,
+        derived_columns: &DerivedColumnScope,
+    ) -> Result<FlattenPlanResult> {
         match subquery.plan() {
             RelOperator::EvalScalar(eval_scalar) => self.flatten_sub_eval_scalar(
                 outer,
@@ -160,6 +344,7 @@ impl SubqueryDecorrelatorOptimizer {
                 join,
                 correlated_columns,
                 flatten_info,
+                need_cross_join,
                 derived_columns,
             ),
             RelOperator::Aggregate(aggregate) => self.flatten_sub_aggregate(
@@ -270,7 +455,10 @@ impl SubqueryDecorrelatorOptimizer {
             .collect::<Result<_>>()?;
 
         for old in correlated_columns {
-            let index = derived_columns.must_resolve(*old)?;
+            // A filter alias hidden from this input is restored above its definition.
+            let Some(index) = derived_columns.resolve(*old) else {
+                continue;
+            };
             if output_columns.insert(index) {
                 items.push(Self::scalar_item_from_index(index, "outer.", &metadata));
             }
@@ -417,6 +605,7 @@ impl SubqueryDecorrelatorOptimizer {
         join: &Join,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
+        need_cross_join: bool,
         derived_columns: &DerivedColumnScope,
     ) -> Result<FlattenPlanResult> {
         // Helper function to check if conditions need a cross join
@@ -485,6 +674,60 @@ impl SubqueryDecorrelatorOptimizer {
                         // predicates, which also preserves LEFT JOIN semantics.
                         left_need_cross_join = true;
                     }
+                }
+            }
+        }
+
+        // An operator above needs every correlated column, but a column that is neither
+        // resolved yet nor referenced by either input would never be materialized. Only one
+        // copy of the outer input may represent an outer row, so materialize it in the input
+        // that is already correlated, and only if the join keeps that input's rows. Otherwise
+        // the copy would not be matched with the other input's outer representation, or rows
+        // the join keeps from the other input would lose their outer columns.
+        if need_cross_join
+            && !left_need_cross_join
+            && !right_need_cross_join
+            && correlated_columns.iter().any(|col| {
+                derived_columns.resolve(*col).is_none()
+                    && !left_prop.outer_columns.contains(col)
+                    && !right_prop.outer_columns.contains(col)
+            })
+        {
+            let can_carry_left = matches!(
+                join.join_type,
+                JoinType::Cross
+                    | JoinType::Inner
+                    | JoinType::InnerAny
+                    | JoinType::Left
+                    | JoinType::LeftAny
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti
+                    | JoinType::LeftSingle
+                    | JoinType::RightMark
+            );
+            let can_carry_right = matches!(
+                join.join_type,
+                JoinType::Cross
+                    | JoinType::Inner
+                    | JoinType::InnerAny
+                    | JoinType::Right
+                    | JoinType::RightAny
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti
+                    | JoinType::RightSingle
+                    | JoinType::LeftMark
+            );
+            match (
+                left_prop.outer_columns.is_empty(),
+                right_prop.outer_columns.is_empty(),
+            ) {
+                (false, true) if can_carry_left => left_need_cross_join = true,
+                (true, false) if can_carry_right => right_need_cross_join = true,
+                _ => {
+                    return Err(ErrorCode::Unimplemented(format!(
+                        "Unsupported correlated subquery: outer columns cannot be materialized below a {} join",
+                        join.join_type
+                    )));
                 }
             }
         }
