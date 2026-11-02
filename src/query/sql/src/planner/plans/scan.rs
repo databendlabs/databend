@@ -436,8 +436,9 @@ impl Operator for Scan {
         // join ordering), then suppress column statistics to prevent data
         // leakage through statistical inference.
         if self.secure_predicates.is_some() {
-            // Emptiness proofs do not use column statistics, so publishing one
-            // does not leak them.
+            // Emptiness proofs only use facts that hold for every row (type
+            // domains and exact all-null counts), so publishing one tells no
+            // more than executing the scan would.
             let mut proven_empty = precise_cardinality == Some(0);
             let cardinality = match &self.secure_predicates {
                 Some(preds) if !preds.is_empty() => {
