@@ -483,3 +483,48 @@ async fn test_concurrent_enqueues_keep_index_and_files_consistent() {
 fn assert_no_reservation(pool: &DiskPool) {
     assert_eq!(pool.stats().writing, 0);
 }
+
+static CANCEL: Gate = Gate::new();
+fn cancel_gate(_: &Path) -> bool {
+    CANCEL.pass();
+    false
+}
+
+/// A reader cancelled while it waits for room leaves nothing pending: the same entry can be
+/// queued again later.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cancelled_enqueue_leaves_nothing_pending() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
+    let writer = Arc::new(DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        WriterOptions {
+            over_watermark: cancel_gate,
+            ..options(1, 100, Duration::from_secs(30))
+        },
+    ));
+    CANCEL.close();
+    assert!(writer.enqueue(job(&pool, data_kind(), "a", 60)).await);
+    CANCEL.wait_entered(1);
+    let waiting = {
+        let (writer, pool) = (writer.clone(), pool.clone());
+        spawn(async move { writer.enqueue(job(&pool, data_kind(), "b", 60)).await })
+    };
+    wait_for(|| writer.pending_entries() == 2);
+    waiting.abort();
+    assert!(waiting.await.unwrap_err().is_cancelled());
+    assert_eq!(writer.pending_entries(), 1);
+    assert_eq!(
+        writer.queued_bytes(),
+        60,
+        "the cancelled entry took no room"
+    );
+
+    CANCEL.open();
+    wait_for(|| idle(&writer));
+    assert!(writer.enqueue(job(&pool, data_kind(), "b", 60)).await);
+    wait_for(|| idle(&writer));
+    assert_eq!(pool.stats().items, 2);
+    assert_eq!(drops(&writer), (0, 0, 0));
+}

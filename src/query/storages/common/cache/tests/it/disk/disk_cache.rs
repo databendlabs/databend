@@ -475,3 +475,39 @@ fn assert_quiet_and_consistent(cache: &DiskCache, dir: &TempDir) {
     assert!(stats.bytes <= stats.cap);
     assert_eq!(cache.kind_usage(data()), (stats.items, stats.bytes));
 }
+
+/// `evict_object` drops every unit of an object, whole or ranges, in every kind and pool, and
+/// leaves other objects alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_evict_object_drops_all_its_units() {
+    let dir = TempDir::new().unwrap();
+    let cache = cache(&dir);
+    let path = "1/2/_i_b_v2/index.parquet";
+    let filters = CacheKind::of::<bloom::Filter>();
+    let metas = CacheKind::of::<bloom::IndexMeta>();
+    let units = [
+        (filters, DiskKey::whole(path)),
+        (filters, DiskKey::range(path, 0..100)),
+        (metas, DiskKey::range(path, 100..200)),
+    ];
+    for (kind, key) in &units {
+        put_and_wait(&cache, *kind, key, Bytes::from(vec![1; 100])).await;
+    }
+    let other = DiskKey::whole("1/2/_i_b_v2/other.parquet");
+    put_and_wait(&cache, filters, &other, Bytes::from(vec![2; 100])).await;
+
+    assert_eq!(cache.evict_object(path), 3);
+    for (kind, key) in &units {
+        assert!(!cache.contains(*kind, key), "{key}");
+        assert_eq!(cache.get(*kind, key).await, None);
+    }
+    assert!(cache.contains(filters, &other));
+    assert_eq!(files_under(&dir.path().join("v2")).len(), 1);
+    assert_eq!(cache.evict_object(path), 0);
+    // The object can be cached again, as rewritten.
+    put_and_wait(&cache, filters, &units[0].1, Bytes::from(vec![3; 100])).await;
+    assert_eq!(
+        cache.get(filters, &units[0].1).await,
+        Some(Bytes::from(vec![3; 100]))
+    );
+}

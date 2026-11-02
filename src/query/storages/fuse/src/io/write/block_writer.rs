@@ -43,6 +43,7 @@ use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -442,6 +443,9 @@ impl BlockWriter {
 
             let location = &index_state.location.0;
             write_data(index_state.data, dal, location).await?;
+            // Bloom indexes are rewritten in place (ngram refresh, missing index rebuild): drop
+            // the old bytes from the disk cache. The memory caches are evicted by the callers.
+            DiskCachedStorage::new(dal.clone()).evict_object(location);
 
             metrics_inc_block_index_write_nums(1);
             metrics_inc_block_index_write_nums(index_state.size);

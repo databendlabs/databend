@@ -153,10 +153,29 @@ impl DiskWriter {
     /// Queues `job`, waiting up to `queue_wait` for room. Returns false when dropped, or when
     /// the same entry is already queued or being written.
     pub async fn enqueue(&self, job: WriteJob) -> bool {
-        let pending_key = (job.pool.pool().index(), job.rel.clone());
-        if !self.shared.pending.lock().insert(pending_key.clone()) {
+        // Takes the key off the pending set unless the job was handed to a writer, also when
+        // the caller is cancelled while waiting for room.
+        struct Pending<'a> {
+            shared: &'a Shared,
+            key: (usize, String),
+            handed_over: bool,
+        }
+        impl Drop for Pending<'_> {
+            fn drop(&mut self) {
+                if !self.handed_over {
+                    self.shared.pending.lock().remove(&self.key);
+                }
+            }
+        }
+        let key = (job.pool.pool().index(), job.rel.clone());
+        if !self.shared.pending.lock().insert(key.clone()) {
             return false;
         }
+        let mut pending = Pending {
+            shared: &self.shared,
+            key,
+            handed_over: false,
+        };
         let len = job.value.len() as u64;
         let options = &self.shared.options;
         let deadline = Instant::now() + options.queue_wait;
@@ -179,18 +198,21 @@ impl DiskWriter {
             }
             let now = Instant::now();
             if now >= deadline {
-                self.shared.pending.lock().remove(&pending_key);
                 self.shared.drops.queue_full.fetch_add(1, Ordering::Relaxed);
                 return false;
             }
             let _ = tokio::time::timeout(deadline - now, room).await;
         }
+        // No await from the room taken to the hand-over: a cancelled caller holds no room.
         if let Err(e) = self.tx.send(job) {
-            // No writer left: undo the accounting.
-            self.shared.done(&pending_key, len);
+            // No writer left: give the room back; the guard takes the key off.
+            self.shared.queued.fetch_sub(len, Ordering::AcqRel);
+            self.shared.room.notify_waiters();
             warn!("[DiskCache] writer threads are gone: {e}");
             return false;
         }
+        // The writer takes the key off when done.
+        pending.handed_over = true;
         true
     }
 }
@@ -224,13 +246,14 @@ impl Shared {
         // Gives the reservation back unless the entry was published, also on a panic.
         struct Held<'a> {
             pool: &'a DiskPool,
+            rel: &'a str,
             bytes: u64,
             published: bool,
         }
         impl Drop for Held<'_> {
             fn drop(&mut self) {
                 if !self.published {
-                    self.pool.release(self.bytes);
+                    self.pool.release(self.rel, self.bytes);
                 }
             }
         }
@@ -241,6 +264,7 @@ impl Shared {
         if reservation.reserved {
             let mut held = Held {
                 pool: &job.pool,
+                rel: &job.rel,
                 bytes,
                 published: false,
             };

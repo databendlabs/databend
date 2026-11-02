@@ -78,7 +78,7 @@ fn test_reserve_rejects_off_pools_and_oversized_entries() {
     let r = pool.reserve("a", 250);
     assert!(r.reserved && r.victims.is_empty());
     assert_eq!(pool.stats().writing, 250);
-    pool.release(250);
+    pool.release("a", 250);
     assert_eq!(pool.stats().writing, 0);
 
     let off = self::pool(0);
@@ -118,12 +118,12 @@ fn test_reserve_fails_when_only_writes_in_flight_are_left() {
     assert_eq!((pool.stats().items, pool.stats().writing), (0, 900));
     let r = pool.reserve("x", 101);
     assert!(!r.reserved && r.victims.is_empty());
-    for _ in 0..4 {
-        pool.release(225);
+    for i in 0..4 {
+        pool.release(&rel(data(), &format!("w{i}")), 225);
     }
     let r = pool.reserve("x", 250);
     assert!(r.reserved);
-    pool.release(250);
+    pool.release("x", 250);
     assert_consistent(&pool);
 }
 
@@ -161,14 +161,14 @@ fn test_entry_being_deleted_is_not_reserved_again() {
     pool.delete(&victims);
     let r = pool.reserve(&victim, 10);
     assert!(r.reserved);
-    pool.release(10);
+    pool.release(&victim, 10);
 
     // `remove` deletes at once, so the key can be written again right away.
     assert!(pool.remove(&a));
     assert!(!pool.remove(&a));
     let r = pool.reserve(&a, 10);
     assert!(r.reserved);
-    pool.release(10);
+    pool.release(&a, 10);
     assert_consistent(&pool);
 }
 
@@ -243,7 +243,13 @@ fn test_reload_keeps_what_belongs_and_deletes_the_rest() {
     let unknown = write_file(&root, "no_such_kind/abc/def", 10);
     let foreign_tmp = write_file(
         &root,
-        &format!("{}/abc/x.1-2{TMP_SUFFIX}", data().name()),
+        &format!("{}/abc/x.y.1-2{TMP_SUFFIX}", data().name()),
+        10,
+    );
+    // Named by an older layout, without an object id.
+    let unnamed = write_file(
+        &root,
+        &format!("{}/abc/0123456789abcdef", data().name()),
         10,
     );
     let own = tmp_path(&root.join(rel(data(), "w")), 7);
@@ -254,9 +260,10 @@ fn test_reload_keeps_what_belongs_and_deletes_the_rest() {
     );
     let oversized = write_file(&root, &rel(data(), "big"), 501);
 
-    assert_eq!(pool.reload(), (6, 3));
+    assert_eq!(pool.reload(), (6, 4));
     assert!(kept.iter().all(|p| p.exists()));
     assert!(!unknown.exists() && !foreign_tmp.exists() && !oversized.exists());
+    assert!(!unnamed.exists());
     assert!(own_tmp.exists());
     assert_eq!(pool.kind_usage(data()), (6, 1200));
     assert_consistent(&pool);
@@ -317,7 +324,7 @@ fn test_concurrent_operations_keep_the_accounting() {
                                 if rng.gen_bool(0.9) {
                                     pool.publish(key, size, size);
                                 } else {
-                                    pool.release(size);
+                                    pool.release(&key, size);
                                 }
                             }
                         }
@@ -348,8 +355,90 @@ fn test_concurrent_operations_keep_the_accounting() {
             let r = pool.reserve(&key, 1);
             assert!(r.reserved, "{key}");
             pool.delete(&r.victims);
-            pool.release(1);
+            pool.release(&key, 1);
         }
     }
+    assert_consistent(&pool);
+}
+
+/// `remove_object` takes every unit of an object out, in every kind, and nothing else; the
+/// object ids come back with the restart scan.
+#[test]
+fn test_remove_object_takes_all_its_units() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    let units = [
+        DiskKey::whole("t/a").rel_path(data()),
+        DiskKey::range("t/a", 0..10).rel_path(data()),
+        DiskKey::range("t/a", 10..20).rel_path(meta()),
+    ];
+    let other = DiskKey::whole("t/b").rel_path(data());
+    for rel in units.iter().chain([&other]) {
+        write_file(&root, rel, 100);
+        put(&pool, rel, 100);
+    }
+    let mut victims = pool.remove_object(&DiskKey::object_id("t/a"));
+    victims.sort();
+    let mut expected = units.to_vec();
+    expected.sort();
+    assert_eq!(victims, expected);
+    assert!(pool.remove_object(&DiskKey::object_id("t/a")).is_empty());
+    pool.delete(&victims);
+    assert!(units.iter().all(|rel| !root.join(rel).exists()));
+    assert!(pool.contains(&other) && root.join(&other).exists());
+    assert_consistent(&pool);
+
+    // A restart rebuilds the ids from the file names; an evicted unit leaves its object.
+    let fresh = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    assert_eq!(fresh.reload(), (1, 0));
+    assert_eq!(fresh.remove_object(&DiskKey::object_id("t/b")), vec![
+        other.clone()
+    ]);
+    fresh.delete(&[other]);
+    let b = DiskKey::range("t/b", 0..1).rel_path(data());
+    put(&fresh, &b, 10);
+    assert_eq!(fresh.evict_bytes(1), vec![b.clone()]);
+    fresh.delete(&[b]);
+    assert!(fresh.remove_object(&DiskKey::object_id("t/b")).is_empty());
+    assert_consistent(&fresh);
+}
+
+/// A key being written cannot be reserved again, and the restart scan leaves its file alone:
+/// the writer renames its own file into place and publishes it.
+#[test]
+fn test_reload_leaves_keys_being_written() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
+    let a = rel(data(), "a");
+    let r = pool.reserve(&a, 100);
+    assert!(r.reserved);
+    assert!(!pool.reserve(&a, 100).reserved, "a second write of the key");
+    // A file of the key left by an earlier run.
+    let file = write_file(&root, &a, 100);
+    assert_eq!(pool.reload(), (0, 0));
+    assert!(file.exists() && !pool.contains(&a));
+    pool.publish(a.clone(), 100, 100);
+    assert!(pool.contains(&a));
+    assert_consistent(&pool);
+}
+
+/// A file the scan rejects is deleted, and its key can be written again afterwards.
+#[test]
+fn test_reload_rejects_then_frees_the_key() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 400);
+    for i in 0..3 {
+        write_file(&root, &rel(data(), &format!("k{i}")), 100);
+    }
+    let big = rel(data(), "big");
+    write_file(&root, &big, 101);
+    assert_eq!(pool.reload(), (3, 1));
+    assert!(!root.join(&big).exists());
+    let r = pool.reserve(&big, 100);
+    assert!(r.reserved && r.victims.is_empty());
+    pool.release(&big, 100);
     assert_consistent(&pool);
 }

@@ -50,14 +50,33 @@ impl DiskKey {
         &self.path
     }
 
-    /// `<kind>/<first 3 hex digits>/<hash>`: the entry's path under its pool root and its key
-    /// in the pool's index. The hash is the hex SipHash 2-4 128 of the key string.
-    pub fn rel_path(&self, kind: CacheKind) -> String {
-        let mut sip = sip128::SipHasher24::new();
-        sip.write(self.to_string().as_bytes());
-        let hash = hex::encode(sip.finish128().as_bytes());
-        format!("{}/{}/{hash}", kind.name(), &hash[0..3])
+    /// The id of the object the unit belongs to: what `DiskCache::evict_object` drops every
+    /// unit of when the object is rewritten or deleted.
+    pub fn object_id(path: &str) -> String {
+        hash(path)
     }
+
+    /// `<kind>/<first 3 hex digits of the object id>/<object id>.<unit id>`: the entry's path
+    /// under its pool root and its key in the pool's index. Ids are the hex SipHash 2-4 128 of
+    /// the object path and of the key string. Units of one object share a prefix, so the pool
+    /// can find them all by the object id.
+    pub fn rel_path(&self, kind: CacheKind) -> String {
+        let object = Self::object_id(&self.path);
+        let unit = hash(&self.to_string());
+        format!("{}/{}/{object}.{unit}", kind.name(), &object[0..3])
+    }
+}
+
+/// The object id of an index key built by `DiskKey::rel_path`.
+pub(crate) fn object_of(rel: &str) -> Option<&str> {
+    let name = rel.rsplit('/').next()?;
+    name.split_once('.').map(|(object, _)| object)
+}
+
+fn hash(s: &str) -> String {
+    let mut sip = sip128::SipHasher24::new();
+    sip.write(s.as_bytes());
+    hex::encode(sip.finish128().as_bytes())
 }
 
 /// The key string: the path, with `#start-end` for a range.

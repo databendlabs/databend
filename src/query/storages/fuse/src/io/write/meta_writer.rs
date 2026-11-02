@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -36,6 +37,9 @@ where T: Marshal + Sync + Send
     #[async_backtrace::framed]
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()> {
         data_accessor.write(location, self.marshal()?).await?;
+        // A meta file rewritten in place (segment statistics by ANALYZE) must not be read
+        // back from the disk cache as it was.
+        DiskCachedStorage::new(data_accessor.clone()).evict_object(location);
         Ok(())
     }
 }
@@ -59,6 +63,8 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
     ) -> Result<()> {
         let bytes = self.marshal()?;
         data_accessor.write(location, bytes.clone()).await?;
+        // Segments are rewritten in place by ANALYZE: drop the old bytes from the disk cache.
+        DiskCachedStorage::new(data_accessor.clone()).evict_object(location);
         let segments = &FuseCaches::instance().segments;
         if segments.is_enabled() {
             segments.put(location, Arc::new(self.try_into()?));

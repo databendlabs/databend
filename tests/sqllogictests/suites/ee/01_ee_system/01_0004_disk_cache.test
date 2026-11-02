@@ -221,6 +221,54 @@ select count() from system.caches where name = 'disk_cache_bloom_index_filter';
 statement error 1006
 call system$set_cache_capacity('disk:memory_cache_table_data', 0);
 
+# Vacuum deletes old snapshots: their bytes leave the disk cache too, or the snapshot history
+# would still be walked from disk. The memory snapshot cache is off, so history reads go to disk.
+statement ok
+set data_retention_time_in_days = 0;
+
+statement ok
+create table v(c int);
+
+statement ok
+insert into v values(1);
+
+statement ok
+insert into v values(2);
+
+statement ok
+insert into v values(3);
+
+query I
+select count() from fuse_snapshot('test_disk_cache', 'v');
+----
+3
+
+query I
+select sleep(1);
+----
+0
+
+statement ok
+optimize table v compact;
+
+query I
+select count(*) from fuse_vacuum2('test_disk_cache', 'v');
+----
+0
+
+query I
+select count() from fuse_snapshot('test_disk_cache', 'v');
+----
+1
+
+query I
+select sum(c) from v;
+----
+6
+
+statement ok
+unset data_retention_time_in_days;
+
 statement ok
 call system$set_cache_capacity('memory_cache_table_snapshot', 256);
 

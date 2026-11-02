@@ -20,11 +20,17 @@
 //! reserves room under the lock (taking victims out of the index), deletes the victims' files and
 //! writes its own without the lock, then publishes the entry under the lock again.
 //!
-//! An entry taken out of the index stays marked as being deleted until `delete` has removed its
-//! file. Meanwhile it cannot be reserved again, and the restart scan leaves its file alone:
-//! otherwise a new file written under the same name could be deleted in place of the old one,
-//! leaving an indexed entry without a file.
+//! A file is never deleted while a new one may be written under its name, and never written
+//! while it may be deleted: otherwise the delete could remove the new file and leave an indexed
+//! entry without one. So an entry taken out of the index stays marked as being deleted until
+//! `delete` has removed its file, a key reserved for writing stays marked until it is published
+//! or released, and a key marked either way cannot be reserved; the restart scan leaves the
+//! files of marked keys alone, and marks a file it rejects before deleting it.
+//!
+//! The pool also keeps the entries of each object, by object id, so `remove_object` can drop
+//! all of them when the object is rewritten or deleted.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -44,6 +50,7 @@ use crate::CacheValue;
 use crate::Pool;
 use crate::disk::disk_file::TMP_SUFFIX;
 use crate::disk::disk_file::is_own_tmp;
+use crate::disk::key::object_of;
 
 /// Entries larger than this share of the pool are not cached, as in the memory pools.
 const OVERSIZED_DIVISOR: u64 = 4;
@@ -91,6 +98,10 @@ struct State {
     kinds: Vec<(u64, u64)>,
     /// Entries taken out whose files `delete` has not removed yet.
     deleting: HashSet<String>,
+    /// Keys reserved by writers and not yet published or released.
+    in_flight: HashSet<String>,
+    /// The entries of each object, by object id.
+    objects: HashMap<String, Vec<String>>,
 }
 
 impl State {
@@ -100,8 +111,16 @@ impl State {
 
     fn insert(&mut self, rel: String, size: u64) {
         let kind = kind_of(&rel);
-        if let Some(old) = self.index.insert(rel, FileSize(size).into()) {
-            self.account(kind, old.get_inner().0, false);
+        match self.index.insert(rel.clone(), FileSize(size).into()) {
+            Some(old) => self.account(kind, old.get_inner().0, false),
+            None => {
+                if let Some(object) = object_of(&rel) {
+                    self.objects
+                        .entry(object.to_string())
+                        .or_default()
+                        .push(rel);
+                }
+            }
         }
         self.account(kind, size, true);
     }
@@ -110,17 +129,29 @@ impl State {
     fn pop_lru(&mut self) -> Option<(String, u64)> {
         let (rel, size) = self.index.pop_by_policy()?;
         let size = size.get_inner().0;
-        self.account(kind_of(&rel), size, false);
-        self.deleting.insert(rel.clone());
+        self.taken(&rel, size);
         Some((rel, size))
     }
 
     /// Takes `rel` out, marking it as being deleted.
     fn pop(&mut self, rel: &str) -> Option<u64> {
         let size = self.index.pop(rel)?.get_inner().0;
+        self.taken(rel, size);
+        Some(size)
+    }
+
+    /// Accounts an entry taken out of the index.
+    fn taken(&mut self, rel: &str, size: u64) {
         self.account(kind_of(rel), size, false);
         self.deleting.insert(rel.to_string());
-        Some(size)
+        if let Some(object) = object_of(rel) {
+            if let Some(rels) = self.objects.get_mut(object) {
+                rels.retain(|r| r != rel);
+                if rels.is_empty() {
+                    self.objects.remove(object);
+                }
+            }
+        }
     }
 
     fn account(&mut self, kind: Option<CacheKind>, size: u64, add: bool) {
@@ -162,6 +193,8 @@ impl DiskPool {
                 writing: 0,
                 kinds: CacheKind::all().map(|_| (0, 0)).collect(),
                 deleting: HashSet::new(),
+                in_flight: HashSet::new(),
+                objects: HashMap::new(),
             }),
             hit: AtomicU64::new(0),
             miss: AtomicU64::new(0),
@@ -194,11 +227,15 @@ impl DiskPool {
 
     /// Reserves `bytes` for `rel`, taking least recently used entries out of the index until
     /// they fit. Rejects an entry larger than a quarter of the pool, any entry when the pool is
-    /// off, and `rel` while its previous file is being deleted.
+    /// off, and `rel` while its previous file is being deleted or another write of it runs.
     pub fn reserve(&self, rel: &str, bytes: u64) -> Reservation {
         let mut state = self.state.lock();
         let mut victims = Vec::new();
-        if state.cap == 0 || bytes > state.cap / OVERSIZED_DIVISOR || state.deleting.contains(rel) {
+        if state.cap == 0
+            || bytes > state.cap / OVERSIZED_DIVISOR
+            || state.deleting.contains(rel)
+            || state.in_flight.contains(rel)
+        {
             return Reservation {
                 reserved: false,
                 victims,
@@ -217,6 +254,7 @@ impl DiskPool {
             }
         }
         state.writing += bytes;
+        state.in_flight.insert(rel.to_string());
         Reservation {
             reserved: true,
             victims,
@@ -228,12 +266,25 @@ impl DiskPool {
     pub fn publish(&self, rel: String, reserved: u64, written: u64) {
         let mut state = self.state.lock();
         state.writing -= reserved;
+        state.in_flight.remove(&rel);
         state.insert(rel, written);
     }
 
-    /// Gives back a reservation whose write failed or was abandoned.
-    pub fn release(&self, reserved: u64) {
-        self.state.lock().writing -= reserved;
+    /// Gives back the reservation of `rel`, whose write failed or was abandoned.
+    pub fn release(&self, rel: &str, reserved: u64) {
+        let mut state = self.state.lock();
+        state.writing -= reserved;
+        state.in_flight.remove(rel);
+    }
+
+    /// Takes every entry of the object `object` (see `DiskKey::object_id`) out of the index, in
+    /// any kind; returns them, for `delete`.
+    pub fn remove_object(&self, object: &str) -> Vec<String> {
+        let mut state = self.state.lock();
+        let rels = state.objects.get(object).cloned().unwrap_or_default();
+        rels.into_iter()
+            .filter(|rel| state.pop(rel).is_some())
+            .collect()
     }
 
     /// Takes the entry out of the index and deletes its file. Returns whether it was indexed.
@@ -348,7 +399,8 @@ impl DiskPool {
                 }
                 return;
             }
-            if kind_of(&rel).is_none() {
+            // Files of unknown kinds, or not named `<object>.<unit>`.
+            if kind_of(&rel).is_none() || object_of(&rel).is_none() {
                 remove(path, &deleted);
                 return;
             }
@@ -357,19 +409,27 @@ impl DiskPool {
             };
             let admitted = {
                 let mut state = self.state.lock();
-                if state.index.contains(&rel) || state.deleting.contains(&rel) {
+                if state.index.contains(&rel)
+                    || state.deleting.contains(&rel)
+                    || state.in_flight.contains(&rel)
+                {
+                    // Indexed by a write meanwhile, being deleted, or being written: its file
+                    // is not the scan's to keep or delete.
                     true
                 } else if state.used() + size <= state.cap && size <= state.cap / OVERSIZED_DIVISOR
                 {
-                    state.insert(rel, size);
+                    state.insert(rel.clone(), size);
                     loaded.fetch_add(1, Ordering::Relaxed);
                     true
                 } else {
+                    // Marked until deleted, so no write of the key starts meanwhile.
+                    state.deleting.insert(rel.clone());
                     false
                 }
             };
             if !admitted {
                 remove(path, &deleted);
+                self.state.lock().deleting.remove(&rel);
             }
         });
         let (loaded, deleted) = (loaded.into_inner(), deleted.into_inner());

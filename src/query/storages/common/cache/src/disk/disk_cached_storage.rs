@@ -110,6 +110,19 @@ impl DiskCachedStorage {
         }
     }
 
+    /// Drops what the disk cache holds of the object at `path`, after it is rewritten in place
+    /// or deleted. Paths of fuse tables are never reused otherwise, so only such callers need
+    /// it; the memory caches of the decoded values are evicted by their own handles.
+    pub fn evict_object(&self, path: &str) {
+        if let Some(disk) = &self.disk {
+            let path = match &self.key_prefix {
+                Some(prefix) => format!("{prefix}{path}"),
+                None => path.to_string(),
+            };
+            disk.evict_object(&path);
+        }
+    }
+
     /// For writes, listing and deletes, which do not go through the disk cache.
     pub fn operator(&self) -> &Operator {
         &self.op
@@ -209,7 +222,9 @@ impl DiskCachedStorage {
         }
         if fill.writes() {
             let puts = misses.iter().map(|(id, range)| {
-                let unit = fetched_unit(&fetched, *id);
+                // Copied out of the merged read buffer: a queued unit must not keep the whole
+                // buffer alive, as the queue accounts for the unit's bytes only.
+                let unit = fetched_unit(&fetched, *id).map(|b| Bytes::copy_from_slice(&b));
                 async move {
                     if let Ok(bytes) = unit {
                         disk.put(kind, &self.key(path, Some(range.clone())), bytes)

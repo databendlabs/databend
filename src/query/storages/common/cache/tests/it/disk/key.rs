@@ -35,3 +35,23 @@ fn test_rel_path_is_kind_prefix_hash() {
     assert_eq!(parts[2].len(), 32);
     assert!(parts[2].starts_with(parts[1]));
 }
+
+/// Units of one object share its id, as the start of their name, whatever their kind.
+#[test]
+fn test_units_of_an_object_share_its_id() {
+    let object = DiskKey::object_id("a/b");
+    assert_eq!(object.len(), 32);
+    assert_ne!(object, DiskKey::object_id("a/c"));
+    let data = CacheKind::of::<column::Data>();
+    let filters = CacheKind::of::<databend_storages_common_cache::kinds::bloom::Filter>();
+    for (kind, key) in [
+        (data, DiskKey::whole("a/b")),
+        (data, DiskKey::range("a/b", 0..10)),
+        (filters, DiskKey::range("a/b", 10..20)),
+    ] {
+        let rel = key.rel_path(kind);
+        let name = rel.rsplit('/').next().unwrap();
+        assert_eq!(name.split_once('.').unwrap().0, object, "{rel}");
+        assert!(rel.starts_with(&format!("{}/{}/", kind.name(), &object[0..3])));
+    }
+}

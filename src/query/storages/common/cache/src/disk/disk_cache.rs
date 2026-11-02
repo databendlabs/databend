@@ -260,6 +260,21 @@ impl DiskCache {
         self.pool(kind).remove(&key.rel_path(kind))
     }
 
+    /// Drops every unit of the object at `path`, in every kind and pool: for objects rewritten
+    /// in place or deleted, whose cached bytes would otherwise be read again. Returns the
+    /// entries dropped.
+    pub fn evict_object(&self, path: &str) -> usize {
+        let object = DiskKey::object_id(path);
+        self.pools
+            .iter()
+            .map(|pool| {
+                let victims = pool.remove_object(&object);
+                pool.delete(&victims);
+                victims.len()
+            })
+            .sum()
+    }
+
     /// Runtime capacity of a pool, in bytes; 0 empties it and stops reads and writes. Files are
     /// deleted in the background. Pools together may not exceed `max_bytes`.
     pub fn set_pool_cap(&self, pool: Pool, cap: u64) -> Result<()> {

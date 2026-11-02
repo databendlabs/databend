@@ -34,6 +34,7 @@ use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
 use databend_common_storages_fuse::operations::slice_summary;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_index::ExternalFile;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -403,8 +404,11 @@ pub async fn do_vacuum2(
     //   stored in the meta-server, should be utilized to determine snapshot visibility and
     //   resolve potential issues.
     let snapshot_cache = &FuseCaches::instance().snapshots;
+    let disk = DiskCachedStorage::new(fuse_table.get_operator());
     for path in snapshots_to_gc.iter() {
         snapshot_cache.evict(path);
+        // Also the raw bytes, or the snapshot history would still be walked from disk.
+        disk.evict_object(path);
     }
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
 

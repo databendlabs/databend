@@ -178,6 +178,12 @@ where
                 ErrorCode::Internal(format!("index column {i} of {location} was not read"))
             })?;
             let (name, cache_key) = names_map.remove(i).unwrap();
+            // A cached column is copied out of the merged read buffer: the cache charges its
+            // own bytes only, and a slice would keep the whole buffer alive.
+            let data = match index_file_cache {
+                Some(_) => Bytes::copy_from_slice(&data),
+                None => data,
+            };
             let file = S::make_file(name.clone(), data);
 
             // add index file to cache

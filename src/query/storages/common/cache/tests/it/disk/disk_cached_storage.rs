@@ -367,3 +367,86 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for Counting<A> {
         self.inner.delete().await
     }
 }
+
+/// An object rewritten in place is read as rewritten once `evict_object` drops it; until then
+/// the disk cache keeps serving the old bytes, which is what callers must prevent.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_evict_object_after_rewrite_reads_the_new_bytes() {
+    let dir = TempDir::new().unwrap();
+    let (op, disk, storage) = setup(&dir).await;
+    let prefixed = storage.clone().with_key_prefix("root/");
+    for storage in [&storage, &prefixed] {
+        storage
+            .read(data(), PATH, None, DiskFill::ReadWrite)
+            .await
+            .unwrap();
+        storage
+            .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+            .await
+            .unwrap();
+    }
+    wait_for(|| disk.contains(data(), &DiskKey::range(format!("root/{PATH}"), 0..10)));
+    wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..10)));
+
+    let rewritten = Bytes::from(vec![9u8; 3_000]);
+    op.write(PATH, rewritten.clone()).await.unwrap();
+    let stale = storage
+        .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    assert_eq!(stale, object().slice(0..10));
+
+    storage.evict_object(PATH);
+    for (range, expected) in [
+        (None, rewritten.clone()),
+        (Some(0..10), rewritten.slice(0..10)),
+    ] {
+        let bytes = storage
+            .read(data(), PATH, range, DiskFill::ReadWrite)
+            .await
+            .unwrap();
+        assert_eq!(bytes, expected);
+    }
+    // The prefixed object is another object; it is dropped through its own storage.
+    assert!(disk.contains(data(), &DiskKey::range(format!("root/{PATH}"), 0..10)));
+    prefixed.evict_object(PATH);
+    assert!(!disk.contains(data(), &DiskKey::range(format!("root/{PATH}"), 0..10)));
+}
+
+/// A reader cancelled while its storage read is in flight does not take the others down: a
+/// waiting reader takes the load over and gets the bytes.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cancelled_reader_hands_the_load_over() {
+    let dir = TempDir::new().unwrap();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .finish()
+        .layer(CountingLayer(reads.clone()));
+    op.write(PATH, object()).await.unwrap();
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op, Some(disk.clone()));
+    let first = {
+        let storage = storage.clone();
+        databend_common_base::runtime::spawn(async move {
+            storage
+                .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+                .await
+        })
+    };
+    wait_for(|| reads.load(std::sync::atomic::Ordering::Relaxed) == 1);
+    let second = {
+        let storage = storage.clone();
+        databend_common_base::runtime::spawn(async move {
+            storage
+                .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+                .await
+        })
+    };
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    first.abort();
+    assert_eq!(second.await.unwrap().unwrap(), object().slice(0..10));
+    assert!(reads.load(std::sync::atomic::Ordering::Relaxed) <= 2);
+    wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..10)));
+}
