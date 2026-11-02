@@ -1,0 +1,56 @@
+=== scan ===
+description: A scan bounds its output by its own estimate.
+sql: SELECT * FROM a
+operator: Scan
+cardinality: 10000000.000
+max_cardinality: 10000000.000
+
+=== inner_join_disjoint_ranges ===
+description: A join estimated to return no rows keeps the largest input as its bound.
+sql: SELECT * FROM a JOIN b ON a.k = b.k
+operator: Join
+cardinality: 0.000
+max_cardinality: 10000000.000
+
+=== union_all_of_joins ===
+description: UNION ALL adds the bounds of its inputs.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k UNION ALL SELECT a.k FROM a JOIN b ON a.k = b.k
+operator: UnionAll
+cardinality: 0.000
+max_cardinality: 20000000.000
+
+=== aggregate_over_join ===
+description: An aggregate resets the bound to its own estimate.
+sql: SELECT a.k, count(*) FROM a JOIN b ON a.k = b.k GROUP BY a.k
+operator: Aggregate
+cardinality: 1.000
+max_cardinality: 1.000
+
+=== left_semi_join ===
+description: A semi join is bounded by the side it returns.
+sql: SELECT * FROM d LEFT SEMI JOIN a ON d.k = a.k
+operator: Join
+cardinality: 1000.000
+max_cardinality: 1000.000
+
+=== inner_join_unique_key_missing_peer_stats ===
+description: A unique key caps the expected output at the rows of the side without statistics.
+sql: SELECT * FROM d JOIN u ON d.k = u.k
+operator: Join
+cardinality: 1000000.000
+max_cardinality: 1000000.000
+
+=== left_join_unique_key_missing_peer_stats ===
+description: A unique key on the null-extended side caps the expected output at the preserved rows.
+sql: SELECT * FROM u LEFT JOIN d ON u.k = d.k
+operator: Join
+cardinality: 1000000.000
+max_cardinality: 1000000.000
+
+=== inner_join_repeated_key_missing_peer_stats ===
+description: A key with repeated values does not cap the expected output.
+sql: SELECT * FROM a JOIN u ON a.k = u.k
+operator: Join
+cardinality: 10000000000000.000
+max_cardinality: 10000000000000.000
+

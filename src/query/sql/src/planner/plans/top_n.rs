@@ -115,6 +115,8 @@ impl Operator for TopN {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            // TopN bounds its output like Limit does.
+            max_cardinality: cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),

@@ -158,8 +158,17 @@ impl UnionAll {
             .filter_map(Result::transpose)
             .collect::<Result<ColumnStatSet>>()?;
 
+        // Both branches reach the output, so their bounds add up.
+        let max_cardinality = left_stat_info
+            .max_cardinality
+            .max(left_stat_info.cardinality)
+            + right_stat_info
+                .max_cardinality
+                .max(right_stat_info.cardinality);
+
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,

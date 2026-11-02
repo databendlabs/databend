@@ -98,6 +98,7 @@ impl Operator for MutationSource {
     fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: 0.0,
+            max_cardinality: 0.0,
             statistics: OpStatistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),
