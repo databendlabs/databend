@@ -2224,7 +2224,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let revoke = map(
         rule! {
-            REVOKE ~ #grant_source ~ FROM ~ #grant_option
+            REVOKE ~ #revoke_source ~ FROM ~ #grant_option
         },
         |(_, source, _, grant_option)| {
             Statement::Revoke(RevokeStmt {
@@ -4227,13 +4227,10 @@ pub fn role_name(i: Input) -> IResult<String> {
 
 pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
     let materialized_view_select = map(
-        rule! { SELECT ~ ON ~ MATERIALIZED ~ VIEW ~ #dot_separated_idents_1_to_2 },
-        |(_, _, _, _, (database, view))| AccountMgrSource::Privs {
+        rule! { SELECT ~ ON ~ MATERIALIZED ~ VIEW ~ #materialized_view_grant_level },
+        |(_, _, _, _, level)| AccountMgrSource::Privs {
             privileges: vec![UserPrivilegeType::Select],
-            level: AccountMgrLevel::MaterializedView(
-                database.map(|database| database.name),
-                view.name,
-            ),
+            level,
         },
     );
     let role = map(
@@ -4450,6 +4447,25 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )
     .parse(i)
+}
+
+fn materialized_view_grant_level(i: Input) -> IResult<AccountMgrLevel> {
+    map_res(grant_level, |level| match level {
+        AccountMgrLevel::Table(database, table) => {
+            Ok(AccountMgrLevel::MaterializedView(database, table))
+        }
+        _ => Err(nom::Err::Error(ErrorKind::other(
+            "expected a materialized view name, not a wildcard or another object type",
+        ))),
+    })(i)
+}
+
+fn revoke_source(i: Input) -> IResult<AccountMgrSource> {
+    let materialized_view_all = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ MATERIALIZED ~ VIEW ~ #materialized_view_grant_level },
+        |(_, _, _, _, _, level)| AccountMgrSource::ALL { level },
+    );
+    rule!(#materialized_view_all | #grant_source).parse(i)
 }
 
 pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {

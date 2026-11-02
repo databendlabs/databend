@@ -345,7 +345,9 @@ async fn show_account_grants(
     name: &str,
 ) -> Result<Option<DataBlock>> {
     let tenant = ctx.get_tenant();
-    let expand_roles = ctx.get_settings().get_enable_expand_roles()?;
+    let settings = ctx.get_settings();
+    let expand_roles = settings.get_enable_expand_roles()?;
+    let ident_quote = settings.get_sql_dialect()?.default_ident_quote();
     let current_user = ctx.get_current_user()?;
     let has_grant_priv = ctx
         .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
@@ -856,8 +858,8 @@ async fn show_account_grants(
                         format!(
                             "GRANT {} ON MATERIALIZED VIEW {}.{} TO {}",
                             privilege_str,
-                            QuotedIdent(db_name, '"'),
-                            QuotedIdent(table_name, '"'),
+                            QuotedIdent(db_name, ident_quote),
+                            QuotedIdent(table_name, ident_quote),
                             identity
                         )
                     } else {

@@ -6,10 +6,16 @@ Bare GRANT rejects an MV: OK
 Bare REVOKE rejects an MV: OK
 MV GRANT rejects a base table: OK
 MV REVOKE rejects a regular view: OK
+MV syntax rejects unsupported privileges and wildcards: OK
 LiveFallback reads need only MV SELECT: OK
 MV SELECT does not authorize source SELECT: OK
 MV SELECT makes the MV visible: OK
-SHOW GRANTS emits executable MV syntax: OK
+SHOW GRANTS round-trips in PostgreSQL: OK
+REVOKE ALL denies MV SELECT in PostgreSQL: OK
+SHOW GRANTS round-trips in MySQL: OK
+REVOKE ALL denies MV SELECT in MySQL: OK
+SHOW GRANTS round-trips in Hive: OK
+REVOKE ALL denies MV SELECT in Hive: OK
 REFRESH still requires source SELECT: OK
 SHOW CREATE still requires source SELECT: OK
 CREATE INDEX still requires source SELECT: OK
