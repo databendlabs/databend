@@ -129,3 +129,43 @@ password = "databend123"
         "meta.password should be databend123"
     );
 }
+
+/// The disk pool ratios share their field names with the memory pool ratios under `[cache]`:
+/// each is read from its own flag and its own TOML table.
+#[test]
+fn test_disk_pool_ratios_are_separate_from_memory_pool_ratios() {
+    let config = Config::parse_from([
+        "databend-query",
+        "--cache-meta-max-ratio",
+        "7",
+        "--cache-disk-meta-max-ratio",
+        "3",
+        "--cache-disk-index-max-ratio",
+        "0",
+        "--cache-disk-data-max-ratio",
+        "5",
+    ]);
+    assert_eq!(config.cache.meta_max_ratio, 7);
+    assert_eq!(
+        (
+            config.cache.disk_cache_config.meta_max_ratio,
+            config.cache.disk_cache_config.index_max_ratio,
+            config.cache.disk_cache_config.data_max_ratio,
+        ),
+        (3, 0, 5)
+    );
+
+    let conf = r#"
+[cache]
+meta_max_ratio = 9
+
+[cache.disk]
+meta_max_ratio = 1
+data_max_ratio = 2
+"#;
+    let from_file: Config = toml::from_str(conf).unwrap();
+    assert_eq!(from_file.cache.meta_max_ratio, 9);
+    let disk = &from_file.cache.disk_cache_config;
+    // Unset ratios keep their defaults.
+    assert_eq!((disk.meta_max_ratio, disk.index_max_ratio, disk.data_max_ratio), (1, 20, 2));
+}

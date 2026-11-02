@@ -3735,6 +3735,7 @@ pub struct DiskCacheConfig {
     /// split `max_bytes` in proportion to their sum, which need not be 100; 0 turns a pool off.
     #[clap(
         long = "cache-disk-meta-max-ratio",
+        id = "cache_disk_meta_max_ratio",
         value_name = "VALUE",
         default_value = "10"
     )]
@@ -3743,6 +3744,7 @@ pub struct DiskCacheConfig {
     /// Share of `max_bytes` for bloom, vector, inverted and spatial index data.
     #[clap(
         long = "cache-disk-index-max-ratio",
+        id = "cache_disk_index_max_ratio",
         value_name = "VALUE",
         default_value = "20"
     )]
@@ -3751,6 +3753,7 @@ pub struct DiskCacheConfig {
     /// Share of `max_bytes` for column data.
     #[clap(
         long = "cache-disk-data-max-ratio",
+        id = "cache_disk_data_max_ratio",
         value_name = "VALUE",
         default_value = "70"
     )]
