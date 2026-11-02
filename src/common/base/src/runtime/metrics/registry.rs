@@ -33,6 +33,7 @@ use crate::runtime::metrics::family::FamilyCounterCreator as InnerFamilyCounterC
 use crate::runtime::metrics::family::FamilyGaugeCreator as InnerFamilyGaugeCreator;
 use crate::runtime::metrics::family::FamilyHistogramCreator as InnerFamilyHistogramCreator;
 use crate::runtime::metrics::family::FamilyLabels;
+use crate::runtime::metrics::family::FamilyMember;
 use crate::runtime::metrics::family_metrics::FamilyCounter as InnerFamilyCounter;
 use crate::runtime::metrics::family_metrics::FamilyGauge as InnerFamilyGauge;
 use crate::runtime::metrics::family_metrics::FamilyHistogram as InnerFamilyHistogram;
@@ -324,6 +325,8 @@ where T: FamilyLabels {
 
 pub type FamilyGauge<T> = Family<T, InnerFamilyGauge<T>>;
 pub type FamilyCounter<T> = Family<T, InnerFamilyCounter<T>>;
+/// One label set of a `FamilyCounter`, looked up once; see `Family::member`.
+pub type FamilyCounterMember<T> = FamilyMember<T, InnerFamilyCounter<T>>;
 pub type FamilyHistogram<T> = Family<T, InnerFamilyHistogram<T>>;
 
 struct CounterCreator;

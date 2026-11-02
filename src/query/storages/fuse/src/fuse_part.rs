@@ -29,6 +29,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_storages_common_cache::size::btree_map;
+use databend_storages_common_cache::size::column_statistics;
+use databend_storages_common_cache::size::hash_map;
+use databend_storages_common_cache::size::location;
+use databend_storages_common_cache::size::none;
+use databend_storages_common_cache::size::option;
+use databend_storages_common_cache::size::scalar;
+use databend_storages_common_cache::size::vec;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -74,6 +82,34 @@ impl PartInfo for FuseBlockPartInfo {
     fn part_type(&self) -> PartInfoType {
         PartInfoType::BlockLevel
     }
+
+    /// Column metas own no heap memory, as in `BlockMeta`'s estimate.
+    fn mem_bytes(&self) -> usize {
+        size_of::<Self>()
+            + self.location.capacity()
+            + option(&self.bloom_filter_index_location, location)
+            + hash_map(&self.columns_meta, |_, _| 0)
+            + option(&self.columns_stat, |stats| {
+                hash_map(stats, |_, s| column_statistics(s))
+            })
+            + option(&self.sort_min_max, |(min, max)| scalar(min) + scalar(max))
+            + option(&self.block_meta_index, block_meta_index)
+    }
+}
+
+fn block_meta_index(b: &BlockMetaIndex) -> usize {
+    b.block_location.capacity()
+        + b.segment_location.capacity()
+        + option(&b.snapshot_location, |s| s.capacity())
+        + option(&b.matched_rows, |v| vec(v, none))
+        + option(&b.matched_scores, |v| vec(v, none))
+        + option(&b.vector_scores, |v| vec(v, none))
+        + option(&b.virtual_block_meta, |v| {
+            v.virtual_block_location.capacity()
+                + btree_map(&v.fields, |_, _| 0)
+                + vec(&v.read_slots, none)
+                + hash_map(&v.virtual_column_stats, |_, s| column_statistics(s))
+        })
 }
 
 impl FuseBlockPartInfo {
@@ -153,6 +189,10 @@ impl PartInfo for FuseLazyPartInfo {
     fn part_type(&self) -> PartInfoType {
         PartInfoType::LazyLevel
     }
+
+    fn mem_bytes(&self) -> usize {
+        size_of::<Self>() + location(&self.segment_location)
+    }
 }
 
 impl FuseLazyPartInfo {
@@ -169,5 +209,91 @@ impl FuseLazyPartInfo {
             .ok_or_else(|| {
                 ErrorCode::Internal("Cannot downcast from PartInfo to FuseLazyPartInfo.")
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::plan::PartStatistics;
+    use databend_common_catalog::plan::Partitions;
+    use databend_common_catalog::plan::PartitionsShuffleKind;
+    use databend_storages_common_cache::CacheKind;
+    use databend_storages_common_cache::CachedItem;
+    use databend_storages_common_cache::MemCache;
+    use databend_storages_common_cache::PoolCaps;
+    use databend_storages_common_cache::backend::KindStore;
+    use databend_storages_common_cache::kinds::table;
+    use databend_storages_common_cache::shared::SharedStore;
+    use databend_storages_common_table_meta::meta::SingleColumnMeta;
+
+    use super::*;
+
+    fn part(columns: u32) -> PartInfoPtr {
+        let meta = SingleColumnMeta {
+            offset: 0,
+            len: 0,
+            num_values: 0,
+        };
+        let stat = || {
+            let (min, max) = ("a".repeat(100), "b".repeat(100));
+            ColumnStatistics::new(Scalar::String(min), Scalar::String(max), 0, 0, None)
+        };
+        FuseBlockPartInfo::create(
+            "1/2/_b/block.parquet".to_string(),
+            None,
+            0,
+            0,
+            (0..columns)
+                .map(|id| (id, ColumnMeta::Parquet(meta.clone())))
+                .collect(),
+            Some((0..columns).map(|id| (id, stat())).collect()),
+            Compression::Lz4Raw,
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Columns make most of a part: their metas and statistics, with the strings of the
+    /// statistics, are counted.
+    #[test]
+    fn test_part_mem_bytes_counts_columns() {
+        let per_column =
+            size_of::<(ColumnId, ColumnMeta)>() + size_of::<(ColumnId, ColumnStatistics)>() + 200;
+        let (one, many) = (part(1).mem_bytes(), part(101).mem_bytes());
+        assert!(many - one >= 100 * per_column, "{one} {many}");
+        assert!(many - one <= 300 * per_column, "{one} {many}");
+    }
+
+    #[test]
+    fn test_nonempty_prune_result_is_charged_until_last_reader() {
+        let parts = (0..4).map(|_| part(101)).collect::<Vec<_>>();
+        let part_bytes: usize = parts.iter().map(|p| p.mem_bytes()).sum();
+        let value = (
+            PartStatistics::default(),
+            Partitions::create(PartitionsShuffleKind::Seq, parts),
+        );
+        let bytes = value.mem_bytes();
+        assert!(bytes >= part_bytes);
+        assert_eq!(value.legacy_bytes(), 0);
+        let store = Arc::new(SharedStore::new(
+            PoolCaps {
+                meta: bytes * 4,
+                index: 0,
+                data: 0,
+            },
+            [],
+            1,
+        ));
+        let kind = CacheKind::of::<table::PruneResult>();
+        let cache = MemCache::new(store.clone(), kind);
+        let held = cache.put("prune", value);
+        assert!(held.is_charged());
+        assert_eq!(store.kind_stats(kind).resident, bytes);
+        assert!(cache.evict("prune"));
+        let stats = store.kind_stats(kind);
+        assert_eq!((stats.in_cache, stats.resident), (0, bytes));
+        drop(held);
+        assert_eq!(store.kind_stats(kind).resident, 0);
     }
 }
