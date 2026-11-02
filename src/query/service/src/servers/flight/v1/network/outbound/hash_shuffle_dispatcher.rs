@@ -124,10 +124,6 @@ impl HashShuffleDispatcher {
                             ProfileStatisticsName::ExchangeRows,
                             block.num_rows(),
                         );
-                        Profile::record_usize_profile(
-                            ProfileStatisticsName::ExchangeBytes,
-                            block.memory_size(),
-                        );
                         items.push(encode_block_for_thread(
                             thread,
                             block,

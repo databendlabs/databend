@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use arrow_flight::FlightData;
 use arrow_schema::Schema as ArrowSchema;
 use async_channel::Receiver;
 use async_channel::Sender;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -70,6 +73,9 @@ fn close_queue(receiver: &Receiver<QueueItem>) {
 pub struct RemoteQueueItem {
     pub data: FlightData,
     owned_semaphore_permit: OwnedSemaphorePermit,
+    /// Time the router waited for the quota. The router runs outside any
+    /// processor, so the receiving processor records it.
+    quota_wait: Duration,
 }
 
 pub enum QueueItem {
@@ -78,15 +84,26 @@ pub enum QueueItem {
 }
 
 impl RemoteQueueItem {
-    pub fn new(data: FlightData, owned_semaphore_permit: OwnedSemaphorePermit) -> Self {
+    pub fn new(
+        data: FlightData,
+        owned_semaphore_permit: OwnedSemaphorePermit,
+        quota_wait: Duration,
+    ) -> Self {
         Self {
             data,
             owned_semaphore_permit,
+            quota_wait,
         }
     }
 
     pub fn into_data(self) -> FlightData {
         drop(self.owned_semaphore_permit);
+        if !self.quota_wait.is_zero() {
+            Profile::record_usize_profile(
+                ProfileStatisticsName::ExchangeReceiveQueueWaitTime,
+                self.quota_wait.as_nanos() as usize,
+            );
+        }
         self.data
     }
 }

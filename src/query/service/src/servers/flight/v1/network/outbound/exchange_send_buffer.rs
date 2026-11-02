@@ -14,9 +14,14 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::OnceLock;
+use std::time::Duration;
+use std::time::Instant;
 
 use arrow_flight::FlightData;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use parking_lot::Mutex;
@@ -124,6 +129,8 @@ struct RemoteInstanceState {
     in_flight: VecDeque<Vec<OwnedSemaphorePermit>>,
     /// Quota held by `in_flight`.
     in_flight_bytes: usize,
+    /// Since when queued data waits for room in flight.
+    held_back_since: Option<Instant>,
     /// First terminal error; checked under the same lock before every enqueue.
     last_error: Option<ErrorCode>,
 }
@@ -136,6 +143,7 @@ impl RemoteInstanceState {
         &mut self,
         max_batch_bytes: usize,
         max_in_flight_bytes: usize,
+        profile: &SendProfile,
     ) -> Option<FlightData> {
         let max_batch_bytes = match self.in_flight.is_empty() {
             true => max_batch_bytes,
@@ -143,6 +151,7 @@ impl RemoteInstanceState {
                 let available = max_in_flight_bytes.saturating_sub(self.in_flight_bytes);
                 let front = flight_data_size(&self.pending.items.front()?.data);
                 if front > available {
+                    self.held_back_since.get_or_insert_with(Instant::now);
                     return None;
                 }
                 max_batch_bytes.min(available)
@@ -150,9 +159,19 @@ impl RemoteInstanceState {
         };
 
         let (flight, permits) = self.pending.pop_batch(max_batch_bytes)?;
+        if let Some(since) = self.held_back_since.take() {
+            profile.record_held_back(since.elapsed());
+        }
         self.in_flight_bytes += permits.iter().map(|p| p.num_permits()).sum::<usize>();
         self.in_flight.push_back(permits);
         Some(flight)
+    }
+
+    /// Queued data waits for a slot in flight.
+    fn hold_back(&mut self) {
+        if !self.pending.items.is_empty() {
+            self.held_back_since.get_or_insert_with(Instant::now);
+        }
     }
 
     /// Release the quota of the oldest frame in flight, answered by a response.
@@ -170,6 +189,7 @@ impl RemoteInstanceState {
         self.pending.items.clear();
         self.in_flight.clear();
         self.in_flight_bytes = 0;
+        self.held_back_since = None;
     }
 }
 
@@ -188,8 +208,35 @@ impl RemoteInstance {
                 pending: PendingSendQueue::default(),
                 in_flight: VecDeque::new(),
                 in_flight_bytes: 0,
+                held_back_since: None,
                 last_error: None,
             }),
+        }
+    }
+}
+
+/// Profile of the processors sending through the buffer. Frames are also sent by
+/// network callbacks, outside any processor, so the time data is held back goes
+/// to the profile captured by the first enqueue. Time recorded after the node's
+/// profile was last collected, while the buffer drains, is not reported.
+#[derive(Default)]
+struct SendProfile(OnceLock<Arc<Profile>>);
+
+impl SendProfile {
+    fn capture(&self) {
+        if self.0.get().is_none()
+            && let Some(profile) = Profile::current()
+        {
+            let _ = self.0.set(profile);
+        }
+    }
+
+    fn record_held_back(&self, time: Duration) {
+        if let Some(profile) = self.0.get() {
+            profile.record_usize(
+                ProfileStatisticsName::ExchangeHeldBackTime,
+                time.as_nanos() as usize,
+            );
         }
     }
 }
@@ -199,6 +246,7 @@ struct ExchangeSendBufferState {
     config: ExchangeSendBufferConfig,
     /// Quota one destination may have in flight: its share of frames in flight.
     max_in_flight_bytes: usize,
+    profile: SendProfile,
 
     /// Pre-allocated remote instances, indexed by destination index
     remotes: Vec<RemoteInstance>,
@@ -232,14 +280,16 @@ impl ExchangeSendBufferState {
 
         loop {
             if !holds_slot && !remote.exchange.try_acquire_send_slot() {
-                return;
+                return remote.state.lock().hold_back();
             }
             holds_slot = false;
 
             let mut state = remote.state.lock();
-            let Some(flight) =
-                state.next_frame(self.config.max_batch_bytes, self.max_in_flight_bytes)
-            else {
+            let Some(flight) = state.next_frame(
+                self.config.max_batch_bytes,
+                self.max_in_flight_bytes,
+                &self.profile,
+            ) else {
                 return remote.exchange.release_send_slot();
             };
 
@@ -347,6 +397,7 @@ impl ExchangeSendBuffer {
         let shared_state = Arc::new(ExchangeSendBufferState {
             config,
             max_in_flight_bytes,
+            profile: SendProfile::default(),
             remotes,
         });
         for (dest_idx, remote) in shared_state.remotes.iter().enumerate() {
@@ -379,19 +430,30 @@ impl ExchangeSendBuffer {
             return Err(error);
         }
 
+        // Called by the sending processors, unlike the network callbacks.
+        self.state.profile.capture();
         for data in items {
-            let permits = flight_data_size(&data).min(self.max_permits) as u32;
+            let size = flight_data_size(&data);
+            Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, size);
+            let permits = size.min(self.max_permits) as u32;
 
             let permit = match self.semaphore.clone().try_acquire_many_owned(permits) {
                 Ok(permit) => permit,
                 Err(_) => {
                     // Queue is full: send what is queued before waiting for quota.
                     self.try_flush(dest_idx);
-                    self.semaphore
+                    let start = Instant::now();
+                    let permit = self
+                        .semaphore
                         .clone()
                         .acquire_many_owned(permits)
                         .await
-                        .expect("exchange send quota is never closed")
+                        .expect("exchange send quota is never closed");
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ExchangeSendQueueWaitTime,
+                        start.elapsed().as_nanos() as usize,
+                    );
+                    permit
                 }
             };
 
@@ -438,6 +500,7 @@ mod tests {
     use bytes::Bytes;
     use bytes::BytesMut;
     use databend_common_base::runtime::Runtime;
+    use databend_common_base::runtime::ThreadTracker;
     use databend_common_base::runtime::spawn;
     use tonic::Status;
 
@@ -1310,5 +1373,60 @@ mod tests {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(buffer.semaphore.available_permits(), buffer.max_permits);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_profile_records_bytes_and_time_held_back() {
+        let profile = Arc::new(Profile::create(
+            0,
+            "HashSendSink".to_string(),
+            Some(0),
+            None,
+            None,
+            Arc::new(String::new()),
+            Arc::new(vec![]),
+            None,
+        ));
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.profile = Some(profile.clone());
+        let _guard = ThreadTracker::tracking(payload);
+
+        let rt = test_runtime();
+        let (exchange, send_rx, pong_tx) = create_mock_exchange_with_slots(1, MAX_FRAMES_IN_FLIGHT);
+        let buffer =
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
+                .unwrap();
+
+        // Every slot carries a frame, and two items wait behind them.
+        for len in 1..=MAX_FRAMES_IN_FLIGHT + 2 {
+            buffer
+                .enqueue_items(0, vec![make_flight_data(len)])
+                .await
+                .unwrap();
+        }
+        for _ in 0..MAX_FRAMES_IN_FLIGHT {
+            send_rx.recv().await.unwrap();
+        }
+        let wait = Duration::from_millis(20);
+        tokio::time::sleep(wait).await;
+
+        // The first response sends both waiting items in one frame; the network
+        // callback records into the profile of the processor that enqueued them.
+        for _ in 0..MAX_FRAMES_IN_FLIGHT + 1 {
+            pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        }
+        tokio::time::timeout(Duration::from_secs(2), send_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let load = |name| profile.load_profile(name);
+        assert_eq!(
+            load(ProfileStatisticsName::ExchangeBytes),
+            (1..=MAX_FRAMES_IN_FLIGHT + 2).sum::<usize>()
+        );
+        assert_eq!(load(ProfileStatisticsName::ExchangeSendQueueWaitTime), 0);
+        assert!(load(ProfileStatisticsName::ExchangeHeldBackTime) >= wait.as_nanos() as usize);
     }
 }

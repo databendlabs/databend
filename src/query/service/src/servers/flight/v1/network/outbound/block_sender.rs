@@ -127,7 +127,6 @@ impl BlockSender for RemoteBlockSender {
 
     async fn send_block(&self, block: DataBlock) -> Result<()> {
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
-        Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
         let items = serialize_block_for_thread(block, self.thread_id, &self.ipc_options)?;
         self.buffer.enqueue_items(self.dest_idx, items).await
     }
