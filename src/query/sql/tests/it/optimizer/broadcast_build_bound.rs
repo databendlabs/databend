@@ -209,7 +209,13 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
         },
         StatsCase {
             name: "aggregate_over_join",
-            description: "An aggregate resets the bound to its own estimate.",
+            description: "An aggregate whose group keys have statistics resets the bound to its own estimate.",
+            sql: "SELECT a.k, count(*) FROM a JOIN d ON a.k = d.k GROUP BY a.k",
+            operator: RelOp::Aggregate,
+        },
+        StatsCase {
+            name: "aggregate_without_group_statistics",
+            description: "An aggregate whose group keys have no statistics keeps its input bound.",
             sql: "SELECT a.k, count(*) FROM a JOIN b ON a.k = b.k GROUP BY a.k",
             operator: RelOp::Aggregate,
         },
