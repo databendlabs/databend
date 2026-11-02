@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::mem::MaybeUninit;
+use std::alloc::Layout;
+use std::alloc::alloc;
+use std::alloc::dealloc;
+use std::alloc::handle_alloc_error;
+use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use log::info;
-use strength_reduce::StrengthReducedU64;
 
 use super::AggrState;
 use super::BATCH_SIZE;
@@ -29,13 +32,16 @@ use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
+use super::group_hash_route_index;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
 use super::probe_state::SelectVector;
+use super::row_ptr::RowIdCodec;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowMut;
 use super::row_ptr::RowPtr;
+use super::row_ptr::StatesRegion;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -44,11 +50,15 @@ use crate::ProjectedBlock;
 use crate::types::DataType;
 
 // payload layout
-// [VALIDITY][GROUPS][HASH][STATE_ADDRS]
+// A page holds its rows, then the aggregate states of its rows in the same order; see
+// `StatesRegion`. A row is
+// [VALIDITY][GROUPS][HASH]
 // [VALIDITY] is the validity bits of the data columns (including the HASH)
 // [GROUPS] is the group data, could be multiple values, fixed size, strings are elsewhere
 // [HASH] is the hash data of the groups
-// [STATE_ADDRS] is the state_addrs of the aggregate functions, 8 bytes each
+//
+// The states of a row are found from its address, so moving rows between payloads moves their
+// states bitwise: a state must never keep a pointer to itself.
 pub struct Payload {
     pub(super) arena: Arc<Bump>,
     pub(super) group_types: Vec<DataType>,
@@ -57,7 +67,8 @@ pub struct Payload {
 
     pub(super) pages: Vec<Page>,
     pub(super) tuple_size: usize,
-    row_per_page: usize,
+    pub(super) row_per_page: usize,
+    page_bytes: usize,
 
     total_rows: usize,
 
@@ -157,12 +168,61 @@ unsafe impl Sync for Payload {}
 pub(super) struct Page {
     // RowRef values into this buffer may be stored in hash indexes and flush
     // state. A page must not reallocate after such row refs are published.
-    data: Vec<MaybeUninit<u8>>,
+    data: PageData,
     pub(super) rows: usize,
     // state_offset = state_rows * agg_len
     // which mark that the offset to clean the agg states
     state_offsets: usize,
     capacity: usize,
+}
+
+/// The bytes of a page, aligned to `StatesRegion::page_align`.
+struct PageData {
+    ptr: NonNull<u8>,
+    layout: Layout,
+    len: usize,
+}
+
+impl PageData {
+    fn with_capacity(capacity: usize, align: usize) -> Self {
+        let layout = Layout::from_size_align(capacity, align).expect("invalid page layout");
+        let ptr = match layout.size() {
+            0 => NonNull::new(align as *mut u8).expect("alignment is never zero"),
+            _ => {
+                NonNull::new(unsafe { alloc(layout) }).unwrap_or_else(|| handle_alloc_error(layout))
+            }
+        };
+        PageData {
+            ptr,
+            layout,
+            len: 0,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    unsafe fn set_len(&mut self, len: usize) {
+        debug_assert!(len <= self.layout.size());
+        self.len = len;
+    }
+
+    fn as_ptr(&self) -> *const u8 {
+        self.ptr.as_ptr()
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.ptr.as_ptr()
+    }
+}
+
+impl Drop for PageData {
+    fn drop(&mut self) {
+        if self.layout.size() != 0 {
+            unsafe { dealloc(self.ptr.as_ptr(), self.layout) };
+        }
+    }
 }
 
 impl Page {
@@ -173,7 +233,7 @@ impl Page {
     pub(super) fn row_ptr(&self, row: usize, row_size: usize) -> RowPtr {
         debug_assert!(row < self.rows);
         debug_assert_eq!(self.data.len(), self.rows * row_size);
-        RowPtr::new(unsafe { self.data.as_ptr().add(row * row_size) as *const u8 })
+        RowPtr::new(unsafe { self.data.as_ptr().add(row * row_size) })
     }
 
     fn reserve_row(&mut self, row_size: usize) -> RowMut {
@@ -183,7 +243,7 @@ impl Page {
             self.data.set_len(row_offset + row_size);
         }
         self.rows += 1;
-        let ptr = unsafe { self.data.as_mut_ptr().add(row_offset) as *mut u8 };
+        let ptr = unsafe { self.data.as_mut_ptr().add(row_offset) };
         RowMut::new(ptr)
     }
 }
@@ -219,12 +279,24 @@ impl Payload {
         let hash_offset = tuple_size;
         tuple_size += size_of::<u64>();
 
-        let state_offset = tuple_size;
-        if !aggrs.is_empty() {
-            tuple_size += size_of::<StateAddr>();
-        }
-
-        let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
+        let (state_size, state_align) = match &states_layout {
+            Some(states_layout) if !aggrs.is_empty() => (
+                states_layout.layout.pad_to_align().size(),
+                states_layout.layout.align(),
+            ),
+            _ => (0, 1),
+        };
+        let row_per_page = (u16::MAX as usize)
+            .min(MAX_PAGE_SIZE.saturating_sub(state_align) / (tuple_size + state_size))
+            .max(1);
+        let states_offset = (row_per_page * tuple_size).next_multiple_of(state_align);
+        let page_bytes = states_offset + row_per_page * state_size;
+        let states = StatesRegion::new(
+            page_bytes.next_power_of_two(),
+            tuple_size,
+            states_offset,
+            state_size,
+        );
 
         Self {
             arena,
@@ -234,11 +306,12 @@ impl Payload {
             aggrs,
             tuple_size,
             row_per_page,
+            page_bytes,
             min_cardinality: None,
             total_rows: 0,
             row_layout: RowLayout {
                 hash_offset,
-                state_offset,
+                states,
                 validity_offsets,
                 group_offsets,
                 group_sizes,
@@ -254,7 +327,7 @@ impl Payload {
 
     #[inline]
     pub fn memory_size(&self) -> usize {
-        self.total_rows * self.tuple_size
+        self.total_rows * (self.tuple_size + self.row_layout.states.size)
     }
 
     pub fn merge_result(&self, flush_state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
@@ -289,7 +362,7 @@ impl Payload {
         state_offsets: PayloadTransferStateOffsets,
         payloads: &mut [Payload],
     ) {
-        // Rows are shallow-copied and still point at the same aggregate states.
+        // Rows are copied with their aggregate states, so the states move to the targets.
         // The source must give up state-drop ownership before target offsets
         // make those states visible to target payload drops.
         self.row_layout.states_layout = None;
@@ -305,7 +378,10 @@ impl Payload {
             self.current_write_page += 1;
             if self.current_write_page > self.pages.len() {
                 self.pages.push(Page {
-                    data: Vec::with_capacity(self.row_per_page * self.tuple_size),
+                    data: PageData::with_capacity(
+                        self.page_bytes,
+                        self.row_layout.states.page_align(),
+                    ),
                     rows: 0,
                     state_offsets: 0,
                     capacity: self.row_per_page,
@@ -326,8 +402,10 @@ impl Payload {
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
+        row_ids: (&mut [u64; BATCH_SIZE], RowIdCodec, usize),
         group_columns: ProjectedBlock,
     ) {
+        let (row_ids, codec, partition) = row_ids;
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
         let address = unsafe {
@@ -341,6 +419,7 @@ impl Payload {
             let row_mut = page.reserve_row(tuple_size);
             address[*row] = row_mut;
             page_index[*row] = page_index_value;
+            row_ids[*row] = codec.encode(partition, page_index_value, page.rows - 1);
 
             if page.rows == page.capacity {
                 (page, page_index_value) = self.writable_page();
@@ -439,29 +518,16 @@ impl Payload {
             address[*row].set_hash(&self.row_layout, group_hashes[*row]);
         }
 
-        debug_assert!(write_offset + 8 == self.row_layout.state_offset);
-        let states = self.row_layout.states_layout.as_ref().map(|states_layout| {
-            (
-                states_layout.layout.repeat(select_vector.len()).unwrap(),
-                states_layout.states_loc.clone(),
-                self.aggrs.clone(),
-            )
-        });
-
-        if let Some(((array_layout, padded_size), states_loc, aggrs)) = states {
-            // write states
-            // Bump only allocates but does not drop, so there is no use after free for any item.
-            let place = self.arena.alloc_layout(array_layout);
-            for (row, place) in select_vector
-                .iter()
-                .copied()
-                .enumerate()
-                .map(|(i, row)| (row, unsafe { place.add(padded_size * i) }))
-            {
-                let place = StateAddr::from(place);
-                address[row].set_state_addr(&self.row_layout, &place);
-                let page = &mut self.pages[page_index[row]];
-                for (aggr, loc) in aggrs.iter().zip(states_loc.iter()) {
+        if let Some(states_layout) = self.row_layout.states_layout.as_ref() {
+            // write states, in the states region of the page
+            for row in select_vector {
+                let place = StateAddr::from(
+                    self.row_layout
+                        .states
+                        .ptr(address[*row].as_mut_ptr().cast_const()),
+                );
+                let page = &mut self.pages[page_index[*row]];
+                for (aggr, loc) in self.aggrs.iter().zip(states_layout.states_loc.iter()) {
                     aggr.init_state(AggrState::new(place, loc));
                     page.state_offsets += 1;
                 }
@@ -493,6 +559,46 @@ impl Payload {
         self.pages.append(other.pages.as_mut());
     }
 
+    /// Move the pages into payloads of at most `max_rows` rows and `max_bytes` bytes each,
+    /// without copying rows; a page over a limit makes a payload of its own. The payloads share
+    /// the arena of the states, which is freed with the last of them.
+    pub fn split_pages(mut self, max_rows: usize, max_bytes: usize) -> Vec<Payload> {
+        if self.total_rows <= max_rows && self.memory_size() <= max_bytes {
+            return vec![self];
+        }
+
+        let mut payloads = vec![];
+        let mut current = self.empty_like();
+        for page in std::mem::take(&mut self.pages) {
+            if page.rows == 0 {
+                continue;
+            }
+            let rows = current.total_rows + page.rows;
+            let row_bytes = self.tuple_size + self.row_layout.states.size;
+            if current.total_rows != 0 && (rows > max_rows || rows * row_bytes > max_bytes) {
+                payloads.push(std::mem::replace(&mut current, self.empty_like()));
+            }
+            current.total_rows += page.rows;
+            current.pages.push(page);
+            current.current_write_page = current.pages.len();
+        }
+        if current.total_rows != 0 {
+            payloads.push(current);
+        }
+        self.total_rows = 0;
+        self.current_write_page = 0;
+        payloads
+    }
+
+    fn empty_like(&self) -> Payload {
+        Payload::new(
+            self.arena.clone(),
+            self.group_types.clone(),
+            self.aggrs.clone(),
+            self.row_layout.states_layout.clone(),
+        )
+    }
+
     pub(super) fn mark_min_cardinality(&mut self) {
         if self.min_cardinality.is_none() {
             self.min_cardinality = Some(self.total_rows);
@@ -505,6 +611,7 @@ impl Payload {
         row_refs: &[RowPtr; BATCH_SIZE],
     ) -> Vec<(usize, usize)> {
         let tuple_size = self.tuple_size;
+        let states = self.row_layout.states;
         let agg_len = self.aggrs.len();
         let (mut page, mut page_index) = self.writable_page();
         let mut state_offsets = Vec::new();
@@ -513,11 +620,13 @@ impl Payload {
         for index in select_vector {
             let mut row_mut = page.reserve_row(tuple_size);
             unsafe {
+                let source = row_refs[*index].as_ptr();
+                std::ptr::copy_nonoverlapping(source, row_mut.as_mut_ptr(), tuple_size);
                 std::ptr::copy_nonoverlapping(
-                    row_refs[*index].as_ptr(),
-                    row_mut.as_mut_ptr(),
-                    tuple_size,
-                )
+                    states.ptr(source),
+                    states.ptr(row_mut.as_mut_ptr().cast_const()),
+                    states.size,
+                );
             }
             page_state_offset += agg_len;
 
@@ -568,12 +677,11 @@ impl Payload {
                 let state = &mut *flush_state.probe_state;
                 state.reset_partitions(partition_count);
 
-                let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
-
                 for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
                     *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
                     let hash = row_ptr.hash(&self.row_layout);
-                    let partition_idx = (hash % mods) as usize;
+                    let partition_idx =
+                        group_hash_route_index(hash, partition_count as u64) as usize;
 
                     let (count, sel) = &mut state.partition_entries[partition_idx];
                     sel[*count as usize] = idx.into();
@@ -586,6 +694,8 @@ impl Payload {
         }
     }
 
+    /// Split the rows into `buckets` payloads by `group_hash_route_index` of their group hash, the
+    /// routing of raw rows with the same group keys.
     pub fn scatter_into_buckets(mut self, buckets: usize) -> Vec<Payload> {
         if buckets == 0 {
             return vec![];

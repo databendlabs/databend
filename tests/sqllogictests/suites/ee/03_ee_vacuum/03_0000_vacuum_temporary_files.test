@@ -38,10 +38,18 @@ SET max_vacuum_temp_files_after_query = 1;
 statement ok
 SET force_aggregate_data_spill = 1;
 
+# The final aggregate buffers its spill up to half of max_block_bytes per bucket and writes files
+# only beyond it, so the query spills enough to leave several temporary files.
+statement ok
+SET max_block_bytes = 1048576;
+
 query ?
-SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) GROUP BY number::string ORDER BY 1 DESC);
+SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(2000000) GROUP BY number::string ORDER BY 1 DESC);
 ----
-100000
+2000000
+
+statement ok
+UNSET max_block_bytes;
 
 statement ok
 SET force_aggregate_data_spill = 0;
@@ -69,10 +77,16 @@ SET max_vacuum_temp_files_after_query = 0;
 statement ok
 SET force_aggregate_data_spill = 1;
 
+statement ok
+SET max_block_bytes = 1048576;
+
 query ?
-SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) GROUP BY number::string ORDER BY 1 DESC);
+SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(2000000) GROUP BY number::string ORDER BY 1 DESC);
 ----
-100000
+2000000
+
+statement ok
+UNSET max_block_bytes;
 
 statement ok
 SET force_aggregate_data_spill = 0;
@@ -125,10 +139,16 @@ SET max_vacuum_temp_files_after_query = 1000000;
 statement ok
 SET force_aggregate_data_spill = 1;
 
+statement ok
+SET max_block_bytes = 1048576;
+
 query ?
-SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) GROUP BY number::string ORDER BY 1 DESC);
+SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(2000000) GROUP BY number::string ORDER BY 1 DESC);
 ----
-100000
+2000000
+
+statement ok
+UNSET max_block_bytes;
 
 statement ok
 SET force_aggregate_data_spill = 0;

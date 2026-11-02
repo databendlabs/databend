@@ -30,8 +30,14 @@ use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DistinctSampler;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::PartialAddStats;
+use databend_common_expression::PartialAggregateMode;
+use databend_common_expression::PartialDecision;
+use databend_common_expression::PartialEnvironment;
+use databend_common_expression::PartialState;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
@@ -42,10 +48,12 @@ use databend_common_expression::StateSerdeItem;
 use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
+use databend_common_expression::group_hash_entries;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 
 const ROWS: usize = 4096;
@@ -680,6 +688,57 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
 }
 
 #[test]
+fn test_add_serialized_groups_matches_combine_and_drops_states() {
+    let fixture = TrackedHeapFixture::new();
+
+    {
+        let hashtable =
+            fixture.build_from_rows(0, HashTableConfig::default().with_initial_radix_bits(0));
+        let serialized = hashtable.payload.aggregate_flush_all().unwrap();
+        let rows = serialized.num_rows();
+        let states = ProjectedBlock::project(&[0], &serialized);
+        let groups = ProjectedBlock::project(&[1], &serialized);
+
+        let mut direct = fixture.empty_table(HashTableConfig::default());
+        let mut flush_state = PayloadFlushState::default();
+        direct
+            .add_serialized_groups(&mut flush_state, groups, states, rows)
+            .unwrap();
+        fixture.assert_result(&mut direct);
+
+        // Merged again into existing groups, like through a temporary table.
+        direct
+            .add_serialized_groups(&mut flush_state, groups, states, rows)
+            .unwrap();
+        let mut combined = fixture.empty_table(HashTableConfig::default());
+        for _ in 0..2 {
+            let partitioned = SerializedPayload {
+                bucket: 0,
+                data_block: serialized.clone(),
+                max_partition_count: 1,
+            }
+            .convert_to_partitioned_payload(
+                vec![Int64Type::data_type()],
+                fixture.aggrs(),
+                1,
+                0,
+                Arc::new(Bump::new()),
+            )
+            .unwrap();
+            combined
+                .combine_payloads(&partitioned, &mut PayloadFlushState::default())
+                .unwrap();
+        }
+        assert_block_value_sort_eq(
+            &fixture.merge_result_block(&mut direct),
+            &fixture.merge_result_block(&mut combined),
+        );
+    }
+
+    fixture.assert_all_states_dropped();
+}
+
+#[test]
 fn test_tracked_heap_accumulate_failure_drops_states() {
     let fixture = TrackedHeapFixture::new();
 
@@ -865,9 +924,177 @@ fn test_combined_payload_bucket_extraction_keeps_states_valid() {
     fixture.assert_all_states_dropped();
 }
 
+#[test]
+fn test_payload_split_pages_keeps_rows_and_states() -> Result<()> {
+    // Distinct keys in one partition, so the payload spans several pages.
+    const KEYS: usize = 40_000;
+    let fixture = TrackedHeapFixture::new();
+
+    {
+        let config = HashTableConfig::default().with_initial_radix_bits(0);
+        let mut source = fixture.empty_table(config.clone());
+        let group_columns: Vec<BlockEntry> =
+            vec![Int64Type::from_data((0..KEYS as i64).collect::<Vec<_>>()).into()];
+        let params = [vec![UInt64Type::from_data(vec![0_u64; KEYS]).into()]];
+        let params: Vec<ProjectedBlock> = params.iter().map(|v| v.into()).collect();
+        source.add_groups(
+            &mut ProbeState::default(),
+            (&group_columns).into(),
+            &params,
+            (&[]).into(),
+            KEYS,
+        )?;
+
+        let (_, payload) = source
+            .payload
+            .into_non_empty_bucket_payloads()
+            .next()
+            .unwrap();
+        let bytes = payload.memory_size();
+
+        // Within the limits: kept whole.
+        let mut whole = payload.split_pages(KEYS, bytes);
+        assert_eq!(whole.len(), 1);
+
+        // Byte limit: whole pages up to half of the payload.
+        let halves = whole.pop().unwrap().split_pages(usize::MAX, bytes / 2);
+        assert!(halves.len() >= 2);
+        assert!(halves.iter().all(|p| p.memory_size() <= bytes / 2));
+
+        // A page over the row limit makes a payload of its own.
+        let mut pieces = vec![];
+        for half in halves {
+            pieces.extend(half.split_pages(1, usize::MAX));
+        }
+        assert!(pieces.len() >= 2);
+        assert_eq!(pieces.iter().map(|p| p.len()).sum::<usize>(), KEYS);
+
+        // Merge some pieces and drop the others unmerged: the states of each must be dropped
+        // exactly once, although the pieces share one arena.
+        let unmerged = pieces.split_off(pieces.len() / 2);
+        let mut merged = fixture.empty_table(config);
+        let mut flush_state = PayloadFlushState::default();
+        for piece in &pieces {
+            merged.combine_payload(piece, &mut flush_state)?;
+        }
+        assert_eq!(merged.len(), pieces.iter().map(|p| p.len()).sum::<usize>());
+        drop(unmerged);
+        drop(pieces);
+        assert!(fixture.live_bytes() > 0);
+    }
+
+    fixture.assert_all_states_dropped();
+    Ok(())
+}
+
 /// `accepts_arity` is a pruning aid, so it must never reject an argument list
 /// that `matches_types` would accept. Both are derived from the same pattern,
 /// and this pins the two together for the shapes used by real functions.
+fn group_hashes(entry: BlockEntry) -> Vec<u64> {
+    let entries = vec![entry];
+    let mut hashes = vec![0; entries[0].len()];
+    group_hash_entries((&entries).into(), &mut hashes);
+    hashes
+}
+
+/// The distinct estimate of the partial aggregate is accurate for short string keys, whose
+/// group hashes are poorly mixed in their low bits.
+#[test]
+fn test_distinct_sampler_estimates_string_keys() {
+    for keys in [20_000, 50_000, 200_000] {
+        for (name, format) in [("n", "".to_string()), ("vn", "v".to_string())] {
+            let strings = (0..keys).map(|key| format!("{format}{key}"));
+            let hashes = group_hashes(StringType::from_data(strings.collect::<Vec<_>>()).into());
+            let mut sampler = DistinctSampler::default();
+            sampler.start(0);
+            sampler.observe(&hashes);
+            let estimate = sampler.distinct().unwrap() as f64;
+            let error = (estimate / keys as f64 - 1.0).abs();
+            assert!(error < 0.05, "{keys} keys '{name}': estimated {estimate}");
+        }
+    }
+}
+
+/// The grown index holds the estimated distinct groups even with an estimate a little low.
+#[test]
+fn test_partial_grows_with_margin_over_estimate() {
+    // Just under what an index of 65536 slots holds, so an estimate a little low would size it
+    // that small.
+    const KEYS: u64 = 48_000;
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
+    let sampler = partial.sampler().unwrap();
+    sampler.start(0);
+    sampler.observe(&group_hashes(
+        UInt64Type::from_data((0..KEYS).collect::<Vec<_>>()).into(),
+    ));
+    let stats = PartialAddStats {
+        rows: 256 * 1024,
+        new_groups: 256 * 1024,
+        windows: 10,
+    };
+    let env = PartialEnvironment {
+        headroom_bytes: None,
+        bytes_per_group: 64,
+        concurrency: 1,
+    };
+    let PartialDecision::Grow { capacity } = partial.observe(stats, &env) else {
+        panic!("expected to grow, got {partial:?}");
+    };
+    let keys = KEYS as usize;
+    assert!(capacity >= AggregateHashTable::capacity_for_groups(keys + keys / 20));
+}
+
+/// String keys in a cyclic order, more than a 65536-slot index holds: the partial aggregate
+/// grows to hold them all and absorbs every repeat afterwards.
+#[test]
+fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
+    const KEYS: usize = 50_000;
+    const BLOCK_ROWS: usize = 8192;
+    let mut table = AggregateHashTable::new(
+        vec![DataType::String],
+        vec![],
+        HashTableConfig::partial_aggregate(),
+        Arc::new(Bump::new()),
+    );
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
+    let mut probe = ProbeState::default();
+    let env = PartialEnvironment {
+        headroom_bytes: None,
+        bytes_per_group: 64,
+        concurrency: 1,
+    };
+    let (mut grown_rows, mut grown_new_groups) = (0, 0);
+    for start in (0..40 * KEYS).step_by(BLOCK_ROWS) {
+        let keys = (start..start + BLOCK_ROWS).map(|row| (row % KEYS).to_string());
+        let entries = vec![StringType::from_data(keys.collect::<Vec<_>>()).into()];
+        let grown = matches!(partial, PartialState::Grown { .. });
+        let capacity = partial.capacity();
+        let stats = table.add_groups_partial(
+            &mut probe,
+            (&entries).into(),
+            &[],
+            BLOCK_ROWS,
+            capacity,
+            partial.sampler(),
+        )?;
+        if grown {
+            grown_rows += stats.rows;
+            grown_new_groups += stats.new_groups;
+        }
+        if partial.observe(stats, &env) != PartialDecision::Continue {
+            table.take_partial_hot();
+        }
+    }
+
+    let PartialState::Grown { capacity } = partial else {
+        panic!("expected to grow, got {partial:?}");
+    };
+    assert!(capacity >= AggregateHashTable::capacity_for_groups(KEYS));
+    assert!(grown_rows > 30 * KEYS);
+    assert!(grown_new_groups <= KEYS, "{grown_new_groups} new groups");
+    Ok(())
+}
+
 #[test]
 fn test_argument_pattern_accepts_arity_agrees_with_matches_types() {
     let any = ArgumentPattern::any;

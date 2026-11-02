@@ -13,135 +13,278 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hint::likely;
+use std::intrinsics::prefetch_read_data;
 use std::mem::size_of;
+use std::simd::cmp::SimdPartialEq;
+use std::simd::u8x16;
 
 use crate::aggregate::HASH_INDEX_LOAD_FACTOR;
 use crate::aggregate::ProbeState;
-use crate::aggregate::hash_index::bitmask::Tag;
-use crate::aggregate::hash_index::group::Group;
 use crate::aggregate::hash_index_adapter::TableAdapter;
-use crate::aggregate::row_ptr::RowPtr;
 
-pub(in crate::aggregate) struct HashIndex {
-    ctrls: Vec<Tag>,
-    pointers: Vec<RowPtr>,
-    capacity: usize,
-    bucket_mask: usize,
-    count: usize,
+/// The id of a row as a hash index slot keeps it: 4 bytes while the ids of the table fit, 8 bytes
+/// otherwise, see `RowIdCodec`.
+pub(in crate::aggregate) trait RowId: Copy {
+    const ZERO: Self;
+
+    fn from_id(id: u64) -> Self;
+
+    fn id(self) -> u64;
+}
+
+impl RowId for u32 {
+    const ZERO: Self = 0;
+
+    #[inline]
+    fn from_id(id: u64) -> Self {
+        // A truncated id would name another row and mix two groups. The table switches to wide
+        // ids before this can happen, so this is a check that is never taken.
+        assert!(
+            id <= u32::MAX as u64,
+            "row id {id} does not fit a compact index"
+        );
+        id as u32
+    }
+
+    #[inline]
+    fn id(self) -> u64 {
+        self as u64
+    }
+}
+
+impl RowId for u64 {
+    const ZERO: Self = 0;
+
+    #[inline]
+    fn from_id(id: u64) -> Self {
+        id
+    }
+
+    #[inline]
+    fn id(self) -> u64 {
+        self
+    }
+}
+
+/// The hash index of an aggregate hash table. Its slots keep the ids of their rows, not their
+/// addresses: 4 bytes each, or 8 bytes once a table has more rows than 4-byte ids can name. The
+/// width is chosen when the index is built, see `AggregateHashTable::resize`. The slots are laid
+/// out in chunks, see `RowIdIndex`.
+pub(in crate::aggregate) enum HashIndex {
+    Compact(RowIdIndex<u32>),
+    Wide(RowIdIndex<u64>),
 }
 
 impl HashIndex {
     pub fn with_capacity(capacity: usize) -> Self {
-        debug_assert!(capacity.is_power_of_two());
-        // avoid handling: SMALL TABLE NASTY CORNER CASE
-        // This can happen for small (n < WIDTH) tables
-        debug_assert!(capacity >= Group::WIDTH);
-        let bucket_mask = capacity - 1;
-        let ctrls = vec![Tag::EMPTY; capacity + Group::WIDTH];
-        let pointers = vec![RowPtr::null(); capacity];
+        HashIndex::Compact(RowIdIndex::with_capacity(capacity))
+    }
+
+    pub fn wide_with_capacity(capacity: usize) -> Self {
+        HashIndex::Wide(RowIdIndex::with_capacity(capacity))
+    }
+
+    pub fn dummy() -> Self {
+        HashIndex::Compact(RowIdIndex::dummy())
+    }
+
+    #[cfg(test)]
+    pub fn is_wide(&self) -> bool {
+        matches!(self, HashIndex::Wide(_))
+    }
+
+    pub fn capacity(&self) -> usize {
+        match self {
+            HashIndex::Compact(index) => index.capacity,
+            HashIndex::Wide(index) => index.capacity,
+        }
+    }
+
+    pub fn count(&self) -> usize {
+        match self {
+            HashIndex::Compact(index) => index.count,
+            HashIndex::Wide(index) => index.count,
+        }
+    }
+
+    pub fn resize_threshold(&self) -> usize {
+        Self::threshold_for_capacity(self.capacity())
+    }
+
+    /// The slots of an index asked for at least `capacity` slots: whole chunks, a power of two.
+    pub fn slots_for(capacity: usize) -> usize {
+        capacity.div_ceil(CHUNK_SLOTS).next_power_of_two() * CHUNK_SLOTS
+    }
+
+    /// The number of groups an index of `capacity` slots holds before it grows.
+    pub fn threshold_for_capacity(capacity: usize) -> usize {
+        (capacity as f64 / HASH_INDEX_LOAD_FACTOR) as usize
+    }
+
+    pub fn allocated_bytes(&self) -> usize {
+        match self {
+            HashIndex::Compact(index) => index.allocated_bytes(),
+            HashIndex::Wide(index) => index.allocated_bytes(),
+        }
+    }
+
+    pub fn reset(&mut self) {
+        match self {
+            HashIndex::Compact(index) => index.reset(),
+            HashIndex::Wide(index) => index.reset(),
+        }
+    }
+
+    /// Set a free slot for a row known to be absent, while the index is rebuilt.
+    pub fn probe_slot_and_set(&mut self, hash: u64, row_id: u64) {
+        match self {
+            HashIndex::Compact(index) => index.probe_slot_and_set(hash, row_id),
+            HashIndex::Wide(index) => index.probe_slot_and_set(hash, row_id),
+        }
+    }
+
+    pub fn probe_and_create(
+        &mut self,
+        state: &mut ProbeState,
+        row_count: usize,
+        adapter: &mut dyn TableAdapter,
+    ) -> usize {
+        match self {
+            HashIndex::Compact(index) => index.probe_and_create(state, row_count, adapter),
+            HashIndex::Wide(index) => index.probe_and_create(state, row_count, adapter),
+        }
+    }
+}
+
+/// The tag of a slot: the top 7 bits of the hash of its group, or `EMPTY`.
+#[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(transparent)]
+struct Tag(u8);
+
+impl Tag {
+    const EMPTY: Tag = Tag(0xFF);
+    /// The lanes of a chunk past its slots: never a full tag (< 0x80) nor `EMPTY`.
+    const PAD: Tag = Tag(0xFE);
+
+    #[inline]
+    const fn full(hash: u64) -> Tag {
+        Tag((hash >> 57) as u8)
+    }
+}
+
+/// Slots of a chunk.
+const CHUNK_SLOTS: usize = 12;
+/// Prefetch the chunks of the rows this far ahead, once the index outgrows the caches.
+const PREFETCH_DISTANCE: usize = 16;
+const PREFETCH_MIN_BYTES: usize = 1 << 20;
+
+/// The tags of 12 slots, then their row ids: one probe reads one cache line with 4-byte ids
+/// (16 + 12 * 4 = 64 bytes), where separate tag and id arrays take two lines and two pages.
+#[repr(C, align(64))]
+#[derive(Clone, Copy)]
+struct Chunk<I> {
+    tags: [Tag; 16],
+    ids: [I; CHUNK_SLOTS],
+}
+
+impl<I: RowId> Chunk<I> {
+    const EMPTY: Chunk<I> = {
+        let mut tags = [Tag::PAD; 16];
+        let mut lane = 0;
+        while lane < CHUNK_SLOTS {
+            tags[lane] = Tag::EMPTY;
+            lane += 1;
+        }
+        Chunk {
+            tags,
+            ids: [I::ZERO; CHUNK_SLOTS],
+        }
+    };
+
+    /// Lanes from `from` whose tag is `tag`, one bit per lane.
+    #[inline]
+    fn match_tag(&self, tag: Tag, from: usize) -> u64 {
+        let tags = u8x16::from_array(self.tags.map(|t| t.0));
+        tags.simd_eq(u8x16::splat(tag.0)).to_bitmask() & (!0 << from)
+    }
+}
+
+/// A hash index whose slots keep row ids of type `I`, in chunks of `CHUNK_SLOTS` slots. A slot
+/// is numbered `chunk * 16 + lane`; probing starts at lane 0 of the chunk the hash selects and
+/// moves on lane by lane, then chunk by chunk.
+pub(in crate::aggregate) struct RowIdIndex<I> {
+    chunks: Vec<Chunk<I>>,
+    capacity: usize,
+    chunk_mask: usize,
+    count: usize,
+}
+
+impl<I: RowId> RowIdIndex<I> {
+    /// An index of at least `capacity` slots.
+    pub fn with_capacity(capacity: usize) -> Self {
+        let chunks = HashIndex::slots_for(capacity) / CHUNK_SLOTS;
         Self {
-            ctrls,
-            pointers,
-            capacity,
-            bucket_mask,
+            chunks: vec![Chunk::EMPTY; chunks],
+            capacity: chunks * CHUNK_SLOTS,
+            chunk_mask: chunks - 1,
             count: 0,
         }
     }
 
     pub fn dummy() -> Self {
         Self {
-            ctrls: vec![],
-            pointers: vec![],
+            chunks: vec![],
             capacity: 0,
-            bucket_mask: 0,
+            chunk_mask: 0,
             count: 0,
         }
     }
-}
 
-impl HashIndex {
     #[inline]
-    fn set_ctrl(&mut self, index: usize, tag: Tag) {
-        // Mirror: keep the tail padding in sync with the head so that
-        // Group::load across the boundary sees consistent ctrl bytes.
-        let index2 = ((index.wrapping_sub(Group::WIDTH)) & self.bucket_mask) + Group::WIDTH;
-
-        self.ctrls[index] = tag;
-        self.ctrls[index2] = tag;
+    fn first_slot(&self, hash: u64) -> usize {
+        (hash as usize & self.chunk_mask) << 4
     }
 
     #[inline]
-    fn h1(&self, hash: u64) -> usize {
-        hash as usize & self.bucket_mask
-    }
-
-    #[inline]
-    fn find_insert_index_in_group(&self, group: &Group, pos: &usize) -> Option<usize> {
-        let bit = group.match_empty().lowest_set_bit();
-
-        if likely(bit.is_some()) {
-            Some((pos + bit.unwrap()) & self.bucket_mask)
+    fn next_slot(&self, slot: usize) -> usize {
+        if (slot & 15) + 1 < CHUNK_SLOTS {
+            slot + 1
         } else {
-            None
+            (((slot >> 4) + 1) & self.chunk_mask) << 4
         }
     }
 
-    /// Find the index of a given `hash` from the `pos` or return a new slot if not exist
-    /// If not exists, the ctrl byte will be set directly
-    pub fn find_or_insert(&mut self, mut pos: usize, hash: u64) -> (usize, bool) {
-        let mut insert_index = None;
-        let tag_hash = Tag::full(hash);
-        loop {
-            let group = unsafe { Group::load(&self.ctrls, pos) };
-            if let Some(bit) = group.match_tag(tag_hash).into_iter().next() {
-                let index = (pos + bit) & self.bucket_mask;
-                return (index, false);
-            }
-            insert_index = self.find_insert_index_in_group(&group, &pos);
-            if let Some(index) = insert_index {
-                self.set_ctrl(index, tag_hash);
-                return (index, true);
-            }
-
-            pos = (pos + Group::WIDTH) & self.bucket_mask;
-        }
+    #[inline]
+    fn id(&self, slot: usize) -> I {
+        self.chunks[slot >> 4].ids[slot & 15]
     }
 
-    /// Probes the hash table for an empty slot using SIMD groups (batches) and sets the control byte.
-    ///
-    /// Returns the index of the found slot.
-    pub fn probe_empty_batch(&mut self, hash: u64) -> usize {
-        let mut pos = self.h1(hash);
-        loop {
-            let group = unsafe { Group::load(&self.ctrls, pos) };
-            if let Some(index) = self.find_insert_index_in_group(&group, &pos) {
-                self.set_ctrl(index, Tag::full(hash));
-                return index;
-            }
-            pos = (pos + Group::WIDTH) & self.bucket_mask;
-        }
+    #[inline]
+    fn set_id(&mut self, slot: usize, id: I) {
+        self.chunks[slot >> 4].ids[slot & 15] = id;
     }
 
-    /// Probes the hash table linearly (scalar probing) for an empty slot and sets the control byte.
-    /// Returns the absolute index of the slot.
-    ///
-    /// # Performance Note
-    /// This method is primarily used during resize operations. In such cases, the map is very
-    /// sparse, meaning collisions are rare.
-    ///
-    /// While SIMD probing (`probe_empty_batch`) is efficient for skipping full groups, it has
-    /// overhead. When the map is sparse, we expect to find an empty slot almost immediately
-    /// (often the first probe). In this specific situation, a simple scalar probe is faster
-    pub fn probe_empty(&mut self, hash: u64) -> usize {
-        let tag_hash = Tag::full(hash);
-        let mut pos = self.h1(hash);
+    /// The first slot from `slot` that holds the tag of `hash`, or else an empty one, which
+    /// takes the tag.
+    #[inline]
+    fn find_or_insert(&mut self, slot: usize, hash: u64) -> (usize, bool) {
+        let tag = Tag::full(hash);
+        let mut chunk = slot >> 4;
+        let mut from = slot & 15;
         loop {
-            if self.ctrls[pos].is_empty() {
-                self.set_ctrl(pos, tag_hash);
-                return pos;
+            let c = &mut self.chunks[chunk];
+            let matched = c.match_tag(tag, from);
+            if matched != 0 {
+                return ((chunk << 4) + matched.trailing_zeros() as usize, false);
             }
-            pos = (pos + 1) & self.bucket_mask;
+            let empty = c.match_tag(Tag::EMPTY, from);
+            if empty != 0 {
+                let lane = empty.trailing_zeros() as usize;
+                c.tags[lane] = tag;
+                return ((chunk << 4) + lane, true);
+            }
+            chunk = (chunk + 1) & self.chunk_mask;
+            from = 0;
         }
     }
 
@@ -154,8 +297,11 @@ impl HashIndex {
         debug_assert!(self.capacity > 0);
         for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
             *row = i.into();
-            state.slots[i] = self.h1(state.group_hashes[i]);
+            state.slots[i] = self.first_slot(state.group_hashes[i]);
         }
+        // Each row starts at a random chunk: once the index is out of the caches, fetch the chunks
+        // of the rows ahead while probing the current one.
+        let mut prefetch = self.allocated_bytes() >= PREFETCH_MIN_BYTES;
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
@@ -165,9 +311,13 @@ impl HashIndex {
             let mut need_compare_count = 0;
             let mut no_match_count = 0;
 
-            for row in state.no_match_vector[..remaining_entries].iter().copied() {
-                let slot = &mut state.slots[row];
-                let (slot, is_new) = self.find_or_insert(*slot, state.group_hashes[row]);
+            for i in 0..remaining_entries {
+                if prefetch && let Some(ahead) = state.no_match_vector.get(i + PREFETCH_DISTANCE) {
+                    let chunk = state.slots[*ahead] >> 4;
+                    prefetch_read_data::<_, 3>(self.chunks[..].as_ptr().wrapping_add(chunk));
+                }
+                let row = state.no_match_vector[i];
+                let (slot, is_new) = self.find_or_insert(state.slots[row], state.group_hashes[row]);
                 state.slots[row] = slot;
 
                 if is_new {
@@ -178,6 +328,8 @@ impl HashIndex {
                     need_compare_count += 1;
                 }
             }
+            // Mismatched rows go on in the chunk they reached.
+            prefetch = false;
 
             if new_entry_count != 0 {
                 new_group_count += new_entry_count;
@@ -185,8 +337,7 @@ impl HashIndex {
                 adapter.append_rows(state, new_entry_count);
 
                 for row in state.empty_vector[..new_entry_count].iter().copied() {
-                    let slot = state.slots[row];
-                    self.pointers[slot] = state.addresses[row];
+                    self.set_id(state.slots[row], I::from_id(state.row_ids[row]));
                 }
             }
 
@@ -195,16 +346,14 @@ impl HashIndex {
                     .iter()
                     .copied()
                 {
-                    let slot = state.slots[row];
-                    state.addresses[row] = self.pointers[slot];
+                    state.addresses[row] = adapter.row_ptr(self.id(state.slots[row]).id());
                 }
 
                 no_match_count = adapter.compare(state, need_compare_count, no_match_count);
             }
 
             for row in state.no_match_vector[..no_match_count].iter().copied() {
-                let slot = state.slots[row];
-                state.slots[row] = (slot + 1) & self.bucket_mask;
+                state.slots[row] = self.next_slot(state.slots[row]);
             }
 
             remaining_entries = no_match_count;
@@ -213,38 +362,31 @@ impl HashIndex {
         self.count += new_group_count;
         new_group_count
     }
-}
-
-impl HashIndex {
-    pub fn capacity(&self) -> usize {
-        self.capacity
-    }
-
-    pub fn count(&self) -> usize {
-        self.count
-    }
-
-    pub fn resize_threshold(&self) -> usize {
-        (self.capacity as f64 / HASH_INDEX_LOAD_FACTOR) as usize
-    }
 
     pub fn allocated_bytes(&self) -> usize {
-        self.ctrls.len() * size_of::<Tag>() + self.pointers.len() * size_of::<RowPtr>()
+        self.chunks.len() * size_of::<Chunk<I>>()
     }
 
     pub fn reset(&mut self) {
-        if self.capacity == 0 {
-            return;
-        }
         self.count = 0;
-        self.ctrls.fill(Tag::EMPTY);
-        self.pointers.fill(RowPtr::null());
+        self.chunks.fill(Chunk::EMPTY);
     }
 
-    pub fn probe_slot_and_set(&mut self, hash: u64, row_ptr: RowPtr) {
-        let index = self.probe_empty(hash);
-        self.pointers[index] = row_ptr;
-        self.count += 1;
+    /// Put a row known to be absent into the first empty slot of its probe sequence.
+    pub fn probe_slot_and_set(&mut self, hash: u64, row_id: u64) {
+        let mut chunk = hash as usize & self.chunk_mask;
+        loop {
+            let c = &mut self.chunks[chunk];
+            let empty = c.match_tag(Tag::EMPTY, 0);
+            if empty != 0 {
+                let lane = empty.trailing_zeros() as usize;
+                c.tags[lane] = Tag::full(hash);
+                c.ids[lane] = I::from_id(row_id);
+                self.count += 1;
+                return;
+            }
+            chunk = (chunk + 1) & self.chunk_mask;
+        }
     }
 }
 
@@ -253,11 +395,11 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::aggregate::row_ptr::RowPtr;
 
     struct TestTableAdapter {
         incoming: Vec<(u64, u64)>,     // (key, hash)
         payload: Vec<(u64, u64, u64)>, // (key, hash, value)
-        init_count: usize,
         pin_data: Box<[u8]>,
     }
 
@@ -265,7 +407,6 @@ mod tests {
         fn new(incoming: Vec<(u64, u64)>, payload: Vec<(u64, u64, u64)>) -> Self {
             Self {
                 incoming,
-                init_count: payload.len(),
                 payload,
                 pin_data: vec![0; 1000].into(),
             }
@@ -284,18 +425,14 @@ mod tests {
             state
         }
 
-        fn init_hash_index(&self, hash_index: &mut HashIndex) {
+        fn init_hash_index<I: RowId>(&self, hash_index: &mut RowIdIndex<I>) {
             for (i, (_, hash, _)) in self.payload.iter().copied().enumerate() {
-                hash_index.probe_slot_and_set(hash, self.get_row_ptr(false, i));
+                hash_index.probe_slot_and_set(hash, i as u64);
             }
         }
 
-        fn get_row_ptr(&self, incoming: bool, row: usize) -> RowPtr {
-            RowPtr::new(unsafe {
-                self.pin_data
-                    .as_ptr()
-                    .add(if incoming { row + self.init_count } else { row })
-            })
+        fn get_row_ptr(&self, id: usize) -> RowPtr {
+            RowPtr::new(unsafe { self.pin_data.as_ptr().add(id) })
         }
 
         fn get_payload(&self, row_ptr: RowPtr) -> (u64, u64, u64) {
@@ -310,9 +447,16 @@ mod tests {
                 let (key, hash) = self.incoming[*row];
                 let value = key + 20;
 
+                // The id of a row is its position in the payload.
+                let id = self.payload.len();
                 self.payload.push((key, hash, value));
-                state.addresses[*row] = self.get_row_ptr(true, row.to_usize());
+                state.addresses[*row] = self.get_row_ptr(id);
+                state.row_ids[*row] = id as u64;
             }
+        }
+
+        fn row_ptr(&self, row_id: u64) -> RowPtr {
+            self.get_row_ptr(row_id as usize)
         }
 
         fn compare(
@@ -351,6 +495,11 @@ mod tests {
 
     impl TestCase {
         fn run_hash_index(self) {
+            self.clone().run_with::<u32>();
+            self.run_with::<u64>();
+        }
+
+        fn run_with<I: RowId>(self) {
             let TestCase {
                 capacity,
                 incoming,
@@ -358,7 +507,7 @@ mod tests {
                 want_count,
                 want,
             } = self;
-            let mut hash_index = HashIndex::with_capacity(capacity);
+            let mut hash_index = RowIdIndex::<I>::with_capacity(capacity);
             let mut adapter = TestTableAdapter::new(incoming, payload);
             let mut state = adapter.init_state();
 
@@ -398,6 +547,46 @@ mod tests {
             payload: vec![(4, 44 << 48, 77)],
             want_count: 3,
             want: HashMap::from_iter([(1, 21), (2, 22), (3, 23), (4, 77)]),
+        }
+        .run_hash_index();
+    }
+
+    #[test]
+    fn test_hash_index_chunk_overflow_and_wrap() {
+        // Every key has the same tag and starts at the same chunk, so each probe compares and
+        // steps over all the keys before it, past the end of a chunk into the next one.
+        let same = |chunk: u64| (0x55u64 << 57) | chunk;
+        let existing = |n: u64, chunk: u64| {
+            (0..n)
+                .map(|k| (k, same(chunk), k + 100))
+                .collect::<Vec<_>>()
+        };
+        let incoming = |from: u64, to: u64, chunk: u64| {
+            (from..to).map(|k| (k, same(chunk))).collect::<Vec<_>>()
+        };
+
+        // Two chunks of 12 slots: 8 keys present, 8 found again and 8 new ones overflow from
+        // chunk 0 into chunk 1.
+        TestCase {
+            capacity: 24,
+            incoming: incoming(0, 16, 0),
+            payload: existing(8, 0),
+            want_count: 8,
+            want: (0..16)
+                .map(|k| (k, if k < 8 { k + 100 } else { k + 20 }))
+                .collect(),
+        }
+        .run_hash_index();
+
+        // Starting at the last chunk wraps around to chunk 0.
+        TestCase {
+            capacity: 24,
+            incoming: incoming(0, 22, 1),
+            payload: existing(10, 1),
+            want_count: 12,
+            want: (0..22)
+                .map(|k| (k, if k < 10 { k + 100 } else { k + 20 }))
+                .collect(),
         }
         .run_hash_index();
     }

@@ -25,6 +25,7 @@ use tokio::sync::Semaphore;
 use tonic::Code;
 use tonic::Status;
 
+use super::super::ping_pong_transport::MAX_FRAMES_IN_FLIGHT;
 use super::super::ping_pong_transport::PingPongCallback;
 use super::super::ping_pong_transport::PingPongResponse;
 use super::super::ping_pong_transport::PingPongTransport;
@@ -49,7 +50,7 @@ impl Default for ExchangeSendBufferConfig {
     fn default() -> Self {
         Self {
             max_queued_bytes: 64 * 1024 * 1024,
-            max_batch_bytes: 4 * 1024 * 1024,
+            max_batch_bytes: 1024 * 1024,
         }
     }
 }
@@ -59,12 +60,12 @@ const MIN_BATCH_BYTES: usize = 256 * 1024;
 impl ExchangeSendBufferConfig {
     /// Batch size used for `num_remotes` destinations.
     ///
-    /// A destination has one frame in flight and sends the next one only after the
-    /// response, so a small frame leaves the link idle for most of each round trip.
-    /// Each destination gets half of its share of the queue, so the next frame can
-    /// fill up while one is in flight, bounded by `max_batch_bytes`.
+    /// A destination has up to `MAX_FRAMES_IN_FLIGHT` frames awaiting responses, so
+    /// too few bytes in flight leave the link idle for most of each round trip.
+    /// Each destination gets half of its share of the queue for its frames in
+    /// flight, so the next frames can fill up meanwhile, bounded by `max_batch_bytes`.
     fn batch_bytes(&self, num_remotes: usize) -> usize {
-        let share = self.max_queued_bytes / (2 * num_remotes.max(1));
+        let share = self.max_queued_bytes / (2 * num_remotes.max(1) * MAX_FRAMES_IN_FLIGHT);
         share.max(MIN_BATCH_BYTES).min(self.max_batch_bytes).max(1)
     }
 }
@@ -119,13 +120,48 @@ impl PendingSendQueue {
 /// Mutable state within RemoteInstance, protected by its own lock.
 struct RemoteInstanceState {
     pending: PendingSendQueue,
-    /// Quota of the frame in flight, released when its response arrives.
-    in_flight: Vec<OwnedSemaphorePermit>,
+    /// Quota of each frame in flight in send order, released by its response.
+    in_flight: VecDeque<Vec<OwnedSemaphorePermit>>,
+    /// Quota held by `in_flight`.
+    in_flight_bytes: usize,
     /// First terminal error; checked under the same lock before every enqueue.
     last_error: Option<ErrorCode>,
 }
 
 impl RemoteInstanceState {
+    /// Take the next frame unless it would raise the bytes in flight above
+    /// `max_in_flight_bytes`. A frame always goes out when none is in flight, so an
+    /// item larger than that makes progress.
+    fn next_frame(
+        &mut self,
+        max_batch_bytes: usize,
+        max_in_flight_bytes: usize,
+    ) -> Option<FlightData> {
+        let max_batch_bytes = match self.in_flight.is_empty() {
+            true => max_batch_bytes,
+            false => {
+                let available = max_in_flight_bytes.saturating_sub(self.in_flight_bytes);
+                let front = flight_data_size(&self.pending.items.front()?.data);
+                if front > available {
+                    return None;
+                }
+                max_batch_bytes.min(available)
+            }
+        };
+
+        let (flight, permits) = self.pending.pop_batch(max_batch_bytes)?;
+        self.in_flight_bytes += permits.iter().map(|p| p.num_permits()).sum::<usize>();
+        self.in_flight.push_back(permits);
+        Some(flight)
+    }
+
+    /// Release the quota of the oldest frame in flight, answered by a response.
+    fn acknowledge(&mut self) {
+        if let Some(permits) = self.in_flight.pop_front() {
+            self.in_flight_bytes -= permits.iter().map(|p| p.num_permits()).sum::<usize>();
+        }
+    }
+
     fn close(&mut self, error: ErrorCode) {
         if self.last_error.is_none() {
             self.last_error = Some(error);
@@ -133,6 +169,7 @@ impl RemoteInstanceState {
 
         self.pending.items.clear();
         self.in_flight.clear();
+        self.in_flight_bytes = 0;
     }
 }
 
@@ -149,7 +186,8 @@ impl RemoteInstance {
             exchange,
             state: Mutex::new(RemoteInstanceState {
                 pending: PendingSendQueue::default(),
-                in_flight: Vec::new(),
+                in_flight: VecDeque::new(),
+                in_flight_bytes: 0,
                 last_error: None,
             }),
         }
@@ -159,6 +197,8 @@ impl RemoteInstance {
 /// State kept alive by response callbacks until all transports finish draining.
 struct ExchangeSendBufferState {
     config: ExchangeSendBufferConfig,
+    /// Quota one destination may have in flight: its share of frames in flight.
+    max_in_flight_bytes: usize,
 
     /// Pre-allocated remote instances, indexed by destination index
     remotes: Vec<RemoteInstance>,
@@ -180,38 +220,52 @@ impl ExchangeSendBufferState {
         )
     }
 
-    /// Send the next batch of pending data. The caller must own the in-flight slot.
-    fn try_flush_remote(&self, dest_idx: usize, status: Option<Status>) {
+    /// Send pending frames while the destination has a free slot and quota in flight.
+    /// `holds_slot` passes in a slot the caller already holds, such as the slot of
+    /// an answered frame.
+    ///
+    /// A slot is released only under the state lock after finding nothing to send,
+    /// so an item enqueued afterwards finds the slot free. Items held back by the
+    /// quota in flight are sent by a response, as some frame is then in flight.
+    fn flush_remote(&self, dest_idx: usize, mut holds_slot: bool) {
         let remote = &self.remotes[dest_idx];
-        let mut state = remote.state.lock();
 
-        let Some(status) = status else {
-            // The slot was idle or its previous frame was answered. Release the
-            // acknowledged quota before taking the next batch.
-            state.in_flight.clear();
+        loop {
+            if !holds_slot && !remote.exchange.try_acquire_send_slot() {
+                return;
+            }
+            holds_slot = false;
 
-            let Some((flight, permits)) = state.pending.pop_batch(self.config.max_batch_bytes)
+            let mut state = remote.state.lock();
+            let Some(flight) =
+                state.next_frame(self.config.max_batch_bytes, self.max_in_flight_bytes)
             else {
                 return remote.exchange.release_send_slot();
             };
-            state.in_flight = permits;
 
-            let Err(status) = remote.exchange.send_frame(flight) else {
+            // A failed send releases its slot.
+            if let Err(status) = remote.exchange.send_frame(flight) {
+                let error = Self::status_to_error(
+                    status,
+                    remote.exchange.local_node_id(),
+                    remote.exchange.remote_node_id(),
+                );
+                state.close(error);
+                remote.exchange.shutdown.notify_waiters();
                 return;
-            };
+            }
+        }
+    }
 
-            let error = Self::status_to_error(
-                status,
-                remote.exchange.local_node_id(),
-                remote.exchange.remote_node_id(),
-            );
-            state.close(error);
-            remote.exchange.shutdown.notify_waiters();
-            remote.exchange.release_send_slot();
-            return;
+    fn on_response(&self, dest_idx: usize, status: Option<Status>) {
+        let remote = &self.remotes[dest_idx];
+
+        let Some(status) = status else {
+            remote.state.lock().acknowledge();
+            return self.flush_remote(dest_idx, true);
         };
 
-        state.close(Self::status_to_error(
+        remote.state.lock().close(Self::status_to_error(
             status,
             remote.exchange.local_node_id(),
             remote.exchange.remote_node_id(),
@@ -232,8 +286,7 @@ impl PingPongCallback for SendBufferCallback {
     }
 
     fn on_response(&self, response: PingPongResponse) {
-        self.buffer
-            .try_flush_remote(self.dest_idx, response.data.err());
+        self.buffer.on_response(self.dest_idx, response.data.err());
     }
 
     fn on_closed(&self) {
@@ -250,7 +303,8 @@ impl PingPongCallback for SendBufferCallback {
 
 /// Byte-bounded send queue shared by all senders of one exchange.
 ///
-/// Each destination node has one FIFO queue and at most one request in flight.
+/// Each destination node has one FIFO queue and up to `MAX_FRAMES_IN_FLIGHT`
+/// requests in flight, holding at most its share of the queue between them.
 /// Queued items to the same node share batches regardless of their target thread.
 /// `max_batch_bytes` bounds their total payload size, except for a single oversized
 /// item; batch framing adds a small overhead.
@@ -286,10 +340,15 @@ impl ExchangeSendBuffer {
             max_batch_bytes: config.batch_bytes(exchanges.len()),
             ..config
         };
+        let max_in_flight_bytes = config.max_batch_bytes * MAX_FRAMES_IN_FLIGHT;
 
         let remotes = exchanges.into_iter().map(RemoteInstance::new).collect();
 
-        let shared_state = Arc::new(ExchangeSendBufferState { config, remotes });
+        let shared_state = Arc::new(ExchangeSendBufferState {
+            config,
+            max_in_flight_bytes,
+            remotes,
+        });
         for (dest_idx, remote) in shared_state.remotes.iter().enumerate() {
             let _ = remote.exchange.start(
                 Arc::new(SendBufferCallback {
@@ -356,14 +415,10 @@ impl ExchangeSendBuffer {
         }
     }
 
-    /// Start sending if the destination has no request in flight. Otherwise the
-    /// response callback sends the queued data.
+    /// Send queued data through the destination's free slots. Data left queued is
+    /// sent by response callbacks.
     fn try_flush(&self, dest_idx: usize) {
-        let remote = &self.state.remotes[dest_idx];
-
-        if remote.exchange.try_acquire_send_slot() {
-            self.state.try_flush_remote(dest_idx, None);
-        }
+        self.state.flush_remote(dest_idx, false);
     }
 
     pub fn is_closed(&self, dest_idx: usize) -> bool {
@@ -403,7 +458,18 @@ mod tests {
         async_channel::Receiver<FlightData>,
         async_channel::Sender<std::result::Result<FlightData, Status>>,
     ) {
-        let (send_tx, send_rx) = async_channel::bounded(1);
+        create_mock_exchange_with_slots(num_threads, 1)
+    }
+
+    fn create_mock_exchange_with_slots(
+        num_threads: usize,
+        slots: usize,
+    ) -> (
+        PingPongTransport,
+        async_channel::Receiver<FlightData>,
+        async_channel::Sender<std::result::Result<FlightData, Status>>,
+    ) {
+        let (send_tx, send_rx) = async_channel::bounded(slots);
         let (pong_tx, pong_rx) = async_channel::unbounded();
         let exchange = PingPongTransport::from_stream(
             num_threads,
@@ -1147,5 +1213,102 @@ mod tests {
                 .expect_err("a failed destination must reject subsequent data");
             assert_eq!(later_error.message(), error.message());
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_frames_fill_free_slots_and_batch_behind_them() {
+        let rt = test_runtime();
+        let (exchange, send_rx, pong_tx) = create_mock_exchange_with_slots(1, MAX_FRAMES_IN_FLIGHT);
+        let buffer =
+            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
+                .unwrap();
+
+        // Each enqueue finds a free slot until all of them are in flight.
+        for len in 1..=MAX_FRAMES_IN_FLIGHT + 2 {
+            buffer
+                .enqueue_items(0, vec![make_flight_data(len)])
+                .await
+                .unwrap();
+        }
+        for len in 1..=MAX_FRAMES_IN_FLIGHT {
+            assert_eq!(send_rx.recv().await.unwrap().data_body.len(), len);
+        }
+        assert!(send_rx.try_recv().is_err());
+
+        // A response frees one slot, which carries both queued items in one frame.
+        pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        let frame = tokio::time::timeout(Duration::from_secs(2), send_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(is_batch(&frame));
+        let lens: Vec<_> = split_batch_flight_data(frame)
+            .into_iter()
+            .map(|item| item.data_body.len())
+            .collect();
+        assert_eq!(lens, vec![
+            MAX_FRAMES_IN_FLIGHT + 1,
+            MAX_FRAMES_IN_FLIGHT + 2
+        ]);
+
+        for _ in 0..MAX_FRAMES_IN_FLIGHT {
+            pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(send_rx.try_recv().is_err());
+        assert_eq!(buffer.semaphore.available_permits(), buffer.max_permits);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_bytes_in_flight_hold_back_frames_until_acknowledged() {
+        let rt = test_runtime();
+        let (exchange, send_rx, pong_tx) = create_mock_exchange_with_slots(1, MAX_FRAMES_IN_FLIGHT);
+        // Frames of at most 100 bytes, so 100 * MAX_FRAMES_IN_FLIGHT bytes in flight.
+        let buffer = ExchangeSendBuffer::create(
+            vec![exchange],
+            ExchangeSendBufferConfig {
+                max_batch_bytes: 100,
+                ..Default::default()
+            },
+            &rt,
+        )
+        .unwrap();
+        let max_in_flight = 100 * MAX_FRAMES_IN_FLIGHT;
+
+        // An oversized item goes out alone while nothing is in flight.
+        buffer
+            .enqueue_items(0, vec![make_flight_data(max_in_flight - 100)])
+            .await
+            .unwrap();
+        buffer
+            .enqueue_items(0, vec![make_flight_data(60)])
+            .await
+            .unwrap();
+        assert_eq!(
+            send_rx.recv().await.unwrap().data_body.len(),
+            max_in_flight - 100
+        );
+        assert_eq!(send_rx.recv().await.unwrap().data_body.len(), 60);
+
+        // Free slots remain, but this item would exceed the bytes in flight.
+        buffer
+            .enqueue_items(0, vec![make_flight_data(50)])
+            .await
+            .unwrap();
+        assert!(send_rx.try_recv().is_err());
+
+        // Acknowledging the oversized frame makes room for it.
+        pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        let frame = tokio::time::timeout(Duration::from_secs(2), send_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(frame.data_body.len(), 50);
+
+        for _ in 0..2 {
+            pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(buffer.semaphore.available_permits(), buffer.max_permits);
     }
 }

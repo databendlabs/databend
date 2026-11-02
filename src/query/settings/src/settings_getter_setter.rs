@@ -632,6 +632,10 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_partial_aggregate_mode(&self) -> Result<String> {
+        self.try_get_string("partial_aggregate_mode")
+    }
+
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
@@ -1308,10 +1312,6 @@ impl Settings {
 
     pub fn get_enable_experimental_table_ref(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_table_ref")? != 0)
-    }
-
-    pub fn get_force_aggregate_shuffle_mode(&self) -> Result<String> {
-        self.try_get_string("force_aggregate_shuffle_mode")
     }
 
     pub fn get_system_tables_count_db_concurrency(&self) -> Result<u64> {

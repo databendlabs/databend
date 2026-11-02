@@ -15,10 +15,14 @@
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::payload_row::CompareState;
+use super::row_ptr::RowPtr;
 use crate::ProjectedBlock;
 
 pub(super) trait TableAdapter {
     fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize);
+
+    /// The row with id `row_id`.
+    fn row_ptr(&self, row_id: u64) -> RowPtr;
 
     fn compare(
         &mut self,
@@ -36,6 +40,11 @@ pub(super) struct AdapterImpl<'a> {
 impl<'a> TableAdapter for AdapterImpl<'a> {
     fn append_rows(&mut self, state: &mut ProbeState, count: usize) {
         self.payload.append_rows(state, count, self.group_columns);
+    }
+
+    #[inline]
+    fn row_ptr(&self, row_id: u64) -> RowPtr {
+        self.payload.row_ptr(row_id)
     }
 
     fn compare(

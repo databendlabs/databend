@@ -38,7 +38,6 @@ use itertools::Itertools;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::AggregatePartialFormatter;
 use crate::physical_plans::format::PhysicalFormat;
-use crate::physical_plans::physical_aggregate_final::AggregateShuffleMode;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -46,9 +45,8 @@ use crate::physical_plans::runtime_scan_filter::register_runtime_top_n_filter;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
-use crate::sessions::TableContextCluster;
+use crate::pipelines::processors::transforms::aggregator::parse_partial_aggregate_mode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -62,8 +60,6 @@ pub struct AggregatePartial {
     pub rank_limit: Option<(Vec<SortDesc>, usize)>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
-
-    pub shuffle_mode: AggregateShuffleMode,
 }
 
 #[typetag::serde]
@@ -163,7 +159,6 @@ impl IPhysicalPlan for AggregatePartial {
             group_by_display: self.group_by_display.clone(),
             rank_limit: self.rank_limit.clone(),
             stat_info: self.stat_info.clone(),
-            shuffle_mode: self.shuffle_mode.clone(),
         })
     }
 
@@ -182,8 +177,6 @@ impl IPhysicalPlan for AggregatePartial {
 
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
-        let max_threads = builder.settings.get_max_threads()?;
-        let cluster = &builder.ctx.get_cluster();
 
         let params = PipelineBuilder::build_aggregator_params(
             &builder.ctx,
@@ -203,12 +196,9 @@ impl IPhysicalPlan for AggregatePartial {
 
         let schema_before_group_by = params.input_schema.clone();
 
-        let radix_bits = self.shuffle_mode.determine_radix_bits();
-        let partial_agg_config = HashTableConfig::partial_aggregate(
-            radix_bits,
-            cluster.nodes.len(),
-            max_threads as usize,
-        );
+        let partial_mode =
+            parse_partial_aggregate_mode(&builder.settings.get_partial_aggregate_mode()?)?;
+        let partial_agg_config = HashTableConfig::partial_aggregate();
 
         // For rank limit, we can filter data using sort with rank before partial.
         if let Some((sort_desc, limit)) =
@@ -227,19 +217,6 @@ impl IPhysicalPlan for AggregatePartial {
             });
         }
 
-        let is_row_shuffle = matches!(self.shuffle_mode, AggregateShuffleMode::Row);
-        let bucket_num = if is_row_shuffle {
-            cluster.nodes.len()
-        } else {
-            2_usize.pow(partial_agg_config.initial_radix_bits as u32)
-        };
-        let shared_partition_streams = SharedPartitionStream::new(
-            builder.main_pipeline.output_len(),
-            0,
-            max_block_bytes,
-            bucket_num,
-        );
-
         builder.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
                 builder.ctx.clone(),
@@ -247,17 +224,11 @@ impl IPhysicalPlan for AggregatePartial {
                 output,
                 params.clone(),
                 partial_agg_config.clone(),
-                shared_partition_streams.clone(),
-                bucket_num,
-                is_row_shuffle,
+                partial_mode,
             )?))
         })?;
 
-        builder.exchange_injector = AggregateInjector::create(
-            builder.ctx.clone(),
-            params.clone(),
-            self.shuffle_mode.clone(),
-        );
+        builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
         Ok(())
     }
 }

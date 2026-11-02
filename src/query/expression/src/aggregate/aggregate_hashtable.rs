@@ -15,20 +15,21 @@
 // A new AggregateHashtable which inspired by duckdb's https://duckdb.org/2022/03/07/aggregate-hashtable.html
 
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
 use smallvec::SmallVec;
 
 use super::BATCH_SIZE;
+use super::HASH_INDEX_LOAD_FACTOR;
 use super::HashIndex;
 use super::HashTableConfig;
 use super::LOAD_FACTOR;
-use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
 use super::hash_index_adapter::AdapterImpl;
+use super::partial_controller::DistinctSampler;
+use super::partial_controller::PartialAddStats;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
@@ -96,11 +97,6 @@ impl GroupKeyState {
         self.dict_hashes
             .as_deref()
             .map(|hashes| &hashes[self.row_offset..self.row_offset + row_count])
-    }
-
-    fn clear_codes(&mut self) {
-        self.code_addresses.fill(RowPtr::null());
-        self.rank_of_code.fill(u32::MAX);
     }
 }
 
@@ -242,16 +238,7 @@ impl AggregateHashTable {
         if !self.direct_append {
             group_state.init_codes(group_columns, row_count);
         }
-        if row_count <= BATCH_SIZE {
-            self.add_groups_inner(
-                state,
-                group_columns,
-                params,
-                agg_states,
-                row_count,
-                &mut group_state,
-            )
-        } else {
+        if row_count > BATCH_SIZE {
             // Probing by codes hashes only one representative row per code combination, so
             // hashing every row of the block up front is only worth it without codes.
             group_state.dict_hashes = (group_state.code_addresses.is_empty()
@@ -261,7 +248,110 @@ impl AggregateHashTable {
                 group_hash_entries(group_columns, &mut hashes);
                 hashes
             });
-            let mut new_count = 0;
+        }
+
+        let mut new_count = 0;
+        Self::for_each_batch(
+            group_columns,
+            params,
+            agg_states,
+            row_count,
+            |group_columns, params, agg_states, start, rows| {
+                group_state.row_offset = start;
+                new_count += self.add_groups_inner(
+                    state,
+                    group_columns,
+                    params,
+                    agg_states,
+                    rows,
+                    &mut group_state,
+                )?;
+                Ok(())
+            },
+        )?;
+        Ok(new_count)
+    }
+
+    /// Aggregate raw input rows, reusing the probe state of `flush_state`.
+    pub fn add_raw_groups(
+        &mut self,
+        flush_state: &mut PayloadFlushState,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        row_count: usize,
+    ) -> Result<usize> {
+        self.add_groups(
+            &mut flush_state.probe_state,
+            group_columns,
+            params,
+            (&[]).into(),
+            row_count,
+        )
+    }
+
+    /// Merge serialized aggregate states into their groups, reusing the probe state of
+    /// `flush_state`.
+    pub fn add_serialized_groups(
+        &mut self,
+        flush_state: &mut PayloadFlushState,
+        group_columns: ProjectedBlock,
+        agg_states: ProjectedBlock,
+        row_count: usize,
+    ) -> Result<usize> {
+        self.add_groups(
+            &mut flush_state.probe_state,
+            group_columns,
+            &[],
+            agg_states,
+            row_count,
+        )
+    }
+
+    /// Adaptive partial aggregation entry point. When the index is full it grows at once to
+    /// `capacity`, or restarts in place once it is that large; the group hashes are fed to
+    /// `sampler` once it has started.
+    pub fn add_groups_partial(
+        &mut self,
+        state: &mut ProbeState,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        row_count: usize,
+        capacity: usize,
+        mut sampler: Option<&mut DistinctSampler>,
+    ) -> Result<PartialAddStats> {
+        debug_assert!(self.config.partial_agg);
+        let mut stats = PartialAddStats::default();
+        Self::for_each_batch(
+            group_columns,
+            params,
+            (&[]).into(),
+            row_count,
+            |group_columns, params, _, _, rows| {
+                self.add_groups_partial_inner(
+                    state,
+                    group_columns,
+                    params,
+                    rows,
+                    capacity,
+                    sampler.as_deref_mut(),
+                    &mut stats,
+                )
+            },
+        )?;
+        Ok(stats)
+    }
+
+    /// Calls `f` with each batch of at most `BATCH_SIZE` rows and the offset of its first row.
+    fn for_each_batch(
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        agg_states: ProjectedBlock,
+        row_count: usize,
+        mut f: impl FnMut(ProjectedBlock, &[ProjectedBlock], ProjectedBlock, usize, usize) -> Result<()>,
+    ) -> Result<()> {
+        if row_count <= BATCH_SIZE {
+            f(group_columns, params, agg_states, 0, row_count)
+        } else {
             for start in (0..row_count).step_by(BATCH_SIZE) {
                 let end = (start + BATCH_SIZE).min(row_count);
                 let step_group_columns = group_columns
@@ -279,17 +369,15 @@ impl AggregateHashTable {
                     .map(|c| c.slice(start..end))
                     .collect::<Vec<_>>();
 
-                group_state.row_offset = start;
-                new_count += self.add_groups_inner(
-                    state,
+                f(
                     (&step_group_columns).into(),
                     &step_params,
                     (&agg_states).into(),
+                    start,
                     end - start,
-                    &mut group_state,
                 )?;
             }
-            Ok(new_count)
+            Ok(())
         }
     }
 
@@ -362,6 +450,61 @@ impl AggregateHashTable {
             self.probe_and_create(state, group_columns, row_count)
         };
 
+        self.accumulate_states(state, params, agg_states, row_count)?;
+        Ok(new_group_count)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn add_groups_partial_inner(
+        &mut self,
+        state: &mut ProbeState,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        row_count: usize,
+        capacity: usize,
+        mut sampler: Option<&mut DistinctSampler>,
+        stats: &mut PartialAddStats,
+    ) -> Result<()> {
+        state.row_count = row_count;
+        group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
+        stats.rows += row_count;
+
+        if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
+            if capacity > self.hash_index.capacity() {
+                // Grow at once. The index was not restarted since the payload was emitted, so
+                // the payload holds one row per key and can rebuild it.
+                self.resize(capacity);
+            } else {
+                // The first window holds exactly the distinct groups seen so far.
+                if let Some(sampler) = sampler.as_deref_mut() {
+                    sampler.start(self.hash_index.count());
+                }
+                // Restart the index in place and keep appending to the payload.
+                self.hash_index.reset();
+                stats.windows += 1;
+            }
+        }
+        if let Some(sampler) = sampler.filter(|sampler| sampler.is_started()) {
+            sampler.observe(&state.group_hashes[..row_count]);
+        }
+
+        let mut adapter = AdapterImpl {
+            payload: &mut self.payload,
+            group_columns,
+        };
+        stats.new_groups += self
+            .hash_index
+            .probe_and_create(state, row_count, &mut adapter);
+        self.accumulate_states(state, params, (&[]).into(), row_count)
+    }
+
+    fn accumulate_states(
+        &self,
+        state: &mut ProbeState,
+        params: &[ProjectedBlock],
+        agg_states: ProjectedBlock,
+        row_count: usize,
+    ) -> Result<()> {
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {
                 state.state_places[i] = state.addresses[i].state_addr(&self.payload.row_layout);
@@ -391,23 +534,42 @@ impl AggregateHashTable {
                 }
             }
         }
+        Ok(())
+    }
 
-        if self.config.partial_agg {
-            // check size
-            if self.hash_index.count() + BATCH_SIZE > self.hash_index.resize_threshold()
-                && self.hash_index.capacity() >= self.config.max_partial_capacity
-            {
-                self.clear_ht();
-            }
+    /// Index capacity that holds `groups` groups without growing.
+    pub fn capacity_for_groups(groups: usize) -> usize {
+        // The index rounds up to whole chunks, a power of two of them: round the slots only once.
+        HashIndex::slots_for(
+            ((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1).max(Self::initial_capacity()),
+        )
+    }
 
-            // check maybe_repartition
-            if self.maybe_repartition() {
-                self.clear_ht();
-                group_state.clear_codes();
-            }
-        }
+    /// Bytes held by the groups of the partial table, excluding the index.
+    pub fn partial_hot_bytes(&self) -> usize {
+        self.payload.memory_size() + self.arena_allocated_bytes()
+    }
 
-        Ok(new_group_count)
+    /// Move the groups out and restart with an empty index of the initial capacity.
+    pub fn take_partial_hot(&mut self) -> PartitionedPayload {
+        let fresh = PartitionedPayload::new_with_start_bit(
+            self.payload.group_types.clone(),
+            self.payload.aggrs.clone(),
+            self.payload.partition_count() as u64,
+            self.config.partition_start_bit,
+            vec![Arc::new(Bump::new())],
+        );
+        let payload = std::mem::replace(&mut self.payload, fresh);
+        self.hash_index = HashIndex::with_capacity(Self::initial_capacity());
+        payload
+    }
+
+    fn arena_allocated_bytes(&self) -> usize {
+        self.payload
+            .arenas
+            .iter()
+            .map(|arena| arena.allocated_bytes())
+            .sum::<usize>()
     }
 
     /// Probes once per distinct combination of codes when every group key is an encoded column
@@ -618,81 +780,32 @@ impl AggregateHashTable {
         Ok(true)
     }
 
-    fn maybe_repartition(&mut self) -> bool {
-        // already final stage or the max radix bits
-        if !self.config.partial_agg || (self.current_radix_bits == self.config.max_radix_bits) {
-            return false;
-        }
-
-        let bytes_per_partition = self.payload.memory_size() / self.payload.partition_count();
-
-        let mut new_radix_bits = self.current_radix_bits;
-
-        if bytes_per_partition > MAX_PAGE_SIZE * self.config.block_fill_factor as usize {
-            new_radix_bits += self.config.repartition_radix_bits_incr;
-        }
-
-        loop {
-            let current_max_radix_bits = self.config.current_max_radix_bits.load(Ordering::SeqCst);
-            if current_max_radix_bits < new_radix_bits
-                && self
-                    .config
-                    .current_max_radix_bits
-                    .compare_exchange(
-                        current_max_radix_bits,
-                        new_radix_bits,
-                        Ordering::SeqCst,
-                        Ordering::SeqCst,
-                    )
-                    .is_err()
-            {
-                continue;
-            }
-            break;
-        }
-
-        let current_max_radix_bits = self.config.current_max_radix_bits.load(Ordering::SeqCst);
-
-        if current_max_radix_bits > self.current_radix_bits {
-            let temp_payload = PartitionedPayload::new(
-                self.payload.group_types.clone(),
-                self.payload.aggrs.clone(),
-                1,
-                vec![Arc::new(Bump::new())],
-            );
-            let payload = std::mem::replace(&mut self.payload, temp_payload);
-            let mut state = PayloadFlushState::default();
-
-            self.current_radix_bits = current_max_radix_bits;
-            self.payload = payload.repartition(1 << current_max_radix_bits, &mut state);
-            return true;
-        }
-        false
-    }
-
     // scan payload to reconstruct PointArray
     fn resize(&mut self, new_capacity: usize) {
-        if self.config.partial_agg {
-            let target = new_capacity.min(self.config.max_partial_capacity);
-            if target == self.hash_index.capacity() {
-                return;
-            }
-            self.hash_index_resize_count += 1;
-            self.hash_index = HashIndex::with_capacity(target);
-            return;
-        }
-
         self.hash_index_resize_count += 1;
 
-        let mut hash_index = HashIndex::with_capacity(new_capacity);
+        // The new index is rebuilt from the payload alone: free the old one before allocating
+        // it, so that the two never take memory at the same time.
+        self.hash_index = HashIndex::dummy();
+        // Every row of the payload is in the index, and the index grows again before it holds
+        // more groups than its threshold: the ids it can meet until then are known now.
+        let new_capacity = HashIndex::slots_for(new_capacity);
+        let new_rows =
+            HashIndex::threshold_for_capacity(new_capacity).saturating_sub(self.payload.len());
+        let mut hash_index = if self.payload.row_ids_fit_compact(new_rows) {
+            HashIndex::with_capacity(new_capacity)
+        } else {
+            HashIndex::wide_with_capacity(new_capacity)
+        };
         // iterate over payloads and copy to new entries
-        for payload in self.payload.payloads.iter() {
-            for page in payload.pages.iter() {
+        let codec = self.payload.row_ids;
+        for (partition, payload) in self.payload.payloads.iter().enumerate() {
+            for (page_index, page) in payload.pages.iter().enumerate() {
                 for idx in 0..page.rows {
                     let row_ptr = payload.data_ptr(page, idx);
                     let hash = row_ptr.hash(&payload.row_layout);
 
-                    hash_index.probe_slot_and_set(hash, row_ptr);
+                    hash_index.probe_slot_and_set(hash, codec.encode(partition, page_index, idx));
                 }
             }
         }
@@ -708,11 +821,6 @@ impl AggregateHashTable {
         ((count.max(Self::initial_capacity()) as f64 * LOAD_FACTOR) as usize).next_power_of_two()
     }
 
-    fn clear_ht(&mut self) {
-        self.payload.mark_min_cardinality();
-        self.hash_index.reset();
-    }
-
     pub fn allocated_bytes(&self) -> usize {
         self.payload.memory_size()
             + self
@@ -726,5 +834,64 @@ impl AggregateHashTable {
 
     pub fn hash_index_resize_count(&self) -> usize {
         self.hash_index_resize_count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use bumpalo::Bump;
+
+    use super::*;
+    use crate::DataBlock;
+    use crate::FromData;
+    use crate::types::NumberDataType;
+    use crate::types::UInt64Type;
+
+    fn key_blocks(groups: u64, repeats: u64) -> Vec<DataBlock> {
+        // Every key `repeats` times, spread over the blocks in a scrambled order: multiplying by a
+        // prime that does not divide `rows` permutes 0..rows.
+        let rows = groups * repeats;
+        let keys = (0..rows)
+            .map(|i| (i * 1_000_003 % rows) % groups)
+            .collect::<Vec<_>>();
+        keys.chunks(8192)
+            .map(|chunk| DataBlock::new_from_columns(vec![UInt64Type::from_data(chunk.to_vec())]))
+            .collect()
+    }
+
+    fn add_blocks(ht: &mut AggregateHashTable, blocks: &[DataBlock]) -> usize {
+        let mut state = ProbeState::default();
+        let mut new_groups = 0;
+        for block in blocks {
+            let groups = ProjectedBlock::project(&[0], block);
+            new_groups += ht
+                .add_groups(&mut state, groups, &[], (&[]).into(), block.num_rows())
+                .unwrap();
+        }
+        new_groups
+    }
+
+    #[test]
+    fn test_hash_index_turns_wide_when_row_ids_outgrow_four_bytes() {
+        let groups = 200_000;
+        let blocks = key_blocks(groups, 3);
+        for max_compact_page in [usize::MAX, 2] {
+            let mut ht = AggregateHashTable::new(
+                vec![DataType::Number(NumberDataType::UInt64)],
+                vec![],
+                HashTableConfig::default().with_initial_radix_bits(2),
+                Arc::new(Bump::new()),
+            );
+            ht.payload.row_ids = ht.payload.row_ids.with_max_compact_page(max_compact_page);
+
+            assert_eq!(add_blocks(&mut ht, &blocks), groups as usize);
+            assert_eq!(ht.len(), groups as usize);
+            assert_eq!(ht.hash_index.is_wide(), max_compact_page != usize::MAX);
+            // Every key finds its group again, so no two groups share an id.
+            assert_eq!(add_blocks(&mut ht, &blocks), 0);
+            assert_eq!(ht.len(), groups as usize);
+        }
     }
 }
