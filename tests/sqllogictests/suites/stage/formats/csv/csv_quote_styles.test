@@ -1,0 +1,159 @@
+# QUOTE_NOT_NULL quotes every non-NULL value. QUOTE_NON_NUMERIC leaves only
+# numbers/decimals unquoted. QUOTE_MINIMAL quotes only for syntax or NULL safety.
+statement ok
+drop stage if exists csv_quote_styles
+
+statement ok
+create stage csv_quote_styles file_format = (type = csv field_delimiter = '|' quote = '`' escape = '')
+
+statement ok
+create or replace table csv_quote_source (
+    n int, d decimal(10, 2), f double, b boolean, x binary,
+    s string, day date, a array(int), v variant
+)
+
+statement ok
+insert into csv_quote_source values
+(1, 1.20, 1.5, true, from_hex('ff'), '123', '2026-01-02', [1], parse_json('123')),
+(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+
+statement ok
+create or replace table csv_quote_copy like csv_quote_source
+
+statement ok
+copy into @csv_quote_styles/not_null.csv
+from (select * from csv_quote_source order by n nulls last)
+file_format = (type = csv)
+single = true include_query_id = false use_raw_path = true overwrite = true
+
+query T
+select $1 from @csv_quote_styles/not_null.csv order by metadata$file_row_number
+----
+"1","1.2","1.5","true","FF","123","2026-01-02","[1]","123"
+\N,\N,\N,\N,\N,\N,\N,\N,\N
+
+statement ok
+copy into csv_quote_copy from @csv_quote_styles/not_null.csv file_format = (type = csv)
+
+query II
+select (select count(*) from csv_quote_copy), count(*) from (
+    select * from csv_quote_source except select * from csv_quote_copy
+)
+----
+2 0
+
+statement ok
+truncate table csv_quote_copy
+
+# Persist the new style as a named file format, not just a COPY-local option.
+statement ok
+create or replace file format csv_quote_non_numeric type = csv quote_style = 'QUOTE_NON_NUMERIC'
+
+statement ok
+copy into @csv_quote_styles/non_numeric.csv
+from (select * from csv_quote_source order by n nulls last)
+file_format = (format_name = 'csv_quote_non_numeric')
+single = true include_query_id = false use_raw_path = true overwrite = true
+
+query T
+select $1 from @csv_quote_styles/non_numeric.csv order by metadata$file_row_number
+----
+1,1.2,1.5,"true","FF","123","2026-01-02","[1]","123"
+\N,\N,\N,\N,\N,\N,\N,\N,\N
+
+statement ok
+copy into csv_quote_copy from @csv_quote_styles/non_numeric.csv file_format = (format_name = 'csv_quote_non_numeric')
+
+query II
+select (select count(*) from csv_quote_copy), count(*) from (
+    select * from csv_quote_source except select * from csv_quote_copy
+)
+----
+2 0
+
+statement ok
+truncate table csv_quote_copy
+
+statement ok
+copy into @csv_quote_styles/minimal.csv
+from (select * from csv_quote_source order by n nulls last)
+file_format = (type = csv quote_style = 'quote_minimal')
+single = true include_query_id = false use_raw_path = true overwrite = true
+
+query T
+select $1 from @csv_quote_styles/minimal.csv order by metadata$file_row_number
+----
+1,1.2,1.5,true,FF,123,2026-01-02,[1],123
+\N,\N,\N,\N,\N,\N,\N,\N,\N
+
+statement ok
+copy into csv_quote_copy from @csv_quote_styles/minimal.csv file_format = (type = csv)
+
+query II
+select (select count(*) from csv_quote_copy), count(*) from (
+    select * from csv_quote_source except select * from csv_quote_copy
+)
+----
+2 0
+
+# Even numeric and BINARY values must be quoted when they match NULL_DISPLAY.
+statement ok
+create or replace table csv_quote_collision (n int, x binary, s string)
+
+statement ok
+copy into @csv_quote_styles/numeric_collision.csv
+from (select 1, from_hex('01'), '1')
+file_format = (type = csv quote_style = 'quote_non_numeric' null_display = '1')
+single = true include_query_id = false use_raw_path = true overwrite = true
+
+query T
+select $1 from @csv_quote_styles/numeric_collision.csv
+----
+"1","01","1"
+
+statement ok
+copy into csv_quote_collision from @csv_quote_styles/numeric_collision.csv
+file_format = (type = csv null_display = '1')
+
+query IIT
+select n, length(x), s from csv_quote_collision
+----
+1 1 1
+
+statement ok
+truncate table csv_quote_collision
+
+statement ok
+copy into @csv_quote_styles/binary_collision.csv
+from (select 1, from_hex('ff'), 'FF')
+file_format = (type = csv quote_style = 'quote_minimal' null_display = 'FF')
+single = true include_query_id = false use_raw_path = true overwrite = true
+
+query T
+select $1 from @csv_quote_styles/binary_collision.csv
+----
+1,"FF","FF"
+
+statement ok
+copy into csv_quote_collision from @csv_quote_styles/binary_collision.csv
+file_format = (type = csv null_display = 'FF')
+
+query ITT
+select n, to_hex(x), s from csv_quote_collision
+----
+1 ff FF
+
+statement ok
+drop file format csv_quote_non_numeric
+
+statement ok
+drop stage csv_quote_styles
+
+statement ok
+drop table csv_quote_source
+
+statement ok
+drop table csv_quote_copy
+
+statement ok
+drop table csv_quote_collision
