@@ -256,6 +256,12 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             operator: RelOp::Join,
         },
         StatsCase {
+            name: "cross_join_over_join",
+            description: "A cross join returns every pair of input rows, so its bound is the product of the input bounds.",
+            sql: "SELECT * FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j CROSS JOIN d",
+            operator: RelOp::Join,
+        },
+        StatsCase {
             name: "inner_join_unique_key_missing_peer_stats",
             description: "A unique key caps the expected output at the rows of the side without statistics.",
             sql: "SELECT * FROM d JOIN u ON d.k = u.k",
