@@ -453,15 +453,22 @@ impl Join {
             && self.spatial_join_candidate(rel_expr)?.is_some())
     }
 
-    fn broadcast_build_is_preferred(ctx: &dyn TableContext, rel_expr: &RelExpr) -> Result<bool> {
+    fn broadcast_build_is_preferred(
+        &self,
+        ctx: &dyn TableContext,
+        rel_expr: &RelExpr,
+    ) -> Result<bool> {
         let settings = ctx.get_settings();
         if settings.get_enforce_shuffle_join()? {
             return Ok(false);
         }
+        if settings.get_enforce_broadcast_join()? {
+            return Ok(true);
+        }
 
         let stat_ctx = StatContext::new(ctx.get_function_context()?, &settings);
         let left_cardinality = rel_expr.derive_cardinality_child(0, &stat_ctx)?.cardinality;
-        let right_cardinality = rel_expr.derive_cardinality_child(1, &stat_ctx)?.cardinality;
+        let build_stat_info = rel_expr.derive_cardinality_child(1, &stat_ctx)?;
         let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {
             ctx.get_cluster().nodes.len().saturating_sub(1) as f64
         } else {
@@ -470,9 +477,21 @@ impl Join {
         };
 
         Ok(
-            right_cardinality * broadcast_join_threshold < left_cardinality
-                || settings.get_enforce_broadcast_join()?,
+            build_stat_info.cardinality * broadcast_join_threshold < left_cardinality
+                && self.broadcast_build_is_safe(ctx, &build_stat_info)?,
         )
+    }
+
+    /// Whether an automatically selected broadcast may copy this build input
+    /// to every node. `enforce_broadcast_join` bypasses this check.
+    fn broadcast_build_is_safe(&self, ctx: &dyn TableContext, build: &StatInfo) -> Result<bool> {
+        // A single node does not copy the build side, and a cross join has no
+        // hash distribution to fall back to.
+        if ctx.get_cluster().nodes.len() <= 1 || matches!(self.join_type, JoinType::Cross) {
+            return Ok(true);
+        }
+        let max_build_rows = ctx.get_settings().get_max_broadcast_join_build_rows()?;
+        Ok(is_safe_broadcast_build(build, max_build_rows))
     }
 }
 
@@ -674,7 +693,7 @@ impl PhysicalOperator for Join {
                     | JoinType::RightAsof
                     | JoinType::FullAsof
             )
-            && Self::broadcast_build_is_preferred(ctx.as_ref(), rel_expr)?
+            && self.broadcast_build_is_preferred(ctx.as_ref(), rel_expr)?
         {
             required.distribution = if child_index == 1 {
                 Distribution::Broadcast
@@ -709,7 +728,7 @@ impl PhysicalOperator for Join {
                 | JoinType::LeftAsof
                 | JoinType::RightAsof
                 | JoinType::FullAsof
-        ) && Self::broadcast_build_is_preferred(ctx.as_ref(), rel_expr)?
+        ) && self.broadcast_build_is_preferred(ctx.as_ref(), rel_expr)?
         {
             required.distribution = if child_index == 1 {
                 Distribution::Broadcast
@@ -742,7 +761,7 @@ impl PhysicalOperator for Join {
     fn compute_required_prop_children(
         &self,
         ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
+        rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
@@ -834,7 +853,10 @@ impl PhysicalOperator for Join {
         }
 
         let settings = ctx.get_settings();
-        if !matches!(self.join_type, JoinType::Cross) && !settings.get_enforce_broadcast_join()? {
+        let enforce_broadcast_join = settings.get_enforce_broadcast_join()?;
+        let stat_ctx = StatContext::new(ctx.get_function_context()?, &settings);
+        let build_stat_info = rel_expr.derive_cardinality_child(1, &stat_ctx)?;
+        if !matches!(self.join_type, JoinType::Cross) && !enforce_broadcast_join {
             // (Hash, Hash) – use full equi-join key set to avoid single-column hash shuffle
             let left_keys: Vec<_> = self
                 .equi_conditions
@@ -875,6 +897,8 @@ impl PhysicalOperator for Join {
                 | JoinType::RightAsof
                 | JoinType::FullAsof
         ) && !settings.get_enforce_shuffle_join()?
+            && (enforce_broadcast_join
+                || self.broadcast_build_is_safe(ctx.as_ref(), &build_stat_info)?)
         {
             // (Any, Broadcast)
             let left_distribution = Distribution::Any;
@@ -903,6 +927,20 @@ impl PhysicalOperator for Join {
 
         Ok(children_required)
     }
+}
+
+/// Whether a build input is small and reliably estimated enough to broadcast.
+/// `max_build_rows = 0` disables the row limit.
+fn is_safe_broadcast_build(stat_info: &StatInfo, max_build_rows: u64) -> bool {
+    let cardinality = stat_info.cardinality;
+    let subtree_cardinality = stat_info.max_cardinality;
+    let max_cardinality = subtree_cardinality.max(cardinality);
+    cardinality.is_finite()
+        && subtree_cardinality.is_finite()
+        && cardinality >= 0.0
+        && subtree_cardinality >= 0.0
+        && (max_build_rows == 0 || max_cardinality <= max_build_rows as f64)
+        && !stat_info.cardinality_is_severely_underestimated()
 }
 
 #[cfg(test)]
@@ -1044,5 +1082,82 @@ mod tests {
 
         assert_eq!(physical_prop.distribution, Distribution::Random);
         Ok(())
+    }
+
+    const MAX_BROADCAST_BUILD_ROWS: u64 = 100_000_000;
+
+    fn build_stat(cardinality: f64, max_cardinality: f64) -> StatInfo {
+        StatInfo {
+            cardinality,
+            max_cardinality,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_safe_broadcast_build_accepts_small_reliable_estimate() {
+        assert!(is_safe_broadcast_build(
+            &build_stat(1_000.0, 10_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        assert!(is_safe_broadcast_build(
+            &build_stat(0.0, 0.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        // A bound below the estimate (the `Default` value is 0) falls back to the estimate.
+        assert!(is_safe_broadcast_build(
+            &build_stat(1_000.0, 0.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+    }
+
+    #[test]
+    fn test_safe_broadcast_build_rejects_severe_underestimate() {
+        // 10 estimated rows out of up to 100M input rows is a 10M-fold gap.
+        assert!(!is_safe_broadcast_build(
+            &build_stat(10.0, 100_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        assert!(!is_safe_broadcast_build(
+            &build_stat(0.0, 1.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        assert!(!is_safe_broadcast_build(
+            &build_stat(10.0, 100_000_000.0),
+            0
+        ));
+    }
+
+    #[test]
+    fn test_safe_broadcast_build_applies_row_limit() {
+        assert!(is_safe_broadcast_build(
+            &build_stat(100_000_000.0, 100_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        assert!(!is_safe_broadcast_build(
+            &build_stat(200_000_000.0, 200_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        // A limit of 0 disables the row limit.
+        assert!(is_safe_broadcast_build(
+            &build_stat(200_000_000.0, 200_000_000.0),
+            0
+        ));
+    }
+
+    #[test]
+    fn test_safe_broadcast_build_rejects_invalid_estimates() {
+        for (cardinality, max_cardinality) in [
+            (f64::NAN, 10.0),
+            (10.0, f64::NAN),
+            (f64::INFINITY, 10.0),
+            (10.0, f64::INFINITY),
+            (-1.0, 10.0),
+        ] {
+            assert!(
+                !is_safe_broadcast_build(&build_stat(cardinality, max_cardinality), 0),
+                "cardinality={cardinality}, max_cardinality={max_cardinality}"
+            );
+        }
     }
 }

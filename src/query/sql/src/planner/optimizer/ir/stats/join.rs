@@ -41,6 +41,7 @@ use crate::optimizer::ir::Side;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 
@@ -338,6 +339,7 @@ pub(crate) struct JoinStatsEstimator {
     left_input: Arc<StatInfo>,
     right_input: Arc<StatInfo>,
     contributions: Vec<JoinConditionContribution>,
+    unique_key_output_bound: Option<f64>,
 }
 
 impl JoinStatsEstimator {
@@ -351,6 +353,7 @@ impl JoinStatsEstimator {
             left_input,
             right_input,
             contributions: Vec::new(),
+            unique_key_output_bound: None,
         }
     }
 
@@ -368,6 +371,12 @@ impl JoinStatsEstimator {
             .precise_cardinality
             .map(StatCardinality::exact)
             .unwrap_or_else(|| StatCardinality::estimate(self.right_input.cardinality));
+        let unique_key_output_bound = join
+            .equi_conditions
+            .iter()
+            .filter_map(|condition| self.unique_key_bound(condition))
+            .reduce(f64::min);
+        self.unique_key_output_bound = unique_key_output_bound;
         for condition in &join.equi_conditions {
             let (left, right) = condition.canonical_keys();
             let evaluated = EquiCondition::estimate_locally(
@@ -423,6 +432,7 @@ impl JoinStatsEstimator {
         if self.output_is_proven_empty() {
             return Ok(Arc::new(StatInfo {
                 cardinality: 0.0,
+                max_cardinality: 0.0,
                 statistics: Statistics {
                     precise_cardinality: Some(0),
                     column_stats: HashMap::new(),
@@ -445,6 +455,7 @@ impl JoinStatsEstimator {
         };
         Ok(Arc::new(StatInfo {
             cardinality: output_rows,
+            max_cardinality: self.max_output_cardinality(output_rows),
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
@@ -452,6 +463,60 @@ impl JoinStatsEstimator {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+
+    /// A unique join key caps fan-out: every row on the peer side matches at
+    /// most one row on the unique side. Uniqueness comes from statistics, so
+    /// this only bounds the expected output, not `max_cardinality`.
+    fn unique_key_bound(&self, condition: &JoinEquiCondition) -> Option<f64> {
+        let left_rows = self.left_input.cardinality;
+        let right_rows = self.right_input.cardinality;
+        let (left, right) = condition.canonical_keys();
+        let is_unique = |key: &ScalarExpr, input: &StatInfo, rows: f64| {
+            identity_column(key)
+                .and_then(|column| input.statistics.column_stats.get(&column))
+                .is_some_and(|stat| is_unique_join_key(stat, rows, condition.is_null_equal))
+        };
+        let left_unique = is_unique(left, &self.left_input, left_rows);
+        let right_unique = is_unique(right, &self.right_input, right_rows);
+        match self.join_type {
+            JoinType::Inner | JoinType::InnerAny => match (left_unique, right_unique) {
+                (true, true) => Some(left_rows.min(right_rows)),
+                (true, false) => Some(right_rows),
+                (false, true) => Some(left_rows),
+                (false, false) => None,
+            },
+            JoinType::Left | JoinType::LeftAny if right_unique => Some(left_rows),
+            JoinType::Right | JoinType::RightAny if left_unique => Some(right_rows),
+            JoinType::Full if left_unique || right_unique => Some(left_rows + right_rows),
+            _ => None,
+        }
+    }
+
+    /// Conservative bound of the rows that may reach the join output. Joins
+    /// that output at most one row per row of one input are bounded by that
+    /// input. Otherwise skew and fan-out make the output estimate unsafe, so
+    /// keep the largest input bound.
+    fn max_output_cardinality(&self, output_rows: f64) -> f64 {
+        let left = self
+            .left_input
+            .max_cardinality
+            .max(self.left_input.cardinality);
+        let right = self
+            .right_input
+            .max_cardinality
+            .max(self.right_input.cardinality);
+        match self.join_type {
+            JoinType::LeftSemi
+            | JoinType::LeftAnti
+            | JoinType::LeftSingle
+            | JoinType::RightMark => left.max(output_rows),
+            JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::RightSingle
+            | JoinType::LeftMark => right.max(output_rows),
+            _ => output_rows.max(left).max(right),
+        }
     }
 
     /// Returns true when an input that is proven empty (`precise_cardinality =
@@ -507,6 +572,10 @@ impl JoinStatsEstimator {
             &left_matches,
             &right_matches,
         );
+        let output_rows = match self.unique_key_output_bound {
+            Some(bound) => output_rows.min(bound.max(0.0)),
+            None => output_rows,
+        };
         let left = self.finish_side_stats(
             Side::Left,
             left_matches,
@@ -1295,6 +1364,16 @@ fn combined_input_statistics(
     (statistics, column_row_scales)
 }
 
+fn is_unique_join_key(stat: &ColumnStat, cardinality: f64, is_null_equal: bool) -> bool {
+    // NULL-safe equality matches NULL keys with each other.
+    if is_null_equal && stat.null_count().upper() > 1.0 {
+        return false;
+    }
+    let non_null_rows =
+        (cardinality - join_key_null_count_for_cardinality(stat, cardinality)).max(0.0);
+    stat.ndv().expected.is_some_and(|ndv| ndv >= non_null_rows)
+}
+
 fn identity_column(expression: &ScalarExpr) -> Option<Symbol> {
     match expression {
         ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
@@ -1319,5 +1398,50 @@ fn null_rejected_column(expression: &ScalarExpr) -> Option<Symbol> {
             }
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn int_key(ndv: NdvEstimate, null_count: u64) -> ColumnStat {
+        ColumnStat::Int {
+            min: 1,
+            max: 1_000,
+            ndv,
+            null_count: StatCount::exact(null_count),
+            histogram: None,
+        }
+    }
+
+    #[test]
+    fn test_unique_join_key_excludes_null_rows() {
+        let key = int_key(NdvEstimate::exact(1_000.0), 10);
+        assert!(is_unique_join_key(&key, 1_010.0, false));
+        assert!(!is_unique_join_key(&key, 1_020.0, false));
+    }
+
+    #[test]
+    fn test_unique_join_key_rejects_repeated_nulls_for_null_safe_equality() {
+        assert!(!is_unique_join_key(
+            &int_key(NdvEstimate::exact(1_000.0), 10),
+            1_010.0,
+            true
+        ));
+        assert!(is_unique_join_key(
+            &int_key(NdvEstimate::exact(1_000.0), 1),
+            1_001.0,
+            true
+        ));
+    }
+
+    #[test]
+    fn test_unique_join_key_requires_expected_ndv() {
+        assert!(!is_unique_join_key(
+            &int_key(NdvEstimate::upper_bound(1_000.0), 0),
+            1_000.0,
+            false
+        ));
     }
 }
