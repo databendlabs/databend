@@ -489,6 +489,15 @@ impl DiskPool {
             .collect()
     }
 
+    /// Drops the invalidation points up to `point`, before which no running fill started. All
+    /// are kept until the restart scan has run.
+    pub fn prune_invalidations(&self, point: u64) {
+        let mut state = self.state.lock();
+        if state.reloaded {
+            state.prune_invalidations(point);
+        }
+    }
+
     /// The last point `object` was invalidated at, while it is kept (see `remove_object`).
     pub fn invalidated_at(&self, object: &str) -> Option<u64> {
         self.state.lock().invalidated.get(object).copied()

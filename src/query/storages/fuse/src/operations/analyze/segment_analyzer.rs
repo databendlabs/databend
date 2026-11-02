@@ -32,7 +32,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_statistics::KllSketch;
 use databend_storages_common_cache::CompactSegmentInfo;
-use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
@@ -430,9 +429,7 @@ impl SegmentAnalyzer {
                 segment_loc,
             );
         self.dal.write(&stats_location, data).await?;
-        // Rewritten in place: drop the old statistics from the memory and the disk cache.
         self.segment_cache.evict_stats(&stats_location);
-        DiskCachedStorage::new(self.dal.clone()).evict_object(&stats_location);
 
         summary.additional_stats_meta = Some(AdditionalStatsMeta {
             size,

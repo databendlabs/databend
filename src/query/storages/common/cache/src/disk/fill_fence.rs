@@ -17,15 +17,22 @@
 //! then rejects an entry whose fill started before the last invalidation of its object. Bytes
 //! read before an object was rewritten or deleted are so never published after it, however
 //! long they wait in the write queue.
+//!
+//! The pools keep invalidation points only while a fill started before them runs; when the
+//! oldest fill finishes, the fence tells them which points they can drop.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
 
+/// Called with a point when the oldest fill finishes: no fill running started before it.
+pub type OnAdvance = Box<dyn Fn(u64) + Send + Sync>;
+
 #[derive(Default)]
 pub struct FillFence {
     state: Mutex<FenceState>,
+    on_advance: Option<OnAdvance>,
 }
 
 #[derive(Default)]
@@ -46,6 +53,14 @@ struct Ticket {
 }
 
 impl FillFence {
+    /// A fence that calls `on_advance` when the oldest fill finishes.
+    pub fn with_on_advance(on_advance: OnAdvance) -> Self {
+        FillFence {
+            state: Mutex::default(),
+            on_advance: Some(on_advance),
+        }
+    }
+
     /// Starts a fill.
     pub fn begin(self: &Arc<Self>) -> FillTicket {
         let mut state = self.state.lock();
@@ -77,6 +92,16 @@ impl FillTicket {
 
 impl Drop for Ticket {
     fn drop(&mut self) {
-        self.fence.state.lock().active.remove(&self.started);
+        let advanced = {
+            let mut state = self.fence.state.lock();
+            let oldest = state.active.first() == Some(&self.started);
+            state.active.remove(&self.started);
+            // No fill running started before the new oldest one, or before the clock.
+            oldest.then(|| state.active.first().copied().unwrap_or(state.clock))
+        };
+        // Outside the fence lock: the callback takes the pool locks.
+        if let (Some(point), Some(on_advance)) = (advanced, &self.fence.on_advance) {
+            on_advance(point);
+        }
     }
 }

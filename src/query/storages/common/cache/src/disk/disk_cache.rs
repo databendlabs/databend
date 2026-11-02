@@ -148,6 +148,7 @@ impl DiskCache {
                 ))
             })?;
         }
+        let fenced = pools.clone();
         let pressure_order = Pool::RECLAIM_ORDER
             .iter()
             .map(|pool| pools[pool.index()].clone())
@@ -161,7 +162,11 @@ impl DiskCache {
             kinds_enabled: CacheKind::all().map(|_| AtomicBool::new(true)).collect(),
             names: CacheKind::all().map(disk_name).collect(),
             flight: SingleFlight::default(),
-            fence: Arc::new(FillFence::default()),
+            fence: Arc::new(FillFence::with_on_advance(Box::new(move |point| {
+                for pool in &fenced {
+                    pool.prune_invalidations(point);
+                }
+            }))),
             updates: Mutex::new(()),
         })
     }
@@ -325,10 +330,11 @@ impl DiskCache {
             .filter(|p| **p != pool)
             .map(|p| self.pools[p.index()].cap())
             .sum();
-        if others + cap > self.max_bytes {
+        // Checked: `cap` may be any u64.
+        let total = others.saturating_add(cap);
+        if total > self.max_bytes {
             return Err(ErrorCode::BadArguments(format!(
-                "disk cache pools would hold {} bytes, more than cache.disk.max_bytes {}",
-                others + cap,
+                "disk cache pools would hold {total} bytes, more than cache.disk.max_bytes {}",
                 self.max_bytes
             )));
         }

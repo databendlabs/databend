@@ -63,14 +63,14 @@ impl CacheDef for BlockMetas {
 }
 
 /// Segment statistics, by location. Loads are not shared: `ANALYZE` rewrites the file in
-/// place and evicts it.
+/// place and evicts it. Not on disk: only writes and maintenance read them, and the disk cache
+/// serves queries.
 pub struct Stats;
 
 impl CacheDef for Stats {
     type Value = Arc<SegmentStatistics>;
     const NAME: &'static str = "memory_cache_segment_statistics";
     const POOL: Pool = Pool::Meta;
-    const DISK: bool = true;
 }
 
 impl CachedItem for CompactSegmentInfo {

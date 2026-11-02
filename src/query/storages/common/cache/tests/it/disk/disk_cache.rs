@@ -613,3 +613,25 @@ async fn test_concurrent_kind_toggles_stay_consistent() {
     assert_eq!(cache.is_kind_enabled(data()), queued);
     assert_eq!(cache.is_kind_enabled(data()), cache.contains(data(), &key));
 }
+
+/// Invalidations kept while an old fill runs are dropped when it finishes, without waiting
+/// for another invalidation.
+#[test]
+fn test_invalidations_are_dropped_when_the_oldest_fill_finishes() {
+    let dir = TempDir::new().unwrap();
+    let cache = cache(&dir);
+    cache.reload_now();
+    let kind = CacheKind::of::<segment::Info>();
+    let paths: Vec<_> = (0..1_000).map(|i| format!("1/2/_sg/{i}.mpk")).collect();
+    let old = cache.begin_fill();
+    let newer = cache.begin_fill();
+    for path in &paths {
+        assert_eq!(cache.evict_object(path), 0);
+    }
+    assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) > 0));
+    // A fill that is not the oldest finishing changes nothing.
+    drop(newer);
+    assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) > 0));
+    drop(old);
+    assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) == 0));
+}

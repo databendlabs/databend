@@ -296,8 +296,9 @@ async fn segments_and_stats(
     Ok((segments, stats))
 }
 
-/// ANALYZE rewrites segments and their statistics in place when it scans blocks for statistics
-/// they lack. Read before by a query, they are read as rewritten after.
+/// ANALYZE rewrites segments in place, with their statistics, when it scans blocks for
+/// statistics they lack. Read before by a query, the segments are read as rewritten after.
+/// Segment statistics have no disk tier: only writes and maintenance read them.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_analyze_rewrites_are_not_read_back_as_they_were() -> anyhow::Result<()> {
     let dir = TempDir::new()?;
@@ -316,14 +317,10 @@ async fn test_analyze_rewrites_are_not_read_back_as_they_were() -> anyhow::Resul
     let op = FuseTable::try_from_table(table.as_ref())?.get_operator();
     let (segments, stats) = segments_and_stats(&fixture, "t").await?;
     assert!(!stats.is_empty(), "ANALYZE wrote no segment statistics");
+    assert!(!CacheKind::of::<segment::Stats>().on_disk());
     let objects: Vec<_> = segments
         .iter()
         .map(|p| (CacheKind::of::<segment::Info>(), p.clone()))
-        .chain(
-            stats
-                .iter()
-                .map(|p| (CacheKind::of::<segment::Stats>(), p.clone())),
-        )
         .collect();
     let mut old = Vec::new();
     for (kind, path) in &objects {

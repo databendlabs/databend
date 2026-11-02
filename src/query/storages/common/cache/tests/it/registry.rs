@@ -21,6 +21,7 @@ use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::inverted;
+use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_cache::kinds::vector;
 
 use crate::fakes::Item;
@@ -100,7 +101,6 @@ fn test_disk_kinds() {
         "disk_cache_table_statistics",
         "disk_cache_compact_segment_info",
         "disk_cache_column_oriented_segment_info",
-        "disk_cache_segment_statistics",
         "disk_cache_bloom_index_file_meta_data",
         "disk_cache_inverted_index_meta_data",
         "disk_cache_vector_index_file_meta_data",
@@ -114,10 +114,12 @@ fn test_disk_kinds() {
         "disk_cache_spatial_index_file",
         "disk_cache_column_data",
     ]);
-    // Decoded values and results computed from several objects are not.
+    // Decoded values and results computed from several objects are not, nor what only writes
+    // and maintenance read.
     for kind in [
         CacheKind::of::<column::Array>(),
         CacheKind::of::<vector::Index>(),
+        CacheKind::of::<segment::Stats>(),
     ] {
         assert!(!kind.on_disk(), "{kind:?}");
         assert!(!disk.is_enabled(kind), "{kind:?}");
