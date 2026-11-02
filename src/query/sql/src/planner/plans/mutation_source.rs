@@ -104,6 +104,7 @@ impl Operator for MutationSource {
                 column_stats: Default::default(),
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                observed_ndv_columns: Default::default(),
             },
         }))
     }

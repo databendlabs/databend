@@ -49,16 +49,18 @@ impl FuseTableColumnStatisticsProvider {
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
+                // `get_useful_stat` fills a missing NDV from the row count and
+                // marks it as inferred.
                 let ndv = distinct_map
                     .and_then(|map| map.get(&column_id).cloned())
-                    .or(stat.distinct_of_values)
-                    .unwrap_or(row_count);
+                    .or(stat.distinct_of_values);
                 let stat = BasicColumnStatistics {
                     min: stat.min.to_datum(),
                     max: stat.max.to_datum(),
-                    ndv: Some(ndv),
+                    ndv,
                     null_count: stat.null_count,
                     in_memory_size: stat.in_memory_size,
+                    ndv_is_inferred: false,
                 };
                 (column_id, stat.get_useful_stat(row_count, stats_row_count))
             })
@@ -104,5 +106,46 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
 
     fn count_min_sketch(&self, column_id: ColumnId) -> Option<ColumnCountMinSketch> {
         self.count_min_sketch.get(&column_id).cloned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_statistics::Datum;
+
+    use super::*;
+
+    fn int_column_stat(distinct_of_values: Option<u64>) -> FuseColumnStatistics {
+        FuseColumnStatistics::new(
+            Scalar::Number(NumberScalar::Int64(1)),
+            Scalar::Number(NumberScalar::Int64(1_000_000)),
+            0,
+            8_000,
+            distinct_of_values,
+        )
+    }
+
+    #[test]
+    fn test_missing_ndv_is_marked_as_inferred() {
+        let provider = FuseTableColumnStatisticsProvider::new(
+            HashMap::from([(0, int_column_stat(None)), (1, int_column_stat(Some(500)))]),
+            HashMap::new(),
+            Default::default(),
+            Default::default(),
+            None,
+            1_000,
+            1_000,
+        );
+
+        let missing = provider.column_statistics(0).unwrap();
+        assert_eq!(missing.min, Some(Datum::Int(1)));
+        assert_eq!(missing.ndv, Some(1_000));
+        assert!(missing.ndv_is_inferred);
+
+        let collected = provider.column_statistics(1).unwrap();
+        assert_eq!(collected.ndv, Some(500));
+        assert!(!collected.ndv_is_inferred);
     }
 }
