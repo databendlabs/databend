@@ -29,7 +29,9 @@
 //!
 //! The pool also keeps the entries of each object, by object id, so `remove_object` can drop
 //! all of them when the object is rewritten or deleted, and the points the objects were
-//! invalidated at, so `publish` rejects an entry read before (see `fill_fence`).
+//! invalidated at, so `publish` rejects an entry read before (see `fill_fence`). Until the
+//! restart scan has run, every invalidation is kept, so the scan does not index the files of
+//! an object invalidated before it got to them.
 //!
 //! `publish` checks the capacity again: it may have shrunk while the entry was written.
 
@@ -115,8 +117,10 @@ struct State {
     /// The entries of each object, by object id.
     objects: HashMap<String, Vec<String>>,
     /// The last point each object was invalidated at, while fills started before it may still
-    /// publish.
+    /// publish, or while the restart scan has not run.
     invalidated: HashMap<String, u64>,
+    /// Whether the restart scan has run.
+    reloaded: bool,
 }
 
 impl State {
@@ -211,6 +215,7 @@ impl DiskPool {
                 in_flight: HashSet::new(),
                 objects: HashMap::new(),
                 invalidated: HashMap::new(),
+                reloaded: false,
             }),
             hit: AtomicU64::new(0),
             miss: AtomicU64::new(0),
@@ -243,12 +248,14 @@ impl DiskPool {
 
     /// Reserves `bytes` for `rel`, taking least recently used entries out of the index until
     /// they fit. Rejects an entry larger than a quarter of the pool, any entry when the pool is
-    /// off, and `rel` while its previous file is being deleted or another write of it runs.
+    /// off, and `rel` while it is indexed (found by the restart scan since it was queued), its
+    /// previous file is being deleted, or another write of it runs.
     pub fn reserve(&self, rel: &str, bytes: u64) -> Reservation {
         let mut state = self.state.lock();
         let mut victims = Vec::new();
         if state.cap == 0
             || bytes > state.cap / OVERSIZED_DIVISOR
+            || state.index.contains(rel)
             || state.deleting.contains(rel)
             || state.in_flight.contains(rel)
         {
@@ -278,8 +285,8 @@ impl DiskPool {
     }
 
     /// Publishes the entry written under a reservation by a fill started at `started` (see
-    /// `fill_fence`). An entry already indexed under `rel` (written concurrently, or found by
-    /// the restart scan) is replaced, not counted twice. The entry is rejected, as a victim,
+    /// `fill_fence`). A key reserved is neither indexed nor scanned meanwhile, so the entry is
+    /// new to the index. The entry is rejected, as a victim,
     /// when its object was invalidated after the fill started, or when it no longer fits the
     /// capacity; entries are evicted when the capacity shrank below what is held.
     pub fn publish(&self, rel: String, reserved: u64, written: u64, started: u64) -> Published {
@@ -323,11 +330,13 @@ impl DiskPool {
     /// returns them, for `delete`. `oldest_fill` is the start of the oldest fill running.
     pub fn remove_object(&self, object: &str, at: u64, oldest_fill: Option<u64>) -> Vec<String> {
         let mut state = self.state.lock();
-        // Points no running fill started before reject nothing any more.
-        state
-            .invalidated
-            .retain(|_, point| oldest_fill.is_some_and(|oldest| oldest < *point));
-        if oldest_fill.is_some_and(|oldest| oldest < at) {
+        if state.reloaded {
+            // Points no running fill started before reject nothing any more.
+            state
+                .invalidated
+                .retain(|_, point| oldest_fill.is_some_and(|oldest| oldest < *point));
+        }
+        if !state.reloaded || oldest_fill.is_some_and(|oldest| oldest < at) {
             state.invalidated.insert(object.to_string(), at);
         }
         let rels = state.objects.get(object).cloned().unwrap_or_default();
@@ -423,6 +432,11 @@ impl DiskPool {
             .collect()
     }
 
+    /// The last point `object` was invalidated at, while it is kept (see `remove_object`).
+    pub fn invalidated_at(&self, object: &str) -> Option<u64> {
+        self.state.lock().invalidated.get(object).copied()
+    }
+
     /// Items and bytes of `kind` in the pool.
     pub fn kind_usage(&self, kind: CacheKind) -> (u64, u64) {
         self.state.lock().kinds[kind.index()]
@@ -430,8 +444,9 @@ impl DiskPool {
 
     /// Rebuilds the index from the files under the root, in scan order, and deletes what does
     /// not belong: files of unknown kinds, files left half written, and files beyond the
-    /// capacity. Returns the entries loaded and the files deleted. Runs concurrently with reads
-    /// and writes: a key indexed meanwhile, or being deleted, is skipped.
+    /// capacity, or of objects invalidated meanwhile. Returns the entries loaded and the files
+    /// deleted. Runs concurrently with reads and writes: a key indexed meanwhile, being deleted
+    /// or being written is skipped.
     pub fn reload(&self) -> (u64, u64) {
         let loaded = AtomicU64::new(0);
         let deleted = AtomicU64::new(0);
@@ -465,7 +480,9 @@ impl DiskPool {
                     // Indexed by a write meanwhile, being deleted, or being written: its file
                     // is not the scan's to keep or delete.
                     true
-                } else if state.used() + size <= state.cap && size <= state.cap / OVERSIZED_DIVISOR
+                } else if state.used() + size <= state.cap
+                    && size <= state.cap / OVERSIZED_DIVISOR
+                    && object_of(&rel).is_none_or(|o| !state.invalidated.contains_key(o))
                 {
                     state.insert(rel.clone(), size);
                     loaded.fetch_add(1, Ordering::Relaxed);
@@ -481,6 +498,7 @@ impl DiskPool {
                 self.state.lock().deleting.remove(&rel);
             }
         });
+        self.state.lock().reloaded = true;
         let (loaded, deleted) = (loaded.into_inner(), deleted.into_inner());
         info!(
             "[DiskCache] pool {}: reloaded {loaded} entries, deleted {deleted} files",

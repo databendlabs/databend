@@ -117,7 +117,7 @@ pub(crate) async fn execute_analyze(
     table: &FuseTable,
     options: AnalyzeOptions,
 ) -> Result<()> {
-    let Some(snapshot) = table.read_table_snapshot().await? else {
+    let Some(snapshot) = table.read_table_snapshot_without_disk_fill().await? else {
         return Ok(());
     };
     let mut pipeline = Pipeline::create();

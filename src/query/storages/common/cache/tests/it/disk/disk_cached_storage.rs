@@ -502,3 +502,39 @@ async fn test_read_in_flight_during_a_rewrite_is_not_cached() {
         storage.evict_object(PATH);
     }
 }
+
+/// A read started after the object was rewritten and invalidated does not join a read of it
+/// still in flight from before: it reads storage itself and gets the rewritten bytes.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_read_after_an_invalidation_does_not_join_one_before() {
+    let dir = TempDir::new().unwrap();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .finish()
+        .layer(CountingLayer(reads.clone()));
+    op.write(PATH, object()).await.unwrap();
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op.clone(), Some(disk.clone()));
+    let before = {
+        let storage = storage.clone();
+        databend_common_base::runtime::spawn(async move {
+            storage
+                .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+                .await
+        })
+    };
+    // The old bytes are read and wait to be returned; the object is rewritten meanwhile.
+    wait_for(|| reads.load(std::sync::atomic::Ordering::Relaxed) == 1);
+    let rewritten = Bytes::from(vec![7u8; 100]);
+    op.write(PATH, rewritten.clone()).await.unwrap();
+    storage.evict_object(PATH);
+    let after = storage
+        .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    assert_eq!(after, rewritten.slice(0..10));
+    assert_eq!(reads.load(std::sync::atomic::Ordering::Relaxed), 2);
+    assert_eq!(before.await.unwrap().unwrap(), object().slice(0..10));
+}

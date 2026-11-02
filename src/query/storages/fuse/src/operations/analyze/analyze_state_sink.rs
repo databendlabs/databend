@@ -461,7 +461,7 @@ impl SinkAnalyzeState {
     async fn commit_statistics(&mut self) -> Result<()> {
         let table = self.table.refresh(self.ctx.as_ref()).await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let Some(snapshot) = table.read_table_snapshot().await? else {
+        let Some(snapshot) = table.read_table_snapshot_without_disk_fill().await? else {
             return Ok(());
         };
         self.rebase_statistics(table, snapshot.clone()).await?;

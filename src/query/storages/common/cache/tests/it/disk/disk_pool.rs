@@ -130,15 +130,16 @@ fn test_reserve_fails_when_only_writes_in_flight_are_left() {
     assert_consistent(&pool);
 }
 
-/// Publishing a key already indexed, by a concurrent write or the restart scan, replaces
-/// the entry instead of counting it twice.
+/// A key indexed, by a write or the restart scan since it was queued, is not reserved again:
+/// replacing it would leave the indexed entry evictable while its new file is written.
 #[test]
-fn test_publish_replaces_an_indexed_entry() {
+fn test_indexed_key_is_not_reserved_again() {
     let pool = pool(1000);
-    put(&pool, &rel(data(), "a"), 100);
-    put(&pool, &rel(data(), "a"), 120);
-    assert_eq!((pool.stats().items, pool.stats().bytes), (1, 120));
-    assert_eq!(pool.kind_usage(data()), (1, 120));
+    let a = rel(data(), "a");
+    put(&pool, &a, 100);
+    let r = pool.reserve(&a, 120);
+    assert!(!r.reserved && r.victims.is_empty());
+    assert_eq!((pool.stats().items, pool.stats().bytes), (1, 100));
     assert_consistent(&pool);
 }
 
@@ -485,6 +486,8 @@ fn test_publish_rejects_fills_started_before_an_invalidation() {
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_path_buf();
     let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
+    // Before the restart scan every point is kept; see the reload test.
+    assert_eq!(pool.reload(), (0, 0));
     let object = DiskKey::object_id("t/a");
     let a = DiskKey::range("t/a", 0..10).rel_path(data());
     let b = DiskKey::range("t/a", 10..20).rel_path(meta());
@@ -571,5 +574,40 @@ fn test_publish_fits_a_pool_shrunk_under_writes() {
     let stats = pool.stats();
     assert_eq!((stats.items, stats.bytes, stats.writing), (0, 0, 0));
     assert!(files_under(&root).is_empty());
+    assert_consistent(&pool);
+}
+
+/// Objects invalidated before the restart scan got to their files: the scan deletes the files
+/// instead of indexing their old bytes, though no fill was running. Once the scan has run, the
+/// points are dropped with the next invalidation.
+#[test]
+fn test_reload_does_not_index_objects_invalidated_before_it() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    let units = [
+        DiskKey::whole("t/a").rel_path(data()),
+        DiskKey::range("t/a", 0..10).rel_path(meta()),
+    ];
+    let other = DiskKey::whole("t/b").rel_path(data());
+    for rel in units.iter().chain([&other]) {
+        write_file(&root, rel, 100);
+    }
+    let object = DiskKey::object_id("t/a");
+    assert!(pool.remove_object(&object, 1, None).is_empty());
+    assert_eq!(pool.invalidated_at(&object), Some(1));
+
+    assert_eq!(pool.reload(), (1, 2));
+    assert!(
+        units
+            .iter()
+            .all(|rel| !root.join(rel).exists() && !pool.contains(rel))
+    );
+    assert!(pool.contains(&other));
+    assert!(
+        pool.remove_object(&DiskKey::object_id("t/c"), 2, None)
+            .is_empty()
+    );
+    assert_eq!(pool.invalidated_at(&object), None);
     assert_consistent(&pool);
 }

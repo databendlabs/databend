@@ -177,7 +177,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                 Err(_) => return Ok(PipelineBuildResult::create()),
             };
 
-            let Some(snapshot) = table.read_table_snapshot().await? else {
+            let Some(snapshot) = table.read_table_snapshot_without_disk_fill().await? else {
                 return Ok(PipelineBuildResult::create());
             };
 

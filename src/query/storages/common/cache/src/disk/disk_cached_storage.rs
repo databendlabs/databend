@@ -159,7 +159,11 @@ impl DiskCachedStorage {
             }
             Ok(bytes)
         };
-        disk.flight().run(&format!("{kind:?}/{key}"), load).await
+        // A read started after the object was invalidated does not join one started before.
+        let generation = disk.invalidation_of(kind, key.path());
+        disk.flight()
+            .run(&format!("{kind:?}/{key}@{generation}"), load)
+            .await
     }
 
     async fn read_storage(&self, path: &str, range: Option<Range<u64>>) -> Result<Bytes> {

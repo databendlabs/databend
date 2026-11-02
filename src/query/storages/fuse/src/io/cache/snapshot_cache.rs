@@ -74,6 +74,15 @@ impl SnapshotCache {
             stats: self.stats.read_only(),
         }
     }
+
+    /// Reads fill the memory caches but not the disk cache: for maintenance, see
+    /// `MemCache::without_disk_fill`.
+    pub fn without_disk_fill(&self) -> Self {
+        SnapshotCache {
+            snapshots: self.snapshots.without_disk_fill(),
+            stats: self.stats.without_disk_fill(),
+        }
+    }
 }
 
 #[cfg(test)]

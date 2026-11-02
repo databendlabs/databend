@@ -286,6 +286,15 @@ impl DiskCache {
         self.pool(kind).remove(&key.rel_path(kind))
     }
 
+    /// The last point the object at `path` was invalidated at, as kept by the pool of `kind`
+    /// while fills started before may run; 0 if none. Reads of an object in flight across an
+    /// invalidation are not shared with reads started after it.
+    pub fn invalidation_of(&self, kind: CacheKind, path: &str) -> u64 {
+        self.pool(kind)
+            .invalidated_at(&DiskKey::object_id(path))
+            .unwrap_or(0)
+    }
+
     /// Drops every unit of the object at `path`, in every kind and pool, and the units of fills
     /// started before, still queued or being written: for objects rewritten in place or
     /// deleted, whose cached bytes would otherwise be read again. Returns the entries dropped.

@@ -534,6 +534,18 @@ impl FuseTable {
         Self::read_table_snapshot_at(cache, self.get_operator(), loc, ver).await
     }
 
+    /// The current snapshot, for maintenance: served by the disk cache, which serves queries,
+    /// but not filled into it.
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_without_disk_fill(
+        &self,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        let loc = self.snapshot_loc();
+        let ver = self.snapshot_format_version(loc.clone())?;
+        let cache = FuseCaches::instance().snapshots.without_disk_fill();
+        Self::read_table_snapshot_at(&cache, self.get_operator(), loc, ver).await
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     /// Reads the current snapshot from storage, bypassing the cache.
