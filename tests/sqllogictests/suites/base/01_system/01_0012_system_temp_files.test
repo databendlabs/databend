@@ -11,10 +11,11 @@ statement ok
 SET force_aggregate_data_spill = 1;
 
 # The final aggregate buffers its spill up to half of max_block_bytes per bucket and writes files
-# only beyond it, so the query spills enough to leave several temporary files.
+# only beyond it. A cluster splits the groups over the final aggregates of every node, so the
+# buffer is kept small enough for each of them to write files.
 skipif mysql
 statement ok
-SET max_block_bytes = 1048576;
+SET max_block_bytes = 65536;
 
 skipif mysql
 query I
