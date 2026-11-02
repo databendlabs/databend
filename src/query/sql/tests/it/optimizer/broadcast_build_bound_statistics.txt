@@ -20,11 +20,18 @@ cardinality: 0.000
 max_cardinality: 20000000.000
 
 === aggregate_over_join ===
-description: An aggregate resets the bound to its own estimate.
+description: An aggregate whose group keys have statistics resets the bound to its own estimate.
+sql: SELECT a.k, count(*) FROM a JOIN d ON a.k = d.k GROUP BY a.k
+operator: Aggregate
+cardinality: 1000.000
+max_cardinality: 1000.000
+
+=== aggregate_without_group_statistics ===
+description: An aggregate whose group keys have no statistics keeps its input bound.
 sql: SELECT a.k, count(*) FROM a JOIN b ON a.k = b.k GROUP BY a.k
 operator: Aggregate
 cardinality: 1.000
-max_cardinality: 1.000
+max_cardinality: 10000000.000
 
 === limit_over_join ===
 description: LIMIT caps the bound of an underestimated input at the limit.

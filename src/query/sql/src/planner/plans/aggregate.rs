@@ -113,9 +113,15 @@ impl Aggregate {
             })
         {
             let cardinality = (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0);
+            // Without group statistics the ratio is only a guess; the groups are
+            // bounded by the input rows alone.
+            let max_cardinality = stat_info
+                .max_cardinality
+                .max(stat_info.cardinality)
+                .max(cardinality);
             return Ok(Arc::new(StatInfo {
                 cardinality,
-                max_cardinality: cardinality,
+                max_cardinality,
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
