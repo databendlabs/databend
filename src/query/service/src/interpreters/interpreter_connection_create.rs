@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateConnectionPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -67,9 +68,14 @@ impl Interpreter for CreateConnectionInterpreter {
             );
 
             let tenant = self.ctx.get_tenant();
-            user_mgr
+            let created = user_mgr
                 .add_connection(&tenant, conn, &plan.create_option)
                 .await?;
+
+            // IF NOT EXISTS on an existing connection writes nothing, so its owner must not change.
+            if !created && plan.create_option != CreateOption::CreateOrReplace {
+                return Ok(PipelineBuildResult::create());
+            }
 
             // Grant ownership as the current role
             if let Some(current_role) = self.ctx.get_current_role() {

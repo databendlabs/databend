@@ -850,7 +850,8 @@ impl CreateTableInterpreter {
             req.table_meta.drop_on = Some(Utc::now());
         }
         let reply = catalog.create_table(req.clone()).await?;
-        if staged && !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+        // IF NOT EXISTS on an existing table creates nothing: keep its owner and skip setup.
+        if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
         if let Err(e) = self

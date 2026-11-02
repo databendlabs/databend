@@ -86,13 +86,14 @@ where
     /// Add a record.
     ///
     /// `create_option` specifies the behavior when the record already exists.
+    /// Returns `true` if no record with the same name existed before.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn add(
         &self,
         value: ValueOf<R>,
         create_option: &CreateOption,
-    ) -> Result<(), CrudError<ExistError<R>>> {
+    ) -> Result<bool, CrudError<ExistError<R>>> {
         self.add_with_ttl(value, None, create_option).await
     }
 
@@ -100,6 +101,7 @@ where
     ///
     /// If `ttl` is `None`, the record will not expire.
     /// `create_option` specifies the behavior when the record already exists.
+    /// Returns `true` if no record with the same name existed before.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn add_with_ttl(
@@ -107,7 +109,7 @@ where
         value: ValueOf<R>,
         ttl: Option<Duration>,
         create_option: &CreateOption,
-    ) -> Result<(), CrudError<ExistError<R>>> {
+    ) -> Result<bool, CrudError<ExistError<R>>> {
         let ident = self.ident(value.name());
 
         let seq = MatchSeq::from(*create_option);
@@ -127,7 +129,7 @@ where
             }
         }
 
-        Ok(())
+        Ok(res.prev.is_none())
     }
 
     #[async_backtrace::framed]

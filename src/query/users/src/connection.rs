@@ -24,19 +24,19 @@ use crate::meta_service_error;
 
 /// user connection operations.
 impl UserApiProvider {
-    // Add a new connection.
+    // Add a new connection. Returns `true` if the connection did not exist before.
     #[async_backtrace::framed]
     pub async fn add_connection(
         &self,
         tenant: &Tenant,
         connection: UserDefinedConnection,
         create_option: &CreateOption,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let connection_api_provider = self.connection_api(tenant);
-        connection_api_provider
+        let created = connection_api_provider
             .add(connection, create_option)
             .await?;
-        Ok(())
+        Ok(created)
     }
 
     // Get one connection from by tenant.

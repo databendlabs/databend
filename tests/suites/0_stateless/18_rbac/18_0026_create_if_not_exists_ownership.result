@@ -1,0 +1,19 @@
+== CREATE TABLE IF NOT EXISTS on an existing table keeps its owner
+OWNERSHIP	if_not_exists_owner_role
+OWNERSHIP	if_not_exists_owner_role
+same table
+denied
+42
+== CREATE TABLE IF NOT EXISTS on a new table grants ownership
+OWNERSHIP	if_not_exists_creator_role
+== CREATE OR REPLACE TABLE creates a table owned by the creator
+OWNERSHIP	if_not_exists_creator_role
+new table
+== CREATE CONNECTION IF NOT EXISTS on an existing connection keeps its owner
+OWNERSHIP	if_not_exists_owner_role
+OWNERSHIP	if_not_exists_owner_role
+denied
+denied
+if_not_exists_conn	s3
+== CREATE CONNECTION IF NOT EXISTS on a new connection grants ownership
+OWNERSHIP	if_not_exists_creator_role
