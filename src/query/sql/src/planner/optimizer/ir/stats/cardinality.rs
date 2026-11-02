@@ -17,14 +17,14 @@ use databend_common_statistics::StatCount;
 
 use crate::optimizer::ir::StatInfo;
 
-/// Caps statistics by an operator-enforced row limit. Like `Limit`, a bounded
-/// operator resets `max_cardinality` to its own estimate.
+/// Caps statistics by an operator-enforced row limit. Like `Limit`, the limit
+/// also caps `max_cardinality`.
 pub(crate) fn cap_stat_info_by_rows(mut stat_info: StatInfo, limit: usize) -> StatInfo {
     let input_cardinality = stat_info.cardinality;
     let limit = limit as f64;
+    stat_info.max_cardinality = stat_info.max_cardinality.max(input_cardinality).min(limit);
     if limit == 0.0 {
         stat_info.cardinality = 0.0;
-        stat_info.max_cardinality = 0.0;
         stat_info.statistics.precise_cardinality =
             stat_info.statistics.precise_cardinality.map(|_| 0);
         stat_info.statistics.column_stats.clear();
@@ -34,12 +34,10 @@ pub(crate) fn cap_stat_info_by_rows(mut stat_info: StatInfo, limit: usize) -> St
     }
 
     if input_cardinality <= limit {
-        stat_info.max_cardinality = input_cardinality;
         return stat_info;
     }
 
     stat_info.cardinality = limit;
-    stat_info.max_cardinality = limit;
     stat_info.statistics.precise_cardinality = stat_info
         .statistics
         .precise_cardinality
@@ -115,6 +113,16 @@ mod tests {
         assert_eq!(capped.statistics.precise_cardinality, Some(10));
         assert_eq!(column_stat.ndv(), NdvEstimate::new(80.0, 90.0));
         assert_eq!(column_stat.null_count(), StatCount::estimate(20.0, 30.0));
+    }
+
+    #[test]
+    fn test_cap_stat_info_caps_input_bound() {
+        let mut input = stat_info(10.0, None);
+        input.max_cardinality = 1000.0;
+        let capped = cap_stat_info_by_rows(input, 100);
+
+        assert_eq!(capped.cardinality, 10.0);
+        assert_eq!(capped.max_cardinality, 100.0);
     }
 
     #[test]
