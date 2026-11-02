@@ -913,7 +913,8 @@ fn test_change_fails_when_a_file_cannot_be_deleted() {
 
 /// A restart scan that cannot read a directory is incomplete: the pool stays as before the
 /// scan, and a change of an object still looks for its files on disk, failing while it cannot
-/// read them. Once readable, the change deletes them.
+/// read them. Once readable, the change deletes them. The invalidations are not kept for a scan
+/// any more: with no fill running, none is.
 #[test]
 fn test_incomplete_scan_keeps_changes_looking_on_disk() {
     use std::os::unix::fs::PermissionsExt;
@@ -933,11 +934,13 @@ fn test_incomplete_scan_keeps_changes_looking_on_disk() {
     let object = DiskKey::object_id("t/a");
     assert!(pool.begin_change(&object).is_err());
     assert!(pool.end_change(&object, 1, None).is_empty());
+    assert_eq!(pool.invalidated_at(&object), None);
 
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
     assert!(file.exists());
     assert_eq!(pool.begin_change(&object).unwrap(), 0);
     assert!(!file.exists());
     assert!(pool.end_change(&object, 2, None).is_empty());
+    assert_eq!(pool.invalidated_at(&object), None);
     assert_consistent(&pool);
 }

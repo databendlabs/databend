@@ -32,8 +32,10 @@
 //! The pool also keeps the entries of each object, by object id, so `remove_object` can drop
 //! all of them when the object is rewritten or deleted, and the points the objects were
 //! invalidated at, so `publish` rejects an entry read before (see `fill_fence`). Until the
-//! restart scan has run, every invalidation is kept, so the scan does not index the files of
-//! an object invalidated before it got to them.
+//! restart scan has finished, every invalidation is kept, so the scan does not index the files
+//! of an object invalidated before it got to them. A scan that could not read every file
+//! leaves the pool not reloaded: changes then delete an object's unindexed files by name, and
+//! the invalidations are pruned as usual, no scan being left for them to exclude files from.
 //!
 //! An object being rewritten or deleted (`begin_change` to `end_change`) has no entry: they are
 //! taken out when the change begins, and none is reserved, published or scanned until it ends.
@@ -132,14 +134,18 @@ struct State {
     /// The entries of each object, by object id.
     objects: HashMap<String, HashSet<String>>,
     /// The last point each object was invalidated at, while fills started before it may still
-    /// publish, or while the restart scan has not run.
+    /// publish, or while the restart scan has not finished.
     invalidated: HashMap<String, u64>,
     /// The same, by point, for pruning in order.
     invalidation_order: BTreeMap<u64, String>,
     /// Objects being rewritten or deleted, with the changes of each under way.
     changing: HashMap<String, usize>,
-    /// Whether the restart scan has run.
+    /// Whether the restart scan has indexed every file it found: until then, changes look for
+    /// an object's files by name too.
     reloaded: bool,
+    /// Whether the restart scan has finished, complete or not: until then, every invalidation
+    /// is kept for it.
+    scanned: bool,
     /// Kinds turned off, by kind index.
     kinds_off: Vec<bool>,
 }
@@ -188,14 +194,14 @@ impl State {
 
     /// See `DiskPool::remove_object`.
     fn remove_object(&mut self, object: &str, at: u64, oldest_fill: Option<u64>) -> Vec<String> {
-        if self.reloaded {
+        if self.scanned {
             // Points no fill running at `at` started before reject nothing any more: those up
             // to `at` and to the oldest fill. Points after `at` are left alone: invalidations
             // reach the pools out of clock order, and `oldest_fill` says nothing of fills
             // started after `at`.
             self.prune_invalidations(oldest_fill.map_or(at, |oldest| oldest.min(at)));
         }
-        if !self.reloaded || oldest_fill.is_some_and(|oldest| oldest < at) {
+        if !self.scanned || oldest_fill.is_some_and(|oldest| oldest < at) {
             self.invalidate(object, at);
         }
         self.take_object(object)
@@ -320,6 +326,7 @@ impl DiskPool {
                 invalidation_order: BTreeMap::new(),
                 changing: HashMap::new(),
                 reloaded: false,
+                scanned: false,
                 kinds_off: CacheKind::all().map(|_| false).collect(),
             }),
             hit: AtomicU64::new(0),
@@ -660,10 +667,10 @@ impl DiskPool {
     }
 
     /// Drops the invalidation points up to `point`, before which no running fill started. All
-    /// are kept until the restart scan has run.
+    /// are kept until the restart scan has finished.
     pub fn prune_invalidations(&self, point: u64) {
         let mut state = self.state.lock();
-        if state.reloaded {
+        if state.scanned {
             state.prune_invalidations(point);
         }
     }
@@ -752,9 +759,13 @@ impl DiskPool {
         });
         // A file the scan could not see is not known either way: the pool stays as before the
         // scan, a change of an object then looking for its files by name.
-        if complete.into_inner() {
-            self.state.lock().reloaded = true;
-        } else {
+        let complete = complete.into_inner();
+        {
+            let mut state = self.state.lock();
+            state.reloaded |= complete;
+            state.scanned = true;
+        }
+        if !complete {
             warn!(
                 "[DiskCache] pool {}: the restart scan is incomplete; changes of objects keep \
                  looking for their files on disk",
