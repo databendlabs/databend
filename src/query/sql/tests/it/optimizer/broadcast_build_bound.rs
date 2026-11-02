@@ -214,6 +214,12 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             operator: RelOp::Aggregate,
         },
         StatsCase {
+            name: "limit_over_join",
+            description: "LIMIT caps the bound of an underestimated input at the limit.",
+            sql: "SELECT * FROM a JOIN b ON a.k = b.k LIMIT 100",
+            operator: RelOp::Limit,
+        },
+        StatsCase {
             name: "left_semi_join",
             description: "A semi join is bounded by the side it returns.",
             sql: "SELECT * FROM d LEFT SEMI JOIN a ON d.k = a.k",
@@ -284,6 +290,21 @@ async fn test_broadcast_build_bound_plan_golden() -> Result<()> {
             settings: &[
                 ("disable_join_reorder", "1"),
                 ("max_broadcast_join_build_rows", "0"),
+            ],
+        },
+        PlanCase {
+            name: "serial_underestimated_build_is_broadcast",
+            description: "A Serial build is broadcast within the row limit even when underestimated, because not broadcasting it would make the whole join Serial.",
+            sql: "SELECT p.v FROM p JOIN (SELECT a.k FROM a JOIN b ON a.k = b.k LIMIT 1000) AS j ON p.k = j.k",
+            settings: NO_REORDER,
+        },
+        PlanCase {
+            name: "serial_build_over_row_limit_stays_serial",
+            description: "A Serial build whose bound exceeds max_broadcast_join_build_rows is not broadcast, although its estimate is 0.",
+            sql: "SELECT p.v FROM p JOIN (SELECT a.k FROM a JOIN b ON a.k = b.k LIMIT 1000) AS j ON p.k = j.k",
+            settings: &[
+                ("disable_join_reorder", "1"),
+                ("max_broadcast_join_build_rows", "500"),
             ],
         },
     ];

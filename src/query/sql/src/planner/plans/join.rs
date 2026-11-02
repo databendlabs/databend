@@ -453,10 +453,14 @@ impl Join {
             && self.spatial_join_candidate(rel_expr)?.is_some())
     }
 
+    /// `serial_build` marks a build side that is already Serial. Not
+    /// broadcasting it makes the whole join Serial, which builds the same hash
+    /// table on one node, so only the row limit applies to it.
     fn broadcast_build_is_preferred(
         &self,
         ctx: &dyn TableContext,
         rel_expr: &RelExpr,
+        serial_build: bool,
     ) -> Result<bool> {
         let settings = ctx.get_settings();
         if settings.get_enforce_shuffle_join()? {
@@ -478,20 +482,31 @@ impl Join {
 
         Ok(
             build_stat_info.cardinality * broadcast_join_threshold < left_cardinality
-                && self.broadcast_build_is_safe(ctx, &build_stat_info)?,
+                && self.broadcast_build_is_safe(ctx, &build_stat_info, serial_build)?,
         )
     }
 
     /// Whether an automatically selected broadcast may copy this build input
-    /// to every node. `enforce_broadcast_join` bypasses this check.
-    fn broadcast_build_is_safe(&self, ctx: &dyn TableContext, build: &StatInfo) -> Result<bool> {
+    /// to every node. `enforce_broadcast_join` bypasses this check. For a
+    /// Serial build only the row limit applies (see
+    /// `broadcast_build_is_preferred`).
+    fn broadcast_build_is_safe(
+        &self,
+        ctx: &dyn TableContext,
+        build: &StatInfo,
+        serial_build: bool,
+    ) -> Result<bool> {
         // A single node does not copy the build side, and a cross join has no
         // hash distribution to fall back to.
         if ctx.get_cluster().nodes.len() <= 1 || matches!(self.join_type, JoinType::Cross) {
             return Ok(true);
         }
         let max_build_rows = ctx.get_settings().get_max_broadcast_join_build_rows()?;
-        Ok(is_safe_broadcast_build(build, max_build_rows))
+        Ok(if serial_build {
+            broadcast_build_within_row_limit(build, max_build_rows)
+        } else {
+            is_safe_broadcast_build(build, max_build_rows)
+        })
     }
 }
 
@@ -693,7 +708,7 @@ impl PhysicalOperator for Join {
                     | JoinType::RightAsof
                     | JoinType::FullAsof
             )
-            && self.broadcast_build_is_preferred(ctx.as_ref(), rel_expr)?
+            && self.broadcast_build_is_preferred(ctx.as_ref(), rel_expr, true)?
         {
             required.distribution = if child_index == 1 {
                 Distribution::Broadcast
@@ -728,7 +743,7 @@ impl PhysicalOperator for Join {
                 | JoinType::LeftAsof
                 | JoinType::RightAsof
                 | JoinType::FullAsof
-        ) && self.broadcast_build_is_preferred(ctx.as_ref(), rel_expr)?
+        ) && self.broadcast_build_is_preferred(ctx.as_ref(), rel_expr, false)?
         {
             required.distribution = if child_index == 1 {
                 Distribution::Broadcast
@@ -898,7 +913,7 @@ impl PhysicalOperator for Join {
                 | JoinType::FullAsof
         ) && !settings.get_enforce_shuffle_join()?
             && (enforce_broadcast_join
-                || self.broadcast_build_is_safe(ctx.as_ref(), &build_stat_info)?)
+                || self.broadcast_build_is_safe(ctx.as_ref(), &build_stat_info, false)?)
         {
             // (Any, Broadcast)
             let left_distribution = Distribution::Any;
@@ -929,9 +944,9 @@ impl PhysicalOperator for Join {
     }
 }
 
-/// Whether a build input is small and reliably estimated enough to broadcast.
-/// `max_build_rows = 0` disables the row limit.
-fn is_safe_broadcast_build(stat_info: &StatInfo, max_build_rows: u64) -> bool {
+/// Whether a build input has valid estimates and neither its estimate nor its
+/// bound exceeds `max_build_rows`. `max_build_rows = 0` disables the row limit.
+fn broadcast_build_within_row_limit(stat_info: &StatInfo, max_build_rows: u64) -> bool {
     let cardinality = stat_info.cardinality;
     let subtree_cardinality = stat_info.max_cardinality;
     let max_cardinality = subtree_cardinality.max(cardinality);
@@ -940,6 +955,11 @@ fn is_safe_broadcast_build(stat_info: &StatInfo, max_build_rows: u64) -> bool {
         && cardinality >= 0.0
         && subtree_cardinality >= 0.0
         && (max_build_rows == 0 || max_cardinality <= max_build_rows as f64)
+}
+
+/// Whether a build input is small and reliably estimated enough to broadcast.
+fn is_safe_broadcast_build(stat_info: &StatInfo, max_build_rows: u64) -> bool {
+    broadcast_build_within_row_limit(stat_info, max_build_rows)
         && !stat_info.cardinality_is_severely_underestimated()
 }
 
@@ -1141,6 +1161,27 @@ mod tests {
         // A limit of 0 disables the row limit.
         assert!(is_safe_broadcast_build(
             &build_stat(200_000_000.0, 200_000_000.0),
+            0
+        ));
+    }
+
+    #[test]
+    fn test_broadcast_build_row_limit_ignores_underestimation() {
+        // A Serial build only checks the row limit against max(estimate, bound).
+        assert!(broadcast_build_within_row_limit(
+            &build_stat(0.0, 1_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        assert!(!broadcast_build_within_row_limit(
+            &build_stat(0.0, 1_000.0),
+            500
+        ));
+        assert!(broadcast_build_within_row_limit(
+            &build_stat(0.0, 1_000.0),
+            0
+        ));
+        assert!(!broadcast_build_within_row_limit(
+            &build_stat(f64::NAN, 1_000.0),
             0
         ));
     }
