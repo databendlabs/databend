@@ -73,6 +73,7 @@ fn column_statistics() -> HashMap<String, BasicColumnStatistics> {
             ndv: Some(100),
             null_count: 10,
             in_memory_size: 800,
+            ndv_is_inferred: false,
         }),
         ("p".to_string(), BasicColumnStatistics {
             min: Some(Datum::Int(1)),
@@ -80,6 +81,7 @@ fn column_statistics() -> HashMap<String, BasicColumnStatistics> {
             ndv: Some(5),
             null_count: 0,
             in_memory_size: 800,
+            ndv_is_inferred: false,
         }),
     ])
 }
@@ -166,6 +168,7 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
                 ndv: Some(1000),
                 null_count: 0,
                 in_memory_size: 4000,
+                ndv_is_inferred: false,
             }),
             ("ts".to_string(), BasicColumnStatistics {
                 min: Some(Datum::Int(0)),
@@ -173,6 +176,7 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
                 ndv: Some(1000),
                 null_count: 0,
                 in_memory_size: 8000,
+                ndv_is_inferred: false,
             }),
         ]),
         HashMap::new(),

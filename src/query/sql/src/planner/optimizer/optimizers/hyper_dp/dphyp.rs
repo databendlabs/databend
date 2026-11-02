@@ -426,6 +426,12 @@ impl DPhpyOptimizer {
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                observed_ndv_columns: producer_stat_info
+                    .statistics
+                    .observed_ndv_columns
+                    .iter()
+                    .filter_map(|producer_col| producer_to_ref.get(producer_col).copied())
+                    .collect(),
             },
         })
     }

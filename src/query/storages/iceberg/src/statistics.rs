@@ -229,6 +229,7 @@ fn get_column_stats(
             .get(&iceberg_col_id)
             .copied()
             .unwrap_or_default(),
+        ndv_is_inferred: false,
     }
 }
 

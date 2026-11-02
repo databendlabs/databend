@@ -67,6 +67,7 @@ fn int_stat(min: i64, max: i64, ndv: u64) -> BasicColumnStatistics {
         ndv: Some(ndv),
         null_count: 0,
         in_memory_size: 8000,
+        ndv_is_inferred: false,
     }
 }
 
@@ -100,6 +101,7 @@ async fn create_context() -> Result<Arc<LiteTableContext>> {
                 ndv: Some(0),
                 null_count: 1000,
                 in_memory_size: 1000,
+                ndv_is_inferred: false,
             }),
         ]),
         HashMap::new(),
