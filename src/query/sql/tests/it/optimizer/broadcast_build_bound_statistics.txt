@@ -68,6 +68,13 @@ operator: Join
 cardinality: 1000.000
 max_cardinality: 1000.000
 
+=== full_join ===
+description: A full join can return the unmatched rows of both inputs, so its bound covers their sum even when the estimate expects every row to match.
+sql: SELECT * FROM a FULL JOIN d ON a.k = d.k
+operator: Join
+cardinality: 10000000.000
+max_cardinality: 10001000.000
+
 === inner_join_unique_key_missing_peer_stats ===
 description: A unique key caps the expected output at the rows of the side without statistics.
 sql: SELECT * FROM d JOIN u ON d.k = u.k
