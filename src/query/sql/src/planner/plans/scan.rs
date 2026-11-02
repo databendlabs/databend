@@ -457,6 +457,7 @@ impl Operator for Scan {
             };
             return Ok(Arc::new(StatInfo {
                 cardinality,
+                max_cardinality: cardinality,
                 statistics: OpStatistics {
                     precise_cardinality: proven_empty.then_some(0),
                     column_stats: Default::default(),
@@ -468,6 +469,7 @@ impl Operator for Scan {
 
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality: cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,

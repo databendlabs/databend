@@ -34,8 +34,23 @@ fn contains_recursive_cte(expr: &SExpr) -> bool {
         || expr.children().any(contains_recursive_cte)
 }
 
+/// The cardinality used to rank a child as the hash build side. A severely
+/// underestimated subtree is ranked by its conservative bound instead.
+fn build_cardinality(stat: &StatInfo) -> f64 {
+    if stat.cardinality_is_severely_underestimated() {
+        stat.max_cardinality.max(stat.cardinality)
+    } else {
+        stat.cardinality
+    }
+}
+
 fn should_commute(join_type: JoinType, left: &StatInfo, right: &StatInfo) -> bool {
-    if left.cardinality < right.cardinality {
+    let left_build_cardinality = build_cardinality(left);
+    let right_build_cardinality = build_cardinality(right);
+    if left_build_cardinality < right_build_cardinality
+        || (left_build_cardinality == right_build_cardinality
+            && left.cardinality < right.cardinality)
+    {
         return matches!(
             join_type,
             JoinType::Inner
@@ -53,7 +68,7 @@ fn should_commute(join_type: JoinType, left: &StatInfo, right: &StatInfo) -> boo
         );
     }
 
-    if left.cardinality != right.cardinality {
+    if left_build_cardinality != right_build_cardinality || left.cardinality != right.cardinality {
         return false;
     }
 
