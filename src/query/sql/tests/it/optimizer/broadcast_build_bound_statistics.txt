@@ -75,6 +75,13 @@ operator: Join
 cardinality: 10000000.000
 max_cardinality: 10001000.000
 
+=== cross_join_over_join ===
+description: A cross join returns every pair of input rows, so its bound is the product of the input bounds.
+sql: SELECT * FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j CROSS JOIN d
+operator: Join
+cardinality: 0.000
+max_cardinality: 10000000000.000
+
 === inner_join_unique_key_missing_peer_stats ===
 description: A unique key caps the expected output at the rows of the side without statistics.
 sql: SELECT * FROM d JOIN u ON d.k = u.k
