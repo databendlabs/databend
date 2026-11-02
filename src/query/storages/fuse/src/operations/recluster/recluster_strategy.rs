@@ -14,6 +14,7 @@
 
 use std::cmp;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -33,6 +34,7 @@ use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::VectorColumnStatistics;
 use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::FuseTable;
@@ -71,6 +73,9 @@ pub(crate) struct ReclusterProperties {
     pub(crate) split_sort_tasks: bool,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) scalar_cluster_key_types: Vec<DataType>,
+    /// Blocks of the final full pass of a vector RECLUSTER FINAL, which are
+    /// rewritten once regardless of level; see `ReclusterFinalCarry`.
+    pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
 }
 
 impl ReclusterProperties {
@@ -129,6 +134,7 @@ impl ReclusterProperties {
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
+            vector_full_pass: None,
         };
         Ok((properties, strategy))
     }
@@ -176,6 +182,7 @@ impl ReclusterProperties {
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
+            vector_full_pass: None,
         };
         (properties, strategy)
     }
@@ -188,6 +195,12 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
     /// not sufficient to select the merge-only execution path.
     fn supports_ordered_merge(&self) -> bool {
         false
+    }
+
+    /// Vector statistics of an input block, which seed the k-means of a vector
+    /// recluster task.
+    fn vector_seed(&self, _block: &BlockMeta) -> Option<VectorColumnStatistics> {
+        None
     }
 
     /// Select windows from a partition-local segment slice. ReclusterMutator performs partition

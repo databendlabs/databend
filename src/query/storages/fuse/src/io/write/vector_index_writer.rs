@@ -71,6 +71,9 @@ pub struct VectorIndexSearchOptions {
     /// Candidate multiplier; set only when the index stores FP16 data.
     pub refine_factor: Option<usize>,
     pub search_ef: Option<usize>,
+    /// Percent of blocks searched by approximate block pruning (1..=99), from the
+    /// `vector_probe_block_percent` setting; `None` searches every block.
+    pub probe_block_percent: Option<usize>,
 }
 
 impl VectorIndexSearchOptions {
@@ -78,11 +81,15 @@ impl VectorIndexSearchOptions {
         index_options: &BTreeMap<String, String>,
         refine_factor: u64,
         search_ef: u64,
+        probe_block_percent: u64,
     ) -> Result<Self> {
         let refine = refine_factor > 0 && vector_index_refine(index_options)?;
         Ok(Self {
             refine_factor: refine.then_some(refine_factor as usize),
             search_ef: (search_ef > 0).then_some(search_ef as usize),
+            probe_block_percent: (1..100)
+                .contains(&probe_block_percent)
+                .then_some(probe_block_percent as usize),
         })
     }
 }

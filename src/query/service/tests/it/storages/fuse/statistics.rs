@@ -612,6 +612,7 @@ async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() 
                 column_name: "embedding".to_string(),
                 dimension: 2,
                 distance_type: VectorDistanceType::L2,
+                page_order: false,
             },
             vector_column_input_offset: 1,
             vector_cluster_id_offset: 1,

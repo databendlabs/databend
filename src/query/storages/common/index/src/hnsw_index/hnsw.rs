@@ -32,6 +32,8 @@ use databend_common_expression::types::VectorColumn;
 use databend_common_expression::types::VectorColumnBuilder;
 use databend_common_expression::types::VectorScalar;
 use log::error;
+use rand::Rng;
+use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::IntoParallelIterator;
@@ -275,7 +277,7 @@ impl HNSWIndex {
             .build()
             .expect("failed to build hnsw build thread pool");
 
-        let mut ids: Vec<usize> = TrueIdxIter::new(column.len(), validity.as_ref()).collect();
+        let mut ids = insertion_order(column.len(), validity.as_ref(), &mut rng);
         let first_few_ids: Vec<usize> = ids
             .drain(..SINGLE_THREADED_HNSW_BUILD_THRESHOLD.min(ids.len()))
             .collect();
@@ -435,6 +437,17 @@ fn preprocess(distance_type: DistanceType, column: VectorColumn) -> VectorColumn
     }
 }
 
+/// The valid rows in the order they are inserted into the graph. Rows may be laid
+/// out by locality (vector clustering sorts them by cluster and FP16 page); inserted
+/// in that order, the first points span a small region and later regions keep few
+/// links to earlier ones, so searches miss neighbors in other regions. A random order
+/// keeps the graph independent of the row order; point ids stay block rows.
+fn insertion_order(rows: usize, validity: Option<&Bitmap>, rng: &mut impl Rng) -> Vec<usize> {
+    let mut ids: Vec<usize> = TrueIdxIter::new(rows, validity).collect();
+    ids.shuffle(rng);
+    ids
+}
+
 fn is_length_zero_or_normalized(length: f32) -> bool {
     length < f32::EPSILON || (length - 1.0).abs() <= 1.0e-6
 }
@@ -446,4 +459,29 @@ fn cosine_preprocess(vector: Vec<f32>) -> Vec<f32> {
     }
     length = length.sqrt();
     vector.iter().map(|x| x / length).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    use super::*;
+
+    #[test]
+    fn test_insertion_order_shuffles_valid_rows() {
+        let mut rng = StdRng::seed_from_u64(7);
+        let validity = Bitmap::from_iter((0..1000).map(|row| row % 10 != 0));
+        let order = insertion_order(1000, Some(&validity), &mut rng);
+        // Every valid row once, no NULL row.
+        let mut sorted = order.clone();
+        sorted.sort_unstable();
+        assert_eq!(
+            sorted,
+            (0..1000).filter(|row| row % 10 != 0).collect::<Vec<_>>()
+        );
+        // Not the row order: the first points do not all come from the first rows.
+        assert_ne!(order, sorted);
+        assert!(order[..256].iter().any(|&row| row >= 500));
+    }
 }

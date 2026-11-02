@@ -181,7 +181,7 @@ fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -
 fn vector_prune_settings(
     ctx: &Arc<dyn TableContext>,
     push_downs: &PushDownInfo,
-) -> Result<Option<(u64, u64)>> {
+) -> Result<Option<(u64, u64, u64)>> {
     if push_downs.vector_index.is_none() {
         return Ok(None);
     }
@@ -189,6 +189,7 @@ fn vector_prune_settings(
     Ok(Some((
         settings.get_vector_refine_factor()?,
         settings.get_vector_search_ef()?,
+        settings.get_vector_probe_block_percent()?,
     )))
 }
 
@@ -211,7 +212,7 @@ fn deterministic_prune_cache_key(
     func_ctx: &FunctionContext,
     segments_location: &[SegmentLocation],
     push_downs: &PushDownInfo,
-    vector_settings: Option<(u64, u64)>,
+    vector_settings: Option<(u64, u64, u64)>,
 ) -> Option<String> {
     if !push_downs.is_deterministic {
         return None;

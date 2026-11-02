@@ -61,7 +61,10 @@ use databend_common_storages_fuse::operations::TransformHilbertCluster;
 use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
+use databend_common_storages_fuse::operations::TransformVectorClusterBlocks;
+use databend_common_storages_fuse::operations::TransformVectorPageOrder;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
+use databend_common_storages_fuse::operations::vector_cluster_memory_budget;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -281,11 +284,20 @@ impl IPhysicalPlan for Recluster {
                 }
                 let max_threads = settings.get_max_threads()? as usize;
 
-                let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
-                    task.total_rows,
-                    task.total_bytes,
-                    task.total_compressed,
-                );
+                let (mut rows_per_block, bytes_per_block) = block_thresholds
+                    .calc_rows_for_recluster(
+                        task.total_rows,
+                        task.total_bytes,
+                        task.total_compressed,
+                    );
+                if cluster_stats_gen.vector_operator().is_some() {
+                    // Vectors barely compress, so the uncompressed bounds applied by
+                    // calc_rows_for_recluster keep blocks far above the compressed
+                    // target. Cap the rows at the size of an INSERT block.
+                    let row_bytes = task.total_bytes.div_ceil(task.total_rows.max(1));
+                    rows_per_block =
+                        rows_per_block.min(block_thresholds.estimate_rows_per_block(row_bytes));
+                }
 
                 let compact_thresholds = block_thresholds
                     .set_rows_per_block(rows_per_block)
@@ -520,12 +532,21 @@ impl Recluster {
             let dimension = vector_operator.info.dimension;
             let distance_type = vector_operator.info.distance_type;
             builder.main_pipeline.try_resize(1)?;
+            // A single lane: the first batch, which trains the task's model, may use
+            // the whole budget.
+            let budget_bytes = vector_cluster_memory_budget(builder.ctx.as_ref(), 1)?;
+            let total_rows = task.total_rows;
+            let seeds = task.vector_seeds.clone();
             builder.main_pipeline.add_accumulating_transformer(move || {
-                TransformVectorCluster::new(
+                // One model for the whole task, whose rows are sorted together.
+                TransformVectorCluster::for_recluster(
                     vector_column_input_offset,
                     dimension,
                     distance_type,
                     rows_per_block,
+                    total_rows,
+                    &seeds,
+                    budget_bytes,
                 )
             });
             builder.main_pipeline.try_resize(max_threads)?;
@@ -549,14 +570,43 @@ impl Recluster {
         )?;
 
         builder.main_pipeline.try_resize(1)?;
-        let extra_key_num = cluster_stats_gen.extra_key_num;
-        builder.main_pipeline.add_accumulating_transformer(move || {
-            OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
-        });
+        match cluster_stats_gen.vector_operator() {
+            // Rows sorted first by vector cluster: cut blocks along cluster boundaries.
+            // With scalar keys before the vector key, clusters repeat within each
+            // scalar group, so cut by size as for linear keys.
+            Some(vector_operator) if vector_operator.info.key_index == 0 => {
+                let key_offset = vector_operator.vector_cluster_id_offset;
+                builder.main_pipeline.add_accumulating_transformer(move || {
+                    TransformVectorClusterBlocks::new(rows_per_block, key_offset)
+                });
+            }
+            _ => {
+                let extra_key_num = cluster_stats_gen.extra_key_num;
+                builder.main_pipeline.add_accumulating_transformer(move || {
+                    OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
+                });
+            }
+        }
         builder.main_pipeline.try_resize(max_threads)?;
         builder
             .main_pipeline
             .add_block_meta_transformer(|| TransformCompactBlock);
+        if let Some(vector_operator) = cluster_stats_gen
+            .vector_operator()
+            .filter(|operator| operator.info.key_index == 0 && operator.info.page_order)
+        {
+            // Order the rows of each cut block by page, in parallel lanes. Only with
+            // FP16 refine data, whose pages this is for, and with the vector key
+            // first: with scalar keys before it, the cluster statistics take their
+            // bounds from the first and last rows.
+            let vector_offset = vector_operator.vector_column_input_offset;
+            let key_offset = vector_operator.vector_cluster_id_offset;
+            let dimension = vector_operator.info.dimension;
+            let distance_type = vector_operator.info.distance_type;
+            builder.main_pipeline.add_transformer(move || {
+                TransformVectorPageOrder::new(vector_offset, key_offset, dimension, distance_type)
+            });
+        }
         Ok(())
     }
 }

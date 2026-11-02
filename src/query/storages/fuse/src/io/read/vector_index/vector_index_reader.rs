@@ -79,10 +79,26 @@ impl VectorIndexReader {
         if limit == 0 || row_count == 0 {
             return Ok(Vec::new());
         }
+        self.search(limit, self.options.search_ef, row_count, location)
+            .await
+    }
+
+    /// HNSW search for the `limit` nearest rows with candidate list size `ef`
+    /// (`None`: the default of `HNSWIndex::search_with_ef`).
+    pub async fn search(
+        &self,
+        limit: usize,
+        ef: Option<usize>,
+        row_count: usize,
+        location: &IndexFileLocation,
+    ) -> Result<Vec<ScoredPointOffset>> {
+        if limit == 0 || row_count == 0 {
+            return Ok(Vec::new());
+        }
         let index = self.loader.load(row_count, location).await?;
         index.index().search_with_ef(
             limit.min(row_count),
-            self.options.search_ef.map(|ef| ef.min(row_count)),
+            ef.map(|ef| ef.min(row_count)),
             &self.query_values,
         )
     }
@@ -223,7 +239,7 @@ mod tests {
                 version: "v1".to_owned(),
                 column_id: COLUMN_ID,
             },
-            VectorIndexSearchOptions::new(&options, 4, 0)?,
+            VectorIndexSearchOptions::new(&options, 4, 0, 0)?,
         ))
     }
 

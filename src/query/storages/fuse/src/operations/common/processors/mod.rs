@@ -49,3 +49,6 @@ pub use transform_serialize_block::TransformSerializeBlock;
 pub use transform_serialize_segment::TransformSerializeSegment;
 pub use transform_serialize_segment::new_serialize_segment_processor;
 pub use transform_vector_cluster::TransformVectorCluster;
+pub use transform_vector_cluster::TransformVectorClusterBlocks;
+pub use transform_vector_cluster::TransformVectorPageOrder;
+pub use transform_vector_cluster::vector_cluster_memory_budget;

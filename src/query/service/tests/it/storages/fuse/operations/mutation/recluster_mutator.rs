@@ -364,6 +364,7 @@ async fn gen_recluster_segments_by_vector_stats(
     file_size: u64,
     thresholds: BlockThresholds,
     cluster_key_id: u32,
+    level: i32,
 ) -> anyhow::Result<Vec<meta::Location>> {
     if let Some(partitions) = partitions {
         assert_eq!(partitions.len(), blocks_by_segment.len());
@@ -410,7 +411,7 @@ async fn gen_recluster_segments_by_vector_stats(
                     } else {
                         vec![]
                     },
-                    0,
+                    level,
                 )),
                 location,
                 None,
@@ -1597,6 +1598,7 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
         100,
         thresholds,
         cluster_key_id,
+        0,
     )
     .await?;
 
@@ -1624,6 +1626,7 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
             column_name: "embedding".to_string(),
             dimension: 2,
             distance_type: VectorDistanceType::L2,
+            page_order: false,
         };
         let mutator = ReclusterMutator::new(
             ctx.clone(),
@@ -1672,71 +1675,97 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
     let cluster_key_id = 0;
     let thresholds = BlockThresholds::new(1000, 100, 100, 1);
 
-    let segment_locations = gen_recluster_segments_by_vector_stats(
-        &data_accessor,
-        &location_generator,
-        &[
-            vec![(1, 1, [0.0, 0.0], 1.0)],
-            vec![(2, 2, [0.5, 0.0], 1.0)],
-            vec![(3, 3, [10.0, 0.0], 1.0)],
-        ],
-        None,
-        false,
-        1000,
-        100,
-        100,
-        thresholds,
-        cluster_key_id,
-    )
-    .await?;
+    // (level, full pass of RECLUSTER FINAL)
+    for (level, full_pass) in [(0, false), (1, false), (1, true)] {
+        let segment_locations = gen_recluster_segments_by_vector_stats(
+            &data_accessor,
+            &location_generator,
+            &[
+                vec![(1, 1, [0.0, 0.0], 1.0)],
+                vec![(2, 2, [0.5, 0.0], 1.0)],
+                vec![(3, 3, [10.0, 0.0], 1.0)],
+            ],
+            None,
+            false,
+            1000,
+            100,
+            100,
+            thresholds,
+            cluster_key_id,
+            level,
+        )
+        .await?;
 
-    let schema = vector_recluster_schema();
-    let ctx: Arc<dyn TableContext> = ctx.clone();
-    let compact_segments = segment_pruning(
-        &ctx,
-        schema.clone(),
-        data_accessor.clone(),
-        create_segment_location_vector(segment_locations, None),
-    )
-    .await?;
+        let schema = vector_recluster_schema();
+        let query_ctx: Arc<dyn TableContext> = ctx.clone();
+        let compact_segments = segment_pruning(
+            &query_ctx,
+            schema.clone(),
+            data_accessor.clone(),
+            create_segment_location_vector(segment_locations, None),
+        )
+        .await?;
 
-    let vector_cluster_info = VectorClusterInfo {
-        key_index: 0,
-        column_id: 1,
-        column_name: "embedding".to_string(),
-        dimension: 2,
-        distance_type: VectorDistanceType::L2,
-    };
-    let mutator = ReclusterMutator::new(
-        ctx,
-        data_accessor,
-        schema,
-        vec![test_vector_cluster_key_expr()],
-        1.0,
-        thresholds,
-        ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
-        0,
-        1,
-        ReclusterMode::Conservative,
-        Some(vector_cluster_info),
-    );
+        let vector_cluster_info = VectorClusterInfo {
+            key_index: 0,
+            column_id: 1,
+            column_name: "embedding".to_string(),
+            dimension: 2,
+            distance_type: VectorDistanceType::L2,
+            page_order: false,
+        };
+        let mutator = ReclusterMutator::new(
+            query_ctx,
+            data_accessor.clone(),
+            schema,
+            vec![test_vector_cluster_key_expr()],
+            1.0,
+            thresholds,
+            ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
+            0,
+            1,
+            ReclusterMode::Conservative,
+            Some(vector_cluster_info),
+        );
+        let mutator = if full_pass {
+            let mut blocks = HashSet::new();
+            for (_, segment) in &compact_segments {
+                for block in segment.block_metas()? {
+                    blocks.insert(block.location.0.clone());
+                }
+            }
+            mutator.with_vector_full_pass(Some(Arc::new(blocks)))
+        } else {
+            mutator
+        };
 
-    let segment_windows = mutator.select_segments(&compact_segments, 8)?;
-    let vector_window = segment_windows
-        .into_iter()
-        .find(|window| {
+        let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+        let vector_window = segment_windows.into_iter().find(|window| {
             window
                 .iter()
                 .map(|segment| segment.loc.segment_idx)
                 .collect::<HashSet<_>>()
                 == HashSet::from([0, 1])
-        })
-        .unwrap();
-    let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
-    assert_eq!(block_num, 2);
-    assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
-    assert_eq!(task_part_counts(&parts), vec![2]);
+        });
+        if level > 0 && !full_pass {
+            // Blocks already written by a vector recluster task are not selected again,
+            // even though their spheres overlap.
+            if let Some(window) = vector_window {
+                let (_, parts) = materialize_candidate_window(&mutator, window, 1).await?;
+                assert!(parts.tasks.is_empty());
+            }
+            continue;
+        }
+        let (block_num, parts) =
+            materialize_candidate_window(&mutator, vector_window.unwrap(), 1).await?;
+        assert_eq!(block_num, 2);
+        assert_eq!(parts.tasks.len(), 1);
+        assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
+        assert_eq!(task_part_counts(&parts), vec![2]);
+        // The full pass rewrites clustered blocks as level 0 input, so its output is
+        // level 1 again.
+        assert_eq!(parts.tasks[0].level, 0);
+    }
 
     Ok(())
 }
@@ -1770,6 +1799,7 @@ async fn test_vector_segment_selection_does_not_cross_partitions() -> anyhow::Re
         100,
         thresholds,
         cluster_key_id,
+        0,
     )
     .await?;
 
@@ -1788,6 +1818,7 @@ async fn test_vector_segment_selection_does_not_cross_partitions() -> anyhow::Re
         column_name: "embedding".to_string(),
         dimension: 2,
         distance_type: VectorDistanceType::L2,
+        page_order: false,
     };
     let mutator = ReclusterMutator::new(
         ctx,

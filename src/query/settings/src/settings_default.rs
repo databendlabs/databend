@@ -1654,6 +1654,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("vector_probe_block_percent", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Approximate block pruning of vector TopN queries: searches only this percent of the blocks, nearest to the query by their vector statistics, and at least enough blocks for the candidates. May reduce recall. 0 or 100 searches every block not pruned safely.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
                 ("copy_dedup_full_path_by_default", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The default value if table option `copy_dedup_full_path` is not set when creating table.",

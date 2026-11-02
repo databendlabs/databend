@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VectorColumnStatistics;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
@@ -485,6 +486,9 @@ pub struct ReclusterTask {
     pub input_level_stats: Vec<ClusterLevelLogStats>,
     pub kind: ReclusterTaskKind,
     pub virtual_column_layout: Option<VirtualColumnLayout>,
+    /// Vector statistics of the input blocks, which seed the task's vector k-means.
+    #[serde(default)]
+    pub vector_seeds: Vec<VectorColumnStatistics>,
     /// Index metadata in original input-block order; absent when reuse is disabled.
     #[serde(default)]
     pub inverted_index_sources: Vec<Vec<BlockIndexMeta>>,

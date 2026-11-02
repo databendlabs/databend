@@ -84,6 +84,19 @@ impl BlockThresholds {
         value - value / 5
     }
 
+    /// Estimates the rows of a written block whose rows take `row_bytes` in memory:
+    /// a block ends at the first of the row, byte and compressed-size targets. The
+    /// compressed size is taken as the in-memory size, which underestimates the rows
+    /// of compressible data.
+    pub fn estimate_rows_per_block(&self, row_bytes: usize) -> usize {
+        let row_bytes = row_bytes.max(1);
+        let bytes_per_block = self.max_bytes_per_block / MAX_BYTES_PER_BLOCK_FACTOR;
+        self.max_rows_per_block
+            .min(bytes_per_block / row_bytes)
+            .min(self.max_compressed_per_block / row_bytes)
+            .max(1)
+    }
+
     #[inline]
     pub fn check_perfect_block(
         &self,

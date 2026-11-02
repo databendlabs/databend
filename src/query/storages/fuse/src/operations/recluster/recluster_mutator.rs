@@ -147,9 +147,33 @@ pub struct ReclusterFinalCarry {
     pub(crate) cluster_key_id: u32,
     // Reuse block-meta decode workers across rounds of one FINAL statement.
     pub(crate) decode_runtime: Option<Arc<Runtime>>,
+    // Vector RECLUSTER FINAL only selects blocks that no recluster task has written
+    // (level 0). After those rounds, the blocks present at that point are rewritten
+    // once more together, regardless of level, so new data is mixed with older
+    // clustered blocks. Blocks written by this pass are not in the set, which ends it.
+    pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
 }
 
 impl ReclusterFinalCarry {
+    /// Starts the full pass of a vector RECLUSTER FINAL over `blocks`, scanning the
+    /// table again from the start.
+    pub fn start_vector_full_pass(&mut self, blocks: HashSet<String>) {
+        self.reset();
+        self.vector_full_pass = Some(Arc::new(blocks));
+    }
+
+    /// Whether the full pass of a vector RECLUSTER FINAL has started.
+    pub fn in_vector_full_pass(&self) -> bool {
+        self.vector_full_pass.is_some()
+    }
+
+    /// Forgets the scan state, keeping a started vector full pass.
+    pub fn reset(&mut self) {
+        let vector_full_pass = self.vector_full_pass.take();
+        *self = Self::default();
+        self.vector_full_pass = vector_full_pass;
+    }
+
     /// Lazily create or reuse the block-meta decode runtime for FINAL recluster.
     pub(crate) fn decode_runtime(&mut self, workers: usize) -> Result<Arc<Runtime>> {
         if self.decode_runtime.is_none() {
@@ -282,6 +306,13 @@ impl ReclusterMutator {
             strategy,
             virtual_column_layout_policy: table.virtual_column_layout_policy(),
         })
+    }
+
+    /// Restricts selection to the full pass of a vector RECLUSTER FINAL over
+    /// `blocks`; see `ReclusterFinalCarry`.
+    pub fn with_vector_full_pass(mut self, blocks: Option<Arc<HashSet<String>>>) -> Self {
+        self.properties.vector_full_pass = blocks;
+        self
     }
 
     /// Build a recluster mutator directly for tests.
@@ -446,11 +477,18 @@ impl ReclusterMutator {
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         let mut blocks_map: BTreeMap<(ReclusterGroup, Vec<Scalar>), Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
-            let level = block.stats().level;
+            let mut level = block.stats().level;
             if level < 0 {
                 continue;
             }
-            if level >= MAX_RECLUSTER_LEVEL {
+            if let Some(full_pass) = &self.properties.vector_full_pass {
+                // The full pass rewrites the blocks present when it started, in one
+                // group whose output is level 1 again, so levels stay bounded.
+                if !full_pass.contains(&block.meta.location.0) {
+                    continue;
+                }
+                level = 0;
+            } else if level >= MAX_RECLUSTER_LEVEL {
                 // Terminal-level blocks are excluded from further rewrite tasks.
                 continue;
             }
@@ -642,6 +680,10 @@ impl ReclusterMutator {
                     input_level_stats: candidate.input_level_stats.clone(),
                     kind: candidate.kind,
                     virtual_column_layout,
+                    vector_seeds: block_metas
+                        .iter()
+                        .filter_map(|(_, block)| self.strategy.vector_seed(block))
+                        .collect(),
                     inverted_index_sources: match self
                         .ctx
                         .get_settings()

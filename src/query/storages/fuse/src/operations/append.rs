@@ -51,6 +51,7 @@ use crate::operations::TransformBlockWriter;
 use crate::operations::TransformPartitionBy;
 use crate::operations::TransformSerializeBlock;
 use crate::operations::TransformVectorCluster;
+use crate::operations::vector_cluster_memory_budget;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::ClusterStatsKey;
 use crate::statistics::ClusterStatsLayout;
@@ -183,10 +184,11 @@ impl FuseTable {
         }
 
         if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
-            let rows_per_block = block_thresholds.max_rows_per_block;
+            let budget_bytes = vector_cluster_memory_budget(ctx.as_ref(), transform_len)?;
             let vector_column_input_offset = vector_operator.vector_column_input_offset;
             let dimension = vector_operator.info.dimension;
             let distance_type = vector_operator.info.distance_type;
+            let page_order = vector_operator.info.page_order;
             let mut builder = pipeline.add_transform_with_specified_len(
                 move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(
@@ -196,8 +198,10 @@ impl FuseTable {
                             vector_column_input_offset,
                             dimension,
                             distance_type,
-                            rows_per_block,
-                        ),
+                            block_thresholds,
+                            budget_bytes,
+                        )
+                        .with_page_order(page_order),
                     )))
                 },
                 transform_len,
@@ -283,17 +287,20 @@ impl FuseTable {
         }
 
         if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
-            let rows_per_block = block_thresholds.max_rows_per_block;
+            let budget_bytes = vector_cluster_memory_budget(ctx.as_ref(), pipeline.output_len())?;
             let vector_column_input_offset = vector_operator.vector_column_input_offset;
             let dimension = vector_operator.info.dimension;
             let distance_type = vector_operator.info.distance_type;
+            let page_order = vector_operator.info.page_order;
             pipeline.add_accumulating_transformer(move || {
                 TransformVectorCluster::new(
                     vector_column_input_offset,
                     dimension,
                     distance_type,
-                    rows_per_block,
+                    block_thresholds,
+                    budget_bytes,
                 )
+                .with_page_order(page_order)
             });
         }
 

@@ -46,6 +46,8 @@ use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
 use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE;
+use databend_storages_common_table_meta::table::parse_vector_index_refine;
 use log::warn;
 
 /// Vector cluster metadata resolved from a vector cluster key expression.
@@ -56,6 +58,9 @@ pub struct VectorClusterInfo {
     pub column_name: String,
     pub dimension: usize,
     pub distance_type: VectorDistanceType,
+    /// Whether a vector index of the column stores FP16 refine data (`refine = true`),
+    /// whose pages the rows of each block are ordered for.
+    pub page_order: bool,
 }
 
 /// Runtime metadata for injecting vector cluster ids into the physical sort key.
@@ -110,17 +115,25 @@ pub fn vector_cluster_info_from_column(
     column_name: &str,
     dimension: usize,
 ) -> Result<VectorClusterInfo> {
-    let distances = table_indexes
-        .values()
-        .filter(|index| {
+    let indexes = || {
+        table_indexes.values().filter(|index| {
             index.index_type == TableIndexType::Vector && index.column_ids.contains(&column_id)
         })
-        .map(|index| {
-            index
-                .options
-                .get(VECTOR_INDEX_OPT_DISTANCE)
-                .map(String::as_str)
-        });
+    };
+    // Invalid values are rejected when the index is created; treat them as no FP16.
+    let page_order = indexes().any(|index| {
+        index
+            .options
+            .get(VECTOR_INDEX_OPT_REFINE)
+            .and_then(|value| parse_vector_index_refine(value))
+            .unwrap_or(false)
+    });
+    let distances = indexes().map(|index| {
+        index
+            .options
+            .get(VECTOR_INDEX_OPT_DISTANCE)
+            .map(String::as_str)
+    });
 
     let distance_type = VectorDistanceType::from_index_options(column_name, distances)?;
     Ok(VectorClusterInfo {
@@ -129,6 +142,7 @@ pub fn vector_cluster_info_from_column(
         column_name: column_name.to_string(),
         dimension,
         distance_type,
+        page_order,
     })
 }
 
