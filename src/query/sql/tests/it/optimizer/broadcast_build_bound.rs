@@ -232,6 +232,18 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             operator: RelOp::Join,
         },
         StatsCase {
+            name: "left_any_join",
+            description: "LEFT ANY JOIN returns one row per left row, so it is bounded by the left side.",
+            sql: "SELECT * FROM d LEFT ANY JOIN a ON d.k = a.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
+            name: "right_any_join",
+            description: "RIGHT ANY JOIN returns one row per right row, so it is bounded by the right side.",
+            sql: "SELECT * FROM a RIGHT ANY JOIN d ON a.k = d.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
             name: "inner_join_unique_key_missing_peer_stats",
             description: "A unique key caps the expected output at the rows of the side without statistics.",
             sql: "SELECT * FROM d JOIN u ON d.k = u.k",
