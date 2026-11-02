@@ -207,7 +207,7 @@ mod tests {
                 };
 
                 router.route_frame(frame()).await.unwrap();
-                let mut pending = Box::pin(router.route_frame(frame()));
+                let mut pending = std::pin::pin!(router.route_frame(frame()));
                 assert!(futures::poll!(pending.as_mut()).is_pending());
 
                 drop(receiver);

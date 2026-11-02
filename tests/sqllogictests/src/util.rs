@@ -250,6 +250,132 @@ pub fn collect_test_files(args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
+pub async fn run_ttc_container(
+    image: &str,
+    port: u16,
+    http_server_port: u16,
+    cs: &mut Vec<ContainerAsync<GenericImage>>,
+    query_result_format: QueryResultFormat,
+) -> Result<()> {
+    let docker = &docker_client_instance().await?;
+    let mut images = image.split(":");
+    let image = images.next().unwrap();
+    let tag = images.next().unwrap_or("latest");
+
+    use rand::Rng;
+    use rand::distributions::Alphanumeric;
+    let rng = rand::thread_rng();
+    let x: String = rng
+        .sample_iter(&Alphanumeric)
+        .take(5)
+        .map(char::from)
+        .collect();
+    let container_name = format!("databend-ttc-{}-{}", port, x);
+    let start = Instant::now();
+    println!("Starting container {container_name}");
+    let mut dsn = format!(
+        "databend://root:@127.0.0.1:{}?sslmode=disable",
+        http_server_port
+    );
+    if matches!(query_result_format, QueryResultFormat::Arrow) {
+        dsn = format!("{dsn}&query_result_format=arrow");
+    }
+
+    let mut i = 1;
+    loop {
+        let log_consumer = LoggingConsumer::new();
+
+        let container_res = GenericImage::new(image, tag)
+            .with_exposed_port(port.tcp())
+            .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+            .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
+            .with_network("host")
+            .with_env_var("DATABEND_DSN", &dsn)
+            .with_env_var("TTC_PORT", format!("{port}"))
+            .with_container_name(&container_name)
+            .with_log_consumer(log_consumer)
+            .start()
+            .await;
+        let duration = start.elapsed().as_secs();
+        match container_res {
+            Ok(container) => {
+                println!(
+                    "Started container {container_name} {} using {duration} secs",
+                    container.id(),
+                );
+                cs.push(container);
+                return Ok(());
+            }
+            Err(err) => {
+                eprintln!(
+                    "Failed to start container {container_name} using {duration} secs: {err}"
+                );
+                stop_container(docker, &container_name).await;
+                if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
+                    break;
+                } else {
+                    println!(
+                        "Retrying to start container {container_name} {i} after {duration} secs",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+    Err(format!("Start {container_name} failed").into())
+}
+
+async fn stop_container(docker: &Docker, container_name: &str) {
+    if docker
+        .inspect_container(container_name, None)
+        .await
+        .is_err()
+    {
+        return;
+    }
+    let _ = docker.stop_container(container_name, None).await;
+    let _ = docker
+        .remove_container(
+            container_name,
+            Some(RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            }),
+        )
+        .await;
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ColumnType {
+    Bool,
+    Text,
+    Integer,
+    FloatingPoint,
+    Any,
+}
+
+impl sqllogictest::ColumnType for ColumnType {
+    fn from_char(value: char) -> Option<Self> {
+        match value {
+            'B' => Some(Self::Bool),
+            'T' => Some(Self::Text),
+            'I' => Some(Self::Integer),
+            'R' => Some(Self::FloatingPoint),
+            _ => Some(Self::Any),
+        }
+    }
+
+    fn to_char(&self) -> char {
+        match self {
+            Self::Bool => 'B',
+            Self::Text => 'T',
+            Self::Integer => 'I',
+            Self::FloatingPoint => 'R',
+            Self::Any => '?',
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -434,131 +560,5 @@ mod tests {
         let files = collect_files(&args).unwrap();
 
         assert_eq!(files, vec![keep_file]);
-    }
-}
-
-pub async fn run_ttc_container(
-    image: &str,
-    port: u16,
-    http_server_port: u16,
-    cs: &mut Vec<ContainerAsync<GenericImage>>,
-    query_result_format: QueryResultFormat,
-) -> Result<()> {
-    let docker = &docker_client_instance().await?;
-    let mut images = image.split(":");
-    let image = images.next().unwrap();
-    let tag = images.next().unwrap_or("latest");
-
-    use rand::Rng;
-    use rand::distributions::Alphanumeric;
-    let rng = rand::thread_rng();
-    let x: String = rng
-        .sample_iter(&Alphanumeric)
-        .take(5)
-        .map(char::from)
-        .collect();
-    let container_name = format!("databend-ttc-{}-{}", port, x);
-    let start = Instant::now();
-    println!("Starting container {container_name}");
-    let mut dsn = format!(
-        "databend://root:@127.0.0.1:{}?sslmode=disable",
-        http_server_port
-    );
-    if matches!(query_result_format, QueryResultFormat::Arrow) {
-        dsn = format!("{dsn}&query_result_format=arrow");
-    }
-
-    let mut i = 1;
-    loop {
-        let log_consumer = LoggingConsumer::new();
-
-        let container_res = GenericImage::new(image, tag)
-            .with_exposed_port(port.tcp())
-            .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
-            .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
-            .with_network("host")
-            .with_env_var("DATABEND_DSN", &dsn)
-            .with_env_var("TTC_PORT", format!("{port}"))
-            .with_container_name(&container_name)
-            .with_log_consumer(log_consumer)
-            .start()
-            .await;
-        let duration = start.elapsed().as_secs();
-        match container_res {
-            Ok(container) => {
-                println!(
-                    "Started container {container_name} {} using {duration} secs",
-                    container.id(),
-                );
-                cs.push(container);
-                return Ok(());
-            }
-            Err(err) => {
-                eprintln!(
-                    "Failed to start container {container_name} using {duration} secs: {err}"
-                );
-                stop_container(docker, &container_name).await;
-                if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
-                    break;
-                } else {
-                    println!(
-                        "Retrying to start container {container_name} {i} after {duration} secs",
-                    );
-                    i += 1;
-                }
-            }
-        }
-    }
-    Err(format!("Start {container_name} failed").into())
-}
-
-async fn stop_container(docker: &Docker, container_name: &str) {
-    if docker
-        .inspect_container(container_name, None)
-        .await
-        .is_err()
-    {
-        return;
-    }
-    let _ = docker.stop_container(container_name, None).await;
-    let _ = docker
-        .remove_container(
-            container_name,
-            Some(RemoveContainerOptions {
-                force: true,
-                ..Default::default()
-            }),
-        )
-        .await;
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum ColumnType {
-    Bool,
-    Text,
-    Integer,
-    FloatingPoint,
-    Any,
-}
-
-impl sqllogictest::ColumnType for ColumnType {
-    fn from_char(value: char) -> Option<Self> {
-        match value {
-            'B' => Some(Self::Bool),
-            'T' => Some(Self::Text),
-            'I' => Some(Self::Integer),
-            'R' => Some(Self::FloatingPoint),
-            _ => Some(Self::Any),
-        }
-    }
-
-    fn to_char(&self) -> char {
-        match self {
-            Self::Bool => 'B',
-            Self::Text => 'T',
-            Self::Integer => 'I',
-            Self::FloatingPoint => 'R',
-            Self::Any => '?',
-        }
     }
 }
