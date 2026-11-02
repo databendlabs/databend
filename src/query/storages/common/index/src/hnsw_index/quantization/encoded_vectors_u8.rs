@@ -79,7 +79,7 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
         if vector_parameters.count == 0 {
             return Ok(EncodedVectorsU8 {
                 encoded_vectors: storage_builder.build(),
-                score_kernel: select_score_kernel(vector_parameters.distance_type),
+                score_kernel: select_score_kernel(vector_parameters.distance_type, actual_dim),
                 metadata: Metadata {
                     actual_dim,
                     alpha: 0.0,
@@ -166,7 +166,7 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
 
         Ok(EncodedVectorsU8 {
             encoded_vectors: storage_builder.build(),
-            score_kernel: select_score_kernel(vector_parameters.distance_type),
+            score_kernel: select_score_kernel(vector_parameters.distance_type, actual_dim),
             metadata: Metadata {
                 actual_dim,
                 alpha,
@@ -310,7 +310,10 @@ impl<TStorage: EncodedStorage> EncodedVectors<EncodedQueryU8> for EncodedVectors
         let quantized_vector_size = Self::get_quantized_vector_size(vector_parameters);
         let encoded_vectors =
             TStorage::from_slice(data, quantized_vector_size, vector_parameters.count)?;
-        let score_kernel = select_score_kernel(metadata.vector_parameters.distance_type);
+        let score_kernel = select_score_kernel(
+            metadata.vector_parameters.distance_type,
+            metadata.actual_dim,
+        );
         let result = Self {
             encoded_vectors,
             metadata,
@@ -389,14 +392,22 @@ impl<TStorage: EncodedStorage> EncodedVectors<EncodedQueryU8> for EncodedVectors
     }
 }
 
-/// The SIMD kernel for `distance_type` that the CPU supports, chosen once per
-/// index instead of on every score; `None` uses the scalar implementation.
+/// Largest `actual_dim` for the VNNI kernels: up to it, a dot product of codes
+/// up to 127 is at most 2^24, so the f32 lane sums of `impl_score_dot_avx` are
+/// exact and its scores match the integer sums of the VNNI kernels. Above it,
+/// AVX2 rounds partial sums and can differ by a few ULPs.
+#[cfg(target_arch = "x86_64")]
+const MAX_VNNI_DIM: usize = (1 << 24) / (127 * 127);
+
+/// The SIMD kernel for `distance_type` and `actual_dim` that the CPU supports,
+/// chosen once per index instead of on every score; `None` uses the scalar
+/// implementation. Every kernel scores exactly like the one it replaces.
 #[allow(unused_variables)]
-fn select_score_kernel(distance_type: DistanceType) -> Option<ScoreKernel> {
+fn select_score_kernel(distance_type: DistanceType, actual_dim: usize) -> Option<ScoreKernel> {
     #[cfg(target_arch = "x86_64")]
     {
         // One `vpdpbusd` multiplies and sums 64 or 32 bytes; L1 has no VNNI form.
-        if distance_type != DistanceType::L1 {
+        if distance_type != DistanceType::L1 && actual_dim <= MAX_VNNI_DIM {
             if is_x86_feature_detected!("avx512vnni") && is_x86_feature_detected!("avx512bw") {
                 return Some(impl_score_dot_avx512_vnni);
             }
@@ -712,6 +723,78 @@ mod tests {
             assert_eq!(dot, impl_score_dot(q, v, dim) as f32, "dot, dim {dim}");
             let l1 = unsafe { impl_score_l1_neon_dotprod(q, v, dim as u32) };
             assert_eq!(l1, impl_score_l1(q, v, dim) as f32, "l1, dim {dim}");
+        }
+    }
+
+    /// Codes in `64..=127` from an LCG, high enough that 4,096-dimensional dot
+    /// products exceed 2^24.
+    #[cfg(any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
+    fn high_codes(dim: usize, seed: u64) -> Vec<u8> {
+        let mut x = seed;
+        (0..dim)
+            .map(|_| {
+                x = x
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                64 + (x >> 58) as u8
+            })
+            .collect()
+    }
+
+    /// The kernel chosen for every distance and dimension scores exactly like
+    /// the kernel main uses on this CPU (AVX2 on x86, NEON on arm), including
+    /// dot products above 2^24, where AVX2 rounds its f32 partial sums.
+    #[cfg(any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
+    #[test]
+    fn test_score_kernel_matches_main() {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if !(is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma")) {
+                return;
+            }
+            assert!(MAX_VNNI_DIM * 127 * 127 <= 1 << 24);
+            assert!((MAX_VNNI_DIM + ALIGNMENT) * 127 * 127 > 1 << 24);
+        }
+        #[cfg(target_arch = "x86_64")]
+        let (main_dot, main_l1): (ScoreKernel, ScoreKernel) =
+            (impl_score_dot_avx, impl_score_l1_avx);
+        #[cfg(target_arch = "aarch64")]
+        let (main_dot, main_l1): (ScoreKernel, ScoreKernel) =
+            (impl_score_dot_neon, impl_score_l1_neon);
+        let main_kernel = |distance_type| match distance_type {
+            DistanceType::Dot | DistanceType::L2 => main_dot,
+            DistanceType::L1 => main_l1,
+        };
+        let mut rounded = 0;
+        for dim in [16, 1024, 1040, 1056, 1536, 4080, 4096] {
+            let mut cases = vec![
+                (vec![127u8; dim], vec![127u8; dim]),
+                (vec![0; dim], vec![127; dim]),
+            ];
+            cases.extend((1..40).map(|seed| (high_codes(dim, seed), high_codes(dim, seed + 1000))));
+            for (q, v) in &cases {
+                let (q, v) = (q.as_ptr(), v.as_ptr());
+                for distance_type in [DistanceType::Dot, DistanceType::L1, DistanceType::L2] {
+                    let kernel = select_score_kernel(distance_type, dim).unwrap();
+                    let expected = unsafe { main_kernel(distance_type)(q, v, dim as u32) };
+                    let score = unsafe { kernel(q, v, dim as u32) };
+                    assert_eq!(score, expected, "{distance_type:?}, dim {dim}");
+                }
+                let dot = unsafe { main_dot(q, v, dim as u32) };
+                rounded += usize::from(dot != impl_score_dot(q, v, dim) as f32);
+            }
+        }
+        // The cases include sums that AVX2 rounds (arm sums exactly).
+        if cfg!(target_arch = "x86_64") {
+            assert!(rounded > 0);
+        } else {
+            assert_eq!(rounded, 0);
         }
     }
 

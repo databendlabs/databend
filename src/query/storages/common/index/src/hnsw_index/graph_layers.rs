@@ -66,10 +66,6 @@ pub trait GraphLayersBase {
     fn links_map<F>(&self, point_id: PointOffsetType, level: usize, f: F)
     where F: FnMut(PointOffsetType);
 
-    /// Hints the CPU to load the links of `point_id` at `level`, ahead of
-    /// `links_map`. A no-op unless the links are read from memory.
-    fn prefetch_links(&self, _point_id: PointOffsetType, _level: usize) {}
-
     /// Get M based on current level
     fn get_m(&self, level: usize) -> usize;
 
@@ -99,22 +95,11 @@ pub trait GraphLayersBase {
                 }
             });
 
-            // Load the links of the candidate to expand next while the neighbors
-            // are scored: it is the best remaining candidate unless a neighbor
-            // scores better, whose links are then loaded after the scoring.
-            let next = searcher.candidates.peek().map(|next| next.idx);
-            if let Some(next) = next {
-                self.prefetch_links(next, level);
-            }
             let scores = points_scorer.score_points(&mut points_ids, limit);
             scores.iter().copied().for_each(|score_point| {
                 searcher.process_candidate(score_point);
                 visited_list.check_and_update_visited(score_point.idx);
             });
-            let new_next = searcher.candidates.peek().map(|next| next.idx);
-            if let Some(new_next) = new_next.filter(|&new_next| Some(new_next) != next) {
-                self.prefetch_links(new_next, level);
-            }
         }
 
         Ok(())
@@ -193,11 +178,6 @@ impl GraphLayersBase for GraphLayers {
     fn links_map<F>(&self, point_id: PointOffsetType, level: usize, f: F)
     where F: FnMut(PointOffsetType) {
         self.links.links(point_id, level).for_each(f);
-    }
-
-    #[inline]
-    fn prefetch_links(&self, point_id: PointOffsetType, level: usize) {
-        self.links.prefetch_links(point_id, level);
     }
 
     fn get_m(&self, level: usize) -> usize {
