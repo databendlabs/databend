@@ -149,10 +149,12 @@ pub struct TrackingPayload {
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub processor_interrupt: Option<Arc<AtomicBool>>,
+    /// Read hardware perf counters around processor runs (EXPLAIN PERF).
     pub perf_enabled: bool,
-    /// Identifies the query on this node for on-demand profiling, 0 if none
-    /// (see `QueryPerf::start_dynamic`). A plain integer so that cloning the
-    /// payload, done for every processor run, costs no atomic operation.
+    /// The query this thread works for, 0 if none. A query-scoped
+    /// `CpuProfiler` samples the threads carrying its token. A plain integer
+    /// so that cloning the payload, done for every processor run, costs no
+    /// atomic operation.
     pub perf_query_token: u64,
     pub process_rows: AtomicUsize,
 }

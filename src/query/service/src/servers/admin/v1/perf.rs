@@ -38,6 +38,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use databend_common_base::runtime::CpuProfiler;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -325,7 +326,7 @@ fn merge_folded(nodes: HashMap<String, PerfNodeStatus>) -> String {
 
     let mut merged = String::new();
     for (node_id, folded) in nodes {
-        let node_frame = QueryPerf::folded_frame(&node_id);
+        let node_frame = CpuProfiler::folded_frame(&node_id);
         for stack in folded.lines() {
             merged.push_str(&node_frame);
             merged.push(';');
@@ -355,7 +356,7 @@ fn render_flamegraphs(
             }
             PerfState::NotRunning | PerfState::Idle => continue,
         };
-        let flamegraph = match status.folded.as_deref().map(QueryPerf::render_flamegraph) {
+        let flamegraph = match status.folded.as_deref().map(CpuProfiler::render_flamegraph) {
             Some(Ok(svg)) => svg,
             Some(Err(cause)) => {
                 failures.push(format!("{node_id}: {}", cause.message()));

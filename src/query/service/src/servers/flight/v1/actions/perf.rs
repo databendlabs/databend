@@ -16,9 +16,9 @@ use std::fmt;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_base::runtime::DynamicPerfGuard;
+use databend_common_base::runtime::CpuProfiler;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::ProfileScope;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
@@ -118,15 +118,15 @@ impl PerfNodeStatus {
 struct PerfSession {
     id: u64,
     target: PerfTarget,
-    /// The token of the profiled query, `None` for the whole process.
-    query_token: Option<u64>,
+    /// The threads sampled, the query's `perf_query_token` on this node.
+    scope: ProfileScope,
     started_at: Instant,
     deadline: Instant,
     state: PerfSessionState,
 }
 
 enum PerfSessionState {
-    Profiling(DynamicPerfGuard),
+    Profiling(CpuProfiler),
     Stopped {
         elapsed: Duration,
         reason: String,
@@ -137,10 +137,10 @@ enum PerfSessionState {
 impl PerfSession {
     fn status(&self, with_folded: bool) -> PerfNodeStatus {
         match &self.state {
-            PerfSessionState::Profiling(guard) => {
+            PerfSessionState::Profiling(profiler) => {
                 let (folded, message) = match with_folded {
                     false => (None, None),
-                    true => match guard.dump_folded() {
+                    true => match profiler.dump_folded() {
                         Ok(folded) => (Some(folded), None),
                         Err(cause) => (None, Some(cause.message())),
                     },
@@ -174,9 +174,9 @@ impl PerfSession {
 
     /// Stop sampling and keep the final samples.
     fn stop(&mut self, reason: String) {
-        if let PerfSessionState::Profiling(guard) = &self.state {
+        if let PerfSessionState::Profiling(profiler) = &self.state {
             info!("Stop profiling {} on this node: {}", self.target, reason);
-            let folded = guard.dump_folded();
+            let folded = profiler.dump_folded();
             self.state = PerfSessionState::Stopped {
                 elapsed: self.started_at.elapsed(),
                 reason,
@@ -217,12 +217,12 @@ fn start(target: PerfTarget, frequency: i32, max_duration: Duration) -> Result<P
         }
     }
 
-    let query_token = match &target {
+    let scope = match &target {
         PerfTarget::Query(query_id) => match find_perf_query_token(query_id) {
-            Some(token) => Some(token),
+            Some(token) => ProfileScope::Query(token),
             None => return Ok(PerfNodeStatus::with_state(PerfState::NotRunning)),
         },
-        PerfTarget::Process => None,
+        PerfTarget::Process => ProfileScope::Process,
     };
 
     if let Some(current) = profiling {
@@ -232,12 +232,8 @@ fn start(target: PerfTarget, frequency: i32, max_duration: Duration) -> Result<P
         )));
     }
 
-    let started = match query_token {
-        Some(token) => QueryPerf::start_dynamic(token, frequency),
-        None => QueryPerf::start_process(frequency),
-    };
-    let guard = match started {
-        Ok(guard) => guard,
+    let profiler = match CpuProfiler::start(scope, frequency) {
+        Ok(profiler) => profiler,
         // EXPLAIN PERF or /debug/pprof/profile owns the profiler.
         Err(cause) => return Ok(PerfNodeStatus::failed(cause.message())),
     };
@@ -251,10 +247,10 @@ fn start(target: PerfTarget, frequency: i32, max_duration: Duration) -> Result<P
     let new_session = PerfSession {
         id,
         target,
-        query_token,
+        scope,
         started_at: now,
         deadline: now + max_duration,
-        state: PerfSessionState::Profiling(guard),
+        state: PerfSessionState::Profiling(profiler),
     };
     let status = new_session.status(false);
     *session = Some(new_session);
@@ -315,7 +311,9 @@ fn check_session(id: u64) -> bool {
         return false;
     }
 
-    if let (PerfTarget::Query(query_id), Some(token)) = (&current.target, current.query_token) {
+    if let (PerfTarget::Query(query_id), ProfileScope::Query(token)) =
+        (&current.target, current.scope)
+    {
         // A new query with the same id gets a new token.
         if find_perf_query_token(query_id) != Some(token) {
             current.stop("query finished".to_string());

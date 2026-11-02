@@ -18,7 +18,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use pprof::protos::Message;
 
-use crate::runtime::ExclusiveProfilerGuard;
+use crate::runtime::CpuProfiler;
+use crate::runtime::ProfileScope;
 
 pub struct Profiling {
     duration: Duration,
@@ -34,13 +35,12 @@ impl Profiling {
     }
 
     pub async fn report(&self) -> Result<pprof::Report> {
-        let guard = ExclusiveProfilerGuard::start(self.frequency, false)
+        let profiler = CpuProfiler::start(ProfileScope::Process, self.frequency)
             .map_err(|e| ErrorCode::UnknownException(e.message()))?;
         tokio::time::sleep(self.duration).await;
-        guard
+        profiler
             .report()
-            .build()
-            .map_err(|e| ErrorCode::UnknownException(e.to_string()))
+            .map_err(|e| ErrorCode::UnknownException(e.message()))
     }
 
     pub async fn dump_flamegraph(&self) -> Result<Vec<u8>> {
