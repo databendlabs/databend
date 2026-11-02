@@ -36,6 +36,49 @@ use nom::Parser;
 use nom_rule::rule;
 
 #[test]
+fn test_materialized_view_select_grants() {
+    use databend_common_ast::ast::AccountMgrLevel;
+    use databend_common_ast::ast::AccountMgrSource;
+
+    for (sql, expected_database) in [
+        ("GRANT SELECT ON MATERIALIZED VIEW mv TO ROLE reader", None),
+        (
+            "REVOKE SELECT ON MATERIALIZED VIEW \"db-name\".mv FROM USER reader",
+            Some("db-name"),
+        ),
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let source = match &stmt {
+            Statement::Grant(stmt) => &stmt.source,
+            Statement::Revoke(stmt) => &stmt.source,
+            _ => panic!("expected GRANT or REVOKE: {sql}"),
+        };
+        let AccountMgrSource::Privs { level, .. } = source else {
+            panic!("expected explicit SELECT: {sql}");
+        };
+        assert_eq!(
+            level,
+            &AccountMgrLevel::MaterializedView(expected_database.map(str::to_string), "mv".into())
+        );
+        let displayed = stmt.to_string();
+        let tokens = tokenize_sql(&displayed).unwrap();
+        let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(stmt, reparsed);
+    }
+    for sql in [
+        "GRANT INSERT ON MATERIALIZED VIEW db.mv TO ROLE reader",
+        "GRANT ALL ON MATERIALIZED VIEW db.mv TO ROLE reader",
+        "GRANT OWNERSHIP ON MATERIALIZED VIEW db.mv TO ROLE reader",
+        "REVOKE INSERT ON MATERIALIZED VIEW db.mv FROM ROLE reader",
+        "GRANT SELECT ON MATERIALIZED VIEW db.* TO ROLE reader",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
+
+#[test]
 fn test_external_access_sql() {
     for sql in [
         "CREATE NETWORK RULE video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443', 'other.example.com')",

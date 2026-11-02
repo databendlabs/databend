@@ -4226,6 +4226,16 @@ pub fn role_name(i: Input) -> IResult<String> {
 }
 
 pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
+    let materialized_view_select = map(
+        rule! { SELECT ~ ON ~ MATERIALIZED ~ VIEW ~ #dot_separated_idents_1_to_2 },
+        |(_, _, _, _, (database, view))| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Select],
+            level: AccountMgrLevel::MaterializedView(
+                database.map(|database| database.name),
+                view.name,
+            ),
+        },
+    );
     let role = map(
         rule! {
             ROLE ~ #role_name
@@ -4418,6 +4428,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
+        | #materialized_view_select : "SELECT ON MATERIALIZED VIEW [<database>.]<view>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
         | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
