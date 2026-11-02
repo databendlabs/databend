@@ -962,7 +962,9 @@ impl KllBucketScanner {
             return Ok(());
         }
         let max_threads = ctx.get_settings().get_max_threads()?.max(1) as usize;
-        let segments_io = SegmentsIO::create(ctx.clone(), table.operator.clone(), table.schema());
+        // ANALYZE reads every segment; the disk cache keeps those queries read.
+        let segments_io = SegmentsIO::create(ctx.clone(), table.operator.clone(), table.schema())
+            .without_disk_fill();
         let runtime =
             Runtime::with_worker_threads(max_threads, Some("analyze-kll-histogram".to_owned()))?;
         // Declared after `runtime` so the outstanding tasks are aborted, on error or

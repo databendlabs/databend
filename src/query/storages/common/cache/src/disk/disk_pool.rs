@@ -123,6 +123,9 @@ struct State {
     deleting: HashSet<String>,
     /// The same, by object id, for `begin_change` to finish them.
     deleting_objects: HashMap<String, HashSet<String>>,
+    /// Those whose delete failed: no delete is pending for them, so the next change of their
+    /// object deletes them and clears their marks.
+    undeleted: HashSet<String>,
     /// Keys reserved by writers and not yet published or released.
     in_flight: HashSet<String>,
     /// The entries of each object, by object id.
@@ -244,6 +247,7 @@ impl State {
 
     fn unmark_deleting(&mut self, rel: &str) {
         self.deleting.remove(rel);
+        self.undeleted.remove(rel);
         if let Some(object) = object_of(rel) {
             if let Some(rels) = self.deleting_objects.get_mut(object) {
                 rels.remove(rel);
@@ -308,6 +312,7 @@ impl DiskPool {
                 kinds: CacheKind::all().map(|_| (0, 0)).collect(),
                 deleting: HashSet::new(),
                 deleting_objects: HashMap::new(),
+                undeleted: HashSet::new(),
                 in_flight: HashSet::new(),
                 objects: HashMap::new(),
                 invalidated: HashMap::new(),
@@ -465,11 +470,25 @@ impl DiskPool {
                 .unwrap_or_default();
             (pending, state.take_object(object), state.reloaded)
         };
-        // The pending deletes keep their marks to clear; no file of those keys is written
-        // meanwhile.
-        let pending = remove_files(&self.root, &pending);
+        // The pending deletes keep their marks for their deletes to clear; no file of those keys
+        // is written meanwhile. Those whose delete failed have none pending: their marks are
+        // cleared here once their files are gone.
+        let (pending_deleted, failed) = match remove_files(&self.root, &pending) {
+            Ok(()) => (Ok(()), HashSet::new()),
+            Err((e, failed)) => (Err(e), failed.into_iter().collect::<HashSet<_>>()),
+        };
+        {
+            let mut state = self.state.lock();
+            for rel in &pending {
+                if failed.contains(rel) {
+                    state.undeleted.insert(rel.clone());
+                } else if state.undeleted.contains(rel) {
+                    state.unmark_deleting(rel);
+                }
+            }
+        }
         let taken = self.try_delete(&victims);
-        let mut deleted = pending.and(taken);
+        let mut deleted = pending_deleted.and(taken);
         if !reloaded {
             // The scan refuses the object's files from now on, and no write of it is put in
             // place, so the files left under its name are unindexed ones.
@@ -498,11 +517,20 @@ impl DiskPool {
                 let path = file?.path();
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
                 if name.is_some_and(|n| n.starts_with(&prefix) && !n.ends_with(TMP_SUFFIX)) {
-                    found.push(path);
+                    found.extend(rel_key(&self.root, &path));
                 }
             }
         }
-        remove_paths(found.iter())
+        remove_files(&self.root, &found).map_err(|(e, failed)| {
+            // Kept as pending deletes, for a retry of the change to find them once the scan
+            // has run.
+            let mut state = self.state.lock();
+            for rel in failed {
+                state.mark_deleting(&rel);
+                state.undeleted.insert(rel);
+            }
+            e
+        })
     }
 
     /// The change of `object` begun by `begin_change` is done, or abandoned: as
@@ -539,12 +567,21 @@ impl DiskPool {
         }
     }
 
-    /// `delete`, returning the first file that could not be deleted. All are tried.
+    /// `delete`, returning the first file that could not be deleted. All are tried; a file
+    /// not deleted stays marked as being deleted, its key not written again, for a change of
+    /// its object to delete it before the object changes.
     fn try_delete(&self, victims: &[String]) -> std::io::Result<()> {
-        let deleted = remove_files(&self.root, victims);
+        let (deleted, failed) = match remove_files(&self.root, victims) {
+            Ok(()) => (Ok(()), HashSet::new()),
+            Err((e, failed)) => (Err(e), failed.into_iter().collect()),
+        };
         let mut state = self.state.lock();
         for rel in victims {
-            state.unmark_deleting(rel);
+            if failed.contains(rel) {
+                state.undeleted.insert(rel.clone());
+            } else {
+                state.unmark_deleting(rel);
+            }
         }
         deleted
     }
@@ -694,8 +731,14 @@ impl DiskPool {
                 }
             };
             if !admitted {
-                remove(path, &deleted);
-                self.state.lock().unmark_deleting(&rel);
+                let gone = remove(path, &deleted);
+                let mut state = self.state.lock();
+                if gone {
+                    state.unmark_deleting(&rel);
+                } else {
+                    // Kept marked, for a change of its object to delete it.
+                    state.undeleted.insert(rel.clone());
+                }
             }
         });
         self.state.lock().reloaded = true;
@@ -708,31 +751,27 @@ impl DiskPool {
     }
 }
 
-/// Deletes the files of `rels` under `root`, all of them; returns the first error but a file
-/// already gone.
-fn remove_files(root: &Path, rels: &[String]) -> std::io::Result<()> {
-    remove_paths(
-        rels.iter()
-            .map(|rel| root.join(rel))
-            .collect::<Vec<_>>()
-            .iter(),
-    )
-}
-
-fn remove_paths<'a>(paths: impl Iterator<Item = &'a PathBuf>) -> std::io::Result<()> {
-    let mut first = Ok(());
-    for path in paths {
-        match fs::remove_file(path) {
+/// Deletes the files of `rels` under `root`, all of them; a file already gone is deleted.
+/// Fails with the first error and the files not deleted.
+fn remove_files(root: &Path, rels: &[String]) -> Result<(), (std::io::Error, Vec<String>)> {
+    let mut first = None;
+    let mut failed = Vec::new();
+    for rel in rels {
+        let path = root.join(rel);
+        match fs::remove_file(&path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
-                if first.is_ok() {
-                    first = Err(std::io::Error::new(e.kind(), format!("{path:?}: {e}")));
-                }
+                first
+                    .get_or_insert_with(|| std::io::Error::new(e.kind(), format!("{path:?}: {e}")));
+                failed.push(rel.clone());
             }
         }
     }
-    first
+    match first {
+        None => Ok(()),
+        Some(e) => Err((e, failed)),
+    }
 }
 
 /// Every file under `root`, recursively, scanning directories in parallel.
@@ -762,11 +801,17 @@ fn rel_key(root: &Path, path: &Path) -> Option<String> {
         .map(|rel| rel.replace(std::path::MAIN_SEPARATOR, "/"))
 }
 
-fn remove(path: &Path, deleted: &AtomicU64) {
+/// Whether the file is gone.
+fn remove(path: &Path, deleted: &AtomicU64) -> bool {
     match fs::remove_file(path) {
         Ok(()) => {
             deleted.fetch_add(1, Ordering::Relaxed);
+            true
         }
-        Err(e) => warn!("[DiskCache] failed to remove {path:?}: {e}"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+        Err(e) => {
+            warn!("[DiskCache] failed to remove {path:?}: {e}");
+            false
+        }
     }
 }

@@ -163,9 +163,11 @@ impl DiskCachedStorage {
             );
             return Ok(bytes);
         }
+        // Before the storage read: an invalidation from here on rejects the bytes. Held until
+        // the shared read is cleaned up, after `run`: the invalidation point kept for the
+        // object, which keeps later readers off this read, lives as long as the ticket.
+        let ticket = disk.begin_fill();
         let load = async {
-            // Before the storage read: an invalidation from here on rejects the bytes.
-            let ticket = disk.begin_fill();
             let bytes = self.read_storage(path, range.clone()).await?;
             metrics_inc_cache_miss_bytes(bytes.len() as u64, disk.metric_name(kind));
             if fill.writes() {
@@ -175,9 +177,12 @@ impl DiskCachedStorage {
         };
         // A read started after the object was invalidated does not join one started before.
         let generation = disk.invalidation_of(kind, key.path());
-        disk.flight()
+        let read = disk
+            .flight()
             .run(&format!("{kind:?}/{key}@{generation}"), load)
-            .await
+            .await;
+        drop(ticket);
+        read
     }
 
     async fn read_storage(&self, path: &str, range: Option<Range<u64>>) -> Result<Bytes> {

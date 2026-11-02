@@ -874,8 +874,8 @@ fn test_change_finishes_pending_deletes_of_the_object() {
 }
 
 /// A file of the object that cannot be deleted, as on a volume remounted read-only, fails the
-/// change: the object must not change while a copy of it would be read after a restart. The
-/// change still ends, and the object's files are refused meanwhile.
+/// change, and every retry while it stays: the object must not change while a copy of it would
+/// be read after a restart. The change still ends; the file stays tracked until deleted.
 #[test]
 fn test_change_fails_when_a_file_cannot_be_deleted() {
     use std::os::unix::fs::PermissionsExt;
@@ -897,10 +897,16 @@ fn test_change_fails_when_a_file_cannot_be_deleted() {
     assert!(pool.begin_change(&object).is_err());
     assert!(root.join(&unit).exists() && !pool.contains(&unit));
     assert!(pool.end_change(&object, 1, None).is_empty());
+    // A retry fails as well while the file stays, and its key is not written meanwhile.
+    assert!(pool.begin_change(&object).is_err());
+    assert!(pool.end_change(&object, 2, None).is_empty());
+    assert!(!pool.reserve(&unit, 100).reserved);
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
-    // A later change deletes the file.
+    // A later change deletes the file, and the key can be written again.
     assert_eq!(pool.begin_change(&object).unwrap(), 0);
     assert!(!root.join(&unit).exists());
-    assert!(pool.end_change(&object, 2, None).is_empty());
+    assert!(pool.end_change(&object, 3, None).is_empty());
+    put_file(&pool, &root, &unit, 4);
+    assert!(pool.contains(&unit));
     assert_consistent(&pool);
 }
