@@ -757,6 +757,8 @@ impl AsyncTransform for NgramIndexTransform {
                     &index_columns,
                     &index_path,
                     block_meta.bloom_filter_index_size,
+                    // A refresh: read the disk cache, do not fill it with the index it rewrites.
+                    DiskFill::ReadOnly,
                 )
                 .await?;
                 let new_ngram_columns = new_ngram_index.serialize_to_data_block()?.take_columns();

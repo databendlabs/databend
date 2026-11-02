@@ -672,3 +672,46 @@ fn test_older_invalidation_keeps_newer_points() {
     assert!(!root.join(&unit).exists());
     assert_consistent(&pool);
 }
+
+/// Two invalidations of one object out of clock order: the older one does not lower the point,
+/// so a fill started between them is still rejected.
+#[test]
+fn test_older_invalidation_of_an_object_keeps_its_newer_point() {
+    let pool = pool(1000);
+    assert_eq!(pool.reload(), (0, 0));
+    let object = DiskKey::object_id("t/a");
+    let unit = DiskKey::whole("t/a").rel_path(data());
+    assert!(pool.reserve(&unit, 100).reserved);
+    // A fill started at 0 runs throughout; the object is invalidated at 1 and at 3, and the
+    // invalidation at 1 arrives last.
+    assert!(pool.remove_object(&object, 3, Some(0)).is_empty());
+    assert!(pool.remove_object(&object, 1, Some(0)).is_empty());
+    assert_eq!(pool.invalidated_at(&object), Some(3));
+    let published = pool.publish(unit.clone(), 100, 100, 2);
+    assert!(!published.indexed);
+    pool.delete(&published.victims);
+    assert_consistent(&pool);
+}
+
+/// An object of many units, as an inverted index cached by page, is taken out whole, and its
+/// units leave no trace in the index of objects.
+#[test]
+fn test_remove_object_of_many_units() {
+    let pool = pool(u64::MAX);
+    let units: Vec<_> = (0..20_000u64)
+        .map(|i| DiskKey::range("t/big", i * 10..i * 10 + 10).rel_path(data()))
+        .collect();
+    for rel in &units {
+        put(&pool, rel, 1);
+    }
+    put(&pool, &rel(data(), "t/other"), 1);
+    let victims = pool.remove_object(&DiskKey::object_id("t/big"), 0, None);
+    assert_eq!(victims.len(), units.len());
+    pool.delete(&victims);
+    assert_eq!(pool.stats().items, 1);
+    assert!(
+        pool.remove_object(&DiskKey::object_id("t/big"), 1, None)
+            .is_empty()
+    );
+    assert_consistent(&pool);
+}

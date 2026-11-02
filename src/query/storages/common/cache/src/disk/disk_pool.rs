@@ -117,7 +117,7 @@ struct State {
     /// Keys reserved by writers and not yet published or released.
     in_flight: HashSet<String>,
     /// The entries of each object, by object id.
-    objects: HashMap<String, Vec<String>>,
+    objects: HashMap<String, HashSet<String>>,
     /// The last point each object was invalidated at, while fills started before it may still
     /// publish, or while the restart scan has not run.
     invalidated: HashMap<String, u64>,
@@ -147,7 +147,7 @@ impl State {
                     self.objects
                         .entry(object.to_string())
                         .or_default()
-                        .push(rel);
+                        .insert(rel);
                 }
             }
         }
@@ -175,7 +175,7 @@ impl State {
         self.deleting.insert(rel.to_string());
         if let Some(object) = object_of(rel) {
             if let Some(rels) = self.objects.get_mut(object) {
-                rels.retain(|r| r != rel);
+                rels.remove(rel);
                 if rels.is_empty() {
                     self.objects.remove(object);
                 }
@@ -355,9 +355,12 @@ impl DiskPool {
             });
         }
         if !state.reloaded || oldest_fill.is_some_and(|oldest| oldest < at) {
-            state.invalidated.insert(object.to_string(), at);
+            // Out of clock order, an older point arrives after a newer one of the object.
+            let point = state.invalidated.entry(object.to_string()).or_insert(at);
+            *point = (*point).max(at);
         }
-        let rels = state.objects.get(object).cloned().unwrap_or_default();
+        // Detached first: taking each entry out then finds no set to update.
+        let rels = state.objects.remove(object).unwrap_or_default();
         rels.into_iter()
             .filter(|rel| state.pop(rel).is_some())
             .collect()

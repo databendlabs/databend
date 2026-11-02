@@ -82,15 +82,23 @@ impl BloomBlockFilterReader for Location {
             BlockBloomFilterIndexVersion::V2(_)
             | BlockBloomFilterIndexVersion::V3(_)
             | BlockBloomFilterIndexVersion::V4(_) => {
-                let res = load_bloom_filter_by_columns(dal, settings, columns, path, index_length)
-                    .await?;
+                let res = load_bloom_filter_by_columns(
+                    dal,
+                    settings,
+                    columns,
+                    path,
+                    index_length,
+                    DiskFill::ReadWrite,
+                )
+                .await?;
                 Ok(res)
             }
         }
     }
 }
 
-/// load index column data
+/// load index column data. `fill`: the most the reads may do with the disk cache; an index
+/// refresh passes `ReadOnly`.
 #[fastrace::trace]
 pub async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
@@ -98,9 +106,10 @@ pub async fn load_bloom_filter_by_columns<'a>(
     column_needed: &'a [String],
     index_path: &'a str,
     index_length: u64,
+    fill: DiskFill,
 ) -> Result<BlockFilter> {
     let whole_file =
-        prepare_bloom_index_read_source(&dal, settings, index_path, index_length).await?;
+        prepare_bloom_index_read_source(&dal, settings, index_path, index_length, fill).await?;
 
     // 1. load index meta
     let bloom_index_meta = load_index_meta(
@@ -108,7 +117,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
         index_path,
         index_length,
         whole_file.as_ref(),
-        DiskFill::ReadWrite,
+        fill,
     )
     .await?;
 
@@ -148,6 +157,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
                 &dal,
                 bloom_index_schema_desc.clone(),
                 whole_file.as_ref(),
+                fill,
             )
         })
         .collect::<Vec<_>>();
@@ -179,6 +189,7 @@ async fn load_column_bloom_filter<'a>(
     dal: &'a Operator,
     bloom_index_schema_desc: SchemaDescPtr,
     whole_file: Option<&Arc<Bytes>>,
+    fill: DiskFill,
 ) -> Result<Arc<FilterImpl>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
@@ -189,6 +200,7 @@ async fn load_column_bloom_filter<'a>(
             col_chunk_meta,
             dal.clone(),
             bloom_index_schema_desc,
+            fill,
         );
         let whole_file = whole_file.cloned();
         async move { column_data_reader.read(whole_file.as_ref()).await }
@@ -235,9 +247,14 @@ async fn prepare_bloom_index_read_source(
     settings: &ReadSettings,
     path: &str,
     index_length: u64,
+    fill: DiskFill,
 ) -> Result<Option<Arc<Bytes>>> {
     if should_read_whole_bloom_index(path, settings, index_length) {
-        let fill = FuseCaches::instance().index_metas.bloom.disk_fill();
+        let fill = FuseCaches::instance()
+            .index_metas
+            .bloom
+            .disk_fill()
+            .at_most(fill);
         let data = DiskCachedStorage::new(dal.clone())
             .read(CacheKind::of::<bloom::Filter>(), path, None, fill)
             .await?;
@@ -441,6 +458,7 @@ mod tests {
             &[filter_name.clone()],
             path,
             data.len() as u64,
+            DiskFill::ReadWrite,
         )
         .await?;
 

@@ -20,6 +20,7 @@ use databend_common_expression::Column;
 use databend_common_metrics::storage::metrics_inc_block_index_read_bytes;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_index::filters::Filter;
@@ -53,6 +54,7 @@ impl BloomColumnFilterReader {
         column_chunk_meta: &SingleColumnMeta,
         operator: Operator,
         schema_desc: SchemaDescPtr,
+        fill: DiskFill,
     ) -> Self {
         let cache_key = format!("{index_path}-{filter_name}");
 
@@ -73,7 +75,10 @@ impl BloomColumnFilterReader {
         };
 
         BloomColumnFilterReader {
-            cache: FuseCaches::instance().bloom_filters.clone(),
+            // The most its reads may do with the disk cache.
+            cache: FuseCaches::instance()
+                .bloom_filters
+                .with_disk_fill_at_most(fill),
             loader,
             index_path,
         }
