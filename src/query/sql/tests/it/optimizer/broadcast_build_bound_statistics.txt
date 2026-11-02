@@ -103,3 +103,45 @@ operator: Join
 cardinality: 10000000000000.000
 max_cardinality: 10000000000000.000
 
+=== inner_join_confident_unique_key ===
+description: A unique key whose NDV is below its domain size bounds the output by the peer side.
+sql: SELECT * FROM d JOIN s ON d.k = s.k
+operator: Join
+cardinality: 180.000
+max_cardinality: 1000.000
+
+=== inner_join_confident_unique_key_below_filter ===
+description: A filter keeps a collected NDV, so its unique key still bounds the output.
+sql: SELECT * FROM d JOIN (SELECT k FROM s WHERE k > 10) AS t ON d.k = t.k
+operator: Join
+cardinality: 178.200
+max_cardinality: 1000.000
+
+=== inner_join_unique_key_with_fallback_ndv ===
+description: An NDV filled from the row count caps only the expected output.
+sql: SELECT * FROM d JOIN f ON d.k = f.k
+operator: Join
+cardinality: 180.000
+max_cardinality: 200000000.000
+
+=== inner_join_unique_key_at_domain_size ===
+description: A unique key whose NDV equals its domain size caps only the expected output.
+sql: SELECT * FROM d JOIN m ON d.k = m.k
+operator: Join
+cardinality: 900.000
+max_cardinality: 200000000.000
+
+=== left_join_confident_unique_key ===
+description: A confident unique key on the null-extended side bounds the output by the preserved side.
+sql: SELECT * FROM u LEFT JOIN s ON u.k = s.k
+operator: Join
+cardinality: 1000000.000
+max_cardinality: 1000000.000
+
+=== full_join_confident_unique_key ===
+description: A FULL join keeps the largest input bound.
+sql: SELECT * FROM u FULL JOIN s ON u.k = s.k
+operator: Join
+cardinality: 201000000.000
+max_cardinality: 201000000.000
+
