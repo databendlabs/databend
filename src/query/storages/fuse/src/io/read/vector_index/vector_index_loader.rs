@@ -28,7 +28,9 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
+use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_index::VectorBundleEntry;
 use databend_storages_common_index::VectorBundleFooter;
 use databend_storages_common_index::VectorBundlePageRead;
@@ -56,6 +58,10 @@ struct VectorIndexLoadSpec;
 impl IndexLoadSpec for VectorIndexLoadSpec {
     type Meta = VectorIndexMeta;
     type File = VectorIndexFile;
+
+    fn file_kind() -> CacheKind {
+        CacheKind::of::<vector::Refine>()
+    }
 
     fn meta_cache(caches: &IndexMetaCache) -> &MemCache<Arc<Self::Meta>> {
         &caches.vector

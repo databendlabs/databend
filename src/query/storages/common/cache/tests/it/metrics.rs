@@ -17,8 +17,13 @@
 
 use std::sync::Arc;
 
+use bytes::Bytes;
+use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheMetricsCollector;
 use databend_storages_common_cache::CacheRow;
+use databend_storages_common_cache::DiskKey;
+use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::segment;
 use futures::executor::block_on;
 use prometheus_client::encoding::text::encode;
@@ -30,9 +35,11 @@ use crate::fakes::cache;
 use crate::fakes::data_kind;
 use crate::fakes::meta_kind;
 use crate::fakes::shared_store;
+use crate::fakes::wait_for;
 use crate::kinds::samples::Sample;
 use crate::kinds::setup::Backend;
 use crate::kinds::setup::manager;
+use crate::manager::disk_config;
 
 const MEMORY: u64 = 1 << 30;
 
@@ -115,6 +122,65 @@ fn test_gauges_follow_cache_rows() {
         assert_eq!(segment.num_items, 1);
         assert!(segment.size > segment.in_cache_size);
     }
+}
+
+/// The disk cache adds gauges per disk pool, the queue, and the counter of dropped entries;
+/// the rows of kinds on disk are in the kind gauges with `pool="disk"`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_disk_gauges_follow_cache_rows() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let manager = Arc::new(manager(&disk_config(&dir), MEMORY, true));
+    let disk = manager.disk().unwrap();
+    let kind = CacheKind::of::<column::Data>();
+    let key = DiskKey::whole("1/2/_b/x.parquet");
+    assert!(disk.put(kind, &key, Bytes::from_static(b"bytes")).await);
+    wait_for(|| disk.contains(kind, &key));
+    // Larger than a quarter of the data pool: dropped.
+    let big = Bytes::from(vec![0; (disk.default_pool_cap(Pool::Data) / 2) as usize]);
+    assert!(disk.put(kind, &DiskKey::whole("big"), big).await);
+    wait_for(|| disk.stats().dropped_rejected == 1);
+
+    let text = scrape(CacheMetricsCollector::of(manager.clone()));
+    let rows = manager.rows();
+    let column_data = rows
+        .iter()
+        .find(|r| r.name == "disk_cache_column_data")
+        .unwrap();
+    let labels = kind_labels(column_data);
+    assert!(labels.contains("pool=\"disk\""));
+    assert_eq!(sample(&text, "cache_items", &labels), Some(1));
+    assert_eq!(sample(&text, "cache_in_cache_bytes", &labels), Some(9));
+    for row in rows.iter().filter(|r| r.disk && r.kind.is_none()) {
+        let labels = format!("pool=\"{}\"", row.pool.unwrap().name());
+        let get = |name| sample(&text, name, &labels);
+        assert_eq!(
+            get("cache_disk_pool_items"),
+            Some(row.num_items),
+            "{}",
+            row.name
+        );
+        assert_eq!(
+            get("cache_disk_pool_used_bytes"),
+            Some(row.size),
+            "{}",
+            row.name
+        );
+        assert_eq!(
+            get("cache_disk_pool_capacity_bytes"),
+            row.capacity,
+            "{}",
+            row.name
+        );
+    }
+    assert_eq!(sample(&text, "cache_disk_queue_bytes", ""), Some(0));
+    assert_eq!(
+        sample(&text, "cache_disk_dropped_total", "reason=\"rejected\""),
+        Some(1)
+    );
+    assert_eq!(
+        sample(&text, "cache_disk_dropped_total", "reason=\"queue_full\""),
+        Some(0)
+    );
 }
 
 /// The shared store counts why entries leave or are refused, per kind.

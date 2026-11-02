@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -23,9 +22,11 @@ use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CachedItem;
+use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::backend::InsertOutcome;
 use databend_storages_common_cache::backend::KindStats;
@@ -38,6 +39,7 @@ use futures::future::join_all;
 use tokio::sync::Notify;
 
 use crate::fakes::FakeReader;
+use crate::fakes::Item;
 use crate::fakes::Live;
 use crate::fakes::cache;
 use crate::fakes::data_kind;
@@ -62,7 +64,7 @@ impl<T: CachedItem + Clone> Reader for UpdatingReader<T> {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, _: &String) -> Result<T> {
+    async fn read(&self, _: &String, _: &ReadCtx) -> Result<T> {
         if self.reads.fetch_add(1, Ordering::Relaxed) == 0 {
             let old = self.old.clone();
             self.started.notify_one();
@@ -76,7 +78,7 @@ impl<T: CachedItem + Clone> Reader for UpdatingReader<T> {
 
 async fn assert_update_does_not_join_old_load<K: Sample>()
 where K::Value: Clone {
-    let manager = CacheManager::new(shared_store(1 << 30, 0, 0), HashMap::new());
+    let manager = CacheManager::new(shared_store(1 << 30, 0, 0), None);
     let cache = manager.cache::<K>();
     let reader = UpdatingReader {
         old: K::sample(1),
@@ -285,5 +287,46 @@ fn test_get_sync_computes_once() -> Result<()> {
         })?;
     }
     assert_eq!(computed, 1);
+    Ok(())
+}
+
+/// Records what the handle let it do with the disk cache.
+struct CtxReader {
+    live: Live,
+    seen: parking_lot::Mutex<Vec<DiskFill>>,
+}
+
+impl Reader for CtxReader {
+    type Key = String;
+    type Item = Item;
+
+    fn cache_key<'a>(&self, key: &'a String) -> Cow<'a, str> {
+        Cow::Borrowed(key)
+    }
+
+    async fn read(&self, _: &String, ctx: &ReadCtx) -> Result<Item> {
+        self.seen.lock().push(ctx.disk);
+        Ok(self.live.item(10))
+    }
+}
+
+/// A miss through a handle that fills reads and fills the disk cache; through a read-only view
+/// it reads the disk cache but does not fill it, as for background tasks.
+#[tokio::test]
+async fn test_handle_passes_its_disk_fill_to_the_reader() -> Result<()> {
+    let cache = cache(&shared_store(1 << 20, 1 << 20, 1 << 20), meta_kind());
+    let reader = CtxReader {
+        live: Live::default(),
+        seen: Default::default(),
+    };
+    assert_eq!(cache.disk_fill(), DiskFill::ReadWrite);
+    cache.get(&reader, "a".to_string()).await?;
+    let view = cache.read_only();
+    assert_eq!(view.disk_fill(), DiskFill::ReadOnly);
+    view.get(&reader, "b".to_string()).await?;
+    assert_eq!(*reader.seen.lock(), [
+        DiskFill::ReadWrite,
+        DiskFill::ReadOnly
+    ]);
     Ok(())
 }

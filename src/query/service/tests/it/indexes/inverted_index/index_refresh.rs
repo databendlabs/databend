@@ -34,6 +34,7 @@ use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::InvertedIndexBundleFooter;
@@ -123,7 +124,7 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     let mut block_metas = vec![];
     for (segment_loc, ver) in &new_snapshot.segments {
         let segment_info = segment_reader
-            .read(&(segment_loc.to_string(), *ver))
+            .read(&(segment_loc.to_string(), *ver), &ReadCtx::BYPASS)
             .await?;
         for block_meta in segment_info.block_metas()? {
             block_metas.push(block_meta);

@@ -3730,6 +3730,31 @@ pub struct DiskCacheConfig {
     )]
     #[serde(default = "bool_true")]
     pub sync_data: bool,
+
+    /// Share of `max_bytes` for table, segment and index metadata. The three disk pool ratios
+    /// split `max_bytes` in proportion to their sum, which need not be 100; 0 turns a pool off.
+    #[clap(
+        long = "cache-disk-meta-max-ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub meta_max_ratio: u64,
+
+    /// Share of `max_bytes` for bloom, vector, inverted and spatial index data.
+    #[clap(
+        long = "cache-disk-index-max-ratio",
+        value_name = "VALUE",
+        default_value = "20"
+    )]
+    pub index_max_ratio: u64,
+
+    /// Share of `max_bytes` for column data.
+    #[clap(
+        long = "cache-disk-data-max-ratio",
+        value_name = "VALUE",
+        default_value = "70"
+    )]
+    pub data_max_ratio: u64,
 }
 
 impl Default for DiskCacheConfig {
@@ -3738,6 +3763,9 @@ impl Default for DiskCacheConfig {
             max_bytes: 21474836480,
             path: "./.databend/_cache".to_owned(),
             sync_data: true,
+            meta_max_ratio: 10,
+            index_max_ratio: 20,
+            data_max_ratio: 70,
         }
     }
 }

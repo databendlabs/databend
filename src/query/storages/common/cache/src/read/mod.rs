@@ -16,6 +16,7 @@ mod reader;
 mod single_flight;
 mod ttl;
 
+pub use reader::ReadCtx;
 pub use reader::Reader;
 pub use single_flight::SingleFlight;
 pub use ttl::TTLReader;

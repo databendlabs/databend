@@ -19,7 +19,6 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CachedVectorIndex;
-use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_cache::kinds::bloom;
@@ -60,8 +59,6 @@ pub struct FuseCaches {
     pub inverted: InvertedIndexCache,
     /// Decoded HNSW indexes. Readers holding one keep it charged.
     pub vector_indexes: MemCache<CachedVectorIndex>,
-    /// Raw column bytes, keyed by `TableDataCacheKey` without the type.
-    pub column_data: MemCache<ColumnData>,
     /// Deserialized columns, keyed by `TableDataCacheKey` with the type.
     pub column_arrays: MemCache<SizedColumnArray>,
 }
@@ -140,7 +137,6 @@ impl FuseCaches {
                 full_payload: manager.cache::<inverted::FullPayload>(),
             },
             vector_indexes: manager.cache::<vector::Index>(),
-            column_data: manager.cache::<column::Data>(),
             column_arrays: manager.cache::<column::Array>(),
         })
     }
@@ -162,7 +158,6 @@ impl FuseCaches {
             prune_results: self.prune_results.read_only(),
             inverted: self.inverted.read_only(),
             vector_indexes: self.vector_indexes.read_only(),
-            column_data: self.column_data.read_only(),
             column_arrays: self.column_arrays.read_only(),
         })
     }

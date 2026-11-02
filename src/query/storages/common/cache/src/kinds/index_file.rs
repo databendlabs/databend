@@ -16,13 +16,10 @@
 
 use std::mem::size_of;
 
-use bytes::Bytes;
-use databend_common_exception::Result;
 use databend_storages_common_index::IndexFile;
 use databend_storages_common_index::IndexMeta;
 
 use crate::CachedItem;
-use crate::DiskCodec;
 use crate::size::btree_map;
 use crate::size::vec;
 
@@ -45,25 +42,5 @@ impl CachedItem for IndexMeta {
 impl CachedItem for IndexFile {
     fn mem_bytes(&self) -> usize {
         size_of::<Self>() + self.data.len()
-    }
-}
-
-impl DiskCodec for IndexMeta {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
-    }
-}
-
-impl DiskCodec for IndexFile {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
     }
 }

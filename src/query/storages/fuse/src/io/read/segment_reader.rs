@@ -15,8 +15,12 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::DiskFill;
+use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -27,7 +31,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentB
 use databend_storages_common_table_meta::meta::column_oriented_segment::deserialize_column_oriented_segment;
 use opendal::Operator;
 
-use super::meta::bytes_reader;
+use super::meta::read_whole;
 use crate::io::FuseCaches;
 use crate::io::SegmentsIO;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
@@ -129,6 +133,17 @@ impl SegmentReader for ColumnOrientedSegmentReader {
     }
 }
 
+/// The whole column-oriented segment, through the disk cache. Columns are decoded on demand, so
+/// a later projection reads the object again; the disk keeps it local.
+async fn read_whole_segment(dal: Operator, location: &str, put_cache: bool) -> Result<Bytes> {
+    let fill = if put_cache {
+        DiskFill::ReadWrite
+    } else {
+        DiskFill::ReadOnly
+    };
+    read_whole::<segment::ColumnOriented>(&DiskCachedStorage::new(dal), location, fill).await
+}
+
 /// Read a column-oriented segment from the storage or cache.
 ///
 /// If the segment is already in cache, we'll check if all requested columns are available.
@@ -165,9 +180,9 @@ pub async fn read_column_oriented_segment(
             if missed_cols.is_empty() {
                 return Ok((*segment).clone());
             }
-            let reader = bytes_reader(&dal, location, None).await?;
+            let bytes = read_whole_segment(dal, location, put_cache).await?;
             let (block_metas, schema, _) =
-                deserialize_column_oriented_segment(reader.to_bytes(), &missed_cols, need_summary)?;
+                deserialize_column_oriented_segment(bytes, &missed_cols, need_summary)?;
 
             let mut merged_block_metas = segment.block_metas.clone();
             merged_block_metas.merge_block(block_metas);
@@ -185,9 +200,9 @@ pub async fn read_column_oriented_segment(
             Ok(merged_segment)
         }
         None => {
-            let reader = bytes_reader(&dal, location, None).await?;
+            let bytes = read_whole_segment(dal, location, put_cache).await?;
             let (block_metas, segment_schema, summary) =
-                deserialize_column_oriented_segment(reader.to_bytes(), projection, need_summary)?;
+                deserialize_column_oriented_segment(bytes, projection, need_summary)?;
             let segment = ColumnOrientedSegment {
                 block_metas,
                 summary: summary.unwrap(),

@@ -27,6 +27,7 @@ use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::TTLReader;
 use databend_storages_common_cache::TTLValue;
@@ -88,7 +89,7 @@ impl Reader for CountingReader {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, _key: &String) -> Result<Value> {
+    async fn read(&self, _key: &String, _ctx: &ReadCtx) -> Result<Value> {
         while self.hold.load(Ordering::SeqCst) {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }

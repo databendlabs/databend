@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_config::CacheConfig;
-use databend_common_config::CacheStorageTypeInnerConfig;
 
 use crate::kinds::bloom;
 use crate::kinds::column;
@@ -124,13 +123,6 @@ impl LegacyKinds {
                         c.spatial_index_filter_memory_ratio,
                         c.spatial_index_filter_size,
                     )
-                },
-            ))
-            .register::<column::Data>(LegacyKind::bytes(
-                "data_cache_in_memory_bytes",
-                |c, _| match c.data_cache_storage {
-                    CacheStorageTypeInnerConfig::Disk => c.data_cache_in_memory_bytes,
-                    CacheStorageTypeInnerConfig::None => 0,
                 },
             ))
             .register::<column::Array>(LegacyKind::bytes(

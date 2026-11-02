@@ -12,27 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheInnerConfig;
+use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheRow;
-use databend_storages_common_cache::ColumnData;
+use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::Unit;
-use databend_storages_common_cache::VectorIndexFile;
 use databend_storages_common_cache::backend::KindStore;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::table;
-use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_cache::kinds::virtual_column;
 use databend_storages_common_cache::legacy::LegacyCapacity;
 use databend_storages_common_cache::legacy::LegacyStore;
@@ -48,8 +46,8 @@ use crate::fakes::wait_for;
 
 const MIB: u64 = 1 << 20;
 
-/// Every disk tier enabled, of 1 MiB, under `dir`.
-fn disk_config(dir: &TempDir) -> CacheConfig {
+/// The disk cache on, of 1 MiB, under `dir`, with the default pool ratios 10/20/70.
+pub fn disk_config(dir: &TempDir) -> CacheConfig {
     CacheConfig {
         data_cache_storage: CacheStorageTypeInnerConfig::Disk,
         disk_cache_config: DiskCacheInnerConfig {
@@ -57,16 +55,6 @@ fn disk_config(dir: &TempDir) -> CacheConfig {
             path: dir.path().to_string_lossy().to_string(),
             ..Default::default()
         },
-        disk_cache_table_bloom_index_data_size: MIB,
-        disk_cache_table_bloom_index_meta_size: MIB,
-        disk_cache_inverted_index_meta_size: MIB,
-        disk_cache_inverted_index_lookup_size: MIB,
-        disk_cache_inverted_index_payload_size: MIB,
-        disk_cache_vector_index_meta_size: MIB,
-        disk_cache_vector_index_data_size: MIB,
-        disk_cache_spatial_index_meta_size: MIB,
-        disk_cache_spatial_index_data_size: MIB,
-        disk_cache_virtual_column_meta_size: MIB,
         ..CacheConfig::default()
     }
 }
@@ -94,97 +82,236 @@ fn capacity(manager: &CacheManager, name: &str) -> Option<u64> {
     row(manager, name).and_then(|r| r.capacity)
 }
 
-fn disk_rows(manager: &CacheManager) -> usize {
-    manager
-        .rows()
-        .iter()
-        .filter(|r| r.name.starts_with("disk_"))
-        .count()
+fn disk_rows(manager: &CacheManager) -> Vec<CacheRow> {
+    manager.rows().into_iter().filter(|r| r.disk).collect()
 }
 
-/// In EE mode, disk tiers enabled in the config can be turned off and on at runtime; outside
-/// EE mode, or disabled in the config, there are none.
+fn disk_kinds() -> usize {
+    CacheKind::all().filter(|k| k.on_disk()).count()
+}
+
+/// The disk cache exists in EE mode with `data_cache_storage = disk` and `max_bytes` over 1 KiB.
+/// It then lists a row per kind kept on disk and per disk pool, and the license can turn it off
+/// and on at runtime.
 #[test]
-fn test_disk_tiers_follow_ee_mode_and_config() {
+fn test_disk_cache_follows_ee_mode_and_config() {
     let dir = TempDir::new().unwrap();
     let config = disk_config(&dir);
     let ee = manager(&config, true);
-    assert_eq!(disk_rows(&ee), 11);
+    assert!(ee.disk().is_some());
+    assert_eq!(disk_rows(&ee).len(), disk_kinds() + Pool::ALL.len());
+    assert!(row(&ee, "disk_cache_column_data").is_some());
+    assert!(row(&ee, "disk_cache_compact_segment_info").is_some());
+    // Kinds not kept on disk have no disk row.
+    assert!(ee.rows().iter().all(|r| r.name != "disk_cache_table_data"));
     ee.set_disk_allowed(false);
-    assert_eq!(disk_rows(&ee), 0);
+    assert!(disk_rows(&ee).is_empty());
     ee.set_disk_allowed(true);
-    assert_eq!(disk_rows(&ee), 11);
+    assert_eq!(disk_rows(&ee).len(), disk_kinds() + Pool::ALL.len());
 
-    let not_ee = manager(&config, false);
-    not_ee.set_disk_allowed(true);
-    assert_eq!(disk_rows(&not_ee), 0);
-    assert_eq!(disk_rows(&manager(&CacheConfig::default(), true)), 0);
-}
-
-/// `enable_table_meta_cache = false` turns off the meta and index disk tiers of the legacy
-/// backend; the shared backend ignores the option.
-#[test]
-fn test_meta_cache_switch_and_disk_tiers() {
-    let dir = TempDir::new().unwrap();
-    let config = CacheConfig {
-        enable_table_meta_cache: false,
-        ..disk_config(&dir)
+    assert!(manager(&config, false).disk().is_none());
+    assert!(manager(&CacheConfig::default(), true).disk().is_none());
+    let tiny = CacheConfig {
+        disk_cache_config: DiskCacheInnerConfig {
+            max_bytes: 1024,
+            ..config.disk_cache_config.clone()
+        },
+        ..config.clone()
     };
-    let legacy = manager(&config, true);
-    assert_eq!(disk_rows(&legacy), 1);
-    assert!(row(&legacy, "disk_cache_column_data").is_some());
-    let shared = CacheConfig {
-        shared_memory_enabled: true,
+    assert!(manager(&tiny, true).disk().is_none());
+    // All ratios 0 leave nothing to split.
+    let no_pools = CacheConfig {
+        disk_cache_config: DiskCacheInnerConfig {
+            meta_max_ratio: 0,
+            index_max_ratio: 0,
+            data_max_ratio: 0,
+            ..config.disk_cache_config.clone()
+        },
         ..config
     };
-    assert_eq!(disk_rows(&manager(&shared, true)), 11);
+    assert!(CacheManager::try_new(&no_pools, &MIB, "t", true).is_err());
 }
 
-/// A kind's cache comes with its disk tier, which keeps serving when the memory tier is off.
+/// The disk cache is independent of the memory backend and its switches; the options of the
+/// pre-refactor disk tiers are accepted and do nothing.
 #[test]
-fn test_cache_attaches_its_disk_tier() -> Result<()> {
+fn test_disk_cache_ignores_memory_options_and_legacy_disk_options() {
+    let dir = TempDir::new().unwrap();
+    for config in [
+        CacheConfig {
+            enable_table_meta_cache: false,
+            ..disk_config(&dir)
+        },
+        CacheConfig {
+            shared_memory_enabled: true,
+            ..disk_config(&dir)
+        },
+        CacheConfig {
+            disk_cache_table_bloom_index_data_size: 1,
+            disk_cache_virtual_column_meta_size: 1,
+            table_data_cache_population_queue_size: 1,
+            data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Fuzzy,
+            ..disk_config(&dir)
+        },
+    ] {
+        let manager = manager(&config, true);
+        assert_eq!(disk_rows(&manager).len(), disk_kinds() + Pool::ALL.len());
+        assert_eq!(
+            capacity(&manager, "__disk_pool:index"),
+            Some(MIB * 20 / 100)
+        );
+    }
+}
+
+/// A disk row counts the kind's lookups; its pool row sums them and holds the entries.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_disk_rows_count_hits_and_entries() {
     let dir = TempDir::new().unwrap();
     let manager = manager(&disk_config(&dir), true);
-    let pages = manager.cache::<vector::Refine>();
-    let page = || VectorIndexFile::create("p".to_string(), Bytes::from_static(b"fp16 page"));
-    pages.put("a:p", page());
-    wait_for(|| {
-        row(&manager, "disk_cache_vector_index_refine")
-            .unwrap()
-            .num_items
-            == 1
-    });
+    let disk = manager.disk().unwrap();
+    let kind = CacheKind::of::<column::Data>();
+    let key = DiskKey::range("1/2/_b/x.parquet", 0..10);
+    assert!(
+        disk.put(kind, &key, Bytes::from_static(b"0123456789"))
+            .await
+    );
+    wait_for(|| disk.contains(kind, &key));
+    assert!(disk.get(kind, &key).await.is_some());
+    assert!(disk.get(kind, &DiskKey::whole("missing")).await.is_none());
 
-    manager.set_cache_capacity("memory_cache_vector_index_refine", 0)?;
-    assert!(row(&manager, "memory_cache_vector_index_refine").is_none());
-    assert_eq!(pages.lookup("a:p").unwrap().data, page().data);
+    let column_data = row(&manager, "disk_cache_column_data").unwrap();
+    assert_eq!((column_data.num_items, column_data.size), (1, 14));
+    assert_eq!(
+        (column_data.capacity, column_data.unit),
+        (None, Unit::Bytes)
+    );
+    assert!(column_data.disk && column_data.pool.is_none());
+    assert!(column_data.hit >= 1 && column_data.miss >= 1);
+    assert_eq!(column_data.access, column_data.hit + column_data.miss);
 
-    // Kinds without a disk tier get none, whatever the config.
-    assert!(row(&manager, "disk_cache_vector_index_file").is_none());
-    Ok(())
+    let pool = row(&manager, "__disk_pool:data").unwrap();
+    assert_eq!((pool.num_items, pool.size, pool.in_cache_size), (1, 14, 14));
+    assert_eq!(pool.pool, Some(Pool::Data));
+    assert_eq!((pool.hit, pool.miss), (1, 1));
+    // The memory row of the kind is separate and empty.
+    let memory = manager
+        .rows()
+        .into_iter()
+        .find(|r| r.name == "memory_cache_column_data")
+        .unwrap();
+    assert!(!memory.disk && memory.num_items == 0);
 }
 
-/// The shared backend reclaims the memory tier of column data under pressure; its disk tier is
-/// kept, and a later lookup refills memory from it.
+/// Pools split `max_bytes` by their ratios, normalized by their sum; 0 turns a pool off.
 #[test]
-fn test_pressure_shrink_keeps_disk_tier() {
+fn test_disk_pools_by_ratio() {
     let dir = TempDir::new().unwrap();
-    let config = CacheConfig {
-        shared_memory_enabled: true,
-        kind_max_bytes: [("memory_cache_column_data".to_string(), MIB)].into(),
-        ..disk_config(&dir)
-    };
-    let manager = manager(&config, true);
-    let cache = manager.cache::<column::Data>();
-    let items = |name| row(&manager, name).unwrap().num_items;
-    cache.put("k", ColumnData::from_bytes(Bytes::from_static(b"data")));
-    wait_for(|| items("disk_cache_column_data") == 1);
-    assert_eq!(items("memory_cache_column_data"), 1);
+    let default = manager(&disk_config(&dir), true);
+    assert_eq!(capacity(&default, "__disk_pool:meta"), Some(MIB / 10));
+    assert_eq!(
+        capacity(&default, "__disk_pool:index"),
+        Some(MIB * 20 / 100)
+    );
+    assert_eq!(capacity(&default, "__disk_pool:data"), Some(MIB * 70 / 100));
 
-    assert_eq!(manager.shrink_for_pressure(&|| false).evicted, 1);
-    assert_eq!(items("memory_cache_column_data"), 0);
-    assert_eq!(cache.lookup("k").unwrap().bytes(), b"data".as_slice());
-    assert_eq!(items("memory_cache_column_data"), 1);
+    let mut config = disk_config(&dir);
+    config.disk_cache_config.meta_max_ratio = 1;
+    config.disk_cache_config.index_max_ratio = 0;
+    config.disk_cache_config.data_max_ratio = 3;
+    let manager = manager(&config, true);
+    assert_eq!(capacity(&manager, "__disk_pool:meta"), Some(MIB / 4));
+    assert_eq!(capacity(&manager, "__disk_pool:data"), Some(MIB * 3 / 4));
+    // An empty pool turns its kinds off.
+    assert!(row(&manager, "__disk_pool:index").is_none());
+    assert!(row(&manager, "disk_cache_bloom_index_filter").is_none());
+}
+
+/// `set_cache_capacity` on a disk pool takes bytes, `'<n>%'` of `max_bytes` or `'default'`;
+/// on a kind, 0 turns its disk cache off and anything else turns it back on.
+#[test]
+fn test_set_disk_capacity() -> Result<()> {
+    let dir = TempDir::new().unwrap();
+    let manager = manager(&disk_config(&dir), true);
+    let data = "__disk_pool:data";
+
+    manager.set_cache_capacity_arg("disk_pool:data", "50%")?;
+    assert_eq!(capacity(&manager, data), Some(MIB / 2));
+    manager.set_cache_capacity_arg("disk_pool:data", " 1000 ")?;
+    assert_eq!(capacity(&manager, data), Some(1000));
+    manager.set_cache_capacity_arg("disk_pool:data", "0")?;
+    assert!(row(&manager, data).is_none());
+    assert!(row(&manager, "disk_cache_column_data").is_none());
+    manager.set_cache_capacity_arg("disk_pool:data", "default")?;
+    assert_eq!(capacity(&manager, data), Some(MIB * 70 / 100));
+    assert!(row(&manager, "disk_cache_column_data").is_some());
+    // The pools together stay within max_bytes.
+    assert!(
+        manager
+            .set_cache_capacity_arg("disk_pool:data", "90%")
+            .is_err()
+    );
+    assert!(
+        manager
+            .set_cache_capacity_arg("disk_pool:data", "101%")
+            .is_err()
+    );
+    for bad in ["-1", "1.5", "abc", "%"] {
+        assert!(
+            manager
+                .set_cache_capacity_arg("disk_pool:data", bad)
+                .is_err(),
+            "{bad}"
+        );
+    }
+    assert!(
+        manager
+            .set_cache_capacity_arg("disk_pool:none", "0")
+            .is_err()
+    );
+    assert_eq!(capacity(&manager, data), Some(MIB * 70 / 100));
+
+    let column_data = "disk_cache_column_data";
+    manager.set_cache_capacity_arg("disk:memory_cache_column_data", "0")?;
+    assert!(row(&manager, column_data).is_none());
+    manager.set_cache_capacity_arg("disk:memory_cache_column_data", "default")?;
+    assert!(row(&manager, column_data).is_some());
+    manager.set_cache_capacity_arg("disk:memory_cache_column_data", "0")?;
+    manager.set_cache_capacity_arg("disk:memory_cache_column_data", "1")?;
+    assert!(row(&manager, column_data).is_some());
+    // Kinds not kept on disk, and unknown kinds.
+    assert!(
+        manager
+            .set_cache_capacity_arg("disk:memory_cache_table_data", "0")
+            .is_err()
+    );
+    assert!(
+        manager
+            .set_cache_capacity_arg("disk:no_such_cache", "0")
+            .is_err()
+    );
+
+    // Memory caches parse the same arguments.
+    manager.set_cache_capacity_arg("memory_cache_table_snapshot", "1")?;
+    assert_eq!(capacity(&manager, "memory_cache_table_snapshot"), Some(1));
+    assert!(
+        manager
+            .set_cache_capacity_arg("memory_cache_table_snapshot", "10%")
+            .is_err()
+    );
+
+    // Without a disk cache.
+    let no_disk = self::manager(&CacheConfig::default(), true);
+    assert!(
+        no_disk
+            .set_cache_capacity_arg("disk_pool:data", "0")
+            .is_err()
+    );
+    assert!(
+        no_disk
+            .set_cache_capacity_arg("disk:memory_cache_column_data", "0")
+            .is_err()
+    );
+    Ok(())
 }
 
 fn empty_snapshot() -> Arc<TableSnapshot> {
@@ -367,7 +494,7 @@ fn find<'a>(rows: &'a [CacheRow], name: &str) -> &'a CacheRow {
 #[test]
 fn test_rows_cover_kinds_and_pools() {
     let store = shared_store(1000, 2000, 0);
-    let manager = CacheManager::new(store.clone(), HashMap::new());
+    let manager = CacheManager::new(store.clone(), None);
     let live = Live::default();
     let kind = CacheKind::of::<virtual_column::Meta>();
     let cache = MemCache::<Item>::new(store, kind);
@@ -407,7 +534,7 @@ fn test_legacy_rows_have_no_pools() {
         CacheKind::of::<table::Snapshot>(),
         LegacyCapacity::Items(10),
     )]));
-    let rows = CacheManager::new(store, HashMap::new()).rows();
+    let rows = CacheManager::new(store, None).rows();
     assert_eq!(rows.len(), CacheKind::all().count());
     let snapshot = find(&rows, "memory_cache_table_snapshot");
     assert_eq!((snapshot.capacity, snapshot.unit), (Some(10), Unit::Count));

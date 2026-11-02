@@ -12,26 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Column data: raw bytes as read from storage, and deserialized columns.
+//! Column data: raw column chunks as read from storage, and deserialized columns.
 
 use arrow::array::ArrayRef;
 use bytes::Bytes;
-use databend_common_config::CacheStorageTypeInnerConfig;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::Column;
 
 use crate::CacheDef;
 use crate::CachedItem;
-use crate::Disk;
-use crate::DiskCodec;
 use crate::KindLimit;
 use crate::Pool;
 
-/// Raw column bytes, by `TableDataCacheKey` without the type; its disk tier is the table data
-/// cache. Off by default in both backends: a hit still decompresses and decodes, so it only
-/// saves the read from the disk tier, and it takes room in the data pool from `Array`, which
-/// serves re-reads decoded.
+/// Raw column chunks. Readers keep them only in the disk cache (`disk_cache_column_data`), whose
+/// data pool they fill: in memory, `Array` serves re-reads decoded. The memory side is off by
+/// default and no reader fills it; `data_cache_in_memory_bytes` is no longer read.
 pub struct Data;
 
 impl CacheDef for Data {
@@ -39,13 +33,7 @@ impl CacheDef for Data {
     const NAME: &'static str = "memory_cache_column_data";
     const POOL: Pool = Pool::Data;
     const SHARED_DEFAULT: KindLimit = KindLimit::DISABLED;
-    const DISK: Option<Disk<Self::Value>> = Some(
-        Disk::new("v1", |c| match c.data_cache_storage {
-            CacheStorageTypeInnerConfig::Disk => c.disk_cache_config.max_bytes,
-            CacheStorageTypeInnerConfig::None => 0,
-        })
-        .reload_policy(|c| c.data_cache_key_reload_policy.clone()),
-    );
+    const DISK: bool = true;
 }
 
 /// Deserialized columns, by `TableDataCacheKey` with the type. Off by default in the legacy
@@ -65,10 +53,6 @@ impl ColumnData {
         ColumnData(bytes)
     }
 
-    pub fn from_merge_io_read_result(bytes: Vec<u8>) -> Self {
-        ColumnData(bytes.into())
-    }
-
     pub fn bytes(&self) -> Bytes {
         self.0.clone()
     }
@@ -78,19 +62,31 @@ impl ColumnData {
     }
 }
 
-impl TryFrom<&ColumnData> for Vec<u8> {
-    type Error = ErrorCode;
-    fn try_from(value: &ColumnData) -> std::result::Result<Self, Self::Error> {
-        Ok(value.0.to_vec())
+/// Key of `Array`: the block, the column, its column chunk and its logical type. Deserialized
+/// arrays carry type metadata, so schema evolution must invalidate them even when the Parquet
+/// column chunk is unchanged.
+#[derive(Clone)]
+pub struct TableDataCacheKey {
+    cache_key: String,
+}
+
+impl TableDataCacheKey {
+    pub fn new(block_path: &str, column_id: u32, offset: u64, len: u64, data_type: &str) -> Self {
+        Self {
+            cache_key: format!("{block_path}-{column_id}-{offset}-{len}-{data_type}"),
+        }
     }
 }
 
-// copying should be avoided
-impl TryFrom<Bytes> for ColumnData {
-    type Error = ErrorCode;
+impl From<TableDataCacheKey> for String {
+    fn from(value: TableDataCacheKey) -> Self {
+        value.cache_key
+    }
+}
 
-    fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
-        Ok(ColumnData(value))
+impl AsRef<str> for TableDataCacheKey {
+    fn as_ref(&self) -> &str {
+        &self.cache_key
     }
 }
 
@@ -124,12 +120,18 @@ impl CachedItem for SizedColumnArray {
     }
 }
 
-impl DiskCodec for ColumnData {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
+    #[test]
+    fn array_cache_key_includes_data_type() {
+        let old = TableDataCacheKey::new("block", 1, 2, 3, "Decimal(10, 2)");
+        let new = TableDataCacheKey::new("block", 1, 2, 3, "Decimal(15, 2)");
+        assert_ne!(old.as_ref(), new.as_ref());
+        assert_eq!(
+            new.as_ref(),
+            TableDataCacheKey::new("block", 1, 2, 3, "Decimal(15, 2)").as_ref()
+        );
     }
 }

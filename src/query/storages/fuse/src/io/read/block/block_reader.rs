@@ -327,9 +327,9 @@ impl BlockReadContext {
 
         let cache_metrics = self.ctx.get_data_cache_metrics();
         let read_from_disk_cache: usize = block_read_res
-            .cached_column_data
+            .disk_column_data
             .iter()
-            .map(|(_, bytes)| bytes.size())
+            .map(|(_, bytes)| bytes.len())
             .sum();
 
         let read_from_in_mem_cache_array: usize = block_read_res

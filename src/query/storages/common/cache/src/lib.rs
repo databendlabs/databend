@@ -21,7 +21,7 @@
 //! - `registry`: what a cache kind is (`CacheDef`) and the registry of the built-in kinds.
 //! - `kinds`: the definitions of the built-in kinds, by domain, with their values.
 //! - `legacy` and `shared`: the two backends; `backend` is the interface both implement.
-//! - `disk`: the disk tier of the kinds that define one.
+//! - `disk`: the disk cache of raw object bytes, below the readers (`DiskCachedStorage`).
 //! - `handle`: the typed cache a reader gets (`MemCache`); `read`: loading into it.
 //! - `local`: plain LRU caches owned by a single component.
 
@@ -73,6 +73,7 @@ pub use handle::Usage;
 pub use kinds::column::CachedColumnArray;
 pub use kinds::column::ColumnData;
 pub use kinds::column::SizedColumnArray;
+pub use kinds::column::TableDataCacheKey;
 pub use kinds::iceberg::IcebergTableCacheValue;
 pub use kinds::vector::CachedVectorIndex;
 pub use local::CacheValue;
@@ -81,6 +82,7 @@ pub use manager::CacheManager;
 pub use manager::CacheRow;
 pub use metrics::CacheMetricsCollector;
 pub use parquet::file::metadata::ParquetMetaData;
+pub use read::ReadCtx;
 pub use read::Reader;
 pub use read::SingleFlight;
 pub use read::TTLReader;

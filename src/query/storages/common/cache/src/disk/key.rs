@@ -12,42 +12,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::fmt;
 use std::hash::Hasher;
-use std::path::Path;
-use std::path::PathBuf;
+use std::ops::Range;
 
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
-#[derive(Debug)]
-pub struct DiskCacheKey(pub String);
+use crate::CacheKind;
 
-impl<S> From<S> for DiskCacheKey
-where S: AsRef<str>
-{
-    // convert key string into hex string of SipHash 2-4 128 bit
-    fn from(key: S) -> Self {
+/// One unit of an object in the disk cache: the whole object, or one range of it. Ranges come
+/// from the object's own metadata (a column chunk, an index column, a footer, a page) so the
+/// same unit gets the same key across queries. Parquet files read from a stage are the
+/// exception: their units are the ranges merged for the read, see `cached_range_read`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DiskKey {
+    path: String,
+    range: Option<Range<u64>>,
+}
+
+impl DiskKey {
+    pub fn whole(path: impl Into<String>) -> Self {
+        DiskKey {
+            path: path.into(),
+            range: None,
+        }
+    }
+
+    pub fn range(path: impl Into<String>, range: Range<u64>) -> Self {
+        DiskKey {
+            path: path.into(),
+            range: Some(range),
+        }
+    }
+
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// `<kind>/<first 3 hex digits>/<hash>`: the entry's path under its pool root and its key
+    /// in the pool's index. The hash is the hex SipHash 2-4 128 of the key string.
+    pub(crate) fn rel_path(&self, kind: CacheKind) -> String {
         let mut sip = sip128::SipHasher24::new();
-        let key = key.as_ref();
-        sip.write(key.as_bytes());
-        let hash = sip.finish128();
-        let hex_hash = hex::encode(hash.as_bytes());
-        DiskCacheKey(hex_hash)
+        sip.write(self.to_string().as_bytes());
+        let hash = hex::encode(sip.finish128().as_bytes());
+        format!("{}/{}/{hash}", kind.name(), &hash[0..3])
     }
 }
 
-impl From<&DiskCacheKey> for PathBuf {
-    fn from(cache_key: &DiskCacheKey) -> Self {
-        let prefix = &cache_key.0[0..3];
-        let mut path_buf = PathBuf::from(prefix);
-        path_buf.push(Path::new(&cache_key.0));
-        path_buf
+/// The key string: the path, with `#start-end` for a range.
+impl fmt::Display for DiskKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.range {
+            None => f.write_str(&self.path),
+            Some(range) => write!(f, "{}#{}-{}", self.path, range.start, range.end),
+        }
     }
 }
 
-impl Display for DiskCacheKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.clone())
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kinds::column;
+
+    #[test]
+    fn range_and_whole_object_are_different_units() {
+        let whole = DiskKey::whole("a/b");
+        let range = DiskKey::range("a/b", 0..10);
+        assert_eq!(whole.to_string(), "a/b");
+        assert_eq!(range.to_string(), "a/b#0-10");
+        let kind = CacheKind::of::<column::Data>();
+        assert_ne!(whole.rel_path(kind), range.rel_path(kind));
+    }
+
+    #[test]
+    fn rel_path_is_kind_prefix_hash() {
+        let rel = DiskKey::whole("a/b").rel_path(CacheKind::of::<column::Data>());
+        let parts: Vec<_> = rel.split('/').collect();
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0], "memory_cache_column_data");
+        assert_eq!(parts[2].len(), 32);
+        assert!(parts[2].starts_with(parts[1]));
     }
 }

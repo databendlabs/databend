@@ -93,6 +93,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
 use databend_common_storage::init_operator_with_policy_scope;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::RangeIndex;
@@ -564,7 +565,9 @@ impl FuseTable {
     ) -> Result<Option<Arc<TableSnapshot>>> {
         match snapshot_location {
             Some(location) => Ok(Some(
-                SnapshotReader::new(operator).read(&(location, ver)).await?,
+                SnapshotReader::new(operator)
+                    .read(&(location, ver), &ReadCtx::BYPASS)
+                    .await?,
             )),
             None => Ok(None),
         }

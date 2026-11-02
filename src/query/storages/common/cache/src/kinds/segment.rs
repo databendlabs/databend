@@ -39,6 +39,7 @@ impl CacheDef for Info {
     const POOL: Pool = Pool::Meta;
     // ANALYZE rewrites this location and puts the new segment under the same key.
     // A miss must not join a load started before that write.
+    const DISK: bool = true;
 }
 
 /// Column-oriented segments, by segment location.
@@ -48,6 +49,7 @@ impl CacheDef for ColumnOriented {
     type Value = Arc<ColumnOrientedSegment>;
     const NAME: &'static str = "memory_cache_column_oriented_segment_info";
     const POOL: Pool = Pool::Meta;
+    const DISK: bool = true;
 }
 
 /// Decoded block metas of a segment, by segment location. Off by default in the legacy
@@ -68,6 +70,7 @@ impl CacheDef for Stats {
     type Value = Arc<SegmentStatistics>;
     const NAME: &'static str = "memory_cache_segment_statistics";
     const POOL: Pool = Pool::Meta;
+    const DISK: bool = true;
 }
 
 impl CachedItem for CompactSegmentInfo {

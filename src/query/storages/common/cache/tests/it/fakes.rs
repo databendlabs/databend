@@ -24,6 +24,7 @@ use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::backend::KindStore;
 use databend_storages_common_cache::kinds::bloom;
@@ -126,7 +127,7 @@ impl Reader for FakeReader {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, _key: &String) -> Result<Item> {
+    async fn read(&self, _key: &String, _ctx: &ReadCtx) -> Result<Item> {
         if !self.delay.is_zero() {
             tokio::time::sleep(self.delay).await;
         }
@@ -140,7 +141,7 @@ pub fn shared_store(meta: usize, index: usize, data: usize) -> Arc<dyn KindStore
     Arc::new(SharedStore::new(PoolCaps { meta, index, data }, [], 4))
 }
 
-/// Waits up to 10 s for `cond`, e.g. for a disk tier written in the background.
+/// Waits up to 10 s for `cond`, e.g. for an entry the disk cache writes in the background.
 pub fn wait_for(cond: impl Fn() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while !cond() {

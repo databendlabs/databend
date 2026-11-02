@@ -26,6 +26,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_enterprise_fail_safe::FailSafeHandler;
 use databend_enterprise_fail_safe::FailSafeHandlerWrapper;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -110,7 +111,9 @@ impl Amender {
     ) -> Result<()> {
         let segment_reader = SegmentInfoReader::new(operator.clone(), schema);
         for (path, ver) in segment_locations {
-            let segment = segment_reader.read(&(path.to_string(), *ver)).await;
+            let segment = segment_reader
+                .read(&(path.to_string(), *ver), &ReadCtx::BYPASS)
+                .await;
 
             match segment {
                 Ok(segment) => {
@@ -121,7 +124,9 @@ impl Amender {
                     if e.code() == ErrorCode::STORAGE_NOT_FOUND {
                         self.recover_object(path).await?;
                         // load the segment again
-                        let segment = segment_reader.read(&(path.to_string(), *ver)).await?;
+                        let segment = segment_reader
+                            .read(&(path.to_string(), *ver), &ReadCtx::BYPASS)
+                            .await?;
                         self.recover_segment(segment.as_ref(), operator.clone())
                             .await?;
                     } else {

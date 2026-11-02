@@ -22,7 +22,18 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_FOOTER_READ_SIZE;
+use databend_storages_common_cache::CacheDef;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::DiskFill;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
+use databend_storages_common_cache::kinds::bloom;
+use databend_storages_common_cache::kinds::segment;
+use databend_storages_common_cache::kinds::spatial;
+use databend_storages_common_cache::kinds::table;
+use databend_storages_common_cache::kinds::vector;
+use databend_storages_common_cache::kinds::virtual_column;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_index::VectorIndexMeta;
@@ -44,20 +55,24 @@ use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::ParquetMetaDataReader;
 
+pub use self::thrift_file_meta_read::read_cached_thrift_file_metadata;
 pub use self::thrift_file_meta_read::read_thrift_file_metadata;
 use crate::io::SnapshotKey;
 
 // workaround for the orphan rules
 // Loader and types of table meta data are all defined outside (of this crate)
-/// Reads and decodes table snapshots. No caching; pair with `SnapshotCache`.
+/// Reads and decodes table snapshots, through the disk cache. No memory caching; pair with
+/// `SnapshotCache`.
 #[derive(Clone)]
 pub struct SnapshotReader {
-    operator: Operator,
+    storage: DiskCachedStorage,
 }
 
 impl SnapshotReader {
     pub fn new(operator: Operator) -> Self {
-        SnapshotReader { operator }
+        SnapshotReader {
+            storage: DiskCachedStorage::new(operator),
+        }
     }
 }
 
@@ -70,22 +85,28 @@ impl Reader for SnapshotReader {
     }
 
     #[async_backtrace::framed]
-    async fn read(&self, (location, ver): &SnapshotKey) -> Result<Arc<TableSnapshot>> {
+    async fn read(
+        &self,
+        (location, ver): &SnapshotKey,
+        ctx: &ReadCtx,
+    ) -> Result<Arc<TableSnapshot>> {
         let version = SnapshotVersion::try_from(*ver)?;
-        let buffer = bytes_reader(&self.operator, location, None).await?;
-        Ok(Arc::new(version.read(buffer.reader())?))
+        let bytes = read_whole::<table::Snapshot>(&self.storage, location, ctx.disk).await?;
+        Ok(Arc::new(version.read(bytes.reader())?))
     }
 }
 
 /// Reads and decodes table snapshot statistics. No caching; pair with `SnapshotCache`.
 #[derive(Clone)]
 pub struct SnapshotStatsReader {
-    operator: Operator,
+    storage: DiskCachedStorage,
 }
 
 impl SnapshotStatsReader {
     pub fn new(operator: Operator) -> Self {
-        SnapshotStatsReader { operator }
+        SnapshotStatsReader {
+            storage: DiskCachedStorage::new(operator),
+        }
     }
 }
 
@@ -98,23 +119,30 @@ impl Reader for SnapshotStatsReader {
     }
 
     #[async_backtrace::framed]
-    async fn read(&self, (location, ver): &SnapshotKey) -> Result<Arc<TableSnapshotStatistics>> {
+    async fn read(
+        &self,
+        (location, ver): &SnapshotKey,
+        ctx: &ReadCtx,
+    ) -> Result<Arc<TableSnapshotStatistics>> {
         let version = TableSnapshotStatisticsVersion::try_from(*ver)?;
-        let buffer = bytes_reader(&self.operator, location, None).await?;
-        Ok(Arc::new(version.read(buffer.reader())?))
+        let bytes = read_whole::<table::SnapshotStats>(&self.storage, location, ctx.disk).await?;
+        Ok(Arc::new(version.read(bytes.reader())?))
     }
 }
 
 /// Reads and decodes row-oriented segments. No caching; pair with `SegmentCache`.
 #[derive(Clone)]
 pub struct SegmentInfoReader {
-    operator: Operator,
+    storage: DiskCachedStorage,
     schema: TableSchemaRef,
 }
 
 impl SegmentInfoReader {
     pub fn new(operator: Operator, schema: TableSchemaRef) -> Self {
-        SegmentInfoReader { operator, schema }
+        SegmentInfoReader {
+            storage: DiskCachedStorage::new(operator),
+            schema,
+        }
     }
 }
 
@@ -127,11 +155,15 @@ impl Reader for SegmentInfoReader {
     }
 
     #[async_backtrace::framed]
-    async fn read(&self, (location, ver): &Location) -> Result<Arc<CompactSegmentInfo>> {
+    async fn read(
+        &self,
+        (location, ver): &Location,
+        ctx: &ReadCtx,
+    ) -> Result<Arc<CompactSegmentInfo>> {
         let version = SegmentInfoVersion::try_from(*ver)?;
-        let buffer = bytes_reader(&self.operator, location, None).await?;
+        let bytes = read_whole::<segment::Info>(&self.storage, location, ctx.disk).await?;
         Ok(Arc::new(
-            (version, self.schema.clone()).read(buffer.reader())?,
+            (version, self.schema.clone()).read(bytes.reader())?,
         ))
     }
 }
@@ -139,12 +171,14 @@ impl Reader for SegmentInfoReader {
 /// Reads and decodes segment statistics. No caching; pair with `SegmentCache`.
 #[derive(Clone)]
 pub struct SegmentStatsReader {
-    operator: Operator,
+    storage: DiskCachedStorage,
 }
 
 impl SegmentStatsReader {
     pub fn new(operator: Operator) -> Self {
-        SegmentStatsReader { operator }
+        SegmentStatsReader {
+            storage: DiskCachedStorage::new(operator),
+        }
     }
 }
 
@@ -157,30 +191,39 @@ impl Reader for SegmentStatsReader {
     }
 
     #[async_backtrace::framed]
-    async fn read(&self, (location, ver): &Location) -> Result<Arc<SegmentStatistics>> {
+    async fn read(
+        &self,
+        (location, ver): &Location,
+        ctx: &ReadCtx,
+    ) -> Result<Arc<SegmentStatistics>> {
         let version = SegmentStatisticsVersion::try_from(*ver)?;
-        let buffer = bytes_reader(&self.operator, location, None).await?;
-        Ok(Arc::new(version.read(buffer.reader())?))
+        let bytes = read_whole::<segment::Stats>(&self.storage, location, ctx.disk).await?;
+        Ok(Arc::new(version.read(bytes.reader())?))
     }
 }
 
 /// Reads and decodes the parquet footer of an index file as `T`. No caching; pair with
 /// `FuseCaches::index_metas`. The key is the path and, when known, the file length.
 pub struct IndexMetaReader<T> {
-    operator: Operator,
+    storage: DiskCachedStorage,
     _meta: PhantomData<fn() -> T>,
 }
 
 impl<T> IndexMetaReader<T> {
     pub fn new(operator: Operator) -> Self {
         IndexMetaReader {
-            operator,
+            storage: DiskCachedStorage::new(operator),
             _meta: PhantomData,
         }
     }
 
-    async fn read_footer(&self, (path, len): &IndexMetaKey) -> Result<ParquetMetaData> {
-        read_thrift_file_metadata(self.operator.clone(), path, *len)
+    async fn read_footer(
+        &self,
+        kind: CacheKind,
+        (path, len): &IndexMetaKey,
+        fill: DiskFill,
+    ) -> Result<ParquetMetaData> {
+        read_cached_thrift_file_metadata(&self.storage, kind, path, *len, fill)
             .await
             .map_err(|err| {
                 ErrorCode::StorageOther(format!("read file meta failed, {}, {:?}", path, err))
@@ -191,7 +234,7 @@ impl<T> IndexMetaReader<T> {
 pub type IndexMetaKey = (String, Option<u64>);
 
 macro_rules! index_meta_reader {
-    ($ty:ty, |$meta:ident| $decode:expr) => {
+    ($ty:ty, $kind:ty, |$meta:ident| $decode:expr) => {
         impl Reader for IndexMetaReader<$ty> {
             type Key = IndexMetaKey;
             type Item = Arc<$ty>;
@@ -201,22 +244,37 @@ macro_rules! index_meta_reader {
             }
 
             #[async_backtrace::framed]
-            async fn read(&self, key: &IndexMetaKey) -> Result<Arc<$ty>> {
-                let $meta = self.read_footer(key).await?;
+            async fn read(&self, key: &IndexMetaKey, ctx: &ReadCtx) -> Result<Arc<$ty>> {
+                let $meta = self
+                    .read_footer(CacheKind::of::<$kind>(), key, ctx.disk)
+                    .await?;
                 Ok(Arc::new($decode))
             }
         }
     };
 }
 
-index_meta_reader!(BloomIndexMeta, |meta| BloomIndexMeta::try_from(meta)?);
-index_meta_reader!(SpatialIndexMeta, |meta| SpatialIndexMeta::try_from(meta)?);
-index_meta_reader!(VectorIndexMeta, |meta| VectorIndexMeta::Legacy(
+index_meta_reader!(BloomIndexMeta, bloom::IndexMeta, |meta| {
+    BloomIndexMeta::try_from(meta)?
+});
+index_meta_reader!(SpatialIndexMeta, spatial::Meta, |meta| {
     SpatialIndexMeta::try_from(meta)?
-));
-index_meta_reader!(VirtualColumnFileMeta, |meta| {
+});
+index_meta_reader!(VectorIndexMeta, vector::Meta, |meta| {
+    VectorIndexMeta::Legacy(SpatialIndexMeta::try_from(meta)?)
+});
+index_meta_reader!(VirtualColumnFileMeta, virtual_column::Meta, |meta| {
     VirtualColumnFileMeta::try_from(meta)?
 });
+
+/// The whole object at `path`, through the disk cache under the kind `D`.
+pub async fn read_whole<D: CacheDef>(
+    storage: &DiskCachedStorage,
+    path: &str,
+    fill: DiskFill,
+) -> Result<bytes::Bytes> {
+    storage.read(CacheKind::of::<D>(), path, None, fill).await
+}
 
 pub async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
     let reader = if let Some(len) = len_hint {
@@ -262,6 +320,46 @@ mod thrift_file_meta_read {
         path: &str,
         len_hint: Option<u64>,
     ) -> Result<ParquetMetaData> {
+        read_footer(&op, path, len_hint, |range| {
+            let op = op.clone();
+            async move {
+                let buffer = op
+                    .read_with(path)
+                    .range(range)
+                    .await
+                    .map_err(|err| ParquetError::General(err.to_string()))?;
+                Ok(buffer.to_bytes())
+            }
+        })
+        .await
+    }
+
+    /// `read_thrift_file_metadata` through the disk cache: the tail and the footer of the file
+    /// are its units, under `kind`.
+    #[async_backtrace::framed]
+    pub async fn read_cached_thrift_file_metadata(
+        storage: &DiskCachedStorage,
+        kind: CacheKind,
+        path: &str,
+        len_hint: Option<u64>,
+        fill: DiskFill,
+    ) -> Result<ParquetMetaData> {
+        read_footer(storage.operator(), path, len_hint, |range| async move {
+            storage.read(kind, path, Some(range), fill).await
+        })
+        .await
+    }
+
+    async fn read_footer<'a, F, Fut>(
+        op: &Operator,
+        path: &'a str,
+        len_hint: Option<u64>,
+        read_range: F,
+    ) -> Result<ParquetMetaData>
+    where
+        F: Fn(std::ops::Range<u64>) -> Fut,
+        Fut: std::future::Future<Output = Result<bytes::Bytes>> + 'a,
+    {
         let file_size = if let Some(len) = len_hint {
             len
         } else {
@@ -282,12 +380,7 @@ mod thrift_file_meta_read {
         let default_end_len = std::cmp::min(DEFAULT_FOOTER_READ_SIZE, file_size) as usize;
 
         // read the end of the file
-        let buffer = op
-            .read_with(path)
-            .range(file_size - default_end_len as u64..file_size)
-            .await
-            .map_err(|err| ParquetError::General(err.to_string()))?
-            .to_vec();
+        let buffer = read_range(file_size - default_end_len as u64..file_size).await?;
 
         // check this is indeed a parquet file
         if buffer[default_end_len - 4..] != PARQUET_MAGIC {
@@ -313,12 +406,7 @@ mod thrift_file_meta_read {
                 .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))
         } else {
             // the end of file read by default is not long enough, read again including the metadata.
-            let buffer = op
-                .read_with(path)
-                .range(file_size - footer_len..file_size)
-                .await
-                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-            let buffer = buffer.to_vec();
+            let buffer = read_range(file_size - footer_len..file_size).await?;
             ParquetMetaDataReader::decode_metadata(&buffer)
                 .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))
         }

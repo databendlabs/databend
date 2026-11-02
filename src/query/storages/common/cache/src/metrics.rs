@@ -26,12 +26,15 @@
 //! `CacheManager::composition`, which leaves out the access, hit and miss counts; those are
 //! exported by their own families.
 //!
-//! Gauges, per kind and per disk tier, labelled by `cache_name` and `pool` (`meta`, `index`,
+//! Gauges, per kind in memory and on disk, labelled by `cache_name` and `pool` (`meta`, `index`,
 //! `data`, or `disk`): `cache_items`, `cache_resident_bytes` (charged, including values evicted
 //! but still held by queries), `cache_in_cache_bytes` (still in the cache), `cache_capacity` (in
-//! the kind's `unit`, absent when unlimited) and `cache_enabled`. Per pool, shared backend only:
-//! `cache_pool_items`, `cache_pool_resident_bytes`, `cache_pool_in_cache_bytes` and
-//! `cache_pool_capacity_bytes`.
+//! the kind's `unit`, absent when unlimited) and `cache_enabled`. Per memory pool, shared backend
+//! only: `cache_pool_items`, `cache_pool_resident_bytes`, `cache_pool_in_cache_bytes` and
+//! `cache_pool_capacity_bytes`. Per disk pool: `cache_disk_pool_items`,
+//! `cache_disk_pool_used_bytes` and `cache_disk_pool_capacity_bytes`; for the disk cache as a
+//! whole, `cache_disk_queue_bytes` and the counter `cache_disk_dropped` by `reason`
+//! (`queue_full`, `rejected`, `io_error`).
 //!
 //! Counters, shared backend only, since the process started:
 //! - `cache_eviction_count` and `cache_eviction_bytes` per kind, by `reason`: `capacity` (room in
@@ -281,13 +284,53 @@ impl Collector for CacheMetricsCollector {
             return Ok(());
         };
         let mut families = Families::new();
+        let mut disk_pools = Family::gauge(
+            "cache_disk_pool_used_bytes",
+            "Bytes of the entries in a disk cache pool.",
+        );
+        let mut disk_pool_items =
+            Family::gauge("cache_disk_pool_items", "Entries in a disk cache pool.");
+        let mut disk_pool_capacity = Family::gauge(
+            "cache_disk_pool_capacity_bytes",
+            "Byte capacity of a disk cache pool.",
+        );
         for row in manager.composition() {
-            match row.kind {
-                Some(_) => families.add_kind(&row),
-                None => families.add_pool(&row),
+            match (row.kind, row.disk) {
+                (Some(_), _) => families.add_kind(&row),
+                (None, false) => families.add_pool(&row),
+                (None, true) => {
+                    let labels: Labels =
+                        vec![("pool", row.pool.map_or("", |p| p.name()).to_string())];
+                    disk_pool_items.push(labels.clone(), row.num_items);
+                    disk_pools.push(labels.clone(), row.size);
+                    if let Some(cap) = row.capacity {
+                        disk_pool_capacity.push(labels, cap);
+                    }
+                }
             }
         }
         let mut families = families.into_vec();
+        families.extend([disk_pool_items, disk_pools, disk_pool_capacity]);
+        if let Some(disk) = manager.disk() {
+            let stats = disk.stats();
+            let mut queued = Family::gauge(
+                "cache_disk_queue_bytes",
+                "Bytes queued to be written to the disk cache.",
+            );
+            queued.push(Labels::new(), stats.queued_bytes);
+            let mut dropped = Family::counter(
+                "cache_disk_dropped",
+                "Entries not written to the disk cache, by reason.",
+            );
+            for (reason, count) in [
+                ("queue_full", stats.dropped_queue_full),
+                ("rejected", stats.dropped_rejected),
+                ("io_error", stats.dropped_io_error),
+            ] {
+                dropped.push(vec![("reason", reason.to_string())], count);
+            }
+            families.extend([queued, dropped]);
+        }
         if let Some(stats) = manager.reclaim_stats() {
             for (name, help, value) in [
                 (

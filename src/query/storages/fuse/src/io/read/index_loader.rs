@@ -27,11 +27,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::DataType;
+use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::CachedItem;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Reader;
-use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -72,6 +74,9 @@ where
 pub trait IndexLoadSpec {
     type Meta: CachedItem;
     type File: CachedItem;
+
+    /// The kind the index columns of the file are cached under, in memory and on disk.
+    fn file_kind() -> CacheKind;
 
     fn meta_cache(caches: &IndexMetaCache) -> &MemCache<Arc<Self::Meta>>;
     /// `None`: the file bytes are not cached.
@@ -162,18 +167,18 @@ where
     }
 
     if !ranges.is_empty() {
-        let merge_io_result =
-            MergeIOReader::merge_io_read(settings, operator.clone(), location, &ranges).await?;
+        // Each index column is a unit of the disk cache; misses are merged into fewer reads.
+        let fill = index_file_cache.map_or(DiskFill::ReadWrite, |cache| cache.disk_fill());
+        let units = DiskCachedStorage::new(operator.clone())
+            .read_units(S::file_kind(), location, &ranges, fill, settings)
+            .await?;
 
-        // merge column data fetched from object storage
-        for (i, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
-            let chunk = merge_io_result
-                .owner_memory
-                .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
-            let data = chunk.slice(range.clone());
-
+        for (i, _) in &ranges {
+            let data = units.unit(*i).ok_or_else(|| {
+                ErrorCode::Internal(format!("index column {i} of {location} was not read"))
+            })?;
             let (name, cache_key) = names_map.remove(i).unwrap();
-            let file = S::make_file(name.clone(), data.to_vec().into());
+            let file = S::make_file(name.clone(), data);
 
             // add index file to cache
             let file = match index_file_cache {

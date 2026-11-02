@@ -28,6 +28,9 @@ use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::ReadSettings;
@@ -213,6 +216,8 @@ pub async fn load_index_meta(
     .await?
 }
 
+/// A small index file whose footer is not cached yet is read whole, as one unit of the disk
+/// cache: its footer and filters come from these bytes.
 async fn prepare_bloom_index_read_source(
     dal: &Operator,
     settings: &ReadSettings,
@@ -220,8 +225,11 @@ async fn prepare_bloom_index_read_source(
     index_length: u64,
 ) -> Result<Option<Arc<Bytes>>> {
     if should_read_whole_bloom_index(path, settings, index_length) {
-        let data = dal.read(path).await?;
-        return Ok(Some(Arc::new(data.to_bytes())));
+        let fill = FuseCaches::instance().index_metas.bloom.disk_fill();
+        let data = DiskCachedStorage::new(dal.clone())
+            .read(CacheKind::of::<bloom::Filter>(), path, None, fill)
+            .await?;
+        return Ok(Some(Arc::new(data)));
     }
 
     Ok(None)

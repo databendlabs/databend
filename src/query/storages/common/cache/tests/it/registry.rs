@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_config::CacheConfig;
-use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_storages_common_cache::CacheDef;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheRegistry;
+use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::kinds::bloom;
@@ -86,66 +85,43 @@ fn test_pools_and_shared_defaults() {
     }
 }
 
-/// Disk tiers keep their pre-refactor directories, so a restart reuses their files.
+/// The kinds whose object bytes are kept in the disk cache, with the names of their rows in
+/// `system.caches` and of their metrics: those of the pre-refactor disk caches where one existed.
 #[test]
-fn test_disk_tiers_keep_their_directories() {
-    let dirs: Vec<_> = CacheKind::all()
-        .filter_map(|k| k.info().disk.map(|disk| (k.name(), disk.dir)))
+fn test_disk_kinds() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let disk = DiskCache::new(dir.path(), 1 << 20, [1, 1, 1], false).unwrap();
+    let on_disk: Vec<_> = CacheKind::all()
+        .filter(|k| k.on_disk())
+        .map(|k| disk.metric_name(k).to_string())
         .collect();
-    assert_eq!(dirs, [
-        ("memory_cache_bloom_index_file_meta_data", "bloom_meta_v1"),
-        (
-            "memory_cache_inverted_index_meta_data",
-            "inverted_index_meta_v1"
-        ),
-        (
-            "memory_cache_vector_index_file_meta_data",
-            "vector_index_meta_v1"
-        ),
-        (
-            "memory_cache_spatial_index_file_meta_data",
-            "spatial_index_meta_v1"
-        ),
-        (
-            "memory_cache_virtual_column_file_meta_data",
-            "virtual_column_meta_v1"
-        ),
-        ("memory_cache_bloom_index_filter", "bloom_filter_v1"),
-        ("memory_cache_vector_index_refine", "vector_index_file_v1"),
-        (
-            "memory_cache_inverted_index_lookup",
-            "inverted_index_lookup_v1"
-        ),
-        (
-            "memory_cache_inverted_index_payload",
-            "inverted_index_payload_v1"
-        ),
-        ("memory_cache_spatial_index_file", "spatial_index_file_v1"),
-        ("memory_cache_column_data", "v1"),
+    assert_eq!(on_disk, [
+        "disk_cache_table_snapshot",
+        "disk_cache_table_statistics",
+        "disk_cache_compact_segment_info",
+        "disk_cache_column_oriented_segment_info",
+        "disk_cache_segment_statistics",
+        "disk_cache_bloom_index_file_meta_data",
+        "disk_cache_inverted_index_meta_data",
+        "disk_cache_vector_index_file_meta_data",
+        "disk_cache_spatial_index_file_meta_data",
+        "disk_cache_virtual_column_file_meta_data",
+        "disk_cache_bloom_index_filter",
+        "disk_cache_vector_index_refine",
+        "disk_cache_inverted_index_lookup",
+        "disk_cache_inverted_index_payload",
+        "disk_cache_inverted_index_full_payload",
+        "disk_cache_spatial_index_file",
+        "disk_cache_column_data",
     ]);
-}
-
-/// Each tier is sized by its own option; column data only with the disk data cache storage.
-#[test]
-fn test_disk_tier_sizes() {
-    let config = CacheConfig {
-        disk_cache_table_bloom_index_data_size: 7,
-        ..CacheConfig::default()
-    };
-    let bytes = |kind: CacheKind, config: &CacheConfig| (kind.info().disk.unwrap().bytes)(config);
-    assert_eq!(bytes(CacheKind::of::<bloom::Filter>(), &config), 7);
-    let column_data = CacheKind::of::<column::Data>();
-    assert_eq!(bytes(column_data, &CacheConfig::default()), 0);
-    let mut config = CacheConfig {
-        data_cache_storage: CacheStorageTypeInnerConfig::Disk,
-        ..CacheConfig::default()
-    };
-    config.disk_cache_config.max_bytes = 9;
-    assert_eq!(bytes(column_data, &config), 9);
-    assert_eq!(
-        (column_data.info().disk.unwrap().reload_policy)(&config),
-        config.data_cache_key_reload_policy
-    );
+    // Decoded values and results computed from several objects are not.
+    for kind in [
+        CacheKind::of::<column::Array>(),
+        CacheKind::of::<vector::Index>(),
+    ] {
+        assert!(!kind.on_disk(), "{kind:?}");
+        assert!(!disk.is_enabled(kind), "{kind:?}");
+    }
 }
 
 #[test]
@@ -204,7 +180,7 @@ fn test_register_numbers_kinds_in_order() {
     assert_eq!(second.index(), 1);
     let info = registry.info(second);
     assert_eq!((info.name, info.pool), ("memory_cache_second", Pool::Data));
-    assert!(info.disk.is_none());
+    assert!(!info.disk);
     assert_eq!(registry.find("cache_second"), Some(second));
 }
 

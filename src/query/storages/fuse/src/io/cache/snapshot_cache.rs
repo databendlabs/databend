@@ -87,6 +87,7 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_storages_common_cache::CacheKind;
     use databend_storages_common_cache::CacheManager;
+    use databend_storages_common_cache::ReadCtx;
     use databend_storages_common_cache::Reader;
     use databend_storages_common_cache::kinds::table;
     use databend_storages_common_cache::legacy::LegacyCapacity;
@@ -132,7 +133,11 @@ mod tests {
             Cow::Borrowed(&key.0)
         }
 
-        async fn read(&self, (location, _): &SnapshotKey) -> Result<Arc<TableSnapshot>> {
+        async fn read(
+            &self,
+            (location, _): &SnapshotKey,
+            _ctx: &ReadCtx,
+        ) -> Result<Arc<TableSnapshot>> {
             self.reads.fetch_add(1, Ordering::Relaxed);
             if location.starts_with("missing") {
                 return Err(ErrorCode::StorageNotFound(location.clone()));
@@ -151,7 +156,11 @@ mod tests {
             Cow::Borrowed(&key.0)
         }
 
-        async fn read(&self, _key: &SnapshotKey) -> Result<Arc<TableSnapshotStatistics>> {
+        async fn read(
+            &self,
+            _key: &SnapshotKey,
+            _ctx: &ReadCtx,
+        ) -> Result<Arc<TableSnapshotStatistics>> {
             Ok(Arc::new(TableSnapshotStatistics::new(
                 HashMap::new(),
                 HashMap::new(),
@@ -174,7 +183,7 @@ mod tests {
                 LegacyCapacity::Items(10),
             ),
         ]));
-        let manager = CacheManager::new(store, HashMap::new());
+        let manager = CacheManager::new(store, None);
         let caches = FuseCaches::new(&manager);
         (manager, caches)
     }

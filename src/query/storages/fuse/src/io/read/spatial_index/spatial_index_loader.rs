@@ -21,7 +21,9 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_read_milliseconds;
+use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::kinds::spatial;
 use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -39,6 +41,10 @@ struct SpatialIndexLoadSpec;
 impl IndexLoadSpec for SpatialIndexLoadSpec {
     type Meta = SpatialIndexMeta;
     type File = SpatialIndexFile;
+
+    fn file_kind() -> CacheKind {
+        CacheKind::of::<spatial::Index>()
+    }
 
     fn meta_cache(caches: &IndexMetaCache) -> &MemCache<Arc<Self::Meta>> {
         &caches.spatial

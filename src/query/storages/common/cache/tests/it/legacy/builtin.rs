@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_config::CacheConfig;
-use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::kinds::inverted;
@@ -42,7 +41,7 @@ fn configured() -> CacheConfig {
         inverted_index_lookup_size: 16,
         inverted_index_payload_size: 400,
         spatial_index_filter_size: 17,
-        data_cache_storage: CacheStorageTypeInnerConfig::Disk,
+        // No longer read: column chunks are kept only on disk.
         data_cache_in_memory_bytes: 18,
         table_data_deserialized_data_bytes: 19,
         ..CacheConfig::default()
@@ -91,7 +90,7 @@ fn test_each_kind_reads_its_option() {
         ("memory_cache_inverted_index_payload", Bytes(300)),
         ("memory_cache_inverted_index_full_payload", Bytes(100)),
         ("memory_cache_spatial_index_file", Bytes(17)),
-        ("memory_cache_column_data", Bytes(18)),
+        ("memory_cache_column_data", Disabled),
         ("memory_cache_table_data", Bytes(19)),
     ]);
 }
@@ -104,7 +103,7 @@ fn test_defaults() {
         capacity(&config, memory, "memory_cache_table_snapshot"),
         LegacyCapacity::Items(256)
     );
-    // Off unless configured: block metas, and column data without the disk data cache storage.
+    // Off unless configured: block metas; column data is never kept in memory as raw bytes.
     assert_eq!(
         capacity(&config, memory, "memory_cache_segment_block_metas"),
         LegacyCapacity::Disabled
@@ -202,7 +201,6 @@ fn test_ignored_options() {
         "inverted_index_lookup_size",
         "inverted_index_payload_size",
         "spatial_index_filter_size, spatial_index_filter_memory_ratio",
-        "data_cache_in_memory_bytes",
         "table_data_deserialized_data_bytes, table_data_deserialized_memory_ratio",
     ]);
 }

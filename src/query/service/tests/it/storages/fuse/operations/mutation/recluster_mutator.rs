@@ -59,6 +59,7 @@ use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -973,7 +974,7 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     let mut unordered = 0;
     for location in &snapshot.segments {
         let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
-            .read(&(location.0.clone(), location.1))
+            .read(&(location.0.clone(), location.1), &ReadCtx::BYPASS)
             .await?;
         for block in segment.block_metas()?.iter() {
             if block
@@ -1002,7 +1003,7 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     assert_eq!(snapshot.summary.row_count, 6);
     for location in &snapshot.segments {
         let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
-            .read(&(location.0.clone(), location.1))
+            .read(&(location.0.clone(), location.1), &ReadCtx::BYPASS)
             .await?;
         assert!(segment.block_metas()?.iter().all(|block| {
             block

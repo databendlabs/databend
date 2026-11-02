@@ -58,6 +58,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_query::sessions::TableContextTelemetry;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
@@ -1290,7 +1291,7 @@ impl CompactSegmentTestFixture {
         // traverse the paths of new segments  in reversed order
         for (idx, x) in new_segment_paths.iter().rev().enumerate() {
             let compact_segment = compact_segment_reader
-                .read(&(x.to_string(), SegmentInfo::VERSION))
+                .read(&(x.to_string(), SegmentInfo::VERSION), &ReadCtx::BYPASS)
                 .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             assert_eq!(
@@ -1367,7 +1368,7 @@ impl CompactCase {
         // 4. input blocks should be there and in the original order
         for location in output.iter().rev() {
             let compact_segment = compact_segment_reader
-                .read(&(location.0.clone(), location.1))
+                .read(&(location.0.clone(), location.1), &ReadCtx::BYPASS)
                 .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary, None);
@@ -1513,7 +1514,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
         let mut output_block_id = Vec::with_capacity(number_of_blocks);
         for location in output.iter().rev() {
             let compact_segment = compact_segment_reader
-                .read(&(location.0.clone(), location.1))
+                .read(&(location.0.clone(), location.1), &ReadCtx::BYPASS)
                 .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             merge_statistics_mut(

@@ -150,7 +150,7 @@ mod tests {
                 LegacyCapacity::Bytes(1 << 20),
             ),
         ]));
-        FuseCaches::new(&CacheManager::new(store, HashMap::new()))
+        FuseCaches::new(&CacheManager::new(store, None))
     }
 
     fn block(i: u64) -> Arc<BlockMeta> {
