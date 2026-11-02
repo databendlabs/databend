@@ -150,7 +150,6 @@ fn test_disk_cache_ignores_memory_options_and_legacy_disk_options() {
             disk_cache_table_bloom_index_data_size: 1,
             disk_cache_virtual_column_meta_size: 1,
             table_data_cache_population_queue_size: 1,
-            data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Fuzzy,
             ..disk_config(&dir)
         },
     ] {
@@ -545,4 +544,37 @@ fn test_legacy_rows_have_no_pools() {
     assert_eq!((snapshot.capacity, snapshot.unit), (Some(10), Unit::Count));
     assert!(snapshot.enabled);
     assert!(!find(&rows, "memory_cache_table_statistics").enabled);
+}
+
+/// `reset`, the default, starts the disk cache empty, so nothing cached before a restart is
+/// read after it, whatever happened to the objects meanwhile; the files are deleted in the
+/// background. `fuzzy` reloads what the previous run cached.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_restart_reloads_only_with_fuzzy() {
+    let dir = TempDir::new().unwrap();
+    let kind = CacheKind::of::<column::Data>();
+    let key = DiskKey::range("1/2/_b/x.parquet", 0..10);
+    let fuzzy = CacheConfig {
+        data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Fuzzy,
+        ..disk_config(&dir)
+    };
+    {
+        let manager = manager(&fuzzy, true);
+        let disk = manager.disk().unwrap();
+        let value = Bytes::from_static(b"0123456789");
+        assert!(disk.put(kind, &key, value, &disk.begin_fill()).await);
+        wait_for(|| disk.contains(kind, &key));
+    }
+    {
+        let manager = manager(&fuzzy, true);
+        let disk = manager.disk().unwrap();
+        wait_for(|| disk.contains(kind, &key));
+    }
+    let manager = manager(&disk_config(&dir), true);
+    let disk = manager.disk().unwrap();
+    assert!(!disk.contains(kind, &key));
+    assert!(disk.get(kind, &key).await.is_none());
+    let tenant = dir.path().join("test_tenant");
+    wait_for(|| std::fs::read_dir(&tenant).unwrap().count() == 1);
+    assert!(tenant.join("v2").is_dir());
 }

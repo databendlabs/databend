@@ -18,7 +18,6 @@ use std::sync::OnceLock;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
-use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::cache::CacheLookupCounters;
@@ -470,9 +469,6 @@ fn ignored_disk_options(config: &CacheConfig) -> Vec<&'static str> {
     }
     if config.table_data_cache_population_queue_size > 0 {
         ignored.push("table_data_cache_population_queue_size");
-    }
-    if config.data_cache_key_reload_policy != DiskCacheKeyReloadPolicy::Reset {
-        ignored.push("data_cache_key_reload_policy");
     }
     ignored
 }

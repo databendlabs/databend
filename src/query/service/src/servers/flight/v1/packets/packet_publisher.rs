@@ -168,6 +168,9 @@ pub struct QueryEnv {
     #[serde(default)]
     pub perf_config: PerfConfig,
     pub user: UserInfo,
+    /// A maintenance statement: its reads on every node do not fill the disk cache.
+    #[serde(default)]
+    pub disk_cache_read_only: bool,
 }
 
 impl QueryEnv {

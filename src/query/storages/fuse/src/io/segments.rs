@@ -31,7 +31,6 @@ use tokio::sync::Semaphore;
 
 use super::read::SegmentReader;
 use crate::io::FuseCaches;
-use crate::io::SegmentCache;
 use crate::io::SegmentInfoReader;
 
 #[derive(Clone)]
@@ -45,8 +44,6 @@ pub struct SegmentsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
     schema: TableSchemaRef,
-    /// Whether reads that fill the caches fill the disk cache too.
-    disk_fill: bool,
 }
 
 impl SegmentsIO {
@@ -55,23 +52,6 @@ impl SegmentsIO {
             ctx,
             operator,
             schema,
-            disk_fill: true,
-        }
-    }
-
-    /// Reads fill the memory cache, when asked to, but not the disk cache: for maintenance,
-    /// see `MemCache::without_disk_fill`.
-    pub fn without_disk_fill(mut self) -> Self {
-        self.disk_fill = false;
-        self
-    }
-
-    fn cache(put_cache: bool, disk_fill: bool) -> SegmentCache {
-        let segments = &FuseCaches::instance().segments;
-        match (put_cache, disk_fill) {
-            (false, _) => segments.read_only(),
-            (true, true) => segments.clone(),
-            (true, false) => segments.without_disk_fill(),
         }
     }
 
@@ -83,21 +63,11 @@ impl SegmentsIO {
         table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Arc<CompactSegmentInfo>> {
-        Self::read_compact_segment_through(
-            Self::cache(put_cache, true),
-            dal,
-            segment_location,
-            table_schema,
-        )
-        .await
-    }
-
-    async fn read_compact_segment_through(
-        cache: SegmentCache,
-        dal: Operator,
-        segment_location: Location,
-        table_schema: TableSchemaRef,
-    ) -> Result<Arc<CompactSegmentInfo>> {
+        let caches = FuseCaches::instance();
+        let cache = match put_cache {
+            true => caches.segments.clone(),
+            false => caches.segments.read_only(),
+        };
         let reader = SegmentInfoReader::new(dal, table_schema);
         cache.get(&reader, segment_location).await
     }
@@ -115,21 +85,15 @@ impl SegmentsIO {
     {
         // combine all the tasks.
         let mut iter = segment_locations.iter();
-        let cache = Self::cache(put_cache, self.disk_fill);
         let tasks = std::iter::from_fn(|| {
             iter.next().map(|location| {
                 let dal = self.operator.clone();
                 let table_schema = self.schema.clone();
                 let segment_location = location.clone();
-                let cache = cache.clone();
                 async move {
-                    let compact_segment = Self::read_compact_segment_through(
-                        cache,
-                        dal,
-                        segment_location,
-                        table_schema,
-                    )
-                    .await?;
+                    let compact_segment =
+                        Self::read_compact_segment(dal, segment_location, table_schema, put_cache)
+                            .await?;
                     compact_segment
                         .try_into()
                         .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))

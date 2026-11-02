@@ -29,6 +29,7 @@ pub async fn start_prepared_query(id: String) -> Result<()> {
     tracking_payload.io_stats = Some(ctx.get_local_io_stats());
     tracking_payload.warehouse_id = ctx.get_cluster().get_warehouse_id().ok();
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
+    tracking_payload.disk_cache_read_only = ctx.get_disk_cache_read_only();
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     debug!("start prepared query {}", id);

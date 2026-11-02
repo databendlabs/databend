@@ -21,6 +21,8 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -108,6 +110,19 @@ struct GcRootSnapshotCtx {
 
 #[async_backtrace::framed]
 pub async fn do_vacuum2(
+    table: &dyn Table,
+    ctx: Arc<dyn TableContext>,
+    respect_flash_back: bool,
+) -> Result<()> {
+    // Maintenance, also from a table function or procedure: its reads do not fill the disk
+    // cache.
+    ThreadTracker::maintenance_payload()
+        .tracking(vacuum2(table, ctx, respect_flash_back))
+        .await
+}
+
+#[async_backtrace::framed]
+async fn vacuum2(
     table: &dyn Table,
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,

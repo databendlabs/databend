@@ -29,7 +29,6 @@ use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
 use databend_storages_common_cache::CacheKind;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_index::VectorBundleEntry;
@@ -108,12 +107,8 @@ impl IndexLoadSpec for VectorIndexLoadSpec {
 /// Loads vector index meta data
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-pub async fn load_vector_index_meta(
-    dal: Operator,
-    path: &str,
-    fill: DiskFill,
-) -> Result<Arc<VectorIndexMeta>> {
-    load_index_meta::<VectorIndexLoadSpec>(dal, path, fill).await
+pub async fn load_vector_index_meta(dal: Operator, path: &str) -> Result<Arc<VectorIndexMeta>> {
+    load_index_meta::<VectorIndexLoadSpec>(dal, path).await
 }
 
 /// The vector index a reader expects, checked against the file it reads.
@@ -131,9 +126,8 @@ pub async fn load_vector_index_files(
     settings: &ReadSettings,
     column_names: &[String],
     location: &str,
-    fill: DiskFill,
 ) -> Result<Vec<Bytes>> {
-    load_index_files::<VectorIndexLoadSpec>(operator, settings, column_names, location, fill)
+    load_index_files::<VectorIndexLoadSpec>(operator, settings, column_names, location)
         .await?
         .into_iter()
         .map(legacy_component_bytes)
@@ -161,7 +155,7 @@ pub(super) async fn check_index_current(
     let IndexFileLocation::Legacy { path } = location else {
         return Ok(());
     };
-    let meta = load_vector_index_meta(operator.clone(), path, DiskFill::ReadWrite).await?;
+    let meta = load_vector_index_meta(operator.clone(), path).await?;
     let current = matches!(meta.as_ref(), VectorIndexMeta::Legacy(meta)
         if meta.metadata.get(&identity.name) == Some(&identity.version));
     if current {
@@ -186,14 +180,7 @@ pub(super) async fn load_hnsw(
 ) -> Result<(Vec<Bytes>, Option<Bytes>)> {
     match location {
         IndexFileLocation::Legacy { path } => {
-            let data = load_vector_index_files(
-                operator.clone(),
-                settings,
-                names,
-                path,
-                DiskFill::ReadWrite,
-            )
-            .await?;
+            let data = load_vector_index_files(operator.clone(), settings, names, path).await?;
             Ok((data, None))
         }
         IndexFileLocation::Bundle { path, size } => {

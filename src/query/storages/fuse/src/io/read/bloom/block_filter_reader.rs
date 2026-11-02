@@ -30,7 +30,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::filters::FilterImpl;
@@ -82,23 +81,15 @@ impl BloomBlockFilterReader for Location {
             BlockBloomFilterIndexVersion::V2(_)
             | BlockBloomFilterIndexVersion::V3(_)
             | BlockBloomFilterIndexVersion::V4(_) => {
-                let res = load_bloom_filter_by_columns(
-                    dal,
-                    settings,
-                    columns,
-                    path,
-                    index_length,
-                    DiskFill::ReadWrite,
-                )
-                .await?;
+                let res = load_bloom_filter_by_columns(dal, settings, columns, path, index_length)
+                    .await?;
                 Ok(res)
             }
         }
     }
 }
 
-/// load index column data. `fill`: the most the reads may do with the disk cache; an index
-/// refresh passes `ReadOnly`.
+/// load index column data
 #[fastrace::trace]
 pub async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
@@ -106,20 +97,13 @@ pub async fn load_bloom_filter_by_columns<'a>(
     column_needed: &'a [String],
     index_path: &'a str,
     index_length: u64,
-    fill: DiskFill,
 ) -> Result<BlockFilter> {
     let whole_file =
-        prepare_bloom_index_read_source(&dal, settings, index_path, index_length, fill).await?;
+        prepare_bloom_index_read_source(&dal, settings, index_path, index_length).await?;
 
     // 1. load index meta
-    let bloom_index_meta = load_index_meta(
-        dal.clone(),
-        index_path,
-        index_length,
-        whole_file.as_ref(),
-        fill,
-    )
-    .await?;
+    let bloom_index_meta =
+        load_index_meta(dal.clone(), index_path, index_length, whole_file.as_ref()).await?;
 
     // 2. filter out columns that needed and exist in the index
     // 2.1 dedup the columns
@@ -157,7 +141,6 @@ pub async fn load_bloom_filter_by_columns<'a>(
                 &dal,
                 bloom_index_schema_desc.clone(),
                 whole_file.as_ref(),
-                fill,
             )
         })
         .collect::<Vec<_>>();
@@ -189,7 +172,6 @@ async fn load_column_bloom_filter<'a>(
     dal: &'a Operator,
     bloom_index_schema_desc: SchemaDescPtr,
     whole_file: Option<&Arc<Bytes>>,
-    fill: DiskFill,
 ) -> Result<Arc<FilterImpl>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
@@ -200,7 +182,6 @@ async fn load_column_bloom_filter<'a>(
             col_chunk_meta,
             dal.clone(),
             bloom_index_schema_desc,
-            fill,
         );
         let whole_file = whole_file.cloned();
         async move { column_data_reader.read(whole_file.as_ref()).await }
@@ -211,20 +192,15 @@ async fn load_column_bloom_filter<'a>(
 }
 
 /// Loads index meta data
-/// read data from cache, or populate cache items if possible. `fill`: the most the read may do
-/// with the disk cache; maintenance reads pass `ReadOnly`.
+/// read data from cache, or populate cache items if possible
 #[fastrace::trace]
 pub async fn load_index_meta(
     dal: Operator,
     path: &str,
     length: u64,
     whole_file: Option<&Arc<Bytes>>,
-    fill: DiskFill,
 ) -> Result<Arc<BloomIndexMeta>> {
-    let cache = FuseCaches::instance()
-        .index_metas
-        .bloom
-        .with_disk_fill_at_most(fill);
+    let cache = FuseCaches::instance().index_metas.bloom.clone();
     if let Some(whole_file) = whole_file {
         let meta = load_index_meta_from_bytes(whole_file)?;
         return Ok(Arc::clone(&cache.fill(path, Arc::new(meta))));
@@ -247,14 +223,9 @@ async fn prepare_bloom_index_read_source(
     settings: &ReadSettings,
     path: &str,
     index_length: u64,
-    fill: DiskFill,
 ) -> Result<Option<Arc<Bytes>>> {
     if should_read_whole_bloom_index(path, settings, index_length) {
-        let fill = FuseCaches::instance()
-            .index_metas
-            .bloom
-            .disk_fill()
-            .at_most(fill);
+        let fill = FuseCaches::instance().index_metas.bloom.disk_fill();
         let data = DiskCachedStorage::new(dal.clone())
             .read(CacheKind::of::<bloom::Filter>(), path, None, fill)
             .await?;
@@ -416,20 +387,15 @@ mod tests {
         FuseCaches::instance().index_metas.bloom.evict(path);
 
         let len = data.len() as u64;
-        let meta = load_index_meta(operator.clone(), path, len, None, DiskFill::ReadWrite).await?;
+        let meta = load_index_meta(operator.clone(), path, len, None).await?;
         assert_eq!(meta.columns.len(), 1);
 
         // Served from the cache once the file is gone.
         operator.delete(path).await?;
-        let cached =
-            load_index_meta(operator.clone(), path, len, None, DiskFill::ReadWrite).await?;
+        let cached = load_index_meta(operator.clone(), path, len, None).await?;
         assert!(Arc::ptr_eq(&meta, &cached));
         FuseCaches::instance().index_metas.bloom.evict(path);
-        assert!(
-            load_index_meta(operator, path, len, None, DiskFill::ReadWrite)
-                .await
-                .is_err()
-        );
+        assert!(load_index_meta(operator, path, len, None).await.is_err());
         Ok(())
     }
 
@@ -458,7 +424,6 @@ mod tests {
             &[filter_name.clone()],
             path,
             data.len() as u64,
-            DiskFill::ReadWrite,
         )
         .await?;
 

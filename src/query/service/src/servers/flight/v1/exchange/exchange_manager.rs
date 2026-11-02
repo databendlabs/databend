@@ -286,6 +286,9 @@ impl DataExchangeManager {
         env: &QueryEnv,
         ctx: Option<Arc<QueryContext>>,
     ) -> Result<()> {
+        if let Some(ctx) = ctx.as_ref() {
+            ctx.set_disk_cache_read_only(env.disk_cache_read_only);
+        }
         if env.perf_config.is_perf_active() {
             if let Some(ctx) = ctx.as_ref() {
                 let mut perf_config = env.perf_config.clone();

@@ -213,8 +213,7 @@ impl SegmentAnalyzer {
             block_reader,
             settings: ReadSettings::from_ctx(ctx)?,
             storage_format: table.get_storage_format(),
-            // ANALYZE reads every segment; the disk cache keeps those queries read.
-            segment_cache: FuseCaches::instance().segments.without_disk_fill(),
+            segment_cache: FuseCaches::instance().segments.clone(),
             segment_reader: SegmentInfoReader::new(dal.clone(), table_schema),
             stats_reader: SegmentStatsReader::new(dal.clone()),
             dal,

@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_io::Files;
@@ -24,11 +26,14 @@ use opendal::Operator;
 /// otherwise still be read when the snapshot history is walked, and deleted segments, blocks
 /// and indexes would hold disk cache room until evicted.
 ///
-/// The files leave the disk cache before the delete and are kept out until it is done, failed
-/// or cancelled: a fill that read a file before is rejected, one that starts after finds no
-/// file, and a crash meanwhile leaves none of them on disk.
+/// The files leave the disk cache before the delete and are kept out until it has finished,
+/// failed or not: a fill that read a file before is rejected, one that starts after finds no
+/// file, and a crash meanwhile leaves none of them on disk. The delete runs to its end in the
+/// background when the caller is cancelled, as its storage requests do, and keeps the files
+/// out until then.
 pub struct TableFiles {
-    files: Files,
+    ctx: Arc<dyn TableContext>,
+    operator: Operator,
     disk: DiskCachedStorage,
 }
 
@@ -36,19 +41,28 @@ impl TableFiles {
     pub fn create(ctx: Arc<dyn TableContext>, operator: Operator) -> Self {
         TableFiles {
             disk: DiskCachedStorage::new(operator.clone()),
-            files: Files::create(ctx, operator),
+            ctx,
+            operator,
         }
     }
 
     pub async fn remove_file_in_batch(&self, locations: &[String]) -> Result<()> {
-        // Ended when the delete is done, or dropped: a cancelled query drops it at the await.
         // A file whose cached copy cannot be deleted is not deleted: it would be read again
         // from the disk cache after a restart.
-        let _changes = locations
+        let changes = locations
             .iter()
             // As `Files` deletes it, and as readers name it.
             .map(|location| self.disk.begin_change(location.trim_start_matches('/')))
             .collect::<Result<Vec<_>>>()?;
-        self.files.remove_file_in_batch(locations).await
+        let files = Files::create(self.ctx.clone(), self.operator.clone());
+        let locations = locations.to_vec();
+        GlobalIORuntime::instance()
+            .spawn(async move {
+                let removed = files.remove_file_in_batch(&locations).await;
+                drop(changes);
+                removed
+            })
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("table file delete task failed: {e}")))?
     }
 }

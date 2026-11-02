@@ -35,6 +35,7 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     // DELETE / UPDATE source). Bind the query's counter so that IO is attributed
     // to it like the IO done later under `start_prepared_query`.
     tracking_payload.io_stats = Some(ctx.get_local_io_stats());
+    tracking_payload.disk_cache_read_only = ctx.get_disk_cache_read_only();
 
     debug!("init query fragments with {:?}", fragments);
 

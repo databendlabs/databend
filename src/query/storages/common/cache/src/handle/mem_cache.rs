@@ -105,21 +105,6 @@ impl<T: CachedItem> MemCache<T> {
         }
     }
 
-    /// Same cache, but reads do not fill the disk cache; the memory tier fills as usual. For
-    /// the reads of maintenance operations: they may be served by the disk cache, which serves
-    /// queries, but do not fill it.
-    pub fn without_disk_fill(&self) -> Self {
-        self.with_disk_fill_at_most(DiskFill::ReadOnly)
-    }
-
-    /// Same cache, its reads doing at most `fill` with the disk cache.
-    pub fn with_disk_fill_at_most(&self, fill: DiskFill) -> Self {
-        MemCache {
-            disk: self.disk.at_most(fill),
-            ..self.clone()
-        }
-    }
-
     /// Whether values of this kind can be cached in memory; lets writers skip building them.
     pub fn is_enabled(&self) -> bool {
         self.store.is_enabled(self.kind)

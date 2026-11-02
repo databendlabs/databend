@@ -19,6 +19,8 @@ use std::sync::Arc;
 
 use databend_common_ast::ast;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableIndexType;
@@ -68,7 +70,11 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
 pub(crate) async fn execute_refresh_hook(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     info!("Table hook starting refresh job");
-    match do_refresh(ctx, desc).await {
+    // Maintenance: its reads do not fill the disk cache.
+    match ThreadTracker::maintenance_payload()
+        .tracking(do_refresh(ctx, desc))
+        .await
+    {
         Ok(_) => {
             info!("Refresh job completed successfully");
         }

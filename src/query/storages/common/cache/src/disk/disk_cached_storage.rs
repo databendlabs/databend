@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
@@ -138,6 +139,16 @@ impl DiskCachedStorage {
         self.disk_for(kind, fill).is_some()
     }
 
+    /// `fill`, read only for maintenance statements (`ThreadTracker::disk_cache_read_only`):
+    /// the disk cache serves queries.
+    fn statement_fill(fill: DiskFill) -> DiskFill {
+        if ThreadTracker::disk_cache_read_only() {
+            fill.at_most(DiskFill::ReadOnly)
+        } else {
+            fill
+        }
+    }
+
     fn disk_for(&self, kind: CacheKind, fill: DiskFill) -> Option<&Arc<DiskCache>> {
         self.disk
             .as_ref()
@@ -152,6 +163,7 @@ impl DiskCachedStorage {
         range: Option<Range<u64>>,
         fill: DiskFill,
     ) -> Result<Bytes> {
+        let fill = Self::statement_fill(fill);
         let key = self.key(path, range.clone());
         let Some(disk) = self.disk_for(kind, fill) else {
             return self.read_storage(path, range).await;
@@ -204,6 +216,7 @@ impl DiskCachedStorage {
         fill: DiskFill,
         settings: &ReadSettings,
     ) -> Result<UnitsRead> {
+        let fill = Self::statement_fill(fill);
         let Some(disk) = self.disk_for(kind, fill) else {
             let fetched =
                 MergeIOReader::merge_io_read(settings, self.op.clone(), path, units).await?;

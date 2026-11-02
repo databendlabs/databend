@@ -3680,10 +3680,11 @@ impl Default for CacheStorageTypeConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum DiskCacheKeyReloadPolicy {
-    // remove all the disk cache during restart
+    // Start with an empty disk cache: what was cached before a restart is never read after it.
     Reset,
-    // recovery the cache keys during restart,
-    // but cache capacity will not be checked
+    // Keep the disk cache across restarts, within the configured capacity. An object rewritten
+    // or deleted just before a host crash may then be read as cached, if the file system lost
+    // the deletion of its cached copy.
     Fuzzy,
 }
 

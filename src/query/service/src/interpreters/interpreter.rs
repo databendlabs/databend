@@ -82,6 +82,12 @@ pub trait Interpreter: Sync + Send {
 
     fn is_ddl(&self) -> bool;
 
+    /// Maintenance statements (ANALYZE, compaction, recluster, vacuum, refreshes) may read
+    /// from the disk cache but do not fill it: it serves queries.
+    fn is_maintenance(&self) -> bool {
+        false
+    }
+
     /// Top-level entry point for user-facing queries (HTTP/MySQL/FlightSQL handlers).
     /// Logs Start/Finish, runs hooks, collects profiles.
     /// Internal callers should use `execute_with_hooks()` with the appropriate `QueryFinishHooks`.
@@ -107,12 +113,14 @@ pub trait Interpreter: Sync + Send {
         let query_io_stats = ctx.get_local_io_stats();
         let already_tracked =
             ThreadTracker::io_stats().is_some_and(|current| Arc::ptr_eq(current, &query_io_stats));
-        if already_tracked {
+        let maintenance = self.is_maintenance() && !ThreadTracker::disk_cache_read_only();
+        if already_tracked && !maintenance {
             return self.execute_with_hooks_inner(ctx, hooks).await;
         }
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.io_stats = Some(query_io_stats);
+        tracking_payload.disk_cache_read_only |= maintenance;
         tracking_payload
             .tracking(self.execute_with_hooks_inner(ctx, hooks))
             .await

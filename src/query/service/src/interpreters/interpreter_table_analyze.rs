@@ -155,6 +155,10 @@ impl Interpreter for AnalyzeTableInterpreter {
         "AnalyzeTableInterpreter"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         true
     }
@@ -177,7 +181,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                 Err(_) => return Ok(PipelineBuildResult::create()),
             };
 
-            let Some(snapshot) = table.read_table_snapshot_without_disk_fill().await? else {
+            let Some(snapshot) = table.read_table_snapshot().await? else {
                 return Ok(PipelineBuildResult::create());
             };
 

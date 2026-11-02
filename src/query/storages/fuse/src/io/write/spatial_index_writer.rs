@@ -35,7 +35,6 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
 use databend_storages_common_blocks::blocks_to_parquet;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -316,13 +315,11 @@ impl SpatialIndexBuilder {
         let existing_columns = if existing_column_names.is_empty() {
             Vec::new()
         } else {
-            // A refresh: read the disk cache, do not fill it with the index being replaced.
             load_spatial_index_files(
                 operator,
                 settings,
                 &existing_column_names,
                 &existing_location.0,
-                DiskFill::ReadOnly,
             )
             .await?
         };

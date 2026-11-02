@@ -18,6 +18,8 @@ databend_common_tracing::register_module_tag!("[ANALYZE-HOOK]");
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -69,7 +71,11 @@ pub(crate) async fn execute_analyze_hook(ctx: Arc<QueryContext>, desc: AnalyzeDe
         return Ok(());
     }
 
-    match do_analyze(ctx, desc).await {
+    // Maintenance: its reads do not fill the disk cache.
+    match ThreadTracker::maintenance_payload()
+        .tracking(do_analyze(ctx, desc))
+        .await
+    {
         Ok(_) => {
             info!("Analyze job completed successfully");
         }
@@ -117,7 +123,7 @@ pub(crate) async fn execute_analyze(
     table: &FuseTable,
     options: AnalyzeOptions,
 ) -> Result<()> {
-    let Some(snapshot) = table.read_table_snapshot_without_disk_fill().await? else {
+    let Some(snapshot) = table.read_table_snapshot().await? else {
         return Ok(());
     };
     let mut pipeline = Pipeline::create();

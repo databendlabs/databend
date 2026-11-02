@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::DiskCachedStorage;
@@ -537,4 +539,56 @@ async fn test_read_after_an_invalidation_does_not_join_one_before() {
     assert_eq!(after, rewritten.slice(0..10));
     assert_eq!(reads.load(std::sync::atomic::Ordering::Relaxed), 2);
     assert_eq!(before.await.unwrap().unwrap(), object().slice(0..10));
+}
+
+/// Reads of a maintenance statement (`ThreadTracker::maintenance_payload`) are served by the
+/// disk cache but do not fill it, whatever the reader asks for; a query's read fills it.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_maintenance_reads_do_not_fill() {
+    let dir = TempDir::new().unwrap();
+    let (_op, disk, storage) = setup(&dir).await;
+    let key = DiskKey::range(PATH, 0..10);
+    let maintenance = |storage: DiskCachedStorage| {
+        ThreadTracker::maintenance_payload().tracking(async move {
+            let range = storage
+                .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+                .await
+                .unwrap();
+            let units = storage
+                .read_units(
+                    data(),
+                    PATH,
+                    &[(1, 20..30)],
+                    DiskFill::ReadWrite,
+                    &ReadSettings {
+                        max_gap_size: 0,
+                        max_range_size: 1_000,
+                        parquet_fast_read_bytes: 0,
+                    },
+                )
+                .await
+                .unwrap();
+            (range, units.unit(1).unwrap())
+        })
+    };
+    let (range, unit) = maintenance(storage.clone()).await;
+    assert_eq!(
+        (range, unit),
+        (object().slice(0..10), object().slice(20..30))
+    );
+    wait_for(|| disk.stats().queued_bytes == 0);
+    assert!(!disk.contains(data(), &key));
+    assert!(!disk.contains(data(), &DiskKey::range(PATH, 20..30)));
+
+    storage
+        .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    wait_for(|| disk.contains(data(), &key));
+    // Served from disk now, still filling nothing.
+    let hits = || disk.pool_stats().iter().map(|(_, s)| s.hit).sum::<u64>();
+    let before = hits();
+    maintenance(storage).await;
+    assert!(hits() > before);
+    assert!(!disk.contains(data(), &DiskKey::range(PATH, 20..30)));
 }

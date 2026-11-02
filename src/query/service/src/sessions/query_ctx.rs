@@ -204,6 +204,19 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
+    /// Fragments of a maintenance statement run here: see `QueryEnv::disk_cache_read_only`.
+    pub fn set_disk_cache_read_only(&self, read_only: bool) {
+        self.shared
+            .disk_cache_read_only
+            .store(read_only, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn get_disk_cache_read_only(&self) -> bool {
+        self.shared
+            .disk_cache_read_only
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     // Each table will create a new QueryContext
     // So partition_queue could be independent in each table context
     // see `builder_join.rs` for more details

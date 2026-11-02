@@ -28,6 +28,7 @@ use bytes::Bytes;
 use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeConfig;
+use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::cache::metrics_inc_cache_access_count;
@@ -114,6 +115,12 @@ impl DiskCache {
             disk.data_max_ratio,
         ])?;
         let tenant_root = PathBuf::from(&disk.path).join(tenant_id);
+        if config.data_cache_key_reload_policy == DiskCacheKeyReloadPolicy::Reset {
+            // Starts empty: the files of the previous run are set aside at once, then deleted
+            // with the older layouts in the background. Nothing cached before a restart is read
+            // after it, whatever happened to the objects meanwhile.
+            set_aside_layout(&tenant_root)?;
+        }
         let cache = DiskCache::new(&tenant_root, disk.max_bytes, caps, disk.sync_data)?;
         info!(
             "[DiskCache] on: {} bytes, meta {} / index {} / data {}, under {:?}",
@@ -459,6 +466,25 @@ fn delete_in_background(pool: Arc<DiskPool>, victims: Vec<String>) {
         .spawn(move || pool.delete(&victims));
     if let Err(e) = spawned {
         warn!("[DiskCache] failed to spawn the delete thread: {e}");
+    }
+}
+
+/// Renames the current layout away, for `remove_old_layouts` to delete it.
+fn set_aside_layout(tenant_root: &Path) -> Result<()> {
+    let layout = tenant_root.join(LAYOUT_DIR);
+    let aside = tenant_root.join(format!("{LAYOUT_DIR}.reset"));
+    if aside.exists() {
+        // Left by a reset that did not get to delete it.
+        fs::remove_dir_all(&aside).map_err(|e| {
+            ErrorCode::StorageOther(format!("failed to remove disk cache {aside:?}: {e}"))
+        })?;
+    }
+    match fs::rename(&layout, &aside) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(ErrorCode::StorageOther(format!(
+            "failed to reset disk cache {layout:?}: {e}"
+        ))),
     }
 }
 

@@ -42,7 +42,6 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::AsyncTransform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::FilterImpl;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_io::ReadSettings;
@@ -436,14 +435,8 @@ async fn check_ngram_index_generated(
         .await
         .map(|meta| meta.content_length())
     {
-        let bloom_index_meta = load_index_meta(
-            operator.clone(),
-            &index_location,
-            content_length,
-            None,
-            DiskFill::ReadOnly,
-        )
-        .await?;
+        let bloom_index_meta =
+            load_index_meta(operator.clone(), &index_location, content_length, None).await?;
 
         let mut all_generated = true;
         for ngram_index_name in &ngram_index_arg.ngram_index_names {
@@ -555,8 +548,7 @@ async fn check_spatial_index_generated(
             .map(|meta| meta.content_length())
         {
             let spatial_index_meta =
-                load_spatial_index_meta(operator.clone(), index_location, DiskFill::ReadOnly)
-                    .await?;
+                load_spatial_index_meta(operator.clone(), index_location).await?;
 
             let current_index_generated = spatial_index_meta
                 .metadata
@@ -757,8 +749,6 @@ impl AsyncTransform for NgramIndexTransform {
                     &index_columns,
                     &index_path,
                     block_meta.bloom_filter_index_size,
-                    // A refresh: read the disk cache, do not fill it with the index it rewrites.
-                    DiskFill::ReadOnly,
                 )
                 .await?;
                 let new_ngram_columns = new_ngram_index.serialize_to_data_block()?.take_columns();
@@ -1100,7 +1090,7 @@ async fn legacy_serves_other_index(
     if unmigrated.is_empty() {
         return Ok(false);
     }
-    let meta = load_vector_index_meta(operator.clone(), path, DiskFill::ReadOnly).await?;
+    let meta = load_vector_index_meta(operator.clone(), path).await?;
     let VectorIndexMeta::Legacy(meta) = meta.as_ref() else {
         return Ok(false);
     };

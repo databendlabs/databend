@@ -104,17 +104,6 @@ impl SegmentCache {
             stats: self.stats.read_only(),
         }
     }
-
-    /// Reads fill the memory caches but not the disk cache: for maintenance, see
-    /// `MemCache::without_disk_fill`.
-    pub fn without_disk_fill(&self) -> Self {
-        SegmentCache {
-            segments: self.segments.without_disk_fill(),
-            column_oriented: self.column_oriented.without_disk_fill(),
-            block_metas: self.block_metas.without_disk_fill(),
-            stats: self.stats.without_disk_fill(),
-        }
-    }
 }
 
 #[cfg(test)]

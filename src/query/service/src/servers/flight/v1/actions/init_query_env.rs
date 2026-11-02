@@ -51,6 +51,7 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     tracking_payload.warehouse_id = env.cluster.get_warehouse_id().ok();
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
     tracking_payload.workload_group_resource = tracking_workload_group;
+    tracking_payload.disk_cache_read_only = env.disk_cache_read_only;
 
     tracking_payload
         .tracking(async move {

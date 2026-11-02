@@ -19,6 +19,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
@@ -128,6 +130,23 @@ pub(crate) fn compact_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
 }
 
 pub(crate) async fn execute_compact_hook(
+    ctx: Arc<QueryContext>,
+    compact_target: CompactTargetTableDescription,
+    trace_ctx: CompactHookTraceCtx,
+    lock_opt: LockTableOption,
+) -> Result<()> {
+    // Maintenance: its reads do not fill the disk cache.
+    ThreadTracker::maintenance_payload()
+        .tracking(compact_after_write(
+            ctx,
+            compact_target,
+            trace_ctx,
+            lock_opt,
+        ))
+        .await
+}
+
+async fn compact_after_write(
     ctx: Arc<QueryContext>,
     compact_target: CompactTargetTableDescription,
     trace_ctx: CompactHookTraceCtx,

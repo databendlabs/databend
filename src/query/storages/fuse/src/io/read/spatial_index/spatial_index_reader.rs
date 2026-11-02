@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_io::ReadSettings;
 use opendal::Operator;
 
@@ -59,7 +58,6 @@ impl SpatialIndexReader {
             &self.settings,
             &self.column_names,
             location,
-            DiskFill::ReadWrite,
         )
         .await?;
 

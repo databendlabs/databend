@@ -461,7 +461,7 @@ impl SinkAnalyzeState {
     async fn commit_statistics(&mut self) -> Result<()> {
         let table = self.table.refresh(self.ctx.as_ref()).await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let Some(snapshot) = table.read_table_snapshot_without_disk_fill().await? else {
+        let Some(snapshot) = table.read_table_snapshot().await? else {
             return Ok(());
         };
         self.rebase_statistics(table, snapshot.clone()).await?;
@@ -962,9 +962,7 @@ impl KllBucketScanner {
             return Ok(());
         }
         let max_threads = ctx.get_settings().get_max_threads()?.max(1) as usize;
-        // ANALYZE reads every segment; the disk cache keeps those queries read.
-        let segments_io = SegmentsIO::create(ctx.clone(), table.operator.clone(), table.schema())
-            .without_disk_fill();
+        let segments_io = SegmentsIO::create(ctx.clone(), table.operator.clone(), table.schema());
         let runtime =
             Runtime::with_worker_threads(max_threads, Some("analyze-kll-histogram".to_owned()))?;
         // Declared after `runtime` so the outstanding tasks are aborted, on error or
