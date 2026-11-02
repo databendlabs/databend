@@ -44,6 +44,7 @@ use fastrace::Span;
 use fastrace::collector::SpanContext;
 use fastrace::collector::TestReporter;
 use fastrace::future::FutureExt;
+use futures::TryStreamExt;
 
 async fn user_context(
     fixture: &TestFixture,
@@ -58,6 +59,150 @@ async fn user_context(
 async fn check_access(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
     let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
     InterpreterFactory::get(ctx, &plan).await.map(|_| ())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_stage_and_udf_access_is_always_checked() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE STAGE always_checked FILE_FORMAT = (TYPE = CSV)")
+        .await?;
+    fixture
+        .execute_command("CREATE FUNCTION always_checked AS (x) -> x + 1")
+        .await?;
+    let tenant = fixture.default_tenant();
+    let api = UserApiProvider::instance();
+    api.grant_ownership_to_role(
+        &tenant,
+        &OwnershipObject::Stage {
+            name: "always_checked".into(),
+        },
+        BUILTIN_ROLE_ACCOUNT_ADMIN,
+    )
+    .await?;
+    api.grant_ownership_to_role(
+        &tenant,
+        &OwnershipObject::UDF {
+            name: "always_checked".into(),
+        },
+        BUILTIN_ROLE_ACCOUNT_ADMIN,
+    )
+    .await?;
+
+    let queries = [
+        "SELECT always_checked(1)",
+        "SELECT $1 FROM @always_checked",
+        "COPY INTO @always_checked FROM (SELECT 1)",
+        "REMOVE @always_checked",
+    ];
+    let user = UserInfo::new_no_auth("rbac_user", "%");
+    let ctx = user_context(&fixture, user.clone(), None).await?;
+    for sql in queries {
+        let error = check_access(ctx.clone(), sql).await.unwrap_err();
+        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED, "{sql}: {error}");
+    }
+
+    let mut granted = user;
+    granted.grants.grant_privileges(
+        &GrantObject::UDF("always_checked".into()),
+        UserPrivilegeType::Usage.into(),
+    );
+    granted.grants.grant_privileges(
+        &GrantObject::Stage("always_checked".into()),
+        (UserPrivilegeType::Read | UserPrivilegeType::Write).into(),
+    );
+    let ctx = user_context(&fixture, granted, None).await?;
+    for sql in queries {
+        check_access(ctx.clone(), sql).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_connection_and_sequence_access_is_always_checked() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    setup_table(&fixture).await?;
+    fixture
+        .execute_command("CREATE CONNECTION always_checked_conn STORAGE_TYPE = 's3' ENDPOINT_URL = 'http://127.0.0.1:9900'")
+        .await?;
+    fixture
+        .execute_command("CREATE SEQUENCE always_checked_seq")
+        .await?;
+    let tenant = fixture.default_tenant();
+    let api = UserApiProvider::instance();
+    for object in [
+        OwnershipObject::Connection {
+            name: "always_checked_conn".into(),
+        },
+        OwnershipObject::Sequence {
+            name: "always_checked_seq".into(),
+        },
+    ] {
+        api.grant_ownership_to_role(&tenant, &object, BUILTIN_ROLE_ACCOUNT_ADMIN)
+            .await?;
+    }
+    let mut user = UserInfo::new_no_auth("object_reader", "%");
+    user.grants.grant_privileges(
+        &GrantObject::Database("default".into(), "select_access".into()),
+        (UserPrivilegeType::Select | UserPrivilegeType::Insert | UserPrivilegeType::Create).into(),
+    );
+    let ctx = user_context(&fixture, user.clone(), None).await?;
+    let queries = [
+        "DESC CONNECTION always_checked_conn",
+        "DROP CONNECTION always_checked_conn",
+        "DESC SEQUENCE always_checked_seq",
+        "DROP SEQUENCE always_checked_seq",
+        "SELECT nextval(always_checked_seq)",
+        "INSERT INTO select_access.t VALUES(nextval(always_checked_seq))",
+        "INSERT INTO select_access.t SELECT nextval(always_checked_seq) FROM numbers(2)",
+        "CREATE TABLE select_access.seq_default(a INT DEFAULT nextval(always_checked_seq))",
+    ];
+    for sql in queries {
+        let error = Box::pin(databend_query::test_kits::execute_command(ctx.clone(), sql))
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED, "{sql}: {error}");
+    }
+    for sql in [
+        "CREATE CONNECTION forbidden_conn STORAGE_TYPE = 's3'",
+        "CREATE SEQUENCE forbidden_seq",
+    ] {
+        let error = check_access(ctx.clone(), sql).await.unwrap_err();
+        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED, "{sql}: {error}");
+    }
+
+    let mut role = RoleInfo::new("object_access", None);
+    role.grants.grant_privileges(
+        &GrantObject::Connection("always_checked_conn".into()),
+        UserPrivilegeType::AccessConnection.into(),
+    );
+    role.grants.grant_privileges(
+        &GrantObject::Sequence("always_checked_seq".into()),
+        UserPrivilegeType::AccessSequence.into(),
+    );
+    api.create_role(&tenant, role, &CreateOption::Create)
+        .await?;
+    RoleCacheManager::instance().invalidate_cache(&tenant);
+    user.grants.grant_role("object_access".into());
+    let granted_ctx = user_context(&fixture, user, None).await?;
+    for sql in queries {
+        check_access(granted_ctx.clone(), sql).await?;
+    }
+    // These are execution-time visibility filters, so constructing interpreters is insufficient.
+    for (ctx, expected_rows) in [(ctx, 0), (granted_ctx, 1)] {
+        for sql in ["SHOW CONNECTIONS", "SHOW SEQUENCES"] {
+            let blocks = Box::pin(TestFixture::execute_query_with_ctx(ctx.clone(), sql))
+                .await?
+                .try_collect::<Vec<_>>()
+                .await?;
+            assert_eq!(
+                blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+                expected_rows,
+                "{sql}"
+            );
+        }
+    }
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

@@ -1,0 +1,36 @@
+=== HTTP authorization settings: baseline ===
+visible=0
+visible=0
+visible=0
+denied
+denied
+denied
+denied
+denied
+denied
+visible=1
+visible=1
+=== HTTP authorization settings: 0 ===
+visible=0
+visible=0
+visible=0
+denied
+denied
+denied
+denied
+denied
+denied
+visible=1
+visible=1
+=== HTTP authorization settings: 1 ===
+visible=0
+visible=0
+visible=0
+denied
+denied
+denied
+denied
+denied
+denied
+visible=1
+visible=1

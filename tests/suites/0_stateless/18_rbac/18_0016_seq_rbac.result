@@ -1,10 +1,4 @@
-=== OLD LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=0 ===
-=== TEST USER A WITH SUPER PRIVILEGES ===
-1
-1
-1
-3
-=== NEW LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=1 ===
+=== Sequence authorization is always enabled ===
 === TEST USER A WITH SUPER PRIVILEGES ===
 --- CREATE 3 sequences WILL SUCCESS ---
 1

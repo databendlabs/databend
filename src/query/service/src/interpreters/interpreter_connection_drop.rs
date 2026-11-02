@@ -28,7 +28,6 @@ use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextQueryIdentity;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -69,18 +68,12 @@ impl Interpreter for DropConnectionInterpreter {
                 .await?;
 
             // 2. Revoke ownership (after drop succeeds to prevent permission leak)
-            if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_connection_privilege_check()?
-            {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                let owner_object = OwnershipObject::Connection {
-                    name: self.plan.name.clone(),
-                };
-                role_api.revoke_ownership(&owner_object).await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            let owner_object = OwnershipObject::Connection {
+                name: self.plan.name.clone(),
+            };
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
 
             // 3. Clean up tag references (must be after drop for concurrency safety)
             let taggable_object = TaggableObject::Connection {

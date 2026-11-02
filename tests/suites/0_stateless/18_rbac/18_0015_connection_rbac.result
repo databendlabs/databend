@@ -1,12 +1,4 @@
-=== OLD LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=0 ===
-=== TEST USER A WITH SUPER PRIVILEGES ===
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
-=== NEW LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=1 ===
+=== Connection authorization is always enabled ===
 === TEST USER A WITH SUPER PRIVILEGES ===
 --- CREATE 3 CONNECTIONS WILL SUCCESS ---
 c1	azblob	endpoint_url=ht***om

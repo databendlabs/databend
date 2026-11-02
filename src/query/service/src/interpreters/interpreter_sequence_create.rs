@@ -33,7 +33,6 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 pub struct CreateSequenceInterpreter {
@@ -85,20 +84,14 @@ impl Interpreter for CreateSequenceInterpreter {
             }
 
             // Grant ownership as the current role
-            if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_sequence_privilege_check()?
-            {
-                let tenant = self.plan.ident.tenant();
-                let name = self.plan.ident.name().to_string();
-                if let Some(current_role) = self.ctx.get_current_role() {
-                    let role_api = UserApiProvider::instance().role_api(tenant);
-                    role_api
-                        .grant_ownership(&OwnershipObject::Sequence { name }, &current_role.name)
-                        .await?;
-                    RoleCacheManager::instance().invalidate_cache(tenant);
-                }
+            let tenant = self.plan.ident.tenant();
+            let name = self.plan.ident.name().to_string();
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let role_api = UserApiProvider::instance().role_api(tenant);
+                role_api
+                    .grant_ownership(&OwnershipObject::Sequence { name }, &current_role.name)
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(tenant);
             }
 
             Ok(PipelineBuildResult::create())

@@ -75,7 +75,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextCluster;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::share::share_mgr;
 use crate::sql::plans::Plan;
@@ -956,16 +955,6 @@ impl PrivilegeAccess {
         connection: String,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
-        if !self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_connection_privilege_check()?
-        {
-            return self
-                .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-                .await;
-        }
-
         if self
             .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
             .await
@@ -1116,16 +1105,6 @@ impl PrivilegeAccess {
     }
 
     async fn validate_seq_access(&self, seq: String) -> Result<()> {
-        if !self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            return self
-                .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-                .await;
-        }
-
         if self
             .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
             .await
@@ -1300,15 +1279,6 @@ impl PrivilegeAccess {
         stage_info: &StageInfo,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
-        // this settings might be enabled as default after we got a better confidence on it
-        if !self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_rbac_check()?
-        {
-            return Ok(());
-        }
-
         // skip check the temp stage from uri like `COPY INTO tbl FROM 'http://xxx'`
         if stage_info.is_temporary {
             return Ok(());
@@ -1736,15 +1706,6 @@ impl AccessChecker for PrivilegeAccess {
         }
         let (identity, grant_set) = (user.identity().display().to_string(), user.grants);
 
-        let enable_experimental_rbac_check = self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_rbac_check()?;
-
-        let enable_seq_rbac_check = self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?;
         let tenant = self.ctx.get_tenant();
         let ctl_name = self.ctx.get_current_catalog();
 
@@ -1833,23 +1794,21 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     _ => {}
                 };
-                if enable_experimental_rbac_check {
-                    match s_expr.get_udfs() {
-                        Ok(udfs) => {
-                            if !udfs.is_empty() {
-                                self.validate_udf_access(udfs).await?;
-                            }
+                match s_expr.get_udfs() {
+                    Ok(udfs) => {
+                        if !udfs.is_empty() {
+                            self.validate_udf_access(udfs).await?;
                         }
-                        Err(err) => {
-                            return Err(err.add_message("get udf error on validating access"));
-                        }
+                    }
+                    Err(err) => {
+                        return Err(err.add_message("get udf error on validating access"));
                     }
                 }
 
                 let metadata = metadata.read().clone();
 
                 for table in metadata.tables() {
-                    if enable_experimental_rbac_check && table.is_source_of_stage() {
+                    if table.is_source_of_stage() {
                         match table.table().get_data_source_info() {
                             DataSourceInfo::StageSource(stage_info) => {
                                 self.validate_stage_access(&stage_info.stage_info, UserPrivilegeType::Read).await?;
@@ -2003,25 +1962,14 @@ impl AccessChecker for PrivilegeAccess {
                 if !UserApiProvider::instance().exists_udf(&tenant, udf_name).await? && plan.if_exists {
                     return Ok(());
                 }
-                if enable_experimental_rbac_check {
-                    let udf = HashSet::from([udf_name]);
-                    self.validate_udf_access(udf).await?;
-                } else {
-                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false, false)
-                        .await?;
-                }
+                let udf = HashSet::from([udf_name]);
+                self.validate_udf_access(udf).await?;
             }
             Plan::DropStage(plan) => {
                 match UserApiProvider::instance().get_stage(&tenant, &plan.name).await {
                     Ok(stage) => {
-                        if enable_experimental_rbac_check {
-                            let privileges = vec![UserPrivilegeType::Read, UserPrivilegeType::Write];
-                            for privilege in privileges {
-                                self.validate_stage_access(&stage, privilege).await?;
-                            }
-                        } else {
-                            self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-                                .await?;
+                        for privilege in [UserPrivilegeType::Read, UserPrivilegeType::Write] {
+                            self.validate_stage_access(&stage, privilege).await?;
                         }
                     }
                     Err(e) => {
@@ -2041,19 +1989,8 @@ impl AccessChecker for PrivilegeAccess {
                     .await
                 {
                     Ok(stage) => {
-                        if enable_experimental_rbac_check {
-                            let privileges = vec![UserPrivilegeType::Read, UserPrivilegeType::Write];
-                            for privilege in privileges {
-                                self.validate_stage_access(&stage, privilege).await?;
-                            }
-                        } else {
-                            self.validate_access(
-                                &GrantObject::Global,
-                                UserPrivilegeType::Super,
-                                false,
-                                false,
-                            )
-                            .await?;
+                        for privilege in [UserPrivilegeType::Read, UserPrivilegeType::Write] {
+                            self.validate_stage_access(&stage, privilege).await?;
                         }
                     }
                     Err(e) => {
@@ -2420,40 +2357,38 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::DataMutation { s_expr, .. } => {
                 let plan = s_expr.mutation()?;
-                if enable_experimental_rbac_check {
-                    match s_expr.input_udfs() {
-                        Ok(udfs) => {
-                            if !udfs.is_empty() {
-                                self.validate_udf_access(udfs).await?;
-                            }
-                        }
-                        Err(err) => {
-                            return Err(err.add_message("get udf error on validating access"));
+                match s_expr.input_udfs() {
+                    Ok(udfs) => {
+                        if !udfs.is_empty() {
+                            self.validate_udf_access(udfs).await?;
                         }
                     }
-                    let matched_evaluators = &plan.matched_evaluators;
-                    let unmatched_evaluators = &plan.unmatched_evaluators;
-                    for matched_evaluator in matched_evaluators {
-                        if let Some(condition) = &matched_evaluator.condition {
-                            let udf = condition.get_udf_names()?;
+                    Err(err) => {
+                        return Err(err.add_message("get udf error on validating access"));
+                    }
+                }
+                let matched_evaluators = &plan.matched_evaluators;
+                let unmatched_evaluators = &plan.unmatched_evaluators;
+                for matched_evaluator in matched_evaluators {
+                    if let Some(condition) = &matched_evaluator.condition {
+                        let udf = condition.get_udf_names()?;
+                        self.validate_udf_access(udf).await?;
+                    }
+                    if let Some(updates) = &matched_evaluator.update {
+                        for scalar in updates.values() {
+                            let udf = scalar.get_udf_names()?;
                             self.validate_udf_access(udf).await?;
-                        }
-                        if let Some(updates) = &matched_evaluator.update {
-                            for scalar in updates.values() {
-                                let udf = scalar.get_udf_names()?;
-                                self.validate_udf_access(udf).await?;
-                            }
                         }
                     }
-                    for unmatched_evaluator in unmatched_evaluators {
-                        if let Some(condition) = &unmatched_evaluator.condition {
-                            let udf = condition.get_udf_names()?;
-                            self.validate_udf_access(udf).await?;
-                        }
-                        for value in &unmatched_evaluator.values {
-                            let udf = value.get_udf_names()?;
-                            self.validate_udf_access(udf).await?;
-                        }
+                }
+                for unmatched_evaluator in unmatched_evaluators {
+                    if let Some(condition) = &unmatched_evaluator.condition {
+                        let udf = condition.get_udf_names()?;
+                        self.validate_udf_access(udf).await?;
+                    }
+                    for value in &unmatched_evaluator.values {
+                        let udf = value.get_udf_names()?;
+                        self.validate_udf_access(udf).await?;
                     }
                 }
                 let privileges = if plan.expected_ttl.is_some() {
@@ -2664,13 +2599,6 @@ impl AccessChecker for PrivilegeAccess {
                 let super_privilege_check_result = self
                     .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await;
-                if !self
-                    .ctx
-                    .get_settings()
-                    .get_enable_experimental_connection_privilege_check()?
-                {
-                    return super_privilege_check_result;
-                }
                 if super_privilege_check_result.is_err() {
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateConnection, true, false)
                         .await?
@@ -2688,10 +2616,6 @@ impl AccessChecker for PrivilegeAccess {
                 let super_privilege_check_result = self
                     .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await;
-                if !enable_seq_rbac_check
-                {
-                    return super_privilege_check_result;
-                }
                 if super_privilege_check_result.is_err() {
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateSequence, true, false)
                         .await?

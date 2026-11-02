@@ -1,0 +1,49 @@
+# Stage/UDF/Connection/Sequence authorization is mandatory; experimental switches are removed.
+query I
+SELECT count(*) FROM system.settings WHERE name = 'enable_experimental_rbac_check'
+----
+0
+
+statement error 2801
+SET enable_experimental_rbac_check = 0
+
+statement error 2801
+SET GLOBAL enable_experimental_rbac_check = 0
+
+# Unknown query-level settings are ignored, not stored as authorization policy.
+query I
+SETTINGS (enable_experimental_rbac_check = 0) SELECT count(*) FROM system.settings WHERE name = 'enable_experimental_rbac_check'
+----
+0
+
+query I
+SELECT /*+ SET_VAR(enable_experimental_rbac_check = 0) */ count(*) FROM system.settings WHERE name = 'enable_experimental_rbac_check'
+----
+0
+
+query I
+SELECT count(*) FROM system.settings WHERE name IN ('enable_experimental_connection_privilege_check', 'enable_experimental_sequence_privilege_check')
+----
+0
+
+statement error 2801
+SET enable_experimental_connection_privilege_check = 0
+
+statement error 2801
+SET GLOBAL enable_experimental_connection_privilege_check = 0
+
+statement error 2801
+SET enable_experimental_sequence_privilege_check = 0
+
+statement error 2801
+SET GLOBAL enable_experimental_sequence_privilege_check = 0
+
+query I
+SETTINGS (enable_experimental_connection_privilege_check = 0, enable_experimental_sequence_privilege_check = 0) SELECT count(*) FROM system.settings WHERE name IN ('enable_experimental_connection_privilege_check', 'enable_experimental_sequence_privilege_check')
+----
+0
+
+query I
+SELECT /*+ SET_VAR(enable_experimental_connection_privilege_check = 0) SET_VAR(enable_experimental_sequence_privilege_check = 0) */ count(*) FROM system.settings WHERE name IN ('enable_experimental_connection_privilege_check', 'enable_experimental_sequence_privilege_check')
+----
+0

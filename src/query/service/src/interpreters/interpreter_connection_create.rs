@@ -28,7 +28,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextQueryIdentity;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -73,23 +72,17 @@ impl Interpreter for CreateConnectionInterpreter {
                 .await?;
 
             // Grant ownership as the current role
-            if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_connection_privilege_check()?
-            {
-                if let Some(current_role) = self.ctx.get_current_role() {
-                    let role_api = UserApiProvider::instance().role_api(&tenant);
-                    role_api
-                        .grant_ownership(
-                            &OwnershipObject::Connection {
-                                name: self.plan.name.clone(),
-                            },
-                            &current_role.name,
-                        )
-                        .await?;
-                    RoleCacheManager::instance().invalidate_cache(&tenant);
-                }
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Connection {
+                            name: self.plan.name.clone(),
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
             }
 
             Ok(PipelineBuildResult::create())

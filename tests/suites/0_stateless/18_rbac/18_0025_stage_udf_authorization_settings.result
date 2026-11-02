@@ -1,0 +1,36 @@
+=== Stage/UDF authorization: baseline ===
+denied stage-read
+allowed stage-read
+denied stage-write
+allowed stage-write
+denied stage-list
+allowed stage-list
+denied udf
+allowed udf
+=== Stage/UDF authorization: http ===
+denied stage-read
+allowed stage-read
+denied stage-write
+allowed stage-write
+denied stage-list
+allowed stage-list
+denied udf
+allowed udf
+=== Stage/UDF authorization: settings ===
+denied stage-read
+allowed stage-read
+denied stage-write
+allowed stage-write
+denied stage-list
+allowed stage-list
+denied udf
+allowed udf
+=== Stage/UDF authorization: hint ===
+denied stage-read
+allowed stage-read
+denied stage-write
+allowed stage-write
+denied stage-list
+allowed stage-list
+denied udf
+allowed udf
