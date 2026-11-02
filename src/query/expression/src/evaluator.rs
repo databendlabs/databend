@@ -407,11 +407,13 @@ impl<'a> Evaluator<'a> {
 
     /// Evaluates a filter's LIKE over a dictionary encoded string column without decoding.
     /// Nullable columns apply their validity after LIKE / NOT LIKE; NULL selects as false.
+    /// With `rows`, the result is only correct at `rows`, see [`DictColumn::like`].
     pub fn try_like_encoded(
         &self,
         expr: &Expr,
         pattern: &LikePattern,
         not: bool,
+        rows: Option<&[u32]>,
     ) -> Option<Bitmap> {
         let Expr::ColumnRef(ColumnRef { id, .. }) = expr else {
             return None;
@@ -426,7 +428,7 @@ impl<'a> Evaluator<'a> {
         let Column::Encoded(encoded) = column else {
             return None;
         };
-        let bitmap = encoded.as_dict()?.like(pattern, not)?;
+        let bitmap = encoded.as_dict()?.like(pattern, not, rows)?;
         Some(match validity {
             Some(validity) => &bitmap & validity,
             None => bitmap,
