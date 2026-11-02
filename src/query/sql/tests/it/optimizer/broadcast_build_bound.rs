@@ -220,6 +220,12 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             operator: RelOp::Limit,
         },
         StatsCase {
+            name: "project_set_over_join",
+            description: "A set-returning function expands the bound by the same factor as the estimate.",
+            sql: "SELECT unnest([1, 2]) FROM a JOIN b ON a.k = b.k",
+            operator: RelOp::ProjectSet,
+        },
+        StatsCase {
             name: "left_semi_join",
             description: "A semi join is bounded by the side it returns.",
             sql: "SELECT * FROM d LEFT SEMI JOIN a ON d.k = a.k",
