@@ -621,7 +621,9 @@ debug-assertions = true
 
 [profile.test]
 opt-level = 0
-debug = true
+# Same as `profile.dev`: backtraces keep file and line, but test builds skip the full type and
+# variable info. Set `CARGO_PROFILE_TEST_DEBUG=true` to debug a test in a debugger.
+debug = "line-tables-only"
 codegen-units = 16
 lto = false
 debug-assertions = true
