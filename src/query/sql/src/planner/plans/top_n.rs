@@ -97,29 +97,40 @@ impl Operator for TopN {
 
     fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
-        let partial = self.after_exchange == Some(false);
-        let output_rows = if partial {
-            self.candidate_count()
+        // The partial stage keeps up to `limit + offset` candidates; only the
+        // final stage skips `offset` rows.
+        let (skipped_rows, output_rows) = if self.after_exchange == Some(false) {
+            (0, self.candidate_count())
         } else {
-            self.limit
+            (self.offset, self.limit)
         };
-        let cardinality = stat_info.cardinality.min(output_rows as f64);
-        let precise_cardinality = stat_info.statistics.precise_cardinality.map(|rows| {
-            if partial {
-                rows.min(self.candidate_count() as u64)
-            } else {
-                rows.saturating_sub(self.offset as u64)
-                    .min(self.limit as u64)
-            }
-        });
+        let precise_cardinality = if output_rows == 0 {
+            Some(0)
+        } else {
+            stat_info.statistics.precise_cardinality.map(|rows| {
+                rows.saturating_sub(skipped_rows as u64)
+                    .min(output_rows as u64)
+            })
+        };
+        let bound_rows = |rows: f64| {
+            (rows - skipped_rows as f64)
+                .max(0.0)
+                .min(output_rows as f64)
+        };
+        // Like Limit, TopN caps the input bound by the rows it may emit. A
+        // known row count gives both the estimate and the bound; otherwise an
+        // estimate of 0 rows stays an estimate (`precise_cardinality` is None).
+        let (cardinality, max_cardinality) = match precise_cardinality {
+            Some(rows) => (rows as f64, rows as f64),
+            None => (
+                bound_rows(stat_info.cardinality),
+                bound_rows(stat_info.max_cardinality.max(stat_info.cardinality)),
+            ),
+        };
 
         Ok(Arc::new(StatInfo {
             cardinality,
-            // Like Limit, TopN caps the input bound by the rows it may emit.
-            max_cardinality: stat_info
-                .max_cardinality
-                .max(stat_info.cardinality)
-                .min(output_rows as f64),
+            max_cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
