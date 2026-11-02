@@ -19,6 +19,8 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
@@ -40,8 +42,10 @@ use futures::TryStreamExt;
 use log::info;
 use seq_marked::SeqValue;
 
+use crate::kv::ownership::drop_owned_object;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
+use crate::meta_txn_error::MetaTxnError;
 
 /// A generic CRUD interface for meta data operations.
 ///
@@ -232,6 +236,23 @@ where
         })?;
 
         Ok(())
+    }
+
+    /// Remove an owned object and its ownership in the same transaction.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn remove_with_ownership(
+        &self,
+        name: &str,
+        seq: MatchSeq,
+        object: OwnershipObject,
+    ) -> Result<bool, MetaTxnError> {
+        let ownership = TenantOwnershipObjectIdent::new(&self.tenant, object);
+        let removed =
+            drop_owned_object(self.kv_api.as_ref(), &self.ident(name), seq, &ownership, &[
+            ])
+            .await?;
+        Ok(removed.is_some())
     }
 
     #[async_backtrace::framed]

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_api::kv::ownership::ownership_grant_object as convert_to_grant_obj;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
@@ -26,7 +27,6 @@ use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleIdent;
@@ -557,28 +557,6 @@ impl RoleApi for RoleMgr {
             ))
             .await?;
         Ok(res.prev.is_some())
-    }
-}
-
-fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
-    match owner_obj {
-        OwnershipObject::Database {
-            catalog_name,
-            db_id,
-        } => GrantObject::DatabaseById(catalog_name.to_string(), *db_id),
-        OwnershipObject::Table {
-            catalog_name,
-            db_id,
-            table_id,
-        } => GrantObject::TableById(catalog_name.to_string(), *db_id, *table_id),
-        OwnershipObject::Stage { name } => GrantObject::Stage(name.to_string()),
-        OwnershipObject::UDF { name } => GrantObject::UDF(name.to_string()),
-        OwnershipObject::Warehouse { id } => GrantObject::Warehouse(id.to_string()),
-        OwnershipObject::Connection { name } => GrantObject::Connection(name.to_string()),
-        OwnershipObject::Sequence { name } => GrantObject::Sequence(name.to_string()),
-        OwnershipObject::Procedure { procedure_id } => GrantObject::Procedure(*procedure_id),
-        OwnershipObject::MaskingPolicy { policy_id } => GrantObject::MaskingPolicy(*policy_id),
-        OwnershipObject::RowAccessPolicy { policy_id } => GrantObject::RowAccessPolicy(*policy_id),
     }
 }
 

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv::ownership::append_ownership_cleanup;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
@@ -24,10 +25,12 @@ use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_del;
 use databend_common_meta_api::txn_put_pb;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageFileIdent;
 use databend_common_meta_app::principal::StageIdent;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
@@ -167,13 +170,19 @@ impl StageApi for StageMgr {
                 .collect();
             dels.push(txn_del(&stage_ident));
 
-            let txn_req = TxnRequest::new(
+            let mut txn_req = TxnRequest::new(
                 vec![
                     // stage is not change, prevent add file to stage
                     txn_cond_eq_seq(&stage_ident, stage_seq),
                 ],
                 dels,
             );
+            let ownership = TenantOwnershipObjectIdent::new(&self.tenant, OwnershipObject::Stage {
+                name: name.to_string(),
+            });
+            append_ownership_cleanup(self.kv_api.as_ref(), &ownership, &mut txn_req)
+                .await
+                .map_err(meta_service_error)?;
             let tx_reply = self
                 .kv_api
                 .transaction(txn_req)

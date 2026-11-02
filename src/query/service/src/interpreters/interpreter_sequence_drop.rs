@@ -16,13 +16,10 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
 use databend_common_meta_app::KeyWithTenant;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_sql::plans::DropSequencePlan;
 use databend_common_users::RoleCacheManager;
-use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -60,15 +57,8 @@ impl Interpreter for DropSequenceInterpreter {
             let catalog = self.ctx.get_default_catalog()?;
             let reply = catalog.drop_sequence(req).await?;
 
-            // Revoke ownership only after the drop request succeeds, so a failed drop does not
-            // leave the sequence without an owner. The sequence may not exist; revoke anyway to
-            // clean up a stale ownership record.
-            let tenant = self.plan.ident.tenant();
-            let name = self.plan.ident.name().to_string();
-            let role_api = UserApiProvider::instance().role_api(tenant);
-            let owner_object = OwnershipObject::Sequence { name };
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(tenant);
+            // The catalog deletes metadata and ownership in the same Meta transaction.
+            RoleCacheManager::instance().invalidate_cache(self.plan.ident.tenant());
 
             if !reply.success && !self.plan.if_exists {
                 return Err(ErrorCode::UnknownSequence(format!(

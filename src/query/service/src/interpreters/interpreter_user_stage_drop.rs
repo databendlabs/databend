@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropStagePlan;
@@ -97,22 +95,14 @@ impl Interpreter for DropUserStageInterpreter {
                 }
             }
 
-            // 2. Drop the stage
+            // 2. Delete stage metadata and ownership in the same Meta transaction.
             user_mgr
                 .drop_stage(&tenant, &plan.name, plan.if_exists)
                 .await?;
 
-            // 3. Revoke ownership (after drop succeeds to prevent permission leak)
-            if let Ok(ref stage) = stage {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                let owner_object = OwnershipObject::Stage {
-                    name: stage.stage_name.clone(),
-                };
-                role_api.revoke_ownership(&owner_object).await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
+            RoleCacheManager::instance().invalidate_cache(&tenant);
 
-            // 4. Clean up tag references (must be after drop for concurrency safety)
+            // 3. Tag cleanup is separate from the metadata/ownership transaction.
             let taggable_object = TaggableObject::Stage {
                 name: plan.name.clone(),
             };
