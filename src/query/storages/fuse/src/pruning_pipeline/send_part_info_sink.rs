@@ -40,7 +40,6 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_storage::ColumnNodes;
-use databend_common_storage::StorageMetrics;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_pruner::BlockMetaIndex;
@@ -62,7 +61,6 @@ pub struct SendPartState {
     cache: Mutex<SendPartCache>,
     limit: AtomicUsize,
     incomplete: AtomicBool,
-    data_metrics: Arc<StorageMetrics>,
 }
 
 impl SendPartState {
@@ -70,21 +68,16 @@ impl SendPartState {
         derterministic_cache_key: Option<String>,
         limit: Option<usize>,
         fuse_pruner: Arc<FusePruner>,
-        data_metrics: Arc<StorageMetrics>,
-        partitions_total: usize,
     ) -> Self {
-        let mut statistics = PartStatistics::default_exact();
-        statistics.partitions_total = partitions_total;
         SendPartState {
             cache: Mutex::new(SendPartCache {
                 partitions: Partitions::default(),
-                statistics,
+                statistics: PartStatistics::default_exact(),
                 derterministic_cache_key,
                 fuse_pruner,
             }),
             limit: AtomicUsize::new(limit.unwrap_or(usize::MAX)),
             incomplete: AtomicBool::new(false),
-            data_metrics,
         }
     }
 
@@ -127,10 +120,6 @@ impl SendPartState {
         }
         // the kind is determined by the push_downs, should be same for all partitions
         send_part_cache.partitions.kind = partitions.kind.clone();
-        self.data_metrics
-            .inc_partitions_total(send_part_cache.statistics.partitions_total as u64);
-        self.data_metrics
-            .inc_partitions_scanned(send_part_cache.statistics.partitions_scanned as u64);
     }
 }
 

@@ -140,4 +140,57 @@ mod tests {
         assert_eq!(metadata_exchange.kind, FragmentKind::Normal);
         assert!(FusePrune::check_physical_plan(&metadata_exchange.input));
     }
+
+    /// The rewrite empties `FuseBlockRead.source.parts` but keeps the lazy
+    /// estimate in `source.statistics`. Only the `FusePrune` node publishes
+    /// planned statistics for the scan; if `FuseBlockRead` ever reported its
+    /// own source, its empty parts would read as "eager" and the estimate
+    /// would be published as real numbers.
+    #[test]
+    fn planned_pruning_stats_come_from_fuse_prune_only() {
+        let mut scan = table_scan(1);
+        {
+            let scan_mut = TableScan::from_mut_physical_plan(&mut scan).unwrap();
+            scan_mut.source.parts = Partitions::create(
+                databend_common_catalog::plan::PartitionsShuffleKind::Mod,
+                vec![databend_common_storages_fuse::FuseLazyPartInfo::create(
+                    0,
+                    ("seg".to_string(), 0),
+                )],
+            );
+            scan_mut.source.statistics = PartStatistics::new_estimated(None, 0, 0, 12, 12);
+        }
+        let mut distributed = PhysicalPlan::new(Exchange {
+            meta: PhysicalPlanMeta::new("Exchange"),
+            input: scan,
+            kind: FragmentKind::Merge,
+            keys: vec![],
+            ignore_exchange: false,
+            allow_adjust_parallelism: true,
+        });
+        distributed = optimize_distributed_fuse_pruning(&distributed, &HashSet::from([1]));
+        distributed.adjust_plan_id(&mut 0);
+
+        let mut stats = Vec::new();
+        distributed.collect_planned_pruning_stats(&mut stats);
+        assert_eq!(
+            stats.len(),
+            1,
+            "exactly one publisher for the scan: {stats:?}"
+        );
+        let (plan_id, stat) = &stats[0];
+        let outer = Exchange::from_physical_plan(&distributed).unwrap();
+        let block_read = FuseBlockRead::from_physical_plan(&outer.input).unwrap();
+        let metadata_exchange = Exchange::from_physical_plan(&block_read.input).unwrap();
+        assert_eq!(
+            *plan_id,
+            metadata_exchange.input.get_id(),
+            "published by FusePrune"
+        );
+        assert_eq!(
+            (stat.partitions_total, stat.partitions_scanned),
+            (12, 0),
+            "the lazy estimate contributes only its total"
+        );
+    }
 }

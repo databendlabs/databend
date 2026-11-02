@@ -57,6 +57,7 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::planned_pruning_stats;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
@@ -95,6 +96,19 @@ impl IPhysicalPlan for MutationSource {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        if let Some(stat) = stats.remove(&self.get_id()) {
+            self.statistics = stat;
+        }
+    }
+
+    fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
+        stats.push((
+            self.get_id(),
+            planned_pruning_stats(&self.partitions, &self.statistics),
+        ));
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -171,6 +185,9 @@ impl IPhysicalPlan for MutationSource {
                 });
             }
             let projection = Projection::Columns(read_partition_columns.clone());
+            // Both branches publish what this node scanned under the physical
+            // plan id; the whole-table total was published by the coordinator.
+            let plan_id = self.get_id();
             if builder.ctx.get_settings().get_enable_prune_pipeline()? {
                 // Prune the segments while the query is running and stream the deletion tasks.
                 let (prune_pipeline, partition_receiver) = table.build_mutation_prune_pipeline(
@@ -178,6 +195,7 @@ impl IPhysicalPlan for MutationSource {
                     self.filters.clone(),
                     projection,
                     segment_locations,
+                    plan_id,
                 )?;
                 builder.pipelines.push(prune_pipeline);
                 Some(partition_receiver)
@@ -192,7 +210,7 @@ impl IPhysicalPlan for MutationSource {
                 };
                 Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
                     .block_on(async move {
-                        let (_, partitions) = table
+                        let (statistics, partitions) = table
                             .do_mutation_block_pruning(
                                 ctx.clone(),
                                 filters,
@@ -201,6 +219,7 @@ impl IPhysicalPlan for MutationSource {
                                 true,
                             )
                             .await?;
+                        ctx.publish_pruned_partitions(plan_id, statistics);
                         ctx.set_partitions(partitions)
                     })?;
                 None

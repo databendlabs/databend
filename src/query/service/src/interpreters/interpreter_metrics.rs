@@ -56,7 +56,7 @@ impl InterpreterMetrics {
             .unwrap_or(0.0);
 
         let io_stats = ctx.get_io_stats();
-        let data_metrics = ctx.get_data_metrics();
+        let partition_stats = ctx.get_partition_stats();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
         let written_bytes = ctx.get_write_progress_value().bytes as u64;
@@ -68,8 +68,8 @@ impl InterpreterMetrics {
         let scan_io_bytes = io_stats.read_bytes;
         let scan_io_bytes_cost_ms = io_stats.read_duration_ms;
 
-        let scan_partitions = data_metrics.get_partitions_scanned();
-        let total_partitions = data_metrics.get_partitions_total();
+        let scan_partitions = partition_stats.scanned;
+        let total_partitions = partition_stats.total;
 
         let result_rows = ctx.get_result_progress_value().rows as u64;
         let result_bytes = ctx.get_result_progress_value().bytes as u64;

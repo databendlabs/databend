@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use async_channel::Sender;
 use chrono::DateTime;
@@ -57,6 +59,8 @@ pub struct ColumnOrientedBlockPruneSink {
     /// statistics are the product, so pruning must run to completion instead
     /// of stopping when the receiver disconnects.
     dry_run: bool,
+    /// Blocks that survived pruning, across all sink instances.
+    partitions_scanned: Arc<AtomicUsize>,
 }
 
 impl ColumnOrientedBlockPruneSink {
@@ -68,11 +72,13 @@ impl ColumnOrientedBlockPruneSink {
         runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
         runtime_scan_filters: RuntimeScanFilters,
         dry_run: bool,
+        partitions_scanned: Arc<AtomicUsize>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
             ColumnOrientedBlockPruneSink {
                 block_pruner,
+                partitions_scanned,
                 column_ids,
                 sender: Some(sender),
                 runtime_filter_prune_context,
@@ -164,6 +170,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let bloom_index_size_col = bloom_index_size_col.clone();
             let runtime_stats_pruner = runtime_stats_pruner.clone();
             let runtime_scan_filters = self.runtime_scan_filters.clone();
+            let partitions_scanned = self.partitions_scanned.clone();
 
             pruning_tasks.push(move |permit: OwnedSemaphorePermit| {
                 Box::pin(async move {
@@ -332,6 +339,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         create_on,
                     );
 
+                    partitions_scanned.fetch_add(1, Ordering::Relaxed);
                     let _ = sender.send(Ok(part_info)).await;
                     Ok(())
                 })

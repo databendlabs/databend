@@ -34,6 +34,7 @@ pub use query_affect::QueryAffect;
 pub use query_ctx::QueryContext;
 pub use query_ctx::convert_query_log_timestamp;
 pub use query_ctx_shared::MemoryUpdater;
+pub use query_ctx_shared::PartitionStats;
 pub use query_ctx_shared::QueryContextShared;
 pub use queue_mgr::AcquireQueueGuard;
 pub use queue_mgr::QueriesQueueManager;

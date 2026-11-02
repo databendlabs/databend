@@ -59,6 +59,7 @@ pub use read::ReadState;
 pub use read::ReadStateOutput;
 pub use read::need_reserve_block_info;
 pub use read::row_fetch_processor;
+pub use read_partitions::PruneCacheScope;
 pub use recluster::CandidateScore;
 pub use recluster::ReclusterCandidateWindow;
 pub use recluster::ReclusterFinalCarry;

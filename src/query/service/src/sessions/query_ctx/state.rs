@@ -193,8 +193,12 @@ impl TableContextPartitionStats for QueryContext {
         self.shared.get_pruned_partitions_stats()
     }
 
-    fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
-        self.shared.set_pruned_partitions_stats(plan_id, stats);
+    fn publish_planned_pruning_stats(&self, plan_id: u32, stats: PartStatistics) {
+        self.shared.publish_planned_pruning_stats(plan_id, stats);
+    }
+
+    fn publish_pruned_partitions(&self, plan_id: u32, stats: PartStatistics) {
+        self.shared.publish_pruned_partitions(plan_id, stats);
     }
 
     fn clear_pruned_partitions_stats(&self) {

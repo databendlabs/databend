@@ -33,7 +33,6 @@ pub struct FusePruningStatistics {
     pub segments_range_pruning_after: AtomicU64,
     /// Segment range pruning cost in nanoseconds.
     pub segments_range_pruning_cost: AtomicU64,
-
     /// Block range pruning stats.
     pub blocks_range_pruning_before: AtomicU64,
     pub blocks_range_pruning_after: AtomicU64,

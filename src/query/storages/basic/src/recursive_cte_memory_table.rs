@@ -26,7 +26,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::IN_MEMORY_R_CTE_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::InMemoryRecursiveDataEntry;
@@ -40,7 +39,6 @@ use tokio::sync::watch;
 pub struct RecursiveCteMemoryTable {
     table_info: TableInfo,
     blocks: Arc<InMemoryRecursiveDataEntry>,
-    data_metrics: Arc<StorageMetrics>,
 }
 
 impl RecursiveCteMemoryTable {
@@ -62,11 +60,7 @@ impl RecursiveCteMemoryTable {
                 .clone()
         };
 
-        Ok(Box::new(Self {
-            table_info,
-            blocks,
-            data_metrics: Arc::new(StorageMetrics::default()),
-        }))
+        Ok(Box::new(Self { table_info, blocks }))
     }
 
     fn cleanup_stale_generations(state: &mut InMemoryRecursiveState) {
@@ -213,10 +207,6 @@ impl Table for RecursiveCteMemoryTable {
 
     fn support_column_projection(&self) -> bool {
         true
-    }
-
-    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
-        Some(self.data_metrics.clone())
     }
 
     #[async_backtrace::framed]

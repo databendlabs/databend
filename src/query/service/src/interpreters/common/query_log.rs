@@ -338,7 +338,7 @@ impl InterpreterQueryLog {
         // Read the IO counter once so that the `*_io_bytes*` columns and
         // `resource_usage` describe the same IoStatsSnapshot.
         let io_stats = ctx.get_io_stats();
-        let data_metrics = ctx.get_data_metrics();
+        let partition_stats = ctx.get_partition_stats();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
         let written_bytes = ctx.get_write_progress_value().bytes as u64;
@@ -350,8 +350,8 @@ impl InterpreterQueryLog {
         let scan_io_bytes = io_stats.read_bytes;
         let scan_io_bytes_cost_ms = io_stats.read_duration_ms;
 
-        let scan_partitions = data_metrics.get_partitions_scanned();
-        let total_partitions = data_metrics.get_partitions_total();
+        let scan_partitions = partition_stats.scanned;
+        let total_partitions = partition_stats.total;
         let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
 

@@ -81,6 +81,10 @@ check_query_log "io-bytes-1" "$SELECT_QUERY_ID" "SELECT count(*) FROM system_his
 
 check_query_log "io-bytes-2" "$INSERT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE written_io_bytes > 0 AND" "1"
 
+# scan_partitions / total_partitions are summed from the per-plan pruning
+# statistics; the select above reads one block of one segment.
+check_query_log "partitions-1" "$SELECT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE scan_partitions = 1 AND total_partitions = 1 AND" "1"
+
 check_query_log "resource-3" null "SELECT count(*) FROM (SELECT parse_json(message) AS m FROM system_history.log_history WHERE target = 'databend::log::query' AND query_id = '$SELECT_QUERY_ID') WHERE m['log_type'] = 1 AND m['resource_usage'] IS NOT NULL AND m['resource_usage']['list_count'] IS NOT NULL AND m['resource_usage']['cpu_time_ms'] IS NOT NULL AND m['resource_usage']['wait_time_ms'] IS NOT NULL" "1"
 
 check_log_history_integrity

@@ -84,9 +84,9 @@ use crate::physical_plans::format::TableScanFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::planned_pruning_stats;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableFactory;
 
 fn should_use_distributed_block_meta_shuffle(
@@ -143,6 +143,13 @@ impl IPhysicalPlan for TableScan {
 
     fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
         sources.push((self.get_id(), self.source.clone()));
+    }
+
+    fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
+        stats.push((
+            self.get_id(),
+            planned_pruning_stats(&self.source.parts, &self.source.statistics),
+        ));
     }
 
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
@@ -204,15 +211,13 @@ impl IPhysicalPlan for TableScan {
         let table = builder.ctx.build_table_from_source_plan(&self.source)?;
         builder.ctx.set_partitions(self.source.parts.clone())?;
 
-        if builder.ctx.get_settings().get_enable_prune_pipeline()? {
-            if let Some(prune_pipeline) = table.build_prune_pipeline(
-                builder.ctx.clone(),
-                &self.source,
-                &mut builder.main_pipeline,
-                self.get_id(),
-            )? {
-                builder.pipelines.push(prune_pipeline);
-            }
+        if let Some(prune_pipeline) = table.build_prune_pipeline(
+            builder.ctx.clone(),
+            &self.source,
+            &mut builder.main_pipeline,
+            self.get_id(),
+        )? {
+            builder.pipelines.push(prune_pipeline);
         }
 
         table.read_data(

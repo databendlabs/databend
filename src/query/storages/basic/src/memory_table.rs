@@ -47,7 +47,6 @@ use databend_common_pipeline::sinks::Sink;
 use databend_common_pipeline::sinks::Sinker;
 use databend_common_pipeline::sources::SyncSource;
 use databend_common_pipeline::sources::SyncSourcer;
-use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -63,8 +62,6 @@ use crate::memory_part::MemoryPartInfo;
 pub struct MemoryTable {
     table_info: TableInfo,
     blocks: Arc<RwLock<Vec<DataBlock>>>,
-
-    data_metrics: Arc<StorageMetrics>,
 }
 
 impl MemoryTable {
@@ -85,11 +82,7 @@ impl MemoryTable {
             })
         };
 
-        let table = Self {
-            table_info,
-            blocks,
-            data_metrics: Arc::new(StorageMetrics::default()),
-        };
+        let table = Self { table_info, blocks };
         Ok(Box::new(table))
     }
 
@@ -146,10 +139,6 @@ impl Table for MemoryTable {
 
     fn support_column_projection(&self) -> bool {
         true
-    }
-
-    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
-        Some(self.data_metrics.clone())
     }
 
     #[async_backtrace::framed]
@@ -423,7 +412,6 @@ impl Sink for MemoryTableSink {
         let rows: usize = operations.iter().map(|b| b.num_rows()).sum();
         let progress_values = ProgressValues { rows, bytes };
         self.write_progress.incr(&progress_values);
-        self.table.data_metrics.inc_write_bytes(bytes);
 
         let mut blocks = self.table.blocks.write();
         if self.overwrite {

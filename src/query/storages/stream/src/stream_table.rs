@@ -42,7 +42,6 @@ use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
-use databend_common_storage::StorageMetrics;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::StreamBacklog;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -351,12 +350,6 @@ impl Table for StreamTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.info
-    }
-
-    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
-        self.source_table
-            .as_ref()
-            .and_then(|source| source.get_data_metrics())
     }
 
     fn stream_source_table_info(&self) -> Option<&TableInfo> {
