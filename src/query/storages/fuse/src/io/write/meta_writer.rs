@@ -36,10 +36,10 @@ where T: Marshal + Sync + Send
 {
     #[async_backtrace::framed]
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()> {
+        // A meta file rewritten in place (a segment by ANALYZE) must not be read back from the
+        // disk cache as it was.
+        let _change = DiskCachedStorage::new(data_accessor.clone()).begin_change(location);
         data_accessor.write(location, self.marshal()?).await?;
-        // A meta file rewritten in place (segment statistics by ANALYZE) must not be read
-        // back from the disk cache as it was.
-        DiskCachedStorage::new(data_accessor.clone()).evict_object(location);
         Ok(())
     }
 }
@@ -62,9 +62,10 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
         location: &str,
     ) -> Result<()> {
         let bytes = self.marshal()?;
+        // Segments are rewritten in place by ANALYZE: keep the old bytes out of the disk cache.
+        let change = DiskCachedStorage::new(data_accessor.clone()).begin_change(location);
         data_accessor.write(location, bytes.clone()).await?;
-        // Segments are rewritten in place by ANALYZE: drop the old bytes from the disk cache.
-        DiskCachedStorage::new(data_accessor.clone()).evict_object(location);
+        drop(change);
         let segments = &FuseCaches::instance().segments;
         if segments.is_enabled() {
             segments.put(location, Arc::new(self.try_into()?));

@@ -370,10 +370,10 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for Counting<A> {
     }
 }
 
-/// An object rewritten in place is read as rewritten once `evict_object` drops it; until then
+/// An object rewritten in place is read as rewritten once its change ends; until then
 /// the disk cache keeps serving the old bytes, which is what callers must prevent.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_evict_object_after_rewrite_reads_the_new_bytes() {
+async fn test_change_after_rewrite_reads_the_new_bytes() {
     let dir = TempDir::new().unwrap();
     let (op, disk, storage) = setup(&dir).await;
     let prefixed = storage.clone().with_key_prefix("root/");
@@ -398,7 +398,7 @@ async fn test_evict_object_after_rewrite_reads_the_new_bytes() {
         .unwrap();
     assert_eq!(stale, object().slice(0..10));
 
-    storage.evict_object(PATH);
+    drop(storage.begin_change(PATH));
     for (range, expected) in [
         (None, rewritten.clone()),
         (Some(0..10), rewritten.slice(0..10)),
@@ -411,7 +411,7 @@ async fn test_evict_object_after_rewrite_reads_the_new_bytes() {
     }
     // The prefixed object is another object; it is dropped through its own storage.
     assert!(disk.contains(data(), &DiskKey::range(format!("root/{PATH}"), 0..10)));
-    prefixed.evict_object(PATH);
+    drop(prefixed.begin_change(PATH));
     assert!(!disk.contains(data(), &DiskKey::range(format!("root/{PATH}"), 0..10)));
 }
 
@@ -478,7 +478,7 @@ async fn test_read_in_flight_during_a_rewrite_is_not_cached() {
         // The old bytes are read; the object is rewritten before they reach the cache.
         wait_for(|| reads.load(std::sync::atomic::Ordering::Relaxed) == 1);
         op.write(PATH, object().slice(1..)).await.unwrap();
-        storage.evict_object(PATH);
+        drop(storage.begin_change(PATH));
         let old = read.await.unwrap().unwrap();
         wait_for(|| disk.stats().queued_bytes == 0);
 
@@ -499,7 +499,7 @@ async fn test_read_in_flight_during_a_rewrite_is_not_cached() {
         };
         assert_eq!(new, expected);
         op.write(PATH, object()).await.unwrap();
-        storage.evict_object(PATH);
+        drop(storage.begin_change(PATH));
     }
 }
 
@@ -529,7 +529,7 @@ async fn test_read_after_an_invalidation_does_not_join_one_before() {
     wait_for(|| reads.load(std::sync::atomic::Ordering::Relaxed) == 1);
     let rewritten = Bytes::from(vec![7u8; 100]);
     op.write(PATH, rewritten.clone()).await.unwrap();
-    storage.evict_object(PATH);
+    drop(storage.begin_change(PATH));
     let after = storage
         .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
         .await

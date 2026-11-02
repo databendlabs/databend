@@ -82,7 +82,7 @@ pub struct DiskCache {
     names: Box<[String]>,
     /// Concurrent misses of one unit read storage once.
     flight: SingleFlight<Bytes>,
-    /// Orders fills against `evict_object`.
+    /// Orders fills against changes of objects (`begin_change`).
     fence: Arc<FillFence>,
     /// Serializes runtime updates: `set_pool_cap`, the check of the pools' sum and the update,
     /// and `set_kind_enabled`, the flag read by `is_enabled` and the pool's.
@@ -305,20 +305,24 @@ impl DiskCache {
             .unwrap_or(0)
     }
 
-    /// Drops every unit of the object at `path`, in every kind and pool, and the units of fills
-    /// started before, still queued or being written: for objects rewritten in place or
-    /// deleted, whose cached bytes would otherwise be read again. Returns the entries dropped.
-    pub fn evict_object(&self, path: &str) -> usize {
+    /// The object at `path` is about to be rewritten in place or deleted: drops every unit of it
+    /// on disk, in every kind and pool, files included, and refuses its units until the
+    /// returned change is dropped, once the object is written or deleted. Then the units of
+    /// fills started before are rejected too, still queued or being written. Its cached bytes
+    /// are so never read again, also after a crash during the change.
+    pub fn begin_change(self: &Arc<Self>, path: &str) -> ObjectChange {
         let object = DiskKey::object_id(path);
-        let (at, oldest_fill) = self.fence.invalidation_point();
-        self.pools
-            .iter()
-            .map(|pool| {
-                let victims = pool.remove_object(&object, at, oldest_fill);
-                pool.delete(&victims);
-                victims.len()
-            })
-            .sum()
+        let mut dropped = 0;
+        for pool in &self.pools {
+            let victims = pool.begin_change(&object);
+            pool.delete(&victims);
+            dropped += victims.len();
+        }
+        ObjectChange {
+            cache: self.clone(),
+            object,
+            dropped,
+        }
     }
 
     /// Runtime capacity of a pool, in bytes; 0 empties it and stops reads and writes. Files are
@@ -390,6 +394,31 @@ impl DiskCache {
             dropped_queue_full: drops.queue_full.load(Ordering::Relaxed),
             dropped_rejected: drops.rejected.load(Ordering::Relaxed),
             dropped_io_error: drops.io_error.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// An object being rewritten or deleted, from `DiskCache::begin_change` until dropped: when the
+/// change is done, or abandoned by an error or a cancelled caller.
+#[must_use]
+pub struct ObjectChange {
+    cache: Arc<DiskCache>,
+    object: String,
+    dropped: usize,
+}
+
+impl ObjectChange {
+    /// The entries dropped when the change began.
+    pub fn dropped(&self) -> usize {
+        self.dropped
+    }
+}
+
+impl Drop for ObjectChange {
+    fn drop(&mut self) {
+        let (at, oldest_fill) = self.cache.fence.invalidation_point();
+        for pool in &self.cache.pools {
+            pool.delete(&pool.end_change(&self.object, at, oldest_fill));
         }
     }
 }

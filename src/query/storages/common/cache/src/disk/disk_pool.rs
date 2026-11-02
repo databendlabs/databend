@@ -18,7 +18,9 @@
 //!
 //! The pool lock guards the index and the byte counts only. File IO happens outside it: a writer
 //! reserves room under the lock (taking victims out of the index), deletes the victims' files and
-//! writes its own without the lock, then publishes the entry under the lock again.
+//! writes its own under a temporary name without the lock, then publishes the entry under the
+//! lock again, renaming the file into place only if the entry is accepted. A file under its
+//! final name is so always an entry the pool accepted, also for the restart scan after a crash.
 //!
 //! A file is never deleted while a new one may be written under its name, and never written
 //! while it may be deleted: otherwise the delete could remove the new file and leave an indexed
@@ -32,6 +34,10 @@
 //! invalidated at, so `publish` rejects an entry read before (see `fill_fence`). Until the
 //! restart scan has run, every invalidation is kept, so the scan does not index the files of
 //! an object invalidated before it got to them.
+//!
+//! An object being rewritten or deleted (`begin_change` to `end_change`) has no entry: they are
+//! taken out when the change begins, and none is reserved, published or scanned until it ends.
+//! A crash during the change leaves no file of the object to be read after the restart.
 //!
 //! `publish` checks the capacity again: it may have shrunk while the entry was written. A kind
 //! turned off is refused by `reserve`, `publish` and the restart scan alike, so no entry of it
@@ -124,6 +130,8 @@ struct State {
     invalidated: HashMap<String, u64>,
     /// The same, by point, for pruning in order.
     invalidation_order: BTreeMap<u64, String>,
+    /// Objects being rewritten or deleted, with the changes of each under way.
+    changing: HashMap<String, usize>,
     /// Whether the restart scan has run.
     reloaded: bool,
     /// Kinds turned off, by kind index.
@@ -133,6 +141,19 @@ struct State {
 impl State {
     fn kind_off(&self, rel: &str) -> bool {
         kind_of(rel).is_some_and(|kind| self.kinds_off[kind.index()])
+    }
+
+    fn changing(&self, rel: &str) -> bool {
+        object_of(rel).is_some_and(|object| self.changing.contains_key(object))
+    }
+
+    /// Takes every entry of `object` out of the index.
+    fn take_object(&mut self, object: &str) -> Vec<String> {
+        // Detached first: taking each entry out then finds no set to update.
+        let rels = self.objects.remove(object).unwrap_or_default();
+        rels.into_iter()
+            .filter(|rel| self.pop(rel).is_some())
+            .collect()
     }
 
     /// Records `object` as invalidated at `at`, unless at a later point already: invalidations
@@ -158,9 +179,22 @@ impl State {
             self.invalidated.remove(&object);
         }
     }
-}
 
-impl State {
+    /// See `DiskPool::remove_object`.
+    fn remove_object(&mut self, object: &str, at: u64, oldest_fill: Option<u64>) -> Vec<String> {
+        if self.reloaded {
+            // Points no fill running at `at` started before reject nothing any more: those up
+            // to `at` and to the oldest fill. Points after `at` are left alone: invalidations
+            // reach the pools out of clock order, and `oldest_fill` says nothing of fills
+            // started after `at`.
+            self.prune_invalidations(oldest_fill.map_or(at, |oldest| oldest.min(at)));
+        }
+        if !self.reloaded || oldest_fill.is_some_and(|oldest| oldest < at) {
+            self.invalidate(object, at);
+        }
+        self.take_object(object)
+    }
+
     fn used(&self) -> u64 {
         self.index.bytes_size() + self.writing
     }
@@ -253,6 +287,7 @@ impl DiskPool {
                 objects: HashMap::new(),
                 invalidated: HashMap::new(),
                 invalidation_order: BTreeMap::new(),
+                changing: HashMap::new(),
                 reloaded: false,
                 kinds_off: CacheKind::all().map(|_| false).collect(),
             }),
@@ -298,6 +333,7 @@ impl DiskPool {
             || state.deleting.contains(rel)
             || state.in_flight.contains(rel)
             || state.kind_off(rel)
+            || state.changing(rel)
         {
             return Reservation {
                 reserved: false,
@@ -325,11 +361,21 @@ impl DiskPool {
     }
 
     /// Publishes the entry written under a reservation by a fill started at `started` (see
-    /// `fill_fence`). A key reserved is neither indexed nor scanned meanwhile, so the entry is
-    /// new to the index. The entry is rejected, as a victim,
-    /// when its object was invalidated after the fill started, or when it no longer fits the
-    /// capacity; entries are evicted when the capacity shrank below what is held.
-    pub fn publish(&self, rel: String, reserved: u64, written: u64, started: u64) -> Published {
+    /// `fill_fence`), and gives the reservation back. A key reserved is neither indexed nor
+    /// scanned meanwhile, so the entry is new to the index. The entry is rejected when its
+    /// object was invalidated after the fill started or is being changed, when its kind is off,
+    /// or when it no longer fits the capacity; entries are evicted when the capacity shrank
+    /// below what is held. `commit` makes the entry's file visible under its name, and runs
+    /// only for an accepted entry, under the lock: an invalidation of the object waits for it,
+    /// then finds the entry indexed. Its error is returned, the entry not indexed.
+    pub fn publish(
+        &self,
+        rel: String,
+        reserved: u64,
+        written: u64,
+        started: u64,
+        commit: impl FnOnce() -> std::io::Result<()>,
+    ) -> std::io::Result<Published> {
         let mut state = self.state.lock();
         state.writing -= reserved;
         state.in_flight.remove(&rel);
@@ -337,17 +383,17 @@ impl DiskPool {
             .and_then(|object| state.invalidated.get(object))
             .is_some_and(|at| *at > started);
         if stale
+            || state.changing(&rel)
             || state.cap == 0
             || written > state.cap / OVERSIZED_DIVISOR
             || state.kind_off(&rel)
         {
-            // Marked until deleted, as an evicted entry is.
-            state.deleting.insert(rel.clone());
-            return Published {
+            return Ok(Published {
                 indexed: false,
-                victims: vec![rel],
-            };
+                victims: Vec::new(),
+            });
         }
+        commit()?;
         state.insert(rel.clone(), written);
         let mut victims = Vec::new();
         while state.used() > state.cap {
@@ -356,10 +402,10 @@ impl DiskPool {
                 None => break,
             }
         }
-        Published {
+        Ok(Published {
             indexed: !victims.contains(&rel),
             victims,
-        }
+        })
     }
 
     /// Gives back the reservation of `rel`, whose write failed or was abandoned.
@@ -373,22 +419,29 @@ impl DiskPool {
     /// any kind, and rejects the entries of fills started before `at` (see `fill_fence`);
     /// returns them, for `delete`. `oldest_fill` is the start of the oldest fill running.
     pub fn remove_object(&self, object: &str, at: u64, oldest_fill: Option<u64>) -> Vec<String> {
+        self.state.lock().remove_object(object, at, oldest_fill)
+    }
+
+    /// `object` is about to be rewritten or deleted: takes its entries out, returned for
+    /// `delete`, and refuses its entries until `end_change`.
+    pub fn begin_change(&self, object: &str) -> Vec<String> {
         let mut state = self.state.lock();
-        if state.reloaded {
-            // Points no fill running at `at` started before reject nothing any more: those up
-            // to `at` and to the oldest fill. Points after `at` are left alone: invalidations
-            // reach the pools out of clock order, and `oldest_fill` says nothing of fills
-            // started after `at`.
-            state.prune_invalidations(oldest_fill.map_or(at, |oldest| oldest.min(at)));
+        *state.changing.entry(object.to_string()).or_default() += 1;
+        state.take_object(object)
+    }
+
+    /// The change of `object` begun by `begin_change` is done, or abandoned: as
+    /// `remove_object` at `at`, so fills started before are rejected from then on, at once
+    /// with the end of the change.
+    pub fn end_change(&self, object: &str, at: u64, oldest_fill: Option<u64>) -> Vec<String> {
+        let mut state = self.state.lock();
+        if let Some(changes) = state.changing.get_mut(object) {
+            *changes -= 1;
+            if *changes == 0 {
+                state.changing.remove(object);
+            }
         }
-        if !state.reloaded || oldest_fill.is_some_and(|oldest| oldest < at) {
-            state.invalidate(object, at);
-        }
-        // Detached first: taking each entry out then finds no set to update.
-        let rels = state.objects.remove(object).unwrap_or_default();
-        rels.into_iter()
-            .filter(|rel| state.pop(rel).is_some())
-            .collect()
+        state.remove_object(object, at, oldest_fill)
     }
 
     /// Takes the entry out of the index and deletes its file. Returns whether it was indexed.
@@ -550,6 +603,7 @@ impl DiskPool {
                     && size <= state.cap / OVERSIZED_DIVISOR
                     && object_of(&rel).is_none_or(|o| !state.invalidated.contains_key(o))
                     && !state.kind_off(&rel)
+                    && !state.changing(&rel)
                 {
                     state.insert(rel.clone(), size);
                     loaded.fetch_add(1, Ordering::Relaxed);

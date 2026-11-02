@@ -37,6 +37,7 @@ use crate::CacheKind;
 use crate::CacheManager;
 use crate::DiskCache;
 use crate::DiskKey;
+use crate::ObjectChange;
 
 /// What a read may do with the disk cache.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,17 +111,18 @@ impl DiskCachedStorage {
         }
     }
 
-    /// Drops what the disk cache holds of the object at `path`, after it is rewritten in place
-    /// or deleted. Paths of fuse tables are never reused otherwise, so only such callers need
-    /// it; the memory caches of the decoded values are evicted by their own handles.
-    pub fn evict_object(&self, path: &str) {
-        if let Some(disk) = &self.disk {
-            let path = match &self.key_prefix {
-                Some(prefix) => format!("{prefix}{path}"),
-                None => path.to_string(),
-            };
-            disk.evict_object(&path);
-        }
+    /// Drops what the disk cache holds of the object at `path`, which is about to be rewritten
+    /// in place or deleted, and keeps it out until the returned change is dropped, once the
+    /// object is written or deleted (see `DiskCache::begin_change`). Paths of fuse tables are
+    /// never reused otherwise, so only such callers need it; the memory caches of the decoded
+    /// values are evicted by their own handles.
+    pub fn begin_change(&self, path: &str) -> Option<ObjectChange> {
+        let disk = self.disk.as_ref()?;
+        let path = match &self.key_prefix {
+            Some(prefix) => format!("{prefix}{path}"),
+            None => path.to_string(),
+        };
+        Some(disk.begin_change(&path))
     }
 
     /// For writes, listing and deletes, which do not go through the disk cache.

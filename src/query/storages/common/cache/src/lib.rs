@@ -71,6 +71,7 @@ pub use disk::DiskCachedStorage;
 pub use disk::DiskFill;
 pub use disk::DiskKey;
 pub use disk::DiskPoolStats;
+pub use disk::ObjectChange;
 pub use disk::UnitsRead;
 pub use disk::split_caps;
 pub use handle::CacheRef;

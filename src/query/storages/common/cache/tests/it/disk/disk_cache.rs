@@ -506,12 +506,12 @@ fn assert_quiet_and_consistent(cache: &DiskCache, dir: &TempDir) {
     assert_eq!(cache.kind_usage(data()), (stats.items, stats.bytes));
 }
 
-/// `evict_object` drops every unit of an object, whole or ranges, in every kind and pool, and
+/// A change of an object drops every unit of it, whole or ranges, in every kind and pool, and
 /// leaves other objects alone.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_evict_object_drops_all_its_units() {
+async fn test_change_drops_all_units_of_the_object() {
     let dir = TempDir::new().unwrap();
-    let cache = cache(&dir);
+    let cache = Arc::new(cache(&dir));
     let path = "1/2/_i_b_v2/index.parquet";
     let filters = CacheKind::of::<bloom::Filter>();
     let metas = CacheKind::of::<bloom::IndexMeta>();
@@ -526,14 +526,14 @@ async fn test_evict_object_drops_all_its_units() {
     let other = DiskKey::whole("1/2/_i_b_v2/other.parquet");
     put_and_wait(&cache, filters, &other, Bytes::from(vec![2; 100])).await;
 
-    assert_eq!(cache.evict_object(path), 3);
+    assert_eq!(cache.begin_change(path).dropped(), 3);
     for (kind, key) in &units {
         assert!(!cache.contains(*kind, key), "{key}");
         assert_eq!(cache.get(*kind, key).await, None);
     }
     assert!(cache.contains(filters, &other));
     assert_eq!(files_under(&dir.path().join("v2")).len(), 1);
-    assert_eq!(cache.evict_object(path), 0);
+    assert_eq!(cache.begin_change(path).dropped(), 0);
     // The object can be cached again, as rewritten.
     put_and_wait(&cache, filters, &units[0].1, Bytes::from(vec![3; 100])).await;
     assert_eq!(
@@ -542,18 +542,19 @@ async fn test_evict_object_drops_all_its_units() {
     );
 }
 
-/// A unit whose fill started before `evict_object`, still queued or being written then, is not
-/// published after it: the bytes were read before the rewrite. A fill started after is.
+/// A unit whose fill started before a change of its object ended, still queued or being written
+/// then, is not published after it: the bytes were read before the rewrite. A fill started
+/// after is.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_evict_object_rejects_fills_started_before() {
+async fn test_change_rejects_fills_started_before() {
     let dir = TempDir::new().unwrap();
-    let cache = cache(&dir);
+    let cache = Arc::new(cache(&dir));
     let path = "1/2/_sg/segment.mpk";
     let kind = CacheKind::of::<segment::Info>();
     let key = DiskKey::whole(path);
     let read_before = cache.begin_fill();
-    // The object is rewritten and evicted before the old bytes are queued.
-    assert_eq!(cache.evict_object(path), 0);
+    // The object is rewritten before the old bytes are queued.
+    assert_eq!(cache.begin_change(path).dropped(), 0);
     assert!(
         cache
             .put(kind, &key, Bytes::from(vec![1; 100]), &read_before)
@@ -626,14 +627,14 @@ async fn test_concurrent_kind_toggles_stay_consistent() {
 #[test]
 fn test_invalidations_are_dropped_when_the_oldest_fill_finishes() {
     let dir = TempDir::new().unwrap();
-    let cache = cache(&dir);
+    let cache = Arc::new(cache(&dir));
     cache.reload_now();
     let kind = CacheKind::of::<segment::Info>();
     let paths: Vec<_> = (0..1_000).map(|i| format!("1/2/_sg/{i}.mpk")).collect();
     let old = cache.begin_fill();
     let newer = cache.begin_fill();
     for path in &paths {
-        assert_eq!(cache.evict_object(path), 0);
+        assert_eq!(cache.begin_change(path).dropped(), 0);
     }
     assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) > 0));
     // A fill that is not the oldest finishing changes nothing.
@@ -641,4 +642,36 @@ fn test_invalidations_are_dropped_when_the_oldest_fill_finishes() {
     assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) > 0));
     drop(old);
     assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) == 0));
+}
+
+/// While an object is being changed, its units are refused and nothing of it reaches the disk,
+/// for a crash to leave behind; once the change ends, they are cached again.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_units_are_refused_during_a_change() {
+    let dir = TempDir::new().unwrap();
+    let cache = Arc::new(cache(&dir));
+    let path = "1/2/_sg/segment.mpk";
+    let kind = CacheKind::of::<segment::Info>();
+    let key = DiskKey::whole(path);
+    let change = cache.begin_change(path);
+    let during = cache.begin_fill();
+    assert!(
+        cache
+            .put(kind, &key, Bytes::from(vec![1; 100]), &during)
+            .await
+    );
+    wait_for(|| cache.stats().queued_bytes == 0);
+    assert!(!cache.contains(kind, &key));
+    assert!(files_under(&dir.path().join("v2")).is_empty());
+    drop(change);
+    // Started during the change: still rejected after it.
+    assert!(
+        cache
+            .put(kind, &key, Bytes::from(vec![1; 100]), &during)
+            .await
+    );
+    wait_for(|| cache.stats().queued_bytes == 0);
+    assert!(!cache.contains(kind, &key));
+    drop(during);
+    put_and_wait(&cache, kind, &key, Bytes::from(vec![2; 100])).await;
 }

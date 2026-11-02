@@ -28,6 +28,7 @@ mod key;
 pub use disk_cache::DiskCache;
 pub use disk_cache::DiskCacheStats;
 pub use disk_cache::DiskPoolStats;
+pub use disk_cache::ObjectChange;
 pub use disk_cache::split_caps;
 pub use disk_cached_storage::DiskCachedStorage;
 pub use disk_cached_storage::DiskFill;

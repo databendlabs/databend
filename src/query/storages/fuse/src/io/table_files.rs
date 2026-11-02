@@ -24,8 +24,9 @@ use opendal::Operator;
 /// otherwise still be read when the snapshot history is walked, and deleted segments, blocks
 /// and indexes would hold disk cache room until evicted.
 ///
-/// The disk cache is dropped after the delete, also when it failed or was cancelled part way: a
-/// fill that read the file before is rejected, and one that starts after finds no file.
+/// The files leave the disk cache before the delete and are kept out until it is done, failed
+/// or cancelled: a fill that read a file before is rejected, one that starts after finds no
+/// file, and a crash meanwhile leaves none of them on disk.
 pub struct TableFiles {
     files: Files,
     disk: DiskCachedStorage,
@@ -40,24 +41,12 @@ impl TableFiles {
     }
 
     pub async fn remove_file_in_batch(&self, locations: &[String]) -> Result<()> {
-        // Drops the files from the disk cache when the delete is done, or dropped: a cancelled
-        // query drops it at the await.
-        struct Evict<'a> {
-            disk: &'a DiskCachedStorage,
-            locations: &'a [String],
-        }
-        impl Drop for Evict<'_> {
-            fn drop(&mut self) {
-                for location in self.locations {
-                    // As `Files` deletes it, and as readers name it.
-                    self.disk.evict_object(location.trim_start_matches('/'));
-                }
-            }
-        }
-        let _evict = Evict {
-            disk: &self.disk,
-            locations,
-        };
+        // Ended when the delete is done, or dropped: a cancelled query drops it at the await.
+        let _changes: Vec<_> = locations
+            .iter()
+            // As `Files` deletes it, and as readers name it.
+            .filter_map(|location| self.disk.begin_change(location.trim_start_matches('/')))
+            .collect();
         self.files.remove_file_in_batch(locations).await
     }
 }

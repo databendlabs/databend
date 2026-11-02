@@ -13,8 +13,9 @@
 // limitations under the License.
 
 //! Files of the disk cache: one per entry, the value followed by its crc32 (little endian).
-//! A file is written under a temporary name and renamed into place, so a reader sees either no
-//! file or a complete one.
+//! A file is written under a temporary name and renamed into place by the pool when it accepts
+//! the entry, so a reader, or the restart scan, sees either no file or a complete one that was
+//! accepted.
 
 use std::fs;
 use std::fs::File;
@@ -65,10 +66,11 @@ pub fn read_entry(path: PathBuf, size: usize) -> Result<Bytes> {
     Ok(bytes.into())
 }
 
-/// Writes `value` and its crc to `tmp`, then renames it to `path`. Returns the bytes written.
-pub fn write_entry(path: &Path, tmp: &Path, value: &[u8], sync_data: bool) -> Result<u64> {
+/// Writes `value` and its crc to `tmp`, the temporary name of an entry file; the pool renames
+/// it into place (see `DiskPool::publish`). Returns the bytes written.
+pub fn write_tmp(tmp: &Path, value: &[u8], sync_data: bool) -> Result<u64> {
     let crc = crc32fast::hash(value).to_le_bytes();
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = tmp.parent() {
         fs::create_dir_all(parent)?;
     }
     let written = (|| {
@@ -77,7 +79,7 @@ pub fn write_entry(path: &Path, tmp: &Path, value: &[u8], sync_data: bool) -> Re
         if sync_data {
             f.sync_data()?;
         }
-        fs::rename(tmp, path)
+        Ok::<_, std::io::Error>(())
     })();
     if let Err(e) = written {
         let _ = fs::remove_file(tmp);

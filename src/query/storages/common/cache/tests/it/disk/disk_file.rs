@@ -23,7 +23,7 @@ use databend_storages_common_cache::disk::disk_file::is_own_tmp;
 use databend_storages_common_cache::disk::disk_file::read_entry;
 use databend_storages_common_cache::disk::disk_file::tmp_path;
 use databend_storages_common_cache::disk::disk_file::validate_checksum;
-use databend_storages_common_cache::disk::disk_file::write_entry;
+use databend_storages_common_cache::disk::disk_file::write_tmp;
 use tempfile::TempDir;
 
 #[test]
@@ -34,9 +34,10 @@ fn test_entry_round_trip_and_checksum() {
     assert!(is_own_tmp(tmp.file_name().unwrap().to_str().unwrap()));
     assert!(tmp.to_str().unwrap().ends_with(TMP_SUFFIX));
 
-    let written = write_entry(&path, &tmp, b"value", false).unwrap();
+    let written = write_tmp(&tmp, b"value", false).unwrap();
     assert_eq!(written, 9);
-    assert!(!tmp.exists());
+    assert!(tmp.exists() && !path.exists());
+    fs::rename(&tmp, &path).unwrap();
     assert_eq!(
         read_entry(path.clone(), 9).unwrap(),
         Bytes::from_static(b"value")

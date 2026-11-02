@@ -15,8 +15,9 @@
 //! Writes disk cache entries in the background. The queue is bounded in bytes; a reader whose
 //! entry does not fit waits a short while for room, then drops the entry and counts it. Writer
 //! threads reserve room in the entry's pool, delete the victims' files, write the entry under a
-//! temporary name and rename it into place, then publish it. The pool may still reject it then,
-//! when its object was invalidated meanwhile or the pool shrank, and its file is deleted.
+//! temporary name, then publish it; the pool renames the file into place if it accepts the
+//! entry. It may reject it then, when its object was invalidated meanwhile or the pool shrank,
+//! and the temporary file is deleted.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -34,7 +35,7 @@ use parking_lot::Mutex;
 use tokio::sync::Notify;
 
 use crate::disk::disk_file::tmp_path;
-use crate::disk::disk_file::write_entry;
+use crate::disk::disk_file::write_tmp;
 use crate::disk::disk_pool::DiskPool;
 use crate::disk::fill_fence::FillTicket;
 
@@ -275,12 +276,17 @@ impl Shared {
             };
             let path = job.pool.root().join(&job.rel);
             let tmp = tmp_path(&path, self.seq.fetch_add(1, Ordering::Relaxed));
-            match write_entry(&path, &tmp, &job.value, self.options.sync_data) {
-                Ok(written) => {
-                    let published =
-                        job.pool
-                            .publish(job.rel.clone(), bytes, written, job.ticket.started());
+            let published =
+                write_tmp(&tmp, &job.value, self.options.sync_data).and_then(|written| {
                     held.published = true;
+                    let commit = || std::fs::rename(&tmp, &path);
+                    let started = job.ticket.started();
+                    Ok(job
+                        .pool
+                        .publish(job.rel.clone(), bytes, written, started, commit)?)
+                });
+            match published {
+                Ok(published) => {
                     job.pool.delete(&published.victims);
                     if !published.indexed {
                         self.drops.rejected.fetch_add(1, Ordering::Relaxed);
@@ -291,6 +297,8 @@ impl Shared {
                     warn!("[DiskCache] failed to write {path:?}: {e}");
                 }
             }
+            // Left when the entry was rejected or its write failed.
+            let _ = std::fs::remove_file(&tmp);
         } else {
             self.drops.rejected.fetch_add(1, Ordering::Relaxed);
         }

@@ -13,8 +13,9 @@
 // limitations under the License.
 
 //! Orders disk fills against invalidations. A fill takes a ticket before it reads the object
-//! from storage, and `DiskCache::evict_object` takes a later point of the same clock; a pool
-//! then rejects an entry whose fill started before the last invalidation of its object. Bytes
+//! from storage, and the end of a change of an object (`DiskCache::begin_change`) takes a later
+//! point of the same clock; a pool then rejects an entry whose fill started before the last
+//! invalidation of its object. Bytes
 //! read before an object was rewritten or deleted are so never published after it, however
 //! long they wait in the write queue.
 //!

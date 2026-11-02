@@ -59,9 +59,25 @@ fn put(pool: &DiskPool, rel: &str, size: u64) -> Vec<String> {
     let r = pool.reserve(rel, size);
     assert!(r.reserved, "{rel}");
     pool.delete(&r.victims);
-    let published = pool.publish(rel.to_string(), size, size, 0);
+    let published = pool
+        .publish(rel.to_string(), size, size, 0, no_file)
+        .unwrap();
     assert!(published.indexed && published.victims.is_empty(), "{rel}");
     r.victims
+}
+
+/// A commit for an entry without a file.
+fn no_file() -> std::io::Result<()> {
+    Ok(())
+}
+
+/// A commit that puts the entry's file of `len` bytes in place, as the writer's rename does.
+fn commit_file(root: &Path, rel: &str, len: usize) -> impl FnOnce() -> std::io::Result<()> {
+    let (root, rel) = (root.to_path_buf(), rel.to_string());
+    move || {
+        write_file(&root, &rel, len);
+        Ok(())
+    }
 }
 
 /// The per-kind counts add up to the pool, and nothing is reserved.
@@ -338,7 +354,9 @@ fn test_concurrent_operations_keep_the_accounting() {
                             if r.reserved {
                                 if rng.gen_bool(0.9) {
                                     let started = rng.gen_range(0..100);
-                                    pool.delete(&pool.publish(key, size, size, started).victims);
+                                    let published =
+                                        pool.publish(key, size, size, started, no_file).unwrap();
+                                    pool.delete(&published.victims);
                                 } else {
                                     pool.release(&key, size);
                                 }
@@ -453,7 +471,7 @@ fn test_reload_leaves_keys_being_written() {
     let file = write_file(&root, &a, 100);
     assert_eq!(pool.reload(), (0, 0));
     assert!(file.exists() && !pool.contains(&a));
-    let published = pool.publish(a.clone(), 100, 100, 0);
+    let published = pool.publish(a.clone(), 100, 100, 0, no_file).unwrap();
     assert!(published.indexed && published.victims.is_empty());
     assert!(pool.contains(&a));
     assert_consistent(&pool);
@@ -498,14 +516,13 @@ fn test_publish_rejects_fills_started_before_an_invalidation() {
     }
     assert!(pool.remove_object(&object, 5, Some(3)).is_empty());
     for (rel, started) in [(&a, 3), (&b, 4)] {
-        let file = write_file(&root, rel, 100);
-        let published = pool.publish(rel.clone(), 100, 100, started);
-        assert!(!published.indexed);
-        assert_eq!(&published.victims, std::slice::from_ref(rel));
-        // The key stays marked until its file is deleted.
-        assert!(!pool.reserve(rel, 100).reserved);
-        pool.delete(&published.victims);
-        assert!(!file.exists() && !pool.contains(rel));
+        let commit = commit_file(&root, rel, 100);
+        let published = pool
+            .publish(rel.clone(), 100, 100, started, commit)
+            .unwrap();
+        assert!(!published.indexed && published.victims.is_empty());
+        // Its file was never put in place, for a restart to find.
+        assert!(!root.join(rel).exists() && !pool.contains(rel));
     }
     // A fill started after the invalidation.
     put_file(&pool, &root, &a, 6);
@@ -526,8 +543,10 @@ fn put_file(pool: &DiskPool, root: &Path, rel: &str, started: u64) {
     let r = pool.reserve(rel, 100);
     assert!(r.reserved, "{rel}");
     pool.delete(&r.victims);
-    write_file(root, rel, 100);
-    let published = pool.publish(rel.to_string(), 100, 100, started);
+    let commit = commit_file(root, rel, 100);
+    let published = pool
+        .publish(rel.to_string(), 100, 100, started, commit)
+        .unwrap();
     assert!(published.indexed, "{rel}");
     pool.delete(&published.victims);
 }
@@ -545,12 +564,12 @@ fn test_publish_fits_a_pool_shrunk_under_writes() {
     let y = rel(data(), "y");
     for (rel, size) in xs.iter().map(|x| (x, 100)).chain([(&y, 250)]) {
         assert!(pool.reserve(rel, size).reserved);
-        write_file(&root, rel, size as usize);
     }
     assert!(pool.set_cap(400).is_empty());
 
     let publish = |rel: &String, size: u64| {
-        let published = pool.publish(rel.clone(), size, size, 0);
+        let commit = commit_file(&root, rel, size as usize);
+        let published = pool.publish(rel.clone(), size, size, 0, commit).unwrap();
         pool.delete(&published.victims);
         published.indexed
     };
@@ -624,16 +643,15 @@ fn test_kind_turned_off_is_refused_by_writes_and_the_scan() {
     let other = rel(data(), "d");
     put_file(&pool, &root, &indexed, 0);
     assert!(pool.reserve(&writing, 100).reserved);
-    write_file(&root, &writing, 100);
     write_file(&root, &scanned, 100);
     write_file(&root, &other, 100);
 
     let victims = pool.set_kind_enabled(meta(), false);
     assert_eq!(victims, vec![indexed.clone()]);
     pool.delete(&victims);
-    let published = pool.publish(writing.clone(), 100, 100, 0);
-    assert!(!published.indexed);
-    pool.delete(&published.victims);
+    let commit = commit_file(&root, &writing, 100);
+    let published = pool.publish(writing.clone(), 100, 100, 0, commit).unwrap();
+    assert!(!published.indexed && !root.join(&writing).exists());
     assert!(!pool.reserve(&indexed, 100).reserved);
     assert_eq!(pool.reload(), (1, 1));
     assert!(pool.contains(&other));
@@ -665,10 +683,9 @@ fn test_older_invalidation_keeps_newer_points() {
             .is_empty()
     );
     assert_eq!(pool.invalidated_at(&a), Some(10));
-    write_file(&root, &unit, 100);
-    let published = pool.publish(unit.clone(), 100, 100, 5);
+    let commit = commit_file(&root, &unit, 100);
+    let published = pool.publish(unit.clone(), 100, 100, 5, commit).unwrap();
     assert!(!published.indexed);
-    pool.delete(&published.victims);
     assert!(!root.join(&unit).exists());
     assert_consistent(&pool);
 }
@@ -687,9 +704,8 @@ fn test_older_invalidation_of_an_object_keeps_its_newer_point() {
     assert!(pool.remove_object(&object, 3, Some(0)).is_empty());
     assert!(pool.remove_object(&object, 1, Some(0)).is_empty());
     assert_eq!(pool.invalidated_at(&object), Some(3));
-    let published = pool.publish(unit.clone(), 100, 100, 2);
+    let published = pool.publish(unit.clone(), 100, 100, 2, no_file).unwrap();
     assert!(!published.indexed);
-    pool.delete(&published.victims);
     assert_consistent(&pool);
 }
 
@@ -755,4 +771,47 @@ fn test_invalidation_points_are_pruned_in_order() {
     assert_eq!(pool.invalidated_at(&objects[0]), None);
     assert_eq!(pool.invalidated_at(&objects[1]), Some(3_001));
     assert_eq!(pool.invalidated_at(&objects[2]), Some(3_002));
+}
+
+/// An object being rewritten or deleted has no entry until the change ends: its entries are
+/// taken out when it begins, and its writes and files are refused meanwhile, so a crash during
+/// the change leaves none for the restart scan. Fills started before the end are rejected.
+#[test]
+fn test_object_being_changed_has_no_entry() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    assert_eq!(pool.reload(), (0, 0));
+    let object = DiskKey::object_id("t/a");
+    let [indexed, writing, scanned] =
+        [0..1, 1..2, 2..3].map(|range| DiskKey::range("t/a", range).rel_path(data()));
+    put_file(&pool, &root, &indexed, 0);
+    assert!(pool.reserve(&writing, 100).reserved);
+
+    let victims = pool.begin_change(&object);
+    assert_eq!(victims, vec![indexed.clone()]);
+    pool.delete(&victims);
+    assert!(!root.join(&indexed).exists());
+    // A write reserved before, and new reservations, are refused while the change runs.
+    let commit = commit_file(&root, &writing, 100);
+    let published = pool.publish(writing.clone(), 100, 100, 1, commit).unwrap();
+    assert!(!published.indexed && !root.join(&writing).exists());
+    assert!(!pool.reserve(&indexed, 100).reserved);
+    // A file of the object found by the scan meanwhile, left by an earlier run.
+    write_file(&root, &scanned, 100);
+    assert_eq!(pool.reload(), (0, 1));
+    assert!(files_under(&root).is_empty());
+
+    // A second change of the object overlaps the first; the object stays out until both end.
+    assert!(pool.begin_change(&object).is_empty());
+    assert!(pool.end_change(&object, 5, Some(2)).is_empty());
+    assert!(!pool.reserve(&indexed, 100).reserved);
+    assert!(pool.end_change(&object, 6, Some(2)).is_empty());
+    // The fill started at 2, before the end, is rejected; one started after is published.
+    assert!(pool.reserve(&indexed, 100).reserved);
+    let published = pool.publish(indexed.clone(), 100, 100, 2, no_file).unwrap();
+    assert!(!published.indexed);
+    put_file(&pool, &root, &indexed, 7);
+    assert!(pool.contains(&indexed));
+    assert_consistent(&pool);
 }

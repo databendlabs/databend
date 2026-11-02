@@ -50,7 +50,7 @@ impl DiskKey {
         &self.path
     }
 
-    /// The id of the object the unit belongs to: what `DiskCache::evict_object` drops every
+    /// The id of the object the unit belongs to: what `DiskCache::begin_change` drops every
     /// unit of when the object is rewritten or deleted.
     pub fn object_id(path: &str) -> String {
         hash(path)
