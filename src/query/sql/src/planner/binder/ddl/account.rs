@@ -47,6 +47,7 @@ use databend_common_meta_app::principal::PublicKeyEntry;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::normalize_public_key;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::schema::is_materialized_view_engine;
@@ -134,9 +135,14 @@ impl Binder {
                 // Note if old version `grant all on db.*/db.t to user`, the user will contain ownership privilege.
                 // revoke all need to revoke it.
                 let principal: PrincipalIdentity = principal.clone().into();
-                let priv_types = match &principal {
-                    PrincipalIdentity::User(_) => grant_object[0].available_privileges(true),
-                    PrincipalIdentity::Role(_) => grant_object[0].available_privileges(false),
+                let priv_types = if matches!(level, AccountMgrLevel::MaterializedView(..)) {
+                    // SELECT is the only privilege exposed by the explicit MV syntax.
+                    UserPrivilegeType::Select.into()
+                } else {
+                    match &principal {
+                        PrincipalIdentity::User(_) => grant_object[0].available_privileges(true),
+                        PrincipalIdentity::Role(_) => grant_object[0].available_privileges(false),
+                    }
                 };
                 let plan = RevokePrivilegePlan {
                     principal: principal.clone(),

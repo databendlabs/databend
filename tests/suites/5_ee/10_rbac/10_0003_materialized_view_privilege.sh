@@ -6,16 +6,16 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 user_sql() {
-	printf '%s\n' "$1" | bendsql_connect_user mv-priv-user mv-select-test -A -o tsv --quote-style=never
+	printf '%s\n' "$1" | bendsql_connect_user mv-priv-user mv-select-test -A -o tsv --quote-style=never "${@:2}"
 }
 
 root_sql() {
-	printf '%s\n' "$1" | bendsql_connect_root -A -o null
+	printf '%s\n' "$1" | bendsql_connect_root -A -o null "${@:2}"
 }
 
 expect_result() {
 	local label="$1" sql="$2" expected="$3" actual
-	actual=$(user_sql "$sql")
+	actual=$(user_sql "$sql" "${@:4}")
 	if [[ "$actual" != "$expected" ]]; then
 		printf '%s: expected <%s>, got <%s>\n' "$label" "$expected" "$actual" >&2
 		exit 1
@@ -25,7 +25,7 @@ expect_result() {
 
 expect_error() {
 	local executor="$1" label="$2" code="$3" sql="$4" actual
-	if actual=$("$executor" "$sql" 2>&1); then
+	if actual=$("$executor" "$sql" "${@:5}" 2>&1); then
 		echo "$label: unexpectedly succeeded" >&2
 		exit 1
 	fi
@@ -70,11 +70,22 @@ revoke select on mv_rbac_db_0020.source from role mv_priv_role;
 expect_error root_sql 'Bare GRANT rejects an MV' 1302 \
 	'grant select on mv_rbac_db_0020.mv to role mv_priv_role'
 expect_error root_sql 'Bare REVOKE rejects an MV' 1302 \
-	'revoke select on mv_rbac_db_0020.mv from role mv_priv_role'
+	'revoke all on mv_rbac_db_0020.mv from role mv_priv_role'
 expect_error root_sql 'MV GRANT rejects a base table' 1302 \
 	'grant select on materialized view mv_rbac_db_0020.source to role mv_priv_role'
 expect_error root_sql 'MV REVOKE rejects a regular view' 1302 \
-	'revoke select on materialized view mv_rbac_db_0020.v from role mv_priv_role'
+	'revoke all on materialized view mv_rbac_db_0020.v from role mv_priv_role'
+for sql in \
+	'grant insert on materialized view mv_rbac_db_0020.mv to role mv_priv_role' \
+	'grant all on materialized view mv_rbac_db_0020.mv to role mv_priv_role' \
+	'grant ownership on materialized view mv_rbac_db_0020.mv to role mv_priv_role' \
+	'revoke insert on materialized view mv_rbac_db_0020.mv from role mv_priv_role' \
+	'grant select on materialized view mv_rbac_db_0020.* to role mv_priv_role' \
+	'revoke all on materialized view * from role mv_priv_role' \
+	'revoke all on materialized view mv_rbac_db_0020.* from role mv_priv_role'; do
+	expect_error root_sql "$sql" 1005 "$sql" >/dev/null
+done
+echo 'MV syntax rejects unsupported privileges and wildcards: OK'
 
 root_sql "
 grant select on materialized view mv_rbac_db_0020.mv to role mv_priv_role;
@@ -87,11 +98,19 @@ expect_error user_sql 'MV SELECT does not authorize source SELECT' 1063 \
 	'select c from mv_rbac_db_0020.source'
 expect_result 'MV SELECT makes the MV visible' \
 	"select count(*) from system.materialized_views where database = 'mv_rbac_db_0020' and name = 'mv'" '1'
-# Replaying SHOW GRANTS also checks it emits the required explicit MV type.
-grant_sql=$(user_sql "select grants from show_grants('role', 'mv_priv_role') where object_name = 'default.mv_rbac_db_0020.mv'")
-[[ "$grant_sql" == *'ON MATERIALIZED VIEW '* ]]
-root_sql "$grant_sql"
-echo 'SHOW GRANTS emits executable MV syntax: OK'
+# Reuse GRANT's string-form names and replay SHOW GRANTS in each session dialect.
+root_sql 'create materialized view mv_rbac_db_0020.`mv-name` as select c from mv_rbac_db_0020.source where c > 0;'
+for dialect in PostgreSQL MySQL Hive; do
+	root_sql "grant select on materialized view 'mv-name' to role mv_priv_role" -D mv_rbac_db_0020 --set "sql_dialect=$dialect"
+	grant_sql=$(user_sql "select grants from show_grants('role', 'mv_priv_role') where object_name = 'default.mv_rbac_db_0020.mv-name'" --set "sql_dialect=$dialect")
+	[[ "$grant_sql" == *'ON MATERIALIZED VIEW '* ]]
+	root_sql "$grant_sql" --set "sql_dialect=$dialect"
+	expect_result "SHOW GRANTS round-trips in $dialect" \
+		'select c from mv_rbac_db_0020.`mv-name` order by c' $'1\n2' --set "sql_dialect=$dialect"
+	root_sql "revoke all privileges on materialized view mv_rbac_db_0020.'mv-name' from role mv_priv_role" --set "sql_dialect=$dialect"
+	expect_error user_sql "REVOKE ALL denies MV SELECT in $dialect" 1063 \
+		'select c from mv_rbac_db_0020.`mv-name`' --set "sql_dialect=$dialect"
+done
 
 # SELECT on an MV does not authorize refresh, definition inspection, or index maintenance.
 expect_error user_sql 'REFRESH still requires source SELECT' 1063 \
@@ -110,7 +129,7 @@ refresh materialized view mv_rbac_db_0020.mv;
 refresh materialized view mv_rbac_db_0020.mv_sum;
 "
 expect_result 'Fresh reads need only MV SELECT' "$read_mv" $'1\t3\n2\t3'
-root_sql 'revoke select on materialized view mv_rbac_db_0020.mv_sum from role mv_priv_role;'
+root_sql 'revoke all on materialized view mv_rbac_db_0020.mv_sum from role mv_priv_role;'
 expect_error user_sql 'Each joined MV requires its own SELECT' 1063 "$read_mv"
 root_sql 'grant select on materialized view mv_rbac_db_0020.mv_sum to role mv_priv_role;'
 root_sql "insert into mv_rbac_db_0020.source values (3, 'three');"
