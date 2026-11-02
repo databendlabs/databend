@@ -109,8 +109,13 @@ impl<T: CachedItem> MemCache<T> {
     /// the reads of maintenance operations: they may be served by the disk cache, which serves
     /// queries, but do not fill it.
     pub fn without_disk_fill(&self) -> Self {
+        self.with_disk_fill_at_most(DiskFill::ReadOnly)
+    }
+
+    /// Same cache, its reads doing at most `fill` with the disk cache.
+    pub fn with_disk_fill_at_most(&self, fill: DiskFill) -> Self {
         MemCache {
-            disk: DiskFill::ReadOnly,
+            disk: self.disk.at_most(fill),
             ..self.clone()
         }
     }

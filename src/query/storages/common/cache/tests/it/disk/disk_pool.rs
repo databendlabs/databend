@@ -611,3 +611,37 @@ fn test_reload_does_not_index_objects_invalidated_before_it() {
     assert_eq!(pool.invalidated_at(&object), None);
     assert_consistent(&pool);
 }
+
+/// A kind turned off is refused everywhere: its entries are taken out, a write reserved before
+/// is rejected at publish, a new reservation is refused, and the restart scan deletes its files.
+/// Turned on again, it is written as before.
+#[test]
+fn test_kind_turned_off_is_refused_by_writes_and_the_scan() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    let [indexed, writing, scanned] = ["a", "b", "c"].map(|name| rel(meta(), name));
+    let other = rel(data(), "d");
+    put_file(&pool, &root, &indexed, 0);
+    assert!(pool.reserve(&writing, 100).reserved);
+    write_file(&root, &writing, 100);
+    write_file(&root, &scanned, 100);
+    write_file(&root, &other, 100);
+
+    let victims = pool.set_kind_enabled(meta(), false);
+    assert_eq!(victims, vec![indexed.clone()]);
+    pool.delete(&victims);
+    let published = pool.publish(writing.clone(), 100, 100, 0);
+    assert!(!published.indexed);
+    pool.delete(&published.victims);
+    assert!(!pool.reserve(&indexed, 100).reserved);
+    assert_eq!(pool.reload(), (1, 1));
+    assert!(pool.contains(&other));
+    assert!(files_under(&root).iter().all(|p| p.ends_with(&other)));
+    assert_eq!(pool.kind_usage(meta()), (0, 0));
+
+    assert!(pool.set_kind_enabled(meta(), true).is_empty());
+    put_file(&pool, &root, &indexed, 0);
+    assert!(pool.contains(&indexed));
+    assert_consistent(&pool);
+}

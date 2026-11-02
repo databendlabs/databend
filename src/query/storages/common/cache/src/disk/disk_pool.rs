@@ -33,7 +33,9 @@
 //! restart scan has run, every invalidation is kept, so the scan does not index the files of
 //! an object invalidated before it got to them.
 //!
-//! `publish` checks the capacity again: it may have shrunk while the entry was written.
+//! `publish` checks the capacity again: it may have shrunk while the entry was written. A kind
+//! turned off is refused by `reserve`, `publish` and the restart scan alike, so no entry of it
+//! comes back from a write queued or a file scanned before.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -121,6 +123,14 @@ struct State {
     invalidated: HashMap<String, u64>,
     /// Whether the restart scan has run.
     reloaded: bool,
+    /// Kinds turned off, by kind index.
+    kinds_off: Vec<bool>,
+}
+
+impl State {
+    fn kind_off(&self, rel: &str) -> bool {
+        kind_of(rel).is_some_and(|kind| self.kinds_off[kind.index()])
+    }
 }
 
 impl State {
@@ -216,6 +226,7 @@ impl DiskPool {
                 objects: HashMap::new(),
                 invalidated: HashMap::new(),
                 reloaded: false,
+                kinds_off: CacheKind::all().map(|_| false).collect(),
             }),
             hit: AtomicU64::new(0),
             miss: AtomicU64::new(0),
@@ -258,6 +269,7 @@ impl DiskPool {
             || state.index.contains(rel)
             || state.deleting.contains(rel)
             || state.in_flight.contains(rel)
+            || state.kind_off(rel)
         {
             return Reservation {
                 reserved: false,
@@ -296,7 +308,11 @@ impl DiskPool {
         let stale = object_of(&rel)
             .and_then(|object| state.invalidated.get(object))
             .is_some_and(|at| *at > started);
-        if stale || state.cap == 0 || written > state.cap / OVERSIZED_DIVISOR {
+        if stale
+            || state.cap == 0
+            || written > state.cap / OVERSIZED_DIVISOR
+            || state.kind_off(&rel)
+        {
             // Marked until deleted, as an evicted entry is.
             state.deleting.insert(rel.clone());
             return Published {
@@ -417,6 +433,17 @@ impl DiskPool {
         }
     }
 
+    /// Turns `kind` on or off. Turning it off takes its entries out, returned for `delete`,
+    /// and refuses its writes and files from then on.
+    pub fn set_kind_enabled(&self, kind: CacheKind, enabled: bool) -> Vec<String> {
+        self.state.lock().kinds_off[kind.index()] = !enabled;
+        if enabled {
+            Vec::new()
+        } else {
+            self.remove_kind(kind)
+        }
+    }
+
     /// Takes every entry of `kind` out; returns them, for `delete`.
     pub fn remove_kind(&self, kind: CacheKind) -> Vec<String> {
         let prefix = format!("{}/", kind.name());
@@ -443,7 +470,7 @@ impl DiskPool {
     }
 
     /// Rebuilds the index from the files under the root, in scan order, and deletes what does
-    /// not belong: files of unknown kinds, files left half written, and files beyond the
+    /// not belong: files of unknown kinds or kinds turned off, files left half written, and files beyond the
     /// capacity, or of objects invalidated meanwhile. Returns the entries loaded and the files
     /// deleted. Runs concurrently with reads and writes: a key indexed meanwhile, being deleted
     /// or being written is skipped.
@@ -483,6 +510,7 @@ impl DiskPool {
                 } else if state.used() + size <= state.cap
                     && size <= state.cap / OVERSIZED_DIVISOR
                     && object_of(&rel).is_none_or(|o| !state.invalidated.contains_key(o))
+                    && !state.kind_off(&rel)
                 {
                     state.insert(rel.clone(), size);
                     loaded.fetch_add(1, Ordering::Relaxed);

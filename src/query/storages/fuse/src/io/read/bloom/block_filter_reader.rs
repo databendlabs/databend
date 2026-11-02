@@ -30,6 +30,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::filters::FilterImpl;
@@ -102,8 +103,14 @@ pub async fn load_bloom_filter_by_columns<'a>(
         prepare_bloom_index_read_source(&dal, settings, index_path, index_length).await?;
 
     // 1. load index meta
-    let bloom_index_meta =
-        load_index_meta(dal.clone(), index_path, index_length, whole_file.as_ref()).await?;
+    let bloom_index_meta = load_index_meta(
+        dal.clone(),
+        index_path,
+        index_length,
+        whole_file.as_ref(),
+        DiskFill::ReadWrite,
+    )
+    .await?;
 
     // 2. filter out columns that needed and exist in the index
     // 2.1 dedup the columns
@@ -192,15 +199,20 @@ async fn load_column_bloom_filter<'a>(
 }
 
 /// Loads index meta data
-/// read data from cache, or populate cache items if possible
+/// read data from cache, or populate cache items if possible. `fill`: the most the read may do
+/// with the disk cache; maintenance reads pass `ReadOnly`.
 #[fastrace::trace]
 pub async fn load_index_meta(
     dal: Operator,
     path: &str,
     length: u64,
     whole_file: Option<&Arc<Bytes>>,
+    fill: DiskFill,
 ) -> Result<Arc<BloomIndexMeta>> {
-    let cache = FuseCaches::instance().index_metas.bloom.clone();
+    let cache = FuseCaches::instance()
+        .index_metas
+        .bloom
+        .with_disk_fill_at_most(fill);
     if let Some(whole_file) = whole_file {
         let meta = load_index_meta_from_bytes(whole_file)?;
         return Ok(Arc::clone(&cache.fill(path, Arc::new(meta))));
@@ -387,15 +399,20 @@ mod tests {
         FuseCaches::instance().index_metas.bloom.evict(path);
 
         let len = data.len() as u64;
-        let meta = load_index_meta(operator.clone(), path, len, None).await?;
+        let meta = load_index_meta(operator.clone(), path, len, None, DiskFill::ReadWrite).await?;
         assert_eq!(meta.columns.len(), 1);
 
         // Served from the cache once the file is gone.
         operator.delete(path).await?;
-        let cached = load_index_meta(operator.clone(), path, len, None).await?;
+        let cached =
+            load_index_meta(operator.clone(), path, len, None, DiskFill::ReadWrite).await?;
         assert!(Arc::ptr_eq(&meta, &cached));
         FuseCaches::instance().index_metas.bloom.evict(path);
-        assert!(load_index_meta(operator, path, len, None).await.is_err());
+        assert!(
+            load_index_meta(operator, path, len, None, DiskFill::ReadWrite)
+                .await
+                .is_err()
+        );
         Ok(())
     }
 

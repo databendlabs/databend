@@ -50,6 +50,15 @@ pub enum DiskFill {
 }
 
 impl DiskFill {
+    /// What a read may do under both `self` and `limit`.
+    pub fn at_most(self, limit: DiskFill) -> DiskFill {
+        match (self, limit) {
+            (DiskFill::Bypass, _) | (_, DiskFill::Bypass) => DiskFill::Bypass,
+            (DiskFill::ReadOnly, _) | (_, DiskFill::ReadOnly) => DiskFill::ReadOnly,
+            _ => DiskFill::ReadWrite,
+        }
+    }
+
     fn reads(self) -> bool {
         self != DiskFill::Bypass
     }

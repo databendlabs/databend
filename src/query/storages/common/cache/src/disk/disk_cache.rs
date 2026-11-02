@@ -340,13 +340,12 @@ impl DiskCache {
         self.max_bytes
     }
 
-    /// Turns the disk cache of `kind` on or off. Turning it off drops the kind's entries.
+    /// Turns the disk cache of `kind` on or off. Turning it off drops the kind's entries, and
+    /// its pool refuses entries of it queued or scanned before.
     pub fn set_kind_enabled(&self, kind: CacheKind, enabled: bool) {
         self.kinds_enabled[kind.index()].store(enabled, Ordering::Relaxed);
-        if !enabled {
-            let pool = self.pool(kind);
-            delete_in_background(pool.clone(), pool.remove_kind(kind));
-        }
+        let pool = self.pool(kind);
+        delete_in_background(pool.clone(), pool.set_kind_enabled(kind, enabled));
     }
 
     pub fn is_kind_enabled(&self, kind: CacheKind) -> bool {

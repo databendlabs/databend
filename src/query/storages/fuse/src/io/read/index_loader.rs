@@ -89,10 +89,17 @@ pub trait IndexLoadSpec {
     fn record_metrics(bytes: u64, ms: u64);
 }
 
+/// `fill`: the most the read may do with the disk cache; maintenance reads pass `ReadOnly`.
 #[fastrace::trace]
-pub async fn load_index_meta<S: IndexLoadSpec>(dal: Operator, path: &str) -> Result<Arc<S::Meta>>
-where IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>> {
-    let cache = S::meta_cache(&FuseCaches::instance().index_metas).clone();
+pub async fn load_index_meta<S: IndexLoadSpec>(
+    dal: Operator,
+    path: &str,
+    fill: DiskFill,
+) -> Result<Arc<S::Meta>>
+where
+    IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>>,
+{
+    let cache = S::meta_cache(&FuseCaches::instance().index_metas).with_disk_fill_at_most(fill);
     let key = (path.to_owned(), None);
     async move {
         let reader = IndexMetaReader::<S::Meta>::new(dal);
@@ -103,12 +110,14 @@ where IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>> 
     .await?
 }
 
+/// `fill`: the most the reads may do with the disk cache; maintenance reads pass `ReadOnly`.
 #[fastrace::trace]
 pub async fn load_index_files<S: IndexLoadSpec>(
     operator: Operator,
     settings: &ReadSettings,
     column_names: &[String],
     location: &str,
+    fill: DiskFill,
 ) -> Result<Vec<Column>>
 where
     IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>>,
@@ -116,7 +125,7 @@ where
     let start = Instant::now();
 
     // 1. load index meta
-    let index_meta = load_index_meta::<S>(operator.clone(), location).await?;
+    let index_meta = load_index_meta::<S>(operator.clone(), location, fill).await?;
 
     // 2. build index schema
     let index_fields: Vec<_> = S::meta_columns(&index_meta)
@@ -168,7 +177,9 @@ where
 
     if !ranges.is_empty() {
         // Each index column is a unit of the disk cache; misses are merged into fewer reads.
-        let fill = index_file_cache.map_or(DiskFill::ReadWrite, |cache| cache.disk_fill());
+        let fill = index_file_cache
+            .map_or(DiskFill::ReadWrite, |cache| cache.disk_fill())
+            .at_most(fill);
         let units = DiskCachedStorage::new(operator.clone())
             .read_units(S::file_kind(), location, &ranges, fill, settings)
             .await?;
