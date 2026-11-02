@@ -15,6 +15,7 @@
 use databend_common_config::CacheConfig;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_cache::legacy::LegacyCapacity;
@@ -138,7 +139,8 @@ fn test_memory_ratio_overrides_bytes() {
     );
 }
 
-/// `enable_table_meta_cache = false` turns off every kind outside the data pool.
+/// `enable_table_meta_cache = false` turns off every kind outside the data pool. Raw column data
+/// is off in any case.
 #[test]
 fn test_meta_cache_switch() {
     let config = CacheConfig {
@@ -146,7 +148,7 @@ fn test_meta_cache_switch() {
         ..configured()
     };
     for (kind, capacity) in LegacyKinds::global().capacities(&config, 1 << 30) {
-        let kept = kind.pool() == Pool::Data;
+        let kept = kind.pool() == Pool::Data && kind != CacheKind::of::<column::Data>();
         assert_eq!(capacity != LegacyCapacity::Disabled, kept, "{kind:?}");
     }
 }

@@ -1218,7 +1218,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_pages_are_units_of_the_disk_cache() -> Result<()> {
         let requested_len = (MAX_MERGED_PAGES + 1) * CACHE_PAGE_SIZE;
-        let data = (0..requested_len)
+        // One page more than read, so the read is not of the whole component.
+        let data = (0..requested_len + CACHE_PAGE_SIZE)
             .map(|index| index as u8)
             .collect::<Vec<_>>();
         let dir = tempfile::TempDir::new()?;
@@ -1232,7 +1233,10 @@ mod tests {
         file.storage =
             DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk.clone()));
 
-        assert_eq!(file.read_range(0..requested_len).await?.as_ref(), &data[..]);
+        assert_eq!(
+            file.read_range(0..requested_len).await?.as_ref(),
+            &data[..requested_len]
+        );
         assert_eq!(*ranges.lock().unwrap(), vec![
             0..MAX_MERGED_READ_SIZE as u64,
             MAX_MERGED_READ_SIZE as u64..requested_len as u64,
@@ -1260,7 +1264,10 @@ mod tests {
             );
         }
         ranges.lock().unwrap().clear();
-        assert_eq!(file.read_range(0..requested_len).await?.as_ref(), &data[..]);
+        assert_eq!(
+            file.read_range(0..requested_len).await?.as_ref(),
+            &data[..requested_len]
+        );
         assert!(ranges.lock().unwrap().is_empty());
 
         // One page evicted from disk: one request, for that page alone.
@@ -1272,7 +1279,10 @@ mod tests {
             file.payload_cache
                 .evict(&file.page_key(PageCacheKind::Payload, page_no));
         }
-        assert_eq!(file.read_range(0..requested_len).await?.as_ref(), &data[..]);
+        assert_eq!(
+            file.read_range(0..requested_len).await?.as_ref(),
+            &data[..requested_len]
+        );
         assert_eq!(*ranges.lock().unwrap(), vec![0..CACHE_PAGE_SIZE as u64]);
         Ok(())
     }

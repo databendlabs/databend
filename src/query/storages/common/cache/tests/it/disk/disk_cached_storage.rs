@@ -303,7 +303,7 @@ async fn test_read_ranges_are_units() {
     }
 }
 
-/// Counts reads reaching the operator.
+/// Counts reads reaching the operator, each taking 50 ms.
 #[derive(Clone)]
 struct CountingLayer(Arc<std::sync::atomic::AtomicUsize>);
 
@@ -342,6 +342,8 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for Counting<A> {
     ) -> opendal::Result<(opendal::raw::RpRead, Self::Reader)> {
         self.reads
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // Slow enough that concurrent misses find the first read in flight.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         self.inner.read(path, args).await
     }
 

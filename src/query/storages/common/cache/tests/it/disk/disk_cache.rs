@@ -23,6 +23,7 @@ use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
+use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_cache::split_caps;
 use tempfile::TempDir;
@@ -121,17 +122,22 @@ async fn test_lru_eviction_within_the_pool() {
 async fn test_eviction_keeps_per_kind_usage() {
     let dir = TempDir::new().unwrap();
     let cache = cache(&dir);
-    let array = CacheKind::of::<column::Array>();
-    put_and_wait(&cache, array, &key(0), Bytes::from(vec![9; 900])).await;
+    // Two kinds of the 2000 byte index pool, entries of 454 bytes with their crc.
+    let (filters, lookups) = (
+        CacheKind::of::<bloom::Filter>(),
+        CacheKind::of::<inverted::Lookup>(),
+    );
+    let small = |i: usize| Bytes::from(vec![i as u8; 450]);
+    put_and_wait(&cache, filters, &key(0), small(0)).await;
     for i in 1..4 {
-        put_and_wait(&cache, data(), &key(i), value(i)).await;
+        put_and_wait(&cache, lookups, &key(i), small(i)).await;
     }
-    assert_eq!(cache.kind_usage(array), (1, 904));
-    assert_eq!(cache.kind_usage(data()), (3, 3 * 904));
-    // The fifth entry evicts the oldest, the `Array` one.
-    put_and_wait(&cache, data(), &key(4), value(4)).await;
-    assert_eq!(cache.kind_usage(array), (0, 0));
-    assert_eq!(cache.kind_usage(data()), (4, 4 * 904));
+    assert_eq!(cache.kind_usage(filters), (1, 454));
+    assert_eq!(cache.kind_usage(lookups), (3, 3 * 454));
+    // The fifth entry evicts the oldest, the filter.
+    put_and_wait(&cache, lookups, &key(4), small(4)).await;
+    assert_eq!(cache.kind_usage(filters), (0, 0));
+    assert_eq!(cache.kind_usage(lookups), (4, 4 * 454));
 }
 
 /// A second put of a key queued or being written is not queued again.
@@ -185,18 +191,27 @@ async fn test_reload_after_restart() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_reload_trims_to_a_smaller_capacity() {
     let dir = TempDir::new().unwrap();
+    // 8 entries of 404 bytes with their crc.
+    let small = |i: usize| Bytes::from(vec![i as u8; 400]);
     {
         let cache = cache(&dir);
-        for i in 0..4 {
-            put_and_wait(&cache, data(), &key(i), value(i)).await;
+        for i in 0..8 {
+            put_and_wait(&cache, data(), &key(i), small(i)).await;
         }
     }
+    // A 2000 byte data pool holds 4 of them.
     let cache = DiskCache::new(dir.path(), MAX_BYTES, [1_000, 2_000, 2_000], false).unwrap();
     cache.reload_now();
-    let (items, bytes) = cache.kind_usage(data());
-    assert_eq!(items, 2);
-    assert!(bytes <= 2_000);
-    wait_for(|| files_under(&dir.path().join("v2/data")).len() == 2);
+    assert_eq!(cache.kind_usage(data()), (4, 4 * 404));
+    assert_eq!(files_under(&dir.path().join("v2/data")).len(), 4);
+    let mut hits = 0;
+    for i in 0..8 {
+        if let Some(bytes) = cache.get(data(), &key(i)).await {
+            assert_eq!(bytes, small(i));
+            hits += 1;
+        }
+    }
+    assert_eq!(hits, 4);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -270,19 +285,25 @@ async fn test_shrinking_a_pool_evicts_lru_first() {
 async fn test_kind_switch_drops_only_that_kind() {
     let dir = TempDir::new().unwrap();
     let cache = cache(&dir);
-    let array = CacheKind::of::<column::Array>();
-    put_and_wait(&cache, data(), &key(0), value(0)).await;
-    put_and_wait(&cache, array, &key(0), Bytes::from(vec![7; 100])).await;
+    // Two kinds of the index pool.
+    let (filters, lookups) = (
+        CacheKind::of::<bloom::Filter>(),
+        CacheKind::of::<inverted::Lookup>(),
+    );
+    let small = Bytes::from(vec![7; 100]);
+    put_and_wait(&cache, filters, &key(0), small.clone()).await;
+    put_and_wait(&cache, lookups, &key(0), small.clone()).await;
 
-    cache.set_kind_enabled(data(), false);
-    assert!(!cache.is_enabled(data()));
-    assert!(!cache.put(data(), &key(1), value(1)).await);
-    assert_eq!(cache.kind_usage(data()), (0, 0));
-    assert!(cache.contains(array, &key(0)));
-    wait_for(|| files_under(&dir.path().join("v2/data")).len() == 1);
+    cache.set_kind_enabled(filters, false);
+    assert!(!cache.is_enabled(filters) && !cache.is_kind_enabled(filters));
+    assert!(!cache.put(filters, &key(1), small.clone()).await);
+    assert_eq!(cache.get(filters, &key(0)).await, None);
+    assert_eq!(cache.kind_usage(filters), (0, 0));
+    assert!(cache.contains(lookups, &key(0)));
+    wait_for(|| files_under(&dir.path().join("v2/index")).len() == 1);
 
-    cache.set_kind_enabled(data(), true);
-    put_and_wait(&cache, data(), &key(1), value(1)).await;
+    cache.set_kind_enabled(filters, true);
+    put_and_wait(&cache, filters, &key(1), small).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

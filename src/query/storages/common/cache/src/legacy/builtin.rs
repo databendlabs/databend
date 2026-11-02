@@ -125,6 +125,9 @@ impl LegacyKinds {
                     )
                 },
             ))
+            // No longer read: readers keep raw column chunks only in the disk cache. Registered so
+            // the kind can still be sized at runtime, off until then.
+            .register::<column::Data>(LegacyKind::bytes("data_cache_in_memory_bytes", |_, _| 0))
             .register::<column::Array>(LegacyKind::bytes(
                 "table_data_deserialized_data_bytes, table_data_deserialized_memory_ratio",
                 column_array_bytes,
