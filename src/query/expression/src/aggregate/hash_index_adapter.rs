@@ -16,8 +16,8 @@ use super::BATCH_SIZE;
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::StateAddr;
+use super::payload::GroupRows;
 use super::payload_row::CompareState;
-use crate::ProjectedBlock;
 
 pub(super) trait TableAdapter {
     fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize);
@@ -32,7 +32,7 @@ pub(super) trait TableAdapter {
 
 pub(super) struct AdapterImpl<'a> {
     pub payload: &'a mut PartitionedPayload,
-    pub group_columns: ProjectedBlock<'a>,
+    pub groups: GroupRows<'a>,
     /// The states to copy into the new groups, see `AggregateHashTable::combine_payload`.
     pub source_states: Option<&'a [StateAddr; BATCH_SIZE]>,
 }
@@ -45,7 +45,7 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
             }
         }
         self.payload
-            .append_rows(state, count, self.group_columns, self.source_states);
+            .append_rows(state, count, self.groups, self.source_states);
     }
 
     fn compare(
@@ -54,15 +54,22 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         need_compare_count: usize,
         no_match_count: usize,
     ) -> usize {
-        CompareState {
+        let compare = CompareState {
             address: &state.addresses,
             compare: &mut state.group_compare_vector,
             no_matched: &mut state.no_match_vector,
+        };
+        let counts = (need_compare_count, no_match_count);
+        match self.groups {
+            GroupRows::Columns(columns) => {
+                compare.row_match_entries(columns, &self.payload.row_layout, counts)
+            }
+            GroupRows::Rows(rows) => compare.row_match_rows(
+                rows,
+                &self.payload.group_types,
+                &self.payload.row_layout,
+                counts,
+            ),
         }
-        .row_match_entries(
-            self.group_columns,
-            &self.payload.row_layout,
-            (need_compare_count, no_match_count),
-        )
     }
 }

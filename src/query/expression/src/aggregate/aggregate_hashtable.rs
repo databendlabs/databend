@@ -31,6 +31,7 @@ use super::StateAddr;
 use super::group_hash_entries;
 use super::hash_index_adapter::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
+use super::payload::GroupRows;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
@@ -361,7 +362,7 @@ impl AggregateHashTable {
                 *entry = i.into();
             }
             self.payload
-                .append_rows(state, row_count, group_columns, None);
+                .append_rows(state, row_count, GroupRows::Columns(group_columns), None);
             row_count
         } else if let Some(new_group_count) =
             self.probe_and_create_by_codes(state, group_columns, row_count, group_state)
@@ -375,7 +376,7 @@ impl AggregateHashTable {
                 group_state.dict_hashes(row_count),
                 0..row_count,
             );
-            self.probe_and_create(state, group_columns, row_count, None)
+            self.probe_and_create(state, GroupRows::Columns(group_columns), row_count, None)
         };
 
         if !self.payload.aggrs.is_empty() {
@@ -507,7 +508,8 @@ impl AggregateHashTable {
             // Functions map dictionary values without changing codes, so distinct codes can
             // produce equal values. Probe representatives normally to find their actual groups
             // before reusing the addresses for rows with the same code.
-            let count = self.probe_and_create(state, (&keys).into(), distinct, None);
+            let count =
+                self.probe_and_create(state, GroupRows::Columns((&keys).into()), distinct, None);
             for (rank, row) in representatives.iter().enumerate() {
                 let code = row_codes[*row as usize] as usize;
                 group_state.code_addresses[code] = state.addresses[rank];
@@ -526,7 +528,7 @@ impl AggregateHashTable {
     fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
-        group_columns: ProjectedBlock,
+        groups: GroupRows,
         row_count: usize,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) -> usize {
@@ -538,7 +540,7 @@ impl AggregateHashTable {
 
         let mut adapter = AdapterImpl {
             payload: &mut self.payload,
-            group_columns,
+            groups,
             source_states,
         };
         self.hash_index
@@ -587,14 +589,15 @@ impl AggregateHashTable {
     ) -> Result<()> {
         flush_state.clear();
 
-        while payload.flush(flush_state) {
+        // Probe with the rows, without building their group columns.
+        while payload.scan_rows(flush_state) {
             let row_count = flush_state.row_count;
 
             let state = &mut *flush_state.probe_state;
             state.new_groups[..row_count].fill(false);
             let _ = self.probe_and_create(
                 state,
-                (&flush_state.group_columns).into(),
+                GroupRows::Rows(&flush_state.addresses),
                 row_count,
                 Some(&flush_state.state_places),
             );

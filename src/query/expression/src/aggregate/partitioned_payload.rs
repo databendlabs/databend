@@ -23,6 +23,7 @@ use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::get_states_layout;
+use super::payload::GroupRows;
 use super::payload::Payload;
 use super::payload::PayloadTransferBatch;
 use super::payload::PayloadTransferStateOffsets;
@@ -162,7 +163,7 @@ impl PartitionedPayload {
         &mut self,
         state: &mut ProbeState,
         new_group_rows: usize,
-        group_columns: ProjectedBlock,
+        groups: GroupRows,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
         if self.payloads.len() == 1 {
@@ -171,7 +172,7 @@ impl PartitionedPayload {
                 &state.group_hashes,
                 &mut state.addresses,
                 &mut state.page_index,
-                group_columns,
+                groups,
                 source_states,
             );
         } else {
@@ -197,7 +198,7 @@ impl PartitionedPayload {
                         &state.group_hashes,
                         &mut state.addresses,
                         &mut state.page_index,
-                        group_columns,
+                        groups,
                         source_states,
                     );
                 }
