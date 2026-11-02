@@ -168,7 +168,9 @@ where
 
     if !ranges.is_empty() {
         // Each index column is a unit of the disk cache; misses are merged into fewer reads.
-        let fill = index_file_cache.map_or(DiskFill::ReadWrite, |cache| cache.disk_fill());
+        // Kinds whose columns are not cached (legacy vector indexes, cached decoded) do not
+        // cache them on disk either, as the bundle loaders.
+        let fill = index_file_cache.map_or(DiskFill::Bypass, |cache| cache.disk_fill());
         let units = DiskCachedStorage::new(operator.clone())
             .read_units(S::file_kind(), location, &ranges, fill, settings)
             .await?;

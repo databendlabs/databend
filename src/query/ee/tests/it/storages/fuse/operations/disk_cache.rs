@@ -190,6 +190,10 @@ async fn test_maintenance_does_not_fill_the_disk_cache() -> anyhow::Result<()> {
         ("purge", &["optimize table {t} compact"], &[
             "optimize table {t} purge",
         ]),
+        // A query statement: the table function marks its own reads.
+        ("fuse_vacuum2", &["optimize table {t} compact"], &[
+            "select * from fuse_vacuum2('{db}', '{n}')",
+        ]),
     ];
 
     let mut fills = Vec::new();
@@ -197,6 +201,7 @@ async fn test_maintenance_does_not_fill_the_disk_cache() -> anyhow::Result<()> {
         let name = format!("t{i}");
         let sql = |s: &str| {
             s.replace("{t}", &format!("{DB}.{name}"))
+                .replace("{db}", DB)
                 .replace("{n}", &name)
         };
         create_table(&fixture, &name, options).await?;
