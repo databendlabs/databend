@@ -102,7 +102,7 @@ async fn test_hierarchical_grouping_sets_optimizer_outcomes() -> Result<()> {
 
     let shared_base = SqlTestCase {
         name: "rollup_shared_base",
-        description: "The default hierarchy derives every lower ROLLUP level from the most detailed grouping.",
+        description: "The shared-base hierarchy derives every lower ROLLUP level from the most detailed grouping.",
         setup_sqls: &[ROLLUP_TABLE],
         sql: ROLLUP_QUERY,
     };
@@ -110,7 +110,7 @@ async fn test_hierarchical_grouping_sets_optimizer_outcomes() -> Result<()> {
 
     let cascading = SqlTestCase {
         name: "rollup_nearest_parent_cascade",
-        description: "The optional cascade derives every lower ROLLUP level from its closest strict superset.",
+        description: "The default cascade derives every lower ROLLUP level from its closest strict superset.",
         setup_sqls: &[ROLLUP_TABLE],
         sql: ROLLUP_QUERY,
     };
