@@ -261,7 +261,7 @@ evaluation (internal):
 | Column | Data                                                                    |
 +--------+-------------------------------------------------------------------------+
 | active | Column(Boolean([0b_____010]))                                           |
-| Output | NullableColumn { column: Decimal64([0, 7, 0]), validity: [0b_____010] } |
+| Output | NullableColumn { column: Decimal64([7, 7, 7]), validity: [0b_____010] } |
 +--------+-------------------------------------------------------------------------+
 
 

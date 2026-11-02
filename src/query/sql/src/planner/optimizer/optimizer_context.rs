@@ -194,6 +194,25 @@ impl OptimizerContext {
         *self.enable_trace.read()
     }
 
+    /// Check if a rule is disabled. Equivalent to `is_optimizer_disabled(&rule_id.to_string())`,
+    /// but avoids formatting the rule name when the skip list is empty.
+    pub fn is_rule_disabled(&self, rule_id: RuleID) -> bool {
+        if !self.grouping_sets_to_union
+            && matches!(
+                rule_id,
+                RuleID::GroupingSetsToUnion | RuleID::HierarchicalGroupingSetsToUnion
+            )
+        {
+            return true;
+        }
+
+        if self.skip_list.is_empty() {
+            return false;
+        }
+
+        self.is_optimizer_disabled(&rule_id.to_string())
+    }
+
     /// Check if an optimizer or rule is disabled based on optimizer_skip_list setting
     pub fn is_optimizer_disabled(&self, name: &str) -> bool {
         if !self.grouping_sets_to_union
@@ -201,6 +220,10 @@ impl OptimizerContext {
                 || name == RuleID::HierarchicalGroupingSetsToUnion.to_string())
         {
             return true;
+        }
+
+        if self.skip_list.is_empty() {
+            return false;
         }
 
         let name_lower = name.to_lowercase();

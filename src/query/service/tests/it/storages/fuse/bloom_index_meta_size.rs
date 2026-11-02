@@ -177,7 +177,8 @@ async fn test_segment_info_size() -> anyhow::Result<()> {
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
+    // Holds the values the way a cache would; the old LRU no longer accepts this type.
+    let mut cache = Vec::with_capacity(cache_number);
     {
         for _ in 0..cache_number {
             let uuid = Uuid::new_v4();
@@ -188,10 +189,10 @@ async fn test_segment_info_size() -> anyhow::Result<()> {
                 .collect::<Vec<_>>();
             let statistics = segment_info.summary.clone();
             let segment_info = SegmentInfo::new(block_metas, statistics);
-            cache.insert(
+            cache.push((
                 format!("{}", uuid.simple()),
                 CompactSegmentInfo::try_from(segment_info)?,
-            );
+            ));
         }
     }
     show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
@@ -223,11 +224,12 @@ async fn test_segment_raw_bytes_size() -> anyhow::Result<()> {
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
+    // Holds the values the way a cache would; the old LRU no longer accepts this type.
+    let mut cache = Vec::with_capacity(cache_number);
 
     for _ in 0..cache_number {
         let uuid = Uuid::new_v4();
-        cache.insert(format!("{}", uuid.simple()), segment_info_bytes.clone());
+        cache.push((format!("{}", uuid.simple()), segment_info_bytes.clone()));
     }
 
     show_memory_usage(
@@ -264,11 +266,12 @@ async fn test_segment_raw_repr_bytes_size() -> anyhow::Result<()> {
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryLruCache::with_items_capacity(String::from(""), cache_number);
+    // Holds the values the way a cache would; the old LRU no longer accepts this type.
+    let mut cache = Vec::with_capacity(cache_number);
 
     for _ in 0..cache_number {
         let uuid = Uuid::new_v4();
-        cache.insert(format!("{}", uuid.simple()), segment_raw.clone());
+        cache.push((format!("{}", uuid.simple()), segment_raw.clone()));
     }
     show_memory_usage(
         "SegmentInfoCache (compact repr)",

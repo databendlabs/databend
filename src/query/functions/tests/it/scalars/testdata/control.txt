@@ -108,7 +108,7 @@ evaluation (internal):
 | cond_a    | Column(Boolean([0b____0011]))                                                  |
 | expr_true | Column(Int64([1, 2, 3, 4]))                                                    |
 | expr_else | Column(NullableColumn { column: Int64([5, 6, 7, 8]), validity: [0b____0101] }) |
-| Output    | NullableColumn { column: Int64([1, 2, 7, 0]), validity: [0b____0111] }         |
+| Output    | NullableColumn { column: Int64([1, 2, 7, 8]), validity: [0b____0111] }         |
 +-----------+--------------------------------------------------------------------------------+
 
 
@@ -273,6 +273,187 @@ error:
 1 | if(cond_a, 1 / expr_a, expr_else)
   |              ^ divided by zero while evaluating function `divide(1, 0)` in expr `1 / expr_a`, during run expr: `if(CAST(cond_a AS Boolean NULL), 1 / expr_a, CAST(expr_else AS Float64))`
 
+
+
+ast            : if(cond_a, expr_a, 1 / expr_zero)
+raw expr       : if(cond_a::Boolean, expr_a::Int64, divide(1, expr_zero::Int64))
+checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), CAST<Int64>(expr_a AS Float64), divide<UInt8, Int64>(1_u8, expr_zero))
+optimized expr : CAST<Int64>(expr_a AS Float64)
+evaluation:
++--------+---------+---------+-----------+---------+
+|        | cond_a  | expr_a  | expr_zero | Output  |
++--------+---------+---------+-----------+---------+
+| Type   | Boolean | Int64   | Int64     | Float64 |
+| Domain | {TRUE}  | {1..=4} | {0..=0}   | {1..=4} |
+| Row 0  | true    | 1       | 0         | 1       |
+| Row 1  | true    | 2       | 0         | 2       |
+| Row 2  | true    | 3       | 0         | 3       |
+| Row 3  | true    | 4       | 0         | 4       |
++--------+---------+---------+-----------+---------+
+evaluation (internal):
++-----------+-------------------------------+
+| Column    | Data                          |
++-----------+-------------------------------+
+| cond_a    | Column(Boolean([0b____1111])) |
+| expr_a    | Column(Int64([1, 2, 3, 4]))   |
+| expr_zero | Column(Int64([0, 0, 0, 0]))   |
+| Output    | Float64([1, 2, 3, 4])         |
++-----------+-------------------------------+
+
+
+ast            : if(cond_a, 1 / expr_zero, expr_a)
+raw expr       : if(cond_a::Boolean NULL, divide(1, expr_zero::Int64), expr_a::Int64)
+checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(cond_a, divide<UInt8, Int64>(1_u8, expr_zero), CAST<Int64>(expr_a AS Float64))
+optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(cond_a, divide<UInt8, Int64>(1_u8, 0_i64), CAST<Int64>(expr_a AS Float64))
+evaluation:
++--------+------------------+---------+-----------+---------+
+|        | cond_a           | expr_a  | expr_zero | Output  |
++--------+------------------+---------+-----------+---------+
+| Type   | Boolean NULL     | Int64   | Int64     | Float64 |
+| Domain | {FALSE} ∪ {NULL} | {1..=4} | {0..=0}   | Unknown |
+| Row 0  | false            | 1       | 0         | 1       |
+| Row 1  | NULL             | 2       | 0         | 2       |
+| Row 2  | false            | 3       | 0         | 3       |
+| Row 3  | NULL             | 4       | 0         | 4       |
++--------+------------------+---------+-----------+---------+
+evaluation (internal):
++-----------+----------------------------------------------------------------------------------+
+| Column    | Data                                                                             |
++-----------+----------------------------------------------------------------------------------+
+| cond_a    | Column(NullableColumn { column: Boolean([0b____1010]), validity: [0b____0101] }) |
+| expr_a    | Column(Int64([1, 2, 3, 4]))                                                      |
+| expr_zero | Column(Int64([0, 0, 0, 0]))                                                      |
+| Output    | Float64([1, 2, 3, 4])                                                            |
++-----------+----------------------------------------------------------------------------------+
+
+
+ast            : if(cond_a, expr_a, 1 / expr_zero = 1, 1 / expr_zero, expr_a)
+raw expr       : if(cond_a::Boolean, expr_a::Int64, eq(divide(1, expr_zero::Int64), 1), divide(1, expr_zero::Int64), expr_a::Int64)
+checked expr   : if<T0=Float64><Boolean NULL, T0, Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), CAST<Int64>(expr_a AS Float64), CAST<Boolean>(eq<Float64, Float64>(divide<UInt8, Int64>(1_u8, expr_zero), CAST<UInt8>(1_u8 AS Float64)) AS Boolean NULL), divide<UInt8, Int64>(1_u8, expr_zero), CAST<Int64>(expr_a AS Float64))
+optimized expr : CAST<Int64>(expr_a AS Float64)
+evaluation:
++--------+---------+---------+-----------+---------+
+|        | cond_a  | expr_a  | expr_zero | Output  |
++--------+---------+---------+-----------+---------+
+| Type   | Boolean | Int64   | Int64     | Float64 |
+| Domain | {TRUE}  | {1..=4} | {0..=0}   | {1..=4} |
+| Row 0  | true    | 1       | 0         | 1       |
+| Row 1  | true    | 2       | 0         | 2       |
+| Row 2  | true    | 3       | 0         | 3       |
+| Row 3  | true    | 4       | 0         | 4       |
++--------+---------+---------+-----------+---------+
+evaluation (internal):
++-----------+-------------------------------+
+| Column    | Data                          |
++-----------+-------------------------------+
+| cond_a    | Column(Boolean([0b____1111])) |
+| expr_a    | Column(Int64([1, 2, 3, 4]))   |
+| expr_zero | Column(Int64([0, 0, 0, 0]))   |
+| Output    | Float64([1, 2, 3, 4])         |
++-----------+-------------------------------+
+
+
+ast            : if(cond_a, if(cond_b, expr_a, 1 / expr_zero), expr_else)
+raw expr       : if(cond_a::Boolean, if(cond_b::Boolean, expr_a::Int64, divide(1, expr_zero::Int64)), expr_else::Int64)
+checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), if<T0=Float64><Boolean NULL, T0, T0>(CAST<Boolean>(cond_b AS Boolean NULL), CAST<Int64>(expr_a AS Float64), divide<UInt8, Int64>(1_u8, expr_zero)), CAST<Int64>(expr_else AS Float64))
+optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), if<T0=Float64><Boolean NULL, T0, T0>(CAST<Boolean>(cond_b AS Boolean NULL), CAST<Int64>(expr_a AS Float64), divide<UInt8, Int64>(1_u8, 0_i64)), CAST<Int64>(expr_else AS Float64))
+evaluation:
++--------+---------------+---------------+---------+-----------+-----------+---------+
+|        | cond_a        | cond_b        | expr_a  | expr_zero | expr_else | Output  |
++--------+---------------+---------------+---------+-----------+-----------+---------+
+| Type   | Boolean       | Boolean       | Int64   | Int64     | Int64     | Float64 |
+| Domain | {FALSE, TRUE} | {FALSE, TRUE} | {1..=4} | {0..=0}   | {9..=12}  | Unknown |
+| Row 0  | true          | true          | 1       | 0         | 9         | 1       |
+| Row 1  | false         | false         | 2       | 0         | 10        | 10      |
+| Row 2  | true          | true          | 3       | 0         | 11        | 3       |
+| Row 3  | false         | true          | 4       | 0         | 12        | 12      |
++--------+---------------+---------------+---------+-----------+-----------+---------+
+evaluation (internal):
++-----------+--------------------------------+
+| Column    | Data                           |
++-----------+--------------------------------+
+| cond_a    | Column(Boolean([0b____0101]))  |
+| cond_b    | Column(Boolean([0b____1101]))  |
+| expr_a    | Column(Int64([1, 2, 3, 4]))    |
+| expr_zero | Column(Int64([0, 0, 0, 0]))    |
+| expr_else | Column(Int64([9, 10, 11, 12])) |
+| Output    | Float64([1, 10, 3, 12])        |
++-----------+--------------------------------+
+
+
+ast            : if(cond_a, expr_true, expr_else)
+raw expr       : if(cond_a::Boolean NULL, expr_true::String, expr_else::String)
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(cond_a, expr_true, expr_else)
+evaluation:
++--------+------------------------+-------------+-------------+-------------+
+|        | cond_a                 | expr_true   | expr_else   | Output      |
++--------+------------------------+-------------+-------------+-------------+
+| Type   | Boolean NULL           | String      | String      | String      |
+| Domain | {FALSE, TRUE} ∪ {NULL} | {"a"..="d"} | {"w"..="z"} | {"a"..="z"} |
+| Row 0  | true                   | 'a'         | 'w'         | 'a'         |
+| Row 1  | false                  | 'b'         | 'x'         | 'x'         |
+| Row 2  | true                   | 'c'         | 'y'         | 'c'         |
+| Row 3  | NULL                   | 'd'         | 'z'         | 'z'         |
++--------+------------------------+-------------+-------------+-------------+
+evaluation (internal):
++-----------+----------------------------------------------------------------------------------+
+| Column    | Data                                                                             |
++-----------+----------------------------------------------------------------------------------+
+| cond_a    | Column(NullableColumn { column: Boolean([0b____1101]), validity: [0b____0111] }) |
+| expr_true | Column(StringColumn[a, b, c, d])                                                 |
+| expr_else | Column(StringColumn[w, x, y, z])                                                 |
+| Output    | StringColumn[a, x, c, z]                                                         |
++-----------+----------------------------------------------------------------------------------+
+
+
+ast            : if(cond_a, expr_true, NULL)
+raw expr       : if(cond_a::Boolean, expr_true::String, NULL)
+checked expr   : if<T0=String NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), CAST<String>(expr_true AS String NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : if<T0=String NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), CAST<String>(expr_true AS String NULL), NULL)
+evaluation:
++--------+---------------+-------------+----------------------+
+|        | cond_a        | expr_true   | Output               |
++--------+---------------+-------------+----------------------+
+| Type   | Boolean       | String      | String NULL          |
+| Domain | {FALSE, TRUE} | {"a"..="d"} | {"a"..="d"} ∪ {NULL} |
+| Row 0  | true          | 'a'         | 'a'                  |
+| Row 1  | false         | 'b'         | NULL                 |
+| Row 2  | true          | 'c'         | 'c'                  |
+| Row 3  | false         | 'd'         | NULL                 |
++--------+---------------+-------------+----------------------+
+evaluation (internal):
++-----------+-----------------------------------------------------------------------------+
+| Column    | Data                                                                        |
++-----------+-----------------------------------------------------------------------------+
+| cond_a    | Column(Boolean([0b____0101]))                                               |
+| expr_true | Column(StringColumn[a, b, c, d])                                            |
+| Output    | NullableColumn { column: StringColumn[a, b, c, d], validity: [0b____0101] } |
++-----------+-----------------------------------------------------------------------------+
+
+
+ast            : if(cond_a, expr_true, expr_else)
+raw expr       : if(cond_a::Boolean, expr_true::Boolean, expr_else::Boolean NULL)
+checked expr   : if<T0=Boolean NULL><Boolean NULL, T0, T0>(CAST<Boolean>(cond_a AS Boolean NULL), CAST<Boolean>(expr_true AS Boolean NULL), expr_else)
+evaluation:
++--------+---------------+---------------+------------------------+------------------------+
+|        | cond_a        | expr_true     | expr_else              | Output                 |
++--------+---------------+---------------+------------------------+------------------------+
+| Type   | Boolean       | Boolean       | Boolean NULL           | Boolean NULL           |
+| Domain | {FALSE, TRUE} | {FALSE, TRUE} | {FALSE, TRUE} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
+| Row 0  | true          | true          | true                   | true                   |
+| Row 1  | false         | true          | false                  | false                  |
+| Row 2  | true          | false         | NULL                   | false                  |
+| Row 3  | false         | false         | false                  | false                  |
++--------+---------------+---------------+------------------------+------------------------+
+evaluation (internal):
++-----------+----------------------------------------------------------------------------------+
+| Column    | Data                                                                             |
++-----------+----------------------------------------------------------------------------------+
+| cond_a    | Column(Boolean([0b____0101]))                                                    |
+| expr_true | Column(Boolean([0b____0011]))                                                    |
+| expr_else | Column(NullableColumn { column: Boolean([0b____0101]), validity: [0b____1011] }) |
+| Output    | NullableColumn { column: Boolean([0b____0001]), validity: [0b____1111] }         |
++-----------+----------------------------------------------------------------------------------+
 
 
 ast            : is_not_null(1)
