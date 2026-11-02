@@ -495,8 +495,8 @@ impl JoinStatsEstimator {
 
     /// Conservative bound of the rows that may reach the join output. Joins
     /// that output at most one row per row of one input are bounded by that
-    /// input. Otherwise skew and fan-out make the output estimate unsafe, so
-    /// keep the largest input bound.
+    /// input, and a full join by the sum of its inputs. Otherwise skew and
+    /// fan-out make the output estimate unsafe, so keep the largest input bound.
     fn max_output_cardinality(&self, output_rows: f64) -> f64 {
         let left = self
             .left_input
@@ -517,6 +517,8 @@ impl JoinStatsEstimator {
             | JoinType::RightAny
             | JoinType::RightSingle
             | JoinType::LeftMark => right.max(output_rows),
+            // A full join can return the unmatched rows of both inputs.
+            JoinType::Full | JoinType::FullAsof => output_rows.max(left + right),
             _ => output_rows.max(left).max(right),
         }
     }
