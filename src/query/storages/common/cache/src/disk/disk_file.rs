@@ -22,6 +22,9 @@ use std::io::IoSlice;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::LazyLock;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
@@ -30,17 +33,27 @@ use databend_common_exception::Result;
 /// Suffix of files being written; files left with it by a crash are removed on restart.
 pub const TMP_SUFFIX: &str = "_tmp";
 
-/// `<path>.<pid>-<seq>_tmp`: unique per write, so concurrent writes of one key do not collide,
-/// and tagged with the process, so a restart scan keeps the files this process is writing.
+/// Names this run of the process: its pid and start time. A pid alone is reused across
+/// restarts, by a container restarting its first process for one.
+static RUN_ID: LazyLock<String> = LazyLock::new(|| {
+    let started = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    format!("{:x}p{started:x}", std::process::id())
+});
+
+/// `<path>.<run>-<seq>_tmp`: unique per write, so concurrent writes of one key do not collide,
+/// and tagged with the run of the process, so a restart scan keeps the files this run is
+/// writing and deletes those of earlier runs.
 pub fn tmp_path(path: &Path, seq: u64) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(format!(".{}-{seq}{TMP_SUFFIX}", std::process::id()));
+    name.push(format!(".{}-{seq}{TMP_SUFFIX}", *RUN_ID));
     path.with_file_name(name)
 }
 
-/// Whether a temporary file was named by `tmp_path` in this process.
+/// Whether a temporary file was named by `tmp_path` in this run of the process.
 pub fn is_own_tmp(name: &str) -> bool {
-    name.contains(&format!(".{}-", std::process::id()))
+    name.contains(&format!(".{}-", *RUN_ID))
 }
 
 /// Reads an entry of `size` bytes, crc included, and returns the value without the crc.

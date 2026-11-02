@@ -133,11 +133,17 @@ async fn test_disk_gauges_follow_cache_rows() {
     let disk = manager.disk().unwrap();
     let kind = CacheKind::of::<column::Data>();
     let key = DiskKey::whole("1/2/_b/x.parquet");
-    assert!(disk.put(kind, &key, Bytes::from_static(b"bytes")).await);
+    assert!(
+        disk.put(kind, &key, Bytes::from_static(b"bytes"), &disk.begin_fill())
+            .await
+    );
     wait_for(|| disk.contains(kind, &key));
     // Larger than a quarter of the data pool: dropped.
     let big = Bytes::from(vec![0; (disk.default_pool_cap(Pool::Data) / 2) as usize]);
-    assert!(disk.put(kind, &DiskKey::whole("big"), big).await);
+    assert!(
+        disk.put(kind, &DiskKey::whole("big"), big, &disk.begin_fill())
+            .await
+    );
     wait_for(|| disk.stats().dropped_rejected == 1);
 
     let text = scrape(CacheMetricsCollector::of(manager.clone()));

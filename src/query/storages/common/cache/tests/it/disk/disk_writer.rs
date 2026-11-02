@@ -35,6 +35,8 @@ use databend_storages_common_cache::disk::disk_pool::DiskPool;
 use databend_storages_common_cache::disk::disk_writer::DiskWriter;
 use databend_storages_common_cache::disk::disk_writer::WriteJob;
 use databend_storages_common_cache::disk::disk_writer::WriterOptions;
+use databend_storages_common_cache::disk::fill_fence::FillFence;
+use databend_storages_common_cache::disk::fill_fence::FillTicket;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::segment;
 use parking_lot::Condvar;
@@ -107,10 +109,22 @@ fn pool_at(root: PathBuf, pool: Pool, cap: u64) -> Arc<DiskPool> {
 }
 
 fn job(pool: &Arc<DiskPool>, kind: CacheKind, name: &str, len: usize) -> WriteJob {
+    let ticket = Arc::new(FillFence::default()).begin();
+    job_of(pool, kind, name, len, ticket)
+}
+
+fn job_of(
+    pool: &Arc<DiskPool>,
+    kind: CacheKind,
+    name: &str,
+    len: usize,
+    ticket: FillTicket,
+) -> WriteJob {
     WriteJob {
         pool: pool.clone(),
         rel: DiskKey::whole(name).rel_path(kind),
         value: value_of(name, len),
+        ticket,
     }
 }
 
@@ -527,4 +541,57 @@ async fn test_cancelled_enqueue_leaves_nothing_pending() {
     wait_for(|| idle(&writer));
     assert_eq!(pool.stats().items, 2);
     assert_eq!(drops(&writer), (0, 0, 0));
+}
+
+static FENCE: Gate = Gate::new();
+fn fence_gate(_: &Path) -> bool {
+    FENCE.pass();
+    false
+}
+
+/// An entry queued before its object is invalidated is not published: its file is deleted, it
+/// counts as rejected, and the ticket of its fill is released. An entry of a fill started after
+/// the invalidation is published.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_entry_of_an_invalidated_object_is_not_published() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
+    let writer = DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        WriterOptions {
+            over_watermark: fence_gate,
+            ..options(1, 100_000, Duration::from_secs(30))
+        },
+    );
+    let fence = Arc::new(FillFence::default());
+    FENCE.close();
+    let stale = fence.begin();
+    assert!(
+        writer
+            .enqueue(job_of(&pool, data_kind(), "a", 60, stale))
+            .await
+    );
+    FENCE.wait_entered(1);
+    let (at, oldest) = fence.invalidation_point();
+    assert!(oldest.is_some());
+    assert!(
+        pool.remove_object(&DiskKey::object_id("a"), at, oldest)
+            .is_empty()
+    );
+    FENCE.open();
+    wait_for(|| idle(&writer));
+    assert_eq!(drops(&writer), (0, 1, 0));
+    assert_eq!(pool.stats().items, 0);
+    assert!(files_under(&dir.path().join("data")).is_empty());
+    // The ticket goes with the job, just after the writer is done with it.
+    wait_for(|| fence.invalidation_point().1.is_none());
+
+    assert!(
+        writer
+            .enqueue(job_of(&pool, data_kind(), "a", 60, fence.begin()))
+            .await
+    );
+    wait_for(|| idle(&writer));
+    assert!(pool.contains(&DiskKey::whole("a").rel_path(data_kind())));
 }

@@ -303,7 +303,7 @@ async fn test_read_ranges_are_units() {
     }
 }
 
-/// Counts reads reaching the operator, each taking 50 ms.
+/// Counts reads reaching the operator, each taking 50 ms after it has the bytes.
 #[derive(Clone)]
 struct CountingLayer(Arc<std::sync::atomic::AtomicUsize>);
 
@@ -340,11 +340,13 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for Counting<A> {
         path: &str,
         args: opendal::raw::OpRead,
     ) -> opendal::Result<(opendal::raw::RpRead, Self::Reader)> {
+        let read = self.inner.read(path, args).await;
         self.reads
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        // Slow enough that concurrent misses find the first read in flight.
+        // Slow enough that concurrent misses find the first read in flight, and that the
+        // object can be rewritten before the bytes read reach the cache.
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        self.inner.read(path, args).await
+        read
     }
 
     async fn write(
@@ -449,4 +451,54 @@ async fn test_cancelled_reader_hands_the_load_over() {
     assert_eq!(second.await.unwrap().unwrap(), object().slice(0..10));
     assert!(reads.load(std::sync::atomic::Ordering::Relaxed) <= 2);
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..10)));
+}
+
+/// A read in flight when the object is rewritten and evicted returns the bytes it read, but
+/// does not leave them in the disk cache: the next read gets the rewritten object.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_read_in_flight_during_a_rewrite_is_not_cached() {
+    let dir = TempDir::new().unwrap();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .finish()
+        .layer(CountingLayer(reads.clone()));
+    op.write(PATH, object()).await.unwrap();
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op.clone(), Some(disk.clone()));
+    for range in [None, Some(0..10)] {
+        reads.store(0, std::sync::atomic::Ordering::Relaxed);
+        let read = {
+            let (storage, range) = (storage.clone(), range.clone());
+            databend_common_base::runtime::spawn(async move {
+                storage.read(data(), PATH, range, DiskFill::ReadWrite).await
+            })
+        };
+        // The old bytes are read; the object is rewritten before they reach the cache.
+        wait_for(|| reads.load(std::sync::atomic::Ordering::Relaxed) == 1);
+        op.write(PATH, object().slice(1..)).await.unwrap();
+        storage.evict_object(PATH);
+        let old = read.await.unwrap().unwrap();
+        wait_for(|| disk.stats().queued_bytes == 0);
+
+        let key = match &range {
+            Some(range) => DiskKey::range(PATH, range.clone()),
+            None => DiskKey::whole(PATH),
+        };
+        assert!(!disk.contains(data(), &key));
+        let new = storage
+            .read(data(), PATH, range.clone(), DiskFill::ReadWrite)
+            .await
+            .unwrap();
+        assert_ne!(old, new);
+        let rewritten = object().slice(1..);
+        let expected = match range {
+            Some(range) => rewritten.slice(range.start as usize..range.end as usize),
+            None => rewritten,
+        };
+        assert_eq!(new, expected);
+        op.write(PATH, object()).await.unwrap();
+        storage.evict_object(PATH);
+    }
 }

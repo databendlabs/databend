@@ -58,6 +58,10 @@ insert into t select number, concat('k', number::string), parse_json(concat('{"a
 statement ok
 insert into t select number + 1000, concat('k', (number + 1000)::string), parse_json(concat('{"a":', (number + 1000)::string, ',"b":"w', (number % 7)::string, '"}')) from numbers(1000);
 
+# Virtual columns are built by a refresh; reads of `v['a']` then go to the sidecar.
+statement ok
+REFRESH VIRTUAL COLUMN FOR t;
+
 statement ok
 call system$set_cache_capacity('memory_cache_table_snapshot', 0);
 

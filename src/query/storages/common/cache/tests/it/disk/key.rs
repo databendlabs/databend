@@ -27,13 +27,15 @@ fn test_range_and_whole_object_are_different_units() {
 }
 
 #[test]
-fn test_rel_path_is_kind_prefix_hash() {
+fn test_rel_path_is_kind_prefix_object_unit() {
     let rel = DiskKey::whole("a/b").rel_path(CacheKind::of::<column::Data>());
     let parts: Vec<_> = rel.split('/').collect();
     assert_eq!(parts.len(), 3);
     assert_eq!(parts[0], "memory_cache_column_data");
-    assert_eq!(parts[2].len(), 32);
-    assert!(parts[2].starts_with(parts[1]));
+    let (object, unit) = parts[2].split_once('.').unwrap();
+    assert_eq!(object, DiskKey::object_id("a/b"));
+    assert_eq!((object.len(), unit.len()), (32, 32));
+    assert!(object.starts_with(parts[1]));
 }
 
 /// Units of one object share its id, as the start of their name, whatever their kind.

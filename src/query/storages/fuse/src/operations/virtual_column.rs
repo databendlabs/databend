@@ -38,7 +38,6 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::RefreshSelection;
 use databend_storages_common_cache::Table;
-use databend_storages_common_io::Files;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -61,6 +60,7 @@ use crate::io::BlockReader;
 use crate::io::FuseCaches;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::SegmentInfoReader;
+use crate::io::TableFiles;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnBuilder;
 use crate::io::VirtualColumnLayoutPlanner;
@@ -632,7 +632,7 @@ pub async fn cleanup_vacuum_virtual_column_files(
         return Ok(0);
     }
 
-    let op = Files::create(ctx, fuse_table.get_operator());
+    let op = TableFiles::create(ctx, fuse_table.get_operator());
     op.remove_file_in_batch(&files_to_remove).await?;
 
     Ok(files_to_remove.len() as u64)

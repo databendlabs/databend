@@ -13,7 +13,8 @@
 // limitations under the License.
 
 //! The disk cache of raw object bytes. `DiskCachedStorage` is what readers use; `DiskCache`
-//! holds the pools (`disk_pool`), the writer (`disk_writer`) and the entry files (`disk_file`).
+//! holds the pools (`disk_pool`), the writer (`disk_writer`), the entry files (`disk_file`) and
+//! the order of fills against invalidations (`fill_fence`).
 //! The parts are public for their tests and diagnostics, as `backend` is.
 
 mod disk_cache;
@@ -21,6 +22,7 @@ mod disk_cached_storage;
 pub mod disk_file;
 pub mod disk_pool;
 pub mod disk_writer;
+pub mod fill_fence;
 mod key;
 
 pub use disk_cache::DiskCache;
@@ -30,4 +32,5 @@ pub use disk_cache::split_caps;
 pub use disk_cached_storage::DiskCachedStorage;
 pub use disk_cached_storage::DiskFill;
 pub use disk_cached_storage::UnitsRead;
+pub use fill_fence::FillTicket;
 pub use key::DiskKey;

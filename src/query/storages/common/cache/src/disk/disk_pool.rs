@@ -28,7 +28,10 @@
 //! files of marked keys alone, and marks a file it rejects before deleting it.
 //!
 //! The pool also keeps the entries of each object, by object id, so `remove_object` can drop
-//! all of them when the object is rewritten or deleted.
+//! all of them when the object is rewritten or deleted, and the points the objects were
+//! invalidated at, so `publish` rejects an entry read before (see `fill_fence`).
+//!
+//! `publish` checks the capacity again: it may have shrunk while the entry was written.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -75,6 +78,15 @@ pub struct Reservation {
     pub victims: Vec<String>,
 }
 
+/// The outcome of `DiskPool::publish`. `victims`, possibly the entry itself, were taken out of
+/// the index and must be passed to `DiskPool::delete`.
+#[derive(Debug)]
+#[must_use]
+pub struct Published {
+    pub indexed: bool,
+    pub victims: Vec<String>,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DiskPoolStats {
     pub items: u64,
@@ -102,6 +114,9 @@ struct State {
     in_flight: HashSet<String>,
     /// The entries of each object, by object id.
     objects: HashMap<String, Vec<String>>,
+    /// The last point each object was invalidated at, while fills started before it may still
+    /// publish.
+    invalidated: HashMap<String, u64>,
 }
 
 impl State {
@@ -195,6 +210,7 @@ impl DiskPool {
                 deleting: HashSet::new(),
                 in_flight: HashSet::new(),
                 objects: HashMap::new(),
+                invalidated: HashMap::new(),
             }),
             hit: AtomicU64::new(0),
             miss: AtomicU64::new(0),
@@ -261,13 +277,38 @@ impl DiskPool {
         }
     }
 
-    /// Publishes the entry written under a reservation. An entry already indexed under `rel`
-    /// (written concurrently, or found by the restart scan) is replaced, not counted twice.
-    pub fn publish(&self, rel: String, reserved: u64, written: u64) {
+    /// Publishes the entry written under a reservation by a fill started at `started` (see
+    /// `fill_fence`). An entry already indexed under `rel` (written concurrently, or found by
+    /// the restart scan) is replaced, not counted twice. The entry is rejected, as a victim,
+    /// when its object was invalidated after the fill started, or when it no longer fits the
+    /// capacity; entries are evicted when the capacity shrank below what is held.
+    pub fn publish(&self, rel: String, reserved: u64, written: u64, started: u64) -> Published {
         let mut state = self.state.lock();
         state.writing -= reserved;
         state.in_flight.remove(&rel);
-        state.insert(rel, written);
+        let stale = object_of(&rel)
+            .and_then(|object| state.invalidated.get(object))
+            .is_some_and(|at| *at > started);
+        if stale || state.cap == 0 || written > state.cap / OVERSIZED_DIVISOR {
+            // Marked until deleted, as an evicted entry is.
+            state.deleting.insert(rel.clone());
+            return Published {
+                indexed: false,
+                victims: vec![rel],
+            };
+        }
+        state.insert(rel.clone(), written);
+        let mut victims = Vec::new();
+        while state.used() > state.cap {
+            match state.pop_lru() {
+                Some((victim, _)) => victims.push(victim),
+                None => break,
+            }
+        }
+        Published {
+            indexed: !victims.contains(&rel),
+            victims,
+        }
     }
 
     /// Gives back the reservation of `rel`, whose write failed or was abandoned.
@@ -278,9 +319,17 @@ impl DiskPool {
     }
 
     /// Takes every entry of the object `object` (see `DiskKey::object_id`) out of the index, in
-    /// any kind; returns them, for `delete`.
-    pub fn remove_object(&self, object: &str) -> Vec<String> {
+    /// any kind, and rejects the entries of fills started before `at` (see `fill_fence`);
+    /// returns them, for `delete`. `oldest_fill` is the start of the oldest fill running.
+    pub fn remove_object(&self, object: &str, at: u64, oldest_fill: Option<u64>) -> Vec<String> {
         let mut state = self.state.lock();
+        // Points no running fill started before reject nothing any more.
+        state
+            .invalidated
+            .retain(|_, point| oldest_fill.is_some_and(|oldest| oldest < *point));
+        if oldest_fill.is_some_and(|oldest| oldest < at) {
+            state.invalidated.insert(object.to_string(), at);
+        }
         let rels = state.objects.get(object).cloned().unwrap_or_default();
         rels.into_iter()
             .filter(|rel| state.pop(rel).is_some())

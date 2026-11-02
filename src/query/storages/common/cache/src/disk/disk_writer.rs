@@ -15,7 +15,8 @@
 //! Writes disk cache entries in the background. The queue is bounded in bytes; a reader whose
 //! entry does not fit waits a short while for room, then drops the entry and counts it. Writer
 //! threads reserve room in the entry's pool, delete the victims' files, write the entry under a
-//! temporary name and rename it into place, then publish it.
+//! temporary name and rename it into place, then publish it. The pool may still reject it then,
+//! when its object was invalidated meanwhile or the pool shrank, and its file is deleted.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -35,6 +36,7 @@ use tokio::sync::Notify;
 use crate::disk::disk_file::tmp_path;
 use crate::disk::disk_file::write_entry;
 use crate::disk::disk_pool::DiskPool;
+use crate::disk::fill_fence::FillTicket;
 
 /// Bytes evicted per pool per pass when the file system is over the watermark.
 const WATERMARK_EVICT_BYTES: u64 = 64 * 1024 * 1024;
@@ -71,6 +73,9 @@ pub struct WriteJob {
     /// Index key and path under the pool root.
     pub rel: String,
     pub value: Bytes,
+    /// Taken before the value was read from storage; held until the entry is published or
+    /// dropped.
+    pub ticket: FillTicket,
 }
 
 /// Why an entry was not written, for `cache_disk_dropped`.
@@ -272,8 +277,14 @@ impl Shared {
             let tmp = tmp_path(&path, self.seq.fetch_add(1, Ordering::Relaxed));
             match write_entry(&path, &tmp, &job.value, self.options.sync_data) {
                 Ok(written) => {
-                    job.pool.publish(job.rel.clone(), bytes, written);
+                    let published =
+                        job.pool
+                            .publish(job.rel.clone(), bytes, written, job.ticket.started());
                     held.published = true;
+                    job.pool.delete(&published.victims);
+                    if !published.indexed {
+                        self.drops.rejected.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
                 Err(e) => {
                     self.drops.io_error.fetch_add(1, Ordering::Relaxed);

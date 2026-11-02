@@ -31,12 +31,11 @@ use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTime
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::TableFiles;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
 use databend_common_storages_fuse::operations::slice_summary;
-use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_index::ExternalFile;
-use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
@@ -383,7 +382,7 @@ pub async fn do_vacuum2(
         block_gc_stats.removed_files,
     ));
 
-    let file_remover = Files::create(ctx.clone(), fuse_table.get_operator());
+    let file_remover = TableFiles::create(ctx.clone(), fuse_table.get_operator());
 
     // segment stats should be removed before segments.
     if !stats_to_gc.is_empty() {
@@ -403,12 +402,10 @@ pub async fn do_vacuum2(
     // - TODO: To ensure correctness in such cases, the table's Least Visible Timestamp (LVT),
     //   stored in the meta-server, should be utilized to determine snapshot visibility and
     //   resolve potential issues.
+    // The disk cache drops them with the delete.
     let snapshot_cache = &FuseCaches::instance().snapshots;
-    let disk = DiskCachedStorage::new(fuse_table.get_operator());
     for path in snapshots_to_gc.iter() {
         snapshot_cache.evict(path);
-        // Also the raw bytes, or the snapshot history would still be walked from disk.
-        disk.evict_object(path);
     }
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
 
@@ -446,7 +443,7 @@ async fn purge_inverted_index_dict_objects(
     protected_locations: &HashSet<String>,
     gc_root_timestamp: DateTime<Utc>,
 ) -> Result<usize> {
-    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
     let mut lister = operator.lister_with(prefix).recursive(true).await?;
     let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut removed = 0;
@@ -509,7 +506,7 @@ async fn purge_vector_index_objects(
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<usize> {
-    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
     let mut lister = operator.lister_with(prefix).recursive(true).await?;
     let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut removed = 0;
@@ -562,7 +559,7 @@ async fn purge_inverted_index_v2_objects(
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<usize> {
-    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
     let mut lister = operator.lister_with(prefix).recursive(true).await?;
     let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut removed = 0;
@@ -642,7 +639,7 @@ async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<Bl
 }
 
 async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
-    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
+    let file_remover = TableFiles::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let blocks_before_gc_root = list_gc_candidate_paths_until_prefix_fs(
         block_gc.dal,
         block_gc.block_location_prefix,
@@ -688,7 +685,7 @@ async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result
 async fn purge_blocks_before_gc_root_object_store_streaming(
     block_gc: &BlockGcContext<'_>,
 ) -> Result<BlockGcStats> {
-    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
+    let file_remover = TableFiles::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let mut lister = block_gc.dal.lister(block_gc.block_location_prefix).await?;
     let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut stats = BlockGcStats {
@@ -765,7 +762,7 @@ async fn list_gc_candidate_paths_until_prefix_fs(
 }
 
 async fn purge_block_chunk(
-    file_remover: &Files,
+    file_remover: &TableFiles,
     block_gc: &BlockGcContext<'_>,
     block_chunk: &[String],
     stats: &mut BlockGcStats,

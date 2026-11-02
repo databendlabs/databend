@@ -52,7 +52,7 @@ fn value(i: usize) -> Bytes {
 }
 
 async fn put_and_wait(cache: &DiskCache, kind: CacheKind, key: &DiskKey, value: Bytes) {
-    assert!(cache.put(kind, key, value).await);
+    assert!(cache.put(kind, key, value, &cache.begin_fill()).await);
     wait_for(|| cache.contains(kind, key));
 }
 
@@ -146,13 +146,15 @@ async fn test_put_of_a_pending_key_is_dropped() {
     let dir = TempDir::new().unwrap();
     let cache = cache(&dir);
     let key = key(0);
-    let puts = futures::future::join_all((0..8).map(|_| cache.put(data(), &key, value(0))));
+    let ticket = cache.begin_fill();
+    let puts =
+        futures::future::join_all((0..8).map(|_| cache.put(data(), &key, value(0), &ticket)));
     let queued = puts.await.into_iter().filter(|q| *q).count();
     assert_eq!(queued, 1);
     wait_for(|| cache.contains(data(), &key));
     assert_eq!(cache.kind_usage(data()), (1, 904));
     // Once on disk, a put of the same key is dropped as well.
-    assert!(!cache.put(data(), &key, value(0)).await);
+    assert!(!cache.put(data(), &key, value(0), &cache.begin_fill()).await);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -161,7 +163,10 @@ async fn test_entry_too_large_for_the_pool_is_rejected() {
     let cache = cache(&dir);
     // More than a quarter of the 4000 byte pool.
     let big = Bytes::from(vec![0; 1_100]);
-    assert!(cache.put(data(), &key(0), big).await, "queued");
+    assert!(
+        cache.put(data(), &key(0), big, &cache.begin_fill()).await,
+        "queued"
+    );
     wait_for(|| cache.stats().dropped_rejected == 1);
     assert!(!cache.contains(data(), &key(0)));
     assert_eq!(cache.stats().queued_bytes, 0);
@@ -255,7 +260,11 @@ async fn test_pool_capacity_at_runtime() {
     cache.set_pool_cap(Pool::Data, 0).unwrap();
     assert!(!cache.is_enabled(data()));
     assert_eq!(cache.get(data(), &key(0)).await, None);
-    assert!(!cache.put(data(), &key(1), value(1)).await);
+    assert!(
+        !cache
+            .put(data(), &key(1), value(1), &cache.begin_fill())
+            .await
+    );
     wait_for(|| files_under(&dir.path().join("v2/data")).is_empty());
 
     cache
@@ -296,7 +305,11 @@ async fn test_kind_switch_drops_only_that_kind() {
 
     cache.set_kind_enabled(filters, false);
     assert!(!cache.is_enabled(filters) && !cache.is_kind_enabled(filters));
-    assert!(!cache.put(filters, &key(1), small.clone()).await);
+    assert!(
+        !cache
+            .put(filters, &key(1), small.clone(), &cache.begin_fill())
+            .await
+    );
     assert_eq!(cache.get(filters, &key(0)).await, None);
     assert_eq!(cache.kind_usage(filters), (0, 0));
     assert!(cache.contains(lookups, &key(0)));
@@ -313,7 +326,11 @@ async fn test_license_switch() {
     put_and_wait(&cache, data(), &key(0), value(0)).await;
     cache.set_allowed(false);
     assert_eq!(cache.get(data(), &key(0)).await, None);
-    assert!(!cache.put(data(), &key(1), value(1)).await);
+    assert!(
+        !cache
+            .put(data(), &key(1), value(1), &cache.begin_fill())
+            .await
+    );
     cache.set_allowed(true);
     assert_eq!(cache.get(data(), &key(0)).await, Some(value(0)));
 }
@@ -382,7 +399,9 @@ async fn test_concurrent_use_keeps_entries_and_files_consistent() {
                     let i = (t * 13 + n * 7) % 48;
                     match n % 5 {
                         0 | 1 => {
-                            cache.put(data(), &stress_key(i), stress_value(i)).await;
+                            cache
+                                .put(data(), &stress_key(i), stress_value(i), &cache.begin_fill())
+                                .await;
                         }
                         2 | 3 => {
                             if let Some(bytes) = cache.get(data(), &stress_key(i)).await {
@@ -429,7 +448,9 @@ async fn test_reload_while_writing() {
     {
         let cache = cache(&dir);
         for i in 0..24 {
-            cache.put(data(), &stress_key(i), stress_value(i)).await;
+            cache
+                .put(data(), &stress_key(i), stress_value(i), &cache.begin_fill())
+                .await;
         }
         wait_for(|| cache.stats().queued_bytes == 0);
     }
@@ -439,7 +460,9 @@ async fn test_reload_while_writing() {
         Thread::spawn(move || cache.reload_now())
     };
     for i in 12..48 {
-        cache.put(data(), &stress_key(i), stress_value(i)).await;
+        cache
+            .put(data(), &stress_key(i), stress_value(i), &cache.begin_fill())
+            .await;
     }
     reload.join().unwrap();
     wait_for(|| cache.stats().queued_bytes == 0);
@@ -510,4 +533,31 @@ async fn test_evict_object_drops_all_its_units() {
         cache.get(filters, &units[0].1).await,
         Some(Bytes::from(vec![3; 100]))
     );
+}
+
+/// A unit whose fill started before `evict_object`, still queued or being written then, is not
+/// published after it: the bytes were read before the rewrite. A fill started after is.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_evict_object_rejects_fills_started_before() {
+    let dir = TempDir::new().unwrap();
+    let cache = cache(&dir);
+    let path = "1/2/_sg/segment.mpk";
+    let kind = CacheKind::of::<segment::Info>();
+    let key = DiskKey::whole(path);
+    let read_before = cache.begin_fill();
+    // The object is rewritten and evicted before the old bytes are queued.
+    assert_eq!(cache.evict_object(path), 0);
+    assert!(
+        cache
+            .put(kind, &key, Bytes::from(vec![1; 100]), &read_before)
+            .await
+    );
+    drop(read_before);
+    wait_for(|| cache.stats().queued_bytes == 0);
+    wait_for(|| cache.stats().dropped_rejected == 1);
+    assert!(!cache.contains(kind, &key));
+    assert!(files_under(&dir.path().join("v2")).is_empty());
+
+    put_and_wait(&cache, kind, &key, Bytes::from(vec![2; 100])).await;
+    assert_eq!(cache.get(kind, &key).await, Some(Bytes::from(vec![2; 100])));
 }

@@ -985,8 +985,10 @@ impl ReclusterMutator {
                 let dal = self.operator.clone();
                 async move {
                     let reader = SegmentStatsReader::new(dal);
+                    // Maintenance: read the disk cache, do not fill it.
                     let stats = FuseCaches::instance()
                         .segments
+                        .without_disk_fill()
                         .get_stats(&reader, (loc, ver))
                         .await?;
                     let mut stats = Arc::unwrap_or_clone(stats);

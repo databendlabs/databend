@@ -43,22 +43,13 @@ use crate::DiskKey;
 pub enum DiskFill {
     /// Read the disk cache; write the bytes read from storage to it.
     ReadWrite,
-    /// Read the disk cache; do not write to it. Background tasks read this way.
+    /// Read the disk cache; do not write to it. Maintenance and background tasks read this way.
     ReadOnly,
     /// Neither read nor write the disk cache.
     Bypass,
 }
 
 impl DiskFill {
-    /// `ReadOnly` for a read-only cache handle, `ReadWrite` otherwise.
-    pub fn from_read_only(read_only: bool) -> DiskFill {
-        if read_only {
-            DiskFill::ReadOnly
-        } else {
-            DiskFill::ReadWrite
-        }
-    }
-
     fn reads(self) -> bool {
         self != DiskFill::Bypass
     }
@@ -159,10 +150,12 @@ impl DiskCachedStorage {
             return Ok(bytes);
         }
         let load = async {
+            // Before the storage read: an invalidation from here on rejects the bytes.
+            let ticket = disk.begin_fill();
             let bytes = self.read_storage(path, range.clone()).await?;
             metrics_inc_cache_miss_bytes(bytes.len() as u64, disk.metric_name(kind));
             if fill.writes() {
-                disk.put(kind, &key, bytes.clone()).await;
+                disk.put(kind, &key, bytes.clone(), &ticket).await;
             }
             Ok(bytes)
         };
@@ -214,6 +207,8 @@ impl DiskCachedStorage {
                 None => misses.push((id, range)),
             }
         }
+        // Before the storage read: an invalidation from here on rejects the units.
+        let ticket = disk.begin_fill();
         let fetched =
             MergeIOReader::merge_io_read(settings, self.op.clone(), path, &misses).await?;
         let miss_bytes: u64 = misses.iter().map(|(_, r)| r.end - r.start).sum();
@@ -225,9 +220,10 @@ impl DiskCachedStorage {
                 // Copied out of the merged read buffer: a queued unit must not keep the whole
                 // buffer alive, as the queue accounts for the unit's bytes only.
                 let unit = fetched_unit(&fetched, *id).map(|b| Bytes::copy_from_slice(&b));
+                let ticket = &ticket;
                 async move {
                     if let Ok(bytes) = unit {
-                        disk.put(kind, &self.key(path, Some(range.clone())), bytes)
+                        disk.put(kind, &self.key(path, Some(range.clone())), bytes, ticket)
                             .await;
                     }
                 }

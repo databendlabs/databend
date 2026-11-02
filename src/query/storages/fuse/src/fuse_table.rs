@@ -97,7 +97,6 @@ use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::RangeIndex;
-use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -162,6 +161,7 @@ use crate::io::SegmentsIO;
 use crate::io::SnapshotCache;
 use crate::io::SnapshotReader;
 use crate::io::SnapshotStatsReader;
+use crate::io::TableFiles;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::WriteSettings;
@@ -1654,9 +1654,9 @@ impl Table for FuseTable {
             files.push(entry.path().to_string());
         }
 
-        let op = Files::create(ctx, self.operator.clone());
+        let op = TableFiles::create(ctx, self.operator.clone());
         let len = files.len() as u64;
-        op.remove_file_in_batch(files).await?;
+        op.remove_file_in_batch(&files).await?;
         Ok(len)
     }
 
@@ -1685,8 +1685,8 @@ impl Table for FuseTable {
         }
         let files = files.into_iter().collect::<Vec<_>>();
         let len = files.len() as u64;
-        Files::create(ctx, self.operator.clone())
-            .remove_file_in_batch(files)
+        TableFiles::create(ctx, self.operator.clone())
+            .remove_file_in_batch(&files)
             .await?;
         Ok(len)
     }

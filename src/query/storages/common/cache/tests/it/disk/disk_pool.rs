@@ -34,6 +34,8 @@ use rand::SeedableRng;
 use rand::rngs::SmallRng;
 use tempfile::TempDir;
 
+use super::files_under;
+
 fn data() -> CacheKind {
     CacheKind::of::<column::Data>()
 }
@@ -57,7 +59,8 @@ fn put(pool: &DiskPool, rel: &str, size: u64) -> Vec<String> {
     let r = pool.reserve(rel, size);
     assert!(r.reserved, "{rel}");
     pool.delete(&r.victims);
-    pool.publish(rel.to_string(), size, size);
+    let published = pool.publish(rel.to_string(), size, size, 0);
+    assert!(published.indexed && published.victims.is_empty(), "{rel}");
     r.victims
 }
 
@@ -247,6 +250,16 @@ fn test_reload_keeps_what_belongs_and_deletes_the_rest() {
         10,
     );
     // Named by an older layout, without an object id.
+    // Left by an earlier run of a process with this pid.
+    let same_pid_tmp = write_file(
+        &root,
+        &format!(
+            "{}/abc/x.y.{}-2{TMP_SUFFIX}",
+            data().name(),
+            std::process::id()
+        ),
+        10,
+    );
     let unnamed = write_file(
         &root,
         &format!("{}/abc/0123456789abcdef", data().name()),
@@ -260,10 +273,10 @@ fn test_reload_keeps_what_belongs_and_deletes_the_rest() {
     );
     let oversized = write_file(&root, &rel(data(), "big"), 501);
 
-    assert_eq!(pool.reload(), (6, 4));
+    assert_eq!(pool.reload(), (6, 5));
     assert!(kept.iter().all(|p| p.exists()));
     assert!(!unknown.exists() && !foreign_tmp.exists() && !oversized.exists());
-    assert!(!unnamed.exists());
+    assert!(!unnamed.exists() && !same_pid_tmp.exists());
     assert!(own_tmp.exists());
     assert_eq!(pool.kind_usage(data()), (6, 1200));
     assert_consistent(&pool);
@@ -301,9 +314,9 @@ fn test_reload_skips_keys_indexed_or_being_deleted() {
     assert_consistent(&pool);
 }
 
-/// Threads reserving, publishing, releasing, looking up, removing, evicting and resizing at
-/// once: afterwards nothing is reserved or marked for deletion, the counts add up, and the pool
-/// fits its capacity.
+/// Threads reserving, publishing, releasing, looking up, removing entries and objects, evicting
+/// and resizing at once: afterwards nothing is reserved or marked for deletion, the counts add
+/// up, and the pool fits its capacity, also when it shrank under writes.
 #[test]
 fn test_concurrent_operations_keep_the_accounting() {
     let pool = Arc::new(pool(10_000));
@@ -314,7 +327,8 @@ fn test_concurrent_operations_keep_the_accounting() {
                 let mut rng = SmallRng::seed_from_u64(t);
                 for _ in 0..5_000 {
                     let kind = if rng.gen_bool(0.5) { data() } else { meta() };
-                    let key = rel(kind, &format!("k{}", rng.gen_range(0..64)));
+                    let name = format!("k{}", rng.gen_range(0..64));
+                    let key = rel(kind, &name);
                     match rng.gen_range(0..10) {
                         0..=3 => {
                             let size = rng.gen_range(1..=2_500);
@@ -322,7 +336,8 @@ fn test_concurrent_operations_keep_the_accounting() {
                             pool.delete(&r.victims);
                             if r.reserved {
                                 if rng.gen_bool(0.9) {
-                                    pool.publish(key, size, size);
+                                    let started = rng.gen_range(0..100);
+                                    pool.delete(&pool.publish(key, size, size, started).victims);
                                 } else {
                                     pool.release(&key, size);
                                 }
@@ -331,8 +346,17 @@ fn test_concurrent_operations_keep_the_accounting() {
                         4 | 5 => {
                             pool.lookup(&key);
                         }
-                        6 => {
+                        6 if rng.gen_bool(0.5) => {
                             pool.remove(&key);
+                        }
+                        6 => {
+                            let at = rng.gen_range(0..100);
+                            let oldest = rng.gen_bool(0.8).then(|| rng.gen_range(0..100));
+                            pool.delete(&pool.remove_object(
+                                &DiskKey::object_id(&name),
+                                at,
+                                oldest,
+                            ));
                         }
                         7 => pool.delete(&pool.evict_bytes(rng.gen_range(0..3_000))),
                         8 => pool.delete(&pool.set_cap(rng.gen_range(5_000..=10_000))),
@@ -346,8 +370,9 @@ fn test_concurrent_operations_keep_the_accounting() {
         t.join().unwrap();
     }
     assert_consistent(&pool);
+    let stats = pool.stats();
+    assert!(stats.bytes <= stats.cap, "{stats:?}");
     pool.delete(&pool.set_cap(10_000));
-    assert!(pool.stats().bytes <= 10_000);
     // Nothing is left marked: every key can be reserved again.
     for kind in [data(), meta()] {
         for i in 0..64 {
@@ -378,12 +403,15 @@ fn test_remove_object_takes_all_its_units() {
         write_file(&root, rel, 100);
         put(&pool, rel, 100);
     }
-    let mut victims = pool.remove_object(&DiskKey::object_id("t/a"));
+    let mut victims = pool.remove_object(&DiskKey::object_id("t/a"), 0, None);
     victims.sort();
     let mut expected = units.to_vec();
     expected.sort();
     assert_eq!(victims, expected);
-    assert!(pool.remove_object(&DiskKey::object_id("t/a")).is_empty());
+    assert!(
+        pool.remove_object(&DiskKey::object_id("t/a"), 0, None)
+            .is_empty()
+    );
     pool.delete(&victims);
     assert!(units.iter().all(|rel| !root.join(rel).exists()));
     assert!(pool.contains(&other) && root.join(&other).exists());
@@ -392,15 +420,20 @@ fn test_remove_object_takes_all_its_units() {
     // A restart rebuilds the ids from the file names; an evicted unit leaves its object.
     let fresh = DiskPool::new(Pool::Data, root.clone(), 10_000);
     assert_eq!(fresh.reload(), (1, 0));
-    assert_eq!(fresh.remove_object(&DiskKey::object_id("t/b")), vec![
-        other.clone()
-    ]);
+    assert_eq!(
+        fresh.remove_object(&DiskKey::object_id("t/b"), 0, None),
+        vec![other.clone()]
+    );
     fresh.delete(&[other]);
     let b = DiskKey::range("t/b", 0..1).rel_path(data());
     put(&fresh, &b, 10);
     assert_eq!(fresh.evict_bytes(1), vec![b.clone()]);
     fresh.delete(&[b]);
-    assert!(fresh.remove_object(&DiskKey::object_id("t/b")).is_empty());
+    assert!(
+        fresh
+            .remove_object(&DiskKey::object_id("t/b"), 0, None)
+            .is_empty()
+    );
     assert_consistent(&fresh);
 }
 
@@ -419,7 +452,8 @@ fn test_reload_leaves_keys_being_written() {
     let file = write_file(&root, &a, 100);
     assert_eq!(pool.reload(), (0, 0));
     assert!(file.exists() && !pool.contains(&a));
-    pool.publish(a.clone(), 100, 100);
+    let published = pool.publish(a.clone(), 100, 100, 0);
+    assert!(published.indexed && published.victims.is_empty());
     assert!(pool.contains(&a));
     assert_consistent(&pool);
 }
@@ -440,5 +474,102 @@ fn test_reload_rejects_then_frees_the_key() {
     let r = pool.reserve(&big, 100);
     assert!(r.reserved && r.victims.is_empty());
     pool.release(&big, 100);
+    assert_consistent(&pool);
+}
+
+/// An entry whose fill started before its object was invalidated is rejected when published:
+/// it was read before the rewrite or delete. Fills started after are published. Points no
+/// running fill started before are dropped.
+#[test]
+fn test_publish_rejects_fills_started_before_an_invalidation() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
+    let object = DiskKey::object_id("t/a");
+    let a = DiskKey::range("t/a", 0..10).rel_path(data());
+    let b = DiskKey::range("t/a", 10..20).rel_path(meta());
+
+    // Fills started at 3 and 4; the object is invalidated at 5 while they run.
+    for rel in [&a, &b] {
+        assert!(pool.reserve(rel, 100).reserved);
+    }
+    assert!(pool.remove_object(&object, 5, Some(3)).is_empty());
+    for (rel, started) in [(&a, 3), (&b, 4)] {
+        let file = write_file(&root, rel, 100);
+        let published = pool.publish(rel.clone(), 100, 100, started);
+        assert!(!published.indexed);
+        assert_eq!(&published.victims, std::slice::from_ref(rel));
+        // The key stays marked until its file is deleted.
+        assert!(!pool.reserve(rel, 100).reserved);
+        pool.delete(&published.victims);
+        assert!(!file.exists() && !pool.contains(rel));
+    }
+    // A fill started after the invalidation.
+    put_file(&pool, &root, &a, 6);
+    assert!(pool.contains(&a));
+
+    // Once no fill started before it runs, the point is dropped with the next invalidation.
+    assert!(
+        pool.remove_object(&DiskKey::object_id("t/b"), 7, None)
+            .is_empty()
+    );
+    put_file(&pool, &root, &b, 0);
+    assert!(pool.contains(&b));
+    assert_consistent(&pool);
+}
+
+/// Reserves, writes and publishes `rel` with a file, for a fill started at `started`.
+fn put_file(pool: &DiskPool, root: &Path, rel: &str, started: u64) {
+    let r = pool.reserve(rel, 100);
+    assert!(r.reserved, "{rel}");
+    pool.delete(&r.victims);
+    write_file(root, rel, 100);
+    let published = pool.publish(rel.to_string(), 100, 100, started);
+    assert!(published.indexed, "{rel}");
+    pool.delete(&published.victims);
+}
+
+/// A pool shrunk while entries are written: `set_cap` has nothing indexed to evict, so the
+/// writes are checked at publish. They are taken out, the entry itself first, until the pool
+/// fits; an entry over the new size limit is rejected, and at 0 every entry is. The files on
+/// disk follow the index.
+#[test]
+fn test_publish_fits_a_pool_shrunk_under_writes() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
+    let xs: Vec<_> = (0..6).map(|i| rel(data(), &format!("x{i}"))).collect();
+    let y = rel(data(), "y");
+    for (rel, size) in xs.iter().map(|x| (x, 100)).chain([(&y, 250)]) {
+        assert!(pool.reserve(rel, size).reserved);
+        write_file(&root, rel, size as usize);
+    }
+    assert!(pool.set_cap(400).is_empty());
+
+    let publish = |rel: &String, size: u64| {
+        let published = pool.publish(rel.clone(), size, size, 0);
+        pool.delete(&published.victims);
+        published.indexed
+    };
+    // Over a quarter of 400.
+    assert!(!publish(&y, 250));
+    // 600 being written: the first two do not fit, the others do.
+    let indexed: Vec<_> = xs.iter().map(|x| publish(x, 100)).collect();
+    assert_eq!(indexed, [false, false, true, true, true, true]);
+    let stats = pool.stats();
+    assert_eq!((stats.bytes, stats.writing), (400, 0));
+    for rel in xs.iter().chain([&y]) {
+        assert_eq!(root.join(rel).exists(), pool.contains(rel), "{rel}");
+    }
+
+    let z = rel(data(), "z");
+    let r = pool.reserve(&z, 100);
+    assert!(r.reserved);
+    pool.delete(&r.victims);
+    pool.delete(&pool.set_cap(0));
+    assert!(!publish(&z, 100));
+    let stats = pool.stats();
+    assert_eq!((stats.items, stats.bytes, stats.writing), (0, 0, 0));
+    assert!(files_under(&root).is_empty());
     assert_consistent(&pool);
 }

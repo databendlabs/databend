@@ -15,6 +15,7 @@
 //! Entry files: the value and its crc, written under a tmp name and renamed.
 
 use std::fs;
+use std::path::Path;
 
 use bytes::Bytes;
 use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
@@ -46,4 +47,14 @@ fn test_entry_round_trip_and_checksum() {
     fs::write(&path, bytes).unwrap();
     assert!(read_entry(path, 9).is_err());
     assert!(validate_checksum(b"abc").is_err());
+}
+
+/// A temporary file of an earlier run is not this run's, even under the same pid: a container
+/// restarting its first process reuses the pid.
+#[test]
+fn test_tmp_files_of_an_earlier_run_with_the_same_pid_are_not_own() {
+    let earlier = format!("entry.{}-1{TMP_SUFFIX}", std::process::id());
+    assert!(!is_own_tmp(&earlier));
+    let own = tmp_path(Path::new("k/entry"), 1);
+    assert!(is_own_tmp(own.file_name().unwrap().to_str().unwrap()));
 }

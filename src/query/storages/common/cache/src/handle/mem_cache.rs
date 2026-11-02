@@ -47,6 +47,8 @@ pub struct MemCache<T: CachedItem> {
     /// Counted on every lookup, so looked up once.
     counters: Arc<CacheLookupCounters>,
     read_only: bool,
+    /// What reads through this handle may do with the disk cache.
+    disk: DiskFill,
 }
 
 impl<T: CachedItem> Clone for MemCache<T> {
@@ -57,6 +59,7 @@ impl<T: CachedItem> Clone for MemCache<T> {
             flight: self.flight.clone(),
             counters: self.counters.clone(),
             read_only: self.read_only,
+            disk: self.disk,
         }
     }
 }
@@ -85,6 +88,7 @@ impl<T: CachedItem> MemCache<T> {
             flight,
             counters,
             read_only: false,
+            disk: DiskFill::ReadWrite,
         }
     }
 
@@ -96,6 +100,17 @@ impl<T: CachedItem> MemCache<T> {
     pub fn read_only(&self) -> Self {
         MemCache {
             read_only: true,
+            disk: DiskFill::ReadOnly,
+            ..self.clone()
+        }
+    }
+
+    /// Same cache, but reads do not fill the disk cache; the memory tier fills as usual. For
+    /// the reads of maintenance operations: they may be served by the disk cache, which serves
+    /// queries, but do not fill it.
+    pub fn without_disk_fill(&self) -> Self {
+        MemCache {
+            disk: DiskFill::ReadOnly,
             ..self.clone()
         }
     }
@@ -111,7 +126,7 @@ impl<T: CachedItem> MemCache<T> {
 
     /// What a read through this handle may do with the disk cache.
     pub fn disk_fill(&self) -> DiskFill {
-        DiskFill::from_read_only(self.read_only)
+        self.disk
     }
 
     /// The context a reader gets on a miss.

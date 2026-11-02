@@ -46,6 +46,8 @@ pub use crate::disk::disk_pool::DiskPoolStats;
 use crate::disk::disk_writer::DiskWriter;
 use crate::disk::disk_writer::WriteJob;
 use crate::disk::disk_writer::WriterOptions;
+use crate::disk::fill_fence::FillFence;
+use crate::disk::fill_fence::FillTicket;
 
 /// `cache.disk.max_bytes` at or below this turns the disk cache off: the cloud platform sets a
 /// tiny size rather than 0 to disable it without unmounting the volume.
@@ -79,6 +81,8 @@ pub struct DiskCache {
     names: Box<[String]>,
     /// Concurrent misses of one unit read storage once.
     flight: SingleFlight<Bytes>,
+    /// Orders fills against `evict_object`.
+    fence: Arc<FillFence>,
 }
 
 impl DiskCache {
@@ -153,6 +157,7 @@ impl DiskCache {
             kinds_enabled: CacheKind::all().map(|_| AtomicBool::new(true)).collect(),
             names: CacheKind::all().map(disk_name).collect(),
             flight: SingleFlight::default(),
+            fence: Arc::new(FillFence::default()),
         })
     }
 
@@ -242,8 +247,21 @@ impl DiskCache {
         self.is_enabled(kind) && self.pool(kind).contains(&key.rel_path(kind))
     }
 
-    /// Queues `value` to be written under `key`. Returns false when it was dropped.
-    pub async fn put(&self, kind: CacheKind, key: &DiskKey, value: Bytes) -> bool {
+    /// Starts a fill: taken before the bytes to put are read from storage, so an invalidation
+    /// of their object meanwhile rejects them.
+    pub fn begin_fill(&self) -> FillTicket {
+        self.fence.begin()
+    }
+
+    /// Queues `value`, read by the fill `ticket`, to be written under `key`. Returns false when
+    /// it was dropped.
+    pub async fn put(
+        &self,
+        kind: CacheKind,
+        key: &DiskKey,
+        value: Bytes,
+        ticket: &FillTicket,
+    ) -> bool {
         if !self.is_enabled(kind) {
             return false;
         }
@@ -252,7 +270,15 @@ impl DiskCache {
         if pool.contains(&rel) {
             return false;
         }
-        self.writer.enqueue(WriteJob { pool, rel, value }).await
+        let ticket = ticket.clone();
+        self.writer
+            .enqueue(WriteJob {
+                pool,
+                rel,
+                value,
+                ticket,
+            })
+            .await
     }
 
     /// Drops `key` from the disk cache.
@@ -260,15 +286,16 @@ impl DiskCache {
         self.pool(kind).remove(&key.rel_path(kind))
     }
 
-    /// Drops every unit of the object at `path`, in every kind and pool: for objects rewritten
-    /// in place or deleted, whose cached bytes would otherwise be read again. Returns the
-    /// entries dropped.
+    /// Drops every unit of the object at `path`, in every kind and pool, and the units of fills
+    /// started before, still queued or being written: for objects rewritten in place or
+    /// deleted, whose cached bytes would otherwise be read again. Returns the entries dropped.
     pub fn evict_object(&self, path: &str) -> usize {
         let object = DiskKey::object_id(path);
+        let (at, oldest_fill) = self.fence.invalidation_point();
         self.pools
             .iter()
             .map(|pool| {
-                let victims = pool.remove_object(&object);
+                let victims = pool.remove_object(&object, at, oldest_fill);
                 pool.delete(&victims);
                 victims.len()
             })

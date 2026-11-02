@@ -330,3 +330,27 @@ async fn test_handle_passes_its_disk_fill_to_the_reader() -> Result<()> {
     ]);
     Ok(())
 }
+
+/// A view without disk fill, for maintenance reads: the reader reads the disk cache without
+/// filling it, and the memory tier still fills; a read-only view of it fills neither.
+#[tokio::test]
+async fn test_view_without_disk_fill_still_fills_memory() -> Result<()> {
+    let cache = cache(&shared_store(1 << 20, 1 << 20, 1 << 20), meta_kind());
+    let reader = CtxReader {
+        live: Live::default(),
+        seen: Default::default(),
+    };
+    let view = cache.without_disk_fill();
+    assert_eq!(view.disk_fill(), DiskFill::ReadOnly);
+    assert!(!view.is_read_only());
+    view.get(&reader, "a".to_string()).await?;
+    assert!(cache.contains("a"));
+    let read_only = view.read_only();
+    read_only.get(&reader, "b".to_string()).await?;
+    assert!(!cache.contains("b"));
+    assert_eq!(*reader.seen.lock(), [
+        DiskFill::ReadOnly,
+        DiskFill::ReadOnly
+    ]);
+    Ok(())
+}
