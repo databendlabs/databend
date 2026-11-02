@@ -700,7 +700,7 @@ fn build_neighbor_row(
         return Ok(None);
     }
     let column_neighbors = parse_value(&serde_json::to_vec(&column_neighbors)?)
-        .map(|value| value.to_vec())
+        .and_then(|value| value.to_vec())
         .map_err(|error| {
             ErrorCode::Internal(format!(
                 "failed to encode lineage column neighbors: {error}"

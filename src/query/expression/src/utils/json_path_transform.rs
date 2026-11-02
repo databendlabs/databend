@@ -161,13 +161,23 @@ pub fn select_locations(data: &[u8], json_path: &JsonPath<'_>) -> Result<Vec<Jso
 
     check_no_overlap(&items)?;
 
-    Ok(items
+    items
         .into_iter()
-        .map(|(location, node)| JsonPathMatch {
-            location,
-            value: node.to_vec(),
+        .map(|(location, node)| {
+            Ok(JsonPathMatch {
+                location,
+                value: encode_value(node)?,
+            })
         })
-        .collect())
+        .collect()
+}
+
+/// Encodes `value` as JSONB, which fails only when it exceeds the JSONB size
+/// limits.
+fn encode_value(value: &JsonbValue<'_>) -> Result<Vec<u8>> {
+    value
+        .to_vec()
+        .map_err(|e| ErrorCode::BadArguments(format!("failed to encode jsonb value: {e:?}")))
 }
 
 fn collect_recursive_locations<'data, 'node>(
@@ -222,7 +232,7 @@ fn collect_recursive_locations<'data, 'node>(
 /// Evaluates a filter path (`$ ? (expr)`) against a single node with the
 /// jsonb selector, keeping predicate semantics identical to `json_path_query`.
 fn eval_filter_on_node(node: &JsonbValue<'_>, filter_path: &JsonPath<'_>) -> Result<bool> {
-    let bytes = node.to_vec();
+    let bytes = encode_value(node)?;
     let raw = RawJsonb::new(&bytes);
     match raw.select_by_path(filter_path) {
         Ok(values) => Ok(!values.is_empty()),
@@ -270,7 +280,7 @@ pub fn replace_at_locations<'a>(
         };
         set_at_location(&mut root, location, new_value)?;
     }
-    Ok(root.to_vec())
+    encode_value(&root)
 }
 
 fn set_at_location<'a>(
@@ -306,7 +316,7 @@ mod tests {
     use super::*;
 
     fn jsonb_of(text: &str) -> Vec<u8> {
-        parse_value(text.as_bytes()).unwrap().to_vec()
+        parse_value(text.as_bytes()).unwrap().to_vec().unwrap()
     }
 
     fn matched_values(data: &[u8], path: &str) -> Vec<String> {
@@ -462,6 +472,6 @@ mod tests {
         assert!(matches.is_empty());
         // Untouched parts of a rebuilt document rely on roundtrip fidelity.
         let root = from_slice(&doc).unwrap();
-        assert_eq!(root.to_vec(), doc);
+        assert_eq!(root.to_vec().unwrap(), doc);
     }
 }

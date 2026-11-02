@@ -129,7 +129,12 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
             while let Some(s) = stream.next().await {
                 let (s, _v) = s?;
                 snapshot_ids.push(s.snapshot_id.simple().to_string());
-                content.push(JsonbValue::from(serde_json::to_value(s)?).to_vec());
+                let snapshot = JsonbValue::from(serde_json::to_value(s)?)
+                    .to_vec()
+                    .map_err(|e| {
+                        ErrorCode::Internal(format!("failed to encode snapshot as jsonb: {e:?}"))
+                    })?;
+                content.push(snapshot);
             }
 
             let block = DataBlock::new_from_columns(vec![

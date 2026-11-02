@@ -129,7 +129,14 @@ impl Interpreter for PresignInterpreter {
                         presigned_req.method().as_str().to_string(),
                         1,
                     ),
-                    BlockEntry::new_const_column_arg::<VariantType>(header.to_vec(), 1),
+                    BlockEntry::new_const_column_arg::<VariantType>(
+                        header.to_vec().map_err(|e| {
+                            ErrorCode::Internal(format!(
+                                "failed to encode presign headers as jsonb: {e:?}"
+                            ))
+                        })?,
+                        1,
+                    ),
                     BlockEntry::new_const_column_arg::<StringType>(
                         presigned_req.uri().to_string(),
                         1,

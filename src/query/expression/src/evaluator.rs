@@ -1019,7 +1019,11 @@ impl<'a> Evaluator<'a> {
                                 &empty_vec
                             };
                             for v in array.iter() {
-                                v.write_to_vec(&mut builder.data);
+                                v.write_to_vec(&mut builder.data).map_err(|e| {
+                                    ErrorCode::BadArguments(format!(
+                                        "failed to encode json value: {e:?}"
+                                    ))
+                                })?;
                                 builder.commit_row();
                             }
                             offsets.push(builder.len() as u64);
@@ -1114,7 +1118,11 @@ impl<'a> Evaluator<'a> {
 
                             for (k, v) in obj.iter() {
                                 key_builder.put_and_commit(k.as_str());
-                                v.write_to_vec(&mut value_builder.data);
+                                v.write_to_vec(&mut value_builder.data).map_err(|e| {
+                                    ErrorCode::BadArguments(format!(
+                                        "failed to encode json value: {e:?}"
+                                    ))
+                                })?;
                                 value_builder.commit_row();
                             }
                             offsets.push(key_builder.len() as u64);

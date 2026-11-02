@@ -377,7 +377,8 @@ impl FieldJsonAstDecoder {
 
     fn read_variant(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         let v = jsonb::Value::from(value);
-        v.write_to_vec(&mut column.data);
+        v.write_to_vec(&mut column.data)
+            .map_err(|e| ErrorCode::BadBytes(format!("invalid variant value: {e:?}")))?;
         column.commit_row();
         Ok(())
     }
