@@ -351,6 +351,13 @@ fn test_split_caps_follows_the_ratios_whatever_their_sum() {
     assert_eq!(split_caps(1000, [10, 20, 70]).unwrap(), [100, 200, 700]);
     assert_eq!(split_caps(1000, [1, 2, 7]).unwrap(), [100, 200, 700]);
     assert_eq!(split_caps(1000, [20, 40, 140]).unwrap(), [100, 200, 700]);
+    // Ratios summing past u64::MAX still split `max_bytes`.
+    let caps = split_caps(20 << 30, [u64::MAX, 100, 0]).unwrap();
+    assert!(
+        caps.iter().map(|c| *c as u128).sum::<u128>() <= 20 << 30,
+        "{caps:?}"
+    );
+    assert_eq!(caps[2], 0);
     assert_eq!(split_caps(1000, [0, 1, 1]).unwrap(), [0, 500, 500]);
     assert!(split_caps(1000, [0, 0, 0]).is_err());
 }

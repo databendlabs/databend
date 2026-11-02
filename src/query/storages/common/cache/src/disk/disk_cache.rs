@@ -402,13 +402,14 @@ fn disk_name(kind: CacheKind) -> String {
 /// Splits `max_bytes` among the pools in proportion to `ratios` (meta, index, data). Their sum
 /// need not be 100; 0 turns a pool off.
 pub fn split_caps(max_bytes: u64, ratios: [u64; 3]) -> Result<[u64; 3]> {
-    let total: u64 = ratios.iter().sum();
+    // Summed wide: ratios are any u64. Each share is at most `max_bytes`.
+    let total: u128 = ratios.iter().map(|r| *r as u128).sum();
     if total == 0 {
         return Err(ErrorCode::InvalidConfig(
             "cache.disk meta_max_ratio, index_max_ratio and data_max_ratio are all 0",
         ));
     }
-    Ok(ratios.map(|r| (max_bytes as u128 * r as u128 / total as u128) as u64))
+    Ok(ratios.map(|r| (max_bytes as u128 * r as u128 / total) as u64))
 }
 
 fn delete_in_background(pool: Arc<DiskPool>, victims: Vec<String>) {
