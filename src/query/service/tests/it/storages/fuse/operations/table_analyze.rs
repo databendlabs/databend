@@ -161,6 +161,44 @@ async fn test_unknown_legacy_sample_ndv_after_sql_append() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_ndv_is_inferred_when_statistics_cover_other_rows() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("set enable_auto_analyze = 0")
+        .await?;
+    fixture
+        .execute_command("create table ndv_coverage_fixture(k bigint)")
+        .await?;
+    for start in [0, 100] {
+        fixture
+            .execute_command(&format!(
+                "insert into ndv_coverage_fixture select number + {start} from numbers(100)"
+            ))
+            .await?;
+    }
+
+    // Appends keep the statistics row count in step with the table.
+    let ctx = fixture.new_query_ctx().await?;
+    let table = latest_fuse_table(&ctx, "ndv_coverage_fixture").await?;
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    assert_eq!(provider.stats_num_rows(), Some(200));
+    assert_eq!(provider.num_rows(), Some(200));
+    assert!(!provider.column_statistics(0).unwrap().ndv_is_inferred);
+
+    // Deleted rows stay in the statistics until they are collected again.
+    fixture
+        .execute_command("delete from ndv_coverage_fixture where k < 50")
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let table = latest_fuse_table(&ctx, "ndv_coverage_fixture").await?;
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    assert_eq!(provider.stats_num_rows(), Some(200));
+    assert_eq!(provider.num_rows(), Some(150));
+    assert!(provider.column_statistics(0).unwrap().ndv_is_inferred);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;

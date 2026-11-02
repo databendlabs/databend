@@ -53,8 +53,9 @@ pub struct Statistics {
     pub column_stats: ColumnStatSet,
     pub top_n: TopNSet,
     pub count_min_sketch: CountMinSketchSet,
-    /// Columns whose NDV was collected over all rows of the table, not filled
-    /// from the row count, extrapolated or summed over parts by the statistics
+    /// Columns whose NDV was collected over exactly the current rows of the
+    /// table, not filled from the row count, derived from statistics over a
+    /// different number of rows, or summed over parts by the statistics
     /// provider. Only these columns can be confidently unique join keys.
     /// Operators that do not propagate a column make it non-confident.
     pub observed_ndv_columns: ColumnSet,
