@@ -26,6 +26,13 @@ operator: Aggregate
 cardinality: 1.000
 max_cardinality: 1.000
 
+=== limit_over_join ===
+description: LIMIT caps the bound of an underestimated input at the limit.
+sql: SELECT * FROM a JOIN b ON a.k = b.k LIMIT 100
+operator: Limit
+cardinality: 0.000
+max_cardinality: 100.000
+
 === left_semi_join ===
 description: A semi join is bounded by the side it returns.
 sql: SELECT * FROM d LEFT SEMI JOIN a ON d.k = a.k
