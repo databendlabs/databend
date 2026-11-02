@@ -320,6 +320,36 @@ mod tests {
     }
 
     #[test]
+    fn test_custom_record_delimiter_round_trip() -> Result<()> {
+        use databend_common_formats::field_encoder::helpers::write_tsv_escaped_string_with_record_delimiter;
+
+        let params = TextFileFormatParams {
+            field_delimiter: "|".to_string(),
+            record_delimiter: ";".to_string(),
+            ..TextFileFormatParams::default()
+        };
+        let mut encoded = Vec::new();
+        for value in ["a;b", "c|d", "tail\\;", ""] {
+            write_tsv_escaped_string_with_record_delimiter(
+                value.as_bytes(),
+                &mut encoded,
+                b'|',
+                b';',
+            );
+            encoded.push(b';');
+        }
+        let records = parse_tsv_records_for_infer_schema(&encoded, &params, true)?
+            .collect::<Result<Vec<_>>>()?;
+        assert_eq!(records, vec![
+            (0, "a;b".to_string()),
+            (0, "c|d".to_string()),
+            (0, "tail\\;".to_string()),
+            (0, "".to_string()),
+        ]);
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_tsv_records_for_infer_schema() -> Result<()> {
         let params = TextFileFormatParams::default();
         let records = parse_tsv_records_for_infer_schema(b"1\\t2\t3\\n4\n5\t6\n", &params, true)?
