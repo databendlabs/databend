@@ -36,6 +36,12 @@ cleanup() {
 DROP DATABASE IF EXISTS if_not_exists_db;
 DROP CONNECTION IF EXISTS if_not_exists_conn;
 DROP CONNECTION IF EXISTS if_not_exists_new_conn;
+DROP STAGE IF EXISTS if_not_exists_stage;
+DROP STAGE IF EXISTS if_not_exists_new_stage;
+DROP SEQUENCE IF EXISTS if_not_exists_seq;
+DROP SEQUENCE IF EXISTS if_not_exists_new_seq;
+DROP FUNCTION IF EXISTS if_not_exists_udf;
+DROP FUNCTION IF EXISTS if_not_exists_new_udf;
 DROP USER IF EXISTS if_not_exists_owner;
 DROP USER IF EXISTS if_not_exists_creator;
 DROP ROLE IF EXISTS if_not_exists_owner_role;
@@ -90,3 +96,47 @@ run_user if_not_exists_owner "DESC CONNECTION if_not_exists_conn" | cut -f1,2
 echo "== CREATE CONNECTION IF NOT EXISTS on a new connection grants ownership"
 run_user if_not_exists_creator "CREATE CONNECTION IF NOT EXISTS if_not_exists_new_conn STORAGE_TYPE = 's3' ENDPOINT_URL = 'http://127.0.0.1:9900'"
 owner_of "CONNECTION if_not_exists_new_conn"
+
+# SUPER authorizes Stage/UDF creation, but does not grant access to another
+# role's objects. Sequence creation requires its own explicit privilege.
+bendsql_connect_root_null --query="
+GRANT SUPER, CREATE SEQUENCE ON *.* TO ROLE if_not_exists_owner_role;
+GRANT SUPER, CREATE SEQUENCE ON *.* TO ROLE if_not_exists_creator_role;
+"
+for kind in STAGE SEQUENCE UDF; do
+	case "$kind" in
+	STAGE)
+		name=if_not_exists_stage
+		new_name=if_not_exists_new_stage
+		ddl=STAGE
+		definition='FILE_FORMAT = (TYPE = CSV)'
+		;;
+	SEQUENCE)
+		name=if_not_exists_seq
+		new_name=if_not_exists_new_seq
+		ddl=SEQUENCE
+		definition='START = 42'
+		;;
+	UDF)
+		name=if_not_exists_udf
+		new_name=if_not_exists_new_udf
+		ddl=FUNCTION
+		definition='AS (x) -> x + 1'
+		;;
+	esac
+
+	echo "== CREATE $ddl IF NOT EXISTS on an existing object keeps its owner"
+	run_user if_not_exists_owner "CREATE $ddl $name $definition" >/dev/null
+	owner_of "$kind $name"
+	run_user if_not_exists_creator "CREATE $ddl IF NOT EXISTS $name $definition" >/dev/null
+	owner_of "$kind $name"
+	expect_denied if_not_exists_creator "DROP $ddl $name"
+
+	echo "== CREATE $ddl IF NOT EXISTS on a new object grants ownership"
+	run_user if_not_exists_creator "CREATE $ddl IF NOT EXISTS $new_name $definition" >/dev/null
+	owner_of "$kind $new_name"
+
+	echo "== CREATE OR REPLACE $ddl grants ownership to the creator"
+	run_user if_not_exists_creator "CREATE OR REPLACE $ddl $name $definition" >/dev/null
+	owner_of "$kind $name"
+done

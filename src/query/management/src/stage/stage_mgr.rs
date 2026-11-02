@@ -82,7 +82,7 @@ impl StageMgr {
 impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn add_stage(&self, info: StageInfo, create_option: &CreateOption) -> Result<()> {
+    async fn add_stage(&self, info: StageInfo, create_option: &CreateOption) -> Result<bool> {
         let ident = self.stage_ident(&info.stage_name);
         let seq = MatchSeq::from(*create_option);
         let upsert = UpsertPB::update(ident, info.clone()).with(seq);
@@ -102,7 +102,7 @@ impl StageApi for StageMgr {
             }
         }
 
-        Ok(())
+        Ok(res.is_changed())
     }
 
     #[async_backtrace::framed]

@@ -23,14 +23,14 @@ use crate::UserApiProvider;
 
 /// user stage operations.
 impl UserApiProvider {
-    // Add a new stage.
+    /// Add a stage, returning whether its metadata changed.
     #[async_backtrace::framed]
     pub async fn add_stage(
         &self,
         tenant: &Tenant,
         info: StageInfo,
         create_option: &CreateOption,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let stage_api_provider = self.stage_api(tenant);
         stage_api_provider.add_stage(info, create_option).await
     }

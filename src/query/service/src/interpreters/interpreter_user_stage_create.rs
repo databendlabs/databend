@@ -113,9 +113,13 @@ impl Interpreter for CreateUserStageInterpreter {
             let mut user_stage = user_stage;
             user_stage.creator = Some(self.ctx.get_current_user()?.identity());
             user_stage.created_on = Utc::now();
-            user_mgr
+            let changed = user_mgr
                 .add_stage(tenant, user_stage.clone(), &plan.create_option)
                 .await?;
+            // IF NOT EXISTS must not change an existing stage's owner or storage.
+            if !changed {
+                return Ok(PipelineBuildResult::create());
+            }
 
             // create dir if new stage if not external stage
             if user_stage.stage_type != StageType::External {

@@ -19,8 +19,8 @@ use databend_common_meta_app::schema::CreateOption;
 
 #[async_trait::async_trait]
 pub trait StageApi: Sync + Send {
-    // Add a stage info to /tenant/stage-name.
-    async fn add_stage(&self, stage: StageInfo, create_option: &CreateOption) -> Result<()>;
+    /// Add stage metadata, returning whether it changed.
+    async fn add_stage(&self, stage: StageInfo, create_option: &CreateOption) -> Result<bool>;
 
     async fn get_stage(&self, name: &str) -> Result<(u64, StageInfo)>;
 
