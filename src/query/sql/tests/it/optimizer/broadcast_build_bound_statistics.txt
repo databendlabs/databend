@@ -47,6 +47,20 @@ operator: Join
 cardinality: 1000.000
 max_cardinality: 1000.000
 
+=== left_any_join ===
+description: LEFT ANY JOIN returns one row per left row, so it is bounded by the left side.
+sql: SELECT * FROM d LEFT ANY JOIN a ON d.k = a.k
+operator: Join
+cardinality: 1000.000
+max_cardinality: 1000.000
+
+=== right_any_join ===
+description: RIGHT ANY JOIN returns one row per right row, so it is bounded by the right side.
+sql: SELECT * FROM a RIGHT ANY JOIN d ON a.k = d.k
+operator: Join
+cardinality: 1000.000
+max_cardinality: 1000.000
+
 === inner_join_unique_key_missing_peer_stats ===
 description: A unique key caps the expected output at the rows of the side without statistics.
 sql: SELECT * FROM d JOIN u ON d.k = u.k
