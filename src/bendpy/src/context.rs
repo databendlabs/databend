@@ -51,7 +51,7 @@ fn extract_string_column(
 ) -> Option<&databend_common_expression::types::StringColumn> {
     match entry {
         BlockEntry::Column(Column::String(col)) => Some(col),
-        BlockEntry::Column(Column::Nullable(n)) => match &n.column {
+        BlockEntry::Column(Column::Nullable(n)) => match n.column() {
             Column::String(col) => Some(col),
             _ => None,
         },
@@ -444,7 +444,28 @@ async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::utils::FromData;
+
     use super::*;
+
+    #[test]
+    fn test_extract_string_column() {
+        let column = StringType::from_data(vec!["column_1", "column_2"]);
+        for column in [column.clone(), column.wrap_nullable(None)] {
+            let entry = BlockEntry::Column(column);
+            let column = extract_string_column(&entry).unwrap();
+            assert_eq!(column.iter().collect::<Vec<_>>(), vec![
+                "column_1", "column_2"
+            ]);
+        }
+
+        let column = Int32Type::from_data(vec![1, 2]);
+        for column in [column.clone(), column.wrap_nullable(None)] {
+            assert!(extract_string_column(&BlockEntry::Column(column)).is_none());
+        }
+    }
 
     #[test]
     fn test_resolve_file_path_absolute() {
