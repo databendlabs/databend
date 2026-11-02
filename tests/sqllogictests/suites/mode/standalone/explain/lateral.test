@@ -424,7 +424,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:1, build key:k (#7), probe targets:[k (#1)@scan0], filter type:
-├── estimated rows: 3.00
+├── estimated rows: 1.00
 ├── Window(Build)
 │   ├── output columns: [COUNT(*) (#4), k (#7), row_number() OVER () (#5)]
 │   ├── aggregate function: [row_number]
