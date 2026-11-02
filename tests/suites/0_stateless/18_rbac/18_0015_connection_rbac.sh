@@ -8,7 +8,7 @@ export USER_B_CONNECT="bendsql_connect_user b 123 -A"
 export USER_C_CONNECT="bendsql_connect_user c 123 -A"
 
 echo "=== Connection authorization is always enabled ==="
-echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
+echo "=== TEST USER A WITH SUPER AND EXPLICIT CREATE CONNECTION PRIVILEGES ==="
 run_root_sql "
 drop stage if exists c1;
 drop stage if exists c2;
@@ -18,8 +18,11 @@ drop role if exists role2;
 drop user if exists a;
 drop user if exists b;
 drop user if exists c;
-create user a identified by '123';
-grant super on *.* to a;
+drop role if exists role_a;
+create role role_a;
+create user a identified by '123' with default_role='role_a';
+grant role role_a to a;
+grant super, create connection on *.* to role role_a;
 drop connection if exists c1;
 drop connection if exists c2;
 drop connection if exists c3;
@@ -47,13 +50,12 @@ create user b identified by '123';
 create role role1;
 create role role2;
 create role role3;
-grant create connection on *.* to role role1;
 grant role role1 to b;
 "
-echo "--- USER b failed to create conn c1 because current role is public, can not create ---"
+echo "--- USER b cannot create without CREATE CONNECTION ---"
 echo "CREATE CONNECTION c1 STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';" | $USER_B_CONNECT
 
-echo "alter user b with default_role='role1';" | bendsql_connect_root
+echo "grant create connection on *.* to role role1; alter user b with default_role='role1';" | bendsql_connect_root
 
 echo "--- success, c1,c2,c3 owner role is role1 ---"
 echo "CREATE CONNECTION c1 STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';" | $USER_B_CONNECT
@@ -123,6 +125,7 @@ drop user if exists c;
 drop stage if exists c1;
 drop stage if exists c2;
 drop stage if exists c3;
+drop role if exists role_a;
 drop role if exists role1;
 drop role if exists role2;
 drop role if exists role3;

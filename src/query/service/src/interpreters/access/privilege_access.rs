@@ -955,14 +955,6 @@ impl PrivilegeAccess {
         connection: String,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
-        if self
-            .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-            .await
-            .is_ok()
-        {
-            return Ok(());
-        }
-
         self.validate_access(
             &GrantObject::Connection(connection),
             privilege,
@@ -1105,14 +1097,6 @@ impl PrivilegeAccess {
     }
 
     async fn validate_seq_access(&self, seq: String) -> Result<()> {
-        if self
-            .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-            .await
-            .is_ok()
-        {
-            return Ok(());
-        }
-
         self.validate_access(
             &GrantObject::Sequence(seq),
             UserPrivilegeType::AccessSequence,
@@ -2596,13 +2580,8 @@ impl AccessChecker for PrivilegeAccess {
             }
             // Connection
             Plan::CreateConnection(_) => {
-                let super_privilege_check_result = self
-                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-                    .await;
-                if super_privilege_check_result.is_err() {
-                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateConnection, true, false)
-                        .await?
-                }
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateConnection, false, false)
+                    .await?;
             }
             Plan::DescConnection(plan) => {
                 self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
@@ -2613,13 +2592,8 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CreateSequence(_) => {
-                let super_privilege_check_result = self
-                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-                    .await;
-                if super_privilege_check_result.is_err() {
-                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateSequence, true, false)
-                        .await?
-                }
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateSequence, false, false)
+                    .await?;
             }
             Plan::DescSequence(plan) => {
                 self.validate_seq_access(plan.ident.name().to_string())

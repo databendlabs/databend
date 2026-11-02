@@ -36,7 +36,7 @@ for seq in $(echo "select name from show_sequences();" | bendsql_connect_root); 
 done
 
 echo "=== Sequence authorization is always enabled ==="
-echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
+echo "=== TEST USER A WITH SUPER AND EXPLICIT CREATE SEQUENCE PRIVILEGES ==="
 run_root_sql "
 drop sequence if exists seq1;
 drop sequence if exists seq2;
@@ -58,7 +58,7 @@ create user c identified by '123' with default_role='role_c';
 grant role role_a to a;
 grant role role_b to b;
 grant role role_c to c;
-grant super on *.* to role role_a;
+grant super, create sequence on *.* to role role_a;
 grant select, insert, create on *.* to role role_b;
 grant select, insert, create on *.* to role role_c;
 drop table if exists tmp_b;
@@ -92,15 +92,14 @@ drop role if exists role3;
 create role role1;
 create role role2;
 create role role3;
-grant create sequence, create on *.* to role role1;
 grant role role1 to b;
 "
 
-echo "--- USER b failed to create conn seq1 because current role is public, can not create ---"
+echo "--- USER b cannot create without CREATE SEQUENCE ---"
 run_root_sql "alter user b with default_role='public';"
 echo "CREATE sequence seq1" | $USER_B_CONNECT
 
-run_root_sql "alter user b with default_role='role1';"
+run_root_sql "grant create sequence, create on *.* to role role1; alter user b with default_role='role1';"
 
 echo "--- success, seq1,2,3 owner role is role1 ---"
 run_user_b "
