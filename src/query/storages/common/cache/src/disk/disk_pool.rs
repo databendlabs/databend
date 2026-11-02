@@ -49,6 +49,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
@@ -685,7 +686,8 @@ impl DiskPool {
     pub fn reload(&self) -> (u64, u64) {
         let loaded = AtomicU64::new(0);
         let deleted = AtomicU64::new(0);
-        let entries = scan_files(&self.root);
+        let complete = AtomicBool::new(true);
+        let entries = scan_files(&self.root, &complete);
         entries.par_iter().for_each(|path| {
             let Some(rel) = rel_key(&self.root, path) else {
                 remove(path, &deleted);
@@ -703,8 +705,15 @@ impl DiskPool {
                 remove(path, &deleted);
                 return;
             }
-            let Ok(size) = fs::metadata(path).map(|m| m.len()) else {
-                return;
+            let size = match fs::metadata(path) {
+                Ok(meta) => meta.len(),
+                // Deleted meanwhile, by a change or an eviction.
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+                Err(e) => {
+                    warn!("[DiskCache] failed to scan {path:?}: {e}");
+                    complete.store(false, Ordering::Relaxed);
+                    return;
+                }
             };
             let admitted = {
                 let mut state = self.state.lock();
@@ -741,7 +750,17 @@ impl DiskPool {
                 }
             }
         });
-        self.state.lock().reloaded = true;
+        // A file the scan could not see is not known either way: the pool stays as before the
+        // scan, a change of an object then looking for its files by name.
+        if complete.into_inner() {
+            self.state.lock().reloaded = true;
+        } else {
+            warn!(
+                "[DiskCache] pool {}: the restart scan is incomplete; changes of objects keep \
+                 looking for their files on disk",
+                self.pool.name()
+            );
+        }
         let (loaded, deleted) = (loaded.into_inner(), deleted.into_inner());
         info!(
             "[DiskCache] pool {}: reloaded {loaded} entries, deleted {deleted} files",
@@ -774,21 +793,40 @@ fn remove_files(root: &Path, rels: &[String]) -> Result<(), (std::io::Error, Vec
     }
 }
 
-/// Every file under `root`, recursively, scanning directories in parallel.
-fn scan_files(root: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(root) else {
-        return Vec::new();
+/// Every file under `root`, recursively, scanning directories in parallel. `complete` is
+/// cleared when a directory or entry could not be read.
+fn scan_files(root: &Path, complete: &AtomicBool) -> Vec<PathBuf> {
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                warn!("[DiskCache] failed to scan {root:?}: {e}");
+                complete.store(false, Ordering::Relaxed);
+            }
+            return Vec::new();
+        }
     };
     entries
-        .filter_map(|e| e.ok())
+        .filter_map(|e| match e {
+            Ok(entry) => Some(entry),
+            Err(e) => {
+                warn!("[DiskCache] failed to scan {root:?}: {e}");
+                complete.store(false, Ordering::Relaxed);
+                None
+            }
+        })
         .collect::<Vec<_>>()
         .into_par_iter()
         .flat_map(|entry| {
             let path = entry.path();
             match entry.file_type() {
-                Ok(t) if t.is_dir() => scan_files(&path),
+                Ok(t) if t.is_dir() => scan_files(&path, complete),
                 Ok(_) => vec![path],
-                Err(_) => Vec::new(),
+                Err(e) => {
+                    warn!("[DiskCache] failed to scan {path:?}: {e}");
+                    complete.store(false, Ordering::Relaxed);
+                    Vec::new()
+                }
             }
         })
         .collect()

@@ -910,3 +910,34 @@ fn test_change_fails_when_a_file_cannot_be_deleted() {
     assert!(pool.contains(&unit));
     assert_consistent(&pool);
 }
+
+/// A restart scan that cannot read a directory is incomplete: the pool stays as before the
+/// scan, and a change of an object still looks for its files on disk, failing while it cannot
+/// read them. Once readable, the change deletes them.
+#[test]
+fn test_incomplete_scan_keeps_changes_looking_on_disk() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    let unit = DiskKey::whole("t/a").rel_path(data());
+    let file = write_file(&root, &unit, 100);
+    let parent = file.parent().unwrap().to_path_buf();
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o000)).unwrap();
+    // As root, permissions do not stop the scan; nothing to check then.
+    if fs::read_dir(&parent).is_ok() {
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+    assert_eq!(pool.reload(), (0, 0));
+    let object = DiskKey::object_id("t/a");
+    assert!(pool.begin_change(&object).is_err());
+    assert!(pool.end_change(&object, 1, None).is_empty());
+
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(file.exists());
+    assert_eq!(pool.begin_change(&object).unwrap(), 0);
+    assert!(!file.exists());
+    assert!(pool.end_change(&object, 2, None).is_empty());
+    assert_consistent(&pool);
+}
