@@ -561,3 +561,28 @@ async fn test_evict_object_rejects_fills_started_before() {
     put_and_wait(&cache, kind, &key, Bytes::from(vec![2; 100])).await;
     assert_eq!(cache.get(kind, &key).await, Some(Bytes::from(vec![2; 100])));
 }
+
+/// Pools resized at once from many threads: each resize checks the pools' sum and updates its
+/// pool together, so the pools never hold more than `max_bytes`, whichever resizes win.
+#[test]
+fn test_concurrent_pool_resizes_stay_within_max_bytes() {
+    let dir = TempDir::new().unwrap();
+    let cache =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 30_000], false).unwrap());
+    let threads: Vec<_> = Pool::ALL
+        .into_iter()
+        .map(|pool| {
+            let cache = cache.clone();
+            Thread::spawn(move || {
+                for i in 0..2_000u64 {
+                    let _ = cache.set_pool_cap(pool, 30_000 + (i * 7919) % 30_000);
+                }
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
+    let total: u64 = cache.pool_stats().iter().map(|(_, s)| s.cap).sum();
+    assert!(total <= 100_000, "{total}");
+}

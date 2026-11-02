@@ -645,3 +645,30 @@ fn test_kind_turned_off_is_refused_by_writes_and_the_scan() {
     assert!(pool.contains(&indexed));
     assert_consistent(&pool);
 }
+
+/// Invalidations reach a pool out of clock order: an older one, which saw no fill running,
+/// does not drop a newer point a fill still running needs.
+#[test]
+fn test_older_invalidation_keeps_newer_points() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
+    assert_eq!(pool.reload(), (0, 0));
+    let a = DiskKey::object_id("t/a");
+    let unit = DiskKey::whole("t/a").rel_path(data());
+    assert!(pool.reserve(&unit, 100).reserved);
+    // The fill started at 5; `t/a` is invalidated at 10 while it runs.
+    assert!(pool.remove_object(&a, 10, Some(5)).is_empty());
+    // An invalidation taken at 8, before the fill, when none ran, arrives late.
+    assert!(
+        pool.remove_object(&DiskKey::object_id("t/b"), 8, None)
+            .is_empty()
+    );
+    assert_eq!(pool.invalidated_at(&a), Some(10));
+    write_file(&root, &unit, 100);
+    let published = pool.publish(unit.clone(), 100, 100, 5);
+    assert!(!published.indexed);
+    pool.delete(&published.victims);
+    assert!(!root.join(&unit).exists());
+    assert_consistent(&pool);
+}

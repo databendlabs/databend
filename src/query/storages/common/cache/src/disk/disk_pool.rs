@@ -347,10 +347,12 @@ impl DiskPool {
     pub fn remove_object(&self, object: &str, at: u64, oldest_fill: Option<u64>) -> Vec<String> {
         let mut state = self.state.lock();
         if state.reloaded {
-            // Points no running fill started before reject nothing any more.
-            state
-                .invalidated
-                .retain(|_, point| oldest_fill.is_some_and(|oldest| oldest < *point));
+            // Points no fill running at `at` started before reject nothing any more. Points
+            // after `at` are left alone: invalidations reach the pools out of clock order, and
+            // `oldest_fill` says nothing of fills started after `at`.
+            state.invalidated.retain(|_, point| {
+                *point > at || oldest_fill.is_some_and(|oldest| oldest < *point)
+            });
         }
         if !state.reloaded || oldest_fill.is_some_and(|oldest| oldest < at) {
             state.invalidated.insert(object.to_string(), at);

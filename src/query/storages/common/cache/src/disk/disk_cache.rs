@@ -35,6 +35,7 @@ use databend_common_metrics::cache::metrics_inc_cache_hit_count;
 use databend_common_metrics::cache::metrics_inc_cache_miss_count;
 use log::info;
 use log::warn;
+use parking_lot::Mutex;
 
 use crate::CacheKind;
 use crate::DiskKey;
@@ -83,6 +84,8 @@ pub struct DiskCache {
     flight: SingleFlight<Bytes>,
     /// Orders fills against `evict_object`.
     fence: Arc<FillFence>,
+    /// Serializes `set_pool_cap`: the check of the pools' sum and the update.
+    resizing: Mutex<()>,
 }
 
 impl DiskCache {
@@ -158,6 +161,7 @@ impl DiskCache {
             names: CacheKind::all().map(disk_name).collect(),
             flight: SingleFlight::default(),
             fence: Arc::new(FillFence::default()),
+            resizing: Mutex::new(()),
         })
     }
 
@@ -314,6 +318,7 @@ impl DiskCache {
     /// Runtime capacity of a pool, in bytes; 0 empties it and stops reads and writes. Files are
     /// deleted in the background. Pools together may not exceed `max_bytes`.
     pub fn set_pool_cap(&self, pool: Pool, cap: u64) -> Result<()> {
+        let _resizing = self.resizing.lock();
         let others: u64 = Pool::ALL
             .iter()
             .filter(|p| **p != pool)
