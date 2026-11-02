@@ -1,0 +1,119 @@
+=== count_over_now_window ===
+description: COUNT(*) over a now() window must not be folded to a constant.
+sql: SELECT count(*) FROM w WHERE ts >= '1969-01-01 00:00:00' AND ts < now()
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [count() AS (#2)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#2)]
+    └── Scan
+        ├── table: default.w (#0)
+        ├── filters: [gte(w.ts (#0), '1969-01-01 00:00:00.000000'), lt(w.ts (#0), now())]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== count_over_today_window ===
+description: COUNT(*) over a today() window must not be folded to a constant.
+sql: SELECT count(*) FROM w WHERE d >= '1969-01-01' AND d < today()
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [count() AS (#2)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#2)]
+    └── Scan
+        ├── table: default.w (#0)
+        ├── filters: [gte(w.d (#1), '1969-01-01'), lt(w.d (#1), today())]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== count_over_out_of_range_filter ===
+description: COUNT(*) over a statistics-derived zero estimate must not be folded.
+sql: SELECT count(*) FROM t WHERE k > 5000
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [count() AS (#2)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#2)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [gt(t.k (#0), 5000)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== count_over_filtered_empty_table ===
+description: COUNT(*) over a filter on an exactly empty table can be folded to 0.
+sql: SELECT count(*) FROM e WHERE v > 10
+EvalScalar
+├── scalars: [0 AS (#2)]
+└── DummyTableScan(DummyTableScan { source_table_indexes: [0] })
+
+
+=== left_join_builds_proven_empty_side ===
+description: On a zero-cardinality tie, LEFT JOIN is commuted so that the proven-empty side is built.
+sql: SELECT * FROM (SELECT * FROM e WHERE v > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k > 5000) AS b ON a.k = b.k
+Join(Right)
+├── build keys: [e.k (#0)]
+├── probe keys: [k (#4)]
+├── other filters: []
+├── Scan
+│   ├── table: default.e (#0)
+│   ├── filters: [gt(e.v (#1), 10)]
+│   ├── order by: []
+│   └── limit: NONE
+└── EvalScalar
+    ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3), CAST(t.k (#2) AS Int64 NULL) AS (#4), CAST(t.v (#3) AS Int64 NULL) AS (#5), t.k (#2) AS (#6)]
+    └── Scan
+        ├── table: default.t (#1)
+        ├── filters: [gt(t.k (#2), 5000)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== right_join_keeps_proven_empty_build_side ===
+description: On a zero-cardinality tie, RIGHT JOIN is not commuted when the proven-empty side is already built.
+sql: SELECT * FROM (SELECT * FROM t WHERE k > 5000) AS a RIGHT JOIN (SELECT * FROM e WHERE v > 10) AS b ON a.k = b.k
+Join(Right)
+├── build keys: [e.k (#2)]
+├── probe keys: [k (#4)]
+├── other filters: []
+├── Scan
+│   ├── table: default.e (#1)
+│   ├── filters: [gt(e.v (#3), 10)]
+│   ├── order by: []
+│   └── limit: NONE
+└── EvalScalar
+    ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1), CAST(t.k (#0) AS Int64 NULL) AS (#4), CAST(t.v (#1) AS Int64 NULL) AS (#5), t.k (#0) AS (#6)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [gt(t.k (#0), 5000)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== left_join_estimated_zero_tie ===
+description: A zero-cardinality tie between two estimates keeps the existing LEFT JOIN order.
+sql: SELECT * FROM (SELECT * FROM t WHERE k > 5000) AS a LEFT JOIN (SELECT * FROM t WHERE v > 500) AS b ON a.k = b.k
+Join(Left)
+├── build keys: [k (#4)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3), CAST(t.k (#2) AS Int64 NULL) AS (#4), CAST(t.v (#3) AS Int64 NULL) AS (#5), t.v (#3) AS (#6)]
+│   └── Scan
+│       ├── table: default.t (#1)
+│       ├── filters: [gt(t.v (#3), 500), gt(t.k (#2), 5000)]
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: [gt(t.k (#0), 5000)]
+    ├── order by: []
+    └── limit: NONE
+
+
