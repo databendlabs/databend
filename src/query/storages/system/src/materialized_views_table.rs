@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -93,22 +92,15 @@ impl AsyncSystemTable for MaterializedViewsTable {
             return Ok(build_block(vec![], catalog_name));
         }
 
-        let mut permission_targets = BTreeMap::new();
-        for item in &listed {
-            permission_targets
-                .entry(item.source.table_id)
-                .or_insert_with(|| TablePrivilegeTarget {
-                    database_name: item
-                        .source
-                        .database_name
-                        .as_deref()
-                        .unwrap_or(&item.database_name),
-                    database_id: item.source.database_id.unwrap_or(item.database_id),
-                    table_name: item.source.table_name.as_deref(),
-                    table_id: item.source.table_id,
-                });
-        }
-        let permission_targets = permission_targets.into_values().collect::<Vec<_>>();
+        let permission_targets = listed
+            .iter()
+            .map(|item| TablePrivilegeTarget {
+                database_name: &item.database_name,
+                database_id: item.database_id,
+                table_name: Some(&item.name),
+                table_id: item.mv.mv_id,
+            })
+            .collect::<Vec<_>>();
         let user = ctx.get_current_user()?;
         let effective_roles = ctx.get_all_effective_roles().await?;
         let visible_indexes = filter_tables_by_privilege(
@@ -120,13 +112,13 @@ impl AsyncSystemTable for MaterializedViewsTable {
             UserPrivilegeType::Select,
         )
         .await?;
-        let visible_source_ids = visible_indexes
+        let visible_mv_ids = visible_indexes
             .into_iter()
             .map(|target_index| permission_targets[target_index].table_id)
             .collect::<HashSet<_>>();
         let visible = listed
             .into_iter()
-            .filter(|item| visible_source_ids.contains(&item.source.table_id))
+            .filter(|item| visible_mv_ids.contains(&item.mv.mv_id))
             .collect::<Vec<_>>();
 
         Ok(build_block(visible, catalog_name))

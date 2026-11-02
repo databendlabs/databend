@@ -1871,12 +1871,7 @@ impl AccessChecker for PrivilegeAccess {
                     // like this sql: copy into t from (select * from @s3); will bind a mock table with name `system.read_parquet(s3)`
                     // this is no means to check table `system.read_parquet(s3)` privilege
                     if !table.is_source_of_stage() {
-                        let catalog_table = table.table();
-                        if is_materialized_view_engine(catalog_table.engine()) {
-                            self.validate_mv_source_access(catalog_table.as_ref()).await?;
-                        } else {
-                            self.validate_table_select_access(catalog_name, table.database(), table.name()).await?
-                        }
+                        self.validate_table_select_access(catalog_name, table.database(), table.name()).await?
                     }
                 }
             }

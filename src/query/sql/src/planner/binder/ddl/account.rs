@@ -30,6 +30,7 @@ use databend_common_ast::ast::ShowOptions;
 use databend_common_ast::ast::UserOptionItem;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::WorkloadMgr;
@@ -48,6 +49,7 @@ use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::normalize_public_key;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_users::UserApiProvider;
 use databend_common_users::validate_public_key_pem;
 
@@ -159,6 +161,24 @@ impl Binder {
         }
     }
 
+    fn validate_grant_table_type(source: &AccountMgrLevel, table: &dyn Table) -> Result<()> {
+        let explicit_mv = matches!(source, AccountMgrLevel::MaterializedView(..));
+        let is_mv = is_materialized_view_engine(table.engine());
+        if explicit_mv && !is_mv {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "'{}' is not a materialized view",
+                table.name()
+            )));
+        }
+        if !explicit_mv && is_mv {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "'{}' is a materialized view; use ON MATERIALIZED VIEW to grant or revoke SELECT",
+                table.name()
+            )));
+        }
+        Ok(())
+    }
+
     pub(in crate::planner::binder) async fn convert_to_grant_object(
         &self,
         source: &AccountMgrLevel,
@@ -169,7 +189,8 @@ impl Binder {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         match source {
             AccountMgrLevel::Global => Ok(GrantObject::Global),
-            AccountMgrLevel::Table(database_name, table_name) => {
+            AccountMgrLevel::Table(database_name, table_name)
+            | AccountMgrLevel::MaterializedView(database_name, table_name) => {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
@@ -188,11 +209,11 @@ impl Binder {
                     .get_db_info()
                     .database_id
                     .db_id;
-                let table_id = catalog
+                let table = catalog
                     .get_table(&tenant, &database_name, table_name)
-                    .await?
-                    .get_id();
-                Ok(GrantObject::TableById(catalog_name, db_id, table_id))
+                    .await?;
+                Self::validate_grant_table_type(source, table.as_ref())?;
+                Ok(GrantObject::TableById(catalog_name, db_id, table.get_id()))
             }
             AccountMgrLevel::Database(database_name) => {
                 let database_name = database_name
@@ -242,7 +263,8 @@ impl Binder {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         match source {
             AccountMgrLevel::Global => Ok(vec![GrantObject::Global]),
-            AccountMgrLevel::Table(database_name, table_name) => {
+            AccountMgrLevel::Table(database_name, table_name)
+            | AccountMgrLevel::MaterializedView(database_name, table_name) => {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
@@ -261,12 +283,12 @@ impl Binder {
                     .get_db_info()
                     .database_id
                     .db_id;
-                let table_id = catalog
+                let table = catalog
                     .get_table(&tenant, &database_name, table_name)
-                    .await?
-                    .get_id();
+                    .await?;
+                Self::validate_grant_table_type(source, table.as_ref())?;
                 Ok(vec![
-                    GrantObject::TableById(catalog_name.clone(), db_id, table_id),
+                    GrantObject::TableById(catalog_name.clone(), db_id, table.get_id()),
                     GrantObject::Table(catalog_name.clone(), database_name, table_name.clone()),
                 ])
             }
