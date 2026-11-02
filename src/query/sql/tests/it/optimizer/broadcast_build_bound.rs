@@ -39,13 +39,17 @@ use crate::framework::golden::write_case_title;
 // `a` and `b` are large, but their key ranges do not overlap, so a join of the
 // two is estimated to return no rows. `d` is a small table with a unique key,
 // `m` is a large table with a unique key, and `u` has no column statistics.
-// `p` is the large probe table.
+// `s` is a large table with a unique key whose NDV is below the size of its
+// value domain, and `f` has the same statistics except that its NDV was filled
+// from the row count. `p` is the large probe table.
 const PROBE_TABLE: &str = "CREATE TABLE p(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const LEFT_RANGE_TABLE: &str = "CREATE TABLE a(k BIGINT NOT NULL)";
 const RIGHT_RANGE_TABLE: &str = "CREATE TABLE b(k BIGINT NOT NULL)";
 const SMALL_TABLE: &str = "CREATE TABLE d(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const LARGE_TABLE: &str = "CREATE TABLE m(k BIGINT NOT NULL)";
 const NO_STATS_TABLE: &str = "CREATE TABLE u(k BIGINT NOT NULL)";
+const SPARSE_KEY_TABLE: &str = "CREATE TABLE s(k BIGINT NOT NULL)";
+const FALLBACK_NDV_TABLE: &str = "CREATE TABLE f(k BIGINT NOT NULL)";
 
 struct StatsCase {
     name: &'static str,
@@ -68,6 +72,7 @@ fn int_stat(min: i64, max: i64, ndv: u64) -> BasicColumnStatistics {
         ndv: Some(ndv),
         null_count: 0,
         in_memory_size: 8000,
+        ndv_is_inferred: false,
     }
 }
 
@@ -110,6 +115,19 @@ async fn create_context(cluster_node_num: u64) -> Result<Arc<LiteTableContext>> 
             HashMap::from([("k".to_string(), int_stat(1, 200_000_000, 200_000_000))]),
         ),
         (NO_STATS_TABLE, 1_000_000, HashMap::new()),
+        (
+            SPARSE_KEY_TABLE,
+            200_000_000,
+            HashMap::from([("k".to_string(), int_stat(1, 1_000_000_000, 200_000_000))]),
+        ),
+        (
+            FALLBACK_NDV_TABLE,
+            200_000_000,
+            HashMap::from([("k".to_string(), BasicColumnStatistics {
+                ndv_is_inferred: true,
+                ..int_stat(1, 1_000_000_000, 200_000_000)
+            })]),
+        ),
     ];
     for (sql, rows, column_stats) in tables {
         ctx.register_table_sql_with_stats(
@@ -243,6 +261,42 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             sql: "SELECT * FROM a JOIN u ON a.k = u.k",
             operator: RelOp::Join,
         },
+        StatsCase {
+            name: "inner_join_confident_unique_key",
+            description: "A unique key whose NDV is below its domain size bounds the output by the peer side.",
+            sql: "SELECT * FROM d JOIN s ON d.k = s.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
+            name: "inner_join_confident_unique_key_below_filter",
+            description: "A filter keeps a collected NDV, so its unique key still bounds the output.",
+            sql: "SELECT * FROM d JOIN (SELECT k FROM s WHERE k > 10) AS t ON d.k = t.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
+            name: "inner_join_unique_key_with_fallback_ndv",
+            description: "An NDV filled from the row count caps only the expected output.",
+            sql: "SELECT * FROM d JOIN f ON d.k = f.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
+            name: "inner_join_unique_key_at_domain_size",
+            description: "A unique key whose NDV equals its domain size caps only the expected output.",
+            sql: "SELECT * FROM d JOIN m ON d.k = m.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
+            name: "left_join_confident_unique_key",
+            description: "A confident unique key on the null-extended side bounds the output by the preserved side.",
+            sql: "SELECT * FROM u LEFT JOIN s ON u.k = s.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
+            name: "full_join_confident_unique_key",
+            description: "A FULL join keeps the largest input bound.",
+            sql: "SELECT * FROM u FULL JOIN s ON u.k = s.k",
+            operator: RelOp::Join,
+        },
     ];
 
     for case in &cases {
@@ -306,6 +360,24 @@ async fn test_broadcast_build_bound_plan_golden() -> Result<()> {
                 ("disable_join_reorder", "1"),
                 ("max_broadcast_join_build_rows", "500"),
             ],
+        },
+        PlanCase {
+            name: "confident_unique_key_join_build_is_broadcast",
+            description: "A join on a confident unique key is bounded by its small peer side, so it can be broadcast.",
+            sql: "SELECT p.v FROM p JOIN (SELECT d.k FROM d JOIN s ON d.k = s.k) AS j ON p.k = j.k",
+            settings: NO_REORDER,
+        },
+        PlanCase {
+            name: "fallback_ndv_join_build_is_shuffled",
+            description: "A join on a key whose NDV was filled from the row count keeps the large input bound, so it is not broadcast.",
+            sql: "SELECT p.v FROM p JOIN (SELECT d.k FROM d JOIN f ON d.k = f.k) AS j ON p.k = j.k",
+            settings: NO_REORDER,
+        },
+        PlanCase {
+            name: "unique_key_at_domain_size_join_build_is_shuffled",
+            description: "A join on a key whose NDV equals its domain size keeps the large input bound, so it is not broadcast.",
+            sql: "SELECT p.v FROM p JOIN (SELECT d.k FROM d JOIN m ON d.k = m.k) AS j ON p.k = j.k",
+            settings: NO_REORDER,
         },
     ];
     for case in &distributed_cases {

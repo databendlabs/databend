@@ -109,6 +109,7 @@ impl Operator for Filter {
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                observed_ndv_columns: stat_info.statistics.observed_ndv_columns.clone(),
             },
         }))
     }

@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::StatEvaluator;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::function_stat::DomainStatBounds;
 use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::stat_distribution::ReturnStat;
@@ -213,6 +214,7 @@ impl Operator for EvalScalar {
             column_stats,
             top_n,
             count_min_sketch,
+            observed_ndv_columns,
             ..
         } = &input.statistics;
         let derived_items = self
@@ -283,6 +285,21 @@ impl Operator for EvalScalar {
                 }
             }))
             .collect();
+        let observed_ndv_columns = self
+            .items
+            .iter()
+            .filter_map(|item| {
+                observed_ndv_source(&item.scalar)
+                    .filter(|column| observed_ndv_columns.contains(column))
+                    .map(|_| item.index)
+            })
+            .chain(
+                observed_ndv_columns
+                    .iter()
+                    .filter(|index| !defined_columns.contains(index))
+                    .copied(),
+            )
+            .collect();
 
         Ok(Arc::new(StatInfo {
             cardinality: input.cardinality,
@@ -292,12 +309,35 @@ impl Operator for EvalScalar {
                 column_stats,
                 top_n,
                 count_min_sketch,
+                observed_ndv_columns,
             },
         }))
     }
 }
 
 impl PhysicalOperator for EvalScalar {}
+
+/// Returns the input column whose collected NDV carries over to `scalar`: the
+/// column itself or a lossless, injective cast of it, such as the nullable
+/// wrapper of an outer join's null-extended side.
+fn observed_ndv_source(scalar: &ScalarExpr) -> Option<Symbol> {
+    match scalar {
+        ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
+        ScalarExpr::CastExpr(cast) if !cast.is_try => match cast.argument.as_ref() {
+            ScalarExpr::BoundColumnRef(column)
+                if classify_conversion(
+                    column.column.data_type.as_ref(),
+                    cast.target_type.as_ref(),
+                )
+                .is_lossless_injective() =>
+            {
+                Some(column.column.index)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -387,6 +427,7 @@ mod tests {
                     column_stats,
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
+                    observed_ndv_columns: Default::default(),
                 },
             })),
         );
@@ -406,6 +447,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), column_stat(1, 3, 3.0))]),
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                observed_ndv_columns: Default::default(),
             },
         });
         let input = SExpr::create(
@@ -498,6 +540,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(0), column_stat(1, 2, 2.0))]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            observed_ndv_columns: Default::default(),
         };
         let cast = ScalarExpr::CastExpr(CastExpr {
             span: None,

@@ -336,6 +336,7 @@ impl Operator for Scan {
             .and_then(|s| s.num_rows);
 
         let mut column_stats: ColumnStatSet = Default::default();
+        let mut observed_ndv_columns = ColumnSet::new();
         for (k, v) in &self.statistics.column_stats {
             // No need to cal histogram for unused columns
             if !used_columns.contains(k) {
@@ -380,6 +381,9 @@ impl Operator for Scan {
                 };
                 if let Ok(column_stat) = ColumnStat::new(bounds, ndv, null_count, histogram) {
                     column_stats.insert(*k, column_stat);
+                    if col_stat.ndv.is_some() && !col_stat.ndv_is_inferred {
+                        observed_ndv_columns.insert(*k);
+                    }
                 }
             }
         }
@@ -463,6 +467,7 @@ impl Operator for Scan {
                     column_stats: Default::default(),
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
+                    observed_ndv_columns: Default::default(),
                 },
             }));
         }
@@ -475,6 +480,7 @@ impl Operator for Scan {
                 column_stats,
                 top_n: output_top_n,
                 count_min_sketch: output_count_min_sketch,
+                observed_ndv_columns,
             },
         }))
     }

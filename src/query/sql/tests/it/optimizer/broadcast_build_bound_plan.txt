@@ -246,6 +246,132 @@ EvalScalar
             └── limit: NONE
 
 
+=== confident_unique_key_join_build_is_broadcast ===
+description: A join on a confident unique key is bounded by its small peer side, so it can be broadcast.
+sql: SELECT p.v FROM p JOIN (SELECT d.k FROM d JOIN s ON d.k = s.k) AS j ON p.k = j.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), d.k (#2) AS (#6), k (#5) AS (#7), p.k (#0) AS (#8)]
+    └── Join(Inner)
+        ├── build keys: [d.k (#2), k (#5)]
+        ├── probe keys: [p.k (#0), p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── EvalScalar
+        │       ├── scalars: [d.k (#2) AS (#2), s.k (#4) AS (#5)]
+        │       └── Join(Inner)
+        │           ├── build keys: [s.k (#4)]
+        │           ├── probe keys: [d.k (#2)]
+        │           ├── other filters: []
+        │           ├── Exchange(Hash)
+        │           │   ├── Exchange(Hash): keys: [s.k (#4)]
+        │           │   └── Scan
+        │           │       ├── table: default.s (#2)
+        │           │       ├── filters: []
+        │           │       ├── order by: []
+        │           │       └── limit: NONE
+        │           └── Exchange(Hash)
+        │               ├── Exchange(Hash): keys: [d.k (#2)]
+        │               └── Scan
+        │                   ├── table: default.d (#1)
+        │                   ├── filters: []
+        │                   ├── order by: []
+        │                   └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== fallback_ndv_join_build_is_shuffled ===
+description: A join on a key whose NDV was filled from the row count keeps the large input bound, so it is not broadcast.
+sql: SELECT p.v FROM p JOIN (SELECT d.k FROM d JOIN f ON d.k = f.k) AS j ON p.k = j.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), d.k (#2) AS (#6), k (#5) AS (#7), p.k (#0) AS (#8)]
+    └── Join(Inner)
+        ├── build keys: [d.k (#2), k (#5)]
+        ├── probe keys: [p.k (#0), p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [d.k (#2), k (#5)]
+        │   └── EvalScalar
+        │       ├── scalars: [d.k (#2) AS (#2), f.k (#4) AS (#5)]
+        │       └── Join(Inner)
+        │           ├── build keys: [f.k (#4)]
+        │           ├── probe keys: [d.k (#2)]
+        │           ├── other filters: []
+        │           ├── Exchange(Hash)
+        │           │   ├── Exchange(Hash): keys: [f.k (#4)]
+        │           │   └── Scan
+        │           │       ├── table: default.f (#2)
+        │           │       ├── filters: []
+        │           │       ├── order by: []
+        │           │       └── limit: NONE
+        │           └── Exchange(Hash)
+        │               ├── Exchange(Hash): keys: [d.k (#2)]
+        │               └── Scan
+        │                   ├── table: default.d (#1)
+        │                   ├── filters: []
+        │                   ├── order by: []
+        │                   └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [p.k (#0), p.k (#0)]
+            └── Scan
+                ├── table: default.p (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== unique_key_at_domain_size_join_build_is_shuffled ===
+description: A join on a key whose NDV equals its domain size keeps the large input bound, so it is not broadcast.
+sql: SELECT p.v FROM p JOIN (SELECT d.k FROM d JOIN m ON d.k = m.k) AS j ON p.k = j.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), d.k (#2) AS (#6), k (#5) AS (#7), p.k (#0) AS (#8)]
+    └── Join(Inner)
+        ├── build keys: [d.k (#2), k (#5)]
+        ├── probe keys: [p.k (#0), p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [d.k (#2), k (#5)]
+        │   └── EvalScalar
+        │       ├── scalars: [d.k (#2) AS (#2), m.k (#4) AS (#5)]
+        │       └── Join(Inner)
+        │           ├── build keys: [m.k (#4)]
+        │           ├── probe keys: [d.k (#2)]
+        │           ├── other filters: []
+        │           ├── Exchange(Hash)
+        │           │   ├── Exchange(Hash): keys: [m.k (#4)]
+        │           │   └── Scan
+        │           │       ├── table: default.m (#2)
+        │           │       ├── filters: []
+        │           │       ├── order by: []
+        │           │       └── limit: NONE
+        │           └── Exchange(Hash)
+        │               ├── Exchange(Hash): keys: [d.k (#2)]
+        │               └── Scan
+        │                   ├── table: default.d (#1)
+        │                   ├── filters: []
+        │                   ├── order by: []
+        │                   └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [p.k (#0), p.k (#0)]
+            └── Scan
+                ├── table: default.p (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === left_join_does_not_build_underestimated_join ===
 description: CommuteJoin ranks an underestimated join by its bound, so the small table stays the build side.
 sql: SELECT j.k, d.v FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j LEFT JOIN d ON j.k = d.k
