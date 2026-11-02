@@ -56,10 +56,10 @@ use opendal::EntryMode;
 
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FuseTable;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::snapshot_history;
 use crate::operations::check_table_ref_access;
 
 impl FuseTable {
@@ -552,10 +552,12 @@ impl FuseTable {
     {
         let abort_checker = ctx.clone().get_abort_checker();
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let caches = FuseCaches::instance();
         // grab the table history as stream
         // snapshots are order by timestamp DESC.
-        let mut snapshot_stream = reader.snapshot_history(
+        let mut snapshot_stream = snapshot_history(
+            &caches.snapshots,
+            self.get_operator(),
             location,
             snapshot_version,
             self.meta_location_generator().clone(),

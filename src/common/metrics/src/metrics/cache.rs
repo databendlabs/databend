@@ -15,6 +15,7 @@
 use std::sync::LazyLock;
 
 use databend_common_base::runtime::metrics::FamilyCounter;
+use databend_common_base::runtime::metrics::FamilyCounterMember;
 use databend_common_base::runtime::metrics::FamilyHistogram;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_histogram_family_in_milliseconds;
@@ -39,6 +40,48 @@ static CACHE_POPULATION_PENDING_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_population_pending_count"));
 static CACHE_POPULATION_OVERFLOW_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_population_overflow_count"));
+
+/// The lookup counters of one cache, looked up once: counting a lookup is then an atomic
+/// addition per counter, with no label to build and find. For caches counted on every lookup;
+/// counts the same metrics as the `metrics_inc_cache_*` functions.
+pub struct CacheLookupCounters {
+    access: FamilyCounterMember<CacheLabels>,
+    hit: FamilyCounterMember<CacheLabels>,
+    miss: FamilyCounterMember<CacheLabels>,
+    miss_bytes: FamilyCounterMember<CacheLabels>,
+}
+
+impl CacheLookupCounters {
+    pub fn new(cache_name: &str) -> Self {
+        let member = |family: &FamilyCounter<CacheLabels>| {
+            family.member(CacheLabels {
+                cache_name: cache_name.to_string(),
+            })
+        };
+        CacheLookupCounters {
+            access: member(&CACHE_ACCESS_COUNT),
+            hit: member(&CACHE_HIT_COUNT),
+            miss: member(&CACHE_MISS_COUNT),
+            miss_bytes: member(&CACHE_MISS_BYTES),
+        }
+    }
+
+    pub fn access(&self) {
+        self.access.inc_by(1);
+    }
+
+    pub fn hit(&self) {
+        self.hit.inc_by(1);
+    }
+
+    pub fn miss(&self) {
+        self.miss.inc_by(1);
+    }
+
+    pub fn miss_bytes(&self, bytes: u64) {
+        self.miss_bytes.inc_by(bytes);
+    }
+}
 
 pub fn get_cache_access_count(cache_name: &str) -> u64 {
     get_metric_count_by_name(&CACHE_ACCESS_COUNT, cache_name)
@@ -119,4 +162,24 @@ pub fn metrics_inc_cache_population_overflow_count(c: i64, cache_name: &str) {
             cache_name: cache_name.to_string(),
         })
         .inc_by(c as u64);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The counters count into the metrics the name-based functions read and update.
+    #[test]
+    fn test_lookup_counters_count_the_named_metrics() {
+        let name = "test_lookup_counters_cache";
+        let counters = CacheLookupCounters::new(name);
+        counters.access();
+        counters.access();
+        counters.hit();
+        counters.miss();
+        metrics_inc_cache_hit_count(1, name);
+        assert_eq!(get_cache_access_count(name), 2);
+        assert_eq!(get_cache_hit_count(name), 2);
+        assert_eq!(get_cache_miss_count(name), 1);
+    }
 }
