@@ -19,6 +19,13 @@ status: error
 code: 2004
 message: Need constant number, but got CAST(number (#0) AS Int64)
 
+=== decimal_scale_rejects_grouping ===
+description: grouping is a placeholder, so it is not evaluated as a constant parameter.
+sql: round(CAST(1 AS DECIMAL(10, 3)), grouping())
+status: error
+code: 2004
+message: Need constant number, but got CAST(grouping() AS Int64)
+
 === decimal_precision_from_explicit_cast ===
 description: to_decimal precision accepts a cast literal.
 sql: to_decimal(text, CAST(10 AS INT), 2)

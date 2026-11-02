@@ -75,6 +75,13 @@ status: ok
 scalar: eq(number (#0), '5')
 type: Boolean NULL
 
+=== explicit_try_cast_keeps_parent_nullable ===
+description: A folded explicit cast is not an implicitly cast argument, so the parent keeps it and its nullability.
+sql: try_to_uint8('1') + small
+status: ok
+scalar: plus(1, small (#7))
+type: UInt16 NULL
+
 === type_range_decides_comparison ===
 description: The range of UInt8 decides the comparison.
 sql: small < 300

@@ -108,6 +108,11 @@ async fn test_type_check_bind_time_folding() -> Result<()> {
             "eq has a (number, string) overload, so the literal is not cast and stays a string.",
             "number = '5'",
         ),
+        case(
+            "explicit_try_cast_keeps_parent_nullable",
+            "A folded explicit cast is not an implicitly cast argument, so the parent keeps it and its nullability.",
+            "try_to_uint8('1') + small",
+        ),
         // Types and nullability imply single values.
         case(
             "type_range_decides_comparison",

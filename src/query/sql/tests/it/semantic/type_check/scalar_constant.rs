@@ -22,6 +22,12 @@ async fn test_type_check_constant_parameters() -> Result<()> {
             sql: "round(CAST(number AS DECIMAL(10,3)), number)",
         },
         SqlTestCase {
+            name: "decimal_scale_rejects_grouping",
+            description: "grouping is a placeholder, so it is not evaluated as a constant parameter.",
+            setup_sqls: &[],
+            sql: "round(CAST(1 AS DECIMAL(10, 3)), grouping())",
+        },
+        SqlTestCase {
             name: "decimal_precision_from_explicit_cast",
             description: "to_decimal precision accepts a cast literal.",
             setup_sqls: &[],

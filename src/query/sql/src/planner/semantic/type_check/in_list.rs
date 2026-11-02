@@ -178,7 +178,9 @@ where A: super::TypeCheckAdapter
             } else {
                 scalar
             };
-            let ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) = scalar else {
+            let (ScalarExpr::ConstantExpr(ConstantExpr { value, .. })
+            | ScalarExpr::TypedConstantExpr(ConstantExpr { value, .. }, _)) = scalar
+            else {
                 return Err(ErrorCode::SemanticError(
                     "Values can't contain subquery, aggregate functions, window functions, or UDFs",
                 )

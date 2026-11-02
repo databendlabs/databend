@@ -24,6 +24,7 @@ use databend_common_expression::IfPruning;
 use databend_common_expression::RangeConstraint;
 use databend_common_expression::Scalar;
 use databend_common_expression::expr::ColumnRef;
+use databend_common_expression::expr::Constant;
 use databend_common_expression::expr::Expr;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
@@ -210,6 +211,19 @@ fn test_eval_constant_rule() {
         eval("to_uint8(300)"),
         None,
         "a failing expression is left for runtime"
+    );
+
+    let grouping = builtin_call("grouping", &[]);
+    let one = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Number(NumberScalar::UInt8(1)),
+        data_type: DataType::Number(NumberDataType::UInt8),
+    });
+    let call = builtin_call("plus", &[grouping, one]);
+    assert_eq!(
+        FoldRules::eval_constant(&FunctionContext::default(), &BUILTIN_FUNCTIONS, &call),
+        None,
+        "the grouping placeholder is not evaluated, even nested"
     );
 }
 

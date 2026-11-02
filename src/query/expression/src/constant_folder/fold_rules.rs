@@ -34,9 +34,13 @@ use crate::Value;
 use crate::block::DataBlock;
 use crate::evaluator::Evaluator;
 use crate::expression::Cast;
+use crate::expression::ColumnRef;
 use crate::expression::Constant;
 use crate::expression::Expr;
+use crate::expression::ExprVisitor;
 use crate::expression::FunctionCall;
+use crate::expression::LambdaFunctionCall;
+use crate::expression::visit_expr;
 use crate::property::Domain;
 use crate::type_check::resolve_cast_function;
 use crate::types::DataType;
@@ -356,12 +360,15 @@ impl FoldRules {
     /// Evaluates an expression without column references. Returns `None` when it
     /// references a column, does not produce a scalar, or fails; a failing
     /// expression is left for runtime so that its error is reported there.
+    /// `grouping` is not evaluated: it is a placeholder that the SQL binder
+    /// replaces with a call over the grouping id, and its implementation
+    /// panics.
     pub fn eval_constant<Index: ColumnIndex>(
         func_ctx: &FunctionContext,
         fn_registry: &FunctionRegistry,
         expr: &Expr<Index>,
     ) -> Option<Scalar> {
-        if expr.contains_column_ref() {
+        if needs_input(expr) {
             return None;
         }
         let block = DataBlock::empty_with_rows(1);
@@ -564,4 +571,43 @@ pub enum IfPruning {
     /// Only the arguments at these indices, in order, can affect the result;
     /// they form a well-formed `if` call.
     Keep(Vec<usize>),
+}
+
+/// Whether `expr` references a column or calls the `grouping` placeholder,
+/// checked in one traversal. Either one keeps it from being evaluated alone.
+fn needs_input<Index: ColumnIndex>(expr: &Expr<Index>) -> bool {
+    struct NeedsInput(bool);
+    impl<I: ColumnIndex> ExprVisitor<I> for NeedsInput {
+        fn enter_column_ref(&mut self, _: &ColumnRef<I>) -> Result<Option<Expr<I>>, Self::Error> {
+            self.0 = true;
+            Ok(None)
+        }
+
+        fn enter_function_call(
+            &mut self,
+            call: &FunctionCall<I>,
+        ) -> Result<Option<Expr<I>>, Self::Error> {
+            if self.0 || call.function.signature.name == "grouping" {
+                self.0 = true;
+                Ok(None)
+            } else {
+                Self::visit_function_call(call, self)
+            }
+        }
+
+        fn enter_lambda_function_call(
+            &mut self,
+            call: &LambdaFunctionCall<I>,
+        ) -> Result<Option<Expr<I>>, Self::Error> {
+            if self.0 {
+                Ok(None)
+            } else {
+                Self::visit_lambda_function_call(call, self)
+            }
+        }
+    }
+
+    let mut visitor = NeedsInput(false);
+    visit_expr(expr, &mut visitor).unwrap();
+    visitor.0
 }

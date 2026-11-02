@@ -789,11 +789,12 @@ where A: TypeCheckAdapter
             }
         }
 
-        // Arguments fold before the call is checked, so an argument that
-        // folds only here is one the check cast implicitly, e.g. the literal in
-        // `timestamp > '2001-01-01'` becomes `978307200000000`. It is replaced
-        // only if the literal keeps the checked type, nullability aside, so
-        // that the call binds as checked.
+        // Arguments fold before the call is checked. An argument whose checked
+        // type differs from its own was cast implicitly by the check, e.g. the
+        // literal in `timestamp > '2001-01-01'`, and its value is known only
+        // now. It is replaced only if the literal keeps the checked type,
+        // nullability aside, so that the call binds as checked. Other
+        // arguments, including folded explicit casts, are kept as bound.
         let mut folded_args = call
             .args
             .iter()
@@ -808,7 +809,11 @@ where A: TypeCheckAdapter
             .zip(&arg_facts)
             .map(
                 |(((checked_arg, is_generic), arg), facts)| match &facts.constant {
-                    Some(value) if arg.facts.evaluable && !is_generic => {
+                    Some(value)
+                        if arg.facts.evaluable
+                            && !is_generic
+                            && checked_arg.data_type() != &arg.data_type =>
+                    {
                         let folded = Self::folded_constant(checked_arg.span(), value.clone());
                         if folded.data_type == checked_arg.data_type().remove_nullable() {
                             folded
