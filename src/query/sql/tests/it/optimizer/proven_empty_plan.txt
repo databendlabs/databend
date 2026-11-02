@@ -91,6 +91,29 @@ Aggregate(Final)
         └── limit: NONE
 
 
+=== count_over_all_null_filter ===
+description: COUNT(*) over a comparison on an all-NULL column with exact counts can be folded to 0.
+sql: SELECT count(*) FROM z WHERE n > 10
+raw_plan:
+EvalScalar
+├── scalars: [COUNT(*) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#2)]
+    └── Filter
+        ├── filters: [gt(z.n (#1), 10)]
+        └── Scan
+            ├── table: default.z (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [0 AS (#2)]
+└── DummyTableScan(DummyTableScan { source_table_indexes: [0] })
+
+
 === count_over_filtered_empty_table ===
 description: COUNT(*) over a filter on an exactly empty table can be folded to 0.
 sql: SELECT count(*) FROM e WHERE v > 10
@@ -210,6 +233,56 @@ Join(Right)
     └── Scan
         ├── table: default.t (#0)
         ├── filters: [gt(t.k (#0), 5000)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== left_join_builds_all_null_proven_empty_side ===
+description: On a zero-cardinality tie, a filter proven empty by an all-NULL column is built instead of an estimated-zero input.
+sql: SELECT * FROM (SELECT * FROM z WHERE n > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k > 5000) AS b ON a.k = b.k
+raw_plan:
+EvalScalar
+├── scalars: [z.k (#0) AS (#0), z.n (#1) AS (#1), k (#4) AS (#4), v (#5) AS (#5)]
+└── Join(Left)
+    ├── build keys: [k (#4)]
+    ├── probe keys: [z.k (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [CAST(t.k (#2) AS Int64 NULL) AS (#4), CAST(t.v (#3) AS Int64 NULL) AS (#5)]
+    │   └── EvalScalar
+    │       ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3)]
+    │       └── Filter
+    │           ├── filters: [gt(t.k (#2), 5000)]
+    │           └── Scan
+    │               ├── table: default.t (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [z.k (#0) AS (#0), z.n (#1) AS (#1)]
+        └── Filter
+            ├── filters: [gt(z.n (#1), 10)]
+            └── Scan
+                ├── table: default.z (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+Join(Right)
+├── build keys: [z.k (#0)]
+├── probe keys: [k (#4)]
+├── other filters: []
+├── Scan
+│   ├── table: default.z (#0)
+│   ├── filters: [gt(z.n (#1), 10)]
+│   ├── order by: []
+│   └── limit: NONE
+└── EvalScalar
+    ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3), CAST(t.k (#2) AS Int64 NULL) AS (#4), CAST(t.v (#3) AS Int64 NULL) AS (#5), t.k (#2) AS (#6)]
+    └── Scan
+        ├── table: default.t (#1)
+        ├── filters: [gt(t.k (#2), 5000)]
         ├── order by: []
         └── limit: NONE
 
