@@ -815,3 +815,30 @@ fn test_object_being_changed_has_no_entry() {
     assert!(pool.contains(&indexed));
     assert_consistent(&pool);
 }
+
+/// A change begun before the restart scan has run deletes the object's files the scan has not
+/// indexed yet: a crash after the change would otherwise leave them to the next scan.
+#[test]
+fn test_change_before_the_scan_deletes_unindexed_files() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    let units = [
+        DiskKey::whole("t/a").rel_path(data()),
+        DiskKey::range("t/a", 0..10).rel_path(meta()),
+    ];
+    let other = DiskKey::whole("t/b").rel_path(data());
+    for rel in units.iter().chain([&other]) {
+        write_file(&root, rel, 100);
+    }
+    let object = DiskKey::object_id("t/a");
+    assert!(pool.begin_change(&object).is_empty());
+    assert!(units.iter().all(|rel| !root.join(rel).exists()));
+    assert!(root.join(&other).exists());
+    assert!(pool.end_change(&object, 1, None).is_empty());
+    // As after a restart: nothing of the object is left to index.
+    let fresh = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    assert_eq!(fresh.reload(), (1, 0));
+    assert!(fresh.contains(&other));
+    assert_consistent(&fresh);
+}

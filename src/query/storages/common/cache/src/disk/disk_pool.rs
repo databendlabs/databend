@@ -423,11 +423,45 @@ impl DiskPool {
     }
 
     /// `object` is about to be rewritten or deleted: takes its entries out, returned for
-    /// `delete`, and refuses its entries until `end_change`.
+    /// `delete`, and refuses its entries until `end_change`. Before the restart scan has run,
+    /// the object may also have files not indexed yet: they are deleted here, for a crash
+    /// after the change not to leave them to the next scan.
     pub fn begin_change(&self, object: &str) -> Vec<String> {
-        let mut state = self.state.lock();
-        *state.changing.entry(object.to_string()).or_default() += 1;
-        state.take_object(object)
+        let (victims, reloaded) = {
+            let mut state = self.state.lock();
+            *state.changing.entry(object.to_string()).or_default() += 1;
+            (state.take_object(object), state.reloaded)
+        };
+        if !reloaded {
+            // The scan refuses the object's files from now on, and no write of it is put in
+            // place, so the files left under its name are unindexed ones.
+            self.delete_unindexed_files(object);
+        }
+        victims
+    }
+
+    /// Deletes the files named after `object` (see `DiskKey::rel_path`) in every kind.
+    fn delete_unindexed_files(&self, object: &str) {
+        let Ok(kinds) = fs::read_dir(&self.root) else {
+            return;
+        };
+        let prefix = format!("{object}.");
+        for kind in kinds.filter_map(|e| e.ok()) {
+            let Ok(files) = fs::read_dir(kind.path().join(&object[..3.min(object.len())])) else {
+                continue;
+            };
+            for file in files.filter_map(|e| e.ok()) {
+                let name = file.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with(&prefix) && !name.ends_with(TMP_SUFFIX) {
+                    if let Err(e) = fs::remove_file(file.path()) {
+                        if e.kind() != std::io::ErrorKind::NotFound {
+                            warn!("[DiskCache] failed to remove {:?}: {e}", file.path());
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// The change of `object` begun by `begin_change` is done, or abandoned: as
