@@ -447,69 +447,62 @@ impl DiskPool {
         self.state.lock().remove_object(object, at, oldest_fill)
     }
 
-    /// `object` is about to be rewritten or deleted: takes its entries out, returned for
-    /// `delete`, and refuses its entries until `end_change`. Before the restart scan has run,
-    /// the object may also have files not indexed yet: they are deleted here, for a crash
-    /// after the change not to leave them to the next scan. So are the files of its entries
-    /// taken out earlier whose delete is still pending, as after a resize in the background.
-    pub fn begin_change(&self, object: &str) -> Vec<String> {
-        let (victims, pending, reloaded) = {
+    /// `object` is about to be rewritten or deleted: deletes the files of its entries, and
+    /// refuses its entries until `end_change`. So are deleted the files of its entries taken
+    /// out earlier whose delete is still pending, as after a resize in the background, and,
+    /// before the restart scan has run, its files not indexed yet: none may be left for a scan
+    /// after a crash. Returns the entries dropped, or the first file that could not be
+    /// deleted: the change must not proceed then. Either way `end_change` ends it.
+    pub fn begin_change(&self, object: &str) -> std::io::Result<usize> {
+        let (pending, victims, reloaded) = {
             let mut state = self.state.lock();
             *state.changing.entry(object.to_string()).or_default() += 1;
-            let victims = state.take_object(object);
-            // `victims` are deleted by the caller before the change proceeds.
-            let pending: Vec<_> = state
+            // Taken before the object's own entries join them.
+            let pending: Vec<String> = state
                 .deleting_objects
                 .get(object)
-                .map(|rels| {
-                    rels.iter()
-                        .filter(|rel| !victims.contains(rel))
-                        .cloned()
-                        .collect()
-                })
+                .map(|rels| rels.iter().cloned().collect())
                 .unwrap_or_default();
-            (victims, pending, state.reloaded)
+            (pending, state.take_object(object), state.reloaded)
         };
-        // Their marks stay for the pending delete to clear; no file of the key is written
+        // The pending deletes keep their marks to clear; no file of those keys is written
         // meanwhile.
-        for rel in &pending {
-            let path = self.root.join(rel);
-            if let Err(e) = fs::remove_file(&path) {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    warn!("[DiskCache] failed to remove {path:?}: {e}");
-                }
-            }
-        }
+        let pending = remove_files(&self.root, &pending);
+        let taken = self.try_delete(&victims);
+        let mut deleted = pending.and(taken);
         if !reloaded {
             // The scan refuses the object's files from now on, and no write of it is put in
             // place, so the files left under its name are unindexed ones.
-            self.delete_unindexed_files(object);
+            deleted = deleted.and(self.delete_unindexed_files(object));
         }
-        victims
+        deleted.map(|()| victims.len())
     }
 
     /// Deletes the files named after `object` (see `DiskKey::rel_path`) in every kind.
-    fn delete_unindexed_files(&self, object: &str) {
-        let Ok(kinds) = fs::read_dir(&self.root) else {
-            return;
+    fn delete_unindexed_files(&self, object: &str) -> std::io::Result<()> {
+        let kinds = match fs::read_dir(&self.root) {
+            Ok(kinds) => kinds,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e),
         };
         let prefix = format!("{object}.");
-        for kind in kinds.filter_map(|e| e.ok()) {
-            let Ok(files) = fs::read_dir(kind.path().join(&object[..3.min(object.len())])) else {
-                continue;
+        let mut found = Vec::new();
+        for kind in kinds {
+            let dir = kind?.path().join(&object[..3.min(object.len())]);
+            let files = match fs::read_dir(&dir) {
+                Ok(files) => files,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(e),
             };
-            for file in files.filter_map(|e| e.ok()) {
-                let name = file.file_name();
-                let name = name.to_string_lossy();
-                if name.starts_with(&prefix) && !name.ends_with(TMP_SUFFIX) {
-                    if let Err(e) = fs::remove_file(file.path()) {
-                        if e.kind() != std::io::ErrorKind::NotFound {
-                            warn!("[DiskCache] failed to remove {:?}: {e}", file.path());
-                        }
-                    }
+            for file in files {
+                let path = file?.path();
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+                if name.is_some_and(|n| n.starts_with(&prefix) && !n.ends_with(TMP_SUFFIX)) {
+                    found.push(path);
                 }
             }
         }
+        remove_paths(found.iter())
     }
 
     /// The change of `object` begun by `begin_change` is done, or abandoned: as
@@ -538,18 +531,22 @@ impl DiskPool {
     /// Deletes the files of entries taken out of the index, then lets their keys be written
     /// again.
     pub fn delete(&self, victims: &[String]) {
-        for rel in victims {
-            let path = self.root.join(rel);
-            if let Err(e) = fs::remove_file(&path) {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    warn!("[DiskCache] failed to remove {path:?}: {e}");
-                }
-            }
+        if let Err(e) = self.try_delete(victims) {
+            warn!(
+                "[DiskCache] failed to remove a file of pool {}: {e}",
+                self.pool.name()
+            );
         }
+    }
+
+    /// `delete`, returning the first file that could not be deleted. All are tried.
+    fn try_delete(&self, victims: &[String]) -> std::io::Result<()> {
+        let deleted = remove_files(&self.root, victims);
         let mut state = self.state.lock();
         for rel in victims {
             state.unmark_deleting(rel);
         }
+        deleted
     }
 
     /// Changes the capacity; returns the entries taken out to fit it, for `delete`.
@@ -709,6 +706,33 @@ impl DiskPool {
         );
         (loaded, deleted)
     }
+}
+
+/// Deletes the files of `rels` under `root`, all of them; returns the first error but a file
+/// already gone.
+fn remove_files(root: &Path, rels: &[String]) -> std::io::Result<()> {
+    remove_paths(
+        rels.iter()
+            .map(|rel| root.join(rel))
+            .collect::<Vec<_>>()
+            .iter(),
+    )
+}
+
+fn remove_paths<'a>(paths: impl Iterator<Item = &'a PathBuf>) -> std::io::Result<()> {
+    let mut first = Ok(());
+    for path in paths {
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                if first.is_ok() {
+                    first = Err(std::io::Error::new(e.kind(), format!("{path:?}: {e}")));
+                }
+            }
+        }
+    }
+    first
 }
 
 /// Every file under `root`, recursively, scanning directories in parallel.

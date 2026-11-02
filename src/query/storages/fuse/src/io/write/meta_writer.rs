@@ -38,7 +38,7 @@ where T: Marshal + Sync + Send
     async fn write_meta(&self, data_accessor: &Operator, location: &str) -> Result<()> {
         // A meta file rewritten in place (a segment by ANALYZE) must not be read back from the
         // disk cache as it was.
-        let _change = DiskCachedStorage::new(data_accessor.clone()).begin_change(location);
+        let _change = DiskCachedStorage::new(data_accessor.clone()).begin_change(location)?;
         data_accessor.write(location, self.marshal()?).await?;
         Ok(())
     }
@@ -63,7 +63,7 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
     ) -> Result<()> {
         let bytes = self.marshal()?;
         // Segments are rewritten in place by ANALYZE: keep the old bytes out of the disk cache.
-        let change = DiskCachedStorage::new(data_accessor.clone()).begin_change(location);
+        let change = DiskCachedStorage::new(data_accessor.clone()).begin_change(location)?;
         data_accessor.write(location, bytes.clone()).await?;
         drop(change);
         let segments = &FuseCaches::instance().segments;

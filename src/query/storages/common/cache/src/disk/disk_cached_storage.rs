@@ -115,14 +115,17 @@ impl DiskCachedStorage {
     /// in place or deleted, and keeps it out until the returned change is dropped, once the
     /// object is written or deleted (see `DiskCache::begin_change`). Paths of fuse tables are
     /// never reused otherwise, so only such callers need it; the memory caches of the decoded
-    /// values are evicted by their own handles.
-    pub fn begin_change(&self, path: &str) -> Option<ObjectChange> {
-        let disk = self.disk.as_ref()?;
+    /// values are evicted by their own handles. Fails when the cached files cannot be deleted:
+    /// the object must not change then.
+    pub fn begin_change(&self, path: &str) -> Result<Option<ObjectChange>> {
+        let Some(disk) = self.disk.as_ref() else {
+            return Ok(None);
+        };
         let path = match &self.key_prefix {
             Some(prefix) => format!("{prefix}{path}"),
             None => path.to_string(),
         };
-        Some(disk.begin_change(&path))
+        disk.begin_change(&path).map(Some)
     }
 
     /// For writes, listing and deletes, which do not go through the disk cache.

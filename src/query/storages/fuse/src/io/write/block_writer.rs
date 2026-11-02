@@ -444,7 +444,7 @@ impl BlockWriter {
             let location = &index_state.location.0;
             // Bloom indexes are rewritten in place (ngram refresh, missing index rebuild): keep
             // the old bytes out of the disk cache. The memory caches are evicted by the callers.
-            let change = DiskCachedStorage::new(dal.clone()).begin_change(location);
+            let change = DiskCachedStorage::new(dal.clone()).begin_change(location)?;
             write_data(index_state.data, dal, location).await?;
             drop(change);
 

@@ -526,14 +526,14 @@ async fn test_change_drops_all_units_of_the_object() {
     let other = DiskKey::whole("1/2/_i_b_v2/other.parquet");
     put_and_wait(&cache, filters, &other, Bytes::from(vec![2; 100])).await;
 
-    assert_eq!(cache.begin_change(path).dropped(), 3);
+    assert_eq!(cache.begin_change(path).unwrap().dropped(), 3);
     for (kind, key) in &units {
         assert!(!cache.contains(*kind, key), "{key}");
         assert_eq!(cache.get(*kind, key).await, None);
     }
     assert!(cache.contains(filters, &other));
     assert_eq!(files_under(&dir.path().join("v2")).len(), 1);
-    assert_eq!(cache.begin_change(path).dropped(), 0);
+    assert_eq!(cache.begin_change(path).unwrap().dropped(), 0);
     // The object can be cached again, as rewritten.
     put_and_wait(&cache, filters, &units[0].1, Bytes::from(vec![3; 100])).await;
     assert_eq!(
@@ -554,7 +554,7 @@ async fn test_change_rejects_fills_started_before() {
     let key = DiskKey::whole(path);
     let read_before = cache.begin_fill();
     // The object is rewritten before the old bytes are queued.
-    assert_eq!(cache.begin_change(path).dropped(), 0);
+    assert_eq!(cache.begin_change(path).unwrap().dropped(), 0);
     assert!(
         cache
             .put(kind, &key, Bytes::from(vec![1; 100]), &read_before)
@@ -634,7 +634,7 @@ fn test_invalidations_are_dropped_when_the_oldest_fill_finishes() {
     let old = cache.begin_fill();
     let newer = cache.begin_fill();
     for path in &paths {
-        assert_eq!(cache.begin_change(path).dropped(), 0);
+        assert_eq!(cache.begin_change(path).unwrap().dropped(), 0);
     }
     assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) > 0));
     // A fill that is not the oldest finishing changes nothing.
@@ -653,7 +653,7 @@ async fn test_units_are_refused_during_a_change() {
     let path = "1/2/_sg/segment.mpk";
     let kind = CacheKind::of::<segment::Info>();
     let key = DiskKey::whole(path);
-    let change = cache.begin_change(path);
+    let change = cache.begin_change(path).unwrap();
     let during = cache.begin_fill();
     assert!(
         cache

@@ -309,20 +309,27 @@ impl DiskCache {
     /// on disk, in every kind and pool, files included, and refuses its units until the
     /// returned change is dropped, once the object is written or deleted. Then the units of
     /// fills started before are rejected too, still queued or being written. Its cached bytes
-    /// are so never read again, also after a crash during the change.
-    pub fn begin_change(self: &Arc<Self>, path: &str) -> ObjectChange {
-        let object = DiskKey::object_id(path);
-        let mut dropped = 0;
-        for pool in &self.pools {
-            let victims = pool.begin_change(&object);
-            pool.delete(&victims);
-            dropped += victims.len();
-        }
-        ObjectChange {
+    /// are so never read again, also after a crash during the change. Fails when a file of the
+    /// object cannot be deleted, as on a volume remounted read-only: it would be read again
+    /// after a restart, so the object must not change.
+    pub fn begin_change(self: &Arc<Self>, path: &str) -> Result<ObjectChange> {
+        let mut change = ObjectChange {
             cache: self.clone(),
-            object,
-            dropped,
+            object: DiskKey::object_id(path),
+            begun: 0,
+            dropped: 0,
+        };
+        for pool in &self.pools {
+            // Counted first: the pool's change is ended on drop, also when it fails.
+            change.begun += 1;
+            change.dropped += pool.begin_change(&change.object).map_err(|e| {
+                ErrorCode::StorageOther(format!(
+                    "[DiskCache] cannot delete the cached files of {path} before it is \
+                     rewritten or deleted: {e}"
+                ))
+            })?;
         }
+        Ok(change)
     }
 
     /// Runtime capacity of a pool, in bytes; 0 empties it and stops reads and writes. Files are
@@ -404,6 +411,8 @@ impl DiskCache {
 pub struct ObjectChange {
     cache: Arc<DiskCache>,
     object: String,
+    /// The pools the change was begun in, in order.
+    begun: usize,
     dropped: usize,
 }
 
@@ -417,7 +426,7 @@ impl ObjectChange {
 impl Drop for ObjectChange {
     fn drop(&mut self) {
         let (at, oldest_fill) = self.cache.fence.invalidation_point();
-        for pool in &self.cache.pools {
+        for pool in self.cache.pools.iter().take(self.begun) {
             pool.delete(&pool.end_change(&self.object, at, oldest_fill));
         }
     }

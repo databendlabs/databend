@@ -788,9 +788,7 @@ fn test_object_being_changed_has_no_entry() {
     put_file(&pool, &root, &indexed, 0);
     assert!(pool.reserve(&writing, 100).reserved);
 
-    let victims = pool.begin_change(&object);
-    assert_eq!(victims, vec![indexed.clone()]);
-    pool.delete(&victims);
+    assert_eq!(pool.begin_change(&object).unwrap(), 1);
     assert!(!root.join(&indexed).exists());
     // A write reserved before, and new reservations, are refused while the change runs.
     let commit = commit_file(&root, &writing, 100);
@@ -803,7 +801,7 @@ fn test_object_being_changed_has_no_entry() {
     assert!(files_under(&root).is_empty());
 
     // A second change of the object overlaps the first; the object stays out until both end.
-    assert!(pool.begin_change(&object).is_empty());
+    assert_eq!(pool.begin_change(&object).unwrap(), 0);
     assert!(pool.end_change(&object, 5, Some(2)).is_empty());
     assert!(!pool.reserve(&indexed, 100).reserved);
     assert!(pool.end_change(&object, 6, Some(2)).is_empty());
@@ -832,7 +830,7 @@ fn test_change_before_the_scan_deletes_unindexed_files() {
         write_file(&root, rel, 100);
     }
     let object = DiskKey::object_id("t/a");
-    assert!(pool.begin_change(&object).is_empty());
+    assert_eq!(pool.begin_change(&object).unwrap(), 0);
     assert!(units.iter().all(|rel| !root.join(rel).exists()));
     assert!(root.join(&other).exists());
     assert!(pool.end_change(&object, 1, None).is_empty());
@@ -861,7 +859,7 @@ fn test_change_finishes_pending_deletes_of_the_object() {
     assert_eq!(pending.len(), 2);
 
     let object = DiskKey::object_id("t/a");
-    assert!(pool.begin_change(&object).is_empty());
+    assert_eq!(pool.begin_change(&object).unwrap(), 0);
     assert!(!root.join(&unit).exists());
     assert!(
         root.join(&other).exists(),
@@ -872,5 +870,37 @@ fn test_change_finishes_pending_deletes_of_the_object() {
     assert!(files_under(&root).is_empty());
     pool.delete(&pool.set_cap(10_000));
     put_file(&pool, &root, &unit, 2);
+    assert_consistent(&pool);
+}
+
+/// A file of the object that cannot be deleted, as on a volume remounted read-only, fails the
+/// change: the object must not change while a copy of it would be read after a restart. The
+/// change still ends, and the object's files are refused meanwhile.
+#[test]
+fn test_change_fails_when_a_file_cannot_be_deleted() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    assert_eq!(pool.reload(), (0, 0));
+    let unit = DiskKey::whole("t/a").rel_path(data());
+    put_file(&pool, &root, &unit, 0);
+    let parent = root.join(&unit).parent().unwrap().to_path_buf();
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
+    // As root, permissions do not stop the delete; nothing to check then.
+    if fs::File::create(parent.join("probe")).is_ok() {
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+
+    let object = DiskKey::object_id("t/a");
+    assert!(pool.begin_change(&object).is_err());
+    assert!(root.join(&unit).exists() && !pool.contains(&unit));
+    assert!(pool.end_change(&object, 1, None).is_empty());
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+    // A later change deletes the file.
+    assert_eq!(pool.begin_change(&object).unwrap(), 0);
+    assert!(!root.join(&unit).exists());
+    assert!(pool.end_change(&object, 2, None).is_empty());
     assert_consistent(&pool);
 }

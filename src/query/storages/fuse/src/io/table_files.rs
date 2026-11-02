@@ -42,11 +42,13 @@ impl TableFiles {
 
     pub async fn remove_file_in_batch(&self, locations: &[String]) -> Result<()> {
         // Ended when the delete is done, or dropped: a cancelled query drops it at the await.
-        let _changes: Vec<_> = locations
+        // A file whose cached copy cannot be deleted is not deleted: it would be read again
+        // from the disk cache after a restart.
+        let _changes = locations
             .iter()
             // As `Files` deletes it, and as readers name it.
-            .filter_map(|location| self.disk.begin_change(location.trim_start_matches('/')))
-            .collect();
+            .map(|location| self.disk.begin_change(location.trim_start_matches('/')))
+            .collect::<Result<Vec<_>>>()?;
         self.files.remove_file_in_batch(locations).await
     }
 }
