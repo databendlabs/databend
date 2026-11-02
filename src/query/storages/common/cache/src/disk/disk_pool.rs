@@ -37,6 +37,7 @@
 //! turned off is refused by `reserve`, `publish` and the restart scan alike, so no entry of it
 //! comes back from a write queued or a file scanned before.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -121,6 +122,8 @@ struct State {
     /// The last point each object was invalidated at, while fills started before it may still
     /// publish, or while the restart scan has not run.
     invalidated: HashMap<String, u64>,
+    /// The same, by point, for pruning in order.
+    invalidation_order: BTreeMap<u64, String>,
     /// Whether the restart scan has run.
     reloaded: bool,
     /// Kinds turned off, by kind index.
@@ -130,6 +133,30 @@ struct State {
 impl State {
     fn kind_off(&self, rel: &str) -> bool {
         kind_of(rel).is_some_and(|kind| self.kinds_off[kind.index()])
+    }
+
+    /// Records `object` as invalidated at `at`, unless at a later point already: invalidations
+    /// reach the pools out of clock order.
+    fn invalidate(&mut self, object: &str, at: u64) {
+        if let Some(point) = self.invalidated.get(object).copied() {
+            if point >= at {
+                return;
+            }
+            self.invalidation_order.remove(&point);
+        }
+        self.invalidated.insert(object.to_string(), at);
+        self.invalidation_order.insert(at, object.to_string());
+    }
+
+    /// Drops the points up to `bound`, in order.
+    fn prune_invalidations(&mut self, bound: u64) {
+        while let Some(entry) = self.invalidation_order.first_entry() {
+            if *entry.key() > bound {
+                break;
+            }
+            let object = entry.remove();
+            self.invalidated.remove(&object);
+        }
     }
 }
 
@@ -225,6 +252,7 @@ impl DiskPool {
                 in_flight: HashSet::new(),
                 objects: HashMap::new(),
                 invalidated: HashMap::new(),
+                invalidation_order: BTreeMap::new(),
                 reloaded: false,
                 kinds_off: CacheKind::all().map(|_| false).collect(),
             }),
@@ -347,17 +375,14 @@ impl DiskPool {
     pub fn remove_object(&self, object: &str, at: u64, oldest_fill: Option<u64>) -> Vec<String> {
         let mut state = self.state.lock();
         if state.reloaded {
-            // Points no fill running at `at` started before reject nothing any more. Points
-            // after `at` are left alone: invalidations reach the pools out of clock order, and
-            // `oldest_fill` says nothing of fills started after `at`.
-            state.invalidated.retain(|_, point| {
-                *point > at || oldest_fill.is_some_and(|oldest| oldest < *point)
-            });
+            // Points no fill running at `at` started before reject nothing any more: those up
+            // to `at` and to the oldest fill. Points after `at` are left alone: invalidations
+            // reach the pools out of clock order, and `oldest_fill` says nothing of fills
+            // started after `at`.
+            state.prune_invalidations(oldest_fill.map_or(at, |oldest| oldest.min(at)));
         }
         if !state.reloaded || oldest_fill.is_some_and(|oldest| oldest < at) {
-            // Out of clock order, an older point arrives after a newer one of the object.
-            let point = state.invalidated.entry(object.to_string()).or_insert(at);
-            *point = (*point).max(at);
+            state.invalidate(object, at);
         }
         // Detached first: taking each entry out then finds no set to update.
         let rels = state.objects.remove(object).unwrap_or_default();

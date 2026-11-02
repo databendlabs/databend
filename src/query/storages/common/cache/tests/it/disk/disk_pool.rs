@@ -715,3 +715,44 @@ fn test_remove_object_of_many_units() {
     );
     assert_consistent(&pool);
 }
+
+/// Points kept while an old fill runs are dropped in order once it is done: the next
+/// invalidation drops them all, and later ones find none to scan.
+#[test]
+fn test_invalidation_points_are_pruned_in_order() {
+    let pool = pool(1000);
+    assert_eq!(pool.reload(), (0, 0));
+    let objects: Vec<_> = (0..1_000u64)
+        .map(|i| DiskKey::object_id(&format!("t/{i}")))
+        .collect();
+    // A fill started at 5 runs while they are invalidated.
+    for (i, object) in objects.iter().enumerate() {
+        assert!(
+            pool.remove_object(object, 10 + i as u64, Some(5))
+                .is_empty()
+        );
+    }
+    assert!(objects.iter().all(|o| pool.invalidated_at(o).is_some()));
+    // The fill is done: an invalidation sees none running.
+    assert!(
+        pool.remove_object(&DiskKey::object_id("t/x"), 2_000, None)
+            .is_empty()
+    );
+    assert!(objects.iter().all(|o| pool.invalidated_at(o).is_none()));
+    // An older fill still running keeps the points after it, and drops those before.
+    assert!(
+        pool.remove_object(&objects[0], 3_000, Some(2_500))
+            .is_empty()
+    );
+    assert!(
+        pool.remove_object(&objects[1], 3_001, Some(2_500))
+            .is_empty()
+    );
+    assert!(
+        pool.remove_object(&objects[2], 3_002, Some(3_000))
+            .is_empty()
+    );
+    assert_eq!(pool.invalidated_at(&objects[0]), None);
+    assert_eq!(pool.invalidated_at(&objects[1]), Some(3_001));
+    assert_eq!(pool.invalidated_at(&objects[2]), Some(3_002));
+}

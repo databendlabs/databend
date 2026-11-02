@@ -139,6 +139,7 @@ select name from system.caches where name in (
     'disk_cache_compact_segment_info',
     'disk_cache_bloom_index_filter',
     'disk_cache_inverted_index_meta_data',
+    'disk_cache_inverted_index_lookup',
     'disk_cache_virtual_column_file_meta_data',
     'disk_cache_column_data'
 ) and hit > 0 and num_items > 0 and size > 0 order by name;
@@ -146,6 +147,7 @@ select name from system.caches where name in (
 disk_cache_bloom_index_filter
 disk_cache_column_data
 disk_cache_compact_segment_info
+disk_cache_inverted_index_lookup
 disk_cache_inverted_index_meta_data
 disk_cache_table_snapshot
 disk_cache_virtual_column_file_meta_data

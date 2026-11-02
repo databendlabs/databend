@@ -556,8 +556,14 @@ impl RemoteBundleFileHandle {
             return Ok(OwnedBytes::empty());
         }
 
+        // A tier is used when the kind is cached in memory or on disk, either alone.
+        let lookup = CacheKind::of::<inverted::Lookup>();
+        let lookup_cached = self.lookup_cache.is_enabled()
+            || self
+                .storage
+                .uses_disk(lookup, self.lookup_cache.disk_fill());
         match self.cache_policy {
-            RangeCachePolicy::LookupWhole if self.lookup_cache.is_enabled() => {
+            RangeCachePolicy::LookupWhole if lookup_cached => {
                 return self.read_cached_lookup_file(range).await;
             }
             RangeCachePolicy::Pages(kind) => {
@@ -565,15 +571,26 @@ impl RemoteBundleFileHandle {
                     if let Some(data) = self.cached_full_payload() {
                         return Ok(OwnedBytes::new(data.slice(range).to_vec()));
                     }
+                    let full_payload = CacheKind::of::<inverted::FullPayload>();
                     if self.is_full_postings_read(&range)
-                        && (self.payload_cache.is_enabled() || self.full_payload_cache.is_enabled())
+                        && (self.payload_cache.is_enabled()
+                            || self.full_payload_cache.is_enabled()
+                            || self
+                                .storage
+                                .uses_disk(full_payload, self.full_payload_cache.disk_fill()))
                     {
                         return self.read_full_postings_file().await;
                     }
                 }
                 let pages_enabled = match kind {
-                    PageCacheKind::Lookup => self.lookup_cache.is_enabled(),
-                    PageCacheKind::Payload => self.payload_cache.is_enabled(),
+                    PageCacheKind::Lookup => lookup_cached,
+                    PageCacheKind::Payload => {
+                        self.payload_cache.is_enabled()
+                            || self.storage.uses_disk(
+                                CacheKind::of::<inverted::Payload>(),
+                                self.payload_cache.disk_fill(),
+                            )
+                    }
                 };
                 if pages_enabled {
                     return self.read_pages(kind, range).await;

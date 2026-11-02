@@ -586,3 +586,30 @@ fn test_concurrent_pool_resizes_stay_within_max_bytes() {
     let total: u64 = cache.pool_stats().iter().map(|(_, s)| s.cap).sum();
     assert!(total <= 100_000, "{total}");
 }
+
+/// A kind turned on and off from two threads at once ends consistent: when it reads as on, its
+/// entries are written; when off, they are not.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_kind_toggles_stay_consistent() {
+    let dir = TempDir::new().unwrap();
+    let cache = Arc::new(cache(&dir));
+    let threads: Vec<_> = [true, false]
+        .into_iter()
+        .map(|first| {
+            let cache = cache.clone();
+            Thread::spawn(move || {
+                for i in 0..2_000 {
+                    cache.set_kind_enabled(data(), (i % 2 == 0) == first);
+                }
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
+    let key = key(0);
+    let queued = cache.put(data(), &key, value(0), &cache.begin_fill()).await;
+    wait_for(|| cache.stats().queued_bytes == 0);
+    assert_eq!(cache.is_kind_enabled(data()), queued);
+    assert_eq!(cache.is_kind_enabled(data()), cache.contains(data(), &key));
+}

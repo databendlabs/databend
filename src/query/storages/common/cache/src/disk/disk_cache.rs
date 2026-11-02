@@ -84,8 +84,9 @@ pub struct DiskCache {
     flight: SingleFlight<Bytes>,
     /// Orders fills against `evict_object`.
     fence: Arc<FillFence>,
-    /// Serializes `set_pool_cap`: the check of the pools' sum and the update.
-    resizing: Mutex<()>,
+    /// Serializes runtime updates: `set_pool_cap`, the check of the pools' sum and the update,
+    /// and `set_kind_enabled`, the flag read by `is_enabled` and the pool's.
+    updates: Mutex<()>,
 }
 
 impl DiskCache {
@@ -161,7 +162,7 @@ impl DiskCache {
             names: CacheKind::all().map(disk_name).collect(),
             flight: SingleFlight::default(),
             fence: Arc::new(FillFence::default()),
-            resizing: Mutex::new(()),
+            updates: Mutex::new(()),
         })
     }
 
@@ -318,7 +319,7 @@ impl DiskCache {
     /// Runtime capacity of a pool, in bytes; 0 empties it and stops reads and writes. Files are
     /// deleted in the background. Pools together may not exceed `max_bytes`.
     pub fn set_pool_cap(&self, pool: Pool, cap: u64) -> Result<()> {
-        let _resizing = self.resizing.lock();
+        let _updates = self.updates.lock();
         let others: u64 = Pool::ALL
             .iter()
             .filter(|p| **p != pool)
@@ -348,6 +349,7 @@ impl DiskCache {
     /// Turns the disk cache of `kind` on or off. Turning it off drops the kind's entries, and
     /// its pool refuses entries of it queued or scanned before.
     pub fn set_kind_enabled(&self, kind: CacheKind, enabled: bool) {
+        let _updates = self.updates.lock();
         self.kinds_enabled[kind.index()].store(enabled, Ordering::Relaxed);
         let pool = self.pool(kind);
         delete_in_background(pool.clone(), pool.set_kind_enabled(kind, enabled));
