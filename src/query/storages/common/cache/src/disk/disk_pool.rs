@@ -121,6 +121,8 @@ struct State {
     kinds: Vec<(u64, u64)>,
     /// Entries taken out whose files `delete` has not removed yet.
     deleting: HashSet<String>,
+    /// The same, by object id, for `begin_change` to finish them.
+    deleting_objects: HashMap<String, HashSet<String>>,
     /// Keys reserved by writers and not yet published or released.
     in_flight: HashSet<String>,
     /// The entries of each object, by object id.
@@ -230,10 +232,32 @@ impl State {
         Some(size)
     }
 
+    fn mark_deleting(&mut self, rel: &str) {
+        self.deleting.insert(rel.to_string());
+        if let Some(object) = object_of(rel) {
+            self.deleting_objects
+                .entry(object.to_string())
+                .or_default()
+                .insert(rel.to_string());
+        }
+    }
+
+    fn unmark_deleting(&mut self, rel: &str) {
+        self.deleting.remove(rel);
+        if let Some(object) = object_of(rel) {
+            if let Some(rels) = self.deleting_objects.get_mut(object) {
+                rels.remove(rel);
+                if rels.is_empty() {
+                    self.deleting_objects.remove(object);
+                }
+            }
+        }
+    }
+
     /// Accounts an entry taken out of the index.
     fn taken(&mut self, rel: &str, size: u64) {
         self.account(kind_of(rel), size, false);
-        self.deleting.insert(rel.to_string());
+        self.mark_deleting(rel);
         if let Some(object) = object_of(rel) {
             if let Some(rels) = self.objects.get_mut(object) {
                 rels.remove(rel);
@@ -283,6 +307,7 @@ impl DiskPool {
                 writing: 0,
                 kinds: CacheKind::all().map(|_| (0, 0)).collect(),
                 deleting: HashSet::new(),
+                deleting_objects: HashMap::new(),
                 in_flight: HashSet::new(),
                 objects: HashMap::new(),
                 invalidated: HashMap::new(),
@@ -425,13 +450,36 @@ impl DiskPool {
     /// `object` is about to be rewritten or deleted: takes its entries out, returned for
     /// `delete`, and refuses its entries until `end_change`. Before the restart scan has run,
     /// the object may also have files not indexed yet: they are deleted here, for a crash
-    /// after the change not to leave them to the next scan.
+    /// after the change not to leave them to the next scan. So are the files of its entries
+    /// taken out earlier whose delete is still pending, as after a resize in the background.
     pub fn begin_change(&self, object: &str) -> Vec<String> {
-        let (victims, reloaded) = {
+        let (victims, pending, reloaded) = {
             let mut state = self.state.lock();
             *state.changing.entry(object.to_string()).or_default() += 1;
-            (state.take_object(object), state.reloaded)
+            let victims = state.take_object(object);
+            // `victims` are deleted by the caller before the change proceeds.
+            let pending: Vec<_> = state
+                .deleting_objects
+                .get(object)
+                .map(|rels| {
+                    rels.iter()
+                        .filter(|rel| !victims.contains(rel))
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default();
+            (victims, pending, state.reloaded)
         };
+        // Their marks stay for the pending delete to clear; no file of the key is written
+        // meanwhile.
+        for rel in &pending {
+            let path = self.root.join(rel);
+            if let Err(e) = fs::remove_file(&path) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    warn!("[DiskCache] failed to remove {path:?}: {e}");
+                }
+            }
+        }
         if !reloaded {
             // The scan refuses the object's files from now on, and no write of it is put in
             // place, so the files left under its name are unindexed ones.
@@ -500,7 +548,7 @@ impl DiskPool {
         }
         let mut state = self.state.lock();
         for rel in victims {
-            state.deleting.remove(rel);
+            state.unmark_deleting(rel);
         }
     }
 
@@ -644,13 +692,13 @@ impl DiskPool {
                     true
                 } else {
                     // Marked until deleted, so no write of the key starts meanwhile.
-                    state.deleting.insert(rel.clone());
+                    state.mark_deleting(&rel);
                     false
                 }
             };
             if !admitted {
                 remove(path, &deleted);
-                self.state.lock().deleting.remove(&rel);
+                self.state.lock().unmark_deleting(&rel);
             }
         });
         self.state.lock().reloaded = true;

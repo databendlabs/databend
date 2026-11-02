@@ -842,3 +842,35 @@ fn test_change_before_the_scan_deletes_unindexed_files() {
     assert!(fresh.contains(&other));
     assert_consistent(&fresh);
 }
+
+/// Entries of an object taken out earlier, whose files a background delete has not removed
+/// yet, as after a resize: a change of the object deletes those files before it proceeds,
+/// and leaves the pending delete to clear their marks.
+#[test]
+fn test_change_finishes_pending_deletes_of_the_object() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    assert_eq!(pool.reload(), (0, 0));
+    let unit = DiskKey::whole("t/a").rel_path(data());
+    let other = DiskKey::whole("t/b").rel_path(data());
+    put_file(&pool, &root, &unit, 0);
+    put_file(&pool, &root, &other, 0);
+    // The resize takes both out; their delete has not run.
+    let pending = pool.set_cap(0);
+    assert_eq!(pending.len(), 2);
+
+    let object = DiskKey::object_id("t/a");
+    assert!(pool.begin_change(&object).is_empty());
+    assert!(!root.join(&unit).exists());
+    assert!(
+        root.join(&other).exists(),
+        "another object's delete is left alone"
+    );
+    assert!(pool.end_change(&object, 1, None).is_empty());
+    pool.delete(&pending);
+    assert!(files_under(&root).is_empty());
+    pool.delete(&pool.set_cap(10_000));
+    put_file(&pool, &root, &unit, 2);
+    assert_consistent(&pool);
+}
