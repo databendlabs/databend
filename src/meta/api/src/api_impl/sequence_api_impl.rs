@@ -13,13 +13,10 @@
 // limitations under the License.
 
 use databend_common_meta_app::KeyUnknownBuilder;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::SequenceError;
 use databend_common_meta_app::app_error::UnsupportedSequenceStorageVersion;
 use databend_common_meta_app::app_error::WrongSequenceCount;
-use databend_common_meta_app::principal::OwnershipObject;
-use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -35,8 +32,7 @@ use databend_common_meta_app::value_id::ValueId;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
-use databend_meta_client::kvapi::StructKey;
-use databend_meta_client::types::MatchSeq;
+use databend_meta_client::types::ConditionResult;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnRequest;
@@ -46,12 +42,13 @@ use log::debug;
 
 use super::sequence_nextval_impl::NextVal;
 use crate::SequenceApi;
-use crate::kv::ownership::drop_owned_object;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
+use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
+use crate::txn_del;
 use crate::txn_op_builder_util::txn_put_pb;
 
 #[async_trait::async_trait]
@@ -217,17 +214,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
-        let ownership =
-            TenantOwnershipObjectIdent::new(req.ident.tenant(), OwnershipObject::Sequence {
-                name: req.ident.name().to_string(),
-            });
-        let removed = drop_owned_object(self, &req.ident, MatchSeq::GE(1), &ownership, &[
-            storage_ident.to_string_key(),
-        ])
-        .await?;
+        let txn = TxnRequest::new(
+            vec![txn_cond_seq(&req.ident, ConditionResult::Gt, 0)],
+            vec![txn_del(&req.ident), txn_del(&storage_ident)],
+        );
+        let (success, _response) = send_txn(self, txn).await?;
 
-        Ok(DropSequenceReply {
-            success: removed.is_some(),
-        })
+        Ok(DropSequenceReply { success })
     }
 }

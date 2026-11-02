@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod owned_object_drop;
 mod quota;
 mod role;
 mod setting;

@@ -1,0 +1,16 @@
+=== CONNECTION ownership cleanup ===
+ownership removed
+denied drop preserves replacement owner
+administrator can reassign ownership
+=== SEQUENCE ownership cleanup ===
+ownership removed
+denied drop preserves replacement owner
+administrator can reassign ownership
+=== STAGE ownership cleanup ===
+ownership removed
+denied drop preserves replacement owner
+administrator can reassign ownership
+=== UDF ownership cleanup ===
+ownership removed
+denied drop preserves replacement owner
+administrator can reassign ownership

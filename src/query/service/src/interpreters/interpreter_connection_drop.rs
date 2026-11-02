@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropConnectionPlan;
 use databend_common_users::RoleCacheManager;
@@ -60,14 +62,20 @@ impl Interpreter for DropConnectionInterpreter {
             let tenant = self.ctx.get_tenant();
             let user_mgr = UserApiProvider::instance();
 
-            // Metadata and ownership are deleted in the same Meta transaction.
+            // Revoke before deleting metadata to avoid a post-drop ownership cleanup.
+            // If the drop fails, an administrator can restore ownership.
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            let owner_object = OwnershipObject::Connection {
+                name: self.plan.name.clone(),
+            };
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+
             user_mgr
                 .drop_connection(&tenant, &plan.name, plan.if_exists)
                 .await?;
 
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-
-            // Tag cleanup is separate from the metadata/ownership transaction.
+            // Tag cleanup is separate from the metadata/ownership operations.
             let taggable_object = TaggableObject::Connection {
                 name: plan.name.clone(),
             };

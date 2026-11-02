@@ -84,6 +84,9 @@ pub trait RoleApi: Sync + Send {
     /// 2. grant ownership on obj to new role,
     /// 3. kv api upsert new owner object key.
     /// Note: if role/old_role is `account_admin` or `public` no need to revoke/grant ownership privilege
+    ///
+    /// TODO: Create name-keyed objects and grant ownership in one Meta transaction.
+    /// A delayed CREATE grant can otherwise overwrite a same-name replacement's owner.
     #[allow(clippy::ptr_arg)]
     async fn grant_ownership(
         &self,
@@ -91,7 +94,13 @@ pub trait RoleApi: Sync + Send {
         role: &str,
     ) -> Result<(), MetaTxnError>;
 
-    /// Remember to call this method when you dropped a OwnerObject like table/database/stage/udf.
+    /// Revoke ownership as part of dropping an object like table/database/stage/udf.
+    /// For name-keyed objects, revoke before deleting metadata rather than cleaning
+    /// up ownership afterward. If deletion fails, an administrator must restore
+    /// ownership with GRANT OWNERSHIP.
+    ///
+    /// TODO: Make CREATE/DROP and ownership changes atomic in Meta. Reordering alone
+    /// does not serialize concurrent DROP/CREATE operations on the same name.
     /// Revoke ownership used when drop old object, contains two step:
     /// 1. revoke ownership privilege obj to new role,
     /// 2. kv api delete old owner object key.
