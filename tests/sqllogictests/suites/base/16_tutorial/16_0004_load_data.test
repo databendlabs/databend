@@ -17,7 +17,7 @@ COPY INTO @citydrive_stage_csv/videos.csv FROM (
     )
     FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 0)
 ----
-3 190 190
+3 196 196
 
 statement ok
 LIST @citydrive_stage_csv
@@ -30,7 +30,7 @@ COPY INTO @citydrive_stage_csv/frame_events.csv FROM (
     )
     FILE_FORMAT = (TYPE = CSV FIELD_DELIMITER = ',' SKIP_HEADER = 0)
 ----
-3 150 150
+3 168 168
 
 statement ok
 LIST @citydrive_stage_csv
