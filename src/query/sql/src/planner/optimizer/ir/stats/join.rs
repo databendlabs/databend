@@ -509,10 +509,12 @@ impl JoinStatsEstimator {
         match self.join_type {
             JoinType::LeftSemi
             | JoinType::LeftAnti
+            | JoinType::LeftAny
             | JoinType::LeftSingle
             | JoinType::RightMark => left.max(output_rows),
             JoinType::RightSemi
             | JoinType::RightAnti
+            | JoinType::RightAny
             | JoinType::RightSingle
             | JoinType::LeftMark => right.max(output_rows),
             _ => output_rows.max(left).max(right),
