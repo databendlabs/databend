@@ -280,6 +280,108 @@ mod escaped_like {
     }
 }
 
+/// `Column::filter` on 65,536 rows (the default max_block_size) for masks of
+/// several selectivities and shapes.
+#[divan::bench_group(max_time = 1)]
+mod filter_selection {
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_column::buffer::Buffer;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::AnyType;
+    use databend_common_expression::types::ArrayColumn;
+    use databend_common_expression::types::BinaryType;
+    use databend_common_expression::types::BooleanType;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::StringType;
+    use divan::counter::ItemsCount;
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    const ROWS: usize = 65_536;
+    const SHAPES: &[&str] = &[
+        "none",
+        "random_1",
+        "random_50",
+        "clustered_50",
+        "random_99",
+        "all",
+    ];
+
+    /// `random_<p>` sets each bit with probability `p`%; `clustered_50`
+    /// alternates runs of 256 set and 256 unset bits.
+    fn mask(shape: &str) -> Bitmap {
+        let mut rng = StdRng::seed_from_u64(1);
+        let bits: Vec<bool> = match shape {
+            "none" => vec![false; ROWS],
+            "all" => vec![true; ROWS],
+            "clustered_50" => (0..ROWS).map(|i| (i / 256) % 2 == 0).collect(),
+            _ => {
+                let percent: u32 = shape.strip_prefix("random_").unwrap().parse().unwrap();
+                (0..ROWS).map(|_| rng.gen_range(0..100) < percent).collect()
+            }
+        };
+        Bitmap::from_iter(bits)
+    }
+
+    fn bench_filter(bencher: divan::Bencher, column: Column, shape: &str) {
+        let mask = mask(shape);
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .bench(|| divan::black_box(column.filter(&mask)));
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn int64(bencher: divan::Bencher, shape: &str) {
+        let column = Int64Type::from_data((0..ROWS as i64).collect());
+        bench_filter(bencher, column, shape);
+    }
+
+    /// About 10% of the rows are NULL.
+    #[divan::bench(args = SHAPES)]
+    fn nullable_int64(bencher: divan::Bencher, shape: &str) {
+        let mut rng = StdRng::seed_from_u64(2);
+        let validity = (0..ROWS).map(|_| rng.gen_range(0..10) != 0).collect();
+        let column = Int64Type::from_data_with_validity((0..ROWS as i64).collect(), validity);
+        bench_filter(bencher, column, shape);
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn string(bencher: divan::Bencher, shape: &str) {
+        let values = (0..ROWS)
+            .map(|i| format!("value_{i:08}_with_a_long_suffix"))
+            .collect::<Vec<_>>();
+        let column = StringType::from_data(values);
+        bench_filter(bencher, column, shape);
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn binary(bencher: divan::Bencher, shape: &str) {
+        let values = (0..ROWS)
+            .map(|i| format!("value_{i:08}").into_bytes())
+            .collect::<Vec<_>>();
+        let column = BinaryType::from_data(values);
+        bench_filter(bencher, column, shape);
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn boolean(bencher: divan::Bencher, shape: &str) {
+        let mut rng = StdRng::seed_from_u64(3);
+        let column = BooleanType::from_data((0..ROWS).map(|_| rng.r#gen::<bool>()).collect());
+        bench_filter(bencher, column, shape);
+    }
+
+    /// `Array(Int64)` with two elements per row.
+    #[divan::bench(args = SHAPES)]
+    fn array_int64(bencher: divan::Bencher, shape: &str) {
+        let values = Int64Type::from_data((0..2 * ROWS as i64).collect());
+        let offsets: Buffer<u64> = (0..=ROWS as u64).map(|i| 2 * i).collect();
+        let column = Column::Array(Box::new(ArrayColumn::<AnyType>::new(values, offsets)));
+        bench_filter(bencher, column, shape);
+    }
+}
+
 // bench                    fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ├─ concat_string_offset                │               │               │               │         │
 // │  ├─ 12                 22.58 ms      │ 31.43 ms      │ 24.05 ms      │ 24.83 ms      │ 100     │ 100
