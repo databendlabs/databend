@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! The disk cache of raw object bytes. `DiskCachedStorage` is what readers use; `DiskCache`
+//! holds the pools (`disk_pool`), the writer (`disk_writer`) and the entry files (`disk_file`).
+//! The parts are public for their tests and diagnostics, as `backend` is.
+
 mod disk_cache;
 mod disk_cached_storage;
-mod disk_file;
-mod disk_pool;
-mod disk_writer;
+pub mod disk_file;
+pub mod disk_pool;
+pub mod disk_writer;
 mod key;
 
 pub use disk_cache::DiskCache;

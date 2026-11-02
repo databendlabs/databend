@@ -45,7 +45,7 @@ use crate::disk::disk_pool::DiskPool;
 pub use crate::disk::disk_pool::DiskPoolStats;
 use crate::disk::disk_writer::DiskWriter;
 use crate::disk::disk_writer::WriteJob;
-use crate::disk::disk_writer::remove_files;
+use crate::disk::disk_writer::WriterOptions;
 
 /// `cache.disk.max_bytes` at or below this turns the disk cache off: the cloud platform sets a
 /// tiny size rather than 0 to disable it without unmounting the volume.
@@ -145,7 +145,7 @@ impl DiskCache {
             .map(|pool| pools[pool.index()].clone())
             .collect();
         Ok(DiskCache {
-            writer: DiskWriter::start(pressure_order, root, sync_data),
+            writer: DiskWriter::start(pressure_order, root, WriterOptions::new(sync_data)),
             pools,
             default_caps: caps,
             max_bytes,
@@ -224,9 +224,7 @@ impl DiskCache {
             }
             Ok(Err(e)) => {
                 warn!("[DiskCache] dropping unreadable entry of {key}: {e}");
-                if let Some(file) = pool.remove(&rel) {
-                    remove_files(&[file]);
-                }
+                pool.remove(&rel);
                 pool.record(false);
                 metrics_inc_cache_miss_count(1, name);
                 None
@@ -259,13 +257,7 @@ impl DiskCache {
 
     /// Drops `key` from the disk cache.
     pub fn evict(&self, kind: CacheKind, key: &DiskKey) -> bool {
-        match self.pool(kind).remove(&key.rel_path(kind)) {
-            Some(file) => {
-                remove_files(&[file]);
-                true
-            }
-            None => false,
-        }
+        self.pool(kind).remove(&key.rel_path(kind))
     }
 
     /// Runtime capacity of a pool, in bytes; 0 empties it and stops reads and writes. Files are
@@ -283,8 +275,8 @@ impl DiskCache {
                 self.max_bytes
             )));
         }
-        let victims = self.pools[pool.index()].set_cap(cap);
-        delete_in_background(victims);
+        let pool = &self.pools[pool.index()];
+        delete_in_background(pool.clone(), pool.set_cap(cap));
         Ok(())
     }
 
@@ -301,7 +293,8 @@ impl DiskCache {
     pub fn set_kind_enabled(&self, kind: CacheKind, enabled: bool) {
         self.kinds_enabled[kind.index()].store(enabled, Ordering::Relaxed);
         if !enabled {
-            delete_in_background(self.pool(kind).remove_kind(kind));
+            let pool = self.pool(kind);
+            delete_in_background(pool.clone(), pool.remove_kind(kind));
         }
     }
 
@@ -355,13 +348,13 @@ pub fn split_caps(max_bytes: u64, ratios: [u64; 3]) -> Result<[u64; 3]> {
     Ok(ratios.map(|r| (max_bytes as u128 * r as u128 / total as u128) as u64))
 }
 
-fn delete_in_background(files: Vec<PathBuf>) {
-    if files.is_empty() {
+fn delete_in_background(pool: Arc<DiskPool>, victims: Vec<String>) {
+    if victims.is_empty() {
         return;
     }
     let spawned = std::thread::Builder::new()
         .name("disk-cache-delete".to_string())
-        .spawn(move || remove_files(&files));
+        .spawn(move || pool.delete(&victims));
     if let Err(e) = spawned {
         warn!("[DiskCache] failed to spawn the delete thread: {e}");
     }

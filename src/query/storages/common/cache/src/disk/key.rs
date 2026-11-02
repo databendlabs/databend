@@ -52,7 +52,7 @@ impl DiskKey {
 
     /// `<kind>/<first 3 hex digits>/<hash>`: the entry's path under its pool root and its key
     /// in the pool's index. The hash is the hex SipHash 2-4 128 of the key string.
-    pub(crate) fn rel_path(&self, kind: CacheKind) -> String {
+    pub fn rel_path(&self, kind: CacheKind) -> String {
         let mut sip = sip128::SipHasher24::new();
         sip.write(self.to_string().as_bytes());
         let hash = hex::encode(sip.finish128().as_bytes());
@@ -67,31 +67,5 @@ impl fmt::Display for DiskKey {
             None => f.write_str(&self.path),
             Some(range) => write!(f, "{}#{}-{}", self.path, range.start, range.end),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::kinds::column;
-
-    #[test]
-    fn range_and_whole_object_are_different_units() {
-        let whole = DiskKey::whole("a/b");
-        let range = DiskKey::range("a/b", 0..10);
-        assert_eq!(whole.to_string(), "a/b");
-        assert_eq!(range.to_string(), "a/b#0-10");
-        let kind = CacheKind::of::<column::Data>();
-        assert_ne!(whole.rel_path(kind), range.rel_path(kind));
-    }
-
-    #[test]
-    fn rel_path_is_kind_prefix_hash() {
-        let rel = DiskKey::whole("a/b").rel_path(CacheKind::of::<column::Data>());
-        let parts: Vec<_> = rel.split('/').collect();
-        assert_eq!(parts.len(), 3);
-        assert_eq!(parts[0], "memory_cache_column_data");
-        assert_eq!(parts[2].len(), 32);
-        assert!(parts[2].starts_with(parts[1]));
     }
 }

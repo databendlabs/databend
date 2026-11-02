@@ -27,7 +27,7 @@
 
 mod accessor;
 pub mod backend;
-mod disk;
+pub mod disk;
 mod handle;
 pub mod kinds;
 pub mod legacy;
@@ -65,7 +65,14 @@ pub use databend_storages_common_table_meta::meta::SegmentStatistics;
 pub use databend_storages_common_table_meta::meta::TableSnapshot;
 pub use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 pub use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
-pub use disk::*;
+pub use disk::DiskCache;
+pub use disk::DiskCacheStats;
+pub use disk::DiskCachedStorage;
+pub use disk::DiskFill;
+pub use disk::DiskKey;
+pub use disk::DiskPoolStats;
+pub use disk::UnitsRead;
+pub use disk::split_caps;
 pub use handle::CacheRef;
 pub use handle::MemCache;
 pub use handle::Reservation;

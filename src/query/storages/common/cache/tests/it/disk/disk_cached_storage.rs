@@ -228,6 +228,81 @@ async fn test_concurrent_misses_read_storage_once() {
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..100)));
 }
 
+/// A failed storage read is returned to every caller sharing it and fills nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_storage_error_is_shared_and_not_cached() {
+    let dir = TempDir::new().unwrap();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .finish()
+        .layer(CountingLayer(reads.clone()));
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op, Some(disk.clone()));
+    let results = futures::future::join_all((0..8).map(|_| {
+        let storage = storage.clone();
+        async move {
+            storage
+                .read(data(), "missing", Some(0..10), DiskFill::ReadWrite)
+                .await
+        }
+    }))
+    .await;
+    assert!(results.iter().all(|r| r.is_err()));
+    assert_eq!(reads.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_not_filled(&disk, &DiskKey::range("missing", 0..10));
+    // The next miss reads storage again.
+    assert!(
+        storage
+            .read(data(), "missing", Some(0..10), DiskFill::ReadWrite)
+            .await
+            .is_err()
+    );
+    assert_eq!(reads.load(std::sync::atomic::Ordering::Relaxed), 2);
+}
+
+/// A unit whose file is damaged is read from storage and written again.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_damaged_entry_falls_back_to_storage_and_refills() {
+    let dir = TempDir::new().unwrap();
+    let (_op, disk, storage) = setup(&dir).await;
+    let key = DiskKey::range(PATH, 0..50);
+    storage
+        .read(data(), PATH, Some(0..50), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    wait_for(|| disk.contains(data(), &key));
+    for file in super::files_under(&dir.path().join("v2/data")) {
+        std::fs::write(file, b"garbage").unwrap();
+    }
+    let bytes = storage
+        .read(data(), PATH, Some(0..50), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    assert_eq!(bytes, object().slice(0..50));
+    wait_for(|| disk.contains(data(), &key));
+    assert_eq!(disk.get(data(), &key).await, Some(object().slice(0..50)));
+}
+
+/// `read_ranges` reads each range as its own unit.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_read_ranges_are_units() {
+    let dir = TempDir::new().unwrap();
+    let (_op, disk, storage) = setup(&dir).await;
+    let ranges = vec![0..10, 100..300, 2_000..3_000];
+    let read = storage
+        .read_ranges(data(), PATH, ranges.clone(), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    assert_eq!(read.len(), 3);
+    for range in ranges {
+        let expected = object().slice(range.start as usize..range.end as usize);
+        assert_eq!(read[&range], expected);
+        wait_for(|| disk.contains(data(), &DiskKey::range(PATH, range.clone())));
+    }
+}
+
 /// Counts reads reaching the operator.
 #[derive(Clone)]
 struct CountingLayer(Arc<std::sync::atomic::AtomicUsize>);

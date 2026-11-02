@@ -28,23 +28,23 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 /// Suffix of files being written; files left with it by a crash are removed on restart.
-pub(crate) const TMP_SUFFIX: &str = "_tmp";
+pub const TMP_SUFFIX: &str = "_tmp";
 
 /// `<path>.<pid>-<seq>_tmp`: unique per write, so concurrent writes of one key do not collide,
 /// and tagged with the process, so a restart scan keeps the files this process is writing.
-pub(crate) fn tmp_path(path: &Path, seq: u64) -> PathBuf {
+pub fn tmp_path(path: &Path, seq: u64) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(format!(".{}-{seq}{TMP_SUFFIX}", std::process::id()));
     path.with_file_name(name)
 }
 
 /// Whether a temporary file was named by `tmp_path` in this process.
-pub(crate) fn is_own_tmp(name: &str) -> bool {
+pub fn is_own_tmp(name: &str) -> bool {
     name.contains(&format!(".{}-", std::process::id()))
 }
 
 /// Reads an entry of `size` bytes, crc included, and returns the value without the crc.
-pub(crate) fn read_entry(path: PathBuf, size: usize) -> Result<Bytes> {
+pub fn read_entry(path: PathBuf, size: usize) -> Result<Bytes> {
     let mut bytes = Vec::with_capacity(size);
     std::io::Read::read_to_end(&mut File::open(path)?, &mut bytes)?;
     validate_checksum(&bytes)?;
@@ -53,7 +53,7 @@ pub(crate) fn read_entry(path: PathBuf, size: usize) -> Result<Bytes> {
 }
 
 /// Writes `value` and its crc to `tmp`, then renames it to `path`. Returns the bytes written.
-pub(crate) fn write_entry(path: &Path, tmp: &Path, value: &[u8], sync_data: bool) -> Result<u64> {
+pub fn write_entry(path: &Path, tmp: &Path, value: &[u8], sync_data: bool) -> Result<u64> {
     let crc = crc32fast::hash(value).to_le_bytes();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -75,7 +75,7 @@ pub(crate) fn write_entry(path: &Path, tmp: &Path, value: &[u8], sync_data: bool
 
 /// The crc32 checksum is stored at the end of `bytes` and encoded as le u32.
 // Although parquet page has built-in crc, but it is optional (and not generated in parquet2)
-pub(crate) fn validate_checksum(bytes: &[u8]) -> Result<()> {
+pub fn validate_checksum(bytes: &[u8]) -> Result<()> {
     let total_len = bytes.len();
     if total_len <= 4 {
         Err(ErrorCode::StorageOther(format!(
@@ -93,35 +93,5 @@ pub(crate) fn validate_checksum(bytes: &[u8]) -> Result<()> {
                 "crc checksum validation failure: provided {crc_provided}, calculated {crc_calculated}"
             )))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use tempfile::TempDir;
-
-    use super::*;
-
-    #[test]
-    fn entry_round_trip_and_checksum() {
-        let dir = TempDir::new().unwrap();
-        let path = dir.path().join("k/entry");
-        let tmp = tmp_path(&path, 1);
-        assert!(is_own_tmp(tmp.file_name().unwrap().to_str().unwrap()));
-        assert!(tmp.to_str().unwrap().ends_with(TMP_SUFFIX));
-
-        let written = write_entry(&path, &tmp, b"value", false).unwrap();
-        assert_eq!(written, 9);
-        assert!(!tmp.exists());
-        assert_eq!(
-            read_entry(path.clone(), 9).unwrap(),
-            Bytes::from_static(b"value")
-        );
-
-        let mut bytes = fs::read(&path).unwrap();
-        bytes[0] ^= 1;
-        fs::write(&path, bytes).unwrap();
-        assert!(read_entry(path, 9).is_err());
-        assert!(validate_checksum(b"abc").is_err());
     }
 }

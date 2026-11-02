@@ -1,0 +1,355 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! `DiskPool`: reservations, eviction order, the deleting marks, the restart scan, and the
+//! accounting under concurrent use.
+
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use databend_common_base::runtime::Thread;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::DiskKey;
+use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
+use databend_storages_common_cache::disk::disk_file::tmp_path;
+use databend_storages_common_cache::disk::disk_pool::DiskPool;
+use databend_storages_common_cache::kinds::column;
+use databend_storages_common_cache::kinds::segment;
+use rand::Rng;
+use rand::SeedableRng;
+use rand::rngs::SmallRng;
+use tempfile::TempDir;
+
+fn data() -> CacheKind {
+    CacheKind::of::<column::Data>()
+}
+
+fn meta() -> CacheKind {
+    CacheKind::of::<segment::Info>()
+}
+
+fn rel(kind: CacheKind, name: &str) -> String {
+    DiskKey::whole(name).rel_path(kind)
+}
+
+/// A pool over a directory that does not exist: deletes find no file, which is fine.
+fn pool(cap: u64) -> DiskPool {
+    DiskPool::new(Pool::Data, PathBuf::from("/nonexistent/disk-pool"), cap)
+}
+
+/// Reserves and publishes an entry of `size` bytes as a writer does, without a file. Returns
+/// the victims, already deleted.
+fn put(pool: &DiskPool, rel: &str, size: u64) -> Vec<String> {
+    let r = pool.reserve(rel, size);
+    assert!(r.reserved, "{rel}");
+    pool.delete(&r.victims);
+    pool.publish(rel.to_string(), size, size);
+    r.victims
+}
+
+/// The per-kind counts add up to the pool, and nothing is reserved.
+fn assert_consistent(pool: &DiskPool) {
+    let stats = pool.stats();
+    let (items, bytes) = CacheKind::all()
+        .map(|k| pool.kind_usage(k))
+        .fold((0, 0), |(i, b), (ki, kb)| (i + ki, b + kb));
+    assert_eq!((items, bytes), (stats.items, stats.bytes));
+    assert_eq!(stats.writing, 0);
+}
+
+#[test]
+fn test_reserve_rejects_off_pools_and_oversized_entries() {
+    let pool = pool(1000);
+    assert!(!pool.reserve("a", 251).reserved);
+    let r = pool.reserve("a", 250);
+    assert!(r.reserved && r.victims.is_empty());
+    assert_eq!(pool.stats().writing, 250);
+    pool.release(250);
+    assert_eq!(pool.stats().writing, 0);
+
+    let off = self::pool(0);
+    assert!(!off.reserve("a", 0).reserved);
+    assert!(!off.reserve("a", 1).reserved);
+}
+
+/// Room is made by evicting the least recently used entries; a lookup refreshes one.
+#[test]
+fn test_reserve_evicts_lru_and_lookup_refreshes() {
+    let pool = pool(1000);
+    for name in ["a", "b", "c", "d"] {
+        assert!(put(&pool, &rel(data(), name), 250).is_empty());
+    }
+    assert!(pool.lookup(&rel(data(), "a")).is_some());
+    assert_eq!(put(&pool, &rel(data(), "e"), 200), vec![rel(data(), "b")]);
+    assert_eq!(put(&pool, &rel(data(), "f"), 250), vec![rel(data(), "c")]);
+    assert_eq!(pool.stats().bytes, 950);
+    assert!(pool.contains(&rel(data(), "a")) && !pool.contains(&rel(data(), "b")));
+    assert_consistent(&pool);
+}
+
+/// Bytes being written cannot be evicted: when only they are left, the reservation fails
+/// without taking anything more out.
+#[test]
+fn test_reserve_fails_when_only_writes_in_flight_are_left() {
+    let pool = pool(1000);
+    put(&pool, &rel(data(), "a"), 200);
+    let held: Vec<_> = (0..4)
+        .map(|i| pool.reserve(&rel(data(), &format!("w{i}")), 225))
+        .collect();
+    assert!(held.iter().all(|r| r.reserved));
+    assert_eq!(held.iter().map(|r| r.victims.len()).sum::<usize>(), 1);
+    for r in &held {
+        pool.delete(&r.victims);
+    }
+    assert_eq!((pool.stats().items, pool.stats().writing), (0, 900));
+    let r = pool.reserve("x", 101);
+    assert!(!r.reserved && r.victims.is_empty());
+    for _ in 0..4 {
+        pool.release(225);
+    }
+    let r = pool.reserve("x", 250);
+    assert!(r.reserved);
+    pool.release(250);
+    assert_consistent(&pool);
+}
+
+/// Publishing a key already indexed, by a concurrent write or the restart scan, replaces
+/// the entry instead of counting it twice.
+#[test]
+fn test_publish_replaces_an_indexed_entry() {
+    let pool = pool(1000);
+    put(&pool, &rel(data(), "a"), 100);
+    put(&pool, &rel(data(), "a"), 120);
+    assert_eq!((pool.stats().items, pool.stats().bytes), (1, 120));
+    assert_eq!(pool.kind_usage(data()), (1, 120));
+    assert_consistent(&pool);
+}
+
+/// An entry taken out cannot be reserved again until its file is deleted: a new file written
+/// under its name would otherwise be the one deleted.
+#[test]
+fn test_entry_being_deleted_is_not_reserved_again() {
+    let pool = pool(1000);
+    let a = rel(data(), "a");
+    for _ in 0..4 {
+        put(
+            &pool,
+            &rel(data(), &format!("x{}", pool.stats().items)),
+            250,
+        );
+    }
+    put(&pool, &a, 100);
+    let victims = pool.evict_bytes(1);
+    assert_eq!(victims.len(), 1);
+    let victim = victims[0].clone();
+    let r = pool.reserve(&victim, 10);
+    assert!(!r.reserved && r.victims.is_empty());
+    pool.delete(&victims);
+    let r = pool.reserve(&victim, 10);
+    assert!(r.reserved);
+    pool.release(10);
+
+    // `remove` deletes at once, so the key can be written again right away.
+    assert!(pool.remove(&a));
+    assert!(!pool.remove(&a));
+    let r = pool.reserve(&a, 10);
+    assert!(r.reserved);
+    pool.release(10);
+    assert_consistent(&pool);
+}
+
+#[test]
+fn test_set_cap_evict_bytes_and_remove_kind() {
+    let pool = pool(1000);
+    for i in 0..4 {
+        put(&pool, &rel(data(), &format!("d{i}")), 100);
+        put(&pool, &rel(meta(), &format!("m{i}")), 100);
+    }
+    assert!(pool.remove(&rel(data(), "d0")));
+    assert_eq!(pool.kind_usage(data()), (3, 300));
+
+    // Oldest first, at least the bytes asked for.
+    let victims = pool.evict_bytes(150);
+    assert_eq!(victims, vec![rel(meta(), "m0"), rel(data(), "d1")]);
+    pool.delete(&victims);
+    let victims = pool.set_cap(400);
+    assert_eq!(victims, vec![rel(meta(), "m1")]);
+    pool.delete(&victims);
+    assert_eq!((pool.cap(), pool.stats().bytes), (400, 400));
+
+    let victims = pool.remove_kind(meta());
+    assert_eq!(victims.len(), 2);
+    pool.delete(&victims);
+    assert_eq!(pool.kind_usage(meta()), (0, 0));
+    assert_eq!(pool.kind_usage(data()), (2, 200));
+
+    // More than it holds: all of it.
+    let victims = pool.evict_bytes(10_000);
+    assert_eq!(victims.len(), 2);
+    pool.delete(&victims);
+    assert_eq!(pool.stats().items, 0);
+
+    put(&pool, &rel(data(), "e"), 100);
+    let victims = pool.set_cap(0);
+    assert_eq!(victims.len(), 1);
+    pool.delete(&victims);
+    assert!(!pool.reserve("f", 1).reserved);
+    assert_consistent(&pool);
+}
+
+#[test]
+fn test_hits_and_misses_are_counted() {
+    let pool = DiskPool::new(Pool::Index, PathBuf::from("/nonexistent"), 1000);
+    pool.record(true);
+    pool.record(false);
+    pool.record(false);
+    let stats = pool.stats();
+    assert_eq!((stats.hit, stats.miss, stats.cap), (1, 2, 1000));
+    assert_eq!(pool.pool(), Pool::Index);
+}
+
+fn write_file(root: &Path, rel: &str, len: usize) -> PathBuf {
+    let path = root.join(rel);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, vec![1u8; len]).unwrap();
+    path
+}
+
+/// The restart scan keeps the entries of known kinds that fit and deletes everything else:
+/// files of unknown kinds, tmp files of other processes, oversized entries, and entries
+/// past the capacity. Tmp files of this process are being written and are kept.
+#[test]
+fn test_reload_keeps_what_belongs_and_deletes_the_rest() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 2000);
+    let kept: Vec<_> = (0..6)
+        .map(|i| write_file(&root, &rel(data(), &format!("k{i}")), 200))
+        .collect();
+    let unknown = write_file(&root, "no_such_kind/abc/def", 10);
+    let foreign_tmp = write_file(
+        &root,
+        &format!("{}/abc/x.1-2{TMP_SUFFIX}", data().name()),
+        10,
+    );
+    let own = tmp_path(&root.join(rel(data(), "w")), 7);
+    let own_tmp = write_file(
+        &root,
+        own.strip_prefix(&root).unwrap().to_str().unwrap(),
+        10,
+    );
+    let oversized = write_file(&root, &rel(data(), "big"), 501);
+
+    assert_eq!(pool.reload(), (6, 3));
+    assert!(kept.iter().all(|p| p.exists()));
+    assert!(!unknown.exists() && !foreign_tmp.exists() && !oversized.exists());
+    assert!(own_tmp.exists());
+    assert_eq!(pool.kind_usage(data()), (6, 1200));
+    assert_consistent(&pool);
+
+    // Past the capacity: a smaller pool keeps what fits, in scan order.
+    let small = DiskPool::new(Pool::Data, root.clone(), 800);
+    assert_eq!(small.reload(), (4, 2));
+    assert_eq!(kept.iter().filter(|p| p.exists()).count(), 4);
+    assert_eq!(small.stats().bytes, 800);
+    assert_consistent(&small);
+}
+
+/// A key indexed before the scan reaches its file, by a write meanwhile, is not counted
+/// again; a key being deleted keeps its file for the delete and is not indexed.
+#[test]
+fn test_reload_skips_keys_indexed_or_being_deleted() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
+    let a = rel(data(), "a");
+    let b = rel(data(), "b");
+    write_file(&root, &a, 100);
+    let b_file = write_file(&root, &b, 100);
+    put(&pool, &a, 100);
+    put(&pool, &b, 100);
+    let victims = pool.evict_bytes(1);
+    assert_eq!(victims, vec![a.clone()]);
+
+    assert_eq!(pool.reload(), (0, 0));
+    assert!(!pool.contains(&a) && pool.contains(&b));
+    assert!(root.join(&a).exists() && b_file.exists());
+    pool.delete(&victims);
+    assert!(!root.join(&a).exists());
+    assert_eq!(pool.kind_usage(data()), (1, 100));
+    assert_consistent(&pool);
+}
+
+/// Threads reserving, publishing, releasing, looking up, removing, evicting and resizing at
+/// once: afterwards nothing is reserved or marked for deletion, the counts add up, and the pool
+/// fits its capacity.
+#[test]
+fn test_concurrent_operations_keep_the_accounting() {
+    let pool = Arc::new(pool(10_000));
+    let threads: Vec<_> = (0..8u64)
+        .map(|t| {
+            let pool = pool.clone();
+            Thread::spawn(move || {
+                let mut rng = SmallRng::seed_from_u64(t);
+                for _ in 0..5_000 {
+                    let kind = if rng.gen_bool(0.5) { data() } else { meta() };
+                    let key = rel(kind, &format!("k{}", rng.gen_range(0..64)));
+                    match rng.gen_range(0..10) {
+                        0..=3 => {
+                            let size = rng.gen_range(1..=2_500);
+                            let r = pool.reserve(&key, size);
+                            pool.delete(&r.victims);
+                            if r.reserved {
+                                if rng.gen_bool(0.9) {
+                                    pool.publish(key, size, size);
+                                } else {
+                                    pool.release(size);
+                                }
+                            }
+                        }
+                        4 | 5 => {
+                            pool.lookup(&key);
+                        }
+                        6 => {
+                            pool.remove(&key);
+                        }
+                        7 => pool.delete(&pool.evict_bytes(rng.gen_range(0..3_000))),
+                        8 => pool.delete(&pool.set_cap(rng.gen_range(5_000..=10_000))),
+                        _ => pool.delete(&pool.remove_kind(kind)),
+                    }
+                }
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
+    assert_consistent(&pool);
+    pool.delete(&pool.set_cap(10_000));
+    assert!(pool.stats().bytes <= 10_000);
+    // Nothing is left marked: every key can be reserved again.
+    for kind in [data(), meta()] {
+        for i in 0..64 {
+            let key = rel(kind, &format!("k{i}"));
+            let r = pool.reserve(&key, 1);
+            assert!(r.reserved, "{key}");
+            pool.delete(&r.victims);
+            pool.release(1);
+        }
+    }
+    assert_consistent(&pool);
+}

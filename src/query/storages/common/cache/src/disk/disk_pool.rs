@@ -19,7 +19,13 @@
 //! The pool lock guards the index and the byte counts only. File IO happens outside it: a writer
 //! reserves room under the lock (taking victims out of the index), deletes the victims' files and
 //! writes its own without the lock, then publishes the entry under the lock again.
+//!
+//! An entry taken out of the index stays marked as being deleted until `delete` has removed its
+//! file. Meanwhile it cannot be reserved again, and the restart scan leaves its file alone:
+//! otherwise a new file written under the same name could be deleted in place of the old one,
+//! leaving an indexed entry without a file.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -43,7 +49,7 @@ use crate::disk::disk_file::is_own_tmp;
 const OVERSIZED_DIVISOR: u64 = 4;
 
 /// Bytes of one entry file, the unit the index accounts in.
-pub(crate) struct FileSize(pub u64);
+struct FileSize(u64);
 
 impl From<FileSize> for CacheValue<FileSize> {
     fn from(value: FileSize) -> Self {
@@ -53,17 +59,21 @@ impl From<FileSize> for CacheValue<FileSize> {
 }
 
 /// The outcome of `DiskPool::reserve`. When `reserved`, the room is held until `publish` or
-/// `release`. Either way, `victims` were taken out of the index and their files must be
-/// deleted.
-pub(crate) struct Reservation {
+/// `release`. Either way, `victims` were taken out of the index and must be passed to
+/// `DiskPool::delete`.
+#[derive(Debug)]
+#[must_use]
+pub struct Reservation {
     pub reserved: bool,
-    pub victims: Vec<PathBuf>,
+    pub victims: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DiskPoolStats {
     pub items: u64,
     pub bytes: u64,
+    /// Bytes reserved by writes not yet published.
+    pub writing: u64,
     pub cap: u64,
     pub hit: u64,
     pub miss: u64,
@@ -79,6 +89,8 @@ struct State {
     writing: u64,
     /// Items and bytes per kind, by kind index, kept with the index.
     kinds: Vec<(u64, u64)>,
+    /// Entries taken out whose files `delete` has not removed yet.
+    deleting: HashSet<String>,
 }
 
 impl State {
@@ -94,15 +106,20 @@ impl State {
         self.account(kind, size, true);
     }
 
-    fn pop_lru(&mut self) -> Option<String> {
+    /// Takes the least recently used entry out, marking it as being deleted.
+    fn pop_lru(&mut self) -> Option<(String, u64)> {
         let (rel, size) = self.index.pop_by_policy()?;
-        self.account(kind_of(&rel), size.get_inner().0, false);
-        Some(rel)
+        let size = size.get_inner().0;
+        self.account(kind_of(&rel), size, false);
+        self.deleting.insert(rel.clone());
+        Some((rel, size))
     }
 
+    /// Takes `rel` out, marking it as being deleted.
     fn pop(&mut self, rel: &str) -> Option<u64> {
         let size = self.index.pop(rel)?.get_inner().0;
         self.account(kind_of(rel), size, false);
+        self.deleting.insert(rel.to_string());
         Some(size)
     }
 
@@ -133,9 +150,9 @@ pub struct DiskPool {
 }
 
 impl DiskPool {
-    /// A pool of `cap` bytes over `root`. The index starts empty; `reload` or `reset` brings the
-    /// directory in line with it.
-    pub(crate) fn new(pool: Pool, root: PathBuf, cap: u64) -> Self {
+    /// A pool of `cap` bytes over `root`. The index starts empty; `reload` fills it from the
+    /// files under `root`.
+    pub fn new(pool: Pool, root: PathBuf, cap: u64) -> Self {
         DiskPool {
             pool,
             root,
@@ -144,6 +161,7 @@ impl DiskPool {
                 cap,
                 writing: 0,
                 kinds: CacheKind::all().map(|_| (0, 0)).collect(),
+                deleting: HashSet::new(),
             }),
             hit: AtomicU64::new(0),
             miss: AtomicU64::new(0),
@@ -159,27 +177,28 @@ impl DiskPool {
     }
 
     /// The entry's file and size, marking it most recently used.
-    pub(crate) fn lookup(&self, rel: &str) -> Option<(PathBuf, u64)> {
+    pub fn lookup(&self, rel: &str) -> Option<(PathBuf, u64)> {
         let size = self.state.lock().index.get(rel).map(|v| v.get_inner().0)?;
         Some((self.root.join(rel), size))
     }
 
     /// Counts a lookup for the pool's row in `system.caches`.
-    pub(crate) fn record(&self, hit: bool) {
+    pub fn record(&self, hit: bool) {
         let counter = if hit { &self.hit } else { &self.miss };
         counter.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub(crate) fn contains(&self, rel: &str) -> bool {
+    pub fn contains(&self, rel: &str) -> bool {
         self.state.lock().index.contains(rel)
     }
 
-    /// Reserves `bytes`, taking least recently used entries out of the index until they fit.
-    /// Rejects an entry larger than a quarter of the pool, and any entry when the pool is off.
-    pub(crate) fn reserve(&self, bytes: u64) -> Reservation {
+    /// Reserves `bytes` for `rel`, taking least recently used entries out of the index until
+    /// they fit. Rejects an entry larger than a quarter of the pool, any entry when the pool is
+    /// off, and `rel` while its previous file is being deleted.
+    pub fn reserve(&self, rel: &str, bytes: u64) -> Reservation {
         let mut state = self.state.lock();
         let mut victims = Vec::new();
-        if state.cap == 0 || bytes > state.cap / OVERSIZED_DIVISOR {
+        if state.cap == 0 || bytes > state.cap / OVERSIZED_DIVISOR || state.deleting.contains(rel) {
             return Reservation {
                 reserved: false,
                 victims,
@@ -187,7 +206,7 @@ impl DiskPool {
         }
         while state.used() + bytes > state.cap {
             match state.pop_lru() {
-                Some(rel) => victims.push(self.root.join(rel)),
+                Some((rel, _)) => victims.push(rel),
                 // Only bytes being written are left; they are published or released soon.
                 None => {
                     return Reservation {
@@ -206,53 +225,69 @@ impl DiskPool {
 
     /// Publishes the entry written under a reservation. An entry already indexed under `rel`
     /// (written concurrently, or found by the restart scan) is replaced, not counted twice.
-    pub(crate) fn publish(&self, rel: String, reserved: u64, written: u64) {
+    pub fn publish(&self, rel: String, reserved: u64, written: u64) {
         let mut state = self.state.lock();
         state.writing -= reserved;
         state.insert(rel, written);
     }
 
     /// Gives back a reservation whose write failed or was abandoned.
-    pub(crate) fn release(&self, reserved: u64) {
+    pub fn release(&self, reserved: u64) {
         self.state.lock().writing -= reserved;
     }
 
-    /// Takes the entry out of the index; returns its file to delete.
-    pub(crate) fn remove(&self, rel: &str) -> Option<PathBuf> {
-        let mut state = self.state.lock();
-        state.pop(rel).map(|_| self.root.join(rel))
+    /// Takes the entry out of the index and deletes its file. Returns whether it was indexed.
+    pub fn remove(&self, rel: &str) -> bool {
+        let removed = self.state.lock().pop(rel).is_some();
+        if removed {
+            self.delete(&[rel.to_string()]);
+        }
+        removed
     }
 
-    /// Changes the capacity; returns the files of the entries taken out to fit it.
-    pub(crate) fn set_cap(&self, cap: u64) -> Vec<PathBuf> {
+    /// Deletes the files of entries taken out of the index, then lets their keys be written
+    /// again.
+    pub fn delete(&self, victims: &[String]) {
+        for rel in victims {
+            let path = self.root.join(rel);
+            if let Err(e) = fs::remove_file(&path) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    warn!("[DiskCache] failed to remove {path:?}: {e}");
+                }
+            }
+        }
+        let mut state = self.state.lock();
+        for rel in victims {
+            state.deleting.remove(rel);
+        }
+    }
+
+    /// Changes the capacity; returns the entries taken out to fit it, for `delete`.
+    pub fn set_cap(&self, cap: u64) -> Vec<String> {
         let mut state = self.state.lock();
         state.cap = cap;
         let mut victims = Vec::new();
         while state.used() > cap {
             match state.pop_lru() {
-                Some(rel) => victims.push(self.root.join(rel)),
+                Some((rel, _)) => victims.push(rel),
                 None => break,
             }
         }
         victims
     }
 
-    /// Takes up to `bytes` of the least recently used entries out; returns their files.
-    pub(crate) fn evict_bytes(&self, bytes: u64) -> Vec<PathBuf> {
+    /// Takes at least `bytes` of the least recently used entries out, or all of them; returns
+    /// them, for `delete`.
+    pub fn evict_bytes(&self, bytes: u64) -> Vec<String> {
         let mut state = self.state.lock();
         let mut freed = 0;
         let mut victims = Vec::new();
         while freed < bytes {
-            let Some((rel, size)) = state
-                .index
-                .peek_by_policy()
-                .map(|(k, v)| (k.clone(), v.get_inner().0))
-            else {
+            let Some((rel, size)) = state.pop_lru() else {
                 break;
             };
-            state.pop(&rel);
             freed += size;
-            victims.push(self.root.join(rel));
+            victims.push(rel);
         }
         victims
     }
@@ -266,14 +301,15 @@ impl DiskPool {
         DiskPoolStats {
             items: state.index.len() as u64,
             bytes: state.index.bytes_size(),
+            writing: state.writing,
             cap: state.cap,
             hit: self.hit.load(Ordering::Relaxed),
             miss: self.miss.load(Ordering::Relaxed),
         }
     }
 
-    /// Takes every entry of `kind` out; returns their files.
-    pub(crate) fn remove_kind(&self, kind: CacheKind) -> Vec<PathBuf> {
+    /// Takes every entry of `kind` out; returns them, for `delete`.
+    pub fn remove_kind(&self, kind: CacheKind) -> Vec<String> {
         let prefix = format!("{}/", kind.name());
         let mut state = self.state.lock();
         let rels: Vec<String> = state
@@ -283,19 +319,20 @@ impl DiskPool {
             .map(|(rel, _)| rel.clone())
             .collect();
         rels.into_iter()
-            .filter_map(|rel| state.pop(&rel).map(|_| self.root.join(rel)))
+            .filter(|rel| state.pop(rel).is_some())
             .collect()
     }
 
     /// Items and bytes of `kind` in the pool.
-    pub(crate) fn kind_usage(&self, kind: CacheKind) -> (u64, u64) {
+    pub fn kind_usage(&self, kind: CacheKind) -> (u64, u64) {
         self.state.lock().kinds[kind.index()]
     }
 
     /// Rebuilds the index from the files under the root, in scan order, and deletes what does
     /// not belong: files of unknown kinds, files left half written, and files beyond the
-    /// capacity. Runs concurrently with reads and writes: a key indexed meanwhile is skipped.
-    pub(crate) fn reload(&self) -> (u64, u64) {
+    /// capacity. Returns the entries loaded and the files deleted. Runs concurrently with reads
+    /// and writes: a key indexed meanwhile, or being deleted, is skipped.
+    pub fn reload(&self) -> (u64, u64) {
         let loaded = AtomicU64::new(0);
         let deleted = AtomicU64::new(0);
         let entries = scan_files(&self.root);
@@ -320,7 +357,7 @@ impl DiskPool {
             };
             let admitted = {
                 let mut state = self.state.lock();
-                if state.index.contains(&rel) {
+                if state.index.contains(&rel) || state.deleting.contains(&rel) {
                     true
                 } else if state.used() + size <= state.cap && size <= state.cap / OVERSIZED_DIVISOR
                 {

@@ -17,6 +17,7 @@
 
 mod case;
 mod chain;
+mod column;
 pub(crate) mod samples;
 pub(crate) mod setup;
 mod stability;

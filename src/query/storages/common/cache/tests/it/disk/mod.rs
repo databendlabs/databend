@@ -18,6 +18,10 @@
 
 mod disk_cache;
 mod disk_cached_storage;
+mod disk_file;
+mod disk_pool;
+mod disk_writer;
+mod key;
 
 use std::path::Path;
 use std::path::PathBuf;

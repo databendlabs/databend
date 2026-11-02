@@ -119,19 +119,3 @@ impl CachedItem for SizedColumnArray {
         self.1
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn array_cache_key_includes_data_type() {
-        let old = TableDataCacheKey::new("block", 1, 2, 3, "Decimal(10, 2)");
-        let new = TableDataCacheKey::new("block", 1, 2, 3, "Decimal(15, 2)");
-        assert_ne!(old.as_ref(), new.as_ref());
-        assert_eq!(
-            new.as_ref(),
-            TableDataCacheKey::new("block", 1, 2, 3, "Decimal(15, 2)").as_ref()
-        );
-    }
-}

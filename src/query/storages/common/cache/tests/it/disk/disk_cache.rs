@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::spawn;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::DiskKey;
@@ -313,4 +315,142 @@ fn test_split_caps_follows_the_ratios_whatever_their_sum() {
     assert_eq!(split_caps(1000, [20, 40, 140]).unwrap(), [100, 200, 700]);
     assert_eq!(split_caps(1000, [0, 1, 1]).unwrap(), [0, 500, 500]);
     assert!(split_caps(1000, [0, 0, 0]).is_err());
+}
+
+/// An entry whose file is gone (deleted behind the cache) is a miss and leaves the index.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_missing_file_is_a_miss_and_dropped() {
+    let dir = TempDir::new().unwrap();
+    let cache = cache(&dir);
+    put_and_wait(&cache, data(), &key(0), value(0)).await;
+    for file in files_under(&dir.path().join("v2/data")) {
+        std::fs::remove_file(file).unwrap();
+    }
+    assert_eq!(cache.get(data(), &key(0)).await, None);
+    assert!(!cache.contains(data(), &key(0)));
+    assert_eq!(cache.kind_usage(data()), (0, 0));
+    // And can be cached again.
+    put_and_wait(&cache, data(), &key(0), value(0)).await;
+    assert_eq!(cache.get(data(), &key(0)).await, Some(value(0)));
+}
+
+fn stress_key(i: usize) -> DiskKey {
+    DiskKey::range(
+        format!("1/2/_b/stress_{i}.parquet"),
+        0..(i as u64 % 7 + 1) * 100,
+    )
+}
+
+/// The value of a key is a function of it, so any hit can be checked.
+fn stress_value(i: usize) -> Bytes {
+    Bytes::from(vec![i as u8; (i % 7 + 1) * 100])
+}
+
+/// Readers putting, getting, evicting and checking keys while the pool is resized and the
+/// kind switched off and on: every hit has the bytes of its key, and once quiet the index,
+/// the per-kind counts and the files agree.
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn test_concurrent_use_keeps_entries_and_files_consistent() {
+    let dir = TempDir::new().unwrap();
+    let cache = Arc::new(cache(&dir));
+    let readers: Vec<_> = (0..16usize)
+        .map(|t| {
+            let cache = cache.clone();
+            spawn(async move {
+                for n in 0..300usize {
+                    let i = (t * 13 + n * 7) % 48;
+                    match n % 5 {
+                        0 | 1 => {
+                            cache.put(data(), &stress_key(i), stress_value(i)).await;
+                        }
+                        2 | 3 => {
+                            if let Some(bytes) = cache.get(data(), &stress_key(i)).await {
+                                assert_eq!(bytes, stress_value(i), "key {i}");
+                            }
+                        }
+                        _ => {
+                            cache.evict(data(), &stress_key(i));
+                        }
+                    }
+                }
+            })
+        })
+        .collect();
+    let control = {
+        let cache = cache.clone();
+        spawn(async move {
+            for n in 0..30u64 {
+                cache.set_pool_cap(Pool::Data, 3_000 + n * 100).unwrap();
+                if n % 10 == 0 {
+                    cache.set_kind_enabled(data(), false);
+                    cache.set_kind_enabled(data(), true);
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+            }
+        })
+    };
+    for r in readers {
+        r.await.unwrap();
+    }
+    control.await.unwrap();
+
+    wait_for(|| cache.stats().queued_bytes == 0);
+    assert_quiet_and_consistent(&cache, &dir);
+    // Entries may be rejected while an earlier file of their key is being deleted.
+    assert_eq!(cache.stats().dropped_io_error, 0);
+}
+
+/// The restart scan running while entries are written: nothing is counted twice, and the
+/// index matches the files.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_reload_while_writing() {
+    let dir = TempDir::new().unwrap();
+    {
+        let cache = cache(&dir);
+        for i in 0..24 {
+            cache.put(data(), &stress_key(i), stress_value(i)).await;
+        }
+        wait_for(|| cache.stats().queued_bytes == 0);
+    }
+    let cache = Arc::new(cache(&dir));
+    let reload = {
+        let cache = cache.clone();
+        Thread::spawn(move || cache.reload_now())
+    };
+    for i in 12..48 {
+        cache.put(data(), &stress_key(i), stress_value(i)).await;
+    }
+    reload.join().unwrap();
+    wait_for(|| cache.stats().queued_bytes == 0);
+    assert_quiet_and_consistent(&cache, &dir);
+    for i in 0..48 {
+        if let Some(bytes) = cache.get(data(), &stress_key(i)).await {
+            assert_eq!(bytes, stress_value(i), "key {i}");
+        }
+    }
+}
+
+/// Once no write is queued and background deletes are done: the pool's items and bytes match
+/// the files under its directory and the kind's counts, within its capacity.
+fn assert_quiet_and_consistent(cache: &DiskCache, dir: &TempDir) {
+    let pool_dir = dir.path().join("v2/data");
+    let stats = || {
+        cache
+            .pool_stats()
+            .into_iter()
+            .find(|(p, _)| *p == Pool::Data)
+            .unwrap()
+            .1
+    };
+    // Deletes of evicted files may still run in the background.
+    wait_for(|| files_under(&pool_dir).len() as u64 == stats().items);
+    let files = files_under(&pool_dir);
+    let on_disk: u64 = files
+        .iter()
+        .map(|f| std::fs::metadata(f).unwrap().len())
+        .sum();
+    let stats = stats();
+    assert_eq!(on_disk, stats.bytes);
+    assert!(stats.bytes <= stats.cap);
+    assert_eq!(cache.kind_usage(data()), (stats.items, stats.bytes));
 }
