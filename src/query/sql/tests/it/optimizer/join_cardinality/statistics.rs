@@ -56,7 +56,7 @@ fn sql_join_table(
         rows,
         column_stats: columns
             .into_iter()
-            .map(|(name, json)| Ok((name.to_string(), column_stat(json)?)))
+            .map(|(name, json)| Ok((name.to_string(), column_stat(json, rows)?)))
             .collect::<Result<_>>()?,
         histograms: HashMap::new(),
     })
@@ -86,7 +86,7 @@ fn write_sql_join_table_stats(
     let mut column_stats = table.column_stats.iter().collect::<Vec<_>>();
     column_stats.sort_by_key(|(name, _)| *name);
     for (name, stat) in column_stats {
-        let bounds = match (&stat.min, &stat.max) {
+        let bounds = match (stat.min(), stat.max()) {
             (Some(min), Some(max)) => format!("min={min}, max={max}"),
             (None, None) => "all_null=true".to_string(),
             (min, max) => format!("min={min:?}, max={max:?}"),
@@ -94,7 +94,8 @@ fn write_sql_join_table_stats(
         writeln!(
             file,
             "input stat    : {side}.{name} {bounds}, ndv={:?}, null={}",
-            stat.ndv, stat.null_count
+            stat.ndv().expected.map(|ndv| ndv as u64),
+            stat.null_count()
         )?;
     }
     let mut histogram_columns = table.histograms.keys().collect::<Vec<_>>();
@@ -407,7 +408,7 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
                 r#"{"min": 1, "max": 3, "ndv": 3, "null_count": 1}"#,
             )])?,
             right: sql_join_table("CREATE TABLE r(k INT NULL, payload INT NOT NULL)", 5, [
-                ("k", r#"{"min": 10, "max": 14, "ndv": 5, "null_count": 1}"#),
+                ("k", r#"{"min": 10, "max": 14, "ndv": 4, "null_count": 1}"#),
                 (
                     "payload",
                     r#"{"min": 20, "max": 24, "ndv": 5, "null_count": 0}"#,

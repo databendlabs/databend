@@ -223,13 +223,15 @@ impl StatisticsTable {
                         column_name: field.name().clone(),
                         stats_row_count,
                         actual_row_count,
-                        distinct_count: column_statistics.and_then(|v| v.ndv),
-                        null_count: column_statistics.map(|v| v.null_count),
+                        distinct_count: column_statistics
+                            .and_then(|v| v.ndv().expected)
+                            .map(|ndv| ndv.round() as u64),
+                        null_count: column_statistics.map(|v| v.null_count()),
                         min: column_statistics
-                            .and_then(|s| s.min.clone())
+                            .and_then(|s| s.min())
                             .map(|v| v.to_string().unwrap()),
                         max: column_statistics
-                            .and_then(|s| s.max.clone())
+                            .and_then(|s| s.max())
                             .map(|v| v.to_string().unwrap()),
                         avg_size: columns_statistics.average_size(column_id),
                         histogram,

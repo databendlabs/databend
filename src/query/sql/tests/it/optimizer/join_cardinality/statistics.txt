@@ -153,7 +153,7 @@ left rows     : 4
 input stat    : left.k min=1, max=3, ndv=Some(3), null=1
 right ddl      : CREATE TABLE r(k INT NULL, payload INT NOT NULL)
 right rows     : 5
-input stat    : right.k min=10, max=14, ndv=Some(5), null=1
+input stat    : right.k min=10, max=14, ndv=Some(4), null=1
 input stat    : right.payload min=20, max=24, ndv=Some(5), null=0
 join          : RIGHT OUTER cardinality=4.000
 stat          : l.k (#0) min=1, max=3, ndv=3.000, null=1.000, histogram=rows=3.000, ndv=3.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000, 3..3:1.000/1.000]

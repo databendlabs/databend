@@ -147,10 +147,20 @@ impl StatEstimate {
     }
 }
 
+/// Distinct non-NULL values: an optional point estimate and an upper cap.
+///
+/// `upper` is a conservative cap kept within the structural bounds, the
+/// non-NULL row count and the size of a discrete domain. Inside those bounds
+/// it may come from a statistical source, such as a selectivity estimate, so
+/// the true NDV can exceed it. Consumers use it to
+/// clamp the point, to stand in for a missing point, and to cap derived
+/// estimates; none relies on it as a guarantee that the true NDV is no larger.
 #[must_use]
 #[derive(Clone, Copy, PartialEq)]
 pub struct NdvEstimate {
+    /// Point estimate; `None` when only the cap is known.
     pub expected: Option<f64>,
+    /// Conservative cap on the point, not a guaranteed bound.
     pub upper: f64,
 }
 
@@ -258,6 +268,51 @@ impl NdvEstimate {
             _ => Self::upper_bound(upper),
         }
     }
+
+    /// Restrict a source NDV to a structural bound, such as the non-NULL row
+    /// count or a discrete domain size. Unlike
+    /// [`Self::reduce`], a zero bound proves the column holds no non-NULL
+    /// value, so the NDV is exactly zero.
+    pub fn bound(self, upper: f64) -> Self {
+        if upper == 0.0 {
+            Self::exact(0.0)
+        } else {
+            self.reduce(upper)
+        }
+    }
+
+    /// Carry an NDV measured over `covered_rows` of a column to all
+    /// `num_rows`. The covered rows need not be a random sample: each
+    /// uncovered row adds at most one value to the upper, and the point is
+    /// extrapolated, not the upper. Without coverage only the row count
+    /// bounds the NDV.
+    pub fn extrapolate(self, covered_rows: u64, num_rows: u64) -> Self {
+        if covered_rows >= num_rows {
+            return self;
+        }
+        if covered_rows == 0 {
+            return Self::upper_bound(num_rows as f64);
+        }
+        let upper = self.upper + (num_rows - covered_rows) as f64;
+        match self.expected {
+            Some(expected) if expected > 0.0 => Self::new(
+                (good_turing_ndv(expected as u64, covered_rows, num_rows) as f64).min(upper),
+                upper,
+            ),
+            _ => Self::upper_bound(upper),
+        }
+    }
+}
+
+// Inspired by duckdb (https://github.com/duckdb/duckdb/blob/main/src/storage/statistics/distinct_statistics.cpp#L55-L69)
+// Callers guarantee 0 < stats_row_count < num_rows and ndv > 0.
+fn good_turing_ndv(ndv: u64, stats_row_count: u64, num_rows: u64) -> u64 {
+    let s = stats_row_count as f64;
+    let n = num_rows as f64;
+    let u = ndv.min(stats_row_count) as f64;
+    let u1 = (u / s).powi(2) * u;
+    let estimate = u + u1 / s * (n - s);
+    estimate.round().clamp(0.0, n) as u64
 }
 
 #[must_use]
@@ -487,5 +542,59 @@ mod tests {
         let ndv = NdvEstimate::upper_bound(10.0).min(NdvEstimate::exact(20.0));
 
         assert_eq!(ndv, NdvEstimate::upper_bound(10.0));
+    }
+
+    #[test]
+    fn test_ndv_bound() {
+        assert_eq!(
+            NdvEstimate::new(12.0, 3000.0).bound(80.0),
+            NdvEstimate::new(12.0, 80.0)
+        );
+        assert_eq!(
+            NdvEstimate::new(1.0, 2.0).bound(1.0),
+            NdvEstimate::exact(1.0)
+        );
+        assert_eq!(
+            NdvEstimate::upper_bound(3000.0).bound(0.0),
+            NdvEstimate::exact(0.0)
+        );
+    }
+
+    #[test]
+    fn test_ndv_extrapolate() {
+        // Full or excess coverage keeps the source estimate.
+        for covered in [3000, 4000] {
+            assert_eq!(
+                NdvEstimate::new(12.0, 15.0).extrapolate(covered, 3000),
+                NdvEstimate::new(12.0, 15.0)
+            );
+        }
+        // The point is extrapolated; each uncovered row extends the upper.
+        assert_eq!(
+            NdvEstimate::exact(12.0).extrapolate(100, 3000),
+            NdvEstimate::new(17.0, 2912.0)
+        );
+        assert_eq!(
+            NdvEstimate::new(12.0, 15.0).extrapolate(999, 1000),
+            NdvEstimate::new(12.0, 16.0)
+        );
+        assert_eq!(
+            NdvEstimate::exact(6000.0).extrapolate(10_000, 1_000_000),
+            NdvEstimate::new(219_840.0, 996_000.0)
+        );
+        // Without coverage or a point, only an upper remains.
+        assert_eq!(
+            NdvEstimate::exact(12.0).extrapolate(0, 3000),
+            NdvEstimate::upper_bound(3000.0)
+        );
+        assert_eq!(
+            NdvEstimate::upper_bound(15.0).extrapolate(100, 3000),
+            NdvEstimate::upper_bound(2915.0)
+        );
+        // Domain bounds apply after extrapolation.
+        assert_eq!(
+            NdvEstimate::exact(12.0).extrapolate(100, 3000).bound(100.0),
+            NdvEstimate::new(17.0, 100.0)
+        );
     }
 }

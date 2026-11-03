@@ -390,6 +390,13 @@ impl StatBounds {
         )
     }
 
+    /// The NDV upper implied by these bounds and a physical upper, such as
+    /// the non-NULL row count.
+    pub fn ndv_upper(&self, physical_upper: f64) -> f64 {
+        self.finite_ndv_upper()
+            .map_or(physical_upper, |upper| upper.min(physical_upper))
+    }
+
     pub fn finite_ndv_upper(&self) -> Option<f64> {
         match self {
             StatBounds::Bool { min, max } => Some(if min == max { 1.0 } else { 2.0 }),

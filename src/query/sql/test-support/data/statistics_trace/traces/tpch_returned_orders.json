@@ -147,7 +147,10 @@
         "max": {
           "Int": 150000
         },
-        "ndv": 130526,
+        "ndv": {
+          "expected": 130526.0,
+          "upper": 130526.0
+        },
         "null_count": 0,
         "in_memory_size": 1200000
       },
@@ -163,7 +166,10 @@
         "max": {
           "Int": 24
         },
-        "ndv": 25,
+        "ndv": {
+          "expected": 25.0,
+          "upper": 25.0
+        },
         "null_count": 0,
         "in_memory_size": 1200000
       },
@@ -216,7 +222,10 @@
             48
           ]
         },
-        "ndv": 150000,
+        "ndv": {
+          "expected": 150000.0,
+          "upper": 150000.0
+        },
         "null_count": 0,
         "in_memory_size": 2700000
       },
@@ -232,7 +241,10 @@
         "max": {
           "Int": 6000000
         },
-        "ndv": 1500000,
+        "ndv": {
+          "expected": 1500000.0,
+          "upper": 1500000.0
+        },
         "null_count": 0,
         "in_memory_size": 12000000
       },
@@ -248,7 +260,10 @@
         "max": {
           "Int": 150000
         },
-        "ndv": 91814,
+        "ndv": {
+          "expected": 91814.0,
+          "upper": 91814.0
+        },
         "null_count": 0,
         "in_memory_size": 12000000
       },
@@ -264,7 +279,10 @@
         "max": {
           "Int": 10440
         },
-        "ndv": 2406,
+        "ndv": {
+          "expected": 2406.0,
+          "upper": 2406.0
+        },
         "null_count": 0,
         "in_memory_size": 6000000
       },
@@ -280,7 +298,10 @@
         "max": {
           "Int": 6000000
         },
-        "ndv": 1601092,
+        "ndv": {
+          "expected": 1601092.0,
+          "upper": 1601092.0
+        },
         "null_count": 0,
         "in_memory_size": 48009720
       },
@@ -300,7 +321,10 @@
             82
           ]
         },
-        "ndv": 3,
+        "ndv": {
+          "expected": 3.0,
+          "upper": 3.0
+        },
         "null_count": 0,
         "in_memory_size": 6001215
       },
@@ -316,7 +340,10 @@
         "max": {
           "Float": 50.0
         },
-        "ndv": 50,
+        "ndv": {
+          "expected": 50.0,
+          "upper": 50.0
+        },
         "null_count": 0,
         "in_memory_size": 48009720
       },
