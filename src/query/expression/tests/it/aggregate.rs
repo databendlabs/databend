@@ -34,6 +34,7 @@ use databend_common_expression::DistinctSampler;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::MAX_GROW_CAPACITY;
+use databend_common_expression::MAX_PARTIAL_TABLE_BYTES;
 use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
 use databend_common_expression::PartialDecision;
@@ -981,15 +982,16 @@ fn test_partial_grows_with_margin_over_estimate() {
         new_groups: 256 * 1024,
         windows: 10,
     };
-    let PartialDecision::Grow { capacity } = partial.observe(stats) else {
+    let PartialDecision::Grow { capacity } = partial.observe(stats, 0) else {
         panic!("expected to grow, got {partial:?}");
     };
     let keys = KEYS as usize;
     assert!(capacity >= AggregateHashTable::capacity_for_groups(keys + keys / 20));
 }
 
-/// Learn `keys` distinct groups among many more materialized ones, which asks to grow.
-fn learn_recurring_keys(keys: u64) -> (PartialState, PartialDecision) {
+/// Learn `keys` distinct groups of `group_bytes` each among many more materialized ones, which
+/// asks to grow.
+fn learn_recurring_keys(keys: u64, group_bytes: usize) -> (PartialState, PartialDecision) {
     let mut partial = PartialState::new(PartialAggregateMode::Auto);
     let sampler = partial.sampler().unwrap();
     sampler.start(0);
@@ -997,11 +999,14 @@ fn learn_recurring_keys(keys: u64) -> (PartialState, PartialDecision) {
         UInt64Type::from_data((0..keys).collect::<Vec<_>>()).into(),
     ));
     let rows = 16 * keys as usize;
-    let decision = partial.observe(PartialAddStats {
-        rows,
-        new_groups: rows,
-        windows: rows / 24_000,
-    });
+    let decision = partial.observe(
+        PartialAddStats {
+            rows,
+            new_groups: rows,
+            windows: rows / 24_000,
+        },
+        group_bytes,
+    );
     (partial, decision)
 }
 
@@ -1009,21 +1014,46 @@ fn learn_recurring_keys(keys: u64) -> (PartialState, PartialDecision) {
 /// distinct groups would not fit: a smaller table would absorb little of them.
 #[test]
 fn test_partial_grows_up_to_max_capacity() {
-    let (partial, decision) = learn_recurring_keys(2_000_000);
+    let (partial, decision) = learn_recurring_keys(2_000_000, 0);
     assert_eq!(decision, PartialDecision::Grow {
         capacity: MAX_GROW_CAPACITY
     });
     assert_eq!(partial.capacity(), MAX_GROW_CAPACITY);
 
-    let (partial, decision) = learn_recurring_keys(3_000_000);
+    let (partial, decision) = learn_recurring_keys(3_000_000, 0);
     assert_eq!(decision, PartialDecision::Continue);
     assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+}
+
+/// The grown table must also fit in `MAX_PARTIAL_TABLE_BYTES` with the bytes a group takes:
+/// a table cut short by its memory would absorb little of the distinct groups.
+#[test]
+fn test_partial_grows_within_table_bytes() {
+    // 2M groups of 50 bytes: 36 MiB of index and 105 MiB of groups.
+    let (_, decision) = learn_recurring_keys(2_000_000, 50);
+    assert_eq!(decision, PartialDecision::Grow {
+        capacity: MAX_GROW_CAPACITY
+    });
+
+    // 2M groups of 150 bytes: 36 MiB of index and 315 MiB of groups.
+    let (partial, decision) = learn_recurring_keys(2_000_000, 150);
+    assert_eq!(decision, PartialDecision::Continue);
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+
+    // Few groups that take much memory each, such as large `array_agg` states.
+    let (_, decision) = learn_recurring_keys(100_000, 4096);
+    assert_eq!(decision, PartialDecision::Continue);
+    let (_, decision) = learn_recurring_keys(100_000, 1024);
+    assert!(matches!(decision, PartialDecision::Grow { .. }));
+
+    let index = AggregateHashTable::index_bytes_for(MAX_GROW_CAPACITY);
+    assert!(index < MAX_PARTIAL_TABLE_BYTES / 4);
 }
 
 /// A grown table shrinks back to the small index for good; other states do not shrink.
 #[test]
 fn test_partial_shrinks_grown_table() {
-    let (mut partial, decision) = learn_recurring_keys(100_000);
+    let (mut partial, decision) = learn_recurring_keys(100_000, 0);
     assert!(matches!(decision, PartialDecision::Grow { .. }));
 
     assert!(partial.shrink());
@@ -1038,7 +1068,7 @@ fn test_partial_shrinks_grown_table() {
         new_groups: 1 << 24,
         windows: 1 << 10,
     };
-    assert_eq!(partial.observe(stats), PartialDecision::Continue);
+    assert_eq!(partial.observe(stats, 0), PartialDecision::Continue);
     assert!(!partial.shrink());
 
     let mut learning = PartialState::new(PartialAggregateMode::Auto);
@@ -1079,7 +1109,7 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
             grown_rows += stats.rows;
             grown_new_groups += stats.new_groups;
         }
-        if partial.observe(stats) != PartialDecision::Continue {
+        if partial.observe(stats, 0) != PartialDecision::Continue {
             table.take_partial_hot();
         }
     }

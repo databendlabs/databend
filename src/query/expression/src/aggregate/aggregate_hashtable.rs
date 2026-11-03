@@ -523,6 +523,11 @@ impl AggregateHashTable {
         Ok(())
     }
 
+    /// Bytes of an index of `capacity` slots.
+    pub fn index_bytes_for(capacity: usize) -> usize {
+        HashIndex::allocated_bytes_for(capacity)
+    }
+
     /// Index capacity that holds `groups` groups without growing.
     pub fn capacity_for_groups(groups: usize) -> usize {
         ((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1)

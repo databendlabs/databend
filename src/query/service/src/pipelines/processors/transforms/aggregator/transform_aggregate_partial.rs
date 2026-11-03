@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::MAX_PARTIAL_TABLE_BYTES;
 use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
 use databend_common_expression::PartialDecision;
@@ -46,11 +47,6 @@ use crate::sessions::QueryContext;
 /// Rows aggregated between two observations of the partial state, so that it changes within
 /// large input blocks rather than after them.
 const DECISION_ROWS: usize = 64 * 1024;
-/// Emit the table once it allocated this much since it was last emitted. The index and the
-/// payload are bounded otherwise, so this mostly bounds the memory aggregate states own outside
-/// the arena, such as the values of `array_agg` or a distinct set, which grow with the rows of
-/// a group whatever the number of groups.
-const MAX_HOT_MEMORY: usize = 256 * 1024 * 1024;
 
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum HashTable {
@@ -98,6 +94,8 @@ pub struct TransformPartialAggregate {
     /// Memory the table allocated since it was last emitted, including what the aggregate
     /// states own outside the arena.
     hot_memory: MemoryMeter,
+    /// What `hot_memory` counted before its last mark, to measure the bytes a group takes.
+    emitted_bytes: usize,
     output_rows: usize,
     /// Stats of all calls to the table, times the index grew and shrank back, and times the
     /// table was emitted for its memory.
@@ -135,6 +133,7 @@ impl TransformPartialAggregate {
                 windowed: false,
                 flush_bytes: params.max_block_bytes,
                 hot_memory: MemoryMeter::default(),
+                emitted_bytes: 0,
                 output_rows: 0,
                 total: PartialAddStats::default(),
                 grows: 0,
@@ -184,6 +183,16 @@ impl TransformPartialAggregate {
         Ok(output)
     }
 
+    /// The memory a group took so far besides the index, which only grows when the state
+    /// decides so: its row, its states and what they own.
+    fn group_bytes(
+        hot_memory: &MemoryMeter,
+        emitted_bytes: usize,
+        total: &PartialAddStats,
+    ) -> usize {
+        (emitted_bytes + hot_memory.bytes()) / total.new_groups.max(1)
+    }
+
     fn aggregate_slice(&mut self, block: &DataBlock) -> Result<Vec<DataBlock>> {
         let rows_num = block.num_rows();
         let HashTable::AggregateHashTable(hashtable) = &mut self.hash_table else {
@@ -206,7 +215,8 @@ impl TransformPartialAggregate {
         self.windowed |= stats.windows > 0;
         self.total += stats;
 
-        let decision = self.state.observe(stats);
+        let group_bytes = Self::group_bytes(&self.hot_memory, self.emitted_bytes, &self.total);
+        let decision = self.state.observe(stats, group_bytes);
         self.grows += matches!(decision, PartialDecision::Grow { .. }) as usize;
         // A grown table cannot release its index on its own, so it is checked once per slice.
         let shrunk = matches!(self.state, PartialState::Grown { .. })
@@ -214,7 +224,7 @@ impl TransformPartialAggregate {
             && self.state.shrink();
         self.shrinks += shrunk as usize;
 
-        let memory_full = self.hot_memory.bytes() >= MAX_HOT_MEMORY;
+        let memory_full = self.hot_memory.bytes() >= MAX_PARTIAL_TABLE_BYTES;
         if decision == PartialDecision::Continue
             && !shrunk
             && !memory_full
@@ -224,6 +234,7 @@ impl TransformPartialAggregate {
         }
         self.memory_flushes += memory_full as usize;
         let hot = hashtable.take_partial_hot();
+        self.emitted_bytes += self.hot_memory.bytes();
         self.hot_memory.mark();
         self.windowed = false;
         self.output_rows += hot.len();
@@ -296,7 +307,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 );
                 let total = &self.total;
                 log::info!(
-                    "[PartialAggregate] Adaptive: final_state={:?}, rows={}, new_groups={}, windows={}, grows={}, shrinks={}, memory_flushes={}",
+                    "[PartialAggregate] Adaptive: final_state={:?}, rows={}, new_groups={}, windows={}, grows={}, shrinks={}, memory_flushes={}, group_bytes={}",
                     self.state,
                     total.rows,
                     total.new_groups,
@@ -304,6 +315,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     self.grows,
                     self.shrinks,
                     self.memory_flushes,
+                    Self::group_bytes(&self.hot_memory, self.emitted_bytes, total),
                 );
                 Self::partitioned_blocks(hashtable.payload, &self.params)
             }

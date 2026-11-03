@@ -24,7 +24,8 @@
 //!   - `M / R` and `D / R` both close to 1: nothing to absorb, switch to `Bypass`.
 //!   - `M > 2 * D`: keys recur beyond a window, so switch to `Grown`.
 //! * `Grown`: the index is grown at once to hold the `D` groups, if they fit in
-//!   [`MAX_GROW_CAPACITY`]. When it fills up it restarts in place like a window.
+//!   [`MAX_GROW_CAPACITY`] slots and, with the bytes a group takes, in
+//!   [`MAX_PARTIAL_TABLE_BYTES`]. When it fills up it restarts in place like a window.
 //! * `Shrunk`: a grown table met memory pressure, emitted its groups and went back to the small
 //!   index for the rest of the input, without further decisions.
 //! * `Bypass`: forward every row to the final aggregate as raw input, for the rest of the input.
@@ -52,6 +53,11 @@ const GROW_DEDUP_RATIO: f64 = 2.0;
 /// threads, while a table that cannot hold the distinct groups absorbs little of them. Keys
 /// beyond it are left to the final aggregate.
 pub const MAX_GROW_CAPACITY: usize = 1 << 22;
+/// The most memory a partial table allocates between two emissions, index included: a grown
+/// table must fit in it, and the caller emits the table once it allocated that much, which
+/// mostly bounds the memory aggregate states own outside the arena (the values of `array_agg`,
+/// a distinct set), as the index and the payload are bounded otherwise.
+pub const MAX_PARTIAL_TABLE_BYTES: usize = 256 * 1024 * 1024;
 /// Grow to hold this many times the estimated distinct groups. An index short of a few keys
 /// absorbs nothing when the keys come in a cyclic order, as each restarts the index before it
 /// repeats, so the margin covers the estimate error.
@@ -209,11 +215,13 @@ impl PartialState {
     }
 
     /// Feed the stats of one `add_groups_partial` call and move to the next state.
-    pub fn observe(&mut self, stats: PartialAddStats) -> PartialDecision {
+    /// `group_bytes` is the memory a group takes besides the index (its row, its states and what
+    /// they own), measured by the caller, or 0 if unknown.
+    pub fn observe(&mut self, stats: PartialAddStats, group_bytes: usize) -> PartialDecision {
         let PartialState::Learning(learning) = self else {
             return PartialDecision::Continue;
         };
-        let decision = learning.observe(stats);
+        let decision = learning.observe(stats, group_bytes);
         match decision {
             PartialDecision::Continue => {}
             PartialDecision::Grow { capacity } => *self = PartialState::Grown { capacity },
@@ -234,7 +242,7 @@ impl PartialState {
 }
 
 impl Learning {
-    fn observe(&mut self, stats: PartialAddStats) -> PartialDecision {
+    fn observe(&mut self, stats: PartialAddStats, group_bytes: usize) -> PartialDecision {
         self.seen += stats;
         if self.seen.rows < self.next_check_rows {
             return PartialDecision::Continue;
@@ -256,10 +264,13 @@ impl Learning {
             return PartialDecision::Bypass;
         }
         if materialized > distinct * GROW_DEDUP_RATIO {
-            let capacity =
-                AggregateHashTable::capacity_for_groups((distinct * GROW_MARGIN) as usize);
+            let groups = (distinct * GROW_MARGIN) as usize;
+            let capacity = AggregateHashTable::capacity_for_groups(groups);
+            let bytes = AggregateHashTable::index_bytes_for(capacity)
+                .saturating_add(groups.saturating_mul(group_bytes));
             if capacity > AggregateHashTable::capacity_for_groups(0)
                 && capacity <= MAX_GROW_CAPACITY
+                && bytes <= MAX_PARTIAL_TABLE_BYTES
             {
                 return PartialDecision::Grow { capacity };
             }

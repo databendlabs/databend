@@ -232,6 +232,11 @@ impl HashIndex {
         self.ctrls.len() * size_of::<Tag>() + self.pointers.len() * size_of::<RowPtr>()
     }
 
+    /// The bytes `with_capacity(capacity)` allocates.
+    pub fn allocated_bytes_for(capacity: usize) -> usize {
+        (capacity + Group::WIDTH) * size_of::<Tag>() + capacity * size_of::<RowPtr>()
+    }
+
     pub fn reset(&mut self) {
         if self.capacity == 0 {
             return;
