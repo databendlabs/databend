@@ -31,13 +31,14 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DistinctSampler;
+use databend_common_expression::EmitReason;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::MAX_GROW_CAPACITY;
 use databend_common_expression::MAX_PARTIAL_TABLE_BYTES;
 use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
-use databend_common_expression::PartialDecision;
+use databend_common_expression::PartialObservation;
 use databend_common_expression::PartialState;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
@@ -965,6 +966,20 @@ fn test_distinct_sampler_estimates_string_keys() {
     }
 }
 
+/// Memory pressure is only checked for a grown table.
+fn unexpected_pressure() -> bool {
+    panic!("memory pressure checked outside the grown state")
+}
+
+/// An observation of `stats` and of groups of `group_bytes` each.
+fn observed(stats: PartialAddStats, group_bytes: usize) -> PartialObservation {
+    PartialObservation {
+        stats,
+        group_bytes,
+        ..Default::default()
+    }
+}
+
 /// The grown index holds the estimated distinct groups even with an estimate a little low.
 #[test]
 fn test_partial_grows_with_margin_over_estimate() {
@@ -982,16 +997,15 @@ fn test_partial_grows_with_margin_over_estimate() {
         new_groups: 256 * 1024,
         windows: 10,
     };
-    let PartialDecision::Grow { capacity } = partial.observe(stats, 0) else {
-        panic!("expected to grow, got {partial:?}");
-    };
+    let reason = partial.step(observed(stats, 0), unexpected_pressure);
+    assert_eq!(reason, Some(EmitReason::Grow), "{partial:?}");
     let keys = KEYS as usize;
-    assert!(capacity >= AggregateHashTable::capacity_for_groups(keys + keys / 20));
+    assert!(partial.capacity() >= AggregateHashTable::capacity_for_groups(keys + keys / 20));
 }
 
 /// Learn `keys` distinct groups of `group_bytes` each among many more materialized ones, which
 /// asks to grow.
-fn learn_recurring_keys(keys: u64, group_bytes: usize) -> (PartialState, PartialDecision) {
+fn learn_recurring_keys(keys: u64, group_bytes: usize) -> (PartialState, Option<EmitReason>) {
     let mut partial = PartialState::new(PartialAggregateMode::Auto);
     let sampler = partial.sampler().unwrap();
     sampler.start(0);
@@ -999,29 +1013,25 @@ fn learn_recurring_keys(keys: u64, group_bytes: usize) -> (PartialState, Partial
         UInt64Type::from_data((0..keys).collect::<Vec<_>>()).into(),
     ));
     let rows = 16 * keys as usize;
-    let decision = partial.observe(
-        PartialAddStats {
-            rows,
-            new_groups: rows,
-            windows: rows / 24_000,
-        },
-        group_bytes,
-    );
-    (partial, decision)
+    let stats = PartialAddStats {
+        rows,
+        new_groups: rows,
+        windows: rows / 24_000,
+    };
+    let reason = partial.step(observed(stats, group_bytes), unexpected_pressure);
+    (partial, reason)
 }
 
 /// The partial aggregate grows up to `MAX_GROW_CAPACITY`, and does not grow at all when the
 /// distinct groups would not fit: a smaller table would absorb little of them.
 #[test]
 fn test_partial_grows_up_to_max_capacity() {
-    let (partial, decision) = learn_recurring_keys(2_000_000, 0);
-    assert_eq!(decision, PartialDecision::Grow {
-        capacity: MAX_GROW_CAPACITY
-    });
+    let (partial, reason) = learn_recurring_keys(2_000_000, 0);
+    assert_eq!(reason, Some(EmitReason::Grow));
     assert_eq!(partial.capacity(), MAX_GROW_CAPACITY);
 
-    let (partial, decision) = learn_recurring_keys(3_000_000, 0);
-    assert_eq!(decision, PartialDecision::Continue);
+    let (partial, reason) = learn_recurring_keys(3_000_000, 0);
+    assert_eq!(reason, None);
     assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 }
 
@@ -1030,33 +1040,69 @@ fn test_partial_grows_up_to_max_capacity() {
 #[test]
 fn test_partial_grows_within_table_bytes() {
     // 2M groups of 50 bytes: 36 MiB of index and 105 MiB of groups.
-    let (_, decision) = learn_recurring_keys(2_000_000, 50);
-    assert_eq!(decision, PartialDecision::Grow {
-        capacity: MAX_GROW_CAPACITY
-    });
+    let (partial, reason) = learn_recurring_keys(2_000_000, 50);
+    assert_eq!(reason, Some(EmitReason::Grow));
+    assert_eq!(partial.capacity(), MAX_GROW_CAPACITY);
 
     // 2M groups of 150 bytes: 36 MiB of index and 315 MiB of groups.
-    let (partial, decision) = learn_recurring_keys(2_000_000, 150);
-    assert_eq!(decision, PartialDecision::Continue);
+    let (partial, reason) = learn_recurring_keys(2_000_000, 150);
+    assert_eq!(reason, None);
     assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 
     // Few groups that take much memory each, such as large `array_agg` states.
-    let (_, decision) = learn_recurring_keys(100_000, 4096);
-    assert_eq!(decision, PartialDecision::Continue);
-    let (_, decision) = learn_recurring_keys(100_000, 1024);
-    assert!(matches!(decision, PartialDecision::Grow { .. }));
+    let (_, reason) = learn_recurring_keys(100_000, 4096);
+    assert_eq!(reason, None);
+    let (_, reason) = learn_recurring_keys(100_000, 1024);
+    assert_eq!(reason, Some(EmitReason::Grow));
 
     let index = AggregateHashTable::index_bytes_for(MAX_GROW_CAPACITY);
     assert!(index < MAX_PARTIAL_TABLE_BYTES / 4);
 }
 
-/// A grown table shrinks back to the small index for good; other states do not shrink.
+/// Without a change of state, the table is emitted once it holds `MAX_PARTIAL_TABLE_BYTES`, or
+/// once its payload outgrew the index; in bypass there is no table to emit.
+#[test]
+fn test_partial_emits_held_memory_and_full_payload() {
+    let quiet = PartialObservation::default();
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
+    assert_eq!(partial.step(quiet, unexpected_pressure), None);
+    let held = PartialObservation {
+        held_bytes: MAX_PARTIAL_TABLE_BYTES,
+        ..quiet
+    };
+    assert_eq!(
+        partial.step(held, unexpected_pressure),
+        Some(EmitReason::MemoryFull)
+    );
+    let full = PartialObservation {
+        payload_full: true,
+        ..quiet
+    };
+    assert_eq!(
+        partial.step(full, unexpected_pressure),
+        Some(EmitReason::PayloadFull)
+    );
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+
+    let mut bypass = PartialState::new(PartialAggregateMode::Bypass);
+    let both = PartialObservation {
+        held_bytes: MAX_PARTIAL_TABLE_BYTES,
+        payload_full: true,
+        ..quiet
+    };
+    assert_eq!(bypass.step(both, unexpected_pressure), None);
+}
+
+/// A grown table shrinks back to the small index under memory pressure, for good: no further
+/// decisions, and memory pressure is no longer checked.
 #[test]
 fn test_partial_shrinks_grown_table() {
-    let (mut partial, decision) = learn_recurring_keys(100_000, 0);
-    assert!(matches!(decision, PartialDecision::Grow { .. }));
+    let quiet = PartialObservation::default();
+    let (mut partial, reason) = learn_recurring_keys(100_000, 0);
+    assert_eq!(reason, Some(EmitReason::Grow));
+    assert_eq!(partial.step(quiet, || false), None);
 
-    assert!(partial.shrink());
+    assert_eq!(partial.step(quiet, || true), Some(EmitReason::Shrink));
     assert!(matches!(partial, PartialState::Shrunk), "{partial:?}");
     assert_eq!(
         partial.capacity(),
@@ -1068,13 +1114,15 @@ fn test_partial_shrinks_grown_table() {
         new_groups: 1 << 24,
         windows: 1 << 10,
     };
-    assert_eq!(partial.observe(stats, 0), PartialDecision::Continue);
-    assert!(!partial.shrink());
-
-    let mut learning = PartialState::new(PartialAggregateMode::Auto);
-    assert!(!learning.shrink());
-    let mut bypass = PartialState::new(PartialAggregateMode::Bypass);
-    assert!(!bypass.shrink());
+    assert_eq!(partial.step(observed(stats, 0), unexpected_pressure), None);
+    let held = PartialObservation {
+        held_bytes: MAX_PARTIAL_TABLE_BYTES,
+        ..quiet
+    };
+    assert_eq!(
+        partial.step(held, unexpected_pressure),
+        Some(EmitReason::MemoryFull)
+    );
 }
 
 /// String keys in a cyclic order, more than a 65536-slot index holds: the partial aggregate
@@ -1109,8 +1157,9 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
             grown_rows += stats.rows;
             grown_new_groups += stats.new_groups;
         }
-        if partial.observe(stats, 0) != PartialDecision::Continue {
+        if partial.step(observed(stats, 0), || false).is_some() {
             table.take_partial_hot();
+            assert!(!table.partial_restarted());
         }
     }
 

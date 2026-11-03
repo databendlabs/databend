@@ -430,7 +430,7 @@ fn test_agg_hashtable_combine_rows() {
                 None,
             )
             .unwrap();
-        assert!(stats.windows > 0);
+        assert!(stats.windows > 0 && partial.partial_restarted());
         final_table.combine(partial, &mut flush_state).unwrap();
     }
 

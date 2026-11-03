@@ -42,6 +42,8 @@ pub struct MemoryMeter {
     base: Option<TrackingPayload>,
     /// The tracking payload of the calls since the last mark, and its memory stat.
     current: Option<(Arc<TrackingPayload>, Arc<MemStat>)>,
+    /// What `bytes` was at each mark, added up.
+    marked_bytes: usize,
 }
 
 impl MemoryMeter {
@@ -75,8 +77,15 @@ impl MemoryMeter {
             .map_or(0, |(_, mem_stat)| mem_stat.get_memory_usage())
     }
 
+    /// What `bytes` was at each mark, added up, plus `bytes`: everything the tracked calls
+    /// built, wherever it is now.
+    pub fn total_bytes(&self) -> usize {
+        self.marked_bytes + self.bytes()
+    }
+
     /// Start counting from now, for example once what was built has been handed over.
     pub fn mark(&mut self) {
+        self.marked_bytes += self.bytes();
         self.current = None;
     }
 }

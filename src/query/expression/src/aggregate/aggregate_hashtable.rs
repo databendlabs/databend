@@ -114,6 +114,9 @@ pub struct AggregateHashTable {
     current_radix_bits: u64,
     hash_index: HashIndex,
     hash_index_resize_count: usize,
+    /// The partial index restarted in place since the payload was taken, so the payload holds
+    /// more rows than the index bounds.
+    partial_restarted: bool,
 }
 
 unsafe impl Send for AggregateHashTable {}
@@ -150,6 +153,7 @@ impl AggregateHashTable {
             hash_index: HashIndex::with_capacity(capacity),
             config,
             hash_index_resize_count: 0,
+            partial_restarted: false,
         }
     }
 
@@ -182,6 +186,7 @@ impl AggregateHashTable {
             hash_index: HashIndex::with_capacity(capacity),
             config,
             hash_index_resize_count: 0,
+            partial_restarted: false,
         }
     }
 
@@ -221,6 +226,7 @@ impl AggregateHashTable {
             hash_index,
             config,
             hash_index_resize_count: 0,
+            partial_restarted: false,
         }
     }
 
@@ -466,6 +472,7 @@ impl AggregateHashTable {
                 }
                 // Restart the index in place and keep appending to the payload.
                 self.hash_index.reset();
+                self.partial_restarted = true;
                 stats.windows += 1;
             }
         }
@@ -540,6 +547,12 @@ impl AggregateHashTable {
         self.payload.memory_size() + self.arena_allocated_bytes()
     }
 
+    /// Whether the partial index restarted in place since the payload was last taken, so that
+    /// the payload is no longer bounded by the index.
+    pub fn partial_restarted(&self) -> bool {
+        self.partial_restarted
+    }
+
     /// Move the groups out and restart with an empty index of the initial capacity.
     pub fn take_partial_hot(&mut self) -> PartitionedPayload {
         let fresh = PartitionedPayload::new_with_start_bit(
@@ -551,6 +564,7 @@ impl AggregateHashTable {
         );
         let payload = std::mem::replace(&mut self.payload, fresh);
         self.hash_index = HashIndex::with_capacity(Self::initial_capacity());
+        self.partial_restarted = false;
         payload
     }
 

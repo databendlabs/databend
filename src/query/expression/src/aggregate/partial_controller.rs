@@ -31,7 +31,10 @@
 //! * `Bypass`: forward every row to the final aggregate as raw input, for the rest of the input.
 //!
 //! The partial aggregate never spills: it bounds itself and leaves spilling to the final
-//! aggregate.
+//! aggregate. [`PartialState::step`] takes every decision of an instance, and tells the caller
+//! to emit the table to the final aggregate, with an [`EmitReason`]: on each change of state,
+//! once the table holds [`MAX_PARTIAL_TABLE_BYTES`], and once the index restarted and the
+//! payload, no longer bounded by it, reached the size of a block.
 
 use std::fmt;
 use std::ops::AddAssign;
@@ -53,10 +56,10 @@ const GROW_DEDUP_RATIO: f64 = 2.0;
 /// threads, while a table that cannot hold the distinct groups absorbs little of them. Keys
 /// beyond it are left to the final aggregate.
 pub const MAX_GROW_CAPACITY: usize = 1 << 22;
-/// The most memory a partial table allocates between two emissions, index included: a grown
-/// table must fit in it, and the caller emits the table once it allocated that much, which
-/// mostly bounds the memory aggregate states own outside the arena (the values of `array_agg`,
-/// a distinct set), as the index and the payload are bounded otherwise.
+/// The most memory a partial table holds, index included: a grown table must fit in it, and the
+/// table is emitted once it holds that much, which mostly bounds the memory aggregate states own
+/// outside the arena (the values of `array_agg`, a distinct set), as the index and the payload
+/// are bounded otherwise.
 pub const MAX_PARTIAL_TABLE_BYTES: usize = 256 * 1024 * 1024;
 /// Grow to hold this many times the estimated distinct groups. An index short of a few keys
 /// absorbs nothing when the keys come in a cyclic order, as each restarts the index before it
@@ -140,14 +143,30 @@ pub enum PartialAggregateMode {
     Bypass,
 }
 
-/// The state change [`PartialState::observe`] made. `Grow` and `Bypass` require the caller to
-/// emit the groups of the table and restart the index before the next block: a grown index is
-/// rebuilt from the payload, which must hold one row per key.
+/// What the caller measured after one `add_groups_partial` call.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PartialObservation {
+    pub stats: PartialAddStats,
+    /// Memory the table holds, index included, since it was last emitted.
+    pub held_bytes: usize,
+    /// Memory a group took so far besides the index (its row, its states and what they own),
+    /// or 0 if unknown.
+    pub group_bytes: usize,
+    /// The index restarted since the table was last emitted, and the payload reached the size
+    /// of a block.
+    pub payload_full: bool,
+}
+
+/// Why [`PartialState::step`] asks the caller to emit the groups of the table to the final
+/// aggregate and restart the index at the capacity of the new state. A grown index is rebuilt
+/// from the payload, which must hold one row per key, so every change of state emits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PartialDecision {
-    Continue,
-    Grow { capacity: usize },
+pub enum EmitReason {
+    Grow,
     Bypass,
+    Shrink,
+    MemoryFull,
+    PayloadFull,
 }
 
 /// The state of one partial aggregate, see the module documentation.
@@ -214,38 +233,43 @@ impl PartialState {
         }
     }
 
-    /// Feed the stats of one `add_groups_partial` call and move to the next state.
-    /// `group_bytes` is the memory a group takes besides the index (its row, its states and what
-    /// they own), measured by the caller, or 0 if unknown.
-    pub fn observe(&mut self, stats: PartialAddStats, group_bytes: usize) -> PartialDecision {
-        let PartialState::Learning(learning) = self else {
-            return PartialDecision::Continue;
+    /// Take the decisions after one `add_groups_partial` call: move to the next state, and say
+    /// whether to emit the table. `memory_pressure` is only checked for a grown table, which
+    /// cannot release its index otherwise.
+    pub fn step(
+        &mut self,
+        observation: PartialObservation,
+        memory_pressure: impl FnOnce() -> bool,
+    ) -> Option<EmitReason> {
+        let next = match self {
+            PartialState::Learning(learning) => {
+                learning.observe(observation.stats, observation.group_bytes)
+            }
+            PartialState::Grown { .. } if memory_pressure() => Some(PartialState::Shrunk),
+            PartialState::Bypass => return None,
+            _ => None,
         };
-        let decision = learning.observe(stats, group_bytes);
-        match decision {
-            PartialDecision::Continue => {}
-            PartialDecision::Grow { capacity } => *self = PartialState::Grown { capacity },
-            PartialDecision::Bypass => *self = PartialState::Bypass,
+        if let Some(next) = next {
+            *self = next;
+            return Some(match self {
+                PartialState::Grown { .. } => EmitReason::Grow,
+                PartialState::Shrunk => EmitReason::Shrink,
+                _ => EmitReason::Bypass,
+            });
         }
-        decision
-    }
-
-    /// Under memory pressure, a grown table goes back to the small index for good. Returns
-    /// whether it was grown: the caller must then emit the groups and restart the index.
-    pub fn shrink(&mut self) -> bool {
-        if !matches!(self, PartialState::Grown { .. }) {
-            return false;
+        if observation.held_bytes >= MAX_PARTIAL_TABLE_BYTES {
+            return Some(EmitReason::MemoryFull);
         }
-        *self = PartialState::Shrunk;
-        true
+        observation.payload_full.then_some(EmitReason::PayloadFull)
     }
 }
 
 impl Learning {
-    fn observe(&mut self, stats: PartialAddStats, group_bytes: usize) -> PartialDecision {
+    /// The next state at a checkpoint, if learning ends there.
+    fn observe(&mut self, stats: PartialAddStats, group_bytes: usize) -> Option<PartialState> {
         self.seen += stats;
         if self.seen.rows < self.next_check_rows {
-            return PartialDecision::Continue;
+            return None;
         }
         while self.next_check_rows <= self.seen.rows {
             self.next_check_rows *= CHECK_GROWTH;
@@ -261,7 +285,7 @@ impl Learning {
 
         if materialized / rows >= BYPASS_DISTINCT_RATIO && distinct / rows >= BYPASS_DISTINCT_RATIO
         {
-            return PartialDecision::Bypass;
+            return Some(PartialState::Bypass);
         }
         if materialized > distinct * GROW_DEDUP_RATIO {
             let groups = (distinct * GROW_MARGIN) as usize;
@@ -272,9 +296,9 @@ impl Learning {
                 && capacity <= MAX_GROW_CAPACITY
                 && bytes <= MAX_PARTIAL_TABLE_BYTES
             {
-                return PartialDecision::Grow { capacity };
+                return Some(PartialState::Grown { capacity });
             }
         }
-        PartialDecision::Continue
+        None
     }
 }

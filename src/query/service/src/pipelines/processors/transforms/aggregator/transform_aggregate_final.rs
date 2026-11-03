@@ -53,9 +53,20 @@ use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::pipelines::processors::transforms::aggregator::statistics::FinalAggregateFinishMode;
-use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
+
+#[allow(clippy::enum_variant_names)]
+enum HashTable {
+    MovedOut,
+    AggregateHashTable(AggregateHashTable),
+}
+
+impl Default for HashTable {
+    fn default() -> Self {
+        Self::MovedOut
+    }
+}
 
 const SPILL_BUCKET_NUM: usize = 4;
 const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;

@@ -34,6 +34,8 @@ fn test_memory_meter_counts_what_calls_keep() {
     assert_eq!(meter.bytes(), 0);
     let more = meter.track(|| vec![1u8; 4 * MIB]);
     assert!(meter.bytes() >= 4 * MIB && meter.bytes() < 5 * MIB);
+    // The total adds what was counted at each mark.
+    assert!(meter.total_bytes() >= 12 * MIB && meter.total_bytes() < 14 * MIB);
     drop((kept, more));
 }
 
