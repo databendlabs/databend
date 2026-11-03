@@ -2171,7 +2171,7 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
     write_case_title(
         &mut file,
         "range_outside_statistics",
-        "A range comparison outside the column min/max expects 1/2500 of the input rows and keeps the 1/5 unknown-filter bound as max; other predicates estimated as no rows keep a zero bound.",
+        "A range comparison outside the column min/max expects 1/2500 of the input rows and keeps the 1/5 unknown-filter bound as max; ranges that contradict each other and other predicates estimated as no rows keep a zero bound.",
     )?;
     let stats = ColumnStatSet::from_iter([
         (Symbol::new(0), ColumnStat::UInt {
@@ -2199,6 +2199,9 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         &["a > 15"],
         &["a > 25", "b = 5"],
         &["and_filters(a > 25, b = 5)"],
+        &["and_filters(a > 25, a < 30)"],
+        &["and_filters(a > 25, a < 5)"],
+        &["and_filters(a > 15, a < 12)"],
         &["or_filters(a > 25, a < 5)"],
         &["or_filters(a > 25, b = 5)"],
         &["or_filters(a > 25, b < 50)"],
