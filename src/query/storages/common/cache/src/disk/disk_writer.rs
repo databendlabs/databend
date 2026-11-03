@@ -361,9 +361,9 @@ impl Shared {
             key: (job.pool.pool().index(), job.rel.clone()),
             len,
         };
-        // An entry too large for its pool ever to be kept is refused before it evicts entries
-        // under disk pressure, which `reserve` would refuse after.
-        if !job.pool.admits(len) {
+        // An entry its pool can never keep, too large or of a kind turned off, is refused
+        // before it evicts entries under disk pressure, which `reserve` would refuse after.
+        if !job.pool.admits(&job.rel, len) {
             self.drops.add(&job.rel, DropReason::Rejected);
             return;
         }

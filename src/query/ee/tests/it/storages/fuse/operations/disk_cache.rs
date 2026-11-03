@@ -27,12 +27,14 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::TableFiles;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::TableContextTableAccess;
@@ -513,6 +515,113 @@ async fn test_vacuumed_files_are_not_read_back() -> anyhow::Result<()> {
     }
     check_rows(&fixture, "t").await?;
     Ok(())
+}
+
+/// A delete cancelled by its caller still goes through, and so does the eviction after it:
+/// the deleted file is not read from the disk cache afterwards.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cancelled_delete_still_evicts() -> anyhow::Result<()> {
+    let dir = TempDir::new()?;
+    let fixture = setup(&dir).await?;
+    create_table(&fixture, "c", "").await?;
+    let table = fuse_table(&fixture, "c").await?;
+    let table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = table.snapshot_loc().expect("a snapshot");
+    let kind = CacheKind::of::<table::Snapshot>();
+    let op = table.get_operator();
+    fill(&op, kind, &snapshot, None).await?;
+
+    // The delete takes 200 ms to start; its caller gives up after 50.
+    let slow = op.clone().layer(SlowDelete(Duration::from_millis(200)));
+    let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    let files = TableFiles::create(ctx, slow);
+    let locations = vec![snapshot.clone()];
+    let cancelled = tokio::time::timeout(
+        Duration::from_millis(50),
+        files.remove_file_in_batch(&locations),
+    )
+    .await;
+    assert!(cancelled.is_err(), "the delete finished before the timeout");
+    assert!(op.exists(&snapshot).await?, "deleted before its delay");
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while op.exists(&snapshot).await? || disk().contains(kind, &DiskKey::whole(&snapshot)) {
+        assert!(
+            Instant::now() < deadline,
+            "the cancelled delete did not go through"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let read = DiskCachedStorage::new(op.clone())
+        .read(kind, &snapshot, None, CacheFill::ReadOnly)
+        .await;
+    assert!(
+        read.is_err(),
+        "the deleted snapshot is read from the disk cache"
+    );
+    Ok(())
+}
+
+/// Delays every delete, so a caller can be cancelled before it starts.
+#[derive(Clone)]
+struct SlowDelete(Duration);
+
+impl<A: opendal::raw::Access> opendal::raw::Layer<A> for SlowDelete {
+    type LayeredAccess = SlowDeleter<A>;
+
+    fn layer(&self, inner: A) -> Self::LayeredAccess {
+        SlowDeleter {
+            inner,
+            delay: self.0,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct SlowDeleter<A> {
+    inner: A,
+    delay: Duration,
+}
+
+impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for SlowDeleter<A> {
+    type Inner = A;
+    type Reader = A::Reader;
+    type Writer = A::Writer;
+    type Lister = A::Lister;
+    type Deleter = A::Deleter;
+
+    fn inner(&self) -> &Self::Inner {
+        &self.inner
+    }
+
+    async fn read(
+        &self,
+        path: &str,
+        args: opendal::raw::OpRead,
+    ) -> opendal::Result<(opendal::raw::RpRead, Self::Reader)> {
+        self.inner.read(path, args).await
+    }
+
+    async fn write(
+        &self,
+        path: &str,
+        args: opendal::raw::OpWrite,
+    ) -> opendal::Result<(opendal::raw::RpWrite, Self::Writer)> {
+        self.inner.write(path, args).await
+    }
+
+    async fn delete(&self) -> opendal::Result<(opendal::raw::RpDelete, Self::Deleter)> {
+        tokio::time::sleep(self.delay).await;
+        self.inner.delete().await
+    }
+
+    async fn list(
+        &self,
+        path: &str,
+        args: opendal::raw::OpList,
+    ) -> opendal::Result<(opendal::raw::RpList, Self::Lister)> {
+        self.inner.list(path, args).await
+    }
 }
 
 /// Writes leave the disk cache as it was: the blocks, segments and indexes an INSERT writes

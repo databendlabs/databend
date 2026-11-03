@@ -45,22 +45,6 @@ pub trait SegmentReader: Send + Sync + 'static {
     type CompactSegment: AbstractSegment;
     type SegmentBuilder: SegmentBuilder;
     type PrunedSegmentMeta: PrunedSegmentMeta<Segment = Self::CompactSegment>;
-    async fn read_compact_segment_through_cache(
-        dal: Operator,
-        location: Location,
-        projection: &HashSet<String>,
-        table_schema: TableSchemaRef,
-    ) -> Result<Arc<Self::CompactSegment>> {
-        Self::read_compact_segment(
-            dal,
-            location,
-            projection,
-            table_schema,
-            CachePolicy::DEFAULT,
-        )
-        .await
-    }
-
     async fn read_compact_segment(
         dal: Operator,
         location: Location,

@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_io::Files;
@@ -24,6 +26,9 @@ use opendal::Operator;
 /// otherwise still be read when the snapshot history is walked, and deleted segments, blocks
 /// and indexes would hold disk cache room until evicted. Dropping them is best effort, as for
 /// the memory caches (see `DiskCache::evict_object`).
+///
+/// The delete and the eviction after it run to their end on the IO runtime when the caller is
+/// cancelled: a delete may have gone through, in part or whole, by then.
 pub struct TableFiles {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
@@ -40,11 +45,17 @@ impl TableFiles {
     }
 
     pub async fn remove_file_in_batch(&self, locations: &[String]) -> Result<()> {
-        let removed = Files::create(self.ctx.clone(), self.operator.clone())
-            .remove_file_in_batch(locations)
-            .await;
-        // After the delete, failed or not: some files may be gone.
-        self.disk.evict_objects(locations).await?;
-        removed
+        let disk = self.disk.clone();
+        let files = Files::create(self.ctx.clone(), self.operator.clone());
+        let locations = locations.to_vec();
+        GlobalIORuntime::instance()
+            .spawn(async move {
+                let removed = files.remove_file_in_batch(&locations).await;
+                // After the delete, failed or not: some files may be gone.
+                disk.evict_objects(&locations).await?;
+                removed
+            })
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("table file delete task failed: {e}")))?
     }
 }

@@ -331,11 +331,13 @@ impl DiskPool {
         self.state.lock().index.contains(rel)
     }
 
-    /// Whether an entry of `len` bytes, its file `len` plus the checksum, is small enough to be
-    /// kept: no larger than a quarter of the pool.
-    pub fn admits(&self, len: u64) -> bool {
-        let cap = self.state.lock().cap;
-        cap > 0 && len.saturating_add(4) <= cap / OVERSIZED_DIVISOR
+    /// Whether an entry `rel` of `len` bytes, its file `len` plus the checksum, can ever be
+    /// kept: the pool and the kind are on, and it is no larger than a quarter of the pool.
+    pub fn admits(&self, rel: &str, len: u64) -> bool {
+        let state = self.state.lock();
+        state.cap > 0
+            && !state.kind_off(rel)
+            && len.saturating_add(4) <= state.cap / OVERSIZED_DIVISOR
     }
 
     /// Reserves `bytes` for `rel`, taking least recently used entries out of the index until

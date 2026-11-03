@@ -452,6 +452,18 @@ async fn test_disk_pressure_evicts_data_then_index_then_meta() {
     wait_for(|| idle(&writer));
     assert_eq!(items(), (0, 0, 5));
     assert_eq!(drops(&writer).1, 1);
+
+    // So is an entry of a kind turned off while it was queued.
+    PRESSURE.store(2, Ordering::SeqCst);
+    meta.set_kind_enabled(meta_kind, false);
+    assert!(writer.enqueue(job(&meta, meta_kind, "off", 100)).await);
+    wait_for(|| idle(&writer));
+    assert_eq!(
+        items(),
+        (0, 0, 0),
+        "the kind's own entries are taken out, no other"
+    );
+    assert_eq!(drops(&writer).1, 2);
     PRESSURE.store(0, Ordering::SeqCst);
 }
 

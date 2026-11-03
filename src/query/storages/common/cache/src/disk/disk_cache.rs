@@ -274,7 +274,8 @@ impl DiskCache {
     /// Whether an entry of `kind` of `len` bytes can be kept: the kind is on and the entry not
     /// too large for its pool.
     pub fn admits(&self, kind: CacheKind, len: u64) -> bool {
-        self.is_enabled(kind) && self.pool(kind).admits(len)
+        // The pool knows an entry's kind by the first component of its key.
+        self.is_enabled(kind) && self.pool(kind).admits(&format!("{}/", kind.name()), len)
     }
 
     /// The bytes of `key`, or `None`. A file missing or failing its checksum is dropped from
