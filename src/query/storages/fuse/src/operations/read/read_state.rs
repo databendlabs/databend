@@ -939,7 +939,6 @@ mod tests {
             NarrowBuffer::pack(keys.into_iter(), 2),
             StringType::from_data(vec!["other", "match", "unused"]),
         ))));
-        let int_type = DataType::Number(NumberDataType::Int32);
         let func_ctx = FunctionContext::default();
 
         for nullable in [false, true] {
@@ -968,10 +967,15 @@ mod tests {
 
             for (raw_expr, single_comparison) in [
                 (eq.clone(), true),
+                // Both OR children have the column's nullability, so the type checker adds no
+                // cast and the predicate stays on the selector path.
                 (
                     call("or", vec![
                         eq.clone(),
-                        call("gt", vec![column(1, int_type.clone()), int_constant(5)]),
+                        call("eq", vec![
+                            column(0, data_type.clone()),
+                            string_constant("unused"),
+                        ]),
                     ]),
                     false,
                 ),
@@ -1074,7 +1078,9 @@ mod tests {
             StringType::from_data(vec!["ok", "no", "ok", "no", "ok", "no"]),
             StringType::from_data(vec!["{}", "invalid", "[]", "invalid", "{}", "invalid"]),
         ]);
-        let raw_expr = call("and", vec![
+        // The planner joins prewhere conjuncts with `and_filters`, which the evaluator
+        // evaluates in order with the surviving rows as validity.
+        let raw_expr = call("and_filters", vec![
             call("eq", vec![
                 column(0, DataType::String),
                 string_constant("ok"),
@@ -1149,6 +1155,7 @@ mod tests {
         let func_ctx = FunctionContext::default();
         let string_type = DataType::String;
         let int_type = DataType::Number(NumberDataType::Int32);
+        let nullable_string_type = DataType::Nullable(Box::new(DataType::String));
         let eq = call("eq", vec![
             column(0, string_type.clone()),
             string_constant("v"),
@@ -1184,6 +1191,43 @@ mod tests {
                     call("eq", vec![
                         call("lower", vec![column(0, string_type.clone())]),
                         string_constant("a"),
+                    ]),
+                ]),
+                false,
+            ),
+            // The LIKE in `09_0064`: the planner joins the conjuncts with `and_filters`, which
+            // takes nullable and non-nullable arguments without casts. A LIKE over a nullable
+            // column keeps the selector path.
+            (
+                call("and_filters", vec![
+                    eq.clone(),
+                    call("like", vec![
+                        column(2, nullable_string_type.clone()),
+                        string_constant("ma%"),
+                    ]),
+                ]),
+                true,
+            ),
+            // An `Others` leaf.
+            (
+                call("and", vec![
+                    eq.clone(),
+                    call("is_not_null", vec![column(2, nullable_string_type.clone())]),
+                ]),
+                false,
+            ),
+            // A cast of a column under a comparison.
+            (
+                call("and", vec![
+                    eq.clone(),
+                    call("gt", vec![
+                        RawExpr::Cast {
+                            span: None,
+                            is_try: false,
+                            expr: Box::new(column(1, int_type.clone())),
+                            dest_type: DataType::Number(NumberDataType::Int64),
+                        },
+                        int_constant(1),
                     ]),
                 ]),
                 false,
