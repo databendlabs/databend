@@ -17,6 +17,7 @@ mod filter;
 mod group_by;
 mod group_by_hash;
 mod if_then_else;
+mod mask_segments;
 mod range_partition;
 mod scatter;
 mod sort;
