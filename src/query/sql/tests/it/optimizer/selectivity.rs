@@ -70,6 +70,7 @@ struct CaseOptions {
     and_strategy: Option<FilterAndStrategy>,
     top_n: Option<TopNSet>,
     count_min_sketch: Option<CountMinSketchSet>,
+    show_max_cardinality: bool,
 }
 
 fn run_case(
@@ -137,6 +138,7 @@ fn run_scalar_case_with_predicates(
         predicates,
         &databend_common_expression::FunctionContext::default(),
     )?;
+    let max_rows = estimator.max_cardinality(estimated_rows, cardinality.value());
     let out_stats = estimator.into_column_stats();
 
     writeln!(
@@ -145,6 +147,9 @@ fn run_scalar_case_with_predicates(
         cardinality_to_string(cardinality)
     )?;
     writeln!(file, "estimated     : {estimated_rows}")?;
+    if options.show_max_cardinality {
+        writeln!(file, "max           : {max_rows}")?;
+    }
     writeln!(file, "in stats      :\n{in_stats}")?;
     if let Some(in_top_n) = in_top_n {
         writeln!(file, "in topn       :\n{in_top_n}")?;
@@ -2156,6 +2161,64 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         StatCardinality::estimate(100.0),
         CaseOptions::default(),
     )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "selectivity_range_outside_statistics.txt")?;
+    write_case_title(
+        &mut file,
+        "range_outside_statistics",
+        "A range comparison outside the column min/max expects 1/2500 of the input rows and keeps the 1/5 unknown-filter bound as max; other predicates estimated as no rows keep a zero bound.",
+    )?;
+    let stats = ColumnStatSet::from_iter([
+        (Symbol::new(0), ColumnStat::UInt {
+            min: 10,
+            max: 19,
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (Symbol::new(1), ColumnStat::UInt {
+            min: 0,
+            max: 99,
+            ndv: NdvEstimate::exact(100.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+    ]);
+    let columns = &[
+        ("a", UInt64Type::data_type()),
+        ("b", UInt64Type::data_type()),
+    ];
+    for predicates in [
+        &["a > 25"][..],
+        &["a <= 5"],
+        &["a > 15"],
+        &["a > 25", "b = 5"],
+        &["and_filters(a > 25, b = 5)"],
+        &["or_filters(a > 25, a < 5)"],
+        &["or_filters(a > 25, b = 5)"],
+        &["or_filters(a > 25, b < 50)"],
+        &["not(a > 25)"],
+        &["a = 25"],
+        &["and_filters(a > 25, b = 500)"],
+        &["a + 1 > 100"],
+    ] {
+        run_case_with_predicates(
+            &mut file,
+            predicates,
+            columns,
+            stats.clone(),
+            StatCardinality::estimate(1_000_000.0),
+            CaseOptions {
+                show_max_cardinality: true,
+                ..Default::default()
+            },
+        )?;
+    }
 
     Ok(())
 }
