@@ -269,7 +269,7 @@ CommitSink
                     │       ├── table: default.system.stage
                     │       ├── scan id: 0
                     │       ├── output columns: [_$1 (#0)]
-                    │       ├── read rows: 6
+                    │       ├── read rows: 12
                     │       ├── read size: < 1 KiB
                     │       ├── partitions total: 1
                     │       ├── partitions scanned: 1
