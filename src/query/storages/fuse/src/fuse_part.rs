@@ -38,6 +38,7 @@ use databend_storages_common_cache::size::option;
 use databend_storages_common_cache::size::scalar;
 use databend_storages_common_cache::size::vec;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::VectorScores;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
@@ -103,7 +104,10 @@ fn block_meta_index(b: &BlockMetaIndex) -> usize {
         + option(&b.snapshot_location, |s| s.capacity())
         + option(&b.matched_rows, |v| vec(v, none))
         + option(&b.matched_scores, |v| vec(v, none))
-        + option(&b.vector_scores, |v| vec(v, none))
+        + option(&b.vector_scores, |v| match v {
+            VectorScores::TopN(scores) => vec(scores, none),
+            VectorScores::All(scores) => vec(scores, none),
+        })
         + option(&b.virtual_block_meta, |v| {
             v.virtual_block_location.capacity()
                 + btree_map(&v.fields, |_, _| 0)
