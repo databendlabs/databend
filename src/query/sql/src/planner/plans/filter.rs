@@ -93,6 +93,10 @@ impl Operator for Filter {
                 .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone())
                 .with_and_strategy(stat_ctx.filter_and_strategy);
         let cardinality = sb.apply(&self.predicates, &stat_ctx.function_context)?;
+        let max_cardinality = sb.max_cardinality(
+            cardinality,
+            stat_info.max_cardinality.max(stat_info.cardinality),
+        );
         // Only a proven-empty result is precise; an estimated zero stays imprecise.
         let precise_cardinality = sb.is_proven_empty().then_some(0);
         // Derive column statistics
@@ -103,7 +107,7 @@ impl Operator for Filter {
         };
         Ok(Arc::new(StatInfo {
             cardinality,
-            max_cardinality: cardinality,
+            max_cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
