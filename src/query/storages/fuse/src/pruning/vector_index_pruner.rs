@@ -318,12 +318,12 @@ impl VectorIndexPruner {
         if param.limit == 0 || metas.is_empty() {
             return Ok(Vec::new());
         }
-        // Descending order and score filters need the scores of every row: the
-        // returned blocks are read whole, and a row without a score would get the
-        // placeholder score, which ranks first in descending order and passes a
-        // lower-bound filter. With refinement, every row is scored with FP16 data
-        // (one read per block, not cached), as for full-row scoring, so the filter
-        // and TopN below use the FP16 scores.
+        // Descending order and score filters need the scores of every row to select
+        // the TopN rows: a row without a score would get the placeholder score,
+        // which ranks first in descending order and passes a lower-bound filter.
+        // With refinement, every row is scored with FP16 data (one read per block,
+        // not cached), as for full-row scoring, so the filter and TopN below use
+        // the FP16 scores.
         let refine = self.refine_options.refine_factor.is_some();
         let results = self
             .score_blocks(metas, move |reader, row_count, location| async move {

@@ -1036,8 +1036,8 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         for ((block_meta_index, _), expected_scores) in
             block_metas.iter().zip(expected_results.iter())
         {
-            // TopN without filters keeps the TopN rows; with filters, every row is
-            // scored and kept.
+            // The pruner attaches the TopN rows (`TopN`) or the scores of all rows
+            // (`All`); compare them in row order.
             let mut vector_scores: Vec<(usize, F32)> = match &block_meta_index.vector_scores {
                 Some(VectorScores::TopN(scores)) => scores
                     .iter()
