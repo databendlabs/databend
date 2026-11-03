@@ -288,7 +288,7 @@ impl<'a> SegmentCompactor<'a> {
                 self.operator.clone(),
                 self.schema.clone(),
                 locations,
-                CachePolicy::READ_ONLY,
+                CachePolicy::READ_ONLY.at_most(self.merge_tasks.cache_policy),
                 self.merge_tasks.io_permits.clone(),
             )
             .await?
