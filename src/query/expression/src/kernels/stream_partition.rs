@@ -365,6 +365,15 @@ impl BlockPartitionStream {
         ready_blocks
     }
 
+    /// Bytes buffered in all partitions, with pending constants counted as if
+    /// they had been expanded.
+    pub fn memory_size(&self) -> usize {
+        self.partitions
+            .iter()
+            .map(PartitionBlockBuilder::memory_size)
+            .sum()
+    }
+
     /// Drops every partition builder, including the capacity a flush reserves
     /// for partitions that received no rows since. Call once the stream ends.
     pub fn reset(&mut self) {

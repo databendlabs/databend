@@ -138,7 +138,7 @@ impl MutableBitmap {
         if self.length.is_multiple_of(8) {
             self.buffer.push(0);
         }
-        let byte = self.buffer.as_mut_slice().last_mut().unwrap();
+        let byte = self.buffer.last_mut().unwrap();
         *byte = set(*byte, self.length % 8, value);
         self.length += 1;
     }
@@ -268,7 +268,7 @@ impl MutableBitmap {
         if self.length.is_multiple_of(8) {
             self.buffer.push(0);
         }
-        let byte = self.buffer.as_mut_slice().last_mut().unwrap();
+        let byte = self.buffer.last_mut().unwrap();
         *byte = set(*byte, self.length % 8, value);
         self.length += 1;
     }
@@ -570,7 +570,7 @@ impl MutableBitmap {
                 self.buffer.push(0);
             }
             // the iterator will not fill the last byte
-            let byte = self.buffer.as_mut_slice().last_mut().unwrap();
+            let byte = self.buffer.last_mut().unwrap();
             for (i, value) in (bit_offset..).zip(iterator) {
                 *byte = set(*byte, i, value);
             }
@@ -583,7 +583,7 @@ impl MutableBitmap {
 
         if bit_offset != 0 {
             // we are in the middle of a byte; lets finish it
-            let byte = self.buffer.as_mut_slice().last_mut().unwrap();
+            let byte = self.buffer.last_mut().unwrap();
             (bit_offset..8).for_each(|i| {
                 *byte = set(*byte, i, iterator.next().unwrap());
             });

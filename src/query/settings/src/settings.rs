@@ -361,7 +361,8 @@ mod tests {
     #[test]
     fn test_recluster_multiway_merge_setting() -> Result<()> {
         let settings = Settings::create(Tenant::new_literal("test_tenant"));
-        assert!(settings.get_enable_recluster_multiway_merge()?);
+        // Disabled by default; users opt in per session or globally.
+        assert!(!settings.get_enable_recluster_multiway_merge()?);
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         assert!(settings.get_enable_recluster_multiway_merge()?);
         // Flight's QueryEnv transports Settings by serde, including session changes.

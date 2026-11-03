@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::column_merge_validity;
+use databend_common_expression::with_column_view_iter;
 use databend_common_expression::with_number_mapped_type;
 
 use super::super::uniq::DistinctSet;
@@ -176,18 +177,20 @@ impl<S: DistinctSet, const SKIP_NULLS: bool> AggregateEval for UnaryDistinctEval
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let (entry, validity) = Self::prepare_column(&input.columns[0], input.validity.cloned());
         let view = entry.downcast::<S::Type>().unwrap();
-        input
-            .states
-            .try_for_each_first_state_value::<UnaryDistinctState<S>, _>(
-                view.iter(),
-                validity.as_ref(),
-                |state, value| {
-                    if state.keys.insert(value)? {
-                        state.replayed = false;
-                    }
-                    Ok(())
-                },
-            )
+        with_column_view_iter!(S::Type, &view, |values| {
+            input
+                .states
+                .try_for_each_first_state_value::<UnaryDistinctState<S>, _>(
+                    values,
+                    validity.as_ref(),
+                    |state, value| {
+                        if state.keys.insert(value)? {
+                            state.replayed = false;
+                        }
+                        Ok(())
+                    },
+                )
+        })
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {

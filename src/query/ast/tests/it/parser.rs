@@ -2111,6 +2111,96 @@ fn test_expr() {
 }
 
 #[test]
+fn test_nested_trailing_vector_argument() {
+    let values = ["0.1973208636045456", "-0.2610067129135132"];
+    let vector = values.repeat(384).join(", ");
+    let cast = format!("CAST([{vector}] AS VECTOR(768))");
+    let mut sql = cast;
+    for depth in 0..=4 {
+        let tokens = tokenize_sql(&sql).unwrap();
+        let mut parsed = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        for _ in 0..depth {
+            let Expr::FunctionCall { mut func, .. } = parsed else {
+                panic!("expected a nested function call");
+            };
+            assert_eq!(func.args.len(), 2);
+            assert_eq!(func.args[0].to_string(), "embedding");
+            assert!(func.lambda.is_none());
+            parsed = func.args.pop().unwrap();
+        }
+        let Expr::Cast {
+            expr, target_type, ..
+        } = parsed
+        else {
+            panic!("expected a vector cast");
+        };
+        assert_eq!(target_type.to_string(), "VECTOR(768)");
+        let Expr::Array { exprs, .. } = *expr else {
+            panic!("expected an array");
+        };
+        assert_eq!(exprs.len(), 768);
+        for (index, value) in exprs.iter().enumerate() {
+            assert_eq!(value.to_string(), values[index % values.len()]);
+        }
+        sql = format!("cosine_distance(embedding, {sql})");
+    }
+}
+
+#[test]
+fn test_trailing_arrow_argument_with_function_suffixes() {
+    for (sql, ambiguous) in [
+        ("f(a, b, doc -> 'key')", true),
+        ("f(a, doc -> 'first', b, doc -> 'key')", true),
+        ("f(a, b, (x, y) -> x + y)", true),
+        ("f(DISTINCT a, b, doc -> 'key')", false),
+        ("f(a, b, doc -> 'key' ORDER BY a)", false),
+        ("f(a, b, doc -> 'key') WITHIN GROUP (ORDER BY a)", false),
+        ("f(a, b, doc -> 'key') FILTER (WHERE ok)", false),
+        ("f(a, b, doc -> 'key') OVER ()", false),
+        ("f(a, b, doc -> 'key')(c)", false),
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let parsed = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        let Expr::FunctionCall { func, .. } = parsed else {
+            panic!("expected a function call: {sql}");
+        };
+        assert_eq!(
+            matches!(func.lambda, Some(LambdaArgument::Ambiguous(_))),
+            ambiguous,
+            "{sql}"
+        );
+        assert_eq!(func.distinct, sql.contains("DISTINCT"), "{sql}");
+        assert_eq!(func.filter.is_some(), sql.contains("FILTER"), "{sql}");
+        assert_eq!(func.window.is_some(), sql.contains("OVER"), "{sql}");
+        assert_eq!(!func.order_by.is_empty(), sql.contains("ORDER BY"), "{sql}");
+        let args = if func.params.is_empty() {
+            &func.args
+        } else {
+            assert_eq!(func.args.len(), 1, "{sql}");
+            &func.params
+        };
+        assert_eq!(
+            args.len(),
+            if sql.contains("'first'") { 4 } else { 3 },
+            "{sql}"
+        );
+        assert_eq!(args[0].to_string(), "a", "{sql}");
+        let ordinary_arg = if sql.contains("(x, y)") {
+            "(x, y) -> x + y"
+        } else {
+            "doc -> 'key'"
+        };
+        let tokens = tokenize_sql(ordinary_arg).unwrap();
+        let ordinary_arg = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(
+            args.last().unwrap().to_string(),
+            ordinary_arg.to_string(),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn test_ambiguous_trailing_lambda_argument() {
     let tokens = tokenize_sql("concat(a, b, doc -> 'key')").unwrap();
     let input = Input {

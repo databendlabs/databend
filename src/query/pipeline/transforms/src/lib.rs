@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(likely_unlikely)]
-#![feature(debug_closure_helpers)]
 #![feature(try_blocks)]
 
 // Logs from this crate will show up as "...".

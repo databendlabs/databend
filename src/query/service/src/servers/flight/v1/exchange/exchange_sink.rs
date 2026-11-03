@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,6 +24,7 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_settings::Settings;
 
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
@@ -32,15 +34,19 @@ use super::exchange_sorting::ExchangeSorting;
 use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::hash_send_sink::HashSendSink;
+use super::hash_shuffle_writer::ShuffleNode;
+use super::hash_shuffle_writer::hash_shuffle_send_budget;
 use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
-use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::RemoteChannel;
-use crate::servers::flight::v1::network::RoundRobinChannel;
-use crate::servers::flight::v1::network::create_local_channels;
-use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
-use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
+use crate::servers::flight::v1::network::outbound::BlockSender;
+use crate::servers::flight::v1::network::outbound::HashShuffleDispatcher;
+use crate::servers::flight::v1::network::outbound::LocalBlockSender;
+use crate::servers::flight::v1::network::outbound::RemoteBlockSender;
+use crate::servers::flight::v1::network::outbound::RoundRobinBlockSender;
+use crate::servers::flight::v1::network::outbound::create_local_block_senders;
+use crate::servers::flight::v1::network::outbound::exchange_send_buffer::ExchangeSendBuffer;
+use crate::servers::flight::v1::network::outbound::exchange_send_buffer::ExchangeSendBufferConfig;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
@@ -146,9 +152,13 @@ impl ExchangeSink {
             local_pos += threads.len();
         }
 
-        let compression = ctx.get_settings().get_query_flight_compression()?;
-        let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
-        let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
+        let settings = ctx.get_settings();
+        let compression = settings.get_query_flight_compression()?;
+        let buffer_config = exchange_send_buffer_config(&settings)?;
+        let budget = hash_shuffle_send_budget(
+            local_threads,
+            settings.get_hash_shuffle_send_buffer_bytes()?,
+        );
         let waker = pipeline.get_waker();
 
         pipeline.resize(local_threads, false)?;
@@ -157,16 +167,18 @@ impl ExchangeSink {
         let exchange_id = &params.exchange_id;
         let exchange_manager = DataExchangeManager::instance();
 
-        let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
-        assert_eq!(channel_set.channels.len(), local_threads);
+        let receive_channels =
+            exchange_manager.get_exchange_receive_channels(query_id, exchange_id)?;
+        assert_eq!(receive_channels.receivers.len(), local_threads);
 
-        let local_outbound = create_local_channels(&channel_set);
-        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+        let local_senders = create_local_block_senders(&receive_channels);
+        let nodes = build_hash_shuffle_nodes(params, local_senders, compression, buffer_config)?;
+        let num_partitions = nodes.last().map(|x| x.partitions.end).unwrap_or_default();
 
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
             params.shuffle_keys.clone(),
-            remote_outbound.len(),
+            num_partitions,
             local_pos,
         )?);
 
@@ -175,16 +187,23 @@ impl ExchangeSink {
             items.push(HashSendSink::create_item(
                 idx,
                 scatter.clone(),
-                remote_outbound.clone(),
+                nodes.clone(),
                 waker.clone(),
-                rows_threshold,
-                bytes_threshold,
+                budget,
             ));
         }
 
         pipeline.add_pipe(Pipe::create(local_threads, 0, items));
         Ok(())
     }
+}
+
+/// Send queue configuration of ping-pong exchanges.
+pub(super) fn exchange_send_buffer_config(settings: &Settings) -> Result<ExchangeSendBufferConfig> {
+    Ok(ExchangeSendBufferConfig {
+        max_queued_bytes: settings.get_exchange_send_queue_bytes()?,
+        max_batch_bytes: settings.get_exchange_frame_bytes()?,
+    })
 }
 
 struct SinkExchangeSorting;
@@ -211,17 +230,18 @@ impl ExchangeSorting for SinkExchangeSorting {
     }
 }
 
-/// Build OutboundChannels for broadcast exchange using PingPongExchange.
-pub(super) fn build_broadcast_outbound_channels(
+/// Build one round-robin block sender per destination node for broadcast.
+pub(super) fn build_broadcast_senders(
     params: &BroadcastExchangeParams,
-    local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
+    local_senders: Vec<Arc<LocalBlockSender>>,
     compression: Option<databend_common_settings::FlightCompression>,
-) -> Result<Vec<Arc<dyn OutboundChannel>>> {
+    config: ExchangeSendBufferConfig,
+) -> Result<Vec<Arc<dyn BlockSender>>> {
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
 
-    let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+    let mut exchanges = exchange_manager.take_ping_pong_transports(query_id, exchange_id)?;
 
     let mut exchanges_seq = Vec::with_capacity(exchanges.len());
 
@@ -229,7 +249,7 @@ pub(super) fn build_broadcast_outbound_channels(
         if target_id != &params.executor_id {
             let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
                 ErrorCode::Internal(format!(
-                    "PingPongExchange not found for target {}",
+                    "PingPongTransport not found for target {}",
                     target_id
                 ))
             })?;
@@ -238,26 +258,30 @@ pub(super) fn build_broadcast_outbound_channels(
         }
     }
 
-    // Create shared ExchangeSinkBuffer: one RemoteInstance per PingPong, N channels each
-    let config = ExchangeBufferConfig::default();
-    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+    // Create shared ExchangeSendBuffer: one RemoteInstance per PingPong
+    let shared_buffer = Arc::new(ExchangeSendBuffer::create(
         exchanges_seq,
         config,
         &GlobalIORuntime::instance(),
     )?);
 
-    let local_channel = RoundRobinChannel::create(local_outbound_channels);
+    let local_sender = RoundRobinBlockSender::create(
+        local_senders
+            .into_iter()
+            .map(|channel| channel as Arc<dyn BlockSender>)
+            .collect(),
+    );
     let mut remote_idx = 0;
-    let mut channels = vec![];
+    let mut senders = vec![];
     for (target_id, threads) in &params.destination_channels {
         if target_id == &params.executor_id {
-            channels.push(local_channel.clone());
+            senders.push(local_sender.clone());
             continue;
         }
 
-        let mut remote_channels = Vec::with_capacity(threads.len());
+        let mut remote_senders = Vec::with_capacity(threads.len());
         for thread_idx in 0..threads.len() {
-            remote_channels.push(RemoteChannel::create(
+            remote_senders.push(RemoteBlockSender::create(
                 remote_idx,
                 thread_idx,
                 shared_buffer.clone(),
@@ -265,24 +289,26 @@ pub(super) fn build_broadcast_outbound_channels(
             )?);
         }
 
-        channels.push(RoundRobinChannel::create(remote_channels));
+        senders.push(RoundRobinBlockSender::create(remote_senders));
         remote_idx += 1;
     }
 
-    Ok(channels)
+    Ok(senders)
 }
 
-/// Build per-thread OutboundChannels for hash exchange.
-pub(super) fn build_hash_outbound_channels(
+/// Build the shuffle destinations of a hash exchange, one entry per node in
+/// `destination_channels` order. Each node owns a contiguous range of partitions,
+/// one per thread.
+pub(super) fn build_hash_shuffle_nodes(
     params: &GlobalExchangeParams,
-    mut local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
+    local_senders: Vec<Arc<LocalBlockSender>>,
     compression: Option<databend_common_settings::FlightCompression>,
-) -> Result<Vec<Arc<dyn OutboundChannel>>> {
-    let num_threads = local_outbound_channels.len();
+    config: ExchangeSendBufferConfig,
+) -> Result<Vec<ShuffleNode>> {
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
-    let mut exchanges = exchange_manager.take_ping_pong_exchanges(query_id, exchange_id)?;
+    let mut exchanges = exchange_manager.take_ping_pong_transports(query_id, exchange_id)?;
 
     let mut exchanges_seq = Vec::with_capacity(exchanges.len());
 
@@ -290,7 +316,7 @@ pub(super) fn build_hash_outbound_channels(
         if target_id != &params.executor_id {
             let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
                 ErrorCode::Internal(format!(
-                    "PingPongExchange not found for target {}",
+                    "PingPongTransport not found for target {}",
                     target_id
                 ))
             })?;
@@ -299,33 +325,47 @@ pub(super) fn build_hash_outbound_channels(
         }
     }
 
-    let config = ExchangeBufferConfig::default();
-    let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
+    let shared_buffer = Arc::new(ExchangeSendBuffer::create(
         exchanges_seq,
         config,
         &GlobalIORuntime::instance(),
     )?);
 
+    let arrow_schema = Arc::new(ArrowSchema::from(params.schema.as_ref()));
     let mut remote_idx = 0;
-    let mut channels = Vec::with_capacity(params.destination_channels.len() * num_threads);
+    let mut partition_start = 0;
+    let mut local_senders = Some(local_senders);
+    let mut nodes = Vec::with_capacity(params.destination_channels.len());
 
     for (target_id, threads) in &params.destination_channels {
-        if target_id == &params.executor_id {
-            channels.extend(std::mem::take(&mut local_outbound_channels));
-            continue;
-        }
+        let partitions = partition_start..partition_start + threads.len();
+        partition_start = partitions.end;
 
-        for t_idx in 0..threads.len() {
-            channels.push(RemoteChannel::create(
-                remote_idx,
-                t_idx,
-                shared_buffer.clone(),
-                compression,
-            )?);
-        }
+        let dispatcher = match target_id == &params.executor_id {
+            true => {
+                let senders = local_senders.take().ok_or_else(|| {
+                    ErrorCode::Internal("Local node appears twice in hash exchange destinations")
+                })?;
+                assert_eq!(senders.len(), threads.len());
+                HashShuffleDispatcher::local(senders)
+            }
+            false => {
+                let dispatcher = HashShuffleDispatcher::remote(
+                    remote_idx,
+                    shared_buffer.clone(),
+                    compression,
+                    arrow_schema.clone(),
+                )?;
+                remote_idx += 1;
+                dispatcher
+            }
+        };
 
-        remote_idx += 1;
+        nodes.push(ShuffleNode {
+            partitions,
+            dispatcher,
+        });
     }
 
-    Ok(channels)
+    Ok(nodes)
 }
