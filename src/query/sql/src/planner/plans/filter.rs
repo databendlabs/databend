@@ -106,8 +106,12 @@ impl Operator for Filter {
                 || (sb.uses_statistics_zero_bound()
                     && stat_info.max_cardinality <= stat_info.cardinality));
         if stat_info.statistics_zero_bound && !proven_empty {
-            // A filter only removes rows, so the input bound still holds.
-            max_cardinality = max_cardinality.max(stat_info.max_cardinality);
+            // The input bound comes from a range below that column statistics
+            // estimate to match no rows. Reduce it by this filter's bound
+            // selectivity, as the expected rows are reduced by its expected
+            // selectivity, so a selective filter also lowers the bound.
+            max_cardinality =
+                max_cardinality.max(sb.bound_cardinality(cardinality, stat_info.max_cardinality));
         }
         // Only a proven-empty result is precise; an estimated zero stays imprecise.
         let precise_cardinality = proven_empty.then_some(0);

@@ -450,9 +450,34 @@ Exchange(Merge)
                 └── limit: NONE
 
 
-=== range_outside_statistics_severe_underestimate_is_shuffled ===
-description: A selective equality next to a range outside the recorded min/max lowers the expected rows far below the unknown-filter bound, so the build side is not broadcast.
+=== range_outside_statistics_and_equality_build_is_broadcast ===
+description: A selective equality next to a range outside the recorded min/max lowers the expected rows and the bound alike, so the build side is broadcast.
 sql: SELECT p.v FROM p JOIN e ON p.k = e.k WHERE e.t > 1000 AND e.v = 5
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#5), e.k (#2) AS (#6), e.t (#3) AS (#7), e.v (#4) AS (#8)]
+    └── Join(Inner)
+        ├── build keys: [e.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Scan
+        │       ├── table: default.e (#1)
+        │       ├── filters: [gt(e.t (#3), 1000), eq(e.v (#4), 5)]
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== two_ranges_outside_statistics_severe_underestimate_is_shuffled ===
+description: Two ranges outside the recorded min/max each count as an unknown filter in the bound, which stays far above the expected rows, so the build side is not broadcast.
+sql: SELECT p.v FROM p JOIN e ON p.k = e.k WHERE e.t > 1000 AND e.v > 1000
 cluster nodes: 2
 settings: [("disable_join_reorder", "1")]
 Exchange(Merge)
@@ -466,7 +491,7 @@ Exchange(Merge)
         │   ├── Exchange(Hash): keys: [e.k (#2)]
         │   └── Scan
         │       ├── table: default.e (#1)
-        │       ├── filters: [gt(e.t (#3), 1000), eq(e.v (#4), 5)]
+        │       ├── filters: [gt(e.t (#3), 1000), gt(e.v (#4), 1000)]
         │       ├── order by: []
         │       └── limit: NONE
         └── Exchange(Hash)
@@ -557,6 +582,31 @@ EvalScalar
     │   └── limit: NONE
     └── EvalScalar
         ├── scalars: [CAST(a.k (#2) AS Int64 NULL) AS (#3)]
+        └── Scan
+            ├── table: default.a (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== left_join_builds_range_outside_statistics_and_equality ===
+description: A selective equality next to a range outside the recorded min/max keeps the bound within 1000x of the small expected rows, so CommuteJoin still makes this side the build side.
+sql: SELECT e.k, a.k FROM e LEFT JOIN a ON e.k = a.k WHERE e.t > 1000 AND e.v = 5
+cluster nodes: 1
+settings: []
+EvalScalar
+├── scalars: [e.k (#0) AS (#0), k (#4) AS (#4), e.t (#1) AS (#5), e.v (#2) AS (#6)]
+└── Join(Right)
+    ├── build keys: [e.k (#0)]
+    ├── probe keys: [k (#4)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.e (#0)
+    │   ├── filters: [gt(e.t (#1), 1000), eq(e.v (#2), 5)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [CAST(a.k (#3) AS Int64 NULL) AS (#4)]
         └── Scan
             ├── table: default.a (#1)
             ├── filters: []
