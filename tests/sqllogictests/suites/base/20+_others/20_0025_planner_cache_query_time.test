@@ -122,30 +122,29 @@ SELECT length(array_filter([now()], x -> x < now() + interval 1 second)) FROM t 
 ----
 1
 
-# COUNT can be folded from statistics derived with the query time. The
+# COUNT can be folded from statistics derived with the query time. The cutoff
+# is a session variable so both executions share one cache key: the first
+# one normally runs before the cutoff and the second one after it. The
 # expected count is computed from now() in the same query, so the result is 1
-# for every execution; a plan reused across seconds of different parity would
-# return 0.
+# for every execution; a plan reused across the cutoff would return 0.
+statement ok
+SET VARIABLE count_cutoff = now() + interval 10 second;
+
 query B
-SELECT count(v) = if(to_second(now()) % 2 = 0, 3, 0) FROM (SELECT lag(if(to_second(now()) % 2 = 0, 1, NULL), 0) OVER (ORDER BY a) AS v FROM t) AS w;
+SELECT count(v) = if(now() < $count_cutoff, 3, 0) FROM (SELECT lag(if(now() < $count_cutoff, 1, NULL), 0) OVER (ORDER BY a) AS v FROM t) AS w;
 ----
 1
 
 statement ok
-SELECT sleep(1);
+SELECT sleep(11);
 
 query B
-SELECT count(v) = if(to_second(now()) % 2 = 0, 3, 0) FROM (SELECT lag(if(to_second(now()) % 2 = 0, 1, NULL), 0) OVER (ORDER BY a) AS v FROM t) AS w;
+SELECT count(v) = if(now() < $count_cutoff, 3, 0) FROM (SELECT lag(if(now() < $count_cutoff, 1, NULL), 0) OVER (ORDER BY a) AS v FROM t) AS w;
 ----
 1
 
 statement ok
-SELECT sleep(1);
-
-query B
-SELECT count(v) = if(to_second(now()) % 2 = 0, 3, 0) FROM (SELECT lag(if(to_second(now()) % 2 = 0, 1, NULL), 0) OVER (ORDER BY a) AS v FROM t) AS w;
-----
-1
+UNSET VARIABLE count_cutoff;
 
 # Binding flags the result cache as ineligible. A planner-cache hit must also
 # restore that flag, even though binding is skipped.
