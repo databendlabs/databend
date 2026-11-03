@@ -17,10 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_api::kv::ownership::create_owned_object;
-use databend_common_meta_api::kv::ownership::drop_owned_object;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
-use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::UserDefinedFunction;
@@ -88,8 +86,7 @@ impl UdfMgr {
             self.kv_api.as_ref(),
             &key,
             &info,
-            create_option,
-            &self.tenant,
+            create_option.is_overriding(),
             &object,
             owner,
             &[],
@@ -189,12 +186,16 @@ impl UdfMgr {
         &self,
         udf_name: &str,
         seq: MatchSeq,
-    ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaTxnError> {
+    ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
         let key = UdfIdent::new(&self.tenant, udf_name);
-        let object = OwnershipObject::UDF {
-            name: udf_name.to_string(),
-        };
-        drop_owned_object(self.kv_api.as_ref(), &key, seq, &self.tenant, &object, &[]).await
+        let req = UpsertPB::delete(key).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
+
+        if res.is_changed() {
+            Ok(res.prev)
+        } else {
+            Ok(None)
+        }
     }
 
     fn ensure_non_builtin(&self, name: &str) -> Result<(), UdfError> {

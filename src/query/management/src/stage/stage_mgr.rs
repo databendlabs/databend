@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv::ownership::create_owned_object;
-use databend_common_meta_api::kv::ownership::ownership_change;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_cond_eq_seq;
@@ -96,14 +95,13 @@ impl StageApi for StageMgr {
             self.kv_api.as_ref(),
             &ident,
             &info,
-            create_option,
-            &self.tenant,
+            create_option.is_overriding(),
             &object,
             owner,
             &[],
         )
         .await
-        .map_err(ErrorCode::from)?;
+        .map_err(meta_service_error)?;
 
         if !written && create_option.if_return_error() {
             return Err(ErrorCode::StageAlreadyExists(format!(
@@ -176,11 +174,6 @@ impl StageApi for StageMgr {
                 .map(|(key, _)| TxnOp::delete(key))
                 .collect();
             dels.push(txn_del(&stage_ident));
-            // The stage's ownership is deleted together with its metadata.
-            let object = OwnershipObject::Stage {
-                name: name.to_string(),
-            };
-            dels.push(ownership_change(&self.tenant, &object, None));
 
             let txn_req = TxnRequest::new(
                 vec![

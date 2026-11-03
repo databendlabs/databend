@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropUDFPlan;
 use databend_common_users::RoleCacheManager;
@@ -64,6 +66,14 @@ impl Interpreter for DropUserUDFScript {
             UserApiProvider::instance()
                 .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
                 .await??;
+
+            // Revoke ownership after the drop succeeds: a failed drop keeps its owner.
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            role_api
+                .revoke_ownership(&OwnershipObject::UDF {
+                    name: plan.udf.clone(),
+                })
+                .await?;
             RoleCacheManager::instance().invalidate_cache(&tenant);
 
             cleanup_object_tags(&tenant, TaggableObject::UDF {

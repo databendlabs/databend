@@ -12,121 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::types::MatchSeq;
-use databend_meta_client::types::MatchSeqExt;
 use databend_meta_client::types::MetaError;
-use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;
 
-use crate::kv_pb_api::KVPbApi;
-use crate::meta_txn_error::MetaTxnError;
-use crate::txn_backoff::txn_backoff;
+use crate::send_txn;
 use crate::txn_cond_eq_seq;
 use crate::txn_del;
 use crate::txn_put_pb;
 
 /// Create or replace an object and record its owner in one transaction.
 ///
-/// - `Create` / `CreateIfNotExists`: write only if the object is absent. An
-///   existing object is left untouched together with its owner, and `false`
-///   is returned; the caller decides whether that is an error.
-/// - `CreateOrReplace`: replace the object version that was read.
+/// An absent object is written together with `extra_ops` and owned by `owner`.
+/// Without an owner, an ownership left behind under the name by a dropped
+/// object is removed, so the new object never inherits it.
 ///
-/// With `owner`, the ownership key is set to that role. Without it, a new
-/// object gets no owner: an ownership left behind by a dropped object of the
-/// same name is removed, while a replaced object keeps its owner.
-/// A concurrent write to the object retries the whole transaction.
-#[allow(clippy::too_many_arguments)]
+/// An existing object is replaced only with `replace`: the owner is then set to
+/// `owner`, or kept without one. Otherwise nothing is written.
+///
+/// Returns whether the object was written.
 pub async fn create_owned_object<K>(
     kv: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &K,
     value: &K::ValueType,
-    create_option: &CreateOption,
-    tenant: &Tenant,
+    replace: bool,
     object: &OwnershipObject,
     owner: Option<&str>,
     extra_ops: &[TxnOp],
-) -> Result<bool, MetaTxnError>
+) -> Result<bool, MetaError>
 where
-    K: kvapi::Key,
+    K: kvapi::Key + KeyWithTenant,
     K::ValueType: FromToProto + 'static,
 {
-    let mut trials = txn_backoff(None, "create_owned_object");
-    loop {
-        trials.next().unwrap()?.await;
-        let current_seq = kv.get_kv(&key.to_string_key()).await?.map_or(0, |v| v.seq);
-        if current_seq != 0 && !create_option.is_overriding() {
-            return Ok(false);
-        }
-        let mut txn = TxnRequest::new(vec![txn_cond_eq_seq(key, current_seq)], vec![txn_put_pb(
-            key, value,
-        )]);
-        txn.if_then.extend(extra_ops.iter().cloned());
-        // A new object must not inherit an ownership left behind under its name.
-        if owner.is_some() || current_seq == 0 {
-            txn.if_then.push(ownership_change(tenant, object, owner));
-        }
-        if kv.transaction(txn).await?.success {
-            return Ok(true);
-        }
-    }
-}
-
-/// Delete an object, its auxiliary keys and its ownership in one transaction.
-/// Missing objects or a mismatched sequence leave all keys unchanged.
-pub async fn drop_owned_object<K>(
-    kv: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &K,
-    seq: MatchSeq,
-    tenant: &Tenant,
-    object: &OwnershipObject,
-    extra_keys: &[String],
-) -> Result<Option<SeqV<K::ValueType>>, MetaTxnError>
-where
-    K: kvapi::Key,
-    K::ValueType: FromToProto,
-{
-    let mut trials = txn_backoff(None, "drop_owned_object");
-    loop {
-        trials.next().unwrap()?.await;
-        let Some(previous) = kv.get_pb(key).await? else {
-            return Ok(None);
-        };
-        if seq.match_seq(&previous.seq).is_err() {
-            return Ok(None);
-        }
-        let mut txn = TxnRequest::new(vec![txn_cond_eq_seq(key, previous.seq)], vec![txn_del(key)]);
-        txn.if_then.extend(extra_keys.iter().map(TxnOp::delete));
-        txn.if_then.push(ownership_change(tenant, object, None));
-        if kv.transaction(txn).await?.success {
-            return Ok(Some(previous));
-        }
-    }
-}
-
-/// The operation that sets the object's owner to `new_owner`, or deletes its
-/// ownership when it is `None`. It is guarded by the object's own condition in
-/// the transaction it is added to.
-pub fn ownership_change(
-    tenant: &Tenant,
-    object: &OwnershipObject,
-    new_owner: Option<&str>,
-) -> TxnOp {
-    let ownership = TenantOwnershipObjectIdent::new(tenant, object.clone());
-    match new_owner {
-        Some(role) => txn_put_pb(&ownership, &OwnershipInfo {
+    let ownership = TenantOwnershipObjectIdent::new(key.tenant(), object.clone());
+    let set_owner = owner.map(|role| {
+        txn_put_pb(&ownership, &OwnershipInfo {
             object: object.clone(),
             role: role.to_string(),
-        }),
-        None => txn_del(&ownership),
+        })
+    });
+    let mut write = vec![txn_put_pb(key, value)];
+    write.extend(extra_ops.iter().cloned());
+
+    let mut txn = TxnRequest::new(vec![txn_cond_eq_seq(key, 0)], write.clone());
+    txn.if_then
+        .push(set_owner.clone().unwrap_or_else(|| txn_del(&ownership)));
+    if replace {
+        txn.else_then = write;
+        txn.else_then.extend(set_owner);
     }
+    let (absent, _) = send_txn(kv, txn).await?;
+    Ok(absent || replace)
 }

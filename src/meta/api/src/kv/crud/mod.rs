@@ -42,10 +42,8 @@ use log::info;
 use seq_marked::SeqValue;
 
 use crate::kv::ownership::create_owned_object;
-use crate::kv::ownership::drop_owned_object;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
-use crate::meta_txn_error::MetaTxnError;
 
 /// A generic CRUD interface for meta data operations.
 ///
@@ -147,14 +145,13 @@ where
         create_option: &CreateOption,
         object: OwnershipObject,
         owner: Option<&str>,
-    ) -> Result<Result<(), ExistError<R>>, MetaTxnError> {
+    ) -> Result<Result<(), ExistError<R>>, MetaError> {
         let name = value.name().to_string();
         let written = create_owned_object(
             self.kv_api.as_ref(),
             &self.ident(&name),
             &value,
-            create_option,
-            &self.tenant,
+            create_option.is_overriding(),
             &object,
             owner,
             &[],
@@ -266,27 +263,6 @@ where
         })?;
 
         Ok(())
-    }
-
-    /// Remove an owned object and its ownership in the same transaction.
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    pub async fn remove_with_ownership(
-        &self,
-        name: &str,
-        seq: MatchSeq,
-        object: OwnershipObject,
-    ) -> Result<bool, MetaTxnError> {
-        let removed = drop_owned_object(
-            self.kv_api.as_ref(),
-            &self.ident(name),
-            seq,
-            &self.tenant,
-            &object,
-            &[],
-        )
-        .await?;
-        Ok(removed.is_some())
     }
 
     #[async_backtrace::framed]

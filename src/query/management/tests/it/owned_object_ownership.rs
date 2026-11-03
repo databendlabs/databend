@@ -12,24 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Ownership is written in the same Meta transaction as the object's metadata.
-//! SQL tests cannot inject a failure between the two writes or leave a stale
-//! ownership behind, so these cases are covered here.
+//! CREATE writes ownership in the same Meta transaction as the object's
+//! metadata. SQL tests cannot inject a failure between the two writes or leave
+//! a stale ownership behind, so these cases are covered here.
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use databend_common_management::StageApi;
-use databend_common_management::StageMgr;
 use databend_common_management::udf::UdfMgr;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::txn_put_pb;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
-use databend_common_meta_app::principal::StageFileIdent;
-use databend_common_meta_app::principal::StageIdent;
-use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::UserDefinedFunction;
@@ -43,7 +38,6 @@ use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::Change;
 use databend_meta_client::types::InvalidReply;
-use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnReply;
@@ -183,56 +177,5 @@ async fn test_create_replaces_stale_owner_atomically() -> anyhow::Result<()> {
             assert_eq!(case.owner().await.as_deref(), role, "{role:?}");
         }
     }
-    Ok(())
-}
-
-/// DROP deletes the object, its auxiliary keys and its owner together: a failed
-/// transaction keeps all of them. UDFs use the generic path; stages also delete
-/// their file records in their own transaction.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_deletes_object_and_owner_atomically() -> anyhow::Result<()> {
-    let case = Case::new(OwnershipObject::UDF { name: NAME.into() }, |tenant| {
-        vec![txn_put_pb(&udf_key(tenant), &udf())]
-    })
-    .await;
-    let key = udf_key(&case.tenant).to_string_key();
-    let udfs = UdfMgr::create(case.kv.clone(), &case.tenant);
-    case.fail_next_ownership_write();
-    assert!(udfs.drop_udf(NAME, MatchSeq::GE(1)).await.is_err());
-    assert!(case.exists(&key).await);
-    assert_eq!(case.owner().await.as_deref(), Some("old_owner"));
-    assert!(udfs.drop_udf(NAME, MatchSeq::GE(1)).await?.is_some());
-    assert!(!case.exists(&key).await);
-    assert_eq!(case.owner().await, None);
-
-    let stage_key = |tenant: &Tenant| StageIdent::new(tenant, NAME);
-    let file_key = |tenant: &Tenant| StageFileIdent::new(stage_key(tenant), "file.csv");
-    let case = Case::new(OwnershipObject::Stage { name: NAME.into() }, |tenant| {
-        let stage = StageInfo {
-            stage_name: NAME.into(),
-            ..Default::default()
-        };
-        vec![
-            txn_put_pb(&stage_key(tenant), &stage),
-            TxnOp::put(file_key(tenant).to_string_key(), b"file".to_vec()),
-        ]
-    })
-    .await;
-    let keys = [
-        stage_key(&case.tenant).to_string_key(),
-        file_key(&case.tenant).to_string_key(),
-    ];
-    let stages = StageMgr::create(case.kv.clone(), &case.tenant);
-    case.fail_next_ownership_write();
-    assert!(stages.drop_stage(NAME).await.is_err());
-    for key in &keys {
-        assert!(case.exists(key).await, "{key}");
-    }
-    assert_eq!(case.owner().await.as_deref(), Some("old_owner"));
-    stages.drop_stage(NAME).await?;
-    for key in &keys {
-        assert!(!case.exists(key).await, "{key}");
-    }
-    assert_eq!(case.owner().await, None);
     Ok(())
 }

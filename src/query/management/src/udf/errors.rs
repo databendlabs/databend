@@ -15,7 +15,6 @@
 use std::fmt::Display;
 
 use databend_common_exception::ErrorCode;
-use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_meta_client::types::MetaError;
 
 use crate::errors::TenantError;
@@ -58,19 +57,13 @@ pub enum UdfApiError {
 
     #[error("MetaService error: {meta_err}; {context}")]
     MetaError {
-        meta_err: MetaTxnError,
+        meta_err: MetaError,
         context: String,
     },
 }
 
 impl From<MetaError> for UdfApiError {
     fn from(meta_err: MetaError) -> Self {
-        Self::from(MetaTxnError::from(meta_err))
-    }
-}
-
-impl From<MetaTxnError> for UdfApiError {
-    fn from(meta_err: MetaTxnError) -> Self {
         UdfApiError::MetaError {
             meta_err,
             context: "".to_string(),
@@ -83,7 +76,7 @@ impl From<UdfApiError> for ErrorCode {
         match value {
             UdfApiError::TenantError(e) => ErrorCode::from(e),
             UdfApiError::MetaError { meta_err, context } => {
-                ErrorCode::from(meta_err).add_message_back(context)
+                ErrorCode::MetaServiceError(meta_err.to_string()).add_message_back(context)
             }
         }
     }
