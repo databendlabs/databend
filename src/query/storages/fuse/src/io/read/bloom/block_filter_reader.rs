@@ -224,9 +224,10 @@ async fn prepare_bloom_index_read_source(
     path: &str,
     index_length: u64,
 ) -> Result<Option<Arc<Bytes>>> {
-    if should_read_whole_bloom_index(path, settings, index_length) {
+    let storage = DiskCachedStorage::new(dal.clone());
+    if should_read_whole_bloom_index(path, settings, index_length, &storage) {
         let fill = FuseCaches::instance().index_metas.bloom.disk_fill();
-        let data = DiskCachedStorage::new(dal.clone())
+        let data = storage
             .read(CacheKind::of::<bloom::Filter>(), path, None, fill)
             .await?;
         return Ok(Some(Arc::new(data)));
@@ -235,12 +236,25 @@ async fn prepare_bloom_index_read_source(
     Ok(None)
 }
 
-fn should_read_whole_bloom_index(path: &str, settings: &ReadSettings, index_length: u64) -> bool {
+/// Whether to read the index file whole: it is small, its footer is not in memory, and the
+/// disk cache keeps it whole, as a filter unit, or keeps no footer either. Read whole, the
+/// footer is not read through the meta pool, which would then never serve it.
+fn should_read_whole_bloom_index(
+    path: &str,
+    settings: &ReadSettings,
+    index_length: u64,
+    storage: &DiskCachedStorage,
+) -> bool {
     if index_length > settings.parquet_fast_read_bytes {
         return false;
     }
-
-    !FuseCaches::instance().index_metas.bloom.contains(path)
+    let metas = &FuseCaches::instance().index_metas.bloom;
+    if metas.contains(path) {
+        return false;
+    }
+    let fill = metas.disk_fill();
+    storage.uses_disk(CacheKind::of::<bloom::Filter>(), fill)
+        || !storage.uses_disk(CacheKind::of::<bloom::IndexMeta>(), fill)
 }
 
 fn load_index_meta_from_bytes(data: &Bytes) -> Result<BloomIndexMeta> {
@@ -312,6 +326,7 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::Int32Type;
     use databend_storages_common_blocks::blocks_to_parquet;
+    use databend_storages_common_cache::DiskCache;
     use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::BloomIndexBuilder;
     use databend_storages_common_index::BloomIndexType;
@@ -367,13 +382,34 @@ mod tests {
             parquet_fast_read_bytes: 1024,
         };
 
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let storage = DiskCachedStorage::with_disk(operator.clone(), None);
         let cache = &FuseCaches::instance().index_metas.bloom;
         cache.evict(path);
-        assert!(should_read_whole_bloom_index(path, &settings, 512));
-        assert!(!should_read_whole_bloom_index(path, &settings, 2048));
+        assert!(should_read_whole_bloom_index(
+            path, &settings, 512, &storage
+        ));
+        assert!(!should_read_whole_bloom_index(
+            path, &settings, 2048, &storage
+        ));
+
+        // With a disk cache: read whole when the file is kept whole in the index pool, not
+        // when only the footer would be kept, in the meta pool.
+        let dir = tempfile::TempDir::new()?;
+        for (index_pool, whole) in [(1 << 20, true), (0, false)] {
+            let disk = DiskCache::new(dir.path(), 1 << 30, [1 << 20, index_pool, 1 << 20], false)?;
+            let storage = DiskCachedStorage::with_disk(operator.clone(), Some(Arc::new(disk)));
+            assert_eq!(
+                should_read_whole_bloom_index(path, &settings, 512, &storage),
+                whole,
+                "index pool {index_pool}"
+            );
+        }
 
         cache.put(path, Arc::new(BloomIndexMeta { columns: vec![] }));
-        assert!(!should_read_whole_bloom_index(path, &settings, 512));
+        assert!(!should_read_whole_bloom_index(
+            path, &settings, 512, &storage
+        ));
         Ok(())
     }
 
