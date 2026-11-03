@@ -1120,3 +1120,37 @@ async fn test_fill_invalidated_while_queued_evicts_nothing() {
         .count();
     assert_eq!(stale_files, 0);
 }
+
+/// Making the bytes of an entry unwinds, as an allocation over the query's memory limit does:
+/// the room the entry took is given back and nothing of it stays pending, so the queue keeps
+/// its capacity.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unwinding_while_making_the_bytes_gives_the_room_back() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
+    let writer = Arc::new(DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        options(1, 100, Duration::from_millis(30)),
+    ));
+    let unwound = {
+        let (writer, pool) = (writer.clone(), pool.clone());
+        spawn(async move {
+            let WriteJob {
+                pool, rel, ticket, ..
+            } = job(&pool, data_kind(), "a", 100);
+            writer
+                .enqueue_with(pool, rel, 100, ticket, || panic!("over the memory limit"))
+                .await
+        })
+    };
+    assert!(unwound.await.unwrap_err().is_panic());
+    assert_eq!(writer.queued_bytes(), 0);
+    assert_eq!(writer.pending_entries(), 0);
+    // The key is free, and the queue takes entries as before.
+    assert!(writer.enqueue(job(&pool, data_kind(), "a", 60)).await);
+    assert!(writer.enqueue(job(&pool, data_kind(), "b", 40)).await);
+    wait_for(|| idle(&writer));
+    assert_eq!(pool.stats().items, 2);
+    assert_eq!(drops(&writer), (0, 0, 0));
+}

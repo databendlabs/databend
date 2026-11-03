@@ -368,10 +368,34 @@ impl DiskWriter {
             }
             let _ = tokio::time::timeout(deadline - now, room).await;
         }
-        // No await from the room taken to the hand-over: a cancelled caller holds no room.
-        let give_back = || {
-            self.shared.queued.fetch_sub(len, Ordering::AcqRel);
-            self.shared.room.notify_waiters();
+        // Held from the room taken to the hand-over, and given back unless the job reaches a
+        // writer: also when making the bytes or listing the entry unwinds, as on a query
+        // over its memory limit. No await in between: a cancelled caller holds no room.
+        struct Held<'a> {
+            shared: &'a Shared,
+            key: &'a (usize, String),
+            len: u64,
+            listed: Option<u64>,
+            handed_over: bool,
+        }
+        impl Drop for Held<'_> {
+            fn drop(&mut self) {
+                if self.handed_over {
+                    return;
+                }
+                if let Some(number) = self.listed {
+                    self.shared.remove_pending(self.key, number);
+                }
+                self.shared.queued.fetch_sub(self.len, Ordering::AcqRel);
+                self.shared.room.notify_waiters();
+            }
+        }
+        let mut held = Held {
+            shared: &self.shared,
+            key: &key,
+            len,
+            listed: None,
+            handed_over: false,
         };
         let value = value();
         debug_assert_eq!(value.len() as u64, len);
@@ -382,28 +406,23 @@ impl DiskWriter {
             // writer indexes its entry before it takes the key off the pending set, so under
             // this lock a key not pending is indexed if it was written.
             if Shared::blocks_in(&pending, &pool, &key) || pool.contains(&key.1) {
-                drop(pending);
-                give_back();
                 return false;
             }
             pending.insert(key.clone(), (value.clone(), ticket.clone(), number));
+            held.listed = Some(number);
         }
-        let (pool, rel) = (pool, key.1.clone());
-        if let Err(e) = self.tx.send((
-            WriteJob {
-                pool,
-                rel,
-                value,
-                ticket,
-            },
-            number,
-        )) {
-            // No writer left.
-            self.shared.remove_pending(&key, number);
-            give_back();
+        let job = WriteJob {
+            pool,
+            rel: key.1.clone(),
+            value,
+            ticket,
+        };
+        if let Err(e) = self.tx.send((job, number)) {
+            // No writer left: the guard gives the room back and takes the key off.
             warn!("[DiskCache] writer threads are gone: {e}");
             return false;
         }
+        held.handed_over = true;
         // The writer takes the key off when done.
         true
     }
