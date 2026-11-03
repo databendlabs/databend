@@ -229,6 +229,13 @@ impl SelectivityEstimator {
         }
     }
 
+    /// Whether the last `apply` was decided by a range comparison whose column
+    /// statistics estimate no matches, so that `max_cardinality` is its
+    /// unknown-filter bound.
+    pub fn uses_statistics_zero_bound(&self) -> bool {
+        self.statistics_zero_fallback
+    }
+
     pub fn into_column_stats(self) -> ColumnStatSet {
         if self.overrides.is_empty() {
             return self.column_stats;

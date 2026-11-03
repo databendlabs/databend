@@ -112,6 +112,7 @@ fn scan_with_stats(table_index: usize, column: Symbol, null_count: u64) -> SExpr
         Some(Arc::new(StatInfo {
             cardinality: CARDINALITY,
             max_cardinality: CARDINALITY,
+            statistics_zero_bound: false,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: HashMap::from([(column, column_stat(null_count))]),

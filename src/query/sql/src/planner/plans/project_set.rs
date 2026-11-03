@@ -47,6 +47,7 @@ impl ProjectSet {
         // Each input row may be repeated, so an input NDV no longer shows that
         // a column is unique.
         input_stat.statistics.observed_ndv_columns.clear();
+        input_stat.statistics_zero_bound = false;
         Ok(Arc::new(input_stat.clone()))
     }
 }
@@ -119,6 +120,7 @@ mod tests {
         let mut input = StatInfo {
             cardinality: 100.0,
             max_cardinality: 100.0,
+            statistics_zero_bound: false,
             statistics: Statistics {
                 observed_ndv_columns: ColumnSet::from([Symbol::new(0)]),
                 ..Default::default()
