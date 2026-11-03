@@ -80,7 +80,7 @@ impl PrewhereSelector {
         let (select_expr, _) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
             .build(filter)
             .into();
-        if !select_expr.contains_string_column_eq_constant() {
+        if !select_expr.contains_string_column_eq_constant() || !reads_only_columns(&select_expr) {
             return None;
         }
         let single_comparison_columns = match &select_expr {
@@ -102,10 +102,8 @@ impl PrewhereSelector {
             &BUILTIN_FUNCTIONS,
             false,
         );
-        // The evaluator path evaluates the conjuncts in order, so a row error in a later one
-        // (e.g. `parse_json` on an invalid value) is not raised for rows an earlier one
-        // rejected. Reordering would make a query fail depending on which blocks a worker
-        // read before, so keep the order of the predicate.
+        // The evaluator path evaluates the conjuncts in order. Keep the order of the predicate
+        // so that the rows each child sees do not depend on which blocks a worker read before.
         executor.disable_reorder();
         Some(Self {
             executor,
@@ -132,6 +130,26 @@ impl PrewhereSelector {
             }
             BlockEntry::Column(_) => true,
         })
+    }
+}
+
+/// Whether every leaf of the predicate compares or matches columns and constants only.
+///
+/// The selector evaluates function calls under a comparison, and `Others` leaves, over the
+/// whole block without the rows that earlier children rejected. The evaluator passes those
+/// rows as validity, so functions such as `parse_json` skip them and their row errors are not
+/// raised. Such predicates keep the evaluator path.
+fn reads_only_columns(select_expr: &SelectExpr) -> bool {
+    match select_expr {
+        SelectExpr::And((exprs, _)) | SelectExpr::Or((exprs, _)) => {
+            exprs.iter().all(reads_only_columns)
+        }
+        SelectExpr::Compare((_, args, _)) => args
+            .iter()
+            .all(|arg| matches!(arg, Expr::ColumnRef(_) | Expr::Constant(_))),
+        SelectExpr::Like((column, _, _)) => matches!(column, Expr::ColumnRef(_)),
+        SelectExpr::BooleanColumn(_) | SelectExpr::BooleanScalar(_) => true,
+        SelectExpr::Others(_) => false,
     }
 }
 
@@ -977,8 +995,8 @@ mod tests {
     }
 
     /// Rows with an invalid JSON value are all rejected by the first conjunct. The evaluator
-    /// never parses them, so the selector must not reorder the conjuncts across blocks and
-    /// parse them first.
+    /// never parses them. A function call under a comparison keeps the evaluator path, and
+    /// the selector executor itself keeps the conjunct order once reordering is disabled.
     #[test]
     fn test_prewhere_selector_keeps_conjunct_order() {
         let num_rows = 6;
@@ -1000,13 +1018,85 @@ mod tests {
         let expr = prewhere_expr(&raw_expr, &func_ctx);
         let expected = evaluator_bitmap(&expr, &block, &func_ctx);
         assert_eq!(expected, vec![true, false, false, false, true, false]);
+        assert!(PrewhereSelector::try_create(&expr, &func_ctx, num_rows).is_none());
 
-        let mut selector = PrewhereSelector::try_create(&expr, &func_ctx, num_rows).unwrap();
-        assert!(selector.applies_to(&block));
+        let mut executor = FilterExecutor::new(
+            expr.clone(),
+            func_ctx.clone(),
+            num_rows,
+            None,
+            &BUILTIN_FUNCTIONS,
+            false,
+        );
+        executor.disable_reorder();
         // Adaptive reordering would swap the two conjuncts after the first block.
         for _ in 0..16 {
-            let actual = filter_with_selector(&mut selector.executor, &block, num_rows).unwrap();
+            let actual = filter_with_selector(&mut executor, &block, num_rows).unwrap();
             assert_eq!(actual.iter().collect::<Vec<_>>(), expected);
+        }
+    }
+
+    #[test]
+    fn test_reads_only_columns() {
+        let func_ctx = FunctionContext::default();
+        let string_type = DataType::String;
+        let int_type = DataType::Number(NumberDataType::Int32);
+        let eq = call("eq", vec![
+            column(0, string_type.clone()),
+            string_constant("v"),
+        ]);
+        for (raw_expr, expected) in [
+            (eq.clone(), true),
+            (
+                call("and", vec![
+                    eq.clone(),
+                    call("or", vec![
+                        call("gt", vec![column(1, int_type.clone()), int_constant(1)]),
+                        call("like", vec![
+                            column(0, string_type.clone()),
+                            string_constant("a%"),
+                        ]),
+                    ]),
+                ]),
+                true,
+            ),
+            (
+                call("and", vec![
+                    eq.clone(),
+                    call("gt", vec![
+                        call("running_difference", vec![column(1, int_type.clone())]),
+                        int_constant(0),
+                    ]),
+                ]),
+                false,
+            ),
+            (
+                call("and", vec![
+                    eq.clone(),
+                    call("eq", vec![
+                        call("lower", vec![column(0, string_type.clone())]),
+                        string_constant("a"),
+                    ]),
+                ]),
+                false,
+            ),
+        ] {
+            let expr = prewhere_expr(&raw_expr, &func_ctx);
+            let (select_expr, _) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+                .build(&expr)
+                .into();
+            assert_eq!(
+                reads_only_columns(&select_expr),
+                expected,
+                "{}",
+                expr.sql_display()
+            );
+            assert_eq!(
+                PrewhereSelector::try_create(&expr, &func_ctx, 8).is_some(),
+                expected,
+                "{}",
+                expr.sql_display()
+            );
         }
     }
 

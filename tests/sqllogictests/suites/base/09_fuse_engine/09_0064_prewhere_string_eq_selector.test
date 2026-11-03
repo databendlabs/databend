@@ -64,9 +64,10 @@ SELECT count(payload) FROM t WHERE s = 'nothing'
 ----
 0
 
-# `running_difference` is 0 only on the first row of the evaluated column. The
-# whole block is evaluated once, so only row 0 is rejected; evaluating slices of
-# 3 rows would reject the first row of every slice.
+# `running_difference` is 0 only on the first row of the evaluated column. Only
+# row 0 of the block may be rejected; evaluating slices of 3 rows would reject
+# the first row of every slice. (A function call under a comparison keeps the
+# evaluator path; the selector's whole-block evaluation is covered by unit tests.)
 query I
 SELECT count(payload) FROM t WHERE s = 'match' AND running_difference(id) > 0
 ----
