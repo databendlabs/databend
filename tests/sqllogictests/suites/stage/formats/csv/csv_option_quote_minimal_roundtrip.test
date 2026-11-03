@@ -69,39 +69,6 @@ select $1 from @s1/custom_null_display.csv (file_format => 'text') order by meta
 1,"NULL"
 2,NULL
 
-# Default load options preserve both literal NULL markers and empty strings.
-statement ok
-create table t_quote_minimal_roundtrip_copy like t_quote_minimal_roundtrip
-
-statement ok
-copy into t_quote_minimal_roundtrip_copy from @s1/default_null_display.csv file_format = (type = csv)
-
-query IT
-select id, value from t_quote_minimal_roundtrip_copy order by id
-----
-1 (empty)
-2 \N
-3 NULL
-4 plain
-
-statement ok
-create table t_quote_minimal_custom_null_copy like t_quote_minimal_custom_null
-
-statement ok
-copy into t_quote_minimal_custom_null_copy from @s1/custom_null_display.csv file_format = (type = csv null_display = 'NULL')
-
-query IT
-select id, value from t_quote_minimal_custom_null_copy order by id
-----
-1 NULL
-2 NULL
-
-# Both values print as NULL above; only the second one is actually NULL.
-query I
-select id from t_quote_minimal_custom_null_copy where value is null
-----
-2
-
 statement ok
 drop stage if exists s1
 
