@@ -25,6 +25,7 @@ use crate::hnsw_index::common::types::ScoredPointOffset;
 use crate::hnsw_index::quantization::EncodedQueryU8;
 use crate::hnsw_index::quantization::EncodedVectorsU8;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
+use crate::hnsw_index::spaces::simple::similarity;
 
 pub enum RawScorer<'a> {
     Original(OriginalRawScorer<'a>),
@@ -139,11 +140,7 @@ fn calculate_score(distance_type: DistanceType, lhs: ScalarRef, rhs: ScalarRef) 
         ) => {
             let l: Vec<_> = lhs.iter().map(|v| *v as f32).collect();
             let r: Vec<_> = rhs.iter().map(|v| *v as f32).collect();
-            match distance_type {
-                DistanceType::Dot => dot_similarity(&l, &r),
-                DistanceType::L1 => manhattan_similarity(&l, &r),
-                DistanceType::L2 => euclid_similarity(&l, &r),
-            }
+            similarity(distance_type, &l, &r)
         }
         (
             ScalarRef::Vector(VectorScalarRef::Float32(lhs)),
@@ -151,24 +148,8 @@ fn calculate_score(distance_type: DistanceType, lhs: ScalarRef, rhs: ScalarRef) 
         ) => {
             let l = unsafe { std::mem::transmute::<&[F32], &[f32]>(lhs) };
             let r = unsafe { std::mem::transmute::<&[F32], &[f32]>(rhs) };
-            match distance_type {
-                DistanceType::Dot => dot_similarity(l, r),
-                DistanceType::L1 => manhattan_similarity(l, r),
-                DistanceType::L2 => euclid_similarity(l, r),
-            }
+            similarity(distance_type, l, r)
         }
         (_, _) => 0.0,
     }
-}
-
-fn dot_similarity(v1: &[f32], v2: &[f32]) -> f32 {
-    v1.iter().zip(v2).map(|(a, b)| a * b).sum()
-}
-
-fn euclid_similarity(v1: &[f32], v2: &[f32]) -> f32 {
-    -v1.iter().zip(v2).map(|(a, b)| (a - b).powi(2)).sum::<f32>()
-}
-
-fn manhattan_similarity(v1: &[f32], v2: &[f32]) -> f32 {
-    -v1.iter().zip(v2).map(|(a, b)| (a - b).abs()).sum::<f32>()
 }

@@ -54,6 +54,13 @@ use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 
 const SINGLE_THREADED_HNSW_BUILD_THRESHOLD: usize = 256;
 
+/// Longest run of points a rayon job inserts without splitting further during an HNSW build.
+///
+/// Rayon's adaptive splitter stops splitting once its budget is spent unless a job gets stolen, so
+/// with a non-power-of-two thread count one thread can be left with up to half the points while
+/// the others idle. Capping the job length keeps the work stealable to the end (qdrant#10686).
+const HNSW_BUILD_MAX_PAR_LEN: usize = 64;
+
 /// Name suffixes of the four HNSW components, in the order `HNSWIndex::build`
 /// produces and `HNSWIndex::open` expects them.
 const HNSW_GRAPH_LINKS_SUFFIX: &str = "_graph_links";
@@ -313,7 +320,11 @@ impl HNSWIndex {
             insert_point(vector_id)?;
         }
         if !ids.is_empty() {
-            pool.install(|| ids.into_par_iter().try_for_each(insert_point))?;
+            pool.install(|| {
+                ids.into_par_iter()
+                    .with_max_len(HNSW_BUILD_MAX_PAR_LEN)
+                    .try_for_each(insert_point)
+            })?;
         }
 
         let (graph_links, graph_data) =
