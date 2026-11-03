@@ -35,8 +35,6 @@ pub struct DiskKey {
 enum Unit {
     Whole,
     Range(Range<u64>),
-    /// The object's length, for reads from its end when no metadata gives it.
-    Length,
 }
 
 impl DiskKey {
@@ -51,14 +49,6 @@ impl DiskKey {
         DiskKey {
             path: path.into(),
             unit: Unit::Range(range),
-        }
-    }
-
-    /// The unit holding the length of the object at `path`, little-endian `u64`.
-    pub fn length(path: impl Into<String>) -> Self {
-        DiskKey {
-            path: path.into(),
-            unit: Unit::Length,
         }
     }
 
@@ -95,13 +85,12 @@ fn hash(s: &str) -> String {
     hex::encode(sip.finish128().as_bytes())
 }
 
-/// The key string: the path, with `#start-end` for a range and `#length` for the length.
+/// The key string: the path, with `#start-end` for a range.
 impl fmt::Display for DiskKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.unit {
             Unit::Whole => f.write_str(&self.path),
             Unit::Range(range) => write!(f, "{}#{}-{}", self.path, range.start, range.end),
-            Unit::Length => write!(f, "{}#length", self.path),
         }
     }
 }

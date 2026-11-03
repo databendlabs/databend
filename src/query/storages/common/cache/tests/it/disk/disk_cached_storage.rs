@@ -400,19 +400,6 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for Counting<A> {
         self.inner.write(path, args).await
     }
 
-    /// Counted and slowed down as reads.
-    async fn stat(
-        &self,
-        path: &str,
-        args: opendal::raw::OpStat,
-    ) -> opendal::Result<opendal::raw::RpStat> {
-        let stat = self.inner.stat(path, args).await;
-        self.reads
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        stat
-    }
-
     async fn list(
         &self,
         path: &str,
@@ -651,37 +638,6 @@ async fn test_maintenance_reads_bypass_the_disk_cache() {
     maintenance(storage).await;
     assert_eq!(accesses(), before);
     assert!(!disk.contains(data(), &DiskKey::range(PATH, 20..30)));
-}
-
-/// The length of an object is cached as one of its units: once cached it needs no storage
-/// request, here none can succeed, and it is dropped with the object's other units when the
-/// object changes.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_content_length_is_cached_until_the_object_changes() {
-    let dir = TempDir::new().unwrap();
-    let (op, disk, storage) = setup(&dir).await;
-    let len = storage
-        .content_length(data(), PATH, DiskFill::ReadWrite)
-        .await
-        .unwrap();
-    assert_eq!(len, object().len() as u64);
-    wait_for(|| disk.contains(data(), &DiskKey::length(PATH)));
-    op.delete(PATH).await.unwrap();
-    assert_eq!(
-        storage
-            .content_length(data(), PATH, DiskFill::ReadWrite)
-            .await
-            .unwrap(),
-        len
-    );
-    drop(storage.begin_change(PATH).unwrap());
-    assert!(!disk.contains(data(), &DiskKey::length(PATH)));
-    assert!(
-        storage
-            .content_length(data(), PATH, DiskFill::ReadWrite)
-            .await
-            .is_err()
-    );
 }
 
 /// A memory operator holding `object()` at `PATH`, counting and delaying its reads, behind a
@@ -927,43 +883,6 @@ async fn test_unit_reads_racing_rewrites_never_return_stale_bytes_after() {
             );
         }
     }
-}
-
-/// Concurrent lengths of one object, as footer reads of one file at once ask for, stat it once;
-/// after the object changes the next ones stat it again and get its new length.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_concurrent_lengths_stat_once_until_the_object_changes() {
-    let dir = TempDir::new().unwrap();
-    let (op, reads, disk, storage) = counted_setup(&dir).await;
-    let lengths = futures::future::join_all((0..16).map(|_| {
-        let storage = storage.clone();
-        async move {
-            storage
-                .content_length(data(), PATH, DiskFill::ReadWrite)
-                .await
-                .unwrap()
-        }
-    }))
-    .await;
-    assert!(lengths.iter().all(|len| *len == object().len() as u64));
-    assert_eq!(reads_of(&reads), 1);
-    wait_for(|| disk.contains(data(), &DiskKey::length(PATH)));
-
-    let change = storage.begin_change(PATH).unwrap();
-    op.write(PATH, Bytes::from(vec![1u8; 10])).await.unwrap();
-    drop(change);
-    let lengths = futures::future::join_all((0..16).map(|_| {
-        let storage = storage.clone();
-        async move {
-            storage
-                .content_length(data(), PATH, DiskFill::ReadWrite)
-                .await
-                .unwrap()
-        }
-    }))
-    .await;
-    assert!(lengths.iter().all(|len| *len == 10));
-    assert_eq!(reads_of(&reads), 2);
 }
 
 /// Maintenance and queries read the same objects at once, on the same runtime: the flag is per

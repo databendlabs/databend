@@ -213,43 +213,6 @@ impl DiskCachedStorage {
         read
     }
 
-    /// The length of the object at `path`, cached as one of its units under `kind`: a read
-    /// from the end of an object whose length nothing else gives then needs no storage request
-    /// once cached. Dropped with the object's other units when it changes.
-    pub async fn content_length(&self, kind: CacheKind, path: &str, fill: DiskFill) -> Result<u64> {
-        let fill = Self::statement_fill(fill);
-        let Some(disk) = self.disk_for(kind, fill) else {
-            return Ok(self.op.stat(path).await?.content_length());
-        };
-        let key = DiskKey::length(self.key(path, None).path());
-        if let Some(bytes) = disk.get(kind, &key).await {
-            if let Ok(len) = <[u8; 8]>::try_from(bytes.as_ref()) {
-                return Ok(u64::from_le_bytes(len));
-            }
-            disk.evict(kind, &key);
-        }
-        // Shared by concurrent readers, as `read`: footer reads of one file at once stat it once.
-        let ticket = disk.begin_fill();
-        let load = async {
-            let len = self.op.stat(path).await?.content_length();
-            let bytes = Bytes::copy_from_slice(&len.to_le_bytes());
-            if fill.writes() {
-                disk.put(kind, &key, bytes.clone(), &ticket).await;
-            }
-            Ok(bytes)
-        };
-        let generation = disk.invalidation_of(kind, key.path());
-        let bytes = disk
-            .flight()
-            .run(&format!("{kind:?}/{key}@{generation}"), load)
-            .await;
-        drop(ticket);
-        let bytes = bytes?;
-        <[u8; 8]>::try_from(bytes.as_ref())
-            .map(u64::from_le_bytes)
-            .map_err(|_| ErrorCode::Internal(format!("bad cached length of {path}")))
-    }
-
     async fn read_storage(&self, path: &str, range: Option<Range<u64>>) -> Result<Bytes> {
         let buffer = match range {
             Some(range) => self.op.read_with(path).range(range).await?,
