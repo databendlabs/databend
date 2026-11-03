@@ -28,7 +28,6 @@ use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextQueryIdentity;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -64,16 +63,12 @@ impl Interpreter for DropConnectionInterpreter {
             let user_mgr = UserApiProvider::instance();
 
             // 1. Drop the connection first
-            user_mgr
+            let dropped = user_mgr
                 .drop_connection(&tenant, &plan.name, plan.if_exists)
                 .await?;
 
-            // 2. Revoke ownership (after drop succeeds to prevent permission leak)
-            if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_connection_privilege_check()?
-            {
+            // 2. Revoke only if this statement dropped it, so a concurrent CREATE keeps its owner
+            if dropped {
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 let owner_object = OwnershipObject::Connection {
                     name: self.plan.name.clone(),

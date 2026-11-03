@@ -1195,13 +1195,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["rounding".into(), "truncating".into()])),
                 }),
-                ("enable_experimental_rbac_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting enable stage and udf privilege check(enable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_table_snapshot_stats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable analyze table statistics for snapshots",
@@ -1219,20 +1212,6 @@ impl DefaultSettings {
                 ("enable_experimental_row_access_policy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting enable row access policy(disable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_connection_privilege_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting enable connection object privilege check(disable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_sequence_privilege_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting enable sequence object privilege check(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
