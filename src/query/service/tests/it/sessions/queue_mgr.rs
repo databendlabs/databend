@@ -494,9 +494,9 @@ async fn test_heavy_actions() -> anyhow::Result<()> {
     // Check.
     for query in queries.iter() {
         let mut planner = Planner::new(ctx.clone());
-        let (plan, extras) = planner.plan_sql(query.sql).await?;
+        let (plan, _) = planner.plan_sql(query.sql).await?;
 
-        let query_entry = QueryEntry::create(&ctx, &plan, &extras)?;
+        let query_entry = QueryEntry::create(&ctx, &plan)?;
         if query.add_to_queue != query_entry.need_acquire_to_queue() {
             error!(
                 "query: {:?}, query-entry: {:?}",
@@ -570,9 +570,8 @@ async fn test_aborted_queued_query_releases_session() -> anyhow::Result<()> {
     let queue = QueueManager::<QueryEntry>::create(1, create_meta_store().await?, false);
 
     let holder_ctx = fixture.new_query_ctx().await?;
-    let extras = Planner::new(holder_ctx.clone()).parse_sql("SELECT 1")?;
     let _holder = queue
-        .acquire(QueryEntry::create_entry(&holder_ctx, &extras, true)?)
+        .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
         .await?;
 
     let session = fixture.new_session_with_type(SessionType::MySQL).await?;
@@ -580,7 +579,7 @@ async fn test_aborted_queued_query_releases_session() -> anyhow::Result<()> {
     let weak_session = Arc::downgrade(&session);
     let ctx = session.create_query_context(&BUILD_INFO).await?;
     let weak_ctx = Arc::downgrade(&ctx);
-    let entry = QueryEntry::create_entry(&ctx, &extras, true)?;
+    let entry = QueryEntry::create_entry(&ctx, true)?;
     let abort_notify = entry.get_abort_notify();
     drop(ctx);
     drop(session);

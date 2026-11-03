@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Keep this integration target separate from `it`: the path-count test installs a process-wide
+// Keep this integration target separate from `it`: the path-count tests install a process-wide
 // fastrace reporter, which must not replace the reporter used by unrelated service tests.
 
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
@@ -42,8 +43,10 @@ use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
 use fastrace::Span;
 use fastrace::collector::SpanContext;
+use fastrace::collector::SpanRecord;
 use fastrace::collector::TestReporter;
 use fastrace::future::FutureExt;
+use parking_lot::Mutex;
 
 async fn user_context(
     fixture: &TestFixture,
@@ -58,6 +61,30 @@ async fn user_context(
 async fn check_access(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
     let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
     InterpreterFactory::get(ctx, &plan).await.map(|_| ())
+}
+
+/// Spans of every test in this target. The reporter is process-wide, so it is installed once;
+/// tests tell their spans apart by trace id.
+fn reported_spans() -> Arc<Mutex<Vec<SpanRecord>>> {
+    static SPANS: OnceLock<Arc<Mutex<Vec<SpanRecord>>>> = OnceLock::new();
+    SPANS
+        .get_or_init(|| {
+            let (reporter, spans) = TestReporter::new();
+            fastrace::set_reporter(reporter, fastrace::collector::Config::default());
+            spans
+        })
+        .clone()
+}
+
+/// Counts spans of `trace` whose name is `name` or whose `::`-separated path ends with it.
+fn count_spans(spans: &[SpanRecord], trace: SpanContext, name: &str) -> usize {
+    spans
+        .iter()
+        .filter(|span| {
+            span.trace_id == trace.trace_id
+                && (span.name == name || span.name.split("::").any(|part| part == name))
+        })
+        .count()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -156,8 +183,7 @@ async fn test_select_access_path_counts() -> anyhow::Result<()> {
     let (db_id, table_id) = setup_table(&fixture).await?;
     let tenant = fixture.default_tenant();
     let api = UserApiProvider::instance();
-    let (reporter, spans) = TestReporter::new();
-    fastrace::set_reporter(reporter, fastrace::collector::Config::default());
+    let spans = reported_spans();
 
     let mut cases = Vec::new();
     let mut legacy = UserInfo::new_no_auth("legacy", "%");
@@ -489,6 +515,146 @@ async fn test_select_ownership_fallback_and_denial() -> anyhow::Result<()> {
         error.message().contains("'default'.'select_access'.'t'"),
         "{error}"
     );
+    Ok(())
+}
+
+/// A multi-table SELECT resolves each database id once, checks a table bound several times
+/// once, and reads the ownership fallback of all tables without a matching grant in one MGet.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_multi_table_select_access_counts() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let (db_id, _) = setup_table(&fixture).await?;
+    for sql in [
+        "CREATE TABLE select_access.t2(a INT)",
+        "CREATE TABLE select_access.t3(a INT)",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    let tenant = fixture.default_tenant();
+    let api = UserApiProvider::instance();
+    let ctx = fixture.new_query_ctx().await?;
+    let t2_id = ctx
+        .get_table("default", "select_access", "t2")
+        .await?
+        .get_id();
+    let t3_id = ctx
+        .get_table("default", "select_access", "t3")
+        .await?
+        .get_id();
+    // Like `setup_table`, keep the fixture's creating role from owning `t2` for every user.
+    api.grant_ownership_to_role(
+        &tenant,
+        &OwnershipObject::Table {
+            catalog_name: "default".into(),
+            db_id,
+            table_id: t2_id,
+        },
+        BUILTIN_ROLE_ACCOUNT_ADMIN,
+    )
+    .await?;
+    for (role, object) in [
+        ("database_owner", OwnershipObject::Database {
+            catalog_name: "default".into(),
+            db_id,
+        }),
+        ("t3_owner", OwnershipObject::Table {
+            catalog_name: "default".into(),
+            db_id,
+            table_id: t3_id,
+        }),
+    ] {
+        api.create_role(&tenant, RoleInfo::new(role, None), &CreateOption::Create)
+            .await?;
+        api.grant_ownership_to_role(&tenant, &object, role).await?;
+    }
+    RoleCacheManager::instance().invalidate_cache(&tenant);
+    let spans = reported_spans();
+
+    let name_grant =
+        |table: &str| GrantObject::Table("default".into(), "select_access".into(), table.into());
+    let mut database_owner = UserInfo::new_no_auth("database_owner", "%");
+    database_owner.grants.grant_role("database_owner".into());
+    let mut grants_only = UserInfo::new_no_auth("grants_only", "%");
+    for object in [
+        name_grant("t"),
+        name_grant("t2"),
+        GrantObject::TableById("default".into(), db_id, t3_id),
+    ] {
+        grants_only
+            .grants
+            .grant_privileges(&object, UserPrivilegeType::Select.into());
+    }
+    let mut mixed = UserInfo::new_no_auth("mixed", "%");
+    mixed
+        .grants
+        .grant_privileges(&name_grant("t2"), UserPrivilegeType::Select.into());
+    mixed.grants.grant_role("t3_owner".into());
+    let mut partial = UserInfo::new_no_auth("partial", "%");
+    partial
+        .grants
+        .grant_privileges(&name_grant("t3"), UserPrivilegeType::Select.into());
+
+    let all_tables = "SELECT count(*) FROM select_access.t a, select_access.t b, \
+        select_access.t2 c, select_access.t3 d";
+    let t2_and_t3 =
+        "SELECT count(*) FROM select_access.t2 c, select_access.t3 d, select_access.t3 e";
+    // Expected counts of: SelectTable, get_database, OwnershipPrefetch, mget_ownerships,
+    // get_ownership, TableOwnership, DatabaseOwnership.
+    for (user, sql, expected, denied_table) in [
+        (database_owner, all_tables, [3, 1, 1, 1, 0, 3, 3], None),
+        (grants_only, all_tables, [3, 1, 0, 0, 0, 0, 0], None),
+        (mixed, t2_and_t3, [2, 1, 1, 1, 0, 1, 0], None),
+        // Ownership is checked after every grant check, then in plan order, so `t` is the
+        // first denial and `t2` is never checked.
+        (partial, all_tables, [3, 1, 1, 1, 0, 1, 1], Some("t")),
+    ] {
+        let name = user.name.clone();
+        let ctx = user_context(&fixture, user, None).await?;
+        let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
+        let trace = SpanContext::random();
+        let result = InterpreterFactory::get(ctx, &plan)
+            .in_span(Span::root("multi_table_select_access_test", trace))
+            .await;
+        match denied_table {
+            None => {
+                result?;
+            }
+            Some(table) => {
+                let error = result.err().expect("query must be denied");
+                assert_eq!(
+                    error.code(),
+                    ErrorCode::PERMISSION_DENIED,
+                    "{name}: {error}"
+                );
+                assert!(
+                    error
+                        .message()
+                        .contains(&format!("'default'.'select_access'.'{table}'")),
+                    "{name}: {error}"
+                );
+            }
+        }
+        fastrace::flush();
+        let spans = spans.lock();
+        for (span_name, expected) in [
+            "Access.SelectTable",
+            "get_database",
+            "Access.OwnershipPrefetch",
+            "mget_ownerships",
+            "get_ownership",
+            "Access.TableOwnership",
+            "Access.DatabaseOwnership",
+        ]
+        .into_iter()
+        .zip(expected)
+        {
+            assert_eq!(
+                count_spans(&spans, trace, span_name),
+                expected,
+                "{name}: {span_name}"
+            );
+        }
+    }
     Ok(())
 }
 

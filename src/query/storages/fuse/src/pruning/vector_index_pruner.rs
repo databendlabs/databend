@@ -50,6 +50,7 @@ use databend_storages_common_index::FixedLengthPriorityQueue;
 use databend_storages_common_index::ScoredPointOffset;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::VectorScores;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::IndexFileLocation;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
@@ -67,9 +68,15 @@ use crate::pruning::PruningCostKind;
 struct VectorTopNParam {
     has_filter: bool,
     filter_expr: Option<Expr>,
+    /// Whether `filter_expr` is set and deterministic: the rows it selects pass it
+    /// again after reading, unlike with a volatile one such as `d > rand()`.
+    deterministic_score_filter: bool,
     asc: bool,
     limit: usize,
     candidate_limit: usize,
+    /// Whether the rows that tie with the last TopN row are kept: only a later
+    /// sort key can choose among them.
+    keep_ties: bool,
 }
 
 /// Vector index pruner.
@@ -152,12 +159,17 @@ impl VectorIndexPruner {
                     Some(factor) => limit.saturating_mul(factor),
                     None => limit,
                 };
+                let deterministic_score_filter = filter_expr
+                    .as_ref()
+                    .is_some_and(|filter| filter.is_deterministic(&BUILTIN_FUNCTIONS));
                 Some(VectorTopNParam {
                     has_filter: filters.is_some(),
                     filter_expr,
+                    deterministic_score_filter,
                     asc: *asc,
                     limit,
                     candidate_limit,
+                    keep_ties: has_tie_breaker(&sort),
                 })
             }
             _ => None,
@@ -237,6 +249,7 @@ impl VectorIndexPruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let limit = param.limit;
         let candidate_limit = param.candidate_limit;
+        let keep_ties = param.keep_ties;
         if limit == 0 || metas.is_empty() {
             return Ok(Vec::new());
         }
@@ -259,44 +272,44 @@ impl VectorIndexPruner {
             .map(|candidate| (candidate.block_meta_index, candidate.block_meta))
             .collect();
 
+        // Each block returns its `candidate_limit` nearest rows, and their ties
+        // with `keep_ties`.
         let mut results = self
             .score_blocks(metas, move |reader, row_count, location| async move {
-                reader.prune(candidate_limit, row_count, &location).await
+                reader
+                    .prune(candidate_limit, keep_ties, row_count, &location)
+                    .await
             })
             .await?;
         if refine {
             let candidates = select_refine_candidates(
-                results
-                    .iter()
-                    .flat_map(|result| result.scores.iter().cloned()),
+                || {
+                    results
+                        .iter()
+                        .flat_map(|result| result.scores.iter().cloned())
+                },
                 candidate_limit,
+                keep_ties,
             );
             results = self.refine_candidates(results, candidates).await?;
         }
 
-        // Keep the global TopK rows, attached to their blocks.
-        let mut top_queue = FixedLengthPriorityQueue::new(limit);
-        for score in results.iter().flat_map(|result| result.scores.iter()) {
-            top_queue.push(score.clone());
-        }
-        let mut top_rows: HashMap<usize, Vec<(usize, F32)>> = HashMap::new();
-        for score in top_queue.into_sorted_vec() {
-            top_rows
-                .entry(score.index)
-                .or_default()
-                .push((score.row_idx as usize, score.score));
-        }
-        Ok(results
-            .into_iter()
-            .filter_map(|result| {
-                let scores = top_rows.remove(&result.block_idx)?;
-                Some(result.into_block_meta(scores))
-            })
-            .collect())
+        // Keep the global TopK rows (and their ties), attached to their blocks.
+        let top_scores = topn_with_ties(
+            || {
+                results
+                    .iter()
+                    .flat_map(|result| result.scores.iter().cloned())
+            },
+            limit,
+            keep_ties,
+        );
+        let rows_only = fills_topn(&top_scores, limit);
+        Ok(topn_block_metas(results, top_scores, rows_only))
     }
 
     /// TopN with a score filter or in descending order: every row is scored. A
-    /// selected block keeps the scores of all its rows.
+    /// selected block keeps the scores of all its rows, or only its TopN rows.
     async fn vector_index_topn_prune(
         &self,
         param: &VectorTopNParam,
@@ -305,12 +318,12 @@ impl VectorIndexPruner {
         if param.limit == 0 || metas.is_empty() {
             return Ok(Vec::new());
         }
-        // Descending order and score filters need the scores of every row: the
-        // returned blocks are read whole, and a row without a score would get the
-        // placeholder score, which ranks first in descending order and passes a
-        // lower-bound filter. With refinement, every row is scored with FP16 data
-        // (one read per block, not cached), as for full-row scoring, so the filter
-        // and TopN below use the FP16 scores.
+        // Descending order and score filters need the scores of every row to select
+        // the TopN rows: a row without a score would get the placeholder score,
+        // which ranks first in descending order and passes a lower-bound filter.
+        // With refinement, every row is scored with FP16 data (one read per block,
+        // not cached), as for full-row scoring, so the filter and TopN below use
+        // the FP16 scores.
         let refine = self.refine_options.refine_factor.is_some();
         let results = self
             .score_blocks(metas, move |reader, row_count, location| async move {
@@ -323,15 +336,20 @@ impl VectorIndexPruner {
             .await?;
 
         let passed = self.eval_score_filters(param.filter_expr.as_ref(), &results)?;
-        let mut top_queue = FixedLengthPriorityQueue::new(param.limit);
-        for score in ranked_scores(&results, &passed, param.asc) {
-            top_queue.push(score);
+        let top_scores = topn_with_ties(
+            || ranked_scores(&results, &passed, param.asc),
+            param.limit,
+            param.keep_ties,
+        );
+        // Read only the TopN rows (and their ties) for ascending order with
+        // deterministic score filters only. The filter runs again after reading,
+        // so a volatile one (`d > rand()`) needs the other rows too.
+        let rows_only =
+            param.asc && param.deterministic_score_filter && fills_topn(&top_scores, param.limit);
+        if rows_only {
+            return Ok(topn_block_metas(results, top_scores, true));
         }
-        let top_blocks: HashSet<usize> = top_queue
-            .into_sorted_vec()
-            .iter()
-            .map(|score| score.index)
-            .collect();
+        let top_blocks: HashSet<usize> = top_scores.iter().map(|score| score.index).collect();
         Ok(results
             .into_iter()
             .filter(|result| top_blocks.contains(&result.block_idx))
@@ -647,21 +665,82 @@ fn ranked_scores<'a>(
         })
 }
 
-/// Keeps the `candidate_limit` lowest scores (callers negate scores for descending
-/// order) and groups their row ids by block.
-fn select_refine_candidates(
-    scores: impl Iterator<Item = VectorScore>,
-    candidate_limit: usize,
-) -> HashMap<usize, Vec<u32>> {
-    if candidate_limit == 0 {
-        return HashMap::new();
+/// Whether `top_scores` has `limit` rows or more (with ties), all ranking before
+/// the placeholder `f32::MAX` of unscored rows. Then the scan only needs these rows.
+fn fills_topn(top_scores: &[VectorScore], limit: usize) -> bool {
+    top_scores.len() >= limit
+        && top_scores
+            .iter()
+            .all(|score| score.score < F32::from(f32::MAX))
+}
+
+/// The blocks with TopN rows, each with its TopN rows attached. The `index` of a
+/// score is the position of its block in `results`, as returned by `score_blocks`.
+fn topn_block_metas(
+    results: Vec<VectorPruneResult>,
+    top_scores: Vec<VectorScore>,
+    rows_only: bool,
+) -> Vec<(BlockMetaIndex, Arc<BlockMeta>)> {
+    debug_assert!(results.iter().enumerate().all(|(i, r)| r.block_idx == i));
+    let mut top_rows: Vec<Vec<(u32, F32)>> = vec![Vec::new(); results.len()];
+    for score in top_scores {
+        top_rows[score.index].push((score.row_idx, score.score));
     }
-    let mut queue = FixedLengthPriorityQueue::new(candidate_limit);
-    for score in scores {
+    results
+        .into_iter()
+        .zip(top_rows)
+        .filter(|(_, scores)| !scores.is_empty())
+        .map(|(result, scores)| result.into_block_meta(scores, rows_only))
+        .collect()
+}
+
+/// Whether a sort key after the vector score can order rows with the same
+/// score, as `id` in `ORDER BY d, id`.
+fn has_tie_breaker(sort: &[(RemoteExpr<String>, bool, bool)]) -> bool {
+    sort.iter().skip(1).any(|(expr, _, _)| {
+        !matches!(expr, RemoteExpr::ColumnRef { id, .. } if id == VECTOR_SCORE_COL_NAME)
+    })
+}
+
+/// The `limit` lowest scores of `scores` (callers negate scores for descending
+/// order), plus, with `keep_ties`, the rows that tie with the last of them. Another
+/// sort key, such as `id` in `ORDER BY d, id`, may choose any tied row, so all of
+/// them are kept; without one, any tied row is a correct result.
+fn topn_with_ties<I: Iterator<Item = VectorScore>>(
+    scores: impl Fn() -> I,
+    limit: usize,
+    keep_ties: bool,
+) -> Vec<VectorScore> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let mut queue = FixedLengthPriorityQueue::new(limit);
+    for score in scores() {
         queue.push(score);
     }
+    let mut top_scores = queue.into_sorted_vec();
+    // With fewer rows than the limit, every row is already selected.
+    if !keep_ties || top_scores.len() < limit {
+        return top_scores;
+    }
+    let Some(last) = top_scores.iter().map(|score| score.score).max() else {
+        return top_scores;
+    };
+    // Replace the selected rows at the last score with every row at that score.
+    top_scores.retain(|score| score.score < last);
+    top_scores.extend(scores().filter(|score| score.score == last));
+    top_scores
+}
+
+/// Keeps the `candidate_limit` lowest scores (callers negate scores for descending
+/// order), and their ties with `keep_ties`, and groups their row ids by block.
+fn select_refine_candidates<I: Iterator<Item = VectorScore>>(
+    scores: impl Fn() -> I,
+    candidate_limit: usize,
+    keep_ties: bool,
+) -> HashMap<usize, Vec<u32>> {
     let mut offsets: HashMap<usize, Vec<u32>> = HashMap::new();
-    for score in queue.into_sorted_vec() {
+    for score in topn_with_ties(scores, candidate_limit, keep_ties) {
         offsets.entry(score.index).or_default().push(score.row_idx);
     }
     offsets
@@ -681,7 +760,8 @@ impl VectorPruneCandidate {
 }
 
 struct VectorPruneResult {
-    // the block index in segment
+    /// The index of the block in this pruning batch: its position in the results
+    /// of `score_blocks`, which numbers the blocks again after refinement.
     block_idx: usize,
     scores: Vec<VectorScore>,
     block_meta_index: BlockMetaIndex,
@@ -689,8 +769,24 @@ struct VectorPruneResult {
 }
 
 impl VectorPruneResult {
-    /// The block with `vector_scores` (row id, score) attached.
-    fn into_block_meta(self, vector_scores: Vec<(usize, F32)>) -> (BlockMetaIndex, Arc<BlockMeta>) {
+    /// Attaches `scores` (row, score): as `TopN` with `rows_only`, otherwise as
+    /// `All` with `f32::MAX` for the other rows.
+    fn into_block_meta(
+        self,
+        scores: Vec<(u32, F32)>,
+        rows_only: bool,
+    ) -> (BlockMetaIndex, Arc<BlockMeta>) {
+        let vector_scores = if rows_only {
+            VectorScores::TopN(scores)
+        } else {
+            let mut all_scores = vec![F32::from(f32::MAX); self.block_meta.row_count as usize];
+            for (row, score) in scores {
+                if let Some(slot) = all_scores.get_mut(row as usize) {
+                    *slot = score;
+                }
+            }
+            VectorScores::All(all_scores)
+        };
         let mut block_meta_index = self.block_meta_index;
         block_meta_index.vector_scores = Some(vector_scores);
         (block_meta_index, self.block_meta)
@@ -701,9 +797,9 @@ impl VectorPruneResult {
         let scores = self
             .scores
             .iter()
-            .map(|score| (score.row_idx as usize, score.score))
-            .collect();
-        self.into_block_meta(scores)
+            .map(|score| (score.row_idx, score.score))
+            .collect::<Vec<_>>();
+        self.into_block_meta(scores, false)
     }
 }
 
@@ -740,6 +836,9 @@ impl VectorScore {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::DataType;
+    use databend_storages_common_table_meta::meta::Compression;
+
     use super::*;
 
     #[test]
@@ -750,10 +849,168 @@ mod tests {
                 index,
                 row_idx,
                 score: F32::from(score),
-            });
+            })
+            .collect::<Vec<_>>();
+        for keep_ties in [false, true] {
+            assert_eq!(
+                select_refine_candidates(|| scores.iter().cloned(), 2, keep_ties),
+                HashMap::from([(0, vec![17]), (1, vec![42])])
+            );
+        }
+        // Row 5 of block 2 ties with the last candidate.
+        let mut scores = scores;
+        scores.push(VectorScore {
+            index: 2,
+            row_idx: 5,
+            score: F32::from(0.2_f32),
+        });
         assert_eq!(
-            select_refine_candidates(scores, 2),
-            HashMap::from([(0, vec![17]), (1, vec![42])])
+            select_refine_candidates(|| scores.iter().cloned(), 2, true),
+            HashMap::from([(0, vec![17]), (1, vec![42]), (2, vec![5])])
         );
+        let candidates = select_refine_candidates(|| scores.iter().cloned(), 2, false);
+        assert_eq!(candidates.values().map(Vec::len).sum::<usize>(), 2);
+        assert_eq!(candidates[&1], vec![42]);
+    }
+
+    #[test]
+    fn test_topn_with_ties() {
+        let scores = [(0, 1, 0.1_f32), (0, 7, 0.2), (1, 5, 0.2), (1, 3, 0.3)]
+            .into_iter()
+            .map(|(index, row_idx, score)| VectorScore {
+                index,
+                row_idx,
+                score: F32::from(score),
+            })
+            .collect::<Vec<_>>();
+        let rows = |limit, keep_ties| {
+            let mut rows = topn_with_ties(|| scores.iter().cloned(), limit, keep_ties)
+                .into_iter()
+                .map(|score| (score.index, score.row_idx))
+                .collect::<Vec<_>>();
+            rows.sort();
+            rows
+        };
+        // The rows of both blocks with the last score 0.2 are kept.
+        assert_eq!(rows(2, true), vec![(0, 1), (0, 7), (1, 5)]);
+        assert_eq!(rows(3, true), vec![(0, 1), (0, 7), (1, 5)]);
+        // No tie at the last score, or fewer rows than the limit.
+        assert_eq!(rows(1, true), vec![(0, 1)]);
+        assert_eq!(rows(5, true), vec![(0, 1), (0, 7), (1, 3), (1, 5)]);
+        assert_eq!(rows(0, true), vec![]);
+        // Without `keep_ties`, one of the tied rows fills the limit.
+        let top = rows(2, false);
+        assert_eq!(top.len(), 2);
+        assert_eq!(top[0], (0, 1));
+        assert!([(0, 7), (1, 5)].contains(&top[1]));
+        assert_eq!(rows(3, false), vec![(0, 1), (0, 7), (1, 5)]);
+    }
+
+    #[test]
+    fn test_has_tie_breaker() {
+        let key = |name: &str| {
+            (
+                RemoteExpr::ColumnRef {
+                    span: None,
+                    id: name.to_string(),
+                    data_type: DataType::Null,
+                    display_name: name.to_string(),
+                },
+                true,
+                false,
+            )
+        };
+        let score = || key(VECTOR_SCORE_COL_NAME);
+        assert!(!has_tie_breaker(&[score()]));
+        assert!(!has_tie_breaker(&[score(), score()]));
+        assert!(has_tie_breaker(&[score(), key("id")]));
+    }
+
+    #[test]
+    fn test_fills_topn() {
+        let scores = |values: &[f32]| {
+            values
+                .iter()
+                .map(|&score| VectorScore {
+                    index: 0,
+                    row_idx: 0,
+                    score: F32::from(score),
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(fills_topn(&scores(&[0.1, 0.2]), 2));
+        // Ties with the last row beyond the limit.
+        assert!(fills_topn(&scores(&[0.1, 0.2, 0.2]), 2));
+        // Fewer rows than the limit, or scores that do not rank before the
+        // placeholder of other rows.
+        assert!(!fills_topn(&scores(&[0.1]), 2));
+        assert!(!fills_topn(&scores(&[0.1, f32::MAX]), 2));
+        assert!(!fills_topn(&scores(&[0.1, f32::NAN]), 2));
+    }
+
+    #[test]
+    fn test_topn_block_metas() {
+        let result = |block_idx: usize, row_count: u64| VectorPruneResult {
+            block_idx,
+            scores: Vec::new(),
+            block_meta_index: BlockMetaIndex::default(),
+            block_meta: Arc::new(BlockMeta::new(
+                row_count,
+                0,
+                0,
+                Default::default(),
+                Default::default(),
+                None,
+                (format!("block_{block_idx}"), 0),
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Compression::None,
+                None,
+            )),
+        };
+        // Rows 2 and 1 of block 0 and row 0 of block 1; block 2 has no TopN rows.
+        let top_scores = [(0, 2, 0.1_f32), (1, 0, 0.2), (0, 1, 0.2)]
+            .into_iter()
+            .map(|(index, row_idx, score)| VectorScore {
+                index,
+                row_idx,
+                score: F32::from(score),
+            })
+            .collect::<Vec<_>>();
+        let blocks = |rows_only| {
+            let results = vec![result(0, 4), result(1, 3), result(2, 2)];
+            topn_block_metas(results, top_scores.clone(), rows_only)
+                .into_iter()
+                .map(|(index, meta)| (meta.location.0.clone(), index.vector_scores.unwrap()))
+                .collect::<Vec<_>>()
+        };
+        let f = |value: f32| F32::from(value);
+        let max = f(f32::MAX);
+        assert_eq!(blocks(true), vec![
+            (
+                "block_0".to_string(),
+                VectorScores::TopN(vec![(2, f(0.1)), (1, f(0.2))])
+            ),
+            ("block_1".to_string(), VectorScores::TopN(vec![(0, f(0.2))])),
+        ]);
+        // Without `rows_only`, the other rows get the placeholder score.
+        assert_eq!(blocks(false), vec![
+            (
+                "block_0".to_string(),
+                VectorScores::All(vec![max, f(0.2), f(0.1), max])
+            ),
+            (
+                "block_1".to_string(),
+                VectorScores::All(vec![f(0.2), max, max])
+            ),
+        ]);
     }
 }

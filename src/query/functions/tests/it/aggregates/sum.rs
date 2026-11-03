@@ -193,6 +193,25 @@ fn test_sum_group_by() {
 }
 
 #[test]
+fn test_v2_sum_dictionary_preserves_row_order() -> Result<()> {
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    // Summing dictionary values by frequency would produce 5 instead of 4.
+    let values = Float64Type::from_data(vec![1e16, 1.0, -1e16, 3.0]);
+    let keys = NarrowBuffer::pack([0, 1, 2, 3, 1].into_iter(), 3);
+    let entry: BlockEntry =
+        Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(keys, values)))).into();
+    let result = eval_v2_aggr("sum", &[entry], 5, false)?;
+    assert_eq!(
+        result.0.index(0).unwrap(),
+        ScalarRef::Number(NumberScalar::Float64(4.0.into()))
+    );
+    Ok(())
+}
+
+#[test]
 fn test_v2_sum_zero_uint64_matches_expected_sum() -> Result<()> {
     let entries = [UInt64Type::from_data(vec![1, 2, 3, 4]).into()];
     let direct_v2 = eval_v2_aggr("sum0", &entries, 4, false)?;

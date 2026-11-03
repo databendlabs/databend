@@ -18,6 +18,7 @@ use std::iter::TrustedLen;
 use std::ops::Range;
 
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 
@@ -139,6 +140,16 @@ impl NarrowBuffer {
 
     pub fn memory_size(&self) -> usize {
         self.len() * self.byte_width()
+    }
+
+    /// Same immutable code slice, including width and offset; does not compare values.
+    pub fn shares_storage(&self, other: &Self) -> bool {
+        self.byte_width() == other.byte_width()
+            && self.len() == other.len()
+            && std::ptr::eq(
+                with_narrow_buffer!(self, |b| b.as_slice().as_ptr().cast::<u8>()),
+                with_narrow_buffer!(other, |b| b.as_slice().as_ptr().cast::<u8>()),
+            )
     }
 
     #[inline]
@@ -302,17 +313,35 @@ impl DictColumn {
 
     /// Matches a string pattern once per dictionary value, then maps the results to rows.
     /// `None` for dictionaries whose values are not strings.
-    pub fn like(&self, pattern: &LikePattern, not: bool) -> Option<Bitmap> {
+    ///
+    /// With `rows`, e.g. the rows a previous predicate of a conjunction kept, the result is
+    /// only correct at `rows`, and only the values they reference are matched.
+    pub fn like(&self, pattern: &LikePattern, not: bool, rows: Option<&[u32]>) -> Option<Bitmap> {
         let Column::String(values) = &self.values else {
             return None;
         };
-        // Cache by dictionary index: repeated keys must not evaluate LIKE again.
-        let dict_matches: Vec<bool> = values
-            .iter()
-            .map(|value| pattern.compare(value.as_bytes()) ^ not)
-            .collect();
-        Some(with_narrow_buffer!(&self.keys, |keys| {
-            keys.iter().map(|key| dict_matches[*key as usize]).collect()
+        // Cache by dictionary index, so repeated keys do not match again: 0 not matched yet,
+        // 1 false, 2 true. Values no row references are never matched.
+        let mut dict_matches = vec![0u8; values.len()];
+        let mut matches = |key: usize| {
+            if dict_matches[key] == 0 {
+                // SAFETY: keys index the dictionary values.
+                let value = unsafe { values.index_unchecked(key) };
+                dict_matches[key] = 1 + (pattern.compare(value.as_bytes()) ^ not) as u8;
+            }
+            dict_matches[key] == 2
+        };
+        Some(with_narrow_buffer!(&self.keys, |keys| match rows {
+            Some(rows) => {
+                let mut bitmap = MutableBitmap::from_len_zeroed(self.len());
+                for &row in rows {
+                    if matches(keys[row as usize] as usize) {
+                        bitmap.set(row as usize, true);
+                    }
+                }
+                bitmap.into()
+            }
+            None => keys.iter().map(|key| matches(*key as usize)).collect(),
         }))
     }
 
@@ -958,7 +987,7 @@ impl EncodedColumn {
     /// Calls `f` with a regular column and the row in it that holds the value of `row`.
     ///
     /// A FOR row is decoded into a column of its own on every call, so consumers of many rows
-    /// (e.g. output formats) decode the column once with [`Column::decode_encoded`] instead.
+    /// (e.g. output formats) decode the column once with [`Column::decode_owned`] instead.
     pub fn with_row<R>(&self, row: usize, f: impl FnOnce(&Column, usize) -> R) -> R {
         match self {
             EncodedColumn::Dict(c) => f(&c.values, c.keys.get(row).unwrap() as usize),
@@ -1141,10 +1170,18 @@ impl<'a, T: AccessType> Iterator for EncodedViewIter<'a, T> {
 impl<T: AccessType> ExactSizeIterator for EncodedViewIter<'_, T> {}
 
 impl Column {
+    pub fn is_dict_encoded(&self) -> bool {
+        match self {
+            Column::Encoded(encoded) => encoded.as_dict().is_some(),
+            Column::Nullable(column) => column.column.is_dict_encoded(),
+            _ => false,
+        }
+    }
+
     /// Decodes an encoded column, also inside `Nullable`; other columns are returned unchanged.
     ///
     /// Row-at-a-time consumers (e.g. output formats) decode once per block instead of per row.
-    pub fn decode_encoded(self) -> Self {
+    pub fn decode_owned(self) -> Self {
         match self {
             Column::Encoded(c) => c.decode(),
             Column::Nullable(mut column) => {
@@ -1160,9 +1197,9 @@ impl Column {
 
 impl Value<AnyType> {
     /// Decodes an encoded column value; other values are returned unchanged.
-    pub fn decode_encoded(self) -> Self {
+    pub fn decode_owned(self) -> Self {
         match self {
-            Value::Column(column) => Value::Column(column.decode_encoded()),
+            Value::Column(column) => Value::Column(column.decode_owned()),
             other => other,
         }
     }
@@ -1194,6 +1231,10 @@ impl Value<AnyType> {
 }
 
 impl BlockEntry {
+    pub fn is_dict_encoded(&self) -> bool {
+        matches!(self, BlockEntry::Column(column) if column.is_dict_encoded())
+    }
+
     pub fn decoded_value(&self) -> Value<AnyType> {
         match self {
             BlockEntry::Column(Column::Encoded(encoded)) => Value::Column(encoded.decode()),

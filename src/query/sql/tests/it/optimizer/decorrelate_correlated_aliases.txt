@@ -43,33 +43,51 @@ EvalScalar
 optimized_plan:
 Exchange(Merge)
 └── EvalScalar
-    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#6) AS (#8)]
+    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#8) AS (#12)]
     └── Filter
-        ├── filters: [is_true(marker (#6))]
+        ├── filters: [is_true(marker (#8))]
         └── Join(RightMark)
-            ├── build keys: [a (#2), b (#3)]
+            ├── build keys: [a (#5), b (#6)]
             ├── probe keys: [a (#0), b (#1)]
             ├── other filters: []
             ├── Exchange(Broadcast)
             │   └── EvalScalar
-            │       ├── scalars: [a (#2) AS (#2), b (#3) AS (#3), 1 AS (#4), correlated_limit_row_number (#5) AS (#7)]
+            │       ├── scalars: [1 AS (#4), a (#5) AS (#5), b (#6) AS (#6), correlated_limit_row_number (#7) AS (#10), a (#2) AS (#11)]
             │       └── Filter
-            │           ├── filters: [lte(correlated_limit_row_number (#5), 1)]
+            │           ├── filters: [lte(correlated_limit_row_number (#7), 1), eq(a (#2), a (#5))]
             │           └── Window
             │               ├── aggregate function: row_number
-            │               ├── partition items: [a (#2) AS (#2), b (#3) AS (#3)]
+            │               ├── partition items: [a (#5) AS (#5), b (#6) AS (#6)]
             │               ├── order by items: []
             │               ├── frame: [Rows: Preceding(None) ~ CurrentRow]
             │               └── Sort
-            │                   ├── sort keys: [a (#2) ASC NULLS LAST, b (#3) ASC NULLS LAST]
+            │                   ├── sort keys: [a (#5) ASC NULLS LAST, b (#6) ASC NULLS LAST]
             │                   ├── limit: [NONE]
             │                   ├── window top: 1
             │                   ├── window function: RowNumber
             │                   └── Exchange(Hash)
-            │                       ├── Exchange(Hash): keys: [a (#2), b (#3)]
-            │                       └── ConstantTableScan
-            │                           ├── columns: [a (#2), b (#3)]
-            │                           └── num_rows: [1]
+            │                       ├── Exchange(Hash): keys: [a (#5), b (#6)]
+            │                       └── EvalScalar
+            │                           ├── scalars: [a (#2) AS (#2), a (#5) AS (#5), b (#6) AS (#6), b (#3) AS (#9)]
+            │                           └── Join(Inner)
+            │                               ├── build keys: [b (#3)]
+            │                               ├── probe keys: [b (#6)]
+            │                               ├── other filters: []
+            │                               ├── Exchange(Broadcast)
+            │                               │   └── ConstantTableScan
+            │                               │       ├── columns: [a (#2), b (#3)]
+            │                               │       └── num_rows: [1]
+            │                               └── Aggregate(Final)
+            │                                   ├── group items: [a (#5) AS (#5), b (#6) AS (#6)]
+            │                                   ├── aggregate functions: []
+            │                                   └── Aggregate(Partial)
+            │                                       ├── group items: [a (#5) AS (#5), b (#6) AS (#6)]
+            │                                       ├── aggregate functions: []
+            │                                       └── Exchange(Hash)
+            │                                           ├── Exchange(Hash): keys: [a (#5)]
+            │                                           └── ConstantTableScan
+            │                                               ├── columns: [a (#5), b (#6)]
+            │                                               └── num_rows: [1]
             └── ConstantTableScan
                 ├── columns: [a (#0), b (#1)]
                 └── num_rows: [1]
@@ -521,5 +539,50 @@ EvalScalar
                         ├── filters: [eq(udaf_inner.b (#1), udaf_inner.b (#1))]
                         ├── order by: []
                         └── limit: NONE
+
+
+=== identity_projection_keeps_table_binding ===
+description: When a correlated column resolves to an index the subquery already projects as an identity, keep that item so the remaining filter still carries a table binding and is absorbed into the scan instead of staying as a redundant Filter.
+sql: SELECT * FROM a WHERE a.id = (SELECT id FROM b WHERE a.id = b.id)
+raw_plan:
+EvalScalar
+├── scalars: [a.id (#0) AS (#0), a.c1 (#1) AS (#1)]
+└── Filter
+    ├── filters: [eq(a.id (#0), SUBQUERY AS (#2))]
+    ├── subquerys
+    │   └── Subquery (Scalar)
+    │       ├── output_column: b.id (#2)
+    │       └── EvalScalar
+    │           ├── scalars: [b.id (#2) AS (#2)]
+    │           └── Filter
+    │               ├── filters: [eq(a.id (#0), b.id (#2))]
+    │               └── Scan
+    │                   ├── table: default.b (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [a.id (#0) AS (#0), a.c1 (#1) AS (#1), b.id (#2) AS (#4)]
+└── Join(Inner)
+    ├── build keys: [b.id (#2), b.id (#2)]
+    ├── probe keys: [a.id (#0), a.id (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.b (#1)
+    │   ├── filters: [eq(b.id (#2), b.id (#2))]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
 
 
