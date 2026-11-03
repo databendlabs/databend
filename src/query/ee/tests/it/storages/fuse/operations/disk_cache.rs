@@ -513,3 +513,39 @@ async fn test_vacuumed_files_are_not_read_back() -> anyhow::Result<()> {
     check_rows(&fixture, "t").await?;
     Ok(())
 }
+
+/// Writes leave the disk cache as it was: the blocks, segments and indexes an INSERT writes
+/// are not put on disk, nor is any of them read back from it. Only the snapshot the INSERT
+/// reads to commit, as a query would, may be cached.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_writes_do_not_fill_the_disk_cache() -> anyhow::Result<()> {
+    let dir = TempDir::new()?;
+    let fixture = setup(&dir).await?;
+    let before = disk_items();
+    create_table(&fixture, "w", "cluster by (a) enable_virtual_column = true").await?;
+    fixture
+        .execute_command(&format!("create ngram index idx_w on {DB}.w(s)"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {DB}.w select number, concat('k', number::string), \
+             parse_json(concat('{{\"a\":', number::string, '}}')) from numbers(1000)"
+        ))
+        .await?;
+    settle().await;
+    let snapshot = CacheKind::of::<table::Snapshot>().name();
+    let filled: Vec<String> = disk_items()
+        .into_iter()
+        .filter(|(kind, items)| {
+            !kind.contains(snapshot.trim_start_matches("memory_cache_"))
+                && *items > before.get(kind).copied().unwrap_or(0)
+        })
+        .map(|(kind, items)| format!("{kind}: {items}"))
+        .collect();
+    assert!(
+        filled.is_empty(),
+        "filled by writes:\n{}",
+        filled.join("\n")
+    );
+    Ok(())
+}

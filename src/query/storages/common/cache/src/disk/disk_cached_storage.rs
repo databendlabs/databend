@@ -54,15 +54,6 @@ pub enum DiskFill {
 }
 
 impl DiskFill {
-    /// What a read may do under both `self` and `limit`.
-    pub fn at_most(self, limit: DiskFill) -> DiskFill {
-        match (self, limit) {
-            (DiskFill::Bypass, _) | (_, DiskFill::Bypass) => DiskFill::Bypass,
-            (DiskFill::ReadOnly, _) | (_, DiskFill::ReadOnly) => DiskFill::ReadOnly,
-            _ => DiskFill::ReadWrite,
-        }
-    }
-
     fn reads(self) -> bool {
         self != DiskFill::Bypass
     }
@@ -103,11 +94,19 @@ impl DiskCachedStorage {
         self
     }
 
-    fn key(&self, path: &str, range: Option<Range<u64>>) -> DiskKey {
-        let path = match &self.key_prefix {
+    /// The object at `path` as the disk cache names it: the key prefix, then the path without
+    /// leading slashes, which the operator ignores. Reads, and changes of the object, so name
+    /// one object alike whichever way its path is written.
+    fn object_path(&self, path: &str) -> String {
+        let path = path.trim_start_matches('/');
+        match &self.key_prefix {
             Some(prefix) => format!("{prefix}{path}"),
             None => path.to_string(),
-        };
+        }
+    }
+
+    fn key(&self, path: &str, range: Option<Range<u64>>) -> DiskKey {
+        let path = self.object_path(path);
         match range {
             Some(range) => DiskKey::range(path, range),
             None => DiskKey::whole(path),
@@ -124,11 +123,19 @@ impl DiskCachedStorage {
         let Some(disk) = self.disk.as_ref() else {
             return Ok(None);
         };
-        let path = match &self.key_prefix {
-            Some(prefix) => format!("{prefix}{path}"),
-            None => path.to_string(),
-        };
-        disk.begin_change(&path).map(Some)
+        disk.begin_change(&self.object_path(path)).map(Some)
+    }
+
+    /// `begin_change` on a blocking thread, for async callers: dropping the object's files, and
+    /// before the restart scan has run looking for them, is file system work.
+    pub async fn begin_change_async(&self, path: &str) -> Result<Option<ObjectChange>> {
+        if self.disk.is_none() {
+            return Ok(None);
+        }
+        let (storage, path) = (self.clone(), path.to_string());
+        databend_common_base::runtime::spawn_blocking(move || storage.begin_change(&path))
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("disk cache change task failed: {e}")))?
     }
 
     /// For writes, listing and deletes, which do not go through the disk cache.

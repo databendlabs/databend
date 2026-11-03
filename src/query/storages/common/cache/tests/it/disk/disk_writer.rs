@@ -1059,3 +1059,64 @@ async fn test_fills_from_before_an_invalidation_do_not_keep_newer_ones_out() {
     assert_eq!(drops(&writer), (0, 2, 0));
     assert_eq!(pool.stats().items, 3);
 }
+
+static STALE: Gate = Gate::new();
+fn stale_gate(_: &Path, _: u64) -> bool {
+    STALE.pass();
+    false
+}
+
+/// A fill queued before a change of its object, and written after the change ended, is
+/// rejected before it reserves room: on a full pool it evicts no entry, and writes no file.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fill_invalidated_while_queued_evicts_nothing() {
+    let dir = TempDir::new().unwrap();
+    // Room for two entries of 400 bytes and their crc.
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 3_300);
+    let writer = DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        WriterOptions {
+            over_watermark: stale_gate,
+            ..options(1, 10_000, Duration::from_millis(30))
+        },
+    );
+    let fence = Arc::new(FillFence::default());
+    STALE.open();
+    for hot in ["hot1", "hot2"] {
+        assert!(
+            writer
+                .enqueue(job_of(&pool, data_kind(), hot, 400, fence.begin()))
+                .await
+        );
+    }
+    wait_for(|| idle(&writer));
+    assert_eq!(pool.stats().items, 2);
+
+    STALE.close();
+    assert!(writer.enqueue(job(&pool, data_kind(), "hold", 10)).await);
+    STALE.wait_entered(1);
+    let stale = job_of(&pool, data_kind(), "stale", 400, fence.begin());
+    assert!(writer.enqueue(stale).await);
+    // The change begins and ends while the fill waits in the queue.
+    let object = DiskKey::object_id("stale");
+    let (at, oldest) = fence.invalidation_point();
+    let _ = pool.begin_change(&object);
+    pool.end_change(&object, at, oldest);
+    STALE.open();
+    wait_for(|| idle(&writer));
+
+    for hot in ["hot1", "hot2"] {
+        assert!(
+            pool.contains(&DiskKey::whole(hot).rel_path(data_kind())),
+            "{hot}"
+        );
+    }
+    assert!(!pool.contains(&DiskKey::whole("stale").rel_path(data_kind())));
+    assert_eq!(drops(&writer).1, 1);
+    let stale_files = files_under(dir.path())
+        .into_iter()
+        .filter(|p| p.to_string_lossy().contains(&object))
+        .count();
+    assert_eq!(stale_files, 0);
+}

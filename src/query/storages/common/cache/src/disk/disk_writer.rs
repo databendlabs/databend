@@ -454,6 +454,13 @@ impl Shared {
             number,
             len,
         };
+        // A fill its object was invalidated since, while it waited in the queue, is rejected
+        // before it evicts anything to make room, under disk pressure or in its pool. `publish`
+        // checks again, for an invalidation from here on.
+        if !job.pool.accepts(&job.rel, job.ticket.started()) {
+            self.drops.add(&job.rel, DropReason::Rejected);
+            return;
+        }
         self.relieve_disk_pressure();
         // Gives the reservation back unless the entry was published, also on a panic.
         struct Held<'a> {

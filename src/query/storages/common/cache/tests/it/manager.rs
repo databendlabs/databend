@@ -418,6 +418,10 @@ fn test_disk_options_out_of_range_fail_the_start() {
             writer_threads: 0,
             ..base.disk_cache_config.clone()
         },
+        DiskCacheInnerConfig {
+            writer_threads: 257,
+            ..base.disk_cache_config.clone()
+        },
     ];
     for disk in bad {
         let config = CacheConfig {
@@ -683,11 +687,14 @@ async fn test_restart_reloads_only_with_fuzzy() {
         let disk = manager.disk().unwrap();
         wait_for(|| disk.contains(kind, &key));
     }
+    // A layout set aside by an earlier reset that did not get to delete it is removed first.
+    let tenant = dir.path().join("test_tenant");
+    std::fs::create_dir_all(tenant.join("v2.reset/data")).unwrap();
+    std::fs::write(tenant.join("v2.reset/data/left"), b"x").unwrap();
     let manager = manager(&disk_config(&dir), true);
     let disk = manager.disk().unwrap();
     assert!(!disk.contains(kind, &key));
     assert!(disk.get(kind, &key).await.is_none());
-    let tenant = dir.path().join("test_tenant");
     wait_for(|| std::fs::read_dir(&tenant).unwrap().count() == 1);
     assert!(tenant.join("v2").is_dir());
 }

@@ -61,8 +61,7 @@ impl TableFiles {
                 let changes = spawn_blocking(move || {
                     names
                         .iter()
-                        // As `Files` deletes it, and as readers name it.
-                        .map(|location| disk.begin_change(location.trim_start_matches('/')))
+                        .map(|location| disk.begin_change(location))
                         .collect::<Result<Vec<_>>>()
                 })
                 .await

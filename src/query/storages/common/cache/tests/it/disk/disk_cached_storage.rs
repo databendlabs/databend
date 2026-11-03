@@ -1110,3 +1110,44 @@ async fn test_unit_reads_larger_than_the_write_queue() {
     assert_eq!(stats.events.written + stats.dropped.iter().sum::<u64>(), 20);
     assert!(stats.events.written >= 1);
 }
+
+/// A path written with a leading slash names the same object as without one, as for the
+/// operator: a read either way hits what the other cached, and a change of the object either
+/// way drops it.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_leading_slashes_name_the_same_object() {
+    let dir = TempDir::new().unwrap();
+    let (_op, reads, disk, storage) = counted_setup(&dir).await;
+    let slashed = format!("/{PATH}");
+    storage
+        .read(data(), &slashed, Some(0..100), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..100)));
+    let bytes = storage
+        .read(data(), PATH, Some(0..100), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    assert_eq!(bytes, object().slice(0..100));
+    assert_eq!(reads_of(&reads), 1);
+    let change = storage.begin_change(&format!("//{PATH}")).unwrap();
+    assert_eq!(change.as_ref().map(|c| c.dropped()), Some(1));
+    assert!(!disk.contains(data(), &DiskKey::range(PATH, 0..100)));
+}
+
+/// `begin_change_async` drops the object's units as `begin_change` does, from an async caller.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_begin_change_async_drops_the_units() {
+    let dir = TempDir::new().unwrap();
+    let (_op, disk, storage) = setup(&dir).await;
+    storage
+        .read(data(), PATH, Some(0..100), DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..100)));
+    let change = storage.begin_change_async(PATH).await.unwrap().unwrap();
+    assert_eq!(change.dropped(), 1);
+    assert!(!disk.contains(data(), &DiskKey::range(PATH, 0..100)));
+    let without = DiskCachedStorage::with_disk(storage.operator().clone(), None);
+    assert!(without.begin_change_async(PATH).await.unwrap().is_none());
+}
