@@ -197,7 +197,7 @@ mod tests {
             router.route_frame(frame(0)).await.unwrap();
 
             // The second frame waits until the first is taken for decoding.
-            let mut pending = Box::pin(router.route_frame(frame(0)));
+            let mut pending = std::pin::pin!(router.route_frame(frame(0)));
             assert!(futures::poll!(pending.as_mut()).is_pending());
             let wait = Duration::from_millis(20);
             std::thread::sleep(wait);
