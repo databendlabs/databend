@@ -372,6 +372,59 @@ Exchange(Merge)
                 └── limit: NONE
 
 
+=== range_outside_statistics_build_is_shuffled ===
+description: A build side filtered by a range outside the recorded min/max is not broadcast when its unknown-filter bound exceeds max_broadcast_join_build_rows.
+sql: SELECT p.v FROM p JOIN r ON p.k = r.k WHERE r.t > 1000
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#4), r.k (#2) AS (#5), r.t (#3) AS (#6)]
+    └── Join(Inner)
+        ├── build keys: [r.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [r.k (#2)]
+        │   └── Scan
+        │       ├── table: default.r (#1)
+        │       ├── filters: [gt(r.t (#3), 1000)]
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [p.k (#0)]
+            └── Scan
+                ├── table: default.p (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== range_outside_statistics_build_within_limit_is_broadcast ===
+description: A build side filtered by a range outside the recorded min/max is broadcast when its unknown-filter bound is within max_broadcast_join_build_rows.
+sql: SELECT p.v FROM p JOIN w ON p.k = w.k WHERE w.t > 1000
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#4), w.k (#2) AS (#5), w.t (#3) AS (#6)]
+    └── Join(Inner)
+        ├── build keys: [w.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Scan
+        │       ├── table: default.w (#1)
+        │       ├── filters: [gt(w.t (#3), 1000)]
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === left_join_does_not_build_underestimated_join ===
 description: CommuteJoin ranks an underestimated join by its bound, so the small table stays the build side.
 sql: SELECT j.k, d.v FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j LEFT JOIN d ON j.k = d.k
@@ -406,5 +459,30 @@ EvalScalar
                 ├── filters: []
                 ├── order by: []
                 └── limit: NONE
+
+
+=== left_join_builds_range_outside_statistics ===
+description: CommuteJoin ranks a range outside the recorded min/max by its small expected rows, so it becomes the build side instead of the larger table.
+sql: SELECT r.k, a.k FROM r LEFT JOIN a ON r.k = a.k WHERE r.t > 1000
+cluster nodes: 1
+settings: []
+EvalScalar
+├── scalars: [r.k (#0) AS (#0), k (#3) AS (#3), r.t (#1) AS (#4)]
+└── Join(Right)
+    ├── build keys: [r.k (#0)]
+    ├── probe keys: [k (#3)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.r (#0)
+    │   ├── filters: [gt(r.t (#1), 1000)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [CAST(a.k (#2) AS Int64 NULL) AS (#3)]
+        └── Scan
+            ├── table: default.a (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 
