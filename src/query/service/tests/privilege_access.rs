@@ -234,39 +234,64 @@ async fn test_connection_and_sequence_access_is_always_checked() -> anyhow::Resu
     Ok(())
 }
 
-/// A DROP ... IF EXISTS that drops nothing must not revoke ownership: an object of the
-/// same name created concurrently would lose its owner. The ownership record of a
-/// missing object stands in for such a concurrent creation.
+/// DROP revokes ownership only when it drops the object. A DROP ... IF EXISTS that
+/// drops nothing keeps the ownership, which stands in for an object of the same name
+/// created concurrently. Sequences skip the positive half: they record ownership
+/// through the catalog, whose temporary embedded meta store in this fixture is not
+/// the one `UserApiProvider` reads; stateless 18_0025 covers them.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_drop_if_exists_keeps_ownership_when_nothing_is_dropped() -> anyhow::Result<()> {
+async fn test_drop_revokes_ownership_only_when_dropped() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let tenant = fixture.default_tenant();
     let api = UserApiProvider::instance();
-    let name = "drop_if_exists_absent".to_string();
-    for (object, sql) in [
+    let name = "drop_revoke".to_string();
+    for (object, kind, create) in [
         (
             OwnershipObject::Stage { name: name.clone() },
-            "DROP STAGE IF EXISTS drop_if_exists_absent",
+            "STAGE",
+            Some("CREATE STAGE drop_revoke FILE_FORMAT = (TYPE = CSV)"),
         ),
         (
             OwnershipObject::UDF { name: name.clone() },
-            "DROP FUNCTION IF EXISTS drop_if_exists_absent",
+            "FUNCTION",
+            Some("CREATE FUNCTION drop_revoke AS (x) -> x + 1"),
         ),
         (
             OwnershipObject::Connection { name: name.clone() },
-            "DROP CONNECTION IF EXISTS drop_if_exists_absent",
+            "CONNECTION",
+            Some(
+                "CREATE CONNECTION drop_revoke STORAGE_TYPE = 's3' ENDPOINT_URL = 'http://127.0.0.1:9900'",
+            ),
         ),
         (
             OwnershipObject::Sequence { name: name.clone() },
-            "DROP SEQUENCE IF EXISTS drop_if_exists_absent",
+            "SEQUENCE",
+            None,
         ),
     ] {
+        if let Some(create) = create {
+            fixture.execute_command(create).await?;
+            assert!(
+                api.get_ownership(&tenant, &object).await?.is_some(),
+                "{kind}"
+            );
+            fixture
+                .execute_command(&format!("DROP {kind} drop_revoke"))
+                .await?;
+            assert!(
+                api.get_ownership(&tenant, &object).await?.is_none(),
+                "{kind}"
+            );
+        }
+
         api.grant_ownership_to_role(&tenant, &object, BUILTIN_ROLE_ACCOUNT_ADMIN)
             .await?;
-        fixture.execute_command(sql).await?;
+        fixture
+            .execute_command(&format!("DROP {kind} IF EXISTS drop_revoke"))
+            .await?;
         assert!(
             api.get_ownership(&tenant, &object).await?.is_some(),
-            "{sql}"
+            "{kind}"
         );
     }
     Ok(())
