@@ -184,10 +184,10 @@ impl DropCounters {
 struct Shared {
     queued: AtomicU64,
     room: Notify,
-    /// Entries queued or being written, by pool and key, with their bytes and the start of the
+    /// Entries queued or being written, by pool and key, with their bytes and the ticket of the
     /// fill that read them: a second miss of the same key while the first is pending is not
     /// queued again, and is served these bytes (see `DiskWriter::pending`).
-    pending: Mutex<HashMap<(usize, String), (Bytes, u64)>>,
+    pending: Mutex<HashMap<(usize, String), (Bytes, FillTicket)>>,
     drops: DropCounters,
     settings: WriterSettings,
     over_watermark: fn(&Path, u64) -> bool,
@@ -286,8 +286,9 @@ impl DiskWriter {
     }
 
     /// The bytes queued or being written under `rel` of the pool with index `pool`, and the
-    /// start of the fill that read them.
-    pub fn pending(&self, pool: usize, rel: &str) -> Option<(Bytes, u64)> {
+    /// ticket of the fill that read them. Held while the bytes are checked against the pool:
+    /// the invalidations of their object since the fill started are kept as long as it is.
+    pub fn pending(&self, pool: usize, rel: &str) -> Option<(Bytes, FillTicket)> {
         self.shared
             .pending
             .lock()
@@ -323,7 +324,7 @@ impl DiskWriter {
             if pending.contains_key(&key) {
                 return false;
             }
-            pending.insert(key.clone(), (job.value.clone(), job.ticket.started()));
+            pending.insert(key.clone(), (job.value.clone(), job.ticket.clone()));
         }
         let mut pending = Pending {
             shared: &self.shared,

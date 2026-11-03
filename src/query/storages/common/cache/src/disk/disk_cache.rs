@@ -313,8 +313,11 @@ impl DiskCache {
             // Read before and still waiting to be written: served, as the entry it becomes,
             // unless its object changed since. Concurrent scans of the same data then read it
             // from storage once.
-            if let Some((bytes, started)) = self.writer.pending(pool.pool().index(), &rel) {
-                if pool.accepts(&rel, started) {
+            // The fill's ticket is held across the check: an invalidation of the object since
+            // the fill started is not pruned meanwhile, even if the job is rejected and drops
+            // its own ticket.
+            if let Some((bytes, ticket)) = self.writer.pending(pool.pool().index(), &rel) {
+                if pool.accepts(&rel, ticket.started()) {
                     hit(&bytes);
                     counters.queued_hits.fetch_add(1, Ordering::Relaxed);
                     return Some(bytes);
