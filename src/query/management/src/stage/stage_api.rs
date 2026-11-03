@@ -15,13 +15,9 @@
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::CreateOption;
 
 #[async_trait::async_trait]
 pub trait StageApi: Sync + Send {
-    // Add a stage info to /tenant/stage-name.
-    async fn add_stage(&self, stage: StageInfo, create_option: &CreateOption) -> Result<()>;
-
     /// Writes the stage and its owner in one transaction; returns whether it was written.
     async fn add_stage_with_owner(
         &self,

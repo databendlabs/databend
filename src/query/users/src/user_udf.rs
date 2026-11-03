@@ -17,7 +17,6 @@ use databend_common_exception::Result;
 use databend_common_management::udf::UdfApiError;
 use databend_common_management::udf::UdfError;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 
@@ -25,25 +24,6 @@ use crate::UserApiProvider;
 
 /// UDF operations.
 impl UserApiProvider {
-    /// Add a UDF, returning whether metadata changed.
-    #[async_backtrace::framed]
-    pub async fn add_udf(
-        &self,
-        tenant: &Tenant,
-        info: UserDefinedFunction,
-        create_option: &CreateOption,
-    ) -> Result<bool> {
-        if self.get_configured_udf(&info.name).is_some() {
-            return Err(ErrorCode::UdfAlreadyExists(format!(
-                "Built-in UDF `{}` already exists",
-                info.name
-            )));
-        }
-
-        let udf_api = self.udf_api(tenant);
-        Ok(udf_api.add_udf(info, create_option).await??)
-    }
-
     /// Writes the UDF and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     pub async fn add_udf_with_owner(
