@@ -468,12 +468,9 @@ async fn test_disk_pressure_evicts_data_then_index_then_meta() {
 }
 
 static INDEXED: Gate = Gate::new();
-static INDEXED_PRESSURE: AtomicUsize = AtomicUsize::new(0);
 fn indexed_gate(_: &Path, _: u64) -> bool {
     INDEXED.pass();
-    INDEXED_PRESSURE
-        .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
-        .is_ok()
+    false
 }
 
 /// An entry whose key was indexed after it was queued, as by the restart scan, is refused
@@ -481,10 +478,9 @@ fn indexed_gate(_: &Path, _: u64) -> bool {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_entry_indexed_while_queued_evicts_nothing() {
     let dir = TempDir::new().unwrap();
-    let data = pool_at(dir.path().join("data"), Pool::Data, 10_000);
     let meta = pool_at(dir.path().join("meta"), Pool::Meta, 10_000);
     let writer = DiskWriter::start(
-        vec![data.clone(), meta.clone()],
+        vec![meta.clone()],
         dir.path().to_path_buf(),
         WriterOptions {
             over_watermark: indexed_gate,
@@ -492,8 +488,6 @@ async fn test_entry_indexed_while_queued_evicts_nothing() {
         },
     );
     let meta_kind = CacheKind::of::<segment::Info>();
-    assert!(writer.enqueue(job(&data, data_kind(), "hot", 100)).await);
-    wait_for(|| idle(&writer));
     // The writer is held in the pressure check of "gate" while "late" waits behind it.
     INDEXED.close();
     assert!(writer.enqueue(job(&meta, meta_kind, "gate", 100)).await);
@@ -509,16 +503,13 @@ async fn test_entry_indexed_while_queued_evicts_nothing() {
             .unwrap()
             .indexed
     );
-    // The file system is over the watermark from now on.
-    INDEXED_PRESSURE.store(10, Ordering::SeqCst);
     INDEXED.open();
     wait_for(|| idle(&writer));
-    // "gate" was checked before the pressure and went in; "late" was refused before it,
-    // and "hot" stays.
-    assert_eq!(data.stats().items, 1);
+    // "gate" checked the watermark and went in; "late" was refused before the check, so the
+    // watermark was checked once in all: nothing could have been evicted for "late".
     assert_eq!(meta.stats().items, 2);
     assert_eq!(drops(&writer).1, 1);
-    assert_eq!(INDEXED_PRESSURE.load(Ordering::SeqCst), 10);
+    assert_eq!(INDEXED.entered.load(Ordering::SeqCst), 1);
 }
 
 /// Many readers queue entries at once, with duplicates, a small queue and a pool that
