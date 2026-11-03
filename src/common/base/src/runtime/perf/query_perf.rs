@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -20,6 +21,7 @@ use std::sync::atomic::Ordering;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
+use pprof::Frames;
 use pprof::ProfilerGuard;
 use pprof::ProfilerGuardBuilder;
 use regex::Regex;
@@ -118,10 +120,32 @@ impl CpuProfiler {
 
     /// The pprof report of the samples collected so far, as sampled.
     pub fn report(&self) -> Result<pprof::Report> {
-        self.profiler_guard
+        self.symbolized_report(|_| {})
+    }
+
+    /// The samples collected so far, symbolized and post-processed.
+    ///
+    /// pprof-rs `ReportBuilder::build` symbolizes under the profiler lock,
+    /// which the signal handler only `try_write`s, so every sample due while
+    /// a report is built would be dropped, and symbolizing takes long on a
+    /// large binary. Only copying the raw stacks holds the lock here.
+    fn symbolized_report(&self, post_processor: impl Fn(&mut Frames)) -> Result<pprof::Report> {
+        let unresolved = self
+            .profiler_guard
             .report()
-            .build()
-            .map_err(|e| ErrorCode::Internal(format!("Failed to report profiler data, {e}")))
+            .build_unresolved()
+            .map_err(|e| ErrorCode::Internal(format!("Failed to report profiler data, {e}")))?;
+
+        let mut data = HashMap::with_capacity(unresolved.data.len());
+        for (frames, count) in unresolved.data {
+            let mut frames = Frames::from(frames);
+            post_processor(&mut frames);
+            *data.entry(frames).or_insert(0) += count;
+        }
+        Ok(pprof::Report {
+            data,
+            timing: unresolved.timing,
+        })
     }
 
     /// The flamegraph SVG of the samples collected so far.
@@ -133,12 +157,7 @@ impl CpuProfiler {
     /// flamegraph tools: one `thread;outermost;...;innermost count` line per
     /// distinct stack.
     pub fn dump_folded(&self) -> Result<String> {
-        let report = self
-            .profiler_guard
-            .report()
-            .frames_post_processor(frames_post_processor())
-            .build()
-            .map_err(|_e| ErrorCode::Internal("Failed to report profiler data"))?;
+        let report = self.symbolized_report(frames_post_processor())?;
         debug!("begin to dump folded stacks");
 
         let mut folded = String::new();
