@@ -218,18 +218,20 @@ impl ClusterHelper for Cluster {
                             channel.finish(&result);
                             result
                         } else {
-                            // Bound the connect by the request timeout, as a cached control
-                            // channel does: without `rpc_client_timeout_secs` it has no bound,
-                            // and a node that drops SYNs would hold the action, and with
-                            // concurrent dispatch the drain after another node's error, for
-                            // the kernel connect timeout.
+                            // Bound the connect as a cached control channel does: by
+                            // `rpc_client_timeout_secs` when set, otherwise by the request
+                            // timeout. Without either a node that drops SYNs would hold the
+                            // action, and with concurrent dispatch the drain after another
+                            // node's error, for the kernel connect timeout.
                             let connect = create_client(
                                 &config,
                                 &node_id,
                                 &flight_address,
                                 flight_params.keep_alive,
                             );
-                            let connect_timeout = Duration::from_secs(flight_params.timeout);
+                            let connect_timeout = rpc_client_options(&config)
+                                .0
+                                .unwrap_or(Duration::from_secs(flight_params.timeout));
                             let mut conn =
                                 match tokio::time::timeout(connect_timeout, connect).await {
                                     Ok(conn) => conn?,
