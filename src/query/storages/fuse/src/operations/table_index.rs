@@ -77,6 +77,7 @@ use crate::io::MetaReaders;
 use crate::io::SpatialIndexBuilder;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VectorIndexBuilder;
+use crate::io::read::bloom::BloomColumnFilterReader;
 use crate::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use crate::io::read::bloom::block_filter_reader::load_index_meta;
 use crate::io::read::load_spatial_index_meta;
@@ -795,7 +796,10 @@ impl AsyncTransform for NgramIndexTransform {
             }
             if let Some(cache) = CacheManager::instance().get_bloom_index_filter_cache() {
                 for old_ngram_name in old_ngram_names {
-                    cache.evict(&format!("{index_path}-{}", old_ngram_name));
+                    cache.evict(&BloomColumnFilterReader::cache_key(
+                        &index_path,
+                        &old_ngram_name,
+                    ));
                 }
             }
         } else {

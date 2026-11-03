@@ -186,7 +186,11 @@ pub async fn load_bloom_filter_by_columns<'a>(
 ///
 /// A column that carries no filter in this index is never cached, so such a
 /// request falls through to the full load path, which keeps the behaviour of
-/// silently omitting it.
+/// silently omitting it. As a consequence, a block whose index skipped one of
+/// the requested columns never takes this fast path: the bloom index builder
+/// emits no filter for a column with fewer than 2 distinct values in the
+/// block (e.g. constant or all-NULL) or for an over-long string column, while
+/// the pruner still asks for it by the table schema.
 fn load_cached_bloom_filters(index_path: &str, column_needed: &[String]) -> Option<BlockFilter> {
     if column_needed.is_empty() {
         return None;
@@ -489,10 +493,8 @@ mod tests {
         let path = "bloom_index_cached_only";
         operator.write(path, data.clone()).await?;
 
-        let Some(filter_cache) = FilterImpl::cache() else {
-            // Nothing to verify without a filter cache.
-            return Ok(());
-        };
+        let filter_cache =
+            FilterImpl::cache().expect("filter cache must be enabled in test globals");
         if let Some(cache) = BloomIndexMeta::cache() {
             cache.evict(path);
         }
