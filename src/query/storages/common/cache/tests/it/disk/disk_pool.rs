@@ -116,6 +116,11 @@ fn test_reserve_evicts_lru_and_lookup_refreshes() {
     assert_eq!(put(&pool, &rel(data(), "e"), 200), vec![rel(data(), "b")]);
     assert_eq!(put(&pool, &rel(data(), "f"), 250), vec![rel(data(), "c")]);
     assert_eq!(pool.stats().bytes, 950);
+    // Counted as evictions for capacity.
+    assert_eq!(
+        (pool.stats().evicted, pool.stats().evicted_bytes),
+        ([2, 0], [500, 0])
+    );
     assert!(pool.contains(&rel(data(), "a")) && !pool.contains(&rel(data(), "b")));
     assert_consistent(&pool);
 }
@@ -210,6 +215,12 @@ fn test_set_cap_evict_bytes_and_remove_kind() {
     assert_eq!(victims, vec![rel(meta(), "m1")]);
     pool.delete(&victims);
     assert_eq!((pool.cap(), pool.stats().bytes), (400, 400));
+    // `evict_bytes` relieves disk pressure; a lowered capacity evicts for capacity. A removal
+    // is not an eviction.
+    assert_eq!(
+        (pool.stats().evicted, pool.stats().evicted_bytes),
+        ([1, 2], [100, 200])
+    );
 
     let victims = pool.remove_kind(meta());
     assert_eq!(victims.len(), 2);

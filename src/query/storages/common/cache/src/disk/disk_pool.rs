@@ -110,6 +110,33 @@ pub struct DiskPoolStats {
     pub cap: u64,
     pub hit: u64,
     pub miss: u64,
+    /// Entries, and their bytes, evicted since the pool started, by `Eviction` reason.
+    pub evicted: [u64; 2],
+    pub evicted_bytes: [u64; 2],
+}
+
+/// Why least recently used entries leave a pool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Eviction {
+    /// For room within the pool's capacity: a write, or a lowered capacity.
+    Capacity,
+    /// The file system is over the watermark (`cache.disk.watermark_ratio`).
+    DiskPressure,
+}
+
+impl Eviction {
+    pub const ALL: [Eviction; 2] = [Eviction::Capacity, Eviction::DiskPressure];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Eviction::Capacity => "capacity",
+            Eviction::DiskPressure => "disk_pressure",
+        }
+    }
+
+    fn index(self) -> usize {
+        self as usize
+    }
 }
 
 struct State {
@@ -152,6 +179,9 @@ struct State {
     scanned: bool,
     /// Kinds turned off, by kind index.
     kinds_off: Vec<bool>,
+    /// See `DiskPoolStats::evicted`.
+    evicted: [u64; 2],
+    evicted_bytes: [u64; 2],
 }
 
 impl State {
@@ -232,10 +262,12 @@ impl State {
     }
 
     /// Takes the least recently used entry out, marking it as being deleted.
-    fn pop_lru(&mut self) -> Option<(String, u64)> {
+    fn pop_lru(&mut self, reason: Eviction) -> Option<(String, u64)> {
         let (rel, size) = self.index.pop_by_policy()?;
         let size = size.get_inner().0;
         self.taken(&rel, size);
+        self.evicted[reason.index()] += 1;
+        self.evicted_bytes[reason.index()] += size;
         Some((rel, size))
     }
 
@@ -348,6 +380,8 @@ impl DiskPool {
                 reloaded: false,
                 scanned: false,
                 kinds_off: CacheKind::all().map(|_| false).collect(),
+                evicted: [0; 2],
+                evicted_bytes: [0; 2],
             }),
             hit: AtomicU64::new(0),
             miss: AtomicU64::new(0),
@@ -406,7 +440,7 @@ impl DiskPool {
             };
         }
         while state.used() + bytes > state.cap {
-            match state.pop_lru() {
+            match state.pop_lru(Eviction::Capacity) {
                 Some((rel, _)) => victims.push(rel),
                 // Only bytes being written are left; they are published or released soon.
                 None => {
@@ -477,7 +511,7 @@ impl DiskPool {
         state.insert(rel.clone(), written);
         let mut victims = Vec::new();
         while state.used() > state.cap {
-            match state.pop_lru() {
+            match state.pop_lru(Eviction::Capacity) {
                 Some((victim, _)) => victims.push(victim),
                 None => break,
             }
@@ -661,7 +695,7 @@ impl DiskPool {
         state.cap = cap;
         let mut victims = Vec::new();
         while state.used() > cap {
-            match state.pop_lru() {
+            match state.pop_lru(Eviction::Capacity) {
                 Some((rel, _)) => victims.push(rel),
                 None => break,
             }
@@ -676,7 +710,7 @@ impl DiskPool {
         let mut freed = 0;
         let mut victims = Vec::new();
         while freed < bytes {
-            let Some((rel, size)) = state.pop_lru() else {
+            let Some((rel, size)) = state.pop_lru(Eviction::DiskPressure) else {
                 break;
             };
             freed += size;
@@ -698,6 +732,8 @@ impl DiskPool {
             cap: state.cap,
             hit: self.hit.load(Ordering::Relaxed),
             miss: self.miss.load(Ordering::Relaxed),
+            evicted: state.evicted,
+            evicted_bytes: state.evicted_bytes,
         }
     }
 

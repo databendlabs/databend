@@ -187,6 +187,19 @@ async fn test_disk_gauges_follow_cache_rows() {
         sample(&text, "cache_disk_dropped_total", "reason=\"queue_full\""),
         Some(0)
     );
+    for reason in ["capacity", "disk_pressure"] {
+        let labels = format!("pool=\"data\",reason=\"{reason}\"");
+        assert_eq!(
+            sample(&text, "cache_disk_eviction_count_total", &labels),
+            Some(0),
+            "{reason}"
+        );
+        assert_eq!(
+            sample(&text, "cache_disk_eviction_bytes_total", &labels),
+            Some(0),
+            "{reason}"
+        );
+    }
 }
 
 /// The shared store counts why entries leave or are refused, per kind.

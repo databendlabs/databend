@@ -34,7 +34,9 @@
 //! `cache_pool_capacity_bytes`. Per disk pool: `cache_disk_pool_items`,
 //! `cache_disk_pool_used_bytes` and `cache_disk_pool_capacity_bytes`; for the disk cache as a
 //! whole, `cache_disk_queue_bytes` and the counter `cache_disk_dropped` by `reason`
-//! (`queue_full`, `rejected`, `io_error`).
+//! (`queue_full`, `rejected`, `io_error`). Counters per disk pool, by `reason` (`capacity`:
+//! room for a write or a lowered capacity; `disk_pressure`: the file system over
+//! `cache.disk.watermark_ratio`): `cache_disk_eviction_count` and `cache_disk_eviction_bytes`.
 //!
 //! Counters, shared backend only, since the process started:
 //! - `cache_eviction_count` and `cache_eviction_bytes` per kind, by `reason`: `capacity` (room in
@@ -61,6 +63,7 @@ use prometheus_client::metrics::counter::ConstCounter;
 use prometheus_client::metrics::gauge::ConstGauge;
 
 use crate::CacheManager;
+use crate::disk::disk_pool::Eviction;
 use crate::manager::CacheRow;
 
 /// Collects the metrics of one manager, or of the global one.
@@ -329,7 +332,26 @@ impl Collector for CacheMetricsCollector {
             ] {
                 dropped.push(vec![("reason", reason.to_string())], count);
             }
-            families.extend([queued, dropped]);
+            let mut evicted = Family::counter(
+                "cache_disk_eviction_count",
+                "Entries evicted from a disk cache pool, by reason.",
+            );
+            let mut evicted_bytes = Family::counter(
+                "cache_disk_eviction_bytes",
+                "Bytes evicted from a disk cache pool, by reason.",
+            );
+            for (pool, stats) in disk.pool_stats() {
+                for reason in Eviction::ALL {
+                    let labels: Labels = vec![
+                        ("pool", pool.name().to_string()),
+                        ("reason", reason.name().to_string()),
+                    ];
+                    let i = reason as usize;
+                    evicted.push(labels.clone(), stats.evicted[i]);
+                    evicted_bytes.push(labels, stats.evicted_bytes[i]);
+                }
+            }
+            families.extend([queued, dropped, evicted, evicted_bytes]);
         }
         if let Some(stats) = manager.reclaim_stats() {
             for (name, help, value) in [
