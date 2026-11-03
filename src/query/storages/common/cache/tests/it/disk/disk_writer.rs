@@ -528,11 +528,7 @@ async fn test_entry_indexed_while_queued_evicts_nothing() {
             .await
     );
     wait_for(|| idle(&writer));
-    assert_eq!(
-        meta.stats().items,
-        0,
-        "the reservations evicted the entries"
-    );
+    assert_eq!(meta.stats().items, 2, "nothing evicted for \"squeezed\"");
     assert_eq!(drops(&writer).1, 2);
     assert_eq!(INDEXED.entered.load(Ordering::SeqCst), 1);
     for rel in &held {
