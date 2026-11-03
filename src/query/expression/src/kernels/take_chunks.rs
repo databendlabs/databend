@@ -40,6 +40,7 @@ use crate::types::bitmap::BitmapType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnVec;
+use crate::types::encoded::widen;
 use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
@@ -54,6 +55,7 @@ use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::vector::VectorColumnBuilder;
 use crate::types::*;
 use crate::with_decimal_type;
+use crate::with_narrow_buffer;
 use crate::with_number_mapped_type;
 use crate::with_opaque_mapped_type;
 use crate::with_opaque_size;
@@ -188,6 +190,11 @@ impl DataBlock {
         }
     }
 }
+
+/// Dictionary encoded chunks (e.g. the build side of a hash join) stay encoded when their
+/// dictionaries merge into at most this many values: every column taken from them carries the
+/// whole dictionary, so it must stay small next to a block.
+const MAX_MERGED_DICTIONARY_VALUES: usize = 4096;
 
 struct TakeColumns<'a> {
     first: Cow<'a, Column>,
@@ -400,6 +407,9 @@ impl Column {
     }
 
     pub fn take_downcast_column_vec(columns: &[Column]) -> ColumnVec {
+        if let Some(dict) = Self::merge_dictionaries(columns) {
+            return dict;
+        }
         let columns = TakeColumns::new(columns);
         match columns.first() {
             Column::Encoded(_) => unreachable!("EncodedColumn::decode returns a regular column"),
@@ -657,6 +667,18 @@ impl Column {
             ColumnVec::Null => Column::Null { len: result_size },
             ColumnVec::EmptyArray => Column::EmptyArray { len: result_size },
             ColumnVec::EmptyMap => Column::EmptyMap { len: result_size },
+            ColumnVec::Dict { keys, values } => {
+                let keys = NarrowBuffer::pack(
+                    indices.iter().map(|ptr| {
+                        keys[ptr.chunk_index as usize]
+                            .get(ptr.row_index as usize)
+                            .unwrap()
+                    }),
+                    values.len() as u64 - 1,
+                );
+                let dict = DictColumn::new(keys, values.clone());
+                Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
+            }
             ColumnVec::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumnVec::NUM_TYPE(columns) => {
                     let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
@@ -800,6 +822,45 @@ impl Column {
                 })
             }
         }
+    }
+
+    /// `columns` as [`ColumnVec::Dict`] if they are all dictionary encoded and their values
+    /// merge into at most [`MAX_MERGED_DICTIONARY_VALUES`] distinct values.
+    fn merge_dictionaries(columns: &[Column]) -> Option<ColumnVec> {
+        fn dict(column: &Column) -> Option<&DictColumn> {
+            column.as_encoded()?.as_dict()
+        }
+
+        if !columns.iter().all(|column| {
+            dict(column).is_some_and(|dict| dict.values.len() <= MAX_MERGED_DICTIONARY_VALUES)
+        }) {
+            return None;
+        }
+        // The dictionaries are chunks of the values of the merged dictionary.
+        let dicts = columns.iter().filter_map(dict);
+        let merged = DictColumn::try_encode_chunks(
+            dicts.clone().map(|dict| &dict.values),
+            MAX_MERGED_DICTIONARY_VALUES,
+        )?;
+        let max_key = merged.values.len() as u64 - 1;
+        // The merged key of `key` of a chunk is `merged.keys[offset + key]`, `offset` being the
+        // number of dictionary values of the chunks before it.
+        let mut offset = 0;
+        let keys = dicts
+            .map(|dict| {
+                let start = offset;
+                offset += dict.values.len();
+                with_narrow_buffer!(&merged.keys, |merged_keys| {
+                    let merged_keys = &merged_keys.as_slice()[start..];
+                    let keys = dict.keys.iter();
+                    NarrowBuffer::pack(keys.map(|key| widen(merged_keys[key as usize])), max_key)
+                })
+            })
+            .collect();
+        Some(ColumnVec::Dict {
+            keys,
+            values: merged.values,
+        })
     }
 
     fn take_block_vec_primitive_types<L, T>(col: &L, indices: &[RowPtr]) -> Vec<T>

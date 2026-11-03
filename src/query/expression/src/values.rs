@@ -60,6 +60,7 @@ use crate::ColumnView;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
 use crate::types::EncodedColumn;
+use crate::types::NarrowBuffer;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
@@ -264,6 +265,11 @@ pub enum ColumnVec {
     Geography(Vec<GeographyColumn>),
     Vector(VectorColumnVec),
     Opaque(OpaqueColumnVec),
+    /// Dictionary encoded chunks whose keys index one shared dictionary.
+    Dict {
+        keys: Vec<NarrowBuffer>,
+        values: Column,
+    },
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
