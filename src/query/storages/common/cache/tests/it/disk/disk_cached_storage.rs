@@ -1074,3 +1074,39 @@ async fn test_unit_reads_of_prefixed_storages_are_their_own() {
     assert!(after.iter().all(|x| *x == 3));
     assert!(before.await.unwrap().unwrap().iter().all(|x| *x == 1));
 }
+
+/// A cold read of more units than the write queue holds returns every unit, and fills what
+/// the queue takes: each unit is written or counted as dropped for a full queue.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unit_reads_larger_than_the_write_queue() {
+    use databend_storages_common_cache::disk::disk_writer::WriterOptions;
+    let dir = TempDir::new().unwrap();
+    let op = Operator::new(Memory::default()).unwrap().finish();
+    op.write(PATH, Bytes::from(vec![5u8; 3_000])).await.unwrap();
+    let disk = Arc::new(
+        DiskCache::with_writer(
+            dir.path(),
+            100_000,
+            [10_000, 20_000, 70_000],
+            WriterOptions {
+                queue_bytes: 250,
+                queue_wait: std::time::Duration::ZERO,
+                ..WriterOptions::new(false)
+            },
+        )
+        .unwrap(),
+    );
+    let storage = DiskCachedStorage::with_disk(op, Some(disk.clone()));
+    let units: Vec<(u32, std::ops::Range<u64>)> = (0..20)
+        .map(|i| (i, i as u64 * 150..i as u64 * 150 + 100))
+        .collect();
+    let read = read_units(&storage, PATH, &units).await.unwrap();
+    assert!(
+        read.iter()
+            .all(|u| u.len() == 100 && u.iter().all(|x| *x == 5))
+    );
+    wait_for(|| disk.stats().queued_bytes == 0);
+    let stats = disk.kind_stats(data());
+    assert_eq!(stats.events.written + stats.dropped.iter().sum::<u64>(), 20);
+    assert!(stats.events.written >= 1);
+}

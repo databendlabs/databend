@@ -32,6 +32,7 @@ use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use futures::future::try_join_all;
+use opendal::Buffer;
 use opendal::Operator;
 
 use crate::CacheKind;
@@ -331,16 +332,19 @@ impl DiskCachedStorage {
         let miss_bytes: u64 = misses.iter().map(|(_, r)| r.end - r.start).sum();
         disk.record_storage_read(kind, miss_bytes);
         if fill.writes() {
-            let puts = misses.iter().map(|(id, range)| {
-                // Copied out of the merged read buffer: a queued unit must not keep the whole
-                // buffer alive, as the queue accounts for the unit's bytes only.
-                let unit = fetched_unit(&fetched, *id).map(|b| Bytes::copy_from_slice(&b));
-                async move {
-                    if let Ok(bytes) = unit {
-                        disk.put(kind, &self.key(path, Some(range.clone())), bytes, ticket)
-                            .await;
-                    }
-                }
+            let fetched = &fetched;
+            let puts = misses.iter().map(|(id, range)| async move {
+                let Ok(unit) = fetched_unit_buffer(fetched, *id) else {
+                    return;
+                };
+                // Copied out of the merged read buffer, so that a queued unit does not keep
+                // the whole buffer alive, the queue accounting for the unit's bytes only; and
+                // once the queue has room for it, so that units waiting for room hold no copy.
+                let key = self.key(path, Some(range.clone()));
+                // One copy, also of a buffer of several chunks.
+                let copy = || Bytes::from(unit.to_vec());
+                disk.put_with(kind, &key, unit.len() as u64, copy, ticket)
+                    .await;
             });
             futures::future::join_all(puts).await;
         }
@@ -380,6 +384,11 @@ impl UnitsRead {
 }
 
 fn fetched_unit(fetched: &MergeIOReadResult, id: ColumnId) -> Result<Bytes> {
+    Ok(fetched_unit_buffer(fetched, id)?.to_bytes())
+}
+
+/// The bytes of unit `id` in `fetched`, as a view of the merged read buffer: no copy.
+fn fetched_unit_buffer(fetched: &MergeIOReadResult, id: ColumnId) -> Result<Buffer> {
     let (chunk, range) = fetched.columns_chunk_offsets.get(&id).ok_or_else(|| {
         databend_common_exception::ErrorCode::Internal(format!(
             "unit {id} of {} was not read",
@@ -389,5 +398,5 @@ fn fetched_unit(fetched: &MergeIOReadResult, id: ColumnId) -> Result<Bytes> {
     let chunk = fetched
         .owner_memory
         .get_chunk(*chunk, &fetched.block_path)?;
-    Ok(chunk.slice(range.clone()).to_bytes())
+    Ok(chunk.slice(range.clone()))
 }

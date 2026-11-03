@@ -397,6 +397,29 @@ impl DiskCache {
             .await
     }
 
+    /// `put` of an entry of `len` bytes made by `value` once the write queue has room for it:
+    /// see `DiskWriter::enqueue_with`.
+    pub async fn put_with(
+        &self,
+        kind: CacheKind,
+        key: &DiskKey,
+        len: u64,
+        value: impl FnOnce() -> Bytes,
+        ticket: &FillTicket,
+    ) -> bool {
+        if !self.is_enabled(kind) {
+            return false;
+        }
+        let pool = self.pool(kind).clone();
+        let rel = key.rel_path(kind);
+        if pool.contains(&rel) {
+            return false;
+        }
+        self.writer
+            .enqueue_with(pool, rel, len, ticket.clone(), value)
+            .await
+    }
+
     /// Drops `key` from the disk cache.
     pub fn evict(&self, kind: CacheKind, key: &DiskKey) -> bool {
         self.pool(kind).remove(&key.rel_path(kind))

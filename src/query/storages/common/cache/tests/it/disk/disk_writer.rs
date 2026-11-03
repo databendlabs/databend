@@ -869,3 +869,117 @@ async fn test_settings_change_while_entries_are_queued() {
         (1 << 20, Duration::from_millis(50), 90, false)
     );
 }
+
+static MADE: Gate = Gate::new();
+fn made_gate(_: &Path, _: u64) -> bool {
+    MADE.pass();
+    false
+}
+
+/// `enqueue_with` makes the bytes only once the queue has room for them: not while it waits,
+/// not when the entry is dropped for a full queue, not when the entry is already queued.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_enqueue_with_makes_the_bytes_once_there_is_room() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
+    let writer = Arc::new(DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        WriterOptions {
+            over_watermark: made_gate,
+            ..options(1, 100, Duration::from_millis(30))
+        },
+    ));
+    let made = Arc::new(AtomicUsize::new(0));
+    let enqueue = |name: &'static str, len: usize| {
+        let (writer, pool, made) = (writer.clone(), pool.clone(), made.clone());
+        async move {
+            let WriteJob {
+                pool, rel, ticket, ..
+            } = job(&pool, data_kind(), name, len);
+            writer
+                .enqueue_with(pool, rel, len as u64, ticket, move || {
+                    made.fetch_add(1, Ordering::SeqCst);
+                    value_of(name, len)
+                })
+                .await
+        }
+    };
+    MADE.close();
+    assert!(enqueue("a", 100).await);
+    MADE.wait_entered(1);
+    assert_eq!(made.load(Ordering::SeqCst), 1);
+    // The queue is full: dropped after waiting, never made.
+    assert!(!enqueue("b", 10).await);
+    assert_eq!(made.load(Ordering::SeqCst), 1);
+    assert_eq!(drops(&writer).0, 1);
+    // Already queued: refused at once, never made.
+    assert!(!enqueue("a", 100).await);
+    assert_eq!(made.load(Ordering::SeqCst), 1);
+    // Waiting for room, not made until "a" is written.
+    let waiting = {
+        let enqueue = enqueue("c", 10);
+        spawn(enqueue)
+    };
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert_eq!(made.load(Ordering::SeqCst), 1);
+    MADE.open();
+    assert!(waiting.await.unwrap());
+    assert_eq!(made.load(Ordering::SeqCst), 2);
+    wait_for(|| idle(&writer));
+    assert_eq!(pool.stats().items, 2);
+}
+
+/// Many tasks queue entries made on demand into a small queue at once: every entry is made
+/// while it holds room, so the bytes made and not yet written never exceed `queue_bytes`;
+/// each entry is written or dropped, and only those queued are made.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_enqueue_with_keeps_made_bytes_within_the_queue() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 1 << 30);
+    const QUEUE: u64 = 4 * 1024;
+    let writer = Arc::new(DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        options(2, QUEUE, Duration::from_millis(20)),
+    ));
+    let made = Arc::new(AtomicU64::new(0));
+    let queued = Arc::new(AtomicU64::new(0));
+    let tasks: Vec<_> = (0..16)
+        .map(|t| {
+            let (writer, pool, made, queued) =
+                (writer.clone(), pool.clone(), made.clone(), queued.clone());
+            spawn(async move {
+                for i in 0..100usize {
+                    let len = 64 + (i * 7919 + t * 31) % 1_000;
+                    let name = format!("t{t}_{i}");
+                    let WriteJob {
+                        pool, rel, ticket, ..
+                    } = job(&pool, data_kind(), &name, len);
+                    let (writer2, made) = (writer.clone(), made.clone());
+                    let ok = writer
+                        .enqueue_with(pool, rel, len as u64, ticket, move || {
+                            // Room is held for this entry: it is counted in the queue.
+                            let queued = writer2.queued_bytes();
+                            assert!(queued >= len as u64 && queued <= QUEUE, "{queued}");
+                            made.fetch_add(1, Ordering::Relaxed);
+                            value_of(&name, len)
+                        })
+                        .await;
+                    if ok {
+                        queued.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            })
+        })
+        .collect();
+    for task in tasks {
+        task.await.unwrap();
+    }
+    wait_for(|| idle(&writer));
+    let made = made.load(Ordering::Relaxed);
+    assert_eq!(made, queued.load(Ordering::Relaxed));
+    let (queue_full, rejected, io_error) = drops(&writer);
+    assert_eq!(made + queue_full, 16 * 100);
+    assert_eq!(pool.stats().items + rejected + io_error, made);
+}

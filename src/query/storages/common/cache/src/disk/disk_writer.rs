@@ -304,34 +304,33 @@ impl DiskWriter {
     /// Queues `job`, waiting up to `queue_wait` for room. Returns false when dropped, or when
     /// the same entry is already queued or being written.
     pub async fn enqueue(&self, job: WriteJob) -> bool {
-        // Takes the key off the pending set unless the job was handed to a writer, also when
-        // the caller is cancelled while waiting for room.
-        struct Pending<'a> {
-            shared: &'a Shared,
-            key: (usize, String),
-            handed_over: bool,
+        let WriteJob {
+            pool,
+            rel,
+            value,
+            ticket,
+        } = job;
+        let len = value.len() as u64;
+        self.enqueue_with(pool, rel, len, ticket, move || value)
+            .await
+    }
+
+    /// `enqueue` of an entry of `len` bytes made by `value` once the queue has room for them:
+    /// a caller copying them out of a larger buffer holds no copy while it waits, so the
+    /// copies of all callers stay within `queue_bytes`. `value` is not called when the entry
+    /// is dropped, or already queued.
+    pub async fn enqueue_with(
+        &self,
+        pool: Arc<DiskPool>,
+        rel: String,
+        len: u64,
+        ticket: FillTicket,
+        value: impl FnOnce() -> Bytes,
+    ) -> bool {
+        let key = (pool.pool().index(), rel);
+        if self.shared.pending.lock().contains_key(&key) {
+            return false;
         }
-        impl Drop for Pending<'_> {
-            fn drop(&mut self) {
-                if !self.handed_over {
-                    self.shared.pending.lock().remove(&self.key);
-                }
-            }
-        }
-        let key = (job.pool.pool().index(), job.rel.clone());
-        {
-            let mut pending = self.shared.pending.lock();
-            if pending.contains_key(&key) {
-                return false;
-            }
-            pending.insert(key.clone(), (job.value.clone(), job.ticket.clone()));
-        }
-        let mut pending = Pending {
-            shared: &self.shared,
-            key,
-            handed_over: false,
-        };
-        let len = job.value.len() as u64;
         let settings = &self.shared.settings;
         let deadline = Instant::now() + settings.queue_wait();
         loop {
@@ -353,21 +352,42 @@ impl DiskWriter {
             }
             let now = Instant::now();
             if now >= deadline {
-                self.shared.drops.add(&pending.key.1, DropReason::QueueFull);
+                self.shared.drops.add(&key.1, DropReason::QueueFull);
                 return false;
             }
             let _ = tokio::time::timeout(deadline - now, room).await;
         }
         // No await from the room taken to the hand-over: a cancelled caller holds no room.
-        if let Err(e) = self.tx.send(job) {
-            // No writer left: give the room back; the guard takes the key off.
+        let give_back = || {
             self.shared.queued.fetch_sub(len, Ordering::AcqRel);
             self.shared.room.notify_waiters();
+        };
+        let value = value();
+        debug_assert_eq!(value.len() as u64, len);
+        {
+            let mut pending = self.shared.pending.lock();
+            // Queued by another caller while this one waited for room.
+            if pending.contains_key(&key) {
+                drop(pending);
+                give_back();
+                return false;
+            }
+            pending.insert(key.clone(), (value.clone(), ticket.clone()));
+        }
+        let (pool, rel) = (pool, key.1.clone());
+        if let Err(e) = self.tx.send(WriteJob {
+            pool,
+            rel,
+            value,
+            ticket,
+        }) {
+            // No writer left.
+            self.shared.pending.lock().remove(&key);
+            give_back();
             warn!("[DiskCache] writer threads are gone: {e}");
             return false;
         }
         // The writer takes the key off when done.
-        pending.handed_over = true;
         true
     }
 }
