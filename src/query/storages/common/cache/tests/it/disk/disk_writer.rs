@@ -221,12 +221,12 @@ async fn test_pending_entry_is_not_queued_twice() {
     wait_for(|| idle(&writer));
     assert_eq!(pool.stats().items, 3);
     assert_eq!(drops(&writer), (0, 0, 0));
-    // Written: the writer takes it again, but the indexed key is not reserved again.
-    assert!(writer.enqueue(job(&pool, data_kind(), "a", 10)).await);
-    wait_for(|| idle(&writer));
+    // Written: indexed, so not queued again, and not counted as a drop.
+    assert!(!writer.enqueue(job(&pool, data_kind(), "a", 10)).await);
+    assert!(idle(&writer));
     assert_eq!(pool.stats().items, 3);
     assert_eq!(pool.kind_usage(data_kind()), (2, 28));
-    assert_eq!(drops(&writer), (0, 1, 0));
+    assert_eq!(drops(&writer), (0, 0, 0));
 }
 
 static FULL: Gate = Gate::new();
