@@ -27,16 +27,10 @@ use crate::txn_cond_eq_seq;
 use crate::txn_del;
 use crate::txn_put_pb;
 
-/// Create or replace an object and record its owner in one transaction.
+/// Writes an object, `extra_ops` and its owner in one transaction; returns whether it was written.
 ///
-/// An absent object is written together with `extra_ops` and owned by `owner`.
-/// Without an owner, an ownership left behind under the name by a dropped
-/// object is removed, so the new object never inherits it.
-///
-/// An existing object is replaced only with `replace`: the owner is then set to
-/// `owner`, or kept without one. Otherwise nothing is written.
-///
-/// Returns whether the object was written.
+/// A new object never inherits an ownership left under its name by a dropped object.
+/// An existing object is overwritten only with `replace`; with no `owner` it keeps its owner.
 pub async fn create_owned_object<K>(
     kv: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &K,

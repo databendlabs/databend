@@ -132,35 +132,26 @@ where
         Ok(())
     }
 
-    /// Add a record and set its owner in the same transaction.
-    ///
-    /// An existing record is kept with its owner: `CreateIfNotExists` writes
-    /// nothing and `Create` returns an exist error. `owner` of `None` records no
-    /// owner; a replaced record keeps its owner.
+    /// Writes the record and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn add_with_ownership(
         &self,
         value: ValueOf<R>,
-        create_option: &CreateOption,
+        replace: bool,
         object: OwnershipObject,
         owner: Option<&str>,
-    ) -> Result<Result<(), ExistError<R>>, MetaError> {
-        let name = value.name().to_string();
-        let written = create_owned_object(
+    ) -> Result<bool, MetaError> {
+        create_owned_object(
             self.kv_api.as_ref(),
-            &self.ident(&name),
+            &self.ident(value.name()),
             &value,
-            create_option.is_overriding(),
+            replace,
             &object,
             owner,
             &[],
         )
-        .await?;
-        if !written && create_option.if_return_error() {
-            return Ok(Err(ExistError::new(name, "Exist when add")));
-        }
-        Ok(Ok(()))
+        .await
     }
 
     #[async_backtrace::framed]

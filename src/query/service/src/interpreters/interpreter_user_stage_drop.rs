@@ -102,8 +102,7 @@ impl Interpreter for DropUserStageInterpreter {
                 .drop_stage(&tenant, &plan.name, plan.if_exists)
                 .await?;
 
-            // 3. Revoke ownership only if this statement dropped the stage: a failed drop
-            // keeps its owner, and an object created concurrently under the name keeps its own.
+            // 3. Revoke only if this statement dropped it, so a concurrent CREATE keeps its owner
             if dropped {
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 let owner_object = OwnershipObject::Stage {

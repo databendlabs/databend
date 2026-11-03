@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv::ownership::create_owned_object;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_cond_eq_seq;
 use databend_common_meta_api::txn_cond_seq;
@@ -37,9 +38,11 @@ use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::ConditionResult::Eq;
+use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;
+use databend_meta_client::types::With;
 use futures::TryStreamExt;
 
 use crate::errors::meta_service_error;
@@ -81,36 +84,51 @@ impl StageMgr {
 impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
+    async fn add_stage(&self, info: StageInfo, create_option: &CreateOption) -> Result<()> {
+        let ident = self.stage_ident(&info.stage_name);
+        let seq = MatchSeq::from(*create_option);
+        let upsert = UpsertPB::update(ident, info.clone()).with(seq);
+
+        let res = self
+            .kv_api
+            .upsert_pb(&upsert)
+            .await
+            .map_err(meta_service_error)?;
+
+        if let CreateOption::Create = create_option {
+            if res.prev.is_some() {
+                return Err(ErrorCode::StageAlreadyExists(format!(
+                    "Stage '{}' already exists.",
+                    info.stage_name
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
     async fn add_stage_with_owner(
         &self,
         info: StageInfo,
-        create_option: &CreateOption,
+        replace: bool,
         owner: Option<&str>,
-    ) -> Result<()> {
-        let ident = self.stage_ident(&info.stage_name);
+    ) -> Result<bool> {
         let object = OwnershipObject::Stage {
             name: info.stage_name.clone(),
         };
-        let written = create_owned_object(
+        create_owned_object(
             self.kv_api.as_ref(),
-            &ident,
+            &self.stage_ident(&info.stage_name),
             &info,
-            create_option.is_overriding(),
+            replace,
             &object,
             owner,
             &[],
         )
         .await
-        .map_err(meta_service_error)?;
-
-        if !written && create_option.if_return_error() {
-            return Err(ErrorCode::StageAlreadyExists(format!(
-                "Stage '{}' already exists.",
-                info.stage_name
-            )));
-        }
-
-        Ok(())
+        .map_err(meta_service_error)
     }
 
     #[async_backtrace::framed]

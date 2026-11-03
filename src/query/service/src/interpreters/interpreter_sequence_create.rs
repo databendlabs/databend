@@ -64,7 +64,7 @@ impl Interpreter for CreateSequenceInterpreter {
                 comment: self.plan.comment.clone(),
                 create_on: Utc::now(),
                 storage_version: 0,
-                // The sequence and its ownership are written in one Meta transaction.
+                // Written in the same transaction as the sequence.
                 owner_role: self.ctx.get_current_role().map(|role| role.name),
             };
             let catalog = self.ctx.get_default_catalog()?;

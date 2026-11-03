@@ -16,25 +16,23 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
 use crate::UserApiProvider;
 
 /// user stage operations.
 impl UserApiProvider {
-    /// Add a stage and set `owner` as its owner in the same transaction.
+    /// Writes the stage and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     pub async fn add_stage(
         &self,
         tenant: &Tenant,
         info: StageInfo,
-        create_option: &CreateOption,
+        replace: bool,
         owner: Option<&str>,
-    ) -> Result<()> {
-        let stage_api_provider = self.stage_api(tenant);
-        stage_api_provider
-            .add_stage_with_owner(info, create_option, owner)
+    ) -> Result<bool> {
+        self.stage_api(tenant)
+            .add_stage_with_owner(info, replace, owner)
             .await
     }
 

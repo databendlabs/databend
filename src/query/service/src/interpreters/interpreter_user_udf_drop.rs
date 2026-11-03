@@ -67,8 +67,7 @@ impl Interpreter for DropUserUDFScript {
                 .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
                 .await??;
 
-            // Revoke ownership only if this statement dropped the UDF: a failed drop keeps
-            // its owner, and an object created concurrently under the name keeps its own.
+            // Revoke only if this statement dropped it, so a concurrent CREATE keeps its owner.
             if dropped {
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 role_api

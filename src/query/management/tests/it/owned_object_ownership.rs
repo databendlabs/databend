@@ -28,7 +28,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_meta_client::kvapi::KVApi;
@@ -164,7 +163,7 @@ async fn test_create_replaces_stale_owner_atomically() -> anyhow::Result<()> {
             case.fail_next_ownership_write();
         }
         let result = UdfMgr::create(case.kv.clone(), &case.tenant)
-            .add_udf_with_owner(udf(), &CreateOption::CreateIfNotExists, role)
+            .add_udf_with_owner(udf(), false, role)
             .await;
         let created = case.exists(&udf_key(&case.tenant).to_string_key()).await;
         if fail {

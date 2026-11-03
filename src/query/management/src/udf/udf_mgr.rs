@@ -50,7 +50,7 @@ impl UdfMgr {
         }
     }
 
-    /// Add a UDF to /tenant/udf-name, returning whether it was written.
+    /// Add a UDF to /tenant/udf-name.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn add_udf(
@@ -58,20 +58,37 @@ impl UdfMgr {
         info: UserDefinedFunction,
         create_option: &CreateOption,
     ) -> Result<Result<bool, UdfError>, UdfApiError> {
-        self.add_udf_with_owner(info, create_option, None).await
+        if let Err(e) = self.ensure_non_builtin(info.name.as_str()) {
+            return Ok(Err(e));
+        }
+
+        let seq = MatchSeq::from(*create_option);
+
+        let key = UdfIdent::new(&self.tenant, &info.name);
+        let req = UpsertPB::insert(key, info.clone()).with(seq);
+        let res = self.kv_api.upsert_pb(&req).await?;
+
+        if let CreateOption::Create = create_option {
+            if res.prev.is_some() {
+                let err = UdfError::Exists {
+                    tenant: self.tenant.tenant_name().to_string(),
+                    name: info.name.to_string(),
+                    reason: "".to_string(),
+                };
+                return Ok(Err(err));
+            }
+        }
+
+        Ok(Ok(res.is_changed()))
     }
 
-    /// Add a UDF and set `owner` as its owner in the same transaction.
-    ///
-    /// An existing UDF is kept with its owner: `CreateIfNotExists` returns
-    /// `false` and `Create` returns an exists error. `owner` of `None` records
-    /// no owner; a replaced UDF keeps its owner.
+    /// Writes the UDF and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn add_udf_with_owner(
         &self,
         info: UserDefinedFunction,
-        create_option: &CreateOption,
+        replace: bool,
         owner: Option<&str>,
     ) -> Result<Result<bool, UdfError>, UdfApiError> {
         if let Err(e) = self.ensure_non_builtin(info.name.as_str()) {
@@ -86,21 +103,12 @@ impl UdfMgr {
             self.kv_api.as_ref(),
             &key,
             &info,
-            create_option.is_overriding(),
+            replace,
             &object,
             owner,
             &[],
         )
         .await?;
-
-        if !written && create_option.if_return_error() {
-            return Ok(Err(UdfError::Exists {
-                tenant: self.tenant.tenant_name().to_string(),
-                name: info.name.to_string(),
-                reason: "".to_string(),
-            }));
-        }
-
         Ok(Ok(written))
     }
 

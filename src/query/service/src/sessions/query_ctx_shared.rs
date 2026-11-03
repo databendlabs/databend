@@ -205,9 +205,8 @@ pub struct QueryContextShared {
     /// Shared across all QueryContext instances within this query.
     pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
 
-    /// Cached sequence visibility checker (ignore_ownership=false, Object::Sequence).
-    /// `nextval` checks access once per VALUES row during binding and once per block during
-    /// execution; sharing the checker avoids listing sequence ownerships for each of them.
+    /// Sequence visibility checker shared by the query: `nextval` asks for it per VALUES row
+    /// and per block, and building it lists all sequence ownerships.
     pub(super) sequence_visibility_checker_cache:
         tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
 

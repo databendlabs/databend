@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::connection_ident;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_sql::plans::CreateConnectionPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -65,12 +67,26 @@ impl Interpreter for CreateConnectionInterpreter {
             );
 
             let tenant = self.ctx.get_tenant();
-            // The connection and its ownership are written in one Meta transaction.
-            // IF NOT EXISTS on an existing connection writes neither.
+            // An existing connection is left with its owner unless replaced.
             let owner = self.ctx.get_current_role().map(|role| role.name);
-            user_mgr
-                .add_connection(&tenant, conn, &plan.create_option, owner.as_deref())
+            let written = user_mgr
+                .add_connection(
+                    &tenant,
+                    conn,
+                    plan.create_option.is_overriding(),
+                    owner.as_deref(),
+                )
                 .await?;
+            if !written {
+                if plan.create_option.if_return_error() {
+                    return Err(ExistError::<connection_ident::Resource>::new(
+                        plan.name.clone(),
+                        "Exist when add",
+                    )
+                    .into());
+                }
+                return Ok(PipelineBuildResult::create());
+            }
             RoleCacheManager::instance().invalidate_cache(&tenant);
 
             Ok(PipelineBuildResult::create())

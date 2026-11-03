@@ -67,8 +67,7 @@ impl Interpreter for DropSequenceInterpreter {
                 )));
             }
 
-            // Revoke ownership only if this statement dropped the sequence: a failed drop
-            // keeps its owner, and an object created concurrently under the name keeps its own.
+            // Revoke only if this statement dropped it, so a concurrent CREATE keeps its owner.
             if reply.success {
                 let tenant = self.plan.ident.tenant();
                 let name = self.plan.ident.name().to_string();

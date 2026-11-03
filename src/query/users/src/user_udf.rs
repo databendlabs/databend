@@ -25,7 +25,7 @@ use crate::UserApiProvider;
 
 /// UDF operations.
 impl UserApiProvider {
-    /// Add a UDF, returning whether it was written.
+    /// Add a UDF, returning whether metadata changed.
     #[async_backtrace::framed]
     pub async fn add_udf(
         &self,
@@ -33,17 +33,24 @@ impl UserApiProvider {
         info: UserDefinedFunction,
         create_option: &CreateOption,
     ) -> Result<bool> {
-        self.add_udf_with_owner(tenant, info, create_option, None)
-            .await
+        if self.get_configured_udf(&info.name).is_some() {
+            return Err(ErrorCode::UdfAlreadyExists(format!(
+                "Built-in UDF `{}` already exists",
+                info.name
+            )));
+        }
+
+        let udf_api = self.udf_api(tenant);
+        Ok(udf_api.add_udf(info, create_option).await??)
     }
 
-    /// Add a UDF and set `owner` as its owner in the same transaction.
+    /// Writes the UDF and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     pub async fn add_udf_with_owner(
         &self,
         tenant: &Tenant,
         info: UserDefinedFunction,
-        create_option: &CreateOption,
+        replace: bool,
         owner: Option<&str>,
     ) -> Result<bool> {
         if self.get_configured_udf(&info.name).is_some() {
@@ -54,9 +61,7 @@ impl UserApiProvider {
         }
 
         let udf_api = self.udf_api(tenant);
-        Ok(udf_api
-            .add_udf_with_owner(info, create_option, owner)
-            .await??)
+        Ok(udf_api.add_udf_with_owner(info, replace, owner).await??)
     }
 
     // Update a UDF.

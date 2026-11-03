@@ -16,7 +16,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserDefinedConnection;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 
@@ -25,23 +24,22 @@ use crate::meta_service_error;
 
 /// user connection operations.
 impl UserApiProvider {
-    /// Add a connection and set `owner` as its owner in the same transaction.
+    /// Writes the connection and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     pub async fn add_connection(
         &self,
         tenant: &Tenant,
         connection: UserDefinedConnection,
-        create_option: &CreateOption,
+        replace: bool,
         owner: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let object = OwnershipObject::Connection {
             name: connection.name.clone(),
         };
         self.connection_api(tenant)
-            .add_with_ownership(connection, create_option, object, owner)
+            .add_with_ownership(connection, replace, object, owner)
             .await
-            .map_err(meta_service_error)??;
-        Ok(())
+            .map_err(meta_service_error)
     }
 
     // Get one connection from by tenant.

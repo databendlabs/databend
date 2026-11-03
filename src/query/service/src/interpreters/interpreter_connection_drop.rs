@@ -67,9 +67,7 @@ impl Interpreter for DropConnectionInterpreter {
                 .drop_connection(&tenant, &plan.name, plan.if_exists)
                 .await?;
 
-            // 2. Revoke ownership only if this statement dropped the connection: a failed
-            // drop keeps its owner, and an object created concurrently under the name keeps
-            // its own.
+            // 2. Revoke only if this statement dropped it, so a concurrent CREATE keeps its owner
             if dropped {
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 let owner_object = OwnershipObject::Connection {

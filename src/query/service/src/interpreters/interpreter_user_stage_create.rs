@@ -96,11 +96,8 @@ impl Interpreter for CreateUserStageInterpreter {
                 _ => None,
             };
 
-            // Remove the old internal stage's files before replacing its metadata. Internal stage
-            // prefixes are name-based, so removing them afterwards could leave the old files
-            // visible to the replacement's owner if removal failed. If the metadata transaction
-            // fails instead, the old stage remains without its files; retrying the statement
-            // completes the replace.
+            // Remove the old files first: the prefix is name-based, so files left behind would be
+            // visible to the new owner. If the replace then fails, retrying completes it.
             if let Some(stage) = old_stage {
                 if stage.stage_type != StageType::External {
                     let op = init_stage_operator(&stage)?;
@@ -115,21 +112,26 @@ impl Interpreter for CreateUserStageInterpreter {
             let mut user_stage = user_stage;
             user_stage.creator = Some(self.ctx.get_current_user()?.identity());
             user_stage.created_on = Utc::now();
-            // The stage and its ownership are written in one Meta transaction.
-            // IF NOT EXISTS on an existing stage writes neither.
+            // An existing stage is left with its owner unless replaced.
             let owner = self.ctx.get_current_role().map(|role| role.name);
-            user_mgr
+            let written = user_mgr
                 .add_stage(
                     tenant,
                     user_stage.clone(),
-                    &plan.create_option,
+                    plan.create_option.is_overriding(),
                     owner.as_deref(),
                 )
                 .await?;
-            RoleCacheManager::instance().invalidate_cache(tenant);
+            if written {
+                RoleCacheManager::instance().invalidate_cache(tenant);
+            } else if plan.create_option.if_return_error() {
+                return Err(ErrorCode::StageAlreadyExists(format!(
+                    "Stage '{}' already exists.",
+                    user_stage.stage_name
+                )));
+            }
 
-            // create dir if new stage if not external stage. Creating an existing
-            // directory is a no-op, so this is safe for IF NOT EXISTS as well.
+            // Create the dir of an internal stage; this is a no-op if it exists.
             if user_stage.stage_type != StageType::External {
                 let op = self.ctx.get_application_level_data_operator()?.operator();
                 op.create_dir(&user_stage.stage_prefix()).await?
