@@ -1260,14 +1260,14 @@ impl DefaultSettings {
                 }),
                 ("hash_shuffle_send_buffer_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256 * 1024 * 1024),
-                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share. Each destination thread then gets about this value / (nodes x threads^2) bytes per send, so raise it on clusters with many nodes and threads: the memory of a node grows with it, but not with the number of nodes.",
+                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share, and buffers up to its share again while they are sending. Each destination thread then gets about this value / (nodes x threads^2) bytes per send, so raise it on clusters with many nodes and threads: the memory of a node grows with it, but not with the number of nodes.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("exchange_frame_bytes", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(4 * 1024 * 1024),
-                    desc: "Sets the maximum bytes of one network frame sent to a node by broadcast and hash shuffle exchanges. Frames are smaller when exchange_send_queue_bytes is shared by many nodes.",
+                    value: UserSettingValue::UInt64(1024 * 1024),
+                    desc: "Sets the maximum bytes of one network frame sent to a node by broadcast and hash shuffle exchanges, at most 4 MiB; up to 4 frames are in flight to a node. Frames are smaller when exchange_send_queue_bytes is shared by many nodes.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u32::MAX as u64)),

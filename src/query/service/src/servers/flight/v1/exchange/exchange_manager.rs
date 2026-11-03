@@ -81,6 +81,7 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::MAX_FRAMES_IN_FLIGHT;
 use crate::servers::flight::v1::network::PingPongTransport;
 use crate::servers::flight::v1::network::inbound::ExchangeFrameRouter;
 use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
@@ -414,7 +415,8 @@ impl DataExchangeManager {
                                 )
                                 .await?;
 
-                                let (send_tx, send_rx) = async_channel::bounded(1);
+                                let (send_tx, send_rx) =
+                                    async_channel::bounded(MAX_FRAMES_IN_FLIGHT);
                                 let response_stream = flight_client
                                     .do_exchange(send_rx, DoExchangeParams {
                                         query_id,
