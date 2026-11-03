@@ -955,3 +955,137 @@ fn test_select_if_then_else_non_strict_decimal() {
         );
     }
 }
+
+#[test]
+fn test_filter_by_mask_word() {
+    use databend_common_expression::Value;
+    use databend_common_expression::types::BooleanType;
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    /// Row `j` of `result` is row `rows[j]` of `column`; for a nullable column
+    /// the inner values are compared too, also at NULL rows.
+    fn assert_rows(result: &Column, column: &Column, rows: &[usize], context: &str) {
+        assert_eq!(result.data_type(), column.data_type(), "{context}");
+        assert_eq!(result.len(), rows.len(), "{context}");
+        for (j, row) in rows.iter().enumerate() {
+            assert_eq!(
+                result.index(j).unwrap(),
+                column.index(*row).unwrap(),
+                "{context} row {row}"
+            );
+        }
+        if let (Column::Nullable(result), Column::Nullable(column)) = (result, column) {
+            assert_rows(&result.column, &column.column, rows, context);
+        }
+    }
+
+    let mut rng = StdRng::seed_from_u64(20904);
+    let mut data_types = get_all_test_data_types(DataTypeFilter::All);
+    data_types.extend([
+        DataType::Decimal(DecimalSize::new_unchecked(50, 5)),
+        DataType::Tuple(vec![
+            DataType::Number(NumberDataType::Int16),
+            DataType::String,
+        ]),
+    ]);
+    data_types.extend(
+        [
+            DataType::Boolean,
+            DataType::Number(NumberDataType::Int64),
+            DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
+            DataType::Date,
+            DataType::String,
+            DataType::Binary,
+            DataType::Variant,
+            DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
+            DataType::Opaque(1),
+        ]
+        .map(|ty| DataType::Nullable(Box::new(ty))),
+    );
+
+    for len in [0, 1, 63, 64, 65, 130, 700] {
+        for shape in [
+            "random_50",
+            "random_1",
+            "random_99",
+            "runs",
+            "all_set",
+            "all_unset",
+        ] {
+            // Both the mask and the columns start at random bit offsets, so the
+            // mask words and the value words are not aligned with each other.
+            let offset = rng.gen_range(0..64);
+            let mut run_left = 0;
+            let mut bit = false;
+            let bits = (0..offset + len)
+                .map(|_| match shape {
+                    "random_50" => rng.gen_bool(0.5),
+                    "random_1" => rng.gen_bool(0.01),
+                    "random_99" => rng.gen_bool(0.99),
+                    "runs" => {
+                        if run_left == 0 {
+                            run_left = rng.gen_range(1..200);
+                            bit = !bit;
+                        }
+                        run_left -= 1;
+                        bit
+                    }
+                    "all_set" => true,
+                    _ => false,
+                })
+                .collect::<Vec<_>>();
+            let mut mask = Bitmap::from(bits.as_slice());
+            mask.slice(offset, len);
+            let rows = (0..len)
+                .filter(|row| mask.get_bit(*row))
+                .collect::<Vec<_>>();
+
+            for data_type in &data_types {
+                let column_offset = rng.gen_range(0..10);
+                let column = Column::random(data_type, column_offset + len, None)
+                    .slice(column_offset..column_offset + len);
+                let context = format!("{data_type} {shape} len {len}");
+                for strategy in [
+                    IterationStrategy::SlicesIterator,
+                    IterationStrategy::IndexIterator,
+                ] {
+                    let mut visitor = FilterVisitor::new(&mask).with_strategy(strategy);
+                    visitor.visit_value(Value::Column(column.clone())).unwrap();
+                    let result = visitor.take_result().unwrap().into_column().unwrap();
+                    assert_rows(&result, &column, &rows, &context);
+                }
+                assert_rows(&column.filter(&mask), &column, &rows, &context);
+            }
+
+            // A boolean column whose bits are all set takes the fast path.
+            let column = BooleanType::from_data(vec![true; len]);
+            assert_rows(&column.filter(&mask), &column, &rows, shape);
+        }
+    }
+
+    // Strings longer than 12 bytes live in the data buffers: the slices strategy
+    // keeps them, the index strategy copies the selected strings.
+    let column = StringType::from_data(
+        (0..200)
+            .map(|row| format!("a string longer than twelve bytes {row}"))
+            .collect::<Vec<_>>(),
+    );
+    let input = column.as_string().unwrap();
+    let mask = Bitmap::from_iter((0..200).map(|row| row % 3 != 0));
+    for (strategy, keeps_buffers) in [
+        (IterationStrategy::SlicesIterator, true),
+        (IterationStrategy::IndexIterator, false),
+    ] {
+        let mut visitor = FilterVisitor::new(&mask).with_strategy(strategy);
+        visitor.visit_value(Value::Column(column.clone())).unwrap();
+        let result = visitor.take_result().unwrap().into_column().unwrap();
+        let result = result.as_string().unwrap();
+        assert_eq!(
+            std::sync::Arc::ptr_eq(result.data_buffers(), input.data_buffers()),
+            keeps_buffers
+        );
+        assert_eq!(result.len(), 133);
+    }
+}
