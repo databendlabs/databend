@@ -131,6 +131,10 @@ struct State {
     undeleted: HashSet<String>,
     /// Keys reserved by writers and not yet published or released.
     in_flight: HashSet<String>,
+    /// Files of a previous run the restart scan left alone because their keys were being
+    /// written, by object id: untracked until a write of the key replaces them, so a change of
+    /// the object deletes them.
+    shadowed: HashMap<String, HashSet<String>>,
     /// The entries of each object, by object id.
     objects: HashMap<String, HashSet<String>>,
     /// The last point each object was invalidated at, while fills started before it may still
@@ -321,6 +325,7 @@ impl DiskPool {
                 deleting_objects: HashMap::new(),
                 undeleted: HashSet::new(),
                 in_flight: HashSet::new(),
+                shadowed: HashMap::new(),
                 objects: HashMap::new(),
                 invalidated: HashMap::new(),
                 invalidation_order: BTreeMap::new(),
@@ -432,6 +437,15 @@ impl DiskPool {
             });
         }
         commit()?;
+        // The file the restart scan left under the key, if any, is replaced.
+        if let Some(object) = object_of(&rel) {
+            if let Some(rels) = state.shadowed.get_mut(object) {
+                rels.remove(&rel);
+                if rels.is_empty() {
+                    state.shadowed.remove(object);
+                }
+            }
+        }
         state.insert(rel.clone(), written);
         let mut victims = Vec::new();
         while state.used() > state.cap {
@@ -462,12 +476,13 @@ impl DiskPool {
 
     /// `object` is about to be rewritten or deleted: deletes the files of its entries, and
     /// refuses its entries until `end_change`. So are deleted the files of its entries taken
-    /// out earlier whose delete is still pending, as after a resize in the background, and,
+    /// out earlier whose delete is still pending, as after a resize in the background, the
+    /// files of a previous run under its keys being written when the restart scan ran, and,
     /// before the restart scan has run, its files not indexed yet: none may be left for a scan
     /// after a crash. Returns the entries dropped, or the first file that could not be
     /// deleted: the change must not proceed then. Either way `end_change` ends it.
     pub fn begin_change(&self, object: &str) -> std::io::Result<usize> {
-        let (pending, victims, reloaded) = {
+        let (pending, victims, shadowed, reloaded) = {
             let mut state = self.state.lock();
             *state.changing.entry(object.to_string()).or_default() += 1;
             // Taken before the object's own entries join them.
@@ -476,7 +491,13 @@ impl DiskPool {
                 .get(object)
                 .map(|rels| rels.iter().cloned().collect())
                 .unwrap_or_default();
-            (pending, state.take_object(object), state.reloaded)
+            // No write of the object publishes while it changes, so none replaces them.
+            let shadowed: Vec<String> = state
+                .shadowed
+                .remove(object)
+                .map(|rels| rels.into_iter().collect())
+                .unwrap_or_default();
+            (pending, state.take_object(object), shadowed, state.reloaded)
         };
         // The pending deletes keep their marks for their deletes to clear; no file of those keys
         // is written meanwhile. Those whose delete failed have none pending: their marks are
@@ -496,7 +517,19 @@ impl DiskPool {
             }
         }
         let taken = self.try_delete(&victims);
-        let mut deleted = pending_deleted.and(taken);
+        let shadowed_deleted = remove_files(&self.root, &shadowed).map_err(|(e, failed)| {
+            // Kept for the next change of the object.
+            let mut state = self.state.lock();
+            for rel in failed {
+                state
+                    .shadowed
+                    .entry(object.to_string())
+                    .or_default()
+                    .insert(rel);
+            }
+            e
+        });
+        let mut deleted = pending_deleted.and(taken).and(shadowed_deleted);
         if !reloaded {
             // The scan refuses the object's files from now on, and no write of it is put in
             // place, so the files left under its name are unindexed ones.
@@ -724,12 +757,21 @@ impl DiskPool {
             };
             let admitted = {
                 let mut state = self.state.lock();
-                if state.index.contains(&rel)
-                    || state.deleting.contains(&rel)
-                    || state.in_flight.contains(&rel)
-                {
-                    // Indexed by a write meanwhile, being deleted, or being written: its file
-                    // is not the scan's to keep or delete.
+                if state.in_flight.contains(&rel) {
+                    // Being written: the write replaces the file when published. Until then
+                    // it is not the scan's to keep or delete, but a change of its object
+                    // deletes it.
+                    if let Some(object) = object_of(&rel) {
+                        state
+                            .shadowed
+                            .entry(object.to_string())
+                            .or_default()
+                            .insert(rel.clone());
+                    }
+                    true
+                } else if state.index.contains(&rel) || state.deleting.contains(&rel) {
+                    // Indexed by a write meanwhile, or being deleted: its file is not the
+                    // scan's to keep or delete.
                     true
                 } else if state.used() + size <= state.cap
                     && size <= state.cap / OVERSIZED_DIVISOR

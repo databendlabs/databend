@@ -944,3 +944,45 @@ fn test_incomplete_scan_keeps_changes_looking_on_disk() {
     assert_eq!(pool.invalidated_at(&object), None);
     assert_consistent(&pool);
 }
+
+/// A file of a previous run under a key being written is left by the restart scan, which
+/// still completes. A change of its object before the write publishes deletes it: the write is
+/// then rejected, and no restart finds the object's old bytes. A write that publishes replaces
+/// it, and a change after finds nothing more to delete.
+#[test]
+fn test_change_deletes_previous_run_file_under_a_key_being_written() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    let rel = DiskKey::whole("t/a").rel_path(data());
+    let object = DiskKey::object_id("t/a");
+    let old = write_file(&root, &rel, 100);
+    assert!(pool.reserve(&rel, 100).reserved);
+    assert_eq!(pool.reload(), (0, 0));
+    assert!(old.exists());
+
+    assert_eq!(pool.begin_change(&object).unwrap(), 0);
+    assert!(!old.exists());
+    let published = pool
+        .publish(rel.clone(), 100, 100, 0, || panic!("not committed"))
+        .unwrap();
+    assert!(!published.indexed);
+    assert!(pool.end_change(&object, 1, None).is_empty());
+    assert_consistent(&pool);
+    let restarted = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    assert_eq!(restarted.reload(), (0, 0));
+
+    // Replaced by a write: nothing is left to delete for it.
+    let old = write_file(&root, &rel, 100);
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    assert!(pool.reserve(&rel, 100).reserved);
+    assert_eq!(pool.reload(), (0, 0));
+    let published = pool
+        .publish(rel.clone(), 100, 100, 0, || fs::write(&old, vec![2u8; 100]))
+        .unwrap();
+    assert!(published.indexed);
+    assert_eq!(pool.begin_change(&object).unwrap(), 1);
+    assert!(!old.exists());
+    assert!(pool.end_change(&object, 2, None).is_empty());
+    assert_consistent(&pool);
+}
