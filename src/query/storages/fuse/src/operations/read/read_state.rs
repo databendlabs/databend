@@ -63,8 +63,8 @@ struct PrewhereSelector {
     executor: FilterExecutor,
     /// Columns compared by the predicate when it is a single comparison.
     single_comparison_columns: Option<Vec<usize>>,
-    /// Input columns of the LIKE leaves.
-    like_columns: Vec<usize>,
+    /// Columns read by the leaves of the predicate.
+    leaf_columns: Vec<usize>,
 }
 
 impl PrewhereSelector {
@@ -107,29 +107,30 @@ impl PrewhereSelector {
         // The evaluator path evaluates the conjuncts in order. Keep the order of the predicate
         // so that the rows each child sees do not depend on which blocks a worker read before.
         executor.disable_reorder();
-        let mut like_columns = Vec::new();
-        collect_like_columns(&select_expr, &mut like_columns);
+        let mut leaf_columns = Vec::new();
+        collect_leaf_columns(&select_expr, &mut leaf_columns);
         Some(Self {
             executor,
             single_comparison_columns,
-            like_columns,
+            leaf_columns,
         })
     }
 
     /// Whether to evaluate `block` with the selector rather than the evaluator.
     ///
-    /// A single comparison has no other predicate to short-circuit. When it reads a constant
-    /// or a non-nullable encoded column, the evaluator computes the result once per block or
-    /// per dictionary value, and the selector would only turn that result into row indexes
-    /// and back. A `Nullable(Encoded)` column is decoded on both paths, so the selector gains
-    /// nothing there either; such blocks keep the evaluator path, as before this change.
+    /// A column missing from blocks written before `ADD COLUMN` is read as a constant. The
+    /// evaluator computes a leaf over it once per block, while the selector expands the result
+    /// (or, for LIKE, the input) to every row and the bitmap is then set row by row. Blocks
+    /// where the predicate reads a constant column keep the evaluator path.
     ///
-    /// The selector expands a constant LIKE input (a column missing from blocks written before
-    /// `ADD COLUMN`) to a full column and matches every row, while the evaluator matches the
-    /// constant once. Such blocks keep the evaluator path.
+    /// A single comparison has no other predicate to short-circuit. When it reads a
+    /// non-nullable encoded column, the evaluator computes the result once per dictionary
+    /// value, and the selector would only turn that result into row indexes and back. A
+    /// `Nullable(Encoded)` column is decoded on both paths, so the selector gains nothing there
+    /// either; such blocks keep the evaluator path, as before this change.
     fn applies_to(&self, block: &DataBlock) -> bool {
         if self
-            .like_columns
+            .leaf_columns
             .iter()
             .any(|id| matches!(block.get_by_offset(*id), BlockEntry::Const(..)))
         {
@@ -149,14 +150,21 @@ impl PrewhereSelector {
     }
 }
 
-fn collect_like_columns(select_expr: &SelectExpr, columns: &mut Vec<usize>) {
+fn collect_leaf_columns(select_expr: &SelectExpr, columns: &mut Vec<usize>) {
     match select_expr {
         SelectExpr::And((exprs, _)) | SelectExpr::Or((exprs, _)) => {
             for expr in exprs {
-                collect_like_columns(expr, columns);
+                collect_leaf_columns(expr, columns);
             }
         }
+        SelectExpr::Compare((_, args, _)) => {
+            columns.extend(args.iter().filter_map(|arg| match arg {
+                Expr::ColumnRef(ColumnRef { id, .. }) => Some(*id),
+                _ => None,
+            }))
+        }
         SelectExpr::Like((Expr::ColumnRef(ColumnRef { id, .. }), _, _)) => columns.push(*id),
+        SelectExpr::BooleanColumn((id, _)) => columns.push(*id),
         _ => {}
     }
 }
@@ -986,9 +994,9 @@ mod tests {
         }
     }
 
-    /// Blocks written before ADD COLUMN read the new column as a constant. A lone comparison
-    /// or a LIKE over it is left to the evaluator; other compound predicates still use the
-    /// selector.
+    /// Blocks written before ADD COLUMN read the new column as a constant. A predicate that
+    /// reads it, alone or in AND/OR, is left to the evaluator; predicates over other columns
+    /// still use the selector.
     #[test]
     fn test_prewhere_selector_over_constant_column() {
         let num_rows = 5;
@@ -1027,13 +1035,22 @@ mod tests {
             ]),
         ]);
 
+        let int_gt = call("gt", vec![
+            column(1, DataType::Number(NumberDataType::Int32)),
+            int_constant(0),
+        ]);
+
         for (raw_expr, uses_selector) in [
             (eq.clone(), false),
-            (compound, true),
+            (compound, false),
+            (call("or", vec![eq.clone(), int_gt.clone()]), false),
             // LIKE over the constant column keeps the evaluator path.
             (call("and", vec![column_eq.clone(), like(0)]), false),
-            (call("or", vec![column_eq, like(0)]), false),
-            (call("and", vec![eq, like(2)]), true),
+            (call("or", vec![column_eq.clone(), like(0)]), false),
+            (call("and", vec![eq, like(2)]), false),
+            // The constant column is not read.
+            (call("and", vec![column_eq.clone(), like(2)]), true),
+            (call("or", vec![column_eq, int_gt]), true),
         ] {
             let expr = prewhere_expr(&raw_expr, &func_ctx);
             let mut selector = PrewhereSelector::try_create(&expr, &func_ctx, 2).unwrap();
