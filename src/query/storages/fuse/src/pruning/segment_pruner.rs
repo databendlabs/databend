@@ -14,12 +14,16 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 
 use crate::io::FuseCaches;
@@ -34,6 +38,8 @@ pub struct SegmentPruner {
     pub pruning_ctx: Arc<PruningContext>,
     pub table_schema: TableSchemaRef,
     pub projection: HashSet<String>,
+    layout_snapshot: OnceLock<Option<(String, Arc<TableSnapshot>)>>,
+    layout_disabled: AtomicBool,
 }
 
 impl SegmentPruner {
@@ -46,6 +52,8 @@ impl SegmentPruner {
             pruning_ctx,
             table_schema,
             projection,
+            layout_snapshot: OnceLock::new(),
+            layout_disabled: AtomicBool::new(false),
         }))
     }
 
@@ -77,16 +85,25 @@ impl SegmentPruner {
                 )
                 .await?;
 
-            // Learn from every summary, including segments rejected below. This
-            // retains only bounded range evidence, never the cached segment Arc.
-            if let Some(snapshot_location) = &segment_location.snapshot_loc
-                && let Some(snapshot) = FuseCaches::instance().snapshots.lookup(snapshot_location)
+            // Ineligible scans never touch the cache or layout mutex. Resolve
+            // eligible snapshots once per pruner, including single-segment batches.
+            if segment_location.learn_layout
+                && !self.layout_disabled.load(Ordering::Relaxed)
+                && let Some(snapshot_location) = &segment_location.snapshot_loc
+                && let Some((location, snapshot)) = self.layout_snapshot.get_or_init(|| {
+                    FuseCaches::instance()
+                        .snapshots
+                        .lookup(snapshot_location)
+                        .map(|snapshot| (snapshot_location.clone(), snapshot))
+                })
+                && snapshot_location == location
                 && snapshot.segments.get(segment_location.segment_idx)
                     == Some(&segment_location.location)
-            {
-                snapshot
+                && !snapshot
                     .segment_layout
-                    .observe(segment_location.segment_idx, &info.summary().col_stats);
+                    .observe(segment_location.segment_idx, &info.summary().col_stats)
+            {
+                self.layout_disabled.store(true, Ordering::Relaxed);
             }
 
             let total_bytes = info.summary().uncompressed_byte_size;

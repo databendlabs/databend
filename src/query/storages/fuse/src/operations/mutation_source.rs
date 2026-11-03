@@ -161,7 +161,11 @@ impl FuseTable {
             let segment_len = snapshot.segments.len();
             let mut segments = Vec::with_capacity(snapshot.segments.len());
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+                segments.push(FuseLazyPartInfo::create(
+                    idx,
+                    segment_location.clone(),
+                    false,
+                ));
             }
             Ok((
                 PartStatistics::new_estimated(

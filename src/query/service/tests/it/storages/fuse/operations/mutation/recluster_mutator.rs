@@ -1284,6 +1284,7 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
                         SegmentInfo::VERSION,
                     ),
                     snapshot_loc: None,
+                    learn_layout: false,
                 },
                 compact_segment.clone(),
             )

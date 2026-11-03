@@ -173,7 +173,7 @@ impl FuseTable {
             .segments
             .iter()
             .enumerate()
-            .map(|(idx, location)| FuseLazyPartInfo::create(idx, location.clone()))
+            .map(|(idx, location)| FuseLazyPartInfo::create(idx, location.clone(), false))
             .collect();
         ctx.set_partitions(Partitions::create(PartitionsShuffleKind::Mod, parts))?;
 

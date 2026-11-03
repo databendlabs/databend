@@ -173,6 +173,7 @@ impl FuseTable {
                     segment_idx: lazy_part_info.segment_index,
                     location: lazy_part_info.segment_location.clone(),
                     snapshot_loc: snapshot_loc.clone(),
+                    learn_layout: lazy_part_info.learn_layout,
                 });
             }
         }

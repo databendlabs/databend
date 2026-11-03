@@ -19,6 +19,7 @@ pub struct SegmentLocation {
     pub segment_idx: usize,
     pub location: Location,
     pub snapshot_loc: Option<String>,
+    pub learn_layout: bool,
 }
 
 pub fn create_segment_location_vector(
@@ -32,6 +33,7 @@ pub fn create_segment_location_vector(
             segment_idx,
             location,
             snapshot_loc: snapshot_loc.clone(),
+            learn_layout: false,
         });
     }
 

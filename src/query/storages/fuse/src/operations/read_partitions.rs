@@ -362,6 +362,7 @@ impl FuseTable {
         let snapshot_location = self
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, snapshot.format_version)?;
+        let mut learn_layout = false;
         let ranges = if !self.is_column_oriented()
             && self.schema().as_ref() == &snapshot.schema
             && let Some(first_key) = self.linear_cluster_keys(ctx.clone()).first()
@@ -369,7 +370,7 @@ impl FuseTable {
             && let Ok(field) = snapshot.schema.field_with_name(&column.id)
         {
             let column_id = field.column_id();
-            snapshot
+            learn_layout = snapshot
                 .segment_layout
                 .initialize(column_id, field.data_type());
             prune_learned_segment_runs(
@@ -394,6 +395,7 @@ impl FuseTable {
                     segment_idx: idx,
                     location: snapshot.segments[idx].clone(),
                     snapshot_loc: Some(snapshot_location.clone()),
+                    learn_layout,
                 })
             })
             .collect();
@@ -471,6 +473,7 @@ impl FuseTable {
                         segments.push(FuseLazyPartInfo::create(
                             segment.segment_idx,
                             segment.location,
+                            segment.learn_layout,
                         ))
                     }
 
@@ -535,6 +538,7 @@ impl FuseTable {
                     segment_idx: lazy_part_info.segment_index,
                     location: lazy_part_info.segment_location.clone(),
                     snapshot_loc: snapshot.clone(),
+                    learn_layout: lazy_part_info.learn_layout,
                 });
                 segment_format = segment_format_from_location(&lazy_part_info.segment_location.0);
             }
@@ -1773,6 +1777,7 @@ mod tests {
             segment_idx,
             location: (location.to_string(), 1),
             snapshot_loc: Some(snapshot_loc.to_string()),
+            learn_layout: false,
         }
     }
 

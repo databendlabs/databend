@@ -196,7 +196,12 @@ impl Clone for SnapshotSegmentLayout {
 }
 
 impl SnapshotSegmentLayout {
-    pub fn initialize(&self, column_id: ColumnId, data_type: &TableDataType) {
+    /// Reserved at snapshot-cache admission: supported endpoints own no heap data.
+    pub const MAX_HEAP_BYTES: usize =
+        MAX_SEGMENT_LAYOUT_RUNS * std::mem::size_of::<OrderedSegmentRun>();
+
+    /// Whether this snapshot can still learn the requested physical column.
+    pub fn initialize(&self, column_id: ColumnId, data_type: &TableDataType) -> bool {
         let mut state = self.state.lock().unwrap();
         if matches!(*state, SegmentLayoutState::Uninitialized) {
             let supported = match data_type.remove_nullable() {
@@ -210,10 +215,11 @@ impl SnapshotSegmentLayout {
                 SegmentLayoutState::Collecting {
                     column_id,
                     data_type: DataType::from(data_type).remove_nullable().clone(),
-                    runs: Vec::new(),
+                    runs: Vec::with_capacity(MAX_SEGMENT_LAYOUT_RUNS),
                 }
             };
         }
+        matches!(&*state, SegmentLayoutState::Collecting { column_id: id, .. } if *id == column_id)
     }
 
     pub fn runs(&self, column: ColumnId) -> Option<Vec<OrderedSegmentRun>> {
@@ -229,7 +235,8 @@ impl SnapshotSegmentLayout {
     /// may arrive out of order or repeat across concurrent queries. The caller
     /// verifies that the position and location belong to this snapshot. Holes
     /// never become certified; excessive fragmentation disables learning.
-    pub fn observe(&self, index: usize, statistics: &StatisticsOfColumns) {
+    /// Returns false when the caller should stop observing this snapshot.
+    pub fn observe(&self, index: usize, statistics: &StatisticsOfColumns) -> bool {
         let mut state = self.state.lock().unwrap();
         let SegmentLayoutState::Collecting {
             column_id,
@@ -237,11 +244,11 @@ impl SnapshotSegmentLayout {
             runs,
         } = &mut *state
         else {
-            return;
+            return false;
         };
         let position = runs.partition_point(|run| run.range.start <= index);
         if position > 0 && index < runs[position - 1].range.end {
-            return;
+            return true;
         }
         let Some(stats) = statistics.get(column_id).filter(|stats| {
             stats.null_count == 0
@@ -253,7 +260,7 @@ impl SnapshotSegmentLayout {
         }) else {
             // Missing/NULL statistics are an uncertified hole, not a reason to
             // discard independently verified runs elsewhere in the snapshot.
-            return;
+            return true;
         };
         let mut position = position;
         let mut run = OrderedSegmentRun {
@@ -274,10 +281,13 @@ impl SnapshotSegmentLayout {
         {
             run.join(runs.remove(position));
         }
-        runs.insert(position, run);
-        if runs.len() > MAX_SEGMENT_LAYOUT_RUNS {
+        // Disable before insertion could grow beyond the prepaid allocation.
+        if runs.len() == MAX_SEGMENT_LAYOUT_RUNS {
             *state = SegmentLayoutState::Disabled;
+            return false;
         }
+        runs.insert(position, run);
+        true
     }
 }
 
@@ -688,7 +698,7 @@ mod tests {
         let previous = snapshot(None);
         let bytes = previous.to_bytes().unwrap();
         let layout = &previous.segment_layout;
-        layout.initialize(0, &TableDataType::Timestamp);
+        assert!(layout.initialize(0, &TableDataType::Timestamp));
         for index in [3, 1, 2, 2] {
             layout.observe(index, &layout_stats(index as i64, index as i64 + 3));
         }
@@ -711,12 +721,24 @@ mod tests {
     #[test]
     fn test_segment_layout_fragmentation_limit() {
         let layout = SnapshotSegmentLayout::default();
-        layout.initialize(0, &TableDataType::Timestamp);
-        for index in 0..=MAX_SEGMENT_LAYOUT_RUNS {
+        assert!(!layout.observe(0, &layout_stats(0, 0)));
+        assert!(!layout.initialize(0, &TableDataType::String));
+        assert!(!layout.initialize(0, &TableDataType::Timestamp));
+        let layout = SnapshotSegmentLayout::default();
+        assert!(layout.initialize(0, &TableDataType::Timestamp));
+        for index in 0..MAX_SEGMENT_LAYOUT_RUNS {
             // Nested ranges cannot be certified by sorting minima alone.
-            layout.observe(index, &layout_stats(index as i64, 1000 - index as i64));
+            assert!(layout.observe(index, &layout_stats(index as i64, 1000 - index as i64)));
         }
+        assert!(matches!(&*layout.state.lock().unwrap(),
+            SegmentLayoutState::Collecting { runs, .. }
+                if runs.len() == MAX_SEGMENT_LAYOUT_RUNS
+                    && runs.capacity() * std::mem::size_of::<OrderedSegmentRun>()
+                        <= SnapshotSegmentLayout::MAX_HEAP_BYTES
+        ));
+        assert!(!layout.observe(MAX_SEGMENT_LAYOUT_RUNS, &layout_stats(128, 872)));
         assert!(layout.runs(0).is_none());
+        assert!(!layout.initialize(0, &TableDataType::Timestamp));
     }
 
     #[test]

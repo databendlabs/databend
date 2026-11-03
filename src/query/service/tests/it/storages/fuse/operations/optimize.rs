@@ -20,6 +20,8 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachedItem;
+use databend_storages_common_table_meta::meta::SnapshotSegmentLayout;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -113,6 +115,11 @@ async fn test_snapshot_segment_layout_uses_partial_observations() -> anyhow::Res
         .await?;
     let table = FuseTable::try_from_table(table.as_ref())?;
     let snapshot = table.read_table_snapshot().await?.unwrap();
+    let cache_charge = snapshot.mem_bytes();
+    assert!(
+        cache_charge
+            >= std::mem::size_of_val(snapshot.as_ref()) + SnapshotSegmentLayout::MAX_HEAP_BYTES
+    );
     let column_id = snapshot.schema.field_with_name("k")?.column_id();
     let names = snapshot.segments[4..12]
         .iter()
@@ -130,6 +137,7 @@ async fn test_snapshot_segment_layout_uses_partial_observations() -> anyhow::Res
     let partial = snapshot.segment_layout.runs(column_id).unwrap();
     assert_eq!(partial.len(), 1);
     assert_eq!(partial[0].range, 4..12);
+    assert_eq!(snapshot.mem_bytes(), cache_charge);
 
     // Segment cache is disabled. Missing edges prove partial runs are used;
     // k=15 lies in an unread hole and must still be returned.

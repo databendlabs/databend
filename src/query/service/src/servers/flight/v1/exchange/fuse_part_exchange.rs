@@ -342,7 +342,7 @@ mod tests {
         };
         assert!(scatter.execute(DataBlock::empty()).is_err());
 
-        let lazy_part = FuseLazyPartInfo::create(0, ("segment-0".to_string(), 1));
+        let lazy_part = FuseLazyPartInfo::create(0, ("segment-0".to_string(), 1), false);
         let block = DataBlock::empty_with_meta(BlockPartitionMeta::create(vec![lazy_part]));
         assert!(scatter.execute(block).is_err());
     }

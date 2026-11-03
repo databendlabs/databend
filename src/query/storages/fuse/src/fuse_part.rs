@@ -170,6 +170,8 @@ impl FuseBlockPartInfo {
 pub struct FuseLazyPartInfo {
     pub segment_index: usize,
     pub segment_location: Location,
+    #[serde(default)]
+    pub learn_layout: bool,
 }
 
 #[typetag::serde(name = "fuse_lazy")]
@@ -200,10 +202,11 @@ impl PartInfo for FuseLazyPartInfo {
 }
 
 impl FuseLazyPartInfo {
-    pub fn create(idx: usize, segment_location: Location) -> PartInfoPtr {
+    pub fn create(idx: usize, segment_location: Location, learn_layout: bool) -> PartInfoPtr {
         Arc::new(Box::new(FuseLazyPartInfo {
             segment_index: idx,
             segment_location,
+            learn_layout,
         }))
     }
 

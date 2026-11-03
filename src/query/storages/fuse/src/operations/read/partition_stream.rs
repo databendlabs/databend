@@ -261,6 +261,7 @@ mod tests {
             tx.send(Ok(FuseLazyPartInfo::create(
                 index,
                 (format!("segment-{index}"), 1),
+                false,
             )))
             .await
             .unwrap();

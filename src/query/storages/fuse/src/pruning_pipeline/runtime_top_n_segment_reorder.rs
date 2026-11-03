@@ -204,6 +204,7 @@ mod tests {
             segment_idx: 0,
             location: (location.to_string(), 0),
             snapshot_loc: None,
+            learn_layout: false,
         };
         DataBlock::empty_with_meta(PrunedCompactSegmentMeta::create((
             segment_location,

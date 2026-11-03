@@ -603,6 +603,7 @@ impl FusePruner {
                                 segment_idx,
                                 location: ("".to_string(), 0),
                                 snapshot_loc: None,
+                                learn_layout: false,
                             },
                             Arc::new(batch),
                             // Change-tracking stream pruning receives detached block metadata

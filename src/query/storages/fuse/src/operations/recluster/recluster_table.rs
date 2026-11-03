@@ -257,6 +257,7 @@ impl FuseTable {
                         segment_idx: scan_start + offset,
                         location: location.clone(),
                         snapshot_loc: None,
+                        learn_layout: false,
                     });
                 }
                 scan_locations

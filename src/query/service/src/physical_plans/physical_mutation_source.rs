@@ -168,6 +168,7 @@ impl IPhysicalPlan for MutationSource {
                     segment_idx: part.segment_index,
                     location: part.segment_location.clone(),
                     snapshot_loc: None,
+                    learn_layout: false,
                 });
             }
             let projection = Projection::Columns(read_partition_columns.clone());
