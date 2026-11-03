@@ -687,6 +687,18 @@ mod tests {
             panic!("expected a small estimate for a range outside the column statistics");
         };
         assert!((selectivity - 1.0 / 2500.0).abs() < 1e-12);
+        // Statistics-derived domains would fold this arm away; the OR keeps it.
+        let range_or_equality = ScalarExpr::FunctionCall(crate::plans::FunctionCall {
+            span: None,
+            func_name: "or_filters".to_string(),
+            params: vec![],
+            arguments: vec![int_comparison("gt", 0, 100), int_comparison("eq", 0, 5)],
+            return_type: Box::new(DataType::Boolean),
+        });
+        assert!(matches!(
+            estimate(&range_or_equality)?,
+            Selectivity::StatisticsZero(selectivity) if selectivity > 1.0 / 2500.0
+        ));
         // An equality outside the column statistics keeps the folded zero.
         assert!(matches!(
             estimate(&int_comparison("eq", 0, 100))?,

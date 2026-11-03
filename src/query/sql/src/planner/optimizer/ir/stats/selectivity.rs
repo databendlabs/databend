@@ -308,6 +308,22 @@ impl SelectivityEstimator {
             return self.apply_statistics_false_predicates(&expr, func_ctx);
         }
 
+        // Statistics-derived domains can also fold away one arm of an OR, such
+        // as a range outside the column statistics. Estimate such predicates
+        // again without those domains and keep the result if it is
+        // `StatisticsZero`.
+        if contains_or_filters(&expr) {
+            let (type_folded, type_domain) =
+                fold_with_constraint_domains(&expr, self.cardinality, &self.column_stats, func_ctx);
+            if deterministic_folded_selectivity(&type_folded, type_domain.as_ref()).is_none() {
+                let (selectivity, constraints) =
+                    self.visit_predicates(type_folded.as_ref(), func_ctx)?;
+                if matches!(selectivity, Selectivity::StatisticsZero(_)) {
+                    return self.apply_visited_selectivity(selectivity, constraints);
+                }
+            }
+        }
+
         let (selectivity, constraints) = self.visit_predicates(folded.as_ref(), func_ctx)?;
         self.apply_visited_selectivity(selectivity, constraints)
     }
@@ -635,6 +651,17 @@ fn fold_with_constraint_domains<'e>(
         func_ctx,
         &BUILTIN_FUNCTIONS,
     )
+}
+
+fn contains_or_filters(expr: &Expr<ColumnBinding>) -> bool {
+    match expr {
+        Expr::FunctionCall(call) => {
+            call.function.signature.name == "or_filters"
+                || call.args.iter().any(contains_or_filters)
+        }
+        Expr::Cast(cast) => contains_or_filters(&cast.expr),
+        Expr::Constant(_) | Expr::ColumnRef(_) | Expr::LambdaFunctionCall(_) => false,
+    }
 }
 
 fn column_is_all_null(
@@ -1028,6 +1055,19 @@ impl SelectivityVisitor<'_> {
             }
             Some(selectivity) => Ok(selectivity),
             None => {
+                if contains_or_filters(&expr) {
+                    let (type_folded, type_domain) =
+                        fold_with_constraint_domains(&expr, cardinality, column_stats, func_ctx);
+                    if deterministic_folded_selectivity(&type_folded, type_domain.as_ref())
+                        .is_none()
+                    {
+                        let mut visitor = visitor.clone();
+                        visitor.visit_expr(type_folded.as_ref())?;
+                        if let Selectivity::StatisticsZero(_) = visitor.selectivity {
+                            return Ok(visitor.selectivity);
+                        }
+                    }
+                }
                 let mut visitor = visitor;
                 visitor.visit_expr(folded.as_ref())?;
                 Ok(visitor.selectivity)
