@@ -110,8 +110,10 @@ impl PrewhereSelector {
     /// Whether to evaluate `block` with the selector rather than the evaluator.
     ///
     /// A single comparison has no other predicate to short-circuit. When it reads a constant
-    /// or encoded column, the evaluator computes the result once per block or per dictionary
-    /// value, and the selector would only turn that result into row indexes and back.
+    /// or a non-nullable encoded column, the evaluator computes the result once per block or
+    /// per dictionary value, and the selector would only turn that result into row indexes
+    /// and back. A `Nullable(Encoded)` column is decoded on both paths, so the selector gains
+    /// nothing there either; such blocks keep the evaluator path, as before this change.
     fn applies_to(&self, block: &DataBlock) -> bool {
         let Some(columns) = &self.single_comparison_columns else {
             return true;

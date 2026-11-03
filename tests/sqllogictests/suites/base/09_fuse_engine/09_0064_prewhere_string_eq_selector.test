@@ -10,10 +10,12 @@ USE db_09_0064
 # ---------------------------------------------------------------------------
 # Prewhere predicates that compare a string column with a constant are
 # evaluated with the selector executor, which yields row indexes instead of a
-# boolean column. A fuse block can hold more rows than `max_block_size`, so the
-# block is evaluated in chunks. The selected rows must match the evaluator
-# path (`enable_selector_executor = 0`) for AND/OR predicates and nullable
-# columns. `payload` is not referenced by the filters, so they run as prewhere.
+# boolean column. A fuse block can hold more rows than `max_block_size`; the
+# selector buffers are grown and the whole block is evaluated once, so
+# `max_block_size = 3` here exercises that growth. The selected rows must match
+# the evaluator path (`enable_selector_executor = 0`) for AND/OR predicates,
+# nullable columns and block-sensitive functions. `payload` is not referenced
+# by the filters, so they run as prewhere.
 # ---------------------------------------------------------------------------
 
 statement ok
@@ -22,6 +24,11 @@ CREATE TABLE t(id INT, s STRING, ns STRING NULL, payload STRING)
 # A single insert writes one block of 20 rows.
 statement ok
 INSERT INTO t SELECT number, if(number % 3 = 0, 'match', 'other'), if(number % 5 = 0, NULL, if(number % 2 = 0, 'match', 'other')), concat('p', number::STRING) FROM numbers(20)
+
+query II
+SELECT block_count, row_count FROM fuse_snapshot('db_09_0064', 't')
+----
+1 20
 
 statement ok
 SET max_block_size = 3
@@ -57,8 +64,21 @@ SELECT count(payload) FROM t WHERE s = 'nothing'
 ----
 0
 
+# `running_difference` is 0 only on the first row of the evaluated column. The
+# whole block is evaluated once, so only row 0 is rejected; evaluating slices of
+# 3 rows would reject the first row of every slice.
+query I
+SELECT count(payload) FROM t WHERE s = 'match' AND running_difference(id) > 0
+----
+6
+
 statement ok
 SET enable_selector_executor = 0
+
+query I
+SELECT count(payload) FROM t WHERE s = 'match' AND running_difference(id) > 0
+----
+6
 
 query T
 SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' OR id > 15
