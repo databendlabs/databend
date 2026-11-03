@@ -442,3 +442,9 @@ SELECT number % 3, number % 3 + 1, count() FROM numbers(10) GROUP BY number % 3,
 0 1 4
 1 2 3
 2 3 3
+
+# A non-deterministic group item is not determined by the group items it uses
+query I
+SELECT count() FROM (SELECT number % 3 FROM numbers(100) GROUP BY number % 3, number % 3 + rand() + 1)
+----
+100

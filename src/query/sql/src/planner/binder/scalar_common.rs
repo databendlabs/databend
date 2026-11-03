@@ -359,7 +359,8 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
 }
 
 /// check if the scalar could be constructed by the columns and constants, using at least one
-/// of the columns (a constant alone is not pruned)
+/// of the columns (a constant alone is not pruned), and is deterministic (`a + rand()` is not
+/// determined by `a`)
 pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> bool {
     struct PruneVisitor<'a> {
         columns: &'a HashSet<ScalarExpr>,
@@ -401,7 +402,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
     let mut visitor = PruneVisitor::new(columns);
     visitor.visit(scalar).unwrap();
 
-    visitor.can_prune && visitor.uses_columns
+    visitor.can_prune && visitor.uses_columns && scalar.is_deterministic()
 }
 
 /// Wrap a cast expression with given target type
