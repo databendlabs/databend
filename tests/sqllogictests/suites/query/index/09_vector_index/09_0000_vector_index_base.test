@@ -435,6 +435,60 @@ SELECT id FROM t_refine_desc WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) >
 ----
 4
 
+# A vector TopN reads only the TopN rows of each block once they fill the limit;
+# their scores must stay with their rows. With fewer scored rows than the limit,
+# rows without a score (NULL vectors) of the same blocks are still output, as
+# with a descending TopN, which scores every row.
+statement ok
+CREATE TABLE t_topn_rows(id Int NOT NULL, embedding Vector(4) NULL,
+  VECTOR INDEX idx(embedding) distance='l2' refine=true)
+
+statement ok
+INSERT INTO t_topn_rows VALUES (1,[1,0,0,0]), (2,NULL), (3,[3,0,0,0]), (4,NULL)
+
+statement ok
+INSERT INTO t_topn_rows VALUES (5,[2,0,0,0]), (6,[4,0,0,0])
+
+query IR
+SELECT id, l2_distance(embedding,[0,0,0,0]::Vector(4)) AS d FROM t_topn_rows ORDER BY d LIMIT 3
+----
+1 1.0
+5 2.0
+3 3.0
+
+query I
+SELECT count() FROM (SELECT id FROM t_topn_rows ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 5)
+----
+5
+
+query I
+SELECT count() FROM (SELECT id FROM t_topn_rows ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC LIMIT 6)
+----
+6
+
+# A filter on the scores only also reads only the TopN rows: 5, 3 and 6 pass it.
+query IR
+SELECT id, l2_distance(embedding,[0,0,0,0]::Vector(4)) AS d FROM t_topn_rows WHERE d > 1.5 ORDER BY d LIMIT 2
+----
+5 2.0
+3 3.0
+
+# A volatile score filter runs again after reading, so the whole block is read:
+# rows that pass the first evaluation may fail the second, and the other rows of
+# the block replace them. The distances 0.5 + id / 1024 of the 30 rows (one block)
+# pass `d > rand()` about half of the time.
+statement ok
+CREATE TABLE t_topn_rows_rand(id Int NOT NULL, embedding Vector(4) NOT NULL,
+  VECTOR INDEX idx(embedding) distance='l2')
+
+statement ok
+INSERT INTO t_topn_rows_rand VALUES (0,[0.5,0,0,0]), (1,[0.5009765625,0,0,0]), (2,[0.501953125,0,0,0]), (3,[0.5029296875,0,0,0]), (4,[0.50390625,0,0,0]), (5,[0.5048828125,0,0,0]), (6,[0.505859375,0,0,0]), (7,[0.5068359375,0,0,0]), (8,[0.5078125,0,0,0]), (9,[0.5087890625,0,0,0]), (10,[0.509765625,0,0,0]), (11,[0.5107421875,0,0,0]), (12,[0.51171875,0,0,0]), (13,[0.5126953125,0,0,0]), (14,[0.513671875,0,0,0]), (15,[0.5146484375,0,0,0]), (16,[0.515625,0,0,0]), (17,[0.5166015625,0,0,0]), (18,[0.517578125,0,0,0]), (19,[0.5185546875,0,0,0]), (20,[0.51953125,0,0,0]), (21,[0.5205078125,0,0,0]), (22,[0.521484375,0,0,0]), (23,[0.5224609375,0,0,0]), (24,[0.5234375,0,0,0]), (25,[0.5244140625,0,0,0]), (26,[0.525390625,0,0,0]), (27,[0.5263671875,0,0,0]), (28,[0.52734375,0,0,0]), (29,[0.5283203125,0,0,0])
+
+query I
+SETTINGS (random_function_seed = 1) SELECT count() FROM (SELECT id FROM t_topn_rows_rand WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) > rand() ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) LIMIT 5)
+----
+5
+
 # Rows that tie with the last TopN row are kept, so a second sort key chooses
 # among all of them. From [0,0,0,0], the distance 2.0 (ids 7 and 5) ties across the
 # two blocks, and 3.0 (ids 2, 4 and 6) across and within them. From [0,0,3,0], ids 4
