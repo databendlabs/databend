@@ -63,6 +63,8 @@ struct PrewhereSelector {
     executor: FilterExecutor,
     /// Columns compared by the predicate when it is a single comparison.
     single_comparison_columns: Option<Vec<usize>>,
+    /// Input columns of the LIKE leaves.
+    like_columns: Vec<usize>,
 }
 
 impl PrewhereSelector {
@@ -105,9 +107,12 @@ impl PrewhereSelector {
         // The evaluator path evaluates the conjuncts in order. Keep the order of the predicate
         // so that the rows each child sees do not depend on which blocks a worker read before.
         executor.disable_reorder();
+        let mut like_columns = Vec::new();
+        collect_like_columns(&select_expr, &mut like_columns);
         Some(Self {
             executor,
             single_comparison_columns,
+            like_columns,
         })
     }
 
@@ -118,7 +123,18 @@ impl PrewhereSelector {
     /// per dictionary value, and the selector would only turn that result into row indexes
     /// and back. A `Nullable(Encoded)` column is decoded on both paths, so the selector gains
     /// nothing there either; such blocks keep the evaluator path, as before this change.
+    ///
+    /// The selector expands a constant LIKE input (a column missing from blocks written before
+    /// `ADD COLUMN`) to a full column and matches every row, while the evaluator matches the
+    /// constant once. Such blocks keep the evaluator path.
     fn applies_to(&self, block: &DataBlock) -> bool {
+        if self
+            .like_columns
+            .iter()
+            .any(|id| matches!(block.get_by_offset(*id), BlockEntry::Const(..)))
+        {
+            return false;
+        }
         let Some(columns) = &self.single_comparison_columns else {
             return true;
         };
@@ -130,6 +146,18 @@ impl PrewhereSelector {
             }
             BlockEntry::Column(_) => true,
         })
+    }
+}
+
+fn collect_like_columns(select_expr: &SelectExpr, columns: &mut Vec<usize>) {
+    match select_expr {
+        SelectExpr::And((exprs, _)) | SelectExpr::Or((exprs, _)) => {
+            for expr in exprs {
+                collect_like_columns(expr, columns);
+            }
+        }
+        SelectExpr::Like((Expr::ColumnRef(ColumnRef { id, .. }), _, _)) => columns.push(*id),
+        _ => {}
     }
 }
 
@@ -947,7 +975,8 @@ mod tests {
     }
 
     /// Blocks written before ADD COLUMN read the new column as a constant. A lone comparison
-    /// over it is left to the evaluator; a compound predicate still uses the selector.
+    /// or a LIKE over it is left to the evaluator; other compound predicates still use the
+    /// selector.
     #[test]
     fn test_prewhere_selector_over_constant_column() {
         let num_rows = 5;
@@ -960,11 +989,22 @@ mod tests {
                     num_rows,
                 ),
                 Int32Type::from_data((0..num_rows as i32).collect()).into(),
+                StringType::from_data(vec!["match", "other", "mark", "match", "x"]).into(),
             ],
             num_rows,
         );
         let eq = call("eq", vec![
             column(0, DataType::String),
+            string_constant("match"),
+        ]);
+        let like = |id| {
+            call("like", vec![
+                column(id, DataType::String),
+                string_constant("ma%"),
+            ])
+        };
+        let column_eq = call("eq", vec![
+            column(2, DataType::String),
             string_constant("match"),
         ]);
         let compound = call("and", vec![
@@ -975,7 +1015,14 @@ mod tests {
             ]),
         ]);
 
-        for (raw_expr, uses_selector) in [(eq, false), (compound, true)] {
+        for (raw_expr, uses_selector) in [
+            (eq.clone(), false),
+            (compound, true),
+            // LIKE over the constant column keeps the evaluator path.
+            (call("and", vec![column_eq.clone(), like(0)]), false),
+            (call("or", vec![column_eq, like(0)]), false),
+            (call("and", vec![eq, like(2)]), true),
+        ] {
             let expr = prewhere_expr(&raw_expr, &func_ctx);
             let mut selector = PrewhereSelector::try_create(&expr, &func_ctx, 2).unwrap();
             assert_eq!(
