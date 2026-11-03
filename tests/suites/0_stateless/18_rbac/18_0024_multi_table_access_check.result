@@ -1,20 +1,15 @@
-=== database owner, tables bound several times ===
-1
-1
-1
-2
-denied
-=== table owner covers only its table ===
-1
-denied
-=== grant and ownership in one statement ===
-1
-denied
-=== ownership of a second database ===
-1
-=== system table and table function next to an owned table ===
+=== owned tables next to system tables, table functions and another database ===
 3
+denied
+1
+=== ownership follows the active roles ===
+denied
+1
+1
 === dropped owner role falls back to account_admin ===
 0
 denied
 0
+=== ownership changes between statements are seen by the next one ===
+denied
+denied

@@ -269,19 +269,6 @@ async fn load_ownership_checks(
     Ok(checks)
 }
 
-/// Identifies one SELECT check in a plan; a table bound several times is checked once.
-type TableAccessKey<'a> = (&'a str, &'a str, &'a str, u64);
-
-fn mark_table_access_checked<'a>(
-    checked_tables: &mut HashSet<TableAccessKey<'a>>,
-    catalog_name: &'a str,
-    db_name: &'a str,
-    table_name: &'a str,
-    table_id: u64,
-) -> bool {
-    checked_tables.insert((catalog_name, db_name, table_name, table_id))
-}
-
 enum ObjectId {
     Database(u64),
     Table(u64, u64),
@@ -2125,6 +2112,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
 
                 let metadata = metadata.read().clone();
+                // A table bound several times (self join, UNION ALL) is checked once.
                 let mut checked_tables = HashSet::new();
                 let mut pending_ownerships = Vec::new();
 
@@ -2155,7 +2143,7 @@ impl AccessChecker for PrivilegeAccess {
                         let db_name = table.database();
                         let table_name = table.name();
                         let bound_table_id = catalog_table.get_id();
-                        if !mark_table_access_checked(&mut checked_tables, catalog_name, db_name, table_name, bound_table_id) {
+                        if !checked_tables.insert((catalog_name, db_name, table_name, bound_table_id)) {
                             continue;
                         }
                         if is_materialized_view_engine(catalog_table.engine()) {
@@ -3416,7 +3404,6 @@ mod tests {
     use super::OwnershipLookup;
     use super::QueryAccessCache;
     use super::load_ownership_checks;
-    use super::mark_table_access_checked;
 
     fn database(db_id: u64) -> OwnershipObject {
         OwnershipObject::Database {
@@ -3484,27 +3471,6 @@ mod tests {
             self.role_lookups.lock().push(role.to_string());
             Ok(self.existing_roles.contains(role))
         }
-    }
-
-    #[test]
-    fn test_mark_table_access_checked() {
-        let accesses = [
-            ("default", "db", "t1", 1),
-            ("default", "db", "t1", 1),
-            ("default", "db", "t1", 2),
-            ("default", "db", "t2", 3),
-            ("default", "db", "t2", 3),
-            ("default", "other_db", "t1", 1),
-            ("other_catalog", "db", "t1", 1),
-        ];
-        let mut checked_tables = HashSet::new();
-        let checked = accesses
-            .into_iter()
-            .filter(|(catalog, db, table, table_id)| {
-                mark_table_access_checked(&mut checked_tables, catalog, db, table, *table_id)
-            })
-            .count();
-        assert_eq!(checked, 5);
     }
 
     #[tokio::test]

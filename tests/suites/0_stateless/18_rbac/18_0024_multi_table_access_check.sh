@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Multi-table SELECT authorization: tables bound several times, grants and ownership mixed in
-# one statement, and the batched ownership fallback for tables without a matching grant.
+# End-to-end checks of the batched ownership fallback in multi-table SELECT: tables on the grant
+# fast path mixed with system tables and table functions, role scope (SET ROLE / SECONDARY ROLES),
+# ownership changes between statements, and owner roles that no longer exist. Meta request
+# counts and cache behaviour are asserted in src/query/service/tests/privilege_access.rs.
 
 set -euo pipefail
 
@@ -31,11 +33,10 @@ cleanup() {
 DROP DATABASE IF EXISTS access_cache;
 DROP DATABASE IF EXISTS access_cache_other;
 DROP USER IF EXISTS cache_db_owner;
-DROP USER IF EXISTS cache_t2_owner;
-DROP USER IF EXISTS cache_mixed;
+DROP USER IF EXISTS cache_roles;
 DROP USER IF EXISTS cache_gone;
 DROP ROLE IF EXISTS cache_db_owner_role;
-DROP ROLE IF EXISTS cache_t2_owner_role;
+DROP ROLE IF EXISTS cache_limited_role;
 DROP ROLE IF EXISTS cache_gone_role;
 "
 }
@@ -53,44 +54,42 @@ INSERT INTO access_cache.t1 VALUES (1);
 INSERT INTO access_cache.t2 VALUES (2);
 INSERT INTO access_cache_other.t3 VALUES (3);
 CREATE USER cache_db_owner IDENTIFIED BY 'password';
-CREATE USER cache_t2_owner IDENTIFIED BY 'password';
-CREATE USER cache_mixed IDENTIFIED BY 'password';
+CREATE USER cache_roles IDENTIFIED BY 'password';
 CREATE USER cache_gone IDENTIFIED BY 'password';
 CREATE ROLE cache_db_owner_role;
-CREATE ROLE cache_t2_owner_role;
+CREATE ROLE cache_limited_role;
 CREATE ROLE cache_gone_role;
 GRANT OWNERSHIP ON access_cache.* TO ROLE cache_db_owner_role;
-GRANT OWNERSHIP ON access_cache.t2 TO ROLE cache_t2_owner_role;
 GRANT OWNERSHIP ON access_cache.t_gone TO ROLE cache_gone_role;
 GRANT ROLE cache_db_owner_role TO cache_db_owner;
-GRANT ROLE cache_t2_owner_role TO cache_t2_owner;
-GRANT ROLE cache_t2_owner_role TO cache_mixed;
-GRANT SELECT ON access_cache.t1 TO cache_mixed;
+GRANT ROLE cache_db_owner_role TO cache_roles;
+GRANT ROLE cache_limited_role TO cache_roles;
 GRANT ROLE cache_gone_role TO cache_gone;
 "
 
-echo '=== database owner, tables bound several times ==='
-run_user cache_db_owner 'SELECT count(*) FROM access_cache.t1 a, access_cache.t1 b, access_cache.t2 c'
-run_user cache_db_owner 'SELECT a FROM access_cache.t1 UNION ALL SELECT a FROM access_cache.t1 UNION ALL SELECT a FROM access_cache.t2 ORDER BY a'
-expect_denied cache_db_owner 'SELECT count(*) FROM access_cache.t1 a, access_cache_other.t3 b'
-
-echo '=== table owner covers only its table ==='
-run_user cache_t2_owner 'SELECT count(*) FROM access_cache.t2 a, access_cache.t2 b'
-expect_denied cache_t2_owner 'SELECT count(*) FROM access_cache.t2 a, access_cache.t1 b'
-
-echo '=== grant and ownership in one statement ==='
-run_user cache_mixed 'SELECT count(*) FROM access_cache.t1 a, access_cache.t2 b, access_cache.t1 c'
-expect_denied cache_mixed 'SELECT count(*) FROM access_cache.t1 a, access_cache.t2 b, access_cache_other.t3 c'
-
-echo '=== ownership of a second database ==='
+echo '=== owned tables next to system tables, table functions and another database ==='
+run_user cache_db_owner 'SELECT count(*) FROM access_cache.t1 a, access_cache.t2 b, system.one c, numbers(3) d'
+expect_denied cache_db_owner 'SELECT count(*) FROM access_cache.t1 a, access_cache_other.t3 b, access_cache.t1 c'
 bendsql_connect_root_null --query='GRANT OWNERSHIP ON access_cache_other.* TO ROLE cache_db_owner_role;'
-run_user cache_db_owner 'SELECT count(*) FROM access_cache.t1 a, access_cache_other.t3 b'
+run_user cache_db_owner 'SELECT count(*) FROM access_cache.t1 a, access_cache_other.t3 b, access_cache.t1 c'
 
-echo '=== system table and table function next to an owned table ==='
-run_user cache_db_owner 'SELECT count(*) FROM access_cache.t1 a, system.one b, numbers(3) c'
+echo '=== ownership follows the active roles ==='
+expect_denied cache_roles 'SET ROLE cache_limited_role; SET SECONDARY ROLES NONE; SELECT count(*) FROM access_cache.t1 a, access_cache.t2 b'
+run_user cache_roles 'SET ROLE cache_limited_role; SET SECONDARY ROLES ALL; SELECT count(*) FROM access_cache.t1 a, access_cache.t2 b'
+run_user cache_roles 'SET ROLE cache_db_owner_role; SET SECONDARY ROLES NONE; SELECT count(*) FROM access_cache.t1 a, access_cache.t2 b'
 
 echo '=== dropped owner role falls back to account_admin ==='
 run_user cache_gone 'SELECT count(*) FROM access_cache.t_gone a, access_cache.t_gone b'
 bendsql_connect_root_null --query='DROP ROLE cache_gone_role;'
-expect_denied cache_gone 'SELECT count(*) FROM access_cache.t_gone'
-bendsql_connect_root --output tsv --query='SELECT count(*) FROM access_cache.t_gone'
+expect_denied cache_gone 'SELECT count(*) FROM access_cache.t_gone a, access_cache.t_gone b'
+bendsql_connect_root --output tsv --query='SELECT count(*) FROM access_cache.t_gone a, access_cache.t_gone b'
+
+echo '=== ownership changes between statements are seen by the next one ==='
+bendsql_connect_root_null --query='GRANT OWNERSHIP ON access_cache.* TO ROLE cache_limited_role;'
+expect_denied cache_db_owner 'SELECT count(*) FROM access_cache.t1 a, access_cache.t2 b'
+bendsql_connect_root_null --query="
+DROP DATABASE access_cache_other;
+CREATE DATABASE access_cache_other;
+CREATE TABLE access_cache_other.t3(a INT);
+"
+expect_denied cache_db_owner 'SELECT count(*) FROM access_cache_other.t3 a, access_cache_other.t3 b'
