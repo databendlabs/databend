@@ -68,6 +68,9 @@ use crate::pruning::PruningCostKind;
 struct VectorTopNParam {
     has_filter: bool,
     filter_expr: Option<Expr>,
+    /// Whether `filter_expr` is set and deterministic: the rows it selects pass it
+    /// again after reading, unlike with a volatile one such as `d > rand()`.
+    deterministic_score_filter: bool,
     asc: bool,
     limit: usize,
     candidate_limit: usize,
@@ -156,9 +159,13 @@ impl VectorIndexPruner {
                     Some(factor) => limit.saturating_mul(factor),
                     None => limit,
                 };
+                let deterministic_score_filter = filter_expr
+                    .as_ref()
+                    .is_some_and(|filter| filter.is_deterministic(&BUILTIN_FUNCTIONS));
                 Some(VectorTopNParam {
                     has_filter: filters.is_some(),
                     filter_expr,
+                    deterministic_score_filter,
                     asc: *asc,
                     limit,
                     candidate_limit,
@@ -337,12 +344,8 @@ impl VectorIndexPruner {
         // Read only the TopN rows (and their ties) for ascending order with
         // deterministic score filters only. The filter runs again after reading,
         // so a volatile one (`d > rand()`) needs the other rows too.
-        let rows_only = param.asc
-            && param
-                .filter_expr
-                .as_ref()
-                .is_some_and(|filter| filter.is_deterministic(&BUILTIN_FUNCTIONS))
-            && fills_topn(&top_scores, param.limit);
+        let rows_only =
+            param.asc && param.deterministic_score_filter && fills_topn(&top_scores, param.limit);
         if rows_only {
             return Ok(topn_block_metas(results, top_scores, true));
         }
@@ -835,6 +838,7 @@ impl VectorScore {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::DataType;
+    use databend_storages_common_table_meta::meta::Compression;
 
     use super::*;
 
@@ -943,5 +947,71 @@ mod tests {
         assert!(!fills_topn(&scores(&[0.1]), 2));
         assert!(!fills_topn(&scores(&[0.1, f32::MAX]), 2));
         assert!(!fills_topn(&scores(&[0.1, f32::NAN]), 2));
+    }
+
+    #[test]
+    fn test_topn_block_metas() {
+        let result = |block_idx: usize, row_count: u64| VectorPruneResult {
+            block_idx,
+            scores: Vec::new(),
+            block_meta_index: BlockMetaIndex::default(),
+            block_meta: Arc::new(BlockMeta::new(
+                row_count,
+                0,
+                0,
+                Default::default(),
+                Default::default(),
+                None,
+                (format!("block_{block_idx}"), 0),
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Compression::None,
+                None,
+            )),
+        };
+        // Rows 2 and 1 of block 0 and row 0 of block 1; block 2 has no TopN rows.
+        let top_scores = [(0, 2, 0.1_f32), (1, 0, 0.2), (0, 1, 0.2)]
+            .into_iter()
+            .map(|(index, row_idx, score)| VectorScore {
+                index,
+                row_idx,
+                score: F32::from(score),
+            })
+            .collect::<Vec<_>>();
+        let blocks = |rows_only| {
+            let results = vec![result(0, 4), result(1, 3), result(2, 2)];
+            topn_block_metas(results, top_scores.clone(), rows_only)
+                .into_iter()
+                .map(|(index, meta)| (meta.location.0.clone(), index.vector_scores.unwrap()))
+                .collect::<Vec<_>>()
+        };
+        let f = |value: f32| F32::from(value);
+        let max = f(f32::MAX);
+        assert_eq!(blocks(true), vec![
+            (
+                "block_0".to_string(),
+                VectorScores::TopN(vec![(2, f(0.1)), (1, f(0.2))])
+            ),
+            ("block_1".to_string(), VectorScores::TopN(vec![(0, f(0.2))])),
+        ]);
+        // Without `rows_only`, the other rows get the placeholder score.
+        assert_eq!(blocks(false), vec![
+            (
+                "block_0".to_string(),
+                VectorScores::All(vec![max, f(0.2), f(0.1), max])
+            ),
+            (
+                "block_1".to_string(),
+                VectorScores::All(vec![f(0.2), max, max])
+            ),
+        ]);
     }
 }
