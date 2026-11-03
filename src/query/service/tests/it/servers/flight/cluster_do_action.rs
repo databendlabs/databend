@@ -165,8 +165,10 @@ async fn test_finish_query_reaches_live_nodes_despite_failed_ones() -> anyhow::R
     ];
     let cluster = Cluster::create(nodes, config.query.node_id.clone());
 
-    for (concurrent, reuse) in all_modes() {
-        let params = flight_params(concurrent, reuse);
+    // `finish_query_on_nodes` always sends one sequential request per node, so only
+    // control channel reuse varies here.
+    for reuse in [false, true] {
+        let params = flight_params(false, reuse);
 
         // A live node accepts FINISH_QUERY for a query it never received.
         let response: HashMap<String, ()> = cluster
@@ -188,10 +190,7 @@ async fn test_finish_query_reaches_live_nodes_despite_failed_ones() -> anyhow::R
             ("missing", ErrorCode::NOT_FOUND_CLUSTER_NODE),
         ];
         expected.sort();
-        assert_eq!(
-            failed, expected,
-            "concurrent = {concurrent}, reuse = {reuse}"
-        );
+        assert_eq!(failed, expected, "reuse = {reuse}");
     }
 
     Ok(())
@@ -226,8 +225,52 @@ async fn test_finish_query_is_bounded_on_hung_node() -> anyhow::Result<()> {
         assert_eq!(failed.len(), 1, "reuse = {reuse}");
         assert_eq!(failed[0].0, hung);
         assert!(
-            elapsed < std::time::Duration::from_secs(15),
+            elapsed < std::time::Duration::from_secs(10),
             "reuse = {reuse}, cleanup took {elapsed:?}"
+        );
+    }
+
+    drop(hung_listener);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_concurrent_do_action_waits_for_started_requests_after_error() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let config = GlobalConfig::instance();
+
+    // `dead` refuses the connection at once; `hung` completes the TCP handshake from the
+    // backlog but never answers, so its request only ends at the request timeout.
+    let hung_listener = StdTcpListener::bind("127.0.0.1:0")?;
+    let (dead, hung) = (node_id("dead"), node_id("hung"));
+    let nodes = vec![
+        node(&dead, &unreachable_address()),
+        node(&hung, &hung_listener.local_addr()?.to_string()),
+    ];
+    let cluster = Cluster::create(nodes, config.query.node_id.clone());
+
+    for reuse in [false, true] {
+        let params = FlightParams {
+            timeout: 2,
+            ..flight_params(true, reuse)
+        };
+        let started = std::time::Instant::now();
+        let result: Result<HashMap<String, ()>> = cluster
+            .do_action(FINISH_QUERY, finish_packets(&[&dead, &hung]), params)
+            .await;
+        let elapsed = started.elapsed();
+
+        // The first error is returned, but only after the request still in flight on
+        // `hung` settled: the caller cleans up right after and must not race with it.
+        let error = result.expect_err("an unreachable node must fail the whole action");
+        assert_eq!(
+            error.code(),
+            ErrorCode::CANNOT_CONNECT_NODE,
+            "reuse = {reuse}, got {error}"
+        );
+        assert!(
+            elapsed >= std::time::Duration::from_millis(1800),
+            "reuse = {reuse}, returned after {elapsed:?} before the hung request settled"
         );
     }
 

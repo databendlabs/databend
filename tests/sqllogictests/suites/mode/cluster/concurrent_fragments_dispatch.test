@@ -1,4 +1,5 @@
-# Distributed queries dispatch INIT_QUERY_FRAGMENTS / START_PREPARED_QUERY to every node.
+# Distributed queries dispatch INIT_QUERY_ENV / INIT_QUERY_FRAGMENTS / START_PREPARED_QUERY
+# to every node.
 # Both the concurrent (default) and the sequential dispatch must produce the same results,
 # including when every scan is pruned to zero rows.
 

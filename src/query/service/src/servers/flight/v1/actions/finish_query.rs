@@ -29,11 +29,16 @@ use crate::servers::flight::v1::exchange::DataExchangeManager;
 
 pub static FINISH_QUERY: &str = "/actions/finish_query";
 
-/// Upper bound for one best-effort `FINISH_QUERY` request, including the connect. The
-/// cleanup runs on the error path of a failed query, after it already waited for the
-/// failing node, so a node that hangs must not delay the error by another full flight
-/// timeout. A healthy node answers this no-op-if-unknown request in milliseconds.
+/// Request timeout of one best-effort `FINISH_QUERY` request. The cleanup runs on the
+/// error path of a failed query, after it already waited for the failing node, so a node
+/// that hangs must not delay the error by another full flight timeout. A healthy node
+/// answers this no-op-if-unknown request in milliseconds.
 const FINISH_QUERY_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Outer bound for one `FINISH_QUERY` request, covering connect and ping, which the request
+/// timeout does not always bound. It is wider than [`FINISH_QUERY_TIMEOUT`] so that a
+/// request that times out normally still drops the cached control channel to a hung node.
+const FINISH_QUERY_MAX_WAIT: Duration = Duration::from_secs(2 * FINISH_QUERY_TIMEOUT.as_secs());
 
 /// Sent by the coordinator when a distributed query fails before it starts executing,
 /// so that nodes which already accepted the query env or fragments release them at once
@@ -56,8 +61,8 @@ pub async fn finish_query(packet: FinishQueryPacket) -> Result<()> {
     Ok(())
 }
 
-/// Best-effort `FINISH_QUERY` to every node in `node_ids`, without retry and bounded by
-/// [`FINISH_QUERY_TIMEOUT`] per node.
+/// Best-effort `FINISH_QUERY` to every node in `node_ids`, without retry, with a request
+/// timeout of [`FINISH_QUERY_TIMEOUT`] and at most [`FINISH_QUERY_MAX_WAIT`] per node.
 ///
 /// Each node gets its own request, so a node that is unreachable or does not know the
 /// action (an older version during a rolling upgrade) does not stop or cancel the request
@@ -79,11 +84,11 @@ pub async fn finish_query_on_nodes(
     let requests = node_ids.into_iter().map(|node_id| async move {
         let message = HashMap::from([(node_id.clone(), packet.clone())]);
         let request = cluster.do_action::<_, ()>(FINISH_QUERY, message, flight_params);
-        let result = match tokio::time::timeout(FINISH_QUERY_TIMEOUT, request).await {
+        let result = match tokio::time::timeout(FINISH_QUERY_MAX_WAIT, request).await {
             Ok(result) => result.map(|_| ()),
             Err(_) => Err(ErrorCode::Timeout(format!(
                 "{} to node {} did not complete within {:?}",
-                FINISH_QUERY, node_id, FINISH_QUERY_TIMEOUT
+                FINISH_QUERY, node_id, FINISH_QUERY_MAX_WAIT
             ))),
         };
         (node_id, result)
