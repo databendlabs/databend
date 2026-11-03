@@ -32,6 +32,7 @@ use crate::CacheKind;
 use crate::CacheRef;
 use crate::CachedItem;
 use crate::DiskCache;
+use crate::DiskOption;
 use crate::KindLimit;
 use crate::MemCache;
 use crate::Pool;
@@ -49,6 +50,7 @@ use crate::shared::SharedStore;
 const POOL_PREFIX: &str = "pool:";
 const DISK_POOL_PREFIX: &str = "disk_pool:";
 const DISK_KIND_PREFIX: &str = "disk:";
+const DISK_OPTION_PREFIX: &str = "disk.";
 const DEFAULT_CAPACITY: &str = "default";
 
 /// One row of `system.caches`: a kind in memory or on disk, or a memory or disk pool.
@@ -343,9 +345,32 @@ impl CacheManager {
     /// `set_cache_capacity(<name>, <arg>)` with the argument as written in SQL: a number of
     /// bytes (or items, for legacy kinds counted in items), `'<n>%'` of the disk cache's
     /// `max_bytes` for a disk pool, or `'default'`. Names: `all`, `pool:<meta|index|data>`,
-    /// `disk_pool:<meta|index|data>`, `disk:<kind>`, a kind name or its old name.
+    /// `disk_pool:<meta|index|data>`, `disk:<kind>`, `disk.<option>` (see `DiskOption`), a
+    /// kind name or its old name.
     pub fn set_cache_capacity_arg(&self, name: &str, arg: &str) -> Result<()> {
         let arg = arg.trim();
+        if let Some(option) = name.strip_prefix(DISK_OPTION_PREFIX) {
+            let option = DiskOption::from_name(option).ok_or_else(|| {
+                let names: Vec<_> = DiskOption::ALL.iter().map(|o| o.name()).collect();
+                ErrorCode::BadArguments(format!(
+                    "unknown disk cache option '{option}', expected one of {}",
+                    names.join(", ")
+                ))
+            })?;
+            let disk = self.disk_or_err()?;
+            let value = match arg {
+                DEFAULT_CAPACITY => disk.default_option(option),
+                "true" if option == DiskOption::SyncData => 1,
+                "false" if option == DiskOption::SyncData => 0,
+                _ => arg.parse::<u64>().map_err(|_| {
+                    ErrorCode::BadArguments(format!(
+                        "cache.disk.{} must be a number or 'default', got '{arg}'",
+                        option.name()
+                    ))
+                })?,
+            };
+            return disk.set_option(option, value);
+        }
         if let Some(pool) = name.strip_prefix(DISK_POOL_PREFIX) {
             let pool = Pool::from_name(pool).ok_or_else(|| {
                 ErrorCode::BadArguments(format!("unknown disk cache pool '{pool}'"))
@@ -415,7 +440,7 @@ fn parse_u64(value: &str, arg: &str) -> Result<u64> {
 
 /// Options of the pre-refactor disk tiers the disk cache no longer reads, when set: the disk
 /// pools replace the per-kind sizes, column chunks are no longer kept in memory as raw bytes,
-/// the queue is bounded in bytes, and a restart always keeps the files. They are still accepted, so configs written for older versions start.
+/// and the queue is bounded in bytes, by `cache.disk.queue_bytes`. They are still accepted, so configs written for older versions start.
 fn ignored_disk_options(config: &CacheConfig) -> Vec<&'static str> {
     let sizes = [
         (

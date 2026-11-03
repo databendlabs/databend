@@ -3724,6 +3724,8 @@ pub struct DiskCacheConfig {
     ///
     /// Setting this to true improves stability in memory-constrained / containerized environments at the cost
     /// of potentially reduced write performance.
+    ///
+    /// Also set at runtime by `system$set_cache_capacity('disk.sync_data', <0|1>)`.
     #[clap(
         long = "cache-disk-sync-data",
         value_name = "VALUE",
@@ -3759,6 +3761,48 @@ pub struct DiskCacheConfig {
         default_value = "70"
     )]
     pub data_max_ratio: u64,
+
+    /// Bytes waiting to be written to the disk cache, at most. A read whose entry finds the
+    /// queue full waits up to `queue_wait_ms` for room, then is served without filling the
+    /// cache. Also set at runtime by `system$set_cache_capacity('disk.queue_bytes', <bytes>)`.
+    #[clap(
+        long = "cache-disk-queue-bytes",
+        id = "cache_disk_queue_bytes",
+        value_name = "VALUE",
+        default_value = "268435456"
+    )]
+    pub queue_bytes: u64,
+
+    /// Milliseconds a read waits for room in a full write queue before giving up the fill;
+    /// 0 never waits. Also set at runtime by
+    /// `system$set_cache_capacity('disk.queue_wait_ms', <milliseconds>)`.
+    #[clap(
+        long = "cache-disk-queue-wait-ms",
+        id = "cache_disk_queue_wait_ms",
+        value_name = "VALUE",
+        default_value = "50"
+    )]
+    pub queue_wait_ms: u64,
+
+    /// Percent of the file system in use above which the disk cache evicts before it writes:
+    /// other files share the disk, spill files among them. 1 to 100; 100 never evicts for it.
+    /// Also set at runtime by `system$set_cache_capacity('disk.watermark_ratio', <percent>)`.
+    #[clap(
+        long = "cache-disk-watermark-ratio",
+        id = "cache_disk_watermark_ratio",
+        value_name = "VALUE",
+        default_value = "90"
+    )]
+    pub watermark_ratio: u64,
+
+    /// Threads writing the disk cache. Read at start only.
+    #[clap(
+        long = "cache-disk-writer-threads",
+        id = "cache_disk_writer_threads",
+        value_name = "VALUE",
+        default_value = "4"
+    )]
+    pub writer_threads: u64,
 }
 
 impl Default for DiskCacheConfig {
@@ -3770,6 +3814,10 @@ impl Default for DiskCacheConfig {
             meta_max_ratio: 10,
             index_max_ratio: 20,
             data_max_ratio: 70,
+            queue_bytes: 268435456,
+            queue_wait_ms: 50,
+            watermark_ratio: 90,
+            writer_threads: 4,
         }
     }
 }

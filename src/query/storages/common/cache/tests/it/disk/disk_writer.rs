@@ -19,6 +19,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -85,7 +86,7 @@ impl Gate {
     }
 }
 
-fn never_full(_: &Path) -> bool {
+fn never_full(_: &Path, _: u64) -> bool {
     false
 }
 
@@ -95,6 +96,7 @@ fn options(writers: usize, queue_bytes: u64, queue_wait: Duration) -> WriterOpti
         queue_bytes,
         queue_wait,
         sync_data: false,
+        watermark_ratio: 90,
         over_watermark: never_full,
     }
 }
@@ -180,7 +182,7 @@ async fn test_writes_and_publishes() {
 }
 
 static DEDUP: Gate = Gate::new();
-fn dedup_gate(_: &Path) -> bool {
+fn dedup_gate(_: &Path, _: u64) -> bool {
     DEDUP.pass();
     false
 }
@@ -226,7 +228,7 @@ async fn test_pending_entry_is_not_queued_twice() {
 }
 
 static FULL: Gate = Gate::new();
-fn full_gate(_: &Path) -> bool {
+fn full_gate(_: &Path, _: u64) -> bool {
     FULL.pass();
     false
 }
@@ -270,7 +272,7 @@ async fn test_full_queue_drops_after_waiting() {
 }
 
 static ROOM: Gate = Gate::new();
-fn room_gate(_: &Path) -> bool {
+fn room_gate(_: &Path, _: u64) -> bool {
     ROOM.pass();
     false
 }
@@ -302,6 +304,80 @@ async fn test_waiting_entry_goes_in_when_room_frees() {
     assert!(waiting.await.unwrap());
     assert!(start.elapsed() < Duration::from_secs(10));
     wait_for(|| idle(&writer));
+    assert_eq!(pool.stats().items, 2);
+}
+
+static GROW: Gate = Gate::new();
+fn grow_gate(_: &Path, _: u64) -> bool {
+    GROW.pass();
+    false
+}
+
+/// A larger queue set at runtime lets a reader waiting for room in at once, while the write
+/// that fills the queue is still running.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_larger_queue_lets_a_waiting_entry_in() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
+    let writer = Arc::new(DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        WriterOptions {
+            over_watermark: grow_gate,
+            ..options(1, 100, Duration::from_secs(30))
+        },
+    ));
+    GROW.close();
+    assert!(writer.enqueue(job(&pool, data_kind(), "a", 80)).await);
+    GROW.wait_entered(1);
+    let waiting = {
+        let (writer, pool) = (writer.clone(), pool.clone());
+        spawn(async move { writer.enqueue(job(&pool, data_kind(), "b", 80)).await })
+    };
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(!waiting.is_finished());
+    writer.set_queue_bytes(1_000);
+    let queued = tokio::time::timeout(Duration::from_secs(10), waiting).await;
+    assert!(queued.expect("the entry still waits").unwrap());
+    assert_eq!(writer.settings().queue_bytes(), 1_000);
+    GROW.open();
+    wait_for(|| idle(&writer));
+    assert_eq!(pool.stats().items, 2);
+}
+
+static RATIO: AtomicU64 = AtomicU64::new(0);
+fn ratio_seen(_: &Path, ratio: u64) -> bool {
+    RATIO.store(ratio, Ordering::Relaxed);
+    false
+}
+
+/// The writer checks the file system against the watermark as last set, and syncs entries as
+/// last set; a shorter wait applies to the next reader.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_settings_apply_to_later_entries() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
+    let writer = DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        WriterOptions {
+            over_watermark: ratio_seen,
+            ..options(1, 1 << 20, Duration::from_millis(50))
+        },
+    );
+    assert!(writer.enqueue(job(&pool, data_kind(), "a", 10)).await);
+    wait_for(|| idle(&writer));
+    assert_eq!(RATIO.load(Ordering::Relaxed), 90);
+
+    writer.set_watermark_ratio(75);
+    writer.set_sync_data(true);
+    writer.set_queue_wait(Duration::ZERO);
+    assert!(writer.enqueue(job(&pool, data_kind(), "b", 10)).await);
+    wait_for(|| idle(&writer));
+    assert_eq!(RATIO.load(Ordering::Relaxed), 75);
+    let settings = writer.settings();
+    assert!(settings.sync_data());
+    assert_eq!(settings.queue_wait(), Duration::ZERO);
     assert_eq!(pool.stats().items, 2);
 }
 
@@ -347,7 +423,7 @@ async fn test_failed_write_releases_its_reservation() {
 }
 
 static PANICKED: AtomicBool = AtomicBool::new(false);
-fn panic_once(_: &Path) -> bool {
+fn panic_once(_: &Path, _: u64) -> bool {
     if !PANICKED.swap(true, Ordering::SeqCst) {
         panic!("injected");
     }
@@ -378,7 +454,7 @@ async fn test_panic_in_writer_keeps_accounting_and_thread() {
 }
 
 static PRESSURE: AtomicUsize = AtomicUsize::new(0);
-fn pressure(_: &Path) -> bool {
+fn pressure(_: &Path, _: u64) -> bool {
     PRESSURE
         .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
         .is_ok()
@@ -500,7 +576,7 @@ fn assert_no_reservation(pool: &DiskPool) {
 }
 
 static CANCEL: Gate = Gate::new();
-fn cancel_gate(_: &Path) -> bool {
+fn cancel_gate(_: &Path, _: u64) -> bool {
     CANCEL.pass();
     false
 }
@@ -545,7 +621,7 @@ async fn test_cancelled_enqueue_leaves_nothing_pending() {
 }
 
 static FENCE: Gate = Gate::new();
-fn fence_gate(_: &Path) -> bool {
+fn fence_gate(_: &Path, _: u64) -> bool {
     FENCE.pass();
     false
 }

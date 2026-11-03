@@ -227,6 +227,49 @@ select count() from system.caches where name = 'disk_cache_bloom_index_filter';
 statement error 1006
 call system$set_cache_capacity('disk:memory_cache_table_data', 0);
 
+# The writer settings of cache.disk change at runtime, and 'default' restores the configured
+# value. Values out of range and unknown settings fail.
+statement ok
+call system$set_cache_capacity('disk.queue_bytes', '536870912');
+
+statement ok
+call system$set_cache_capacity('disk.queue_wait_ms', '100');
+
+statement ok
+call system$set_cache_capacity('disk.watermark_ratio', '95');
+
+statement ok
+call system$set_cache_capacity('disk.sync_data', 'false');
+
+query IIT
+select count(), sum(id), max(s) from t;
+----
+2000 1999000 k999
+
+statement error 1006
+call system$set_cache_capacity('disk.queue_bytes', 0);
+
+statement error 1006
+call system$set_cache_capacity('disk.watermark_ratio', 101);
+
+statement error 1006
+call system$set_cache_capacity('disk.sync_data', 2);
+
+statement error 1006
+call system$set_cache_capacity('disk.writer_threads', 8);
+
+statement ok
+call system$set_cache_capacity('disk.queue_bytes', 'default');
+
+statement ok
+call system$set_cache_capacity('disk.queue_wait_ms', 'default');
+
+statement ok
+call system$set_cache_capacity('disk.watermark_ratio', 'default');
+
+statement ok
+call system$set_cache_capacity('disk.sync_data', 'default');
+
 # Vacuum deletes old snapshots: their bytes leave the disk cache too, or the snapshot history
 # would still be walked from disk. The memory snapshot cache is off, so history reads go to disk.
 statement ok

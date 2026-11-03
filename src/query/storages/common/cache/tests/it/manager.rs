@@ -25,6 +25,7 @@ use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheRow;
 use databend_storages_common_cache::DiskKey;
+use databend_storages_common_cache::DiskOption;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::Unit;
@@ -316,6 +317,116 @@ fn test_set_disk_capacity() -> Result<()> {
             .is_err()
     );
     Ok(())
+}
+
+/// The writer settings start from `cache.disk`; `set_cache_capacity('disk.<option>', ..)`
+/// changes them, `'default'` restores the configured value, and values out of range or
+/// unknown options fail and change nothing.
+#[test]
+fn test_set_disk_options() -> Result<()> {
+    let dir = TempDir::new().unwrap();
+    let config = CacheConfig {
+        disk_cache_config: DiskCacheInnerConfig {
+            queue_bytes: 4 * MIB,
+            queue_wait_ms: 20,
+            watermark_ratio: 80,
+            sync_data: false,
+            writer_threads: 2,
+            ..disk_config(&dir).disk_cache_config
+        },
+        ..disk_config(&dir)
+    };
+    let manager = manager(&config, true);
+    let disk = manager.disk().unwrap();
+    let configured = [
+        (DiskOption::QueueBytes, 4 * MIB),
+        (DiskOption::QueueWaitMs, 20),
+        (DiskOption::WatermarkRatio, 80),
+        (DiskOption::SyncData, 0),
+    ];
+    for (option, value) in configured {
+        assert_eq!(disk.option(option), value, "{option:?}");
+    }
+
+    manager.set_cache_capacity_arg("disk.queue_bytes", " 1048576 ")?;
+    manager.set_cache_capacity_arg("disk.queue_wait_ms", "0")?;
+    manager.set_cache_capacity_arg("disk.watermark_ratio", "100")?;
+    manager.set_cache_capacity_arg("disk.sync_data", "true")?;
+    assert_eq!(disk.option(DiskOption::QueueBytes), MIB);
+    assert_eq!(disk.option(DiskOption::QueueWaitMs), 0);
+    assert_eq!(disk.option(DiskOption::WatermarkRatio), 100);
+    assert_eq!(disk.option(DiskOption::SyncData), 1);
+    manager.set_cache_capacity_arg("disk.sync_data", "0")?;
+    assert_eq!(disk.option(DiskOption::SyncData), 0);
+
+    for (name, bad) in [
+        ("disk.queue_bytes", "0"),
+        ("disk.queue_bytes", "1MiB"),
+        ("disk.queue_wait_ms", "-1"),
+        ("disk.watermark_ratio", "0"),
+        ("disk.watermark_ratio", "101"),
+        ("disk.sync_data", "2"),
+        ("disk.queue_bytes", "true"),
+        ("disk.writer_threads", "8"),
+        ("disk.no_such_option", "1"),
+    ] {
+        assert!(
+            manager.set_cache_capacity_arg(name, bad).is_err(),
+            "{name} {bad}"
+        );
+    }
+    assert_eq!(disk.option(DiskOption::QueueBytes), MIB);
+    assert_eq!(disk.option(DiskOption::WatermarkRatio), 100);
+
+    for option in DiskOption::ALL {
+        manager.set_cache_capacity_arg(&format!("disk.{}", option.name()), "default")?;
+    }
+    for (option, value) in configured {
+        assert_eq!(disk.option(option), value, "{option:?}");
+    }
+
+    let no_disk = self::manager(&CacheConfig::default(), true);
+    assert!(
+        no_disk
+            .set_cache_capacity_arg("disk.queue_bytes", "1")
+            .is_err()
+    );
+    Ok(())
+}
+
+/// Writer settings out of range in `cache.disk` fail the start.
+#[test]
+fn test_disk_options_out_of_range_fail_the_start() {
+    let dir = TempDir::new().unwrap();
+    let base = disk_config(&dir);
+    let bad = [
+        DiskCacheInnerConfig {
+            queue_bytes: 0,
+            ..base.disk_cache_config.clone()
+        },
+        DiskCacheInnerConfig {
+            watermark_ratio: 0,
+            ..base.disk_cache_config.clone()
+        },
+        DiskCacheInnerConfig {
+            watermark_ratio: 101,
+            ..base.disk_cache_config.clone()
+        },
+        DiskCacheInnerConfig {
+            writer_threads: 0,
+            ..base.disk_cache_config.clone()
+        },
+    ];
+    for disk in bad {
+        let config = CacheConfig {
+            disk_cache_config: disk.clone(),
+            ..base.clone()
+        };
+        assert!(
+            CacheManager::try_new(&config, &MIB, "test_tenant", true).is_err(),
+            "{disk:?}"
+        );
+    }
 }
 
 fn empty_snapshot() -> Arc<TableSnapshot> {

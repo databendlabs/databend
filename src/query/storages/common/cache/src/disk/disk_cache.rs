@@ -23,11 +23,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use bytes::Bytes;
 use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeConfig;
+use databend_common_config::DiskCacheInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -42,6 +44,7 @@ use crate::CacheKind;
 use crate::DiskKey;
 use crate::Pool;
 use crate::SingleFlight;
+use crate::disk::DiskOption;
 use crate::disk::disk_file::read_entry;
 use crate::disk::disk_pool::DiskPool;
 pub use crate::disk::disk_pool::DiskPoolStats;
@@ -59,6 +62,9 @@ const MIN_DISK_CACHE_BYTES: u64 = 1024;
 /// entries under `<path>/<tenant>` are from older layouts and are removed in the background.
 const LAYOUT_DIR: &str = "v2";
 
+/// `cache.disk.writer_threads` at most.
+const MAX_WRITER_THREADS: u64 = 256;
+
 /// Per-pool figures, plus the queue and the entries not written.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DiskCacheStats {
@@ -74,6 +80,8 @@ pub struct DiskCache {
     default_caps: [u64; 3],
     max_bytes: u64,
     writer: DiskWriter,
+    /// The writer's settings as configured: what `default` restores.
+    default_writer: WriterOptions,
     /// Off when the license does not allow the disk cache.
     allowed: AtomicBool,
     /// Per kind, by kind index: false after `set_cache_capacity('disk:<kind>', 0)`.
@@ -121,7 +129,8 @@ impl DiskCache {
             // after it, whatever happened to the objects meanwhile.
             set_aside_layout(&tenant_root)?;
         }
-        let cache = DiskCache::new(&tenant_root, disk.max_bytes, caps, disk.sync_data)?;
+        let writer = writer_options(disk)?;
+        let cache = DiskCache::with_writer(&tenant_root, disk.max_bytes, caps, writer)?;
         info!(
             "[DiskCache] on: {} bytes, meta {} / index {} / data {}, under {:?}",
             disk.max_bytes, caps[0], caps[1], caps[2], tenant_root
@@ -138,6 +147,16 @@ impl DiskCache {
         max_bytes: u64,
         caps: [u64; 3],
         sync_data: bool,
+    ) -> Result<Self> {
+        Self::with_writer(tenant_root, max_bytes, caps, WriterOptions::new(sync_data))
+    }
+
+    /// `new`, with the writer started as `writer` says.
+    pub fn with_writer(
+        tenant_root: &Path,
+        max_bytes: u64,
+        caps: [u64; 3],
+        writer: WriterOptions,
     ) -> Result<Self> {
         let root = tenant_root.join(LAYOUT_DIR);
         let pools = Pool::ALL.map(|pool| {
@@ -161,7 +180,8 @@ impl DiskCache {
             .map(|pool| pools[pool.index()].clone())
             .collect();
         Ok(DiskCache {
-            writer: DiskWriter::start(pressure_order, root, WriterOptions::new(sync_data)),
+            writer: DiskWriter::start(pressure_order, root, writer),
+            default_writer: writer,
             pools,
             default_caps: caps,
             max_bytes,
@@ -370,6 +390,40 @@ impl DiskCache {
         self.max_bytes
     }
 
+    /// The current value of a writer setting.
+    pub fn option(&self, option: DiskOption) -> u64 {
+        let settings = self.writer.settings();
+        match option {
+            DiskOption::QueueBytes => settings.queue_bytes(),
+            DiskOption::QueueWaitMs => settings.queue_wait().as_millis() as u64,
+            DiskOption::WatermarkRatio => settings.watermark_ratio(),
+            DiskOption::SyncData => settings.sync_data() as u64,
+        }
+    }
+
+    /// The value of a writer setting from `cache.disk`.
+    pub fn default_option(&self, option: DiskOption) -> u64 {
+        let writer = &self.default_writer;
+        match option {
+            DiskOption::QueueBytes => writer.queue_bytes,
+            DiskOption::QueueWaitMs => writer.queue_wait.as_millis() as u64,
+            DiskOption::WatermarkRatio => writer.watermark_ratio,
+            DiskOption::SyncData => writer.sync_data as u64,
+        }
+    }
+
+    /// Changes a writer setting, for the entries queued from now on.
+    pub fn set_option(&self, option: DiskOption, value: u64) -> Result<()> {
+        option.check(value)?;
+        match option {
+            DiskOption::QueueBytes => self.writer.set_queue_bytes(value),
+            DiskOption::QueueWaitMs => self.writer.set_queue_wait(Duration::from_millis(value)),
+            DiskOption::WatermarkRatio => self.writer.set_watermark_ratio(value),
+            DiskOption::SyncData => self.writer.set_sync_data(value == 1),
+        }
+        Ok(())
+    }
+
     /// Turns the disk cache of `kind` on or off. Turning it off drops the kind's entries, and
     /// its pool refuses entries of it queued or scanned before.
     pub fn set_kind_enabled(&self, kind: CacheKind, enabled: bool) {
@@ -437,6 +491,31 @@ impl Drop for ObjectChange {
             pool.delete(&pool.end_change(&self.object, at, oldest_fill));
         }
     }
+}
+
+/// The writer as `cache.disk` configures it, checked.
+fn writer_options(disk: &DiskCacheInnerConfig) -> Result<WriterOptions> {
+    let invalid = |e: ErrorCode| ErrorCode::InvalidConfig(e.message());
+    for (option, value) in [
+        (DiskOption::QueueBytes, disk.queue_bytes),
+        (DiskOption::QueueWaitMs, disk.queue_wait_ms),
+        (DiskOption::WatermarkRatio, disk.watermark_ratio),
+    ] {
+        option.check(value).map_err(invalid)?;
+    }
+    if !(1..=MAX_WRITER_THREADS).contains(&disk.writer_threads) {
+        return Err(ErrorCode::InvalidConfig(format!(
+            "cache.disk.writer_threads must be 1 to {MAX_WRITER_THREADS}, got {}",
+            disk.writer_threads
+        )));
+    }
+    Ok(WriterOptions {
+        writers: disk.writer_threads as usize,
+        queue_bytes: disk.queue_bytes,
+        queue_wait: Duration::from_millis(disk.queue_wait_ms),
+        watermark_ratio: disk.watermark_ratio,
+        ..WriterOptions::new(disk.sync_data)
+    })
 }
 
 /// `disk_cache_<...>`, the names of the pre-refactor disk caches.

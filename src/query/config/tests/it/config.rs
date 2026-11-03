@@ -169,3 +169,47 @@ data_max_ratio = 2
     // Unset ratios keep their defaults.
     assert_eq!((disk.meta_max_ratio, disk.index_max_ratio, disk.data_max_ratio), (1, 20, 2));
 }
+
+/// The disk cache writer settings are read from their flags and from `[cache.disk]`; unset
+/// ones keep their defaults.
+#[test]
+fn test_disk_writer_settings() {
+    let config = Config::parse_from([
+        "databend-query",
+        "--cache-disk-queue-bytes",
+        "1048576",
+        "--cache-disk-queue-wait-ms",
+        "0",
+        "--cache-disk-watermark-ratio",
+        "80",
+        "--cache-disk-writer-threads",
+        "8",
+    ]);
+    let disk = &config.cache.disk_cache_config;
+    assert_eq!(
+        (
+            disk.queue_bytes,
+            disk.queue_wait_ms,
+            disk.watermark_ratio,
+            disk.writer_threads
+        ),
+        (1048576, 0, 80, 8)
+    );
+
+    let conf = r#"
+[cache.disk]
+queue_bytes = 536870912
+watermark_ratio = 95
+"#;
+    let from_file: Config = toml::from_str(conf).unwrap();
+    let disk = &from_file.cache.disk_cache_config;
+    assert_eq!(
+        (
+            disk.queue_bytes,
+            disk.queue_wait_ms,
+            disk.watermark_ratio,
+            disk.writer_threads
+        ),
+        (536870912, 50, 95, 4)
+    );
+}
