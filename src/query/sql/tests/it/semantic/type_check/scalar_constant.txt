@@ -26,6 +26,34 @@ status: error
 code: 2004
 message: Need constant number, but got CAST(grouping() AS Int64)
 
+=== decimal_scale_rejects_set_returning_function ===
+description: A set-returning function is not evaluated as a constant parameter.
+sql: round(CAST(1 AS DECIMAL(10, 3)), unnest([1]))
+status: error
+code: 2004
+message: Need constant number, but got CAST(get(1)(unnest(CAST([1] AS Array(UInt8 NULL)))) AS Int64)
+
+=== decimal_precision_rejects_set_returning_function ===
+description: to_decimal precision must be a constant, not a set-returning function.
+sql: to_decimal(text, unnest([10]), 2)
+status: error
+code: 1065
+message: Invalid arguments for `to_decimal`, precision is only allowed to be a constant
+
+=== histogram_buckets_reject_set_returning_function ===
+description: histogram bucket count must be a constant, not a set-returning function.
+sql: histogram(number, unnest([2]))
+status: error
+code: 2004
+message: Need constant number, but got CAST(get(1)(unnest(CAST([2] AS Array(UInt8 NULL)))) AS UInt64)
+
+=== decimal_scale_from_nullable_explicit_cast ===
+description: A folded TRY cast keeps its nullable type; the scale it gives is read and NULL passes through.
+sql: round(CAST(number AS DECIMAL(10, 3)), try_to_int64('2'))
+status: ok
+scalar: round(2)(CAST(number (#0) AS Decimal(10, 3) NULL), 2)
+type: Decimal(10, 2) NULL
+
 === decimal_precision_from_explicit_cast ===
 description: to_decimal precision accepts a cast literal.
 sql: to_decimal(text, CAST(10 AS INT), 2)

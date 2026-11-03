@@ -213,6 +213,12 @@ fn test_eval_constant_rule() {
         "a failing expression is left for runtime"
     );
 
+    assert_eq!(
+        eval("unnest([1, 2])"),
+        None,
+        "set-returning functions are not evaluated"
+    );
+
     let grouping = builtin_call("grouping", &[]);
     let one = Expr::Constant(Constant {
         span: None,

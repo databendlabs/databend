@@ -28,6 +28,30 @@ async fn test_type_check_constant_parameters() -> Result<()> {
             sql: "round(CAST(1 AS DECIMAL(10, 3)), grouping())",
         },
         SqlTestCase {
+            name: "decimal_scale_rejects_set_returning_function",
+            description: "A set-returning function is not evaluated as a constant parameter.",
+            setup_sqls: &[],
+            sql: "round(CAST(1 AS DECIMAL(10, 3)), unnest([1]))",
+        },
+        SqlTestCase {
+            name: "decimal_precision_rejects_set_returning_function",
+            description: "to_decimal precision must be a constant, not a set-returning function.",
+            setup_sqls: &[],
+            sql: "to_decimal(text, unnest([10]), 2)",
+        },
+        SqlTestCase {
+            name: "histogram_buckets_reject_set_returning_function",
+            description: "histogram bucket count must be a constant, not a set-returning function.",
+            setup_sqls: &[],
+            sql: "histogram(number, unnest([2]))",
+        },
+        SqlTestCase {
+            name: "decimal_scale_from_nullable_explicit_cast",
+            description: "A folded TRY cast keeps its nullable type; the scale it gives is read and NULL passes through.",
+            setup_sqls: &[],
+            sql: "round(CAST(number AS DECIMAL(10, 3)), try_to_int64('2'))",
+        },
+        SqlTestCase {
             name: "decimal_precision_from_explicit_cast",
             description: "to_decimal precision accepts a cast literal.",
             setup_sqls: &[],

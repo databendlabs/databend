@@ -360,9 +360,9 @@ impl FoldRules {
     /// Evaluates an expression without column references. Returns `None` when it
     /// references a column, does not produce a scalar, or fails; a failing
     /// expression is left for runtime so that its error is reported there.
-    /// `grouping` is not evaluated: it is a placeholder that the SQL binder
-    /// replaces with a call over the grouping id, and its implementation
-    /// panics.
+    /// Set-returning functions and `grouping` are not evaluated: the
+    /// evaluator runs scalar functions only, and `grouping` is a placeholder
+    /// that the SQL binder replaces with a call over the grouping id.
     pub fn eval_constant<Index: ColumnIndex>(
         func_ctx: &FunctionContext,
         fn_registry: &FunctionRegistry,
@@ -573,8 +573,9 @@ pub enum IfPruning {
     Keep(Vec<usize>),
 }
 
-/// Whether `expr` references a column or calls the `grouping` placeholder,
-/// checked in one traversal. Either one keeps it from being evaluated alone.
+/// Whether `expr` references a column, calls a set-returning function or
+/// calls the `grouping` placeholder, checked in one traversal. Any of them
+/// keeps it from being evaluated alone.
 fn needs_input<Index: ColumnIndex>(expr: &Expr<Index>) -> bool {
     struct NeedsInput(bool);
     impl<I: ColumnIndex> ExprVisitor<I> for NeedsInput {
@@ -587,7 +588,10 @@ fn needs_input<Index: ColumnIndex>(expr: &Expr<Index>) -> bool {
             &mut self,
             call: &FunctionCall<I>,
         ) -> Result<Option<Expr<I>>, Self::Error> {
-            if self.0 || call.function.signature.name == "grouping" {
+            if self.0
+                || matches!(call.function.eval, FunctionEval::SRF { .. })
+                || call.function.signature.name == "grouping"
+            {
                 self.0 = true;
                 Ok(None)
             } else {

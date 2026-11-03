@@ -503,10 +503,12 @@ where A: TypeCheckAdapter
         BoundScalar::constant(ConstantExpr { span, value }, data_type)
     }
 
-    /// A folded explicit cast, which keeps the type it names. It is a literal
-    /// when a literal has that type, e.g. `CAST('2020-01-01' AS DATE)`. The
-    /// type binds only the cast itself: a call that folds over it is a
-    /// constant typed as literals are, e.g. `if(true, 1::INT64, number)`.
+    /// A folded constant that keeps `data_type`: the type an explicit cast
+    /// names, or the checked type of a nullable argument that type checking
+    /// cast implicitly. It is a literal when a literal has that type, e.g.
+    /// `CAST('2020-01-01' AS DATE)`. The type binds only this node: a call
+    /// that folds over it is a constant typed as literals are, e.g.
+    /// `if(true, 1::INT64, number)`.
     pub(super) fn folded_constant_of_type(
         span: Span,
         value: Scalar,
@@ -792,9 +794,13 @@ where A: TypeCheckAdapter
         // Arguments fold before the call is checked. An argument whose checked
         // type differs from its own was cast implicitly by the check, e.g. the
         // literal in `timestamp > '2001-01-01'`, and its value is known only
-        // now. It is replaced only if the literal keeps the checked type,
-        // nullability aside, so that the call binds as checked. Other
-        // arguments, including folded explicit casts, are kept as bound.
+        // now. It is replaced only if the constant keeps the checked type, so
+        // that the call binds as checked. A non-nullable argument becomes a
+        // literal; nullability that the check added is ignored, as lowering
+        // adds it again. A nullable argument keeps its nullability, as the
+        // call may be nullable only because of it, so it becomes a constant
+        // of the checked type. Other arguments, including folded explicit
+        // casts, are kept as bound.
         let mut folded_args = call
             .args
             .iter()
@@ -814,8 +820,19 @@ where A: TypeCheckAdapter
                             && !is_generic
                             && checked_arg.data_type() != &arg.data_type =>
                     {
-                        let folded = Self::folded_constant(checked_arg.span(), value.clone());
-                        if folded.data_type == checked_arg.data_type().remove_nullable() {
+                        let (folded, checked_type) = if arg.data_type.is_nullable_or_null() {
+                            let data_type = checked_arg.data_type().clone();
+                            let folded = Self::folded_constant_of_type(
+                                checked_arg.span(),
+                                value.clone(),
+                                data_type.clone(),
+                            );
+                            (folded, data_type)
+                        } else {
+                            let folded = Self::folded_constant(checked_arg.span(), value.clone());
+                            (folded, checked_arg.data_type().remove_nullable())
+                        };
+                        if folded.data_type == checked_type {
                             folded
                         } else {
                             arg

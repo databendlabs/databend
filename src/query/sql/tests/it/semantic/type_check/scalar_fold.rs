@@ -109,6 +109,11 @@ async fn test_type_check_bind_time_folding() -> Result<()> {
             "number = '5'",
         ),
         case(
+            "implicit_cast_of_nullable_constant_keeps_nullability",
+            "A nullable constant cast implicitly is replaced by a constant of the checked nullable type, as a literal would make the call non-nullable.",
+            "assume_not_null(ts) > try_to_string('2001-01-01')",
+        ),
+        case(
             "explicit_try_cast_keeps_parent_nullable",
             "A folded explicit cast is not an implicitly cast argument, so the parent keeps it and its nullability.",
             "try_to_uint8('1') + small",
