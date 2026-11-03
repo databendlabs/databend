@@ -317,16 +317,19 @@ impl SelectExprBuilder {
             // The type checker wraps a non-nullable boolean in this cast when it is combined
             // with a nullable one by `and` / `or`. The cast neither introduces NULL nor fails,
             // so the selection of the inner predicate is the selection of the cast, also under
-            // a negation. The cast used to be an `Others` leaf that blocks reordering; keep
-            // that, so a guard before it still runs first (e.g. `ns = 'ok' AND parse_json(v)
-            // = ..` must not parse the rows `ns = 'ok'` rejected).
+            // a negation. The cast used to be an `Others` leaf, evaluated as a whole and in
+            // place; keep its order and the order inside it, so a guard before it or inside it
+            // still runs first (e.g. `ns = 'ok' AND parse_json(v) = ..` must not parse the
+            // rows `ns = 'ok'` rejected).
             Expr::Cast(Cast {
                 is_try: false,
                 expr: inner,
                 dest_type: DataType::Nullable(deref!(DataType::Boolean)),
                 ..
             }) if inner.data_type() == &DataType::Boolean => {
-                self.build_select_expr(inner, not).can_reorder(false)
+                let mut result = self.build_select_expr(inner, not);
+                result.select_expr.disable_reorder();
+                result.can_reorder(false)
             }
             Expr::Cast(Cast { is_try, .. }) if *is_try => self.other_select_expr(expr, not),
             _ => self.other_select_expr(expr, not).can_reorder(false),
