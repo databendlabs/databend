@@ -12,9 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_common_sql::Planner;
+use databend_common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 
@@ -69,5 +73,81 @@ async fn test_fuse_table_optimize() -> anyhow::Result<()> {
     // blocks are so tiny, they should be compacted into one
     assert_eq!(parts.len(), 1);
 
+    Ok(())
+}
+
+async fn layout_rows(fixture: &TestFixture, sql: &str) -> anyhow::Result<Vec<Scalar>> {
+    let blocks: Vec<DataBlock> = fixture.execute_query(sql).await?.try_collect().await?;
+    Ok(blocks
+        .iter()
+        .flat_map(|block| {
+            (0..block.num_rows())
+                .map(move |row| block.get_by_offset(0).index(row).unwrap().to_owned())
+        })
+        .collect())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_snapshot_segment_layout_uses_partial_observations() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_segment_cache_bytes(0).await?;
+    for sql in [
+        "set enable_auto_analyze = 0",
+        "set auto_compaction_imperfect_blocks_threshold = 0",
+        "set enable_compact_after_write = 0",
+        "set enable_prune_cache = 0",
+        "set enable_distributed_pruning = 0",
+        "create table learned_segments(k bigint) cluster by(k) block_per_segment=1",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    for key in 0..16 {
+        fixture
+            .execute_command(&format!("insert into learned_segments values ({key})"))
+            .await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let table = ctx
+        .get_catalog("default")
+        .await?
+        .get_table(&ctx.get_tenant(), "default", "learned_segments")
+        .await?;
+    let table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    let column_id = snapshot.schema.field_with_name("k")?.column_id();
+    let names = snapshot.segments[4..12]
+        .iter()
+        .map(|location| format!("'{}'", location.0))
+        .collect::<Vec<_>>()
+        .join(",");
+    assert!(
+        layout_rows(
+            &fixture,
+            &format!("select k from learned_segments where _segment_name in ({names}) and k = -1",)
+        )
+        .await?
+        .is_empty()
+    );
+    let partial = snapshot.segment_layout.runs(column_id).unwrap();
+    assert_eq!(partial.len(), 1);
+    assert_eq!(partial[0].range, 4..12);
+
+    // Segment cache is disabled. Missing edges prove partial runs are used;
+    // k=15 lies in an unread hole and must still be returned.
+    let operator = table.get_operator();
+    let mut removed = Vec::new();
+    for index in [4, 11] {
+        let path = &snapshot.segments[index].0;
+        removed.push((path.clone(), operator.read(path).await?.to_vec()));
+        operator.delete(path).await?;
+    }
+    let result = layout_rows(
+        &fixture,
+        "select k from learned_segments where k = 7 or k = 15 order by k",
+    )
+    .await;
+    for (path, data) in removed {
+        operator.write(&path, data).await?;
+    }
+    assert_eq!(result?, vec![Scalar::from(7_i64), Scalar::from(15_i64)]);
     Ok(())
 }

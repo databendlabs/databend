@@ -22,6 +22,7 @@ use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 
+use crate::io::FuseCaches;
 use crate::io::read::SegmentReader;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
@@ -75,6 +76,18 @@ impl SegmentPruner {
                     ),
                 )
                 .await?;
+
+            // Learn from every summary, including segments rejected below. This
+            // retains only bounded range evidence, never the cached segment Arc.
+            if let Some(snapshot_location) = &segment_location.snapshot_loc
+                && let Some(snapshot) = FuseCaches::instance().snapshots.lookup(snapshot_location)
+                && snapshot.segments.get(segment_location.segment_idx)
+                    == Some(&segment_location.location)
+            {
+                snapshot
+                    .segment_layout
+                    .observe(segment_location.segment_idx, &info.summary().col_stats);
+            }
 
             let total_bytes = info.summary().uncompressed_byte_size;
             // Perf.

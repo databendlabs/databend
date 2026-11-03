@@ -52,6 +52,13 @@ impl SnapshotCache {
         Ok(Arc::clone(&value))
     }
 
+    /// Inspect an already cached snapshot without loading metadata on a miss.
+    pub(crate) fn lookup(&self, location: &str) -> Option<Arc<TableSnapshot>> {
+        self.snapshots
+            .lookup(location)
+            .map(|value| Arc::clone(&value))
+    }
+
     pub fn put(&self, location: &str, snapshot: Arc<TableSnapshot>) {
         self.snapshots.put(location, snapshot);
     }

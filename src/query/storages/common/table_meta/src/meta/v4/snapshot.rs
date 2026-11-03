@@ -15,14 +15,20 @@
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::io::Read;
+use std::ops::Range;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use chrono::DateTime;
 use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
 use databend_common_io::prelude::BinaryRead;
@@ -36,6 +42,7 @@ use crate::meta::Location;
 use crate::meta::MetaEncoding;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
+use crate::meta::StatisticsOfColumns;
 use crate::meta::TableMetaTimestamps;
 use crate::meta::Versioned;
 use crate::meta::format::MetaCompression;
@@ -49,7 +56,7 @@ use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::table::ClusterType;
 
-#[frozen_api("9de02316")]
+#[frozen_api("22233d80")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -93,6 +100,11 @@ pub struct TableSnapshot {
     /// this the size of this vector could be kept reasonable
     pub segments: Vec<Location>,
 
+    /// Bounded, process-local evidence learned from segment reads. Never persisted
+    /// or inherited by a new snapshot (including mutable clones).
+    #[serde(skip)]
+    pub segment_layout: SnapshotSegmentLayout,
+
     /// The metadata of the cluster keys.
     pub cluster_key_meta: Option<ClusterKey>,
     #[serde(default)]
@@ -105,6 +117,168 @@ pub struct TableSnapshot {
     // Also cleared by transaction retry when the complete delta is unknown.
     #[serde(default)]
     logical_change_counters: Option<LogicalChangeCounters>,
+}
+
+const MAX_SEGMENT_LAYOUT_RUNS: usize = 128;
+
+/// A continuous run whose physical minima AND maxima are monotone. Endpoints
+/// alone enclose the run; no segment metadata or locations are retained.
+#[derive(Clone, Debug)]
+pub struct OrderedSegmentRun {
+    pub range: Range<usize>,
+    first_min: Scalar,
+    first_max: Scalar,
+    last_min: Scalar,
+    last_max: Scalar,
+}
+
+impl OrderedSegmentRun {
+    pub fn descending(&self) -> bool {
+        self.first_min.as_ref() > self.last_min.as_ref()
+            || self.first_max.as_ref() > self.last_max.as_ref()
+    }
+
+    pub fn bounds(&self) -> (&Scalar, &Scalar) {
+        if self.descending() {
+            (&self.last_min, &self.first_max)
+        } else {
+            (&self.first_min, &self.last_max)
+        }
+    }
+
+    fn can_join(&self, next: &Self) -> bool {
+        let le = |a: &Scalar, b: &Scalar| a.as_ref() <= b.as_ref();
+        let ascending = le(&self.first_min, &self.last_min)
+            && le(&self.first_max, &self.last_max)
+            && le(&self.last_min, &next.first_min)
+            && le(&self.last_max, &next.first_max)
+            && le(&next.first_min, &next.last_min)
+            && le(&next.first_max, &next.last_max);
+        let descending = le(&self.last_min, &self.first_min)
+            && le(&self.last_max, &self.first_max)
+            && le(&next.first_min, &self.last_min)
+            && le(&next.first_max, &self.last_max)
+            && le(&next.last_min, &next.first_min)
+            && le(&next.last_max, &next.first_max);
+        self.range.end == next.range.start && (ascending || descending)
+    }
+
+    fn join(&mut self, next: Self) {
+        self.range.end = next.range.end;
+        self.last_min = next.last_min;
+        self.last_max = next.last_max;
+    }
+}
+
+#[derive(Debug, Default)]
+enum SegmentLayoutState {
+    #[default]
+    Uninitialized,
+    Disabled,
+    Collecting {
+        column_id: ColumnId,
+        data_type: DataType,
+        runs: Vec<OrderedSegmentRun>,
+    },
+}
+
+/// Runtime-only and bounded independently of the segment metadata cache.
+#[derive(Debug, Default, FrozenAPI)]
+pub struct SnapshotSegmentLayout {
+    state: Mutex<SegmentLayoutState>,
+}
+
+impl Clone for SnapshotSegmentLayout {
+    fn clone(&self) -> Self {
+        // Callers may change schema or segment locations after cloning a snapshot.
+        Self::default()
+    }
+}
+
+impl SnapshotSegmentLayout {
+    pub fn initialize(&self, column_id: ColumnId, data_type: &TableDataType) {
+        let mut state = self.state.lock().unwrap();
+        if matches!(*state, SegmentLayoutState::Uninitialized) {
+            let supported = match data_type.remove_nullable() {
+                TableDataType::Timestamp | TableDataType::Date => true,
+                TableDataType::Number(number) => number.is_integer(),
+                _ => false,
+            };
+            *state = if !supported {
+                SegmentLayoutState::Disabled
+            } else {
+                SegmentLayoutState::Collecting {
+                    column_id,
+                    data_type: DataType::from(data_type).remove_nullable().clone(),
+                    runs: Vec::new(),
+                }
+            };
+        }
+    }
+
+    pub fn runs(&self, column: ColumnId) -> Option<Vec<OrderedSegmentRun>> {
+        match &*self.state.lock().unwrap() {
+            SegmentLayoutState::Collecting {
+                column_id, runs, ..
+            } if *column_id == column && !runs.is_empty() => Some(runs.clone()),
+            _ => None,
+        }
+    }
+
+    /// Called before predicate pruning, using original snapshot positions. Reads
+    /// may arrive out of order or repeat across concurrent queries. The caller
+    /// verifies that the position and location belong to this snapshot. Holes
+    /// never become certified; excessive fragmentation disables learning.
+    pub fn observe(&self, index: usize, statistics: &StatisticsOfColumns) {
+        let mut state = self.state.lock().unwrap();
+        let SegmentLayoutState::Collecting {
+            column_id,
+            data_type,
+            runs,
+        } = &mut *state
+        else {
+            return;
+        };
+        let position = runs.partition_point(|run| run.range.start <= index);
+        if position > 0 && index < runs[position - 1].range.end {
+            return;
+        }
+        let Some(stats) = statistics.get(column_id).filter(|stats| {
+            stats.null_count == 0
+                && !stats.min.is_null()
+                && !stats.max.is_null()
+                && stats.min.as_ref().is_value_of_type(data_type)
+                && stats.max.as_ref().is_value_of_type(data_type)
+                && stats.min.as_ref() <= stats.max.as_ref()
+        }) else {
+            // Missing/NULL statistics are an uncertified hole, not a reason to
+            // discard independently verified runs elsewhere in the snapshot.
+            return;
+        };
+        let mut position = position;
+        let mut run = OrderedSegmentRun {
+            range: index..index + 1,
+            first_min: stats.min.clone(),
+            first_max: stats.max.clone(),
+            last_min: stats.min.clone(),
+            last_max: stats.max.clone(),
+        };
+        if position > 0 && runs[position - 1].can_join(&run) {
+            position -= 1;
+            let mut previous = runs.remove(position);
+            previous.join(run);
+            run = previous;
+        }
+        if let Some(next) = runs.get(position)
+            && run.can_join(next)
+        {
+            run.join(runs.remove(position));
+        }
+        runs.insert(position, run);
+        if runs.len() > MAX_SEGMENT_LAYOUT_RUNS {
+            *state = SegmentLayoutState::Disabled;
+        }
+    }
 }
 
 /// Cumulative UPDATE/DELETE counters. Only endpoints with the same known epoch
@@ -221,6 +395,7 @@ impl TableSnapshot {
             schema,
             summary,
             segments,
+            segment_layout: SnapshotSegmentLayout::default(),
             cluster_key_meta,
             cluster_type,
             table_statistics_location,
@@ -407,6 +582,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             schema: s.schema,
             summary: s.summary,
             segments: s.segments,
+            segment_layout: SnapshotSegmentLayout::default(),
             cluster_key_meta: s.cluster_key_meta,
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
@@ -433,6 +609,7 @@ where T: Into<v3::TableSnapshot>
             schema: s.schema.into(),
             summary: s.summary.into(),
             segments: s.segments,
+            segment_layout: SnapshotSegmentLayout::default(),
             cluster_key_meta: s.cluster_key_meta,
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
@@ -492,6 +669,55 @@ mod tests {
 
     use super::*;
     use crate::meta::ClusterStatistics;
+
+    fn layout_stats(min: i64, max: i64) -> StatisticsOfColumns {
+        std::collections::HashMap::from([(
+            0,
+            crate::meta::ColumnStatistics::new(
+                Scalar::Timestamp(min),
+                Scalar::Timestamp(max),
+                0,
+                0,
+                None,
+            ),
+        )])
+    }
+
+    #[test]
+    fn test_segment_layout_partial_runs_and_runtime_only_state() {
+        let previous = snapshot(None);
+        let bytes = previous.to_bytes().unwrap();
+        let layout = &previous.segment_layout;
+        layout.initialize(0, &TableDataType::Timestamp);
+        for index in [3, 1, 2, 2] {
+            layout.observe(index, &layout_stats(index as i64, index as i64 + 3));
+        }
+        let view = layout.runs(0).unwrap();
+        layout.observe(4, &layout_stats(4, 7));
+        assert_eq!(view.len(), 1);
+        assert_eq!(view[0].range, 1..4);
+        assert_eq!(layout.runs(0).unwrap()[0].range, 1..5);
+        assert_eq!(bytes, previous.to_bytes().unwrap());
+        assert!(previous.clone().segment_layout.runs(0).is_none());
+        assert!(
+            TableSnapshot::from_slice(&bytes)
+                .unwrap()
+                .segment_layout
+                .runs(0)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_segment_layout_fragmentation_limit() {
+        let layout = SnapshotSegmentLayout::default();
+        layout.initialize(0, &TableDataType::Timestamp);
+        for index in 0..=MAX_SEGMENT_LAYOUT_RUNS {
+            // Nested ranges cannot be certified by sorting minima alone.
+            layout.observe(index, &layout_stats(index as i64, 1000 - index as i64));
+        }
+        assert!(layout.runs(0).is_none());
+    }
 
     #[test]
     fn test_try_from_previous_uses_target_cluster_key_info() {

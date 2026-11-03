@@ -62,5 +62,70 @@ select count() from test_range_array where embedding is null;
 ----
 1
 
+# Learn existing segment ranges without ANALYZE, COMPACT or data rewrites.
+statement ok
+SET enable_auto_analyze = 0
+
+statement ok
+SET enable_compact_after_write = 0
+
+statement ok
+SET auto_compaction_imperfect_blocks_threshold = 0
+
+statement ok
+SET enable_prune_cache = 0
+
+statement ok
+CREATE TABLE ordered_segments(k BIGINT NULL, payload BIGINT) CLUSTER BY(k) block_per_segment=1
+
+statement ok
+INSERT INTO ordered_segments VALUES (1, 1)
+
+statement ok
+INSERT INTO ordered_segments VALUES (2, 2)
+
+statement ok
+INSERT INTO ordered_segments VALUES (3, 3)
+
+statement ok
+INSERT INTO ordered_segments VALUES (4, 4)
+
+# Normal reads learn the layout; repeats must keep returning the same rows.
+query I rowsort
+SELECT payload FROM ordered_segments WHERE k BETWEEN 2 AND 3
+----
+2
+3
+
+query I rowsort
+SELECT payload FROM ordered_segments WHERE k BETWEEN 2 AND 3
+----
+2
+3
+
+query I rowsort
+SELECT payload FROM ordered_segments WHERE k = 2 OR payload = 4
+----
+2
+4
+
+# A new snapshot must not inherit stale positions; NULL remains an unread hole.
+statement ok
+INSERT INTO ordered_segments VALUES (NULL, 5)
+
+query I
+SELECT payload FROM ordered_segments WHERE k IS NULL
+----
+5
+
+query I rowsort
+SELECT payload FROM ordered_segments WHERE k = 2 OR k IS NULL
+----
+2
+5
+
+statement ok
+UNSET (enable_auto_analyze, enable_compact_after_write, auto_compaction_imperfect_blocks_threshold, enable_prune_cache)
+
 statement ok
 DROP DATABASE db_09_0009_04

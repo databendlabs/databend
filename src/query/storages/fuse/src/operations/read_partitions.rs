@@ -18,6 +18,7 @@ databend_common_tracing::register_module_tag!("[FUSE-PARTITIONS]");
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -43,8 +44,10 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
@@ -62,11 +65,13 @@ use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::NgramHashAlgorithm;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::RangeIndexInput;
+use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_SIZE;
@@ -98,12 +103,12 @@ use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexRebuilder;
 use crate::io::FuseCaches;
+use crate::io::SegmentsIO;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::pruning::SegmentPruner;
 use crate::pruning::VectorIndexPruner;
-use crate::pruning::create_segment_location_vector;
 use crate::pruning::table_sample;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
@@ -129,7 +134,7 @@ const DEFAULT_BLOOM_SIZE: u64 = 1024 * 1024;
 struct SnapshotReadInfo {
     snapshot_id: SnapshotId,
     snapshot_location: String,
-    segment_locations: Vec<Location>,
+    segment_locations: Vec<SegmentLocation>,
     row_count: usize,
     compressed_byte_size: usize,
     block_count: usize,
@@ -148,10 +153,109 @@ impl SnapshotReadInfo {
     fn segment_count(&self) -> usize {
         self.segment_locations.len()
     }
+}
 
-    fn into_pruning_segments(self) -> Vec<SegmentLocation> {
-        create_segment_location_vector(self.segment_locations, Some(self.snapshot_location))
+/// Use verified runs immediately; unread gaps always follow the original path.
+/// Each binary-search predicate tests an enclosing
+/// prefix/suffix domain, not a single segment; gaps, ORs and unknown columns must
+/// never be mistaken for proof that an unvisited range is empty.
+/// None means no pruning; Some(empty) means every segment was excluded.
+async fn prune_learned_segment_runs(
+    ctx: Arc<dyn TableContext>,
+    operator: Operator,
+    snapshot: &TableSnapshot,
+    column_id: ColumnId,
+    schema: TableSchemaRef,
+    push_downs: &Option<PushDownInfo>,
+) -> Result<Option<Vec<Range<usize>>>> {
+    let Some(filters) = push_downs
+        .as_ref()
+        .and_then(|p| p.effective_filters(&BUILTIN_FUNCTIONS))
+    else {
+        return Ok(None);
+    };
+    let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+    let field = snapshot.schema.field_of_column_id(column_id)?;
+    if !filter.column_refs().contains_key(field.name()) {
+        return Ok(None);
     }
+    let Some(runs) = snapshot.segment_layout.runs(column_id) else {
+        return Ok(None);
+    };
+    let pruner =
+        RangePrunerCreator::try_create(ctx.get_function_context()?, &schema, Some(&filter))?;
+
+    let mut covered = 0;
+    let mut candidates = Vec::new();
+    let mut statistics = HashMap::with_capacity(1);
+    let mut probes = HashMap::new();
+
+    for run in runs {
+        if covered < run.range.start {
+            candidates.push(covered..run.range.start);
+        }
+        covered = run.range.end;
+        let (min, max) = run.bounds();
+        statistics.insert(
+            column_id,
+            ColumnStatistics::new(min.clone(), max.clone(), 0, 0, None),
+        );
+        if !pruner.should_keep(&RangeIndexInput::from_columns(&statistics), None) {
+            continue;
+        }
+        let mut start = run.range.start;
+        let mut end = run.range.end;
+        probes.clear();
+        for prefix in [true, false] {
+            let mut low = start;
+            let mut high = end;
+            while low < high {
+                ctx.check_aborting()
+                    .with_context(|| "learned segment pruning aborted")?;
+                let mid = low + (high - low) / 2;
+                if let std::collections::hash_map::Entry::Vacant(entry) = probes.entry(mid) {
+                    let segment = SegmentsIO::read_compact_segment(
+                        operator.clone(),
+                        snapshot.segments[mid].clone(),
+                        schema.clone(),
+                        true,
+                    )
+                    .await?;
+                    let Some(column) = segment.summary.col_stats.get(&column_id) else {
+                        return Ok(None);
+                    };
+                    entry.insert(column.clone());
+                }
+                let column = &probes[&mid];
+                let enclosing = statistics.get_mut(&column_id).unwrap();
+                if prefix != run.descending() {
+                    enclosing.min = min.clone();
+                    enclosing.max = column.max.clone();
+                } else {
+                    enclosing.min = column.min.clone();
+                    enclosing.max = max.clone();
+                }
+                let keep = pruner.should_keep(&RangeIndexInput::from_columns(&statistics), None);
+                if keep == prefix {
+                    high = mid;
+                } else {
+                    low = mid + 1;
+                }
+            }
+            if prefix {
+                start = low;
+            } else {
+                end = low;
+            }
+        }
+        if start < end {
+            candidates.push(start..end);
+        }
+    }
+    if covered < snapshot.segments.len() {
+        candidates.push(covered..snapshot.segments.len());
+    }
+    Ok(Some(candidates))
 }
 
 fn read_partitions_pruning_mode(push_downs: &Option<PushDownInfo>) -> ReadPartitionsPruningMode {
@@ -245,16 +349,54 @@ fn deterministic_prune_cache_key(
 }
 
 impl FuseTable {
-    async fn read_snapshot_info(&self) -> Result<Option<SnapshotReadInfo>> {
+    async fn read_snapshot_info(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: &Option<PushDownInfo>,
+    ) -> Result<Option<SnapshotReadInfo>> {
         let snapshot = self.read_table_snapshot().await?;
         let Some(snapshot) = snapshot else {
             return Ok(None);
         };
 
-        let segment_locations = snapshot.segments.clone();
         let snapshot_location = self
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, snapshot.format_version)?;
+        let ranges = if !self.is_column_oriented()
+            && self.schema().as_ref() == &snapshot.schema
+            && let Some(first_key) = self.linear_cluster_keys(ctx.clone()).first()
+            && let Expr::ColumnRef(column) = first_key.as_expr(&BUILTIN_FUNCTIONS)
+            && let Ok(field) = snapshot.schema.field_with_name(&column.id)
+        {
+            let column_id = field.column_id();
+            snapshot
+                .segment_layout
+                .initialize(column_id, field.data_type());
+            prune_learned_segment_runs(
+                ctx,
+                self.operator.clone(),
+                &snapshot,
+                column_id,
+                self.schema_with_stream(),
+                push_downs,
+            )
+            .await?
+        } else {
+            None
+        };
+        let full_range = ranges.is_none().then_some(0..snapshot.segments.len());
+        let segment_locations = ranges
+            .into_iter()
+            .flatten()
+            .chain(full_range)
+            .flat_map(|range| {
+                range.map(|idx| SegmentLocation {
+                    segment_idx: idx,
+                    location: snapshot.segments[idx].clone(),
+                    snapshot_loc: Some(snapshot_location.clone()),
+                })
+            })
+            .collect();
 
         Ok(Some(SnapshotReadInfo {
             snapshot_id: snapshot.snapshot_id,
@@ -300,7 +442,7 @@ impl FuseTable {
                 .map(|(statistics, partitions)| (statistics, partitions, None));
         }
 
-        let read_info = self.read_snapshot_info().await?;
+        let read_info = self.read_snapshot_info(ctx.clone(), &push_downs).await?;
 
         info!(
             "Reading partitions for table {}, push downs: {:?}, snapshot: {:?}",
@@ -325,10 +467,11 @@ impl FuseTable {
                 {
                     let snapshot_location = read_info.snapshot_location;
                     let mut segments = Vec::with_capacity(read_info.segment_locations.len());
-                    for (idx, segment_location) in
-                        read_info.segment_locations.into_iter().enumerate()
-                    {
-                        segments.push(FuseLazyPartInfo::create(idx, segment_location))
+                    for segment in read_info.segment_locations {
+                        segments.push(FuseLazyPartInfo::create(
+                            segment.segment_idx,
+                            segment.location,
+                        ))
                     }
 
                     return Ok((
@@ -346,7 +489,7 @@ impl FuseTable {
 
                 let table_schema = self.schema_with_stream();
                 let summary = read_info.block_count;
-                let segments_location = read_info.into_pruning_segments();
+                let segments_location = read_info.segment_locations;
 
                 self.prune_snapshot_blocks(
                     ctx.clone(),
