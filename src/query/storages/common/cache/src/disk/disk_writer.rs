@@ -478,7 +478,9 @@ impl Shared {
         // A fill its object was invalidated since, while it waited in the queue, is rejected
         // before it evicts anything to make room, under disk pressure or in its pool. `publish`
         // checks again, for an invalidation from here on.
-        if !job.pool.accepts(&job.rel, job.ticket.started()) {
+        // Nor is one too large for its pool ever to be kept: it would evict entries under disk
+        // pressure, then be refused by `reserve`.
+        if !job.pool.accepts(&job.rel, job.ticket.started()) || !job.pool.admits(len) {
             self.drops.add(&job.rel, DropReason::Rejected);
             return;
         }

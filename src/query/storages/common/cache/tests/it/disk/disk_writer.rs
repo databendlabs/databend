@@ -506,6 +506,15 @@ async fn test_disk_pressure_evicts_data_then_index_then_meta() {
     assert_eq!(items(), (0, 0, 5));
     assert_eq!(files_under(&dir.path().join("index")).len(), 0);
     assert_eq!(files_under(&dir.path().join("meta")).len(), 5);
+
+    // An entry too large for its pool, over a quarter of it, is refused before the pressure
+    // check: nothing is evicted for it.
+    PRESSURE.store(2, Ordering::SeqCst);
+    assert!(writer.enqueue(job(&meta, meta_kind, "huge", 2_600)).await);
+    wait_for(|| idle(&writer));
+    assert_eq!(items(), (0, 0, 5));
+    assert_eq!(drops(&writer).1, 1);
+    PRESSURE.store(0, Ordering::SeqCst);
 }
 
 /// Many readers queue entries at once, with duplicates, a small queue and a pool that
