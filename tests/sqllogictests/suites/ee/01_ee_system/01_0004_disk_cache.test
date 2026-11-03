@@ -107,6 +107,13 @@ select v['a'], v['b'] from t where id = 777;
 ----
 777 "w0"
 
+# Queries prune virtual columns from the block metas; the virtual column files' own metadata
+# is read by this table function.
+query B
+select count() > 0 from fuse_virtual_column_parquet_meta('test_disk_cache', 't');
+----
+1
+
 query I
 select sleep(1);
 ----
@@ -132,6 +139,11 @@ query TT
 select v['a'], v['b'] from t where id = 777;
 ----
 777 "w0"
+
+query B
+select count() > 0 from fuse_virtual_column_parquet_meta('test_disk_cache', 't');
+----
+1
 
 query T
 select name from system.caches where name in (

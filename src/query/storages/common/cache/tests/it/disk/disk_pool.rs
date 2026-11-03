@@ -986,3 +986,43 @@ fn test_change_deletes_previous_run_file_under_a_key_being_written() {
     assert!(pool.end_change(&object, 2, None).is_empty());
     assert_consistent(&pool);
 }
+
+/// Such a file stays marked until it is deleted: while it cannot be, every change of its
+/// object fails, an overlapping one included, and none can complete and let the storage
+/// mutation run with the file left for a restart.
+#[test]
+fn test_previous_run_file_under_a_key_being_written_stays_marked_until_deleted() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    let rel = DiskKey::whole("t/a").rel_path(data());
+    let object = DiskKey::object_id("t/a");
+    let old = write_file(&root, &rel, 100);
+    assert!(pool.reserve(&rel, 100).reserved);
+    assert_eq!(pool.reload(), (0, 0));
+
+    let parent = old.parent().unwrap().to_path_buf();
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
+    // As root, permissions do not stop the delete; nothing to check then.
+    if fs::remove_file(parent.join("probe")).is_ok() || fs::write(parent.join("probe"), b"").is_ok()
+    {
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+        return;
+    }
+    assert!(pool.begin_change(&object).is_err());
+    assert!(pool.begin_change(&object).is_err());
+    assert!(old.exists());
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(pool.begin_change(&object).unwrap(), 0);
+    assert!(!old.exists());
+    // The write started before the changes, at 0, still runs: it is rejected.
+    for at in 1..=3 {
+        pool.end_change(&object, at, Some(0));
+    }
+    let published = pool
+        .publish(rel.clone(), 100, 100, 0, || panic!("not committed"))
+        .unwrap();
+    assert!(!published.indexed);
+    assert_consistent(&pool);
+}

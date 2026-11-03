@@ -491,12 +491,17 @@ impl DiskPool {
                 .get(object)
                 .map(|rels| rels.iter().cloned().collect())
                 .unwrap_or_default();
-            // No write of the object publishes while it changes, so none replaces them.
+            // No write of the object publishes while it changes, so none replaces them. Marked
+            // until deleted, as the entries taken: a change of the object meanwhile deletes
+            // them too, and one whose delete fails keeps them for the next.
             let shadowed: Vec<String> = state
                 .shadowed
                 .remove(object)
                 .map(|rels| rels.into_iter().collect())
                 .unwrap_or_default();
+            for rel in &shadowed {
+                state.mark_deleting(rel);
+            }
             (pending, state.take_object(object), shadowed, state.reloaded)
         };
         // The pending deletes keep their marks for their deletes to clear; no file of those keys
@@ -517,18 +522,7 @@ impl DiskPool {
             }
         }
         let taken = self.try_delete(&victims);
-        let shadowed_deleted = remove_files(&self.root, &shadowed).map_err(|(e, failed)| {
-            // Kept for the next change of the object.
-            let mut state = self.state.lock();
-            for rel in failed {
-                state
-                    .shadowed
-                    .entry(object.to_string())
-                    .or_default()
-                    .insert(rel);
-            }
-            e
-        });
+        let shadowed_deleted = self.try_delete(&shadowed);
         let mut deleted = pending_deleted.and(taken).and(shadowed_deleted);
         if !reloaded {
             // The scan refuses the object's files from now on, and no write of it is put in
