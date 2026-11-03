@@ -378,8 +378,10 @@ impl DiskWriter {
         let number = self.shared.seq.fetch_add(1, Ordering::Relaxed);
         {
             let mut pending = self.shared.pending.lock();
-            // Queued by another caller while this one waited for room.
-            if Shared::blocks_in(&pending, &pool, &key) {
+            // Queued by another caller while this one waited for room, or written already: a
+            // writer indexes its entry before it takes the key off the pending set, so under
+            // this lock a key not pending is indexed if it was written.
+            if Shared::blocks_in(&pending, &pool, &key) || pool.contains(&key.1) {
                 drop(pending);
                 give_back();
                 return false;

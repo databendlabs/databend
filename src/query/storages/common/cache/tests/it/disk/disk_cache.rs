@@ -160,6 +160,32 @@ async fn test_put_of_a_pending_key_is_dropped() {
     assert!(!cache.put(data(), &key, value(0), &cache.begin_fill()).await);
 }
 
+/// Puts of one key from many tasks while the first is written: whichever moment each comes,
+/// queued, being written or indexed, only one is queued, over many rounds.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_puts_of_a_key_being_written_queue_it_once() {
+    let dir = TempDir::new().unwrap();
+    let cache = Arc::new(cache(&dir));
+    for round in 0..200 {
+        let key = DiskKey::range(format!("1/2/_b/round_{round}.parquet"), 0..900);
+        let tasks: Vec<_> = (0..8)
+            .map(|_| {
+                let (cache, key) = (cache.clone(), key.clone());
+                spawn(async move {
+                    let ticket = cache.begin_fill();
+                    cache.put(data(), &key, value(0), &ticket).await
+                })
+            })
+            .collect();
+        let mut queued = 0;
+        for task in tasks {
+            queued += task.await.unwrap() as usize;
+        }
+        assert_eq!(queued, 1, "round {round}");
+        wait_for(|| cache.stats().queued_bytes == 0);
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_entry_too_large_for_the_pool_is_rejected() {
     let dir = TempDir::new().unwrap();
