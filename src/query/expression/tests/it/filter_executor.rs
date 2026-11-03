@@ -259,3 +259,86 @@ fn test_select_like_over_constant_null() {
         }
     }
 }
+
+/// The selector take copies runs of selected rows in bulk; with OR the
+/// selection may be out of row order, which `keep_order` sorts.
+#[test]
+fn test_selector_take_runs() {
+    let num_rows = 4096;
+    let columns = [
+        ("k", DataType::Number(NumberDataType::Int32)),
+        ("s", DataType::String),
+    ];
+    let block = DataBlock::new_from_columns(vec![
+        Int32Type::from_data((0..num_rows as i32).collect::<Vec<_>>()),
+        StringType::from_data(
+            (0..num_rows)
+                .map(|row| format!("a string longer than a view: {row}"))
+                .collect::<Vec<_>>(),
+        ),
+    ]);
+    let func_ctx = FunctionContext::default();
+    let mut unordered_selections = 0;
+    for text in [
+        // Runs of 128 rows, about 25% selected.
+        "k % 512 < 128",
+        // OR appends the rows of the second branch after those of the first.
+        "k >= 3000 OR k % 512 < 128",
+        // Random rows.
+        "k * 7919 % 13 < 5",
+        "k * 7919 % 13 < 3 OR k * 104729 % 11 < 3",
+        // More than 80% selected: the range take.
+        "k >= 3000 OR k % 512 < 450",
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let truth = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+            .run(&expr)
+            .unwrap()
+            .try_downcast::<BooleanType>()
+            .unwrap();
+        let expected = block.clone().filter_boolean_value(&truth).unwrap();
+        for keep_order in [true, false] {
+            let mut executor = FilterExecutor::new(
+                expr.clone(),
+                func_ctx.clone(),
+                num_rows,
+                None,
+                &BUILTIN_FUNCTIONS,
+                keep_order,
+            );
+            let count = executor.select(&block).unwrap();
+            let selection = executor.true_selection()[..count].to_vec();
+            let actual = executor.take(block.clone(), num_rows, count).unwrap();
+            assert_eq!(actual.num_rows(), expected.num_rows(), "{text}");
+            if keep_order {
+                for (l, r) in actual.columns().iter().zip(expected.columns()) {
+                    assert_eq!(l.value(), r.value(), "{text}");
+                }
+            } else {
+                // The rows come in the order of the selection.
+                let reference = block.take(selection.as_slice()).unwrap();
+                unordered_selections += !selection.is_sorted() as usize;
+                let mut sorted = selection.clone();
+                sorted.sort();
+                assert!(sorted.windows(2).all(|w| w[0] < w[1]), "{text}");
+                assert_eq!(sorted.len(), expected.num_rows(), "{text}");
+                if actual.num_rows() * 10 > num_rows * 8 {
+                    // The range take sorts the selection first.
+                    let expected_sorted = block.take(sorted.as_slice()).unwrap();
+                    for (l, r) in actual.columns().iter().zip(expected_sorted.columns()) {
+                        assert_eq!(l.value(), r.value(), "{text}");
+                    }
+                } else {
+                    for (l, r) in actual.columns().iter().zip(reference.columns()) {
+                        assert_eq!(l.value(), r.value(), "{text}");
+                    }
+                }
+            }
+        }
+    }
+    assert!(unordered_selections > 0);
+}
