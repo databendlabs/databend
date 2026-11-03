@@ -357,6 +357,8 @@ fn render_flamegraphs(
             PerfState::NotRunning | PerfState::Idle => continue,
         };
         let flamegraph = match status.folded.as_deref().map(CpuProfiler::render_flamegraph) {
+            // No samples on this node yet.
+            Some(Ok(svg)) if svg.is_empty() => continue,
             Some(Ok(svg)) => svg,
             Some(Err(cause)) => {
                 failures.push(format!("{node_id}: {}", cause.message()));
@@ -444,6 +446,10 @@ mod tests {
             ),
             ("idle".to_string(), status(PerfState::Idle, None)),
             ("gone".to_string(), status(PerfState::NotRunning, None)),
+            (
+                "unsampled".to_string(),
+                status(PerfState::Profiling, Some("")),
+            ),
         ]);
         let html = render_flamegraphs("z-local", nodes).unwrap();
 
@@ -454,6 +460,7 @@ mod tests {
         assert!(html.contains("remote_fn (1 samples, 100.00%)"));
         assert!(!html.contains("idle"));
         assert!(!html.contains("gone"));
+        assert!(!html.contains("unsampled"));
         assert!(!html.contains("Failed nodes"));
         assert!(!html.contains("{{PERF_COUNTERS_TABLE}}"));
     }
@@ -481,6 +488,12 @@ mod tests {
             ("n2".to_string(), PerfNodeStatus::failed("busy".to_string())),
         ]);
         assert_eq!(render_flamegraphs("n1", nodes), Err("n2: busy".to_string()));
+
+        let nodes = HashMap::from([
+            ("n1".to_string(), status(PerfState::Profiling, Some(""))),
+            ("n2".to_string(), status(PerfState::Stopped, Some(""))),
+        ]);
+        assert_eq!(render_flamegraphs("n1", nodes), Err(String::new()));
     }
 
     #[test]

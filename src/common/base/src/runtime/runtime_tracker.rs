@@ -392,7 +392,7 @@ impl Drop for TrackingGuard {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
 
-            // Sync perf flag when restoring the previous payload
+            // Sync the perf query token of the restored payload for the profiler
             QueryPerf::sync_from_payload(&thread_tracker.payload);
         });
     }
@@ -481,7 +481,7 @@ impl ThreadTracker {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
 
-            // Sync perf flag from the new payload to thread_local PERF_FLAG
+            // Sync the perf query token of the new payload for the profiler
             QueryPerf::sync_from_payload(&thread_tracker.payload);
 
             guard

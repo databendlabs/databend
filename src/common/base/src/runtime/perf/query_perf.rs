@@ -26,12 +26,13 @@ use regex::Regex;
 
 use crate::runtime::TrackingPayload;
 
-/// Whether the profiler samples the current thread, see `CpuProfiler`.
+/// The `perf_query_token` of the payload the current thread runs, see
+/// `CpuProfiler`.
 ///
 /// Read by the profiler's signal handler, so it is a plain thread local kept
 /// apart from `ThreadTracker`, maintained by `QueryPerf::sync_from_payload`.
 #[thread_local]
-static mut PERF_FLAG: bool = false;
+static mut PERF_QUERY_TOKEN: u64 = NO_PROFILER;
 
 /// What the process-wide `CpuProfiler` samples: `NO_PROFILER`, `ALL_THREADS`,
 /// or the `perf_query_token` of the query whose threads it samples. Claiming
@@ -56,10 +57,11 @@ pub enum ProfileScope {
 ///
 /// Every query gets a `perf_query_token` on each node, carried in the
 /// `TrackingPayload` of the threads working for it. On every payload switch,
-/// `QueryPerf::sync_from_payload` sets `PERF_FLAG` if the token is the one in
-/// `PROFILER_SCOPE`, and a query-scoped profiler skips samples of threads
-/// without the flag. A running query is thus picked up at its next processor
-/// `process()` or future poll, without cooperation from its pipeline.
+/// `QueryPerf::sync_from_payload` copies the token to `PERF_QUERY_TOKEN`, and
+/// a query-scoped profiler skips samples of threads whose token is not the
+/// one in `PROFILER_SCOPE`. The comparison happens per sample, so a running
+/// query is picked up at once, without cooperation from its pipeline, and a
+/// thread stops matching as soon as the profiler changes.
 pub struct CpuProfiler {
     // Dropped before `_scope`: sampling stops before the scope is released.
     profiler_guard: ProfilerGuard<'static>,
@@ -179,15 +181,17 @@ impl CpuProfiler {
 pub struct QueryPerf;
 
 impl QueryPerf {
+    /// Whether the query-scoped profiler samples the current thread. Called
+    /// by the profiler's signal handler.
     pub fn flag() -> bool {
-        unsafe { PERF_FLAG }
+        let token = unsafe { PERF_QUERY_TOKEN };
+        token != NO_PROFILER && token == PROFILER_SCOPE.load(Ordering::Relaxed)
     }
 
-    /// Set `PERF_FLAG` for the payload the current thread switches to.
+    /// Record the token of the payload the current thread switches to.
     pub fn sync_from_payload(payload: &TrackingPayload) {
-        let scope = PROFILER_SCOPE.load(Ordering::Relaxed);
         unsafe {
-            PERF_FLAG = scope != NO_PROFILER && scope == payload.perf_query_token;
+            PERF_QUERY_TOKEN = payload.perf_query_token;
         }
     }
 
@@ -372,23 +376,22 @@ mod tests {
         }
 
         // Set by `CpuProfiler::start`, which also starts the process-wide
-        // profiler that this test does not need. A running query picks it up
-        // at its next payload switch.
-        PROFILER_SCOPE.store(token, Ordering::Relaxed);
+        // profiler that this test does not need.
         {
             let _guard = ThreadTracker::tracking_inner(payload.clone());
-            assert!(QueryPerf::flag(), "the query is profiled");
+            PROFILER_SCOPE.store(token, Ordering::Relaxed);
+            assert!(QueryPerf::flag(), "a running query is picked up at once");
 
             let inherited = ThreadTracker::tracking_function(QueryPerf::flag);
             assert!(inherited(), "tracking function inherits the token");
+
+            // Profiling another query while this one is still in `process()`.
+            PROFILER_SCOPE.store(QueryPerf::next_query_token(), Ordering::Relaxed);
+            assert!(!QueryPerf::flag(), "another query is profiled");
+
+            PROFILER_SCOPE.store(token, Ordering::Relaxed);
         }
         assert!(!QueryPerf::flag(), "restored payload has no token");
-
-        PROFILER_SCOPE.store(QueryPerf::next_query_token(), Ordering::Relaxed);
-        {
-            let _guard = ThreadTracker::tracking_inner(payload.clone());
-            assert!(!QueryPerf::flag(), "another query is profiled");
-        }
         PROFILER_SCOPE.store(0, Ordering::Relaxed);
     }
 
