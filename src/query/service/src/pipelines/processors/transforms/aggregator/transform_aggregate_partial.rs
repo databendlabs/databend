@@ -15,7 +15,11 @@
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_catalog::table_context::TableContextSettings;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ParentMemStat;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
@@ -24,7 +28,6 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
 use databend_common_expression::PartialDecision;
-use databend_common_expression::PartialEnvironment;
 use databend_common_expression::PartialState;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::ProbeState;
@@ -47,6 +50,57 @@ use crate::sessions::QueryContext;
 /// Rows aggregated between two observations of the partial state, so that it changes within
 /// large input blocks rather than after them.
 const DECISION_ROWS: usize = 64 * 1024;
+/// Emit the table once it allocated this much since it was last emitted. The index and the
+/// payload are bounded otherwise, so this mostly bounds the memory aggregate states own outside
+/// the arena, such as the values of `array_agg` or a distinct set, which grow with the rows of
+/// a group whatever the number of groups.
+const MAX_HOT_MEMORY: usize = 256 * 1024 * 1024;
+
+/// Memory the table allocated since it was last emitted, including what the aggregate states
+/// allocate on their own. The calls into the table are tracked under a child of the memory stat
+/// of the processor, so the plan and the query still account for them; the states are freed by
+/// the final aggregate, so only the growth since the last emission is meaningful.
+#[derive(Default)]
+struct HotMemory {
+    /// Created on the first call, from the tracking payload of the processor.
+    tracking: Option<(Arc<TrackingPayload>, Arc<MemStat>)>,
+    emitted_at: usize,
+}
+
+impl HotMemory {
+    fn track<R>(&mut self, f: impl FnOnce() -> R) -> R {
+        let (payload, _) = self.tracking.get_or_insert_with(|| {
+            let mut payload = ThreadTracker::new_tracking_payload();
+            let parent = match payload.mem_stat.take() {
+                Some(mem_stat) => ParentMemStat::Normal(mem_stat),
+                None => ParentMemStat::StaticRef(&GLOBAL_MEM_STAT),
+            };
+            let mem_stat = MemStat::create_child(None, 0, parent);
+            payload.mem_stat = Some(mem_stat.clone());
+            (Arc::new(payload), mem_stat)
+        });
+        let guard = ThreadTracker::tracking_inner(payload.clone());
+        let result = f();
+        // Allocations are buffered per thread; flush them into the child before reading it. The
+        // parents still enforce their limits on the allocations that follow.
+        let _ = guard.flush();
+        result
+    }
+
+    fn usage(&self) -> usize {
+        self.tracking
+            .as_ref()
+            .map_or(0, |(_, mem_stat)| mem_stat.get_memory_usage())
+    }
+
+    fn bytes(&self) -> usize {
+        self.usage().saturating_sub(self.emitted_at)
+    }
+
+    fn emitted(&mut self) {
+        self.emitted_at = self.usage();
+    }
+}
 
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum HashTable {
@@ -77,8 +131,9 @@ pub fn parse_partial_aggregate_mode(mode: &str) -> Result<PartialAggregateMode> 
 ///
 /// The table is emitted downstream whenever `PartialState` asks for it. In bypass, input blocks
 /// are forwarded unchanged as raw rows for the final aggregate to aggregate. The partial
-/// aggregate never spills: its table is bounded by the state machine, and the final aggregate
-/// spills under memory pressure.
+/// aggregate never spills: its table is bounded by the state machine and by the memory it
+/// allocates between emissions, a grown table shrinks back under memory pressure, and the final
+/// aggregate spills.
 pub struct TransformPartialAggregate {
     hash_table: HashTable,
     probe_state: ProbeState,
@@ -90,14 +145,14 @@ pub struct TransformPartialAggregate {
     /// by the index, so emit it once it holds `flush_bytes`.
     windowed: bool,
     flush_bytes: usize,
-    concurrency: usize,
-    /// Bytes per group of the table, updated once the table holds enough groups that page
-    /// preallocation does not dominate.
-    bytes_per_group: usize,
+    hot_memory: HotMemory,
     output_rows: usize,
-    /// Stats of all calls to the table, and times the index grew.
+    /// Stats of all calls to the table, times the index grew and shrank back, and times the
+    /// table was emitted for its memory.
     total: PartialAddStats,
     grows: usize,
+    shrinks: usize,
+    memory_flushes: usize,
 }
 
 impl TransformPartialAggregate {
@@ -109,7 +164,6 @@ impl TransformPartialAggregate {
         config: HashTableConfig,
         mode: PartialAggregateMode,
     ) -> Result<Box<dyn Processor>> {
-        let concurrency = ctx.get_settings().get_max_threads()?.max(1) as usize;
         let hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
             params.group_data_types.clone(),
             params.aggregate_functions.clone(),
@@ -128,11 +182,12 @@ impl TransformPartialAggregate {
                 state: PartialState::new(mode),
                 windowed: false,
                 flush_bytes: params.max_block_bytes,
-                concurrency,
-                bytes_per_group: 64,
+                hot_memory: HotMemory::default(),
                 output_rows: 0,
                 total: PartialAddStats::default(),
                 grows: 0,
+                shrinks: 0,
+                memory_flushes: 0,
                 params,
             },
         ))
@@ -186,40 +241,38 @@ impl TransformPartialAggregate {
         let params_columns =
             Self::aggregate_arguments(block, &self.params.aggregate_functions_arguments);
         let capacity = self.state.capacity();
-        let stats = hashtable.add_groups_partial(
-            &mut self.probe_state,
-            group_columns,
-            &params_columns,
-            rows_num,
-            capacity,
-            self.state.sampler(),
-        )?;
+        let stats = self.hot_memory.track(|| {
+            hashtable.add_groups_partial(
+                &mut self.probe_state,
+                group_columns,
+                &params_columns,
+                rows_num,
+                capacity,
+                self.state.sampler(),
+            )
+        })?;
         self.windowed |= stats.windows > 0;
         self.total += stats;
 
-        // An index entry costs a control byte and a row pointer at the index load factor.
-        const INDEX_BYTES_PER_GROUP: usize = 13;
-        if hashtable.len() >= 16 * 1024 {
-            self.bytes_per_group =
-                hashtable.partial_hot_bytes() / hashtable.len() + INDEX_BYTES_PER_GROUP;
-        }
-        let env = PartialEnvironment {
-            headroom_bytes: self
-                .settings
-                .check_spill_remain()
-                .map(|remain| remain.max(0) as usize),
-            bytes_per_group: self.bytes_per_group,
-            concurrency: self.concurrency,
-        };
-        let decision = self.state.observe(stats, &env);
+        let decision = self.state.observe(stats);
         self.grows += matches!(decision, PartialDecision::Grow { .. }) as usize;
+        // A grown table cannot release its index on its own, so it is checked once per slice.
+        let shrunk = matches!(self.state, PartialState::Grown { .. })
+            && self.settings.check_spill()
+            && self.state.shrink();
+        self.shrinks += shrunk as usize;
 
+        let memory_full = self.hot_memory.bytes() >= MAX_HOT_MEMORY;
         if decision == PartialDecision::Continue
+            && !shrunk
+            && !memory_full
             && !(self.windowed && hashtable.partial_hot_bytes() >= self.flush_bytes)
         {
             return Ok(vec![]);
         }
+        self.memory_flushes += memory_full as usize;
         let hot = hashtable.take_partial_hot();
+        self.hot_memory.emitted();
         self.windowed = false;
         self.output_rows += hot.len();
         Ok(Self::partitioned_blocks(hot, &self.params))
@@ -291,15 +344,42 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 );
                 let total = &self.total;
                 log::info!(
-                    "[PartialAggregate] Adaptive: final_state={:?}, rows={}, new_groups={}, windows={}, grows={}",
+                    "[PartialAggregate] Adaptive: final_state={:?}, rows={}, new_groups={}, windows={}, grows={}, shrinks={}, memory_flushes={}",
                     self.state,
                     total.rows,
                     total.new_groups,
                     total.windows,
                     self.grows,
+                    self.shrinks,
+                    self.memory_flushes,
                 );
                 Self::partitioned_blocks(hashtable.payload, &self.params)
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MIB: usize = 1024 * 1024;
+
+    #[test]
+    fn test_hot_memory_counts_what_calls_keep() {
+        let mut hot = HotMemory::default();
+        let kept = hot.track(|| vec![1u8; 8 * MIB]);
+        assert!(hot.bytes() >= 8 * MIB);
+
+        // What a call frees before it returns does not count.
+        let before = hot.bytes();
+        hot.track(|| drop(std::hint::black_box(vec![1u8; 8 * MIB])));
+        assert!(hot.bytes() < before + MIB);
+
+        hot.emitted();
+        assert_eq!(hot.bytes(), 0);
+        let more = hot.track(|| vec![1u8; 4 * MIB]);
+        assert!(hot.bytes() >= 4 * MIB && hot.bytes() < 5 * MIB);
+        drop((kept, more));
     }
 }

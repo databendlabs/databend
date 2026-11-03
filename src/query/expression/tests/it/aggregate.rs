@@ -33,10 +33,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DistinctSampler;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::MAX_GROW_CAPACITY;
 use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
 use databend_common_expression::PartialDecision;
-use databend_common_expression::PartialEnvironment;
 use databend_common_expression::PartialState;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
@@ -981,16 +981,70 @@ fn test_partial_grows_with_margin_over_estimate() {
         new_groups: 256 * 1024,
         windows: 10,
     };
-    let env = PartialEnvironment {
-        headroom_bytes: None,
-        bytes_per_group: 64,
-        concurrency: 1,
-    };
-    let PartialDecision::Grow { capacity } = partial.observe(stats, &env) else {
+    let PartialDecision::Grow { capacity } = partial.observe(stats) else {
         panic!("expected to grow, got {partial:?}");
     };
     let keys = KEYS as usize;
     assert!(capacity >= AggregateHashTable::capacity_for_groups(keys + keys / 20));
+}
+
+/// Learn `keys` distinct groups among many more materialized ones, which asks to grow.
+fn learn_recurring_keys(keys: u64) -> (PartialState, PartialDecision) {
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
+    let sampler = partial.sampler().unwrap();
+    sampler.start(0);
+    sampler.observe(&group_hashes(
+        UInt64Type::from_data((0..keys).collect::<Vec<_>>()).into(),
+    ));
+    let rows = 16 * keys as usize;
+    let decision = partial.observe(PartialAddStats {
+        rows,
+        new_groups: rows,
+        windows: rows / 24_000,
+    });
+    (partial, decision)
+}
+
+/// The partial aggregate grows up to `MAX_GROW_CAPACITY`, and does not grow at all when the
+/// distinct groups would not fit: a smaller table would absorb little of them.
+#[test]
+fn test_partial_grows_up_to_max_capacity() {
+    let (partial, decision) = learn_recurring_keys(2_000_000);
+    assert_eq!(decision, PartialDecision::Grow {
+        capacity: MAX_GROW_CAPACITY
+    });
+    assert_eq!(partial.capacity(), MAX_GROW_CAPACITY);
+
+    let (partial, decision) = learn_recurring_keys(3_000_000);
+    assert_eq!(decision, PartialDecision::Continue);
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+}
+
+/// A grown table shrinks back to the small index for good; other states do not shrink.
+#[test]
+fn test_partial_shrinks_grown_table() {
+    let (mut partial, decision) = learn_recurring_keys(100_000);
+    assert!(matches!(decision, PartialDecision::Grow { .. }));
+
+    assert!(partial.shrink());
+    assert!(matches!(partial, PartialState::Shrunk), "{partial:?}");
+    assert_eq!(
+        partial.capacity(),
+        AggregateHashTable::capacity_for_groups(0)
+    );
+    assert!(partial.sampler().is_none());
+    let stats = PartialAddStats {
+        rows: 1 << 24,
+        new_groups: 1 << 24,
+        windows: 1 << 10,
+    };
+    assert_eq!(partial.observe(stats), PartialDecision::Continue);
+    assert!(!partial.shrink());
+
+    let mut learning = PartialState::new(PartialAggregateMode::Auto);
+    assert!(!learning.shrink());
+    let mut bypass = PartialState::new(PartialAggregateMode::Bypass);
+    assert!(!bypass.shrink());
 }
 
 /// String keys in a cyclic order, more than a 65536-slot index holds: the partial aggregate
@@ -1007,11 +1061,6 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
     );
     let mut partial = PartialState::new(PartialAggregateMode::Auto);
     let mut probe = ProbeState::default();
-    let env = PartialEnvironment {
-        headroom_bytes: None,
-        bytes_per_group: 64,
-        concurrency: 1,
-    };
     let (mut grown_rows, mut grown_new_groups) = (0, 0);
     for start in (0..40 * KEYS).step_by(BLOCK_ROWS) {
         let keys = (start..start + BLOCK_ROWS).map(|row| (row % KEYS).to_string());
@@ -1030,7 +1079,7 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
             grown_rows += stats.rows;
             grown_new_groups += stats.new_groups;
         }
-        if partial.observe(stats, &env) != PartialDecision::Continue {
+        if partial.observe(stats) != PartialDecision::Continue {
             table.take_partial_hot();
         }
     }

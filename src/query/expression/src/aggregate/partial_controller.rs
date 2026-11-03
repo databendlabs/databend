@@ -23,12 +23,14 @@
 //!   sampled estimate `D` of the distinct groups:
 //!   - `M / R` and `D / R` both close to 1: nothing to absorb, switch to `Bypass`.
 //!   - `M > 2 * D`: keys recur beyond a window, so switch to `Grown`.
-//! * `Grown`: the index is grown at once to hold the `D` groups, or as many as the memory
-//!   headroom allows. When it fills up it restarts in place like a window.
+//! * `Grown`: the index is grown at once to hold the `D` groups, if they fit in
+//!   [`MAX_GROW_CAPACITY`]. When it fills up it restarts in place like a window.
+//! * `Shrunk`: a grown table met memory pressure, emitted its groups and went back to the small
+//!   index for the rest of the input, without further decisions.
 //! * `Bypass`: forward every row to the final aggregate as raw input, for the rest of the input.
 //!
-//! The partial aggregate never spills: under memory pressure the headroom leaves no room to grow,
-//! and the final aggregate spills.
+//! The partial aggregate never spills: it bounds itself and leaves spilling to the final
+//! aggregate.
 
 use std::fmt;
 use std::ops::AddAssign;
@@ -45,8 +47,11 @@ const CHECK_GROWTH: usize = 4;
 const BYPASS_DISTINCT_RATIO: f64 = 0.9;
 /// Grow when materialized groups exceed the estimated distinct groups by this factor.
 const GROW_DEDUP_RATIO: f64 = 2.0;
-/// Leave this many times the growth of all instances as headroom before memory pressure.
-const HEADROOM_FACTOR: usize = 2;
+/// The largest grown index: 4M slots, 36 MiB of index for up to 3.1M groups per instance. Every
+/// instance holds the keys it sees, so a larger table multiplies their memory by the number of
+/// threads, while a table that cannot hold the distinct groups absorbs little of them. Keys
+/// beyond it are left to the final aggregate.
+pub const MAX_GROW_CAPACITY: usize = 1 << 22;
 /// Grow to hold this many times the estimated distinct groups. An index short of a few keys
 /// absorbs nothing when the keys come in a cyclic order, as each restarts the index before it
 /// repeats, so the margin covers the estimate error.
@@ -129,17 +134,6 @@ pub enum PartialAggregateMode {
     Bypass,
 }
 
-/// Runtime facts the decisions need besides the stats of the last call.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct PartialEnvironment {
-    /// Memory left before the pressure threshold, if memory is limited.
-    pub headroom_bytes: Option<usize>,
-    /// Bytes per group of the table, including its index entry.
-    pub bytes_per_group: usize,
-    /// Partial instances running concurrently.
-    pub concurrency: usize,
-}
-
 /// The state change [`PartialState::observe`] made. `Grow` and `Bypass` require the caller to
 /// emit the groups of the table and restart the index before the next block: a grown index is
 /// rebuilt from the payload, which must hold one row per key.
@@ -158,6 +152,7 @@ pub enum PartialState {
         /// Index capacity the table grows to at once when full.
         capacity: usize,
     },
+    Shrunk,
     Bypass,
 }
 
@@ -214,11 +209,11 @@ impl PartialState {
     }
 
     /// Feed the stats of one `add_groups_partial` call and move to the next state.
-    pub fn observe(&mut self, stats: PartialAddStats, env: &PartialEnvironment) -> PartialDecision {
+    pub fn observe(&mut self, stats: PartialAddStats) -> PartialDecision {
         let PartialState::Learning(learning) = self else {
             return PartialDecision::Continue;
         };
-        let decision = learning.observe(stats, env);
+        let decision = learning.observe(stats);
         match decision {
             PartialDecision::Continue => {}
             PartialDecision::Grow { capacity } => *self = PartialState::Grown { capacity },
@@ -226,10 +221,20 @@ impl PartialState {
         }
         decision
     }
+
+    /// Under memory pressure, a grown table goes back to the small index for good. Returns
+    /// whether it was grown: the caller must then emit the groups and restart the index.
+    pub fn shrink(&mut self) -> bool {
+        if !matches!(self, PartialState::Grown { .. }) {
+            return false;
+        }
+        *self = PartialState::Shrunk;
+        true
+    }
 }
 
 impl Learning {
-    fn observe(&mut self, stats: PartialAddStats, env: &PartialEnvironment) -> PartialDecision {
+    fn observe(&mut self, stats: PartialAddStats) -> PartialDecision {
         self.seen += stats;
         if self.seen.rows < self.next_check_rows {
             return PartialDecision::Continue;
@@ -251,17 +256,11 @@ impl Learning {
             return PartialDecision::Bypass;
         }
         if materialized > distinct * GROW_DEDUP_RATIO {
-            let groups = (distinct * GROW_MARGIN) as usize;
-            let fit_groups = match env.headroom_bytes {
-                None => groups,
-                Some(headroom) => {
-                    let per_group =
-                        env.bytes_per_group.max(1) * env.concurrency.max(1) * HEADROOM_FACTOR;
-                    groups.min(headroom / per_group)
-                }
-            };
-            let capacity = AggregateHashTable::capacity_for_groups(fit_groups);
-            if capacity > AggregateHashTable::capacity_for_groups(0) {
+            let capacity =
+                AggregateHashTable::capacity_for_groups((distinct * GROW_MARGIN) as usize);
+            if capacity > AggregateHashTable::capacity_for_groups(0)
+                && capacity <= MAX_GROW_CAPACITY
+            {
                 return PartialDecision::Grow { capacity };
             }
         }
