@@ -39,6 +39,7 @@ use databend_common_metrics::cache::metrics_inc_cache_access_count;
 use databend_common_metrics::cache::metrics_inc_cache_hit_count;
 use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
 use databend_common_metrics::cache::metrics_inc_cache_miss_count;
+use databend_storages_common_io::MergeIOReadResult;
 use log::info;
 use log::warn;
 use parking_lot::Mutex;
@@ -126,6 +127,9 @@ pub struct DiskCache {
     names: Box<[String]>,
     /// Concurrent misses of one unit read storage once.
     flight: SingleFlight<Bytes>,
+    /// Concurrent misses of the same units of one object, as scans of the same columns at
+    /// once make them, read storage once (`DiskCachedStorage::read_units`).
+    units_flight: SingleFlight<MergeIOReadResult>,
     /// Orders fills against changes of objects (`begin_change`).
     fence: Arc<FillFence>,
     /// Serializes runtime updates: `set_pool_cap`, the check of the pools' sum and the update,
@@ -225,6 +229,7 @@ impl DiskCache {
             names: CacheKind::all().map(disk_name).collect(),
             counters: CacheKind::all().map(|_| KindCounters::default()).collect(),
             flight: SingleFlight::default(),
+            units_flight: SingleFlight::default(),
             fence: Arc::new(FillFence::with_on_advance(Box::new(move |point| {
                 for pool in &fenced {
                     pool.prune_invalidations(point);
@@ -269,6 +274,10 @@ impl DiskCache {
 
     pub(crate) fn flight(&self) -> &SingleFlight<Bytes> {
         &self.flight
+    }
+
+    pub(crate) fn units_flight(&self) -> &SingleFlight<MergeIOReadResult> {
+        &self.units_flight
     }
 
     /// Whether entries of `kind` are read from and written to disk.

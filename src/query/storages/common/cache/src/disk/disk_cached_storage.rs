@@ -38,6 +38,7 @@ use crate::CacheManager;
 use crate::DiskCache;
 use crate::DiskKey;
 use crate::ObjectChange;
+use crate::disk::FillTicket;
 
 /// What a read may do with the disk cache.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -273,20 +274,50 @@ impl DiskCachedStorage {
                 None => misses.push((id, range)),
             }
         }
-        // Before the storage read: an invalidation from here on rejects the units.
-        let ticket = disk.begin_fill();
-        let fetched =
-            MergeIOReader::merge_io_read(settings, self.op.clone(), path, &misses).await?;
-        let miss_bytes: u64 = misses.iter().map(|(_, r)| r.end - r.start).sum();
-        if miss_bytes > 0 {
-            disk.record_storage_read(kind, miss_bytes);
+        if misses.is_empty() {
+            let fetched =
+                MergeIOReader::merge_io_read(settings, self.op.clone(), path, &misses).await?;
+            return Ok(UnitsRead { cached, fetched });
         }
+        // Before the storage read: an invalidation from here on rejects the units. Held until
+        // the shared read is cleaned up, as in `read`.
+        let ticket = disk.begin_fill();
+        let load = self.fetch_units(kind, path, &misses, fill, settings, disk, &ticket);
+        // Readers missing the same units at once, as scans of the same columns do, share one
+        // storage read; one started after the object was invalidated does not join.
+        let generation = disk.invalidation_of(kind, path);
+        let mut flight_key = format!("{kind:?}/{path}@{generation}");
+        for (id, range) in &misses {
+            flight_key.push_str(&format!(":{id}={}-{}", range.start, range.end));
+        }
+        let fetched = disk.units_flight().run(&flight_key, load).await;
+        drop(ticket);
+        Ok(UnitsRead {
+            cached,
+            fetched: fetched?,
+        })
+    }
+
+    /// Reads `misses` from storage with merge IO and queues them to disk unit by unit.
+    #[allow(clippy::too_many_arguments)]
+    async fn fetch_units(
+        &self,
+        kind: CacheKind,
+        path: &str,
+        misses: &[(ColumnId, Range<u64>)],
+        fill: DiskFill,
+        settings: &ReadSettings,
+        disk: &DiskCache,
+        ticket: &FillTicket,
+    ) -> Result<MergeIOReadResult> {
+        let fetched = MergeIOReader::merge_io_read(settings, self.op.clone(), path, misses).await?;
+        let miss_bytes: u64 = misses.iter().map(|(_, r)| r.end - r.start).sum();
+        disk.record_storage_read(kind, miss_bytes);
         if fill.writes() {
             let puts = misses.iter().map(|(id, range)| {
                 // Copied out of the merged read buffer: a queued unit must not keep the whole
                 // buffer alive, as the queue accounts for the unit's bytes only.
                 let unit = fetched_unit(&fetched, *id).map(|b| Bytes::copy_from_slice(&b));
-                let ticket = &ticket;
                 async move {
                     if let Ok(bytes) = unit {
                         disk.put(kind, &self.key(path, Some(range.clone())), bytes, ticket)
@@ -296,7 +327,7 @@ impl DiskCachedStorage {
             });
             futures::future::join_all(puts).await;
         }
-        Ok(UnitsRead { cached, fetched })
+        Ok(fetched)
     }
 
     /// Several ranges of `path`, each its own unit, read concurrently.

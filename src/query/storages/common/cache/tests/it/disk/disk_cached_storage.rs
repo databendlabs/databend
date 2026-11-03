@@ -230,6 +230,47 @@ async fn test_concurrent_misses_read_storage_once() {
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..100)));
 }
 
+/// Concurrent misses of the same units of an object, as scans of the same columns at once make
+/// them, read storage once with merge IO and share the bytes.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_unit_misses_read_storage_once() {
+    let dir = TempDir::new().unwrap();
+    let op = Operator::new(Memory::default()).unwrap().finish();
+    op.write(PATH, object()).await.unwrap();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let op = op.layer(CountingLayer(reads.clone()));
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op, Some(disk.clone()));
+    let units = [(0u32, 0..100u64), (1, 200..300)];
+    let settings = ReadSettings {
+        max_gap_size: 1_000,
+        max_range_size: 10_000,
+        parquet_fast_read_bytes: 0,
+    };
+
+    let results = futures::future::join_all((0..16).map(|_| {
+        let storage = storage.clone();
+        let units = units.clone();
+        async move {
+            let read = storage
+                .read_units(data(), PATH, &units, DiskFill::ReadWrite, &settings)
+                .await
+                .unwrap();
+            (read.unit(0).unwrap(), read.unit(1).unwrap())
+        }
+    }))
+    .await;
+    assert!(
+        results
+            .iter()
+            .all(|r| *r == (object().slice(0..100), object().slice(200..300)))
+    );
+    // One merged read of both units.
+    assert_eq!(reads.load(std::sync::atomic::Ordering::Relaxed), 1);
+    wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 200..300)));
+}
+
 /// A failed storage read is returned to every caller sharing it and fills nothing.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_storage_error_is_shared_and_not_cached() {
