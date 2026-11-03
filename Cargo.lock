@@ -3155,7 +3155,6 @@ dependencies = [
  "foreign_vec",
  "hex",
  "log",
- "match-template",
  "num-traits",
  "proptest",
  "serde",
@@ -3880,7 +3879,6 @@ dependencies = [
  "prost-build 0.14.3",
  "semver",
  "tonic",
- "tonic-prost",
  "tonic-prost-build",
 ]
 
