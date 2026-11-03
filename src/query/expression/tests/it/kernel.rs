@@ -1056,6 +1056,12 @@ fn take_index_shapes(rng: &mut impl rand::Rng, len: usize) -> Vec<(&'static str,
             shuffled_runs.iter().cloned().flatten().collect(),
         ),
         ("repeated_runs", repeated_runs.flatten().collect()),
+        // Runs of 8 rows: the variable-length columns of `take_test_block`
+        // copy the runs, the fixed-width and bitmap columns gather rows.
+        (
+            "short_runs",
+            (0..len).filter(|row| (row / 8) % 2 == 0).collect(),
+        ),
         ("single_rows", (0..len).step_by(2).collect()),
         ("all", (0..len).collect()),
         ("one_row", vec![rng.gen_range(0..len)]),
@@ -1188,42 +1194,60 @@ fn test_take_by_runs_and_ranges() -> databend_common_exception::Result<()> {
 }
 
 /// `take_with_optimize_size_by_runs` copies the selected `String` values like
-/// `take_with_optimize_size`, while `take_ranges` shares the data buffers.
+/// `take_with_optimize_size`, while `take_ranges` shares the data buffers. A
+/// top-level `String` column keeps the row gather; a `Nullable(String)`
+/// column with runs of 32 rows or more takes the runs path.
 #[test]
 fn test_take_by_runs_copies_strings() -> databend_common_exception::Result<()> {
+    use databend_common_expression::types::NullableColumn;
+    use databend_common_expression::types::StringColumn;
+
     let values = (0..1000)
         .map(|i| format!("a string longer than a view: {i:06}"))
         .collect::<Vec<_>>();
-    let block = DataBlock::new_from_columns(vec![StringType::from_data(values)]);
-    let source = block
-        .get_by_offset(0)
-        .as_column()
-        .unwrap()
-        .as_string()
-        .unwrap();
+    let strings = StringType::from_data(values);
+    let validity = Bitmap::from_iter((0..1000).map(|row| row % 7 != 0));
+    let nullable_strings = NullableColumn::new_column(strings.clone(), validity.clone());
     let ranges = [100..400, 600..700];
     let indices = ranges.iter().cloned().flatten().collect::<Vec<u32>>();
 
-    let shares_buffers = |taken: &DataBlock| {
-        let taken = taken.get_by_offset(0).as_column().unwrap();
-        let taken = taken.as_string().unwrap();
-        taken.data_buffers().iter().any(|buffer| {
-            source
-                .data_buffers()
-                .iter()
-                .any(|s| s.as_ptr() == buffer.as_ptr())
-        })
+    let inner_strings = |column: &Column| -> StringColumn {
+        match column {
+            Column::Nullable(nullable) => nullable.column.as_string().unwrap().clone(),
+            column => column.as_string().unwrap().clone(),
+        }
     };
+    for column in [strings, nullable_strings] {
+        let block = DataBlock::new_from_columns(vec![column.clone()]);
+        let source = inner_strings(&column);
+        let shares_buffers = |taken: &DataBlock| {
+            let taken = inner_strings(taken.get_by_offset(0).as_column().unwrap());
+            taken.data_buffers().iter().any(|buffer| {
+                source
+                    .data_buffers()
+                    .iter()
+                    .any(|s| s.as_ptr() == buffer.as_ptr())
+            })
+        };
+        let case = column.data_type().to_string();
 
-    let by_runs = block.take_with_optimize_size_by_runs(&indices)?;
-    assert_taken_rows(&block, &by_runs, &indices, "by_runs");
-    assert!(!shares_buffers(&by_runs));
-    let taken = by_runs.get_by_offset(0).as_column().unwrap();
-    assert!(taken.as_string().unwrap().total_buffer_len() < source.total_buffer_len() / 2);
+        let by_runs = block.take_with_optimize_size_by_runs(&indices)?;
+        assert_taken_rows(&block, &by_runs, &indices, &case);
+        assert!(!shares_buffers(&by_runs), "{case}");
+        let taken = inner_strings(by_runs.get_by_offset(0).as_column().unwrap());
+        assert!(
+            taken.total_buffer_len() < source.total_buffer_len() / 2,
+            "{case}"
+        );
+        if let Column::Nullable(taken) = by_runs.get_by_offset(0).as_column().unwrap() {
+            let expected = indices.iter().map(|&row| validity.get_bit(row as usize));
+            assert!(taken.validity.iter().eq(expected), "{case}");
+        }
 
-    let by_ranges = block.clone().take_ranges(&ranges, indices.len())?;
-    assert_taken_rows(&block, &by_ranges, &indices, "by_ranges");
-    assert!(shares_buffers(&by_ranges));
+        let by_ranges = block.clone().take_ranges(&ranges, indices.len())?;
+        assert_taken_rows(&block, &by_ranges, &indices, &case);
+        assert!(shares_buffers(&by_ranges), "{case}");
+    }
     Ok(())
 }
 

@@ -262,12 +262,24 @@ fn test_select_like_over_constant_null() {
 
 /// The selector take copies runs of selected rows in bulk; with OR the
 /// selection may be out of row order, which `keep_order` sorts.
+///
+/// The block has a variable-length column and a nullable column, so that on
+/// runs of 32 rows or more every column takes the runs path
+/// (`take_with_optimize_size_by_runs`); random rows keep the row gather.
 #[test]
 fn test_selector_take_runs() {
+    use databend_common_expression::types::BinaryType;
+    use databend_common_expression::types::Int64Type;
+
     let num_rows = 4096;
     let columns = [
         ("k", DataType::Number(NumberDataType::Int32)),
         ("s", DataType::String),
+        ("b", DataType::Binary),
+        (
+            "n",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+        ),
     ];
     let block = DataBlock::new_from_columns(vec![
         Int32Type::from_data((0..num_rows as i32).collect::<Vec<_>>()),
@@ -276,19 +288,30 @@ fn test_selector_take_runs() {
                 .map(|row| format!("a string longer than a view: {row}"))
                 .collect::<Vec<_>>(),
         ),
+        BinaryType::from_data(
+            (0..num_rows)
+                .map(|row| format!("bytes {row}").into_bytes())
+                .collect::<Vec<_>>(),
+        ),
+        Int64Type::from_data_with_validity(
+            (0..num_rows as i64).collect::<Vec<_>>(),
+            (0..num_rows).map(|row| row % 5 != 0).collect::<Vec<_>>(),
+        ),
     ]);
     let func_ctx = FunctionContext::default();
     let mut unordered_selections = 0;
-    for text in [
+    // `runs`: the selection has runs of 32 rows or more on average, the
+    // largest threshold of `take_with_optimize_size_by_runs`.
+    for (text, runs) in [
         // Runs of 128 rows, about 25% selected.
-        "k % 512 < 128",
+        ("k % 512 < 128", true),
         // OR appends the rows of the second branch after those of the first.
-        "k >= 3000 OR k % 512 < 128",
+        ("k >= 3000 OR k % 512 < 128", true),
         // Random rows.
-        "k * 7919 % 13 < 5",
-        "k * 7919 % 13 < 3 OR k * 104729 % 11 < 3",
+        ("k * 7919 % 13 < 5", false),
+        ("k * 7919 % 13 < 3 OR k * 104729 % 11 < 3", false),
         // More than 80% selected: the range take.
-        "k >= 3000 OR k % 512 < 450",
+        ("k >= 3000 OR k % 512 < 450", true),
     ] {
         let expr = type_check::check(
             &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
@@ -312,6 +335,13 @@ fn test_selector_take_runs() {
             );
             let count = executor.select(&block).unwrap();
             let selection = executor.true_selection()[..count].to_vec();
+            let selection_runs = 1 + selection.windows(2).filter(|w| w[0] + 1 != w[1]).count();
+            assert_eq!(selection.len() >= 32 * selection_runs, runs, "{text}");
+            let by_runs = block.take_with_optimize_size_by_runs(&selection).unwrap();
+            let by_rows = block.take_with_optimize_size(selection.as_slice()).unwrap();
+            for (l, r) in by_runs.columns().iter().zip(by_rows.columns()) {
+                assert_eq!(l.value(), r.value(), "{text}");
+            }
             let actual = executor.take(block.clone(), num_rows, count).unwrap();
             assert_eq!(actual.num_rows(), expected.num_rows(), "{text}");
             if keep_order {

@@ -288,4 +288,22 @@ mod tests {
         assert_eq!(last.len(), 1);
         assert_eq!(last[0], u32::MAX - 1..u32::MAX);
     }
+
+    /// The selections of `filter_executor::test_selector_take_runs` with runs
+    /// take the runs path, for every column kind: the test checks the results
+    /// of that path only while the thresholds stay below its run lengths.
+    #[test]
+    fn test_selector_test_selections_take_runs() {
+        use super::FIXED_MIN_RUN_LEN;
+        use super::VARIABLE_MIN_RUN_LEN;
+
+        let clustered = (0..4096_u32).filter(|k| k % 512 < 128);
+        let or_selection = (3000..4096_u32)
+            .chain((0..3000).filter(|k| k % 512 < 128))
+            .collect::<Vec<_>>();
+        const { assert!(VARIABLE_MIN_RUN_LEN <= FIXED_MIN_RUN_LEN) };
+        for selection in [clustered.collect::<Vec<_>>(), or_selection] {
+            assert!(index_runs(&selection, FIXED_MIN_RUN_LEN).is_some());
+        }
+    }
 }
