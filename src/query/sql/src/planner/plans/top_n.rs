@@ -112,19 +112,22 @@ impl Operator for TopN {
                     .min(output_rows as u64)
             })
         };
-        let bound_rows = |rows: f64| {
-            (rows - skipped_rows as f64)
-                .max(0.0)
-                .min(output_rows as f64)
-        };
-        // Like Limit, TopN caps the input bound by the rows it may emit. A
-        // known row count gives both the estimate and the bound; otherwise an
-        // estimate of 0 rows stays an estimate (`precise_cardinality` is None).
+        // A known row count gives both the estimate and the bound. Otherwise
+        // the estimate skips the offset, but the bound does not: the input
+        // bound is not exact, and an input larger than it can still fill all
+        // `limit` rows after the offset. Like Limit, TopN only caps the input
+        // bound by the rows it may emit. An estimate of 0 rows stays an
+        // estimate (`precise_cardinality` is None).
         let (cardinality, max_cardinality) = match precise_cardinality {
             Some(rows) => (rows as f64, rows as f64),
             None => (
-                bound_rows(stat_info.cardinality),
-                bound_rows(stat_info.max_cardinality.max(stat_info.cardinality)),
+                (stat_info.cardinality - skipped_rows as f64)
+                    .max(0.0)
+                    .min(output_rows as f64),
+                stat_info
+                    .max_cardinality
+                    .max(stat_info.cardinality)
+                    .min(output_rows as f64),
             ),
         };
 
