@@ -101,8 +101,8 @@ out stats     :
 
 expr          : or_filters(a > 25, b = 5)
 cardinality   : 1000000
-estimated     : 10000
-max           : 10000
+estimated     : 10396
+max           : 200000
 in stats      :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
