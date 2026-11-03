@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
@@ -242,8 +243,11 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
         let (compact_plan, _) = planner2.plan_sql(&compact_sql).await?;
         if let Plan::OptimizeCompactBlock { s_expr } = compact_plan {
-            let optimize_interpreter =
-                OptimizeCompactBlockInterpreter::try_create(ctx.clone(), *s_expr.clone(), true)?;
+            let optimize_interpreter = OptimizeCompactBlockInterpreter::try_create(
+                ctx.clone(),
+                *s_expr.clone(),
+                LockTableOption::LockWithRetry,
+            )?;
             let _ = optimize_interpreter.execute(ctx).await?;
         }
         Ok::<(), ErrorCode>(())

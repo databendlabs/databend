@@ -300,7 +300,6 @@ async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()>
     .await?
     .try_collect::<Vec<_>>()
     .await?;
-    assert_eq!(ctx.get_settings().get_acquire_lock_timeout()?, 1);
 
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;

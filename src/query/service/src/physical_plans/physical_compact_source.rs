@@ -14,14 +14,12 @@
 
 use std::any::Any;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
-use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -36,7 +34,6 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
-use databend_common_storages_fuse::operations::CompactBlockPartInfo;
 use databend_common_storages_fuse::operations::CompactLazyPartInfo;
 use databend_common_storages_fuse::operations::CompactSource as FuseCompactSource;
 use databend_common_storages_fuse::operations::CompactTransform;
@@ -235,36 +232,26 @@ impl IPhysicalPlan for CompactSource {
 }
 
 impl PhysicalPlanBuilder {
-    /// Keep Native Compact execution independent of recluster planning. Claims
-    /// cover exact snapshot sources; the table lock is acquired only at publish.
     pub async fn build_compact_block(
         &mut self,
         compact_block: &databend_common_sql::plans::OptimizeCompactBlock,
-        tbl: Arc<dyn Table>,
-        acquire_commit_lock: bool,
-        claimed_segments: &HashSet<String>,
-    ) -> Result<(PhysicalPlan, Vec<String>)> {
+    ) -> Result<PhysicalPlan> {
         let databend_common_sql::plans::OptimizeCompactBlock {
+            catalog,
             database,
             table,
             limit,
-            ..
         } = compact_block;
 
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(catalog).await?;
+        let tbl = catalog.get_table(&tenant, database, table).await?;
         tbl.check_mutable_for_maintenance()?;
 
-        let fuse = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
-            ErrorCode::Unimplemented(format!(
-                "The 'compact_blocks' operation is not supported for the table '{}'. Table engine: '{}'.",
-                tbl.name(),
-                tbl.get_table_info().engine(),
-            ))
-        })?;
         let table_info = tbl.get_table_info().clone();
-        let compacted = fuse
-            .compact_blocks(self.ctx.clone(), limit.clone(), claimed_segments)
-            .await?;
-        let Some((parts, snapshot)) = compacted else {
+
+        let Some((parts, snapshot)) = tbl.compact_blocks(self.ctx.clone(), limit.clone()).await?
+        else {
             return Err(ErrorCode::NoNeedToCompact(format!(
                 "No need to do compact for '{database}'.'{table}'"
             )));
@@ -275,39 +262,6 @@ impl PhysicalPlanBuilder {
             .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
 
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-        let mut source_indices = HashSet::new();
-        if acquire_commit_lock {
-            for part in &parts.partitions {
-                if merge_meta {
-                    let lazy_part = part
-                        .as_any()
-                        .downcast_ref::<CompactLazyPartInfo>()
-                        .ok_or_else(|| {
-                            ErrorCode::Internal(
-                                "Cannot downcast from PartInfo to CompactLazyPartInfo.",
-                            )
-                        })?;
-                    source_indices.extend(lazy_part.segment_indices.iter().copied());
-                } else if let CompactBlockPartInfo::CompactExtraInfo(extra) =
-                    CompactBlockPartInfo::from_part(part)?
-                {
-                    // Extras describe every source segment, including those
-                    // whose blocks are rewritten by CompactTaskInfo entries.
-                    source_indices.insert(extra.segment_index);
-                    source_indices.extend(extra.removed_segment_indexes.iter().copied());
-                }
-            }
-        }
-        let source_locations = source_indices
-            .into_iter()
-            .map(|index| {
-                snapshot
-                    .segments
-                    .get(index)
-                    .map(|location| location.0.clone())
-                    .ok_or_else(|| ErrorCode::Internal("Compact source index is outside snapshot"))
-            })
-            .collect::<Result<Vec<_>>>()?;
         let mut root: PhysicalPlan = PhysicalPlan::new(CompactSource {
             parts,
             table_info: table_info.clone(),
@@ -338,16 +292,13 @@ impl PhysicalPlanBuilder {
             },
             update_stream_meta: vec![],
             deduplicated_label: None,
-            recluster_info: Some(ReclusterInfoSideCar {
-                acquire_commit_lock,
-                ..Default::default()
-            }),
+            recluster_info: None,
             table_meta_timestamps,
             meta: PhysicalPlanMeta::new("CommitSink"),
             expected_ttl: None,
         });
 
         root.adjust_plan_id(&mut 0);
-        Ok((root, source_locations))
+        Ok(root)
     }
 }

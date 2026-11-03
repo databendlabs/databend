@@ -205,15 +205,7 @@ impl PhysicalPlanBuilder {
             PhysicalRelOperator::MutationSource(mutation_source) => {
                 self.build_mutation_source(mutation_source).await
             }
-            PhysicalRelOperator::CompactBlock(compact) => {
-                let table = self
-                    .ctx
-                    .get_table(&compact.catalog, &compact.database, &compact.table)
-                    .await?;
-                self.build_compact_block(compact, table, false, &HashSet::new())
-                    .await
-                    .map(|(plan, _)| plan)
-            }
+            PhysicalRelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
             PhysicalRelOperator::MaterializedCTE(materialized_cte) => {
                 self.build_materialized_cte(s_expr, materialized_cte, stat_info)
                     .await

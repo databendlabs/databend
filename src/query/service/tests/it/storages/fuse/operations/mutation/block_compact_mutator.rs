@@ -22,7 +22,6 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactBlockPartInfo;
@@ -120,8 +119,8 @@ async fn test_compact() -> anyhow::Result<()> {
 async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<bool> {
     let settings = ctx.get_settings();
     let mut pipeline = databend_common_pipeline::core::Pipeline::create();
-    let res = FuseTable::try_from_table(table.as_ref())?
-        .compact_blocks(ctx.clone(), CompactionLimits::default(), &HashSet::new())
+    let res = table
+        .compact_blocks(ctx.clone(), CompactionLimits::default())
         .await?;
 
     let table_info = table.get_table_info().clone();

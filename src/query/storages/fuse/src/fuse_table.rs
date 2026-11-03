@@ -38,6 +38,7 @@ use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::ReusablePrunedMetas;
@@ -1579,6 +1580,16 @@ impl Table for FuseTable {
     ) -> Result<()> {
         self.check_format_supported()?;
         self.do_compact_segments(ctx, pipeline, limit).await
+    }
+
+    #[async_backtrace::framed]
+    async fn compact_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        limits: CompactionLimits,
+    ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.check_format_supported()?;
+        self.do_compact_blocks(ctx, limits).await
     }
 
     #[async_backtrace::framed]

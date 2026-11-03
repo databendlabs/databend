@@ -696,10 +696,6 @@ impl Settings {
         self.try_get_u64("acquire_lock_timeout")
     }
 
-    pub fn set_acquire_lock_timeout(&self, timeout: u64) -> Result<()> {
-        self.try_set_u64("acquire_lock_timeout", timeout)
-    }
-
     pub fn get_enterprise_license(&self, version: BuildInfoRef) -> String {
         let license = unsafe {
             self.unchecked_try_get_string("enterprise_license")

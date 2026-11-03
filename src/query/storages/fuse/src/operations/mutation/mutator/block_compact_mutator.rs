@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
@@ -71,7 +70,6 @@ pub struct BlockCompactMutator {
     pub partition_key_count: usize,
     pub partition_key_id: Option<u32>,
     pub virtual_column_layout_policy: VirtualColumnLayoutPolicy,
-    pub claimed_segments: HashSet<String>,
 }
 
 impl BlockCompactMutator {
@@ -91,7 +89,6 @@ impl BlockCompactMutator {
             partition_key_count: 0,
             partition_key_id: None,
             virtual_column_layout_policy: Default::default(),
-            claimed_segments: HashSet::new(),
         }
     }
 
@@ -143,24 +140,18 @@ impl BlockCompactMutator {
         let mut lazy_parts = Vec::new();
         let chunk_size = max_threads * 4;
         for chunk in segment_locations.chunks(chunk_size) {
-            let chunk_start = segment_idx;
-            let (indices, locations): (Vec<_>, Vec<_>) = chunk
-                .iter()
-                .enumerate()
-                .filter(|(_, location)| !self.claimed_segments.contains(&location.0))
-                .map(|(offset, location)| (chunk_start + offset, location.clone()))
-                .unzip();
-            segment_idx += chunk.len();
-            if locations.is_empty() {
-                continue;
-            }
-            // Read only unclaimed metadata and preserve snapshot indexes.
+            // Read the segments information in parallel.
             let mut segment_infos = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(&locations, false)
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
                 .await?
                 .into_iter()
-                .zip(indices)
-                .map(|(segment, idx)| segment.map(|segment| (idx, segment)))
+                .map(|sg| {
+                    sg.map(|v| {
+                        let idx = segment_idx;
+                        segment_idx += 1;
+                        (idx, v)
+                    })
+                })
                 .collect::<Result<Vec<_>>>()?;
 
             if let Some(cluster_key_info) = self.cluster_key_info.as_ref() {

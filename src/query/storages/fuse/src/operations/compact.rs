@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Partitions;
@@ -145,14 +144,12 @@ impl FuseTable {
         })
     }
 
-    /// Native size-only compaction, excluding sources owned by concurrent tasks.
-    pub async fn compact_blocks(
+    #[async_backtrace::framed]
+    pub(crate) async fn do_compact_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
         limits: CompactionLimits,
-        claimed_segments: &HashSet<String>,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        self.check_format_supported()?;
         let compact_options = if let Some(v) = self
             .compact_options(limits.segment_limit, limits.block_limit)
             .await?
@@ -170,7 +167,6 @@ impl FuseTable {
             self.operator.clone(),
             self.cluster_key_info(),
         );
-        mutator.claimed_segments = claimed_segments.clone();
         mutator.partition_key_count = self.partition_key_count();
         mutator.partition_key_id = self.partition_key_id();
         mutator.virtual_column_layout_policy = self.virtual_column_layout_policy();
