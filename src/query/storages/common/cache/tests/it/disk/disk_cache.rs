@@ -545,9 +545,9 @@ async fn test_change_drops_all_units_of_the_object() {
     );
 }
 
-/// A unit whose fill started before a change of its object ended, still queued or being written
-/// then, is not published after it: the bytes were read before the rewrite. A fill started
-/// after is.
+/// A unit whose fill started before a change of its object ended is not published after it: the
+/// bytes were read before the rewrite. Queued after the change, it is rejected at once, and
+/// counted as rejected. A fill started after is published.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_change_rejects_fills_started_before() {
     let dir = TempDir::new().unwrap();
@@ -558,8 +558,9 @@ async fn test_change_rejects_fills_started_before() {
     let read_before = cache.begin_fill();
     // The object is rewritten before the old bytes are queued.
     assert_eq!(cache.begin_change(path).unwrap().dropped(), 0);
+    // Rejected at once, before it is queued or its bytes are made.
     assert!(
-        cache
+        !cache
             .put(kind, &key, Bytes::from(vec![1; 100]), &read_before)
             .await
     );
@@ -677,8 +678,9 @@ async fn test_units_are_refused_during_a_change() {
     let key = DiskKey::whole(path);
     let change = cache.begin_change(path).unwrap();
     let during = cache.begin_fill();
+    // Rejected at once, before it is queued or its bytes are made.
     assert!(
-        cache
+        !cache
             .put(kind, &key, Bytes::from(vec![1; 100]), &during)
             .await
     );
@@ -687,8 +689,9 @@ async fn test_units_are_refused_during_a_change() {
     assert!(files_under(&dir.path().join("v2")).is_empty());
     drop(change);
     // Started during the change: still rejected after it.
+    // Rejected at once, before it is queued or its bytes are made.
     assert!(
-        cache
+        !cache
             .put(kind, &key, Bytes::from(vec![1; 100]), &during)
             .await
     );
