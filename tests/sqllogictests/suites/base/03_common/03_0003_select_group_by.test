@@ -435,3 +435,10 @@ select * from (SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP
 
 statement error
 SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    brand, rollup(quantity), all;
+
+query III
+SELECT number % 3, number % 3 + 1, count() FROM numbers(10) GROUP BY number % 3, number % 3 + 1 ORDER BY 1
+----
+0 1 4
+1 2 3
+2 3 3

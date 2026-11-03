@@ -358,11 +358,13 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
     }
 }
 
-/// check if the scalar could be constructed by the columns
+/// check if the scalar could be constructed by the columns and constants, using at least one
+/// of the columns (a constant alone is not pruned)
 pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> bool {
     struct PruneVisitor<'a> {
         columns: &'a HashSet<ScalarExpr>,
         can_prune: bool,
+        uses_columns: bool,
     }
 
     impl<'a> PruneVisitor<'a> {
@@ -370,6 +372,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             Self {
                 columns,
                 can_prune: true,
+                uses_columns: false,
             }
         }
     }
@@ -377,6 +380,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
     impl<'a> Visitor<'a> for PruneVisitor<'a> {
         fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
             if self.columns.contains(expr) {
+                self.uses_columns = true;
                 return Ok(());
             }
 
@@ -392,17 +396,12 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             self.can_prune = false;
             Ok(())
         }
-
-        fn visit_constant(&mut self, _constant: &'a crate::plans::ConstantExpr) -> Result<()> {
-            self.can_prune = false;
-            Ok(())
-        }
     }
 
     let mut visitor = PruneVisitor::new(columns);
     visitor.visit(scalar).unwrap();
 
-    visitor.can_prune
+    visitor.can_prune && visitor.uses_columns
 }
 
 /// Wrap a cast expression with given target type
