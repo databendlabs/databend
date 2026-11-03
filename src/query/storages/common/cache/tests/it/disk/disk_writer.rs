@@ -726,3 +726,146 @@ async fn test_entries_waiting_to_be_written_are_served_until_their_object_change
     assert!(cache.contains(kind, &kept));
     assert_eq!(cache.get(kind, &kept).await, Some(value));
 }
+
+/// Readers look up entries while they are queued, written and published, and while their
+/// objects change: once a change of an object has begun, no lookup returns the bytes read
+/// before it, from the queue or from disk, during the change or after. Every lookup is counted
+/// once, as a hit or a miss, in the kind's figures.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_lookups_racing_writes_and_changes_never_serve_changed_objects() {
+    let dir = TempDir::new().unwrap();
+    let cache = Arc::new(
+        DiskCache::with_writer(
+            dir.path(),
+            1 << 24,
+            [1 << 22, 1 << 22, 1 << 23],
+            WriterOptions {
+                ..options(4, 1 << 20, Duration::from_millis(50))
+            },
+        )
+        .unwrap(),
+    );
+    let kind = data_kind();
+    const OBJECTS: usize = 64;
+    let path = |i: usize| format!("1/2/_b/race_{i}.parquet");
+    let changed: Arc<Vec<AtomicBool>> =
+        Arc::new((0..OBJECTS).map(|_| AtomicBool::new(false)).collect());
+    let lookups = Arc::new(AtomicU64::new(0));
+    let old = Bytes::from(vec![1u8; 1_000]);
+    for i in 0..OBJECTS {
+        let fill = cache.begin_fill();
+        let key = DiskKey::range(path(i), 0..1_000);
+        cache.put(kind, &key, old.clone(), &fill).await;
+    }
+    let readers: Vec<_> = (0..8)
+        .map(|r| {
+            let (cache, changed, lookups) = (cache.clone(), changed.clone(), lookups.clone());
+            spawn(async move {
+                for n in 0..2_000 {
+                    let i = (r * 7 + n) % OBJECTS;
+                    let after = changed[i].load(Ordering::SeqCst);
+                    let got = cache.get(kind, &DiskKey::range(path(i), 0..1_000)).await;
+                    lookups.fetch_add(1, Ordering::Relaxed);
+                    if after {
+                        assert!(got.is_none(), "object {i} served after its change began");
+                    }
+                }
+            })
+        })
+        .collect();
+    let changer = {
+        let (cache, changed) = (cache.clone(), changed.clone());
+        spawn(async move {
+            for i in (0..OBJECTS).rev() {
+                let change = cache.begin_change(&path(i)).unwrap();
+                changed[i].store(true, Ordering::SeqCst);
+                tokio::time::sleep(Duration::from_millis(1)).await;
+                drop(change);
+            }
+        })
+    };
+    for reader in readers {
+        reader.await.unwrap();
+    }
+    changer.await.unwrap();
+    wait_for(|| cache.stats().queued_bytes == 0);
+    for i in 0..OBJECTS {
+        assert!(
+            cache
+                .get(kind, &DiskKey::range(path(i), 0..1_000))
+                .await
+                .is_none()
+        );
+    }
+    let stats = cache.kind_stats(kind);
+    assert_eq!(
+        stats.hits + stats.misses,
+        lookups.load(Ordering::Relaxed) + OBJECTS as u64
+    );
+    assert!(stats.queued_hits <= stats.hits);
+}
+
+/// The writer settings change while entries are queued from many tasks: every entry queued is
+/// written or counted as dropped, the queue drains, and the settings end as last set.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_settings_change_while_entries_are_queued() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 1 << 30);
+    let writer = Arc::new(DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        options(2, 4 * 1024, Duration::from_millis(5)),
+    ));
+    let queued = Arc::new(AtomicU64::new(0));
+    let tasks: Vec<_> = (0..8)
+        .map(|t| {
+            let (writer, pool, queued) = (writer.clone(), pool.clone(), queued.clone());
+            spawn(async move {
+                for i in 0..200 {
+                    if writer
+                        .enqueue(job(&pool, data_kind(), &format!("t{t}_{i}"), 512))
+                        .await
+                    {
+                        queued.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            })
+        })
+        .collect();
+    let tuner = {
+        let writer = writer.clone();
+        spawn(async move {
+            for i in 0..200u64 {
+                writer.set_queue_bytes(1_024 * (1 + i % 16));
+                writer.set_queue_wait(Duration::from_millis(i % 3));
+                writer.set_watermark_ratio(50 + i % 50);
+                writer.set_sync_data(i % 2 == 0);
+                tokio::time::sleep(Duration::from_micros(200)).await;
+            }
+            writer.set_queue_bytes(1 << 20);
+            writer.set_queue_wait(Duration::from_millis(50));
+            writer.set_watermark_ratio(90);
+            writer.set_sync_data(false);
+        })
+    };
+    for task in tasks {
+        task.await.unwrap();
+    }
+    tuner.await.unwrap();
+    wait_for(|| idle(&writer));
+    let (_, rejected, io_error) = drops(&writer);
+    assert_eq!(
+        pool.stats().items + rejected + io_error,
+        queued.load(Ordering::Relaxed)
+    );
+    let settings = writer.settings();
+    assert_eq!(
+        (
+            settings.queue_bytes(),
+            settings.queue_wait(),
+            settings.watermark_ratio(),
+            settings.sync_data()
+        ),
+        (1 << 20, Duration::from_millis(50), 90, false)
+    );
+}

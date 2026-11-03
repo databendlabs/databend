@@ -1076,3 +1076,61 @@ fn test_previous_run_file_is_deleted_when_its_replacement_is_abandoned() {
     }
     assert_consistent(&pool);
 }
+
+/// Changes of an object race the write of one of its keys that has a previous run's file under
+/// it, from several threads. At the end the previous run's bytes are gone: the file is deleted,
+/// or replaced by the write, then indexed. Nothing is left marked, and the key can be written
+/// again.
+#[test]
+fn test_changes_racing_a_shadowed_write_leave_no_file() {
+    for round in 0..50 {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().to_path_buf();
+        let pool = Arc::new(DiskPool::new(Pool::Data, root.clone(), 10_000));
+        let rel = DiskKey::whole("t/a").rel_path(data());
+        let object = DiskKey::object_id("t/a");
+        let old = write_file(&root, &rel, 100);
+        assert!(pool.reserve(&rel, 100).reserved);
+        assert_eq!(pool.reload(), (0, 0));
+        let changers: Vec<_> = (0..4u64)
+            .map(|t| {
+                let (pool, object) = (pool.clone(), object.clone());
+                Thread::spawn(move || {
+                    for i in 0..20 {
+                        let _ = pool.begin_change(&object);
+                        pool.end_change(&object, 1 + t * 100 + i, Some(0));
+                    }
+                })
+            })
+            .collect();
+        let writer = {
+            let (pool, rel, path) = (pool.clone(), rel.clone(), old.clone());
+            Thread::spawn(move || {
+                if round % 2 == 0 {
+                    let commit = || fs::write(&path, vec![2u8; 100]);
+                    let published = pool.publish(rel.clone(), 100, 100, 0, commit).unwrap();
+                    pool.delete(&published.victims);
+                } else {
+                    pool.release(&rel, 100);
+                }
+            })
+        };
+        for t in changers {
+            t.join().unwrap();
+        }
+        writer.join().unwrap();
+        if old.exists() {
+            assert!(
+                pool.contains(&rel),
+                "round {round}: an unindexed file is left"
+            );
+            assert_eq!(fs::read(&old).unwrap(), vec![2u8; 100], "round {round}");
+            pool.remove(&rel);
+        }
+        assert!(!old.exists(), "round {round}");
+        let r = pool.reserve(&rel, 1);
+        assert!(r.reserved, "round {round}");
+        pool.release(&rel, 1);
+        assert_consistent(&pool);
+    }
+}

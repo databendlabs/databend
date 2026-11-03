@@ -25,6 +25,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_io::MergeIOReadResult;
@@ -219,13 +220,26 @@ impl DiskCachedStorage {
             }
             disk.evict(kind, &key);
         }
+        // Shared by concurrent readers, as `read`: footer reads of one file at once stat it once.
         let ticket = disk.begin_fill();
-        let len = self.op.stat(path).await?.content_length();
-        if fill.writes() {
+        let load = async {
+            let len = self.op.stat(path).await?.content_length();
             let bytes = Bytes::copy_from_slice(&len.to_le_bytes());
-            disk.put(kind, &key, bytes, &ticket).await;
-        }
-        Ok(len)
+            if fill.writes() {
+                disk.put(kind, &key, bytes.clone(), &ticket).await;
+            }
+            Ok(bytes)
+        };
+        let generation = disk.invalidation_of(kind, key.path());
+        let bytes = disk
+            .flight()
+            .run(&format!("{kind:?}/{key}@{generation}"), load)
+            .await;
+        drop(ticket);
+        let bytes = bytes?;
+        <[u8; 8]>::try_from(bytes.as_ref())
+            .map(u64::from_le_bytes)
+            .map_err(|_| ErrorCode::Internal(format!("bad cached length of {path}")))
     }
 
     async fn read_storage(&self, path: &str, range: Option<Range<u64>>) -> Result<Bytes> {

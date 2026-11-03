@@ -400,6 +400,19 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for Counting<A> {
         self.inner.write(path, args).await
     }
 
+    /// Counted and slowed down as reads.
+    async fn stat(
+        &self,
+        path: &str,
+        args: opendal::raw::OpStat,
+    ) -> opendal::Result<opendal::raw::RpStat> {
+        let stat = self.inner.stat(path, args).await;
+        self.reads
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        stat
+    }
+
     async fn list(
         &self,
         path: &str,
@@ -914,4 +927,81 @@ async fn test_unit_reads_racing_rewrites_never_return_stale_bytes_after() {
             );
         }
     }
+}
+
+/// Concurrent lengths of one object, as footer reads of one file at once ask for, stat it once;
+/// after the object changes the next ones stat it again and get its new length.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_lengths_stat_once_until_the_object_changes() {
+    let dir = TempDir::new().unwrap();
+    let (op, reads, disk, storage) = counted_setup(&dir).await;
+    let lengths = futures::future::join_all((0..16).map(|_| {
+        let storage = storage.clone();
+        async move {
+            storage
+                .content_length(data(), PATH, DiskFill::ReadWrite)
+                .await
+                .unwrap()
+        }
+    }))
+    .await;
+    assert!(lengths.iter().all(|len| *len == object().len() as u64));
+    assert_eq!(reads_of(&reads), 1);
+    wait_for(|| disk.contains(data(), &DiskKey::length(PATH)));
+
+    let change = storage.begin_change(PATH).unwrap();
+    op.write(PATH, Bytes::from(vec![1u8; 10])).await.unwrap();
+    drop(change);
+    let lengths = futures::future::join_all((0..16).map(|_| {
+        let storage = storage.clone();
+        async move {
+            storage
+                .content_length(data(), PATH, DiskFill::ReadWrite)
+                .await
+                .unwrap()
+        }
+    }))
+    .await;
+    assert!(lengths.iter().all(|len| *len == 10));
+    assert_eq!(reads_of(&reads), 2);
+}
+
+/// Maintenance and queries read the same objects at once, on the same runtime: the flag is per
+/// statement, so maintenance reads never touch the disk cache while the queries' reads fill
+/// and hit it. Every disk cache lookup is a query's.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_maintenance_and_queries_at_once_keep_their_own_disk_policy() {
+    let dir = TempDir::new().unwrap();
+    let (_op, disk, storage) = setup(&dir).await;
+    let query_reads = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let tasks: Vec<_> = (0..16)
+        .map(|t| {
+            let (storage, query_reads) = (storage.clone(), query_reads.clone());
+            databend_common_base::runtime::spawn(async move {
+                for i in 0..50u64 {
+                    let range = Some((i % 10) * 100..(i % 10) * 100 + 100);
+                    if t % 2 == 0 {
+                        ThreadTracker::maintenance_payload()
+                            .tracking(storage.read(data(), PATH, range, DiskFill::ReadWrite))
+                            .await
+                            .unwrap();
+                    } else {
+                        storage
+                            .read(data(), PATH, range, DiskFill::ReadWrite)
+                            .await
+                            .unwrap();
+                        query_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+            })
+        })
+        .collect();
+    for task in tasks {
+        task.await.unwrap();
+    }
+    let stats = disk.kind_stats(data());
+    assert_eq!(
+        stats.hits + stats.misses,
+        query_reads.load(std::sync::atomic::Ordering::Relaxed)
+    );
 }
