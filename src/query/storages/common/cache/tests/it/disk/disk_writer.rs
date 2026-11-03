@@ -513,18 +513,31 @@ async fn test_entry_indexed_while_queued_evicts_nothing() {
 
     // So is an entry that the writes in flight alone leave no room for: evicting every entry
     // could not make it fit, and the watermark is not checked for it either.
-    let held = DiskKey::whole("held").rel_path(meta_kind);
-    assert!(meta.reserve(&held, 9_000).reserved);
+    // Four writes of a quarter of the pool each, in flight.
+    let held: Vec<String> = (0..4)
+        .map(|i| DiskKey::whole(&format!("held{i}")).rel_path(meta_kind))
+        .collect();
+    for rel in &held {
+        let r = meta.reserve(rel, 2_400);
+        assert!(r.reserved);
+        meta.delete(&r.victims);
+    }
     assert!(
         writer
-            .enqueue(job(&meta, meta_kind, "squeezed", 2_000))
+            .enqueue(job(&meta, meta_kind, "squeezed", 1_000))
             .await
     );
     wait_for(|| idle(&writer));
-    assert_eq!(meta.stats().items, 2);
+    assert_eq!(
+        meta.stats().items,
+        0,
+        "the reservations evicted the entries"
+    );
     assert_eq!(drops(&writer).1, 2);
     assert_eq!(INDEXED.entered.load(Ordering::SeqCst), 1);
-    meta.release(&held, 9_000);
+    for rel in &held {
+        meta.release(rel, 2_400);
+    }
 }
 
 /// Many readers queue entries at once, with duplicates, a small queue and a pool that
