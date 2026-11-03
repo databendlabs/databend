@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_functions::is_builtin_function;
-use databend_common_meta_api::kv::ownership::create_owned_object;
+use databend_common_meta_api::crud::create_owned_object;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::OwnershipObject;

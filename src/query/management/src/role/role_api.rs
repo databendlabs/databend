@@ -66,7 +66,24 @@ pub trait RoleApi: Sync + Send {
     /// The owner role need to update to account_admin.
     async fn transfer_ownership_to_admin(&self, role: &str) -> Result<(), MetaTxnError>;
 
-    /// Set `role` as the owner of `object`, replacing any previous owner.
+    /// Grant ownership would transfer ownership of a object from one role to another role
+    ///
+    ///
+    /// Seq number ensures there is no other write happens between get and set.
+    /// from: the role that currently owns the object, it could be empty on the first time
+    /// to: the role that will own the object, to.0 is the owner role name, to.1 is the role details
+    /// None RoleInfo means the role is built-in role, could only update grant object metadata
+    ///
+    /// Grant ownership used when create new object, contains two step:
+    /// 1. grant ownership privilege obj to role,
+    /// 2. kv api upsert new owner object key.
+    ///
+    /// or:
+    ///
+    /// 1. revoke ownership on obj from old role,
+    /// 2. grant ownership on obj to new role,
+    /// 3. kv api upsert new owner object key.
+    /// Note: if role/old_role is `account_admin` or `public` no need to revoke/grant ownership privilege
     #[allow(clippy::ptr_arg)]
     async fn grant_ownership(
         &self,
@@ -74,7 +91,12 @@ pub trait RoleApi: Sync + Send {
         role: &str,
     ) -> Result<(), MetaTxnError>;
 
-    /// Delete the ownership of `object`. Call it after the object itself is dropped.
+    /// Remember to call this method when you dropped a OwnerObject like table/database/stage/udf.
+    /// Revoke ownership used when drop old object, contains two step:
+    /// 1. revoke ownership privilege obj to new role,
+    /// 2. kv api delete old owner object key.
+    ///
+    /// Note: if role is `account_admin` or None no need to revoke
     async fn revoke_ownership(&self, object: &OwnershipObject) -> Result<(), MetaTxnError>;
 
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC

@@ -43,7 +43,7 @@ use log::debug;
 
 use super::sequence_nextval_impl::NextVal;
 use crate::SequenceApi;
-use crate::kv::ownership::create_owned_object;
+use crate::crud::create_owned_object;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
