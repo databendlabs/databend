@@ -172,7 +172,7 @@ impl Binder {
         }
         if !explicit_mv && is_mv {
             return Err(ErrorCode::TableEngineNotSupported(format!(
-                "'{}' is a materialized view; use ON MATERIALIZED VIEW to grant or revoke SELECT",
+                "'{}' is a materialized view; use ON MATERIALIZED VIEW to grant or revoke privileges",
                 table.name()
             )));
         }
