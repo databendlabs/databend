@@ -191,11 +191,11 @@ max_cardinality: 200000000.000
 statistics_zero_bound: true
 
 === filter_range_outside_statistics_and_equality ===
-description: A selective predicate in the same conjunction lowers the expectation but not the bound.
+description: A selective predicate in the same conjunction lowers the expectation and the bound, in which only the range counts as an unknown filter.
 sql: SELECT * FROM r WHERE t > 1000 AND k = 5
 operator: Filter
 cardinality: 0.400
-max_cardinality: 200000000.000
+max_cardinality: 200.000
 statistics_zero_bound: true
 
 === filter_equality_outside_statistics ===
@@ -223,19 +223,27 @@ max_cardinality: 200000000.000
 statistics_zero_bound: true
 
 === filter_over_range_outside_statistics ===
-description: A filter keeps the bound of a range outside the recorded min/max below it.
+description: A filter keeps the bound of a range outside the recorded min/max below it, reduced by its own selectivity.
 sql: SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE k > 10
 operator: Filter
 cardinality: 400000.000
 max_cardinality: 200000000.000
 statistics_zero_bound: true
 
+=== filter_equality_over_range_outside_statistics ===
+description: A selective equality above a range outside the recorded min/max lowers the bound as much as the expected rows.
+sql: SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE k = 5
+operator: Filter
+cardinality: 1.213
+max_cardinality: 606.550
+statistics_zero_bound: true
+
 === filter_over_window_over_range_outside_statistics ===
-description: A window function keeps the rows of its input, so a filter on its result keeps the bound of the range below.
+description: A window function keeps the rows of its input, so a filter on its result keeps the bound of the range below, reduced by its own selectivity.
 sql: SELECT * FROM (SELECT k, row_number() OVER (PARTITION BY k ORDER BY t) AS n FROM r WHERE t > 1000) AS x WHERE n <> 5
 operator: Filter
 cardinality: 200000.000
-max_cardinality: 200000000.000
+max_cardinality: 100000000.000
 statistics_zero_bound: true
 
 === filter_proven_empty_over_range_outside_statistics ===
@@ -245,6 +253,14 @@ operator: Filter
 cardinality: 0.000
 max_cardinality: 0.000
 statistics_zero_bound: false
+
+=== filter_two_ranges_outside_statistics ===
+description: Two ranges outside the recorded min/max each count as an unknown filter in the bound.
+sql: SELECT * FROM e WHERE t > 1000 AND v > 1000
+operator: Filter
+cardinality: 160.000
+max_cardinality: 40000000.000
+statistics_zero_bound: true
 
 === filter_range_outside_statistics_over_join ===
 description: A range outside the recorded min/max above a join whose bound exceeds its estimate keeps the strict row limit.
