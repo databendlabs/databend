@@ -467,6 +467,60 @@ async fn test_disk_pressure_evicts_data_then_index_then_meta() {
     PRESSURE.store(0, Ordering::SeqCst);
 }
 
+static INDEXED: Gate = Gate::new();
+static INDEXED_PRESSURE: AtomicUsize = AtomicUsize::new(0);
+fn indexed_gate(_: &Path, _: u64) -> bool {
+    INDEXED.pass();
+    INDEXED_PRESSURE
+        .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+        .is_ok()
+}
+
+/// An entry whose key was indexed after it was queued, as by the restart scan, is refused
+/// before the pressure check: nothing is evicted for it.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_entry_indexed_while_queued_evicts_nothing() {
+    let dir = TempDir::new().unwrap();
+    let data = pool_at(dir.path().join("data"), Pool::Data, 10_000);
+    let meta = pool_at(dir.path().join("meta"), Pool::Meta, 10_000);
+    let writer = DiskWriter::start(
+        vec![data.clone(), meta.clone()],
+        dir.path().to_path_buf(),
+        WriterOptions {
+            over_watermark: indexed_gate,
+            ..options(1, 1 << 20, Duration::from_millis(50))
+        },
+    );
+    let meta_kind = CacheKind::of::<segment::Info>();
+    assert!(writer.enqueue(job(&data, data_kind(), "hot", 100)).await);
+    wait_for(|| idle(&writer));
+    // The writer is held in the pressure check of "gate" while "late" waits behind it.
+    INDEXED.close();
+    assert!(writer.enqueue(job(&meta, meta_kind, "gate", 100)).await);
+    INDEXED.wait_entered(1);
+    let late = job(&meta, meta_kind, "late", 100);
+    let rel = late.rel.clone();
+    assert!(writer.enqueue(late).await);
+    // Indexed meanwhile, as the restart scan does with a file of the previous run.
+    let r = meta.reserve(&rel, 104);
+    assert!(r.reserved);
+    assert!(
+        meta.publish(rel.clone(), 104, 104, || Ok(()))
+            .unwrap()
+            .indexed
+    );
+    // The file system is over the watermark from now on.
+    INDEXED_PRESSURE.store(10, Ordering::SeqCst);
+    INDEXED.open();
+    wait_for(|| idle(&writer));
+    // "gate" was checked before the pressure and went in; "late" was refused before it,
+    // and "hot" stays.
+    assert_eq!(data.stats().items, 1);
+    assert_eq!(meta.stats().items, 2);
+    assert_eq!(drops(&writer).1, 1);
+    assert_eq!(INDEXED_PRESSURE.load(Ordering::SeqCst), 10);
+}
+
 /// Many readers queue entries at once, with duplicates, a small queue and a pool that
 /// evicts: whatever is dropped, the queue drains to zero, nothing stays pending or
 /// reserved, and the index matches the files, each holding the value of its key.

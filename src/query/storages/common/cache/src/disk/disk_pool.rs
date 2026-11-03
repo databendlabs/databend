@@ -331,13 +331,18 @@ impl DiskPool {
         self.state.lock().index.contains(rel)
     }
 
-    /// Whether an entry `rel` of `len` bytes, its file `len` plus the checksum, can ever be
-    /// kept: the pool and the kind are on, and it is no larger than a quarter of the pool.
+    /// Whether `reserve` would take an entry `rel` of `len` bytes, its file `len` plus the
+    /// checksum, as things stand: the pool and the kind are on, it is no larger than a quarter
+    /// of the pool, and the key is not indexed (as by the restart scan since it was queued),
+    /// being deleted or being written. Checked before anything is evicted for the entry.
     pub fn admits(&self, rel: &str, len: u64) -> bool {
         let state = self.state.lock();
         state.cap > 0
             && !state.kind_off(rel)
             && len.saturating_add(4) <= state.cap / OVERSIZED_DIVISOR
+            && !state.index.contains(rel)
+            && !state.deleting.contains(rel)
+            && !state.in_flight.contains(rel)
     }
 
     /// Reserves `bytes` for `rel`, taking least recently used entries out of the index until
