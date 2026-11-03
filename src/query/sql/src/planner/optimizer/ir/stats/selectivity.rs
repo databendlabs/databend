@@ -367,10 +367,16 @@ impl SelectivityEstimator {
         self.overrides = constraints.apply_to_column_stats(&self.column_stats)?;
         if matches!(selectivity, Selectivity::StatisticsZero(_)) {
             // A range outside the column statistics empties the constrained
-            // column. The estimate is not zero, so scale the input statistics
-            // of such a column instead.
-            self.overrides
-                .retain(|_, column_stat| column_stat.ndv().upper > 0.0);
+            // column. The estimate is not zero, so keep the input statistics of
+            // such a column; the comparison still rejects NULLs.
+            for (index, column_stat) in self.overrides.iter_mut() {
+                if column_stat.ndv().upper == 0.0
+                    && let Some(input_stat) = self.column_stats.get(index)
+                {
+                    *column_stat = input_stat.clone();
+                    column_stat.set_null_count(StatCount::exact(0));
+                }
+            }
         }
         Ok(self.apply_selectivity_to_column_stats(selectivity, &not_null_columns))
     }
