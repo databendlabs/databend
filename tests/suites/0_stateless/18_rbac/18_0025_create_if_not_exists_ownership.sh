@@ -27,6 +27,12 @@ owner_of() {
 	bendsql_connect_root --output tsv --query="SHOW GRANTS ON $1" | awk -F '\t' '$1 == "OWNERSHIP" { print $1 "\t" $5 }'
 }
 
+# Counts the owner role's OWNERSHIP grants on objects named $1. SHOW GRANTS FOR ROLE lists
+# ownership records directly, so a record left behind by DROP still shows up here.
+owned_count() {
+	bendsql_connect_root --output tsv --query="SHOW GRANTS FOR ROLE if_not_exists_owner_role" | awk -F '\t' -v name="$1" '$1 == "OWNERSHIP" && $2 == name { n++ } END { print n + 0 }'
+}
+
 table_id() {
 	bendsql_connect_root --output tsv --query="SELECT table_id FROM system.tables WHERE database = 'if_not_exists_db' AND name = '$1'"
 }
@@ -79,6 +85,9 @@ owner_of "CONNECTION if_not_exists_conn"
 expect_denied if_not_exists_creator "DESC CONNECTION if_not_exists_conn"
 expect_denied if_not_exists_creator "DROP CONNECTION if_not_exists_conn"
 run_user if_not_exists_owner "DESC CONNECTION if_not_exists_conn" | cut -f1,2
+echo "owned before DROP: $(owned_count if_not_exists_conn)"
+run_user if_not_exists_owner "DROP CONNECTION if_not_exists_conn"
+echo "owned after DROP: $(owned_count if_not_exists_conn)"
 
 # SUPER authorizes Stage/UDF creation, but does not grant access to another
 # role's objects. Sequence creation requires its own explicit privilege.
@@ -111,4 +120,7 @@ for kind in STAGE SEQUENCE UDF; do
 	run_user if_not_exists_creator "CREATE $ddl IF NOT EXISTS $name $definition" >/dev/null
 	owner_of "$kind $name"
 	expect_denied if_not_exists_creator "DROP $ddl $name"
+	echo "owned before DROP: $(owned_count "$name")"
+	run_user if_not_exists_owner "DROP $ddl $name" >/dev/null
+	echo "owned after DROP: $(owned_count "$name")"
 done
