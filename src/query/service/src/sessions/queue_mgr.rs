@@ -52,7 +52,6 @@ use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
 use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
 use databend_common_metrics::session::set_session_queued_queries;
-use databend_common_sql::PlanExtras;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
@@ -577,7 +576,6 @@ pub struct QueryEntry {
     ctx: Arc<QueryContext>,
     pub query_id: String,
     pub create_time: SystemTime,
-    pub sql: String,
     pub user_info: UserInfo,
     pub timeout: Duration,
     pub lock_ttl: Duration,
@@ -589,7 +587,6 @@ pub struct QueryEntry {
 impl QueryEntry {
     pub fn create_entry(
         ctx: &Arc<QueryContext>,
-        plan_extras: &PlanExtras,
         need_acquire_to_queue: bool,
     ) -> Result<QueryEntry> {
         let settings = ctx.get_settings();
@@ -604,7 +601,6 @@ impl QueryEntry {
             need_acquire_to_queue,
             query_id: ctx.get_id(),
             create_time: ctx.get_query_created_time(),
-            sql: plan_extras.statement.to_mask_sql(),
             user_info: ctx.get_current_user()?,
             timeout: match settings.get_statement_queued_timeout()? {
                 0 => Duration::from_secs(60 * 60 * 24 * 365 * 35),
@@ -615,13 +611,9 @@ impl QueryEntry {
         })
     }
 
-    pub fn create(
-        ctx: &Arc<QueryContext>,
-        plan: &Plan,
-        plan_extras: &PlanExtras,
-    ) -> Result<QueryEntry> {
+    pub fn create(ctx: &Arc<QueryContext>, plan: &Plan) -> Result<QueryEntry> {
         let need_add_to_queue = Self::is_heavy_action(plan);
-        QueryEntry::create_entry(ctx, plan_extras, need_add_to_queue)
+        QueryEntry::create_entry(ctx, need_add_to_queue)
     }
 
     /// Check a plan is heavy action or not.

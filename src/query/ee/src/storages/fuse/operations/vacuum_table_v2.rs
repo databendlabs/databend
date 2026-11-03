@@ -29,12 +29,11 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
 use databend_common_storages_fuse::operations::slice_summary;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_index::ExternalFile;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -403,10 +402,9 @@ pub async fn do_vacuum2(
     // - TODO: To ensure correctness in such cases, the table's Least Visible Timestamp (LVT),
     //   stored in the meta-server, should be utilized to determine snapshot visibility and
     //   resolve potential issues.
-    if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-        for path in snapshots_to_gc.iter() {
-            snapshot_cache.evict(path);
-        }
+    let snapshot_cache = &FuseCaches::instance().snapshots;
+    for path in snapshots_to_gc.iter() {
+        snapshot_cache.evict(path);
     }
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
 

@@ -1040,7 +1040,7 @@ pub async fn filter_tables_by_privilege(
 
         if has_privilege(&id_object)
             || has_privilege(&legacy_database)
-            || legacy_table.as_ref().is_some_and(&has_privilege)
+            || legacy_table.as_ref().is_some_and(has_privilege)
         {
             visible.push(target_index);
         } else {
