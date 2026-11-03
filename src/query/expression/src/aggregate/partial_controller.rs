@@ -31,7 +31,7 @@
 //! * `Bypass`: forward every row to the final aggregate as raw input, for the rest of the input.
 //!
 //! The partial aggregate never spills: it bounds itself and leaves spilling to the final
-//! aggregate. [`PartialController::step`] takes every decision of an instance, and tells the
+//! aggregate. [`PartialState::step`] takes every decision of an instance, and tells the
 //! caller to emit the table to the final aggregate, with an [`EmitReason`]: on each change of
 //! state, once the table holds its memory (see [`partial_table_bytes`]), and once the index
 //! restarted and the payload, no longer bounded by it, reached the size of a block.
@@ -141,15 +141,19 @@ pub enum PartialAggregateMode {
     Bypass,
 }
 
-/// The most memory a partial table holds, index included: `ratio_percent` of `max_memory_usage`
-/// shared by the `threads` instances of a query, within [`MIN_PARTIAL_TABLE_BYTES`] and
-/// [`MAX_PARTIAL_TABLE_BYTES`]. A grown table must fit in it, and the table is emitted once it
-/// holds that much, which mostly bounds the memory aggregate states own outside the arena (the
-/// values of `array_agg`, a distinct set), as the index and the payload are bounded otherwise.
-/// The bounds keep a table that can grow on small machines, and one that is not larger than
-/// the 4M-slot index needs when there are few threads.
-pub fn partial_table_bytes(max_memory_usage: usize, ratio_percent: u64, threads: usize) -> usize {
-    let share = max_memory_usage / 100 * ratio_percent as usize / threads.max(1);
+/// Share of `max_memory_usage`, in percent, that the partial tables of a query hold together.
+const PARTIAL_TABLE_MEMORY_PERCENT: usize = 2;
+
+/// The most memory a partial table holds, index included: [`PARTIAL_TABLE_MEMORY_PERCENT`] of
+/// `max_memory_usage` shared by the `threads` instances of a query, within
+/// [`MIN_PARTIAL_TABLE_BYTES`] and [`MAX_PARTIAL_TABLE_BYTES`], 128 MiB with 8 GB per core. A
+/// grown table must fit in it, and the table is emitted once it holds that much, which mostly
+/// bounds the memory aggregate states own outside the arena (the values of `array_agg`, a
+/// distinct set), as the index and the payload are bounded otherwise. The bounds keep a table
+/// that can grow on small machines, and one that is not larger than the 4M-slot index needs
+/// when there are few threads.
+pub fn partial_table_bytes(max_memory_usage: usize, threads: usize) -> usize {
+    let share = max_memory_usage / 100 * PARTIAL_TABLE_MEMORY_PERCENT / threads.max(1);
     share.clamp(MIN_PARTIAL_TABLE_BYTES, MAX_PARTIAL_TABLE_BYTES)
 }
 
@@ -167,7 +171,7 @@ pub struct PartialObservation {
     pub payload_full: bool,
 }
 
-/// Why [`PartialController::step`] asks the caller to emit the groups of the table to the final
+/// Why [`PartialState::step`] asks the caller to emit the groups of the table to the final
 /// aggregate and restart the index at the capacity of the new state. A grown index is rebuilt
 /// from the payload, which must hold one row per key, so every change of state emits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -242,65 +246,34 @@ impl PartialState {
             _ => None,
         }
     }
-}
-
-/// The state of one partial aggregate and the memory its table may hold.
-#[derive(Debug)]
-pub struct PartialController {
-    state: PartialState,
-    max_table_bytes: usize,
-}
-
-impl PartialController {
-    /// `max_table_bytes` comes from [`partial_table_bytes`].
-    pub fn new(mode: PartialAggregateMode, max_table_bytes: usize) -> Self {
-        Self {
-            state: PartialState::new(mode),
-            max_table_bytes,
-        }
-    }
-
-    pub fn state(&self) -> &PartialState {
-        &self.state
-    }
-
-    /// Index capacity of the table, which restarts in place when full.
-    pub fn capacity(&self) -> usize {
-        self.state.capacity()
-    }
-
-    /// The distinct sampler for the next call while learning, see [`PartialState::sampler`].
-    pub fn sampler(&mut self) -> Option<&mut DistinctSampler> {
-        self.state.sampler()
-    }
 
     /// Take the decisions after one `add_groups_partial` call: move to the next state, and say
-    /// whether to emit the table. `memory_pressure` is only checked for a grown table, which
-    /// cannot release its index otherwise.
+    /// whether to emit the table. `max_table_bytes` comes from [`partial_table_bytes`].
+    /// `memory_pressure` is only checked for a grown table, which cannot release its index
+    /// otherwise.
     pub fn step(
         &mut self,
         observation: PartialObservation,
+        max_table_bytes: usize,
         memory_pressure: impl FnOnce() -> bool,
     ) -> Option<EmitReason> {
-        let next = match &mut self.state {
-            PartialState::Learning(learning) => learning.observe(
-                observation.stats,
-                observation.group_bytes,
-                self.max_table_bytes,
-            ),
+        let next = match self {
+            PartialState::Learning(learning) => {
+                learning.observe(observation.stats, observation.group_bytes, max_table_bytes)
+            }
             PartialState::Grown { .. } if memory_pressure() => Some(PartialState::Shrunk),
             PartialState::Bypass => return None,
             _ => None,
         };
         if let Some(next) = next {
-            self.state = next;
-            return Some(match self.state {
+            *self = next;
+            return Some(match self {
                 PartialState::Grown { .. } => EmitReason::Grow,
                 PartialState::Shrunk => EmitReason::Shrink,
                 _ => EmitReason::Bypass,
             });
         }
-        if observation.held_bytes >= self.max_table_bytes {
+        if observation.held_bytes >= max_table_bytes {
             return Some(EmitReason::MemoryFull);
         }
         observation.payload_full.then_some(EmitReason::PayloadFull)

@@ -39,7 +39,6 @@ use databend_common_expression::MAX_PARTIAL_TABLE_BYTES;
 use databend_common_expression::MIN_PARTIAL_TABLE_BYTES;
 use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
-use databend_common_expression::PartialController;
 use databend_common_expression::PartialObservation;
 use databend_common_expression::PartialState;
 use databend_common_expression::PayloadFlushState;
@@ -989,7 +988,7 @@ fn test_partial_grows_with_margin_over_estimate() {
     // Just under what an index of 65536 slots holds, so an estimate a little low would size it
     // that small.
     const KEYS: u64 = 48_000;
-    let mut partial = PartialController::new(PartialAggregateMode::Auto, MAX_PARTIAL_TABLE_BYTES);
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
     let sampler = partial.sampler().unwrap();
     sampler.start(0);
     sampler.observe(&group_hashes(
@@ -1000,7 +999,11 @@ fn test_partial_grows_with_margin_over_estimate() {
         new_groups: 256 * 1024,
         windows: 10,
     };
-    let reason = partial.step(observed(stats, 0), unexpected_pressure);
+    let reason = partial.step(
+        observed(stats, 0),
+        MAX_PARTIAL_TABLE_BYTES,
+        unexpected_pressure,
+    );
     assert_eq!(reason, Some(EmitReason::Grow), "{partial:?}");
     let keys = KEYS as usize;
     assert!(partial.capacity() >= AggregateHashTable::capacity_for_groups(keys + keys / 20));
@@ -1008,7 +1011,7 @@ fn test_partial_grows_with_margin_over_estimate() {
 
 /// Learn `keys` distinct groups of `group_bytes` each among many more materialized ones, which
 /// asks to grow.
-fn learn_recurring_keys(keys: u64, group_bytes: usize) -> (PartialController, Option<EmitReason>) {
+fn learn_recurring_keys(keys: u64, group_bytes: usize) -> (PartialState, Option<EmitReason>) {
     learn_recurring_keys_within(keys, group_bytes, MAX_PARTIAL_TABLE_BYTES)
 }
 
@@ -1017,8 +1020,8 @@ fn learn_recurring_keys_within(
     keys: u64,
     group_bytes: usize,
     max_table_bytes: usize,
-) -> (PartialController, Option<EmitReason>) {
-    let mut partial = PartialController::new(PartialAggregateMode::Auto, max_table_bytes);
+) -> (PartialState, Option<EmitReason>) {
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
     let sampler = partial.sampler().unwrap();
     sampler.start(0);
     sampler.observe(&group_hashes(
@@ -1030,7 +1033,11 @@ fn learn_recurring_keys_within(
         new_groups: rows,
         windows: rows / 24_000,
     };
-    let reason = partial.step(observed(stats, group_bytes), unexpected_pressure);
+    let reason = partial.step(
+        observed(stats, group_bytes),
+        max_table_bytes,
+        unexpected_pressure,
+    );
     (partial, reason)
 }
 
@@ -1044,10 +1051,7 @@ fn test_partial_grows_up_to_max_capacity() {
 
     let (partial, reason) = learn_recurring_keys(3_000_000, 0);
     assert_eq!(reason, None);
-    assert!(
-        matches!(partial.state(), PartialState::Learning(_)),
-        "{partial:?}"
-    );
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 }
 
 /// The grown table must also fit in `MAX_PARTIAL_TABLE_BYTES` with the bytes a group takes:
@@ -1062,10 +1066,7 @@ fn test_partial_grows_within_table_bytes() {
     // 2M groups of 150 bytes: 36 MiB of index and 315 MiB of groups.
     let (partial, reason) = learn_recurring_keys(2_000_000, 150);
     assert_eq!(reason, None);
-    assert!(
-        matches!(partial.state(), PartialState::Learning(_)),
-        "{partial:?}"
-    );
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 
     // Few groups that take much memory each, such as large `array_agg` states.
     let (_, reason) = learn_recurring_keys(100_000, 4096);
@@ -1079,10 +1080,7 @@ fn test_partial_grows_within_table_bytes() {
     // The same 2M groups of 50 bytes do not fit in a table of 128 MiB.
     let (partial, reason) = learn_recurring_keys_within(2_000_000, 50, 128 << 20);
     assert_eq!(reason, None);
-    assert!(
-        matches!(partial.state(), PartialState::Learning(_)),
-        "{partial:?}"
-    );
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 }
 
 /// The memory of a partial table is a share of `max_memory_usage` per thread, within bounds.
@@ -1091,19 +1089,13 @@ fn test_partial_table_bytes() {
     const GIB: usize = 1 << 30;
     const MIB: usize = 1 << 20;
     // 16 threads, 128 GiB of which 80% may be used, 2% for the partial tables: about 128 MiB.
-    let bytes = partial_table_bytes(128 * GIB / 10 * 8, 2, 16);
+    let bytes = partial_table_bytes(128 * GIB / 10 * 8, 16);
     assert!((120 * MIB..140 * MIB).contains(&bytes), "{bytes}");
     // Little memory per thread.
-    assert_eq!(
-        partial_table_bytes(16 * GIB, 2, 16),
-        MIN_PARTIAL_TABLE_BYTES
-    );
+    assert_eq!(partial_table_bytes(16 * GIB, 16), MIN_PARTIAL_TABLE_BYTES);
     // Few threads.
-    assert_eq!(
-        partial_table_bytes(200 * GIB, 2, 2),
-        MAX_PARTIAL_TABLE_BYTES
-    );
-    assert_eq!(partial_table_bytes(0, 2, 16), MIN_PARTIAL_TABLE_BYTES);
+    assert_eq!(partial_table_bytes(200 * GIB, 2), MAX_PARTIAL_TABLE_BYTES);
+    assert_eq!(partial_table_bytes(0, 16), MIN_PARTIAL_TABLE_BYTES);
 }
 
 /// Without a change of state, the table is emitted once it holds `MAX_PARTIAL_TABLE_BYTES`, or
@@ -1111,14 +1103,17 @@ fn test_partial_table_bytes() {
 #[test]
 fn test_partial_emits_held_memory_and_full_payload() {
     let quiet = PartialObservation::default();
-    let mut partial = PartialController::new(PartialAggregateMode::Auto, MAX_PARTIAL_TABLE_BYTES);
-    assert_eq!(partial.step(quiet, unexpected_pressure), None);
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
+    assert_eq!(
+        partial.step(quiet, MAX_PARTIAL_TABLE_BYTES, unexpected_pressure),
+        None
+    );
     let held = PartialObservation {
         held_bytes: MAX_PARTIAL_TABLE_BYTES,
         ..quiet
     };
     assert_eq!(
-        partial.step(held, unexpected_pressure),
+        partial.step(held, MAX_PARTIAL_TABLE_BYTES, unexpected_pressure),
         Some(EmitReason::MemoryFull)
     );
     let full = PartialObservation {
@@ -1126,21 +1121,21 @@ fn test_partial_emits_held_memory_and_full_payload() {
         ..quiet
     };
     assert_eq!(
-        partial.step(full, unexpected_pressure),
+        partial.step(full, MAX_PARTIAL_TABLE_BYTES, unexpected_pressure),
         Some(EmitReason::PayloadFull)
     );
-    assert!(
-        matches!(partial.state(), PartialState::Learning(_)),
-        "{partial:?}"
-    );
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 
-    let mut bypass = PartialController::new(PartialAggregateMode::Bypass, MAX_PARTIAL_TABLE_BYTES);
+    let mut bypass = PartialState::new(PartialAggregateMode::Bypass);
     let both = PartialObservation {
         held_bytes: MAX_PARTIAL_TABLE_BYTES,
         payload_full: true,
         ..quiet
     };
-    assert_eq!(bypass.step(both, unexpected_pressure), None);
+    assert_eq!(
+        bypass.step(both, MAX_PARTIAL_TABLE_BYTES, unexpected_pressure),
+        None
+    );
 }
 
 /// A grown table shrinks back to the small index under memory pressure, for good: no further
@@ -1150,13 +1145,13 @@ fn test_partial_shrinks_grown_table() {
     let quiet = PartialObservation::default();
     let (mut partial, reason) = learn_recurring_keys(100_000, 0);
     assert_eq!(reason, Some(EmitReason::Grow));
-    assert_eq!(partial.step(quiet, || false), None);
+    assert_eq!(partial.step(quiet, MAX_PARTIAL_TABLE_BYTES, || false), None);
 
-    assert_eq!(partial.step(quiet, || true), Some(EmitReason::Shrink));
-    assert!(
-        matches!(partial.state(), PartialState::Shrunk),
-        "{partial:?}"
+    assert_eq!(
+        partial.step(quiet, MAX_PARTIAL_TABLE_BYTES, || true),
+        Some(EmitReason::Shrink)
     );
+    assert!(matches!(partial, PartialState::Shrunk), "{partial:?}");
     assert_eq!(
         partial.capacity(),
         AggregateHashTable::capacity_for_groups(0)
@@ -1167,13 +1162,20 @@ fn test_partial_shrinks_grown_table() {
         new_groups: 1 << 24,
         windows: 1 << 10,
     };
-    assert_eq!(partial.step(observed(stats, 0), unexpected_pressure), None);
+    assert_eq!(
+        partial.step(
+            observed(stats, 0),
+            MAX_PARTIAL_TABLE_BYTES,
+            unexpected_pressure
+        ),
+        None
+    );
     let held = PartialObservation {
         held_bytes: MAX_PARTIAL_TABLE_BYTES,
         ..quiet
     };
     assert_eq!(
-        partial.step(held, unexpected_pressure),
+        partial.step(held, MAX_PARTIAL_TABLE_BYTES, unexpected_pressure),
         Some(EmitReason::MemoryFull)
     );
 }
@@ -1190,13 +1192,13 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
         HashTableConfig::partial_aggregate(),
         Arc::new(Bump::new()),
     );
-    let mut partial = PartialController::new(PartialAggregateMode::Auto, MAX_PARTIAL_TABLE_BYTES);
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
     let mut probe = ProbeState::default();
     let (mut grown_rows, mut grown_new_groups) = (0, 0);
     for start in (0..40 * KEYS).step_by(BLOCK_ROWS) {
         let keys = (start..start + BLOCK_ROWS).map(|row| (row % KEYS).to_string());
         let entries = vec![StringType::from_data(keys.collect::<Vec<_>>()).into()];
-        let grown = matches!(partial.state(), PartialState::Grown { .. });
+        let grown = matches!(partial, PartialState::Grown { .. });
         let capacity = partial.capacity();
         let stats = table.add_groups_partial(
             &mut probe,
@@ -1210,16 +1212,19 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
             grown_rows += stats.rows;
             grown_new_groups += stats.new_groups;
         }
-        if partial.step(observed(stats, 0), || false).is_some() {
+        if partial
+            .step(observed(stats, 0), MAX_PARTIAL_TABLE_BYTES, || false)
+            .is_some()
+        {
             table.take_partial_hot();
             assert!(!table.partial_restarted());
         }
     }
 
-    let PartialState::Grown { capacity } = partial.state() else {
+    let PartialState::Grown { capacity } = partial else {
         panic!("expected to grow, got {partial:?}");
     };
-    assert!(*capacity >= AggregateHashTable::capacity_for_groups(KEYS));
+    assert!(capacity >= AggregateHashTable::capacity_for_groups(KEYS));
     assert!(grown_rows > 30 * KEYS);
     assert!(grown_new_groups <= KEYS, "{grown_new_groups} new groups");
     Ok(())

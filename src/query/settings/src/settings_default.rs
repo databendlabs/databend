@@ -856,13 +856,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["auto".into(), "bypass".into()])),
                 }),
-                ("partial_aggregate_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(2),
-                    desc: "Percentage of max_memory_usage that the partial aggregations of a query hold together, shared by their threads and kept between 64 MiB and 256 MiB per thread.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(1..=100)),
-                }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",

@@ -24,7 +24,6 @@ use databend_common_expression::EmitReason;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
-use databend_common_expression::PartialController;
 use databend_common_expression::PartialObservation;
 use databend_common_expression::PartialState;
 use databend_common_expression::PartitionedPayload;
@@ -63,7 +62,7 @@ pub fn parse_partial_aggregate_mode(mode: &str) -> Result<PartialAggregateMode> 
 }
 
 /// TransformPartialAggregate is a cache in front of the final aggregate. For each slice of the
-/// input it measures, lets `PartialController::step` decide and emits the table when asked; in bypass,
+/// input it measures, lets `PartialState::step` decide and emits the table when asked; in bypass,
 /// input blocks are forwarded unchanged as raw rows for the final aggregate to aggregate. The
 /// partial aggregate never spills: the state bounds the table and the final aggregate spills.
 pub struct TransformPartialAggregate {
@@ -72,7 +71,9 @@ pub struct TransformPartialAggregate {
     params: Arc<AggregatorParams>,
     statistics: AggregationStatistics,
     settings: MemorySettings,
-    partial: PartialController,
+    state: PartialState,
+    /// The most memory the table holds, see `partial_table_bytes`.
+    max_table_bytes: usize,
     /// Memory the table holds since it was last emitted, including what the aggregate states
     /// own outside the arena.
     memory: MemoryMeter,
@@ -129,7 +130,8 @@ impl TransformPartialAggregate {
                 probe_state: ProbeState::default(),
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
                 statistics: AggregationStatistics::new("PartialAggregate"),
-                partial: PartialController::new(mode, max_table_bytes),
+                state: PartialState::new(mode),
+                max_table_bytes,
                 memory: MemoryMeter::default(),
                 output_rows: 0,
                 total: PartialAddStats::default(),
@@ -158,7 +160,7 @@ impl TransformPartialAggregate {
         let mut output = vec![];
         let mut start = 0;
         while start < rows_num {
-            if matches!(self.partial.state(), PartialState::Bypass) {
+            if matches!(self.state, PartialState::Bypass) {
                 // The rows are forwarded as is: the shuffle routes them by their group keys.
                 self.output_rows += rows_num - start;
                 output.push(match start {
@@ -183,7 +185,7 @@ impl TransformPartialAggregate {
         let group_columns = ProjectedBlock::project(&self.params.group_columns, block);
         let params_columns =
             Self::aggregate_arguments(block, &self.params.aggregate_functions_arguments);
-        let capacity = self.partial.capacity();
+        let capacity = self.state.capacity();
         let stats = self.memory.track(|| {
             self.table.add_groups_partial(
                 &mut self.probe_state,
@@ -191,7 +193,7 @@ impl TransformPartialAggregate {
                 &params_columns,
                 rows_num,
                 capacity,
-                self.partial.sampler(),
+                self.state.sampler(),
             )
         })?;
         self.total += stats;
@@ -204,7 +206,10 @@ impl TransformPartialAggregate {
                 && self.table.partial_hot_bytes() >= self.params.max_block_bytes,
         };
         let settings = &self.settings;
-        let Some(reason) = self.partial.step(observation, || settings.check_spill()) else {
+        let Some(reason) = self
+            .state
+            .step(observation, self.max_table_bytes, || settings.check_spill())
+        else {
             return Ok(vec![]);
         };
         self.emits.add(reason);
@@ -286,7 +291,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
         let total = &self.total;
         log::info!(
             "[PartialAggregate] Adaptive: final_state={:?}, rows={}, new_groups={}, windows={}, emits={:?}, group_bytes={}",
-            self.partial.state(),
+            self.state,
             total.rows,
             total.new_groups,
             total.windows,

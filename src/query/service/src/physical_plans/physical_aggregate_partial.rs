@@ -201,7 +201,6 @@ impl IPhysicalPlan for AggregatePartial {
             parse_partial_aggregate_mode(&builder.settings.get_partial_aggregate_mode()?)?;
         let max_table_bytes = partial_table_bytes(
             builder.settings.get_max_memory_usage()? as usize,
-            builder.settings.get_partial_aggregate_memory_ratio()?,
             builder.main_pipeline.output_len(),
         );
         let partial_agg_config = HashTableConfig::partial_aggregate();
