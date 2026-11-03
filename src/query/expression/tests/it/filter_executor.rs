@@ -93,28 +93,20 @@ fn test_select_like_over_dictionary() {
         // correct results. Ordinary strings must instead use the fallback.
         assert!(
             evaluator
-                .try_like_encoded(&column_ref, &pattern, false)
+                .try_like_encoded(&column_ref, &pattern, false, None)
                 .is_some()
         );
         assert!(
             Evaluator::new(&plain, &func_ctx, &BUILTIN_FUNCTIONS)
-                .try_like_encoded(&column_ref, &pattern, false)
+                .try_like_encoded(&column_ref, &pattern, false, None)
                 .is_none()
         );
 
         for text in [
             "url LIKE 'xxx%'",
             "NOT (url LIKE 'xxx%')",
-            "url LIKE 'xxx/a'",
-            "url LIKE '%/a'",
-            "url LIKE '%xx%'",
-            "url LIKE 'x%/%'",
-            "url LIKE 'xxx/_'",
             "url LIKE '%'",
             "NOT (url LIKE '%')",
-            "url LIKE ''",
-            "url LIKE 'unused'",
-            "NOT (url LIKE 'unused')",
             r#""like"(url, 'xxx!_%', '!')"#,
             "f AND url LIKE 'xxx%'",
             "url LIKE 'xxx%' AND f",

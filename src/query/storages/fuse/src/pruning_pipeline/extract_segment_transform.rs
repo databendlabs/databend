@@ -21,11 +21,10 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransformer;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
+use crate::io::FuseCaches;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostController;
 use crate::pruning::PruningCostKind;
@@ -91,23 +90,15 @@ impl ExtractSegmentTransform {
         populate_cache: bool,
         pruning_cost: &PruningCostController,
     ) -> Result<Arc<Vec<Arc<BlockMeta>>>> {
-        if let Some(cache) = CacheManager::instance().get_segment_block_metas_cache() {
-            if let Some(metas) = cache.get(segment_path) {
-                Ok(metas)
-            } else {
-                let metas = pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
-                    segment.block_metas()
-                })?;
-                match populate_cache {
-                    true => Ok(cache.insert(segment_path.to_string(), metas)),
-                    false => Ok(Arc::new(metas)),
-                }
-            }
-        } else {
-            let metas = pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
+        let caches = FuseCaches::instance();
+        let cache = match populate_cache {
+            true => caches.segments.clone(),
+            false => caches.segments.read_only(),
+        };
+        cache.block_metas(segment_path, || {
+            pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
                 segment.block_metas()
-            })?;
-            Ok(Arc::new(metas))
-        }
+            })
+        })
     }
 }

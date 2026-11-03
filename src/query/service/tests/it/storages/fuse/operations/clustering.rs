@@ -28,9 +28,9 @@ use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
 use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::io::snapshot_history;
 use databend_common_users::UserApiProvider;
 use databend_meta_client::types::MatchSeq;
 use databend_query::interpreters::AlterTableClusterKeyInterpreter;
@@ -149,15 +149,15 @@ async fn test_concurrent_disjoint_recluster_commits() -> anyhow::Result<()> {
         .snapshot_loc()
         .expect("recluster should record a snapshot location");
     let snapshot_version = TableMetaLocationGenerator::snapshot_version(&snapshot_loc);
-    let snapshot_history: Vec<_> =
-        MetaReaders::table_snapshot_reader(fuse_table_after.get_operator())
-            .snapshot_history(
-                snapshot_loc,
-                snapshot_version,
-                fuse_table_after.meta_location_generator().clone(),
-            )
-            .try_collect()
-            .await?;
+    let snapshot_history: Vec<_> = snapshot_history(
+        &FuseCaches::instance().snapshots,
+        fuse_table_after.get_operator(),
+        snapshot_loc,
+        snapshot_version,
+        fuse_table_after.meta_location_generator().clone(),
+    )
+    .try_collect()
+    .await?;
     assert_eq!(
         snapshot_history[0].0.snapshot_id,
         snapshot_after.snapshot_id

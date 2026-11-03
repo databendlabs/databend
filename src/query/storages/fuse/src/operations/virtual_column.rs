@@ -37,7 +37,6 @@ use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::RefreshSelection;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Table;
 use databend_storages_common_io::Files;
 use databend_storages_common_io::ReadSettings;
@@ -59,8 +58,9 @@ use crate::FuseTable;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
 use crate::io::BlockReader;
+use crate::io::FuseCaches;
 use crate::io::JsonPathStatisticsBuilder;
-use crate::io::MetaReaders;
+use crate::io::SegmentInfoReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnBuilder;
 use crate::io::VirtualColumnLayoutPlanner;
@@ -148,7 +148,8 @@ pub async fn prepare_refresh_virtual_column(
     let projection = Projection::Columns(field_indices);
     let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
 
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
+    let segment_cache = FuseCaches::instance().segments.read_only();
 
     let write_settings = fuse_table.get_write_settings();
     let storage_format = write_settings.storage_format;
@@ -183,13 +184,8 @@ pub async fn prepare_refresh_virtual_column(
             }
             matched_selection = true;
         }
-        let segment_info = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment_info = segment_cache
+            .get(&segment_reader, (location.to_string(), *ver))
             .await?;
         let block_metas = segment_info.block_metas()?;
         let stats = match segment_info.summary.additional_stats_loc() {
@@ -388,7 +384,8 @@ pub async fn commit_refresh_virtual_column(
         return Ok(0);
     };
     let table_schema = fuse_table.schema();
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
+    let segment_cache = FuseCaches::instance().segments.read_only();
 
     let mut results_by_block = HashMap::with_capacity(results.len());
     for result in results {
@@ -398,13 +395,8 @@ pub async fn commit_refresh_virtual_column(
     let mut mutation_entries = Vec::new();
     let mut applied_blocks = 0;
     for (segment_idx, (location, ver)) in latest_snapshot.segments.iter().enumerate() {
-        let segment_info = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment_info = segment_cache
+            .get(&segment_reader, (location.to_string(), *ver))
             .await?;
         for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
             let block_location = &block_meta.location.0;
@@ -603,17 +595,13 @@ pub async fn cleanup_vacuum_virtual_column_files(
     };
 
     let table_schema = fuse_table.schema();
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
+    let segment_cache = FuseCaches::instance().segments.read_only();
 
     let mut referenced_virtual_locations = HashSet::new();
     for (location, ver) in &snapshot_referenced_segments {
-        let segment = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment = segment_cache
+            .get(&segment_reader, (location.to_string(), *ver))
             .await?;
 
         for block_meta in segment.block_metas()?.into_iter() {
@@ -656,19 +644,14 @@ async fn prepare_vacuum_virtual_column_mutations(
     latest_snapshot: Arc<TableSnapshot>,
 ) -> Result<Vec<MutationLogEntry>> {
     let table_schema = fuse_table.schema();
-    let segment_reader =
-        MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema.clone());
+    let segment_cache = FuseCaches::instance().segments.read_only();
 
     let mut mutation_entries = Vec::new();
 
     for (segment_idx, (location, ver)) in latest_snapshot.segments.iter().enumerate() {
-        let segment_info = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment_info = segment_cache
+            .get(&segment_reader, (location.to_string(), *ver))
             .await?;
 
         let additional_stats_loc = segment_info.summary.additional_stats_loc();

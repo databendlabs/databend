@@ -120,12 +120,22 @@ impl<Num: Number> SimpleType for CoreNumber<Num> {
     }
 
     #[inline]
-    fn from_for_raw(raw: i128) -> Option<Self::Scalar> {
-        if Num::FLOATING {
-            None
-        } else {
-            num_traits::cast(raw)
+    fn from_for_raw(raw: i128) -> Self::Scalar {
+        // `raw as Num`. `Num` is one of the integer types below (floats are not frame of
+        // reference encoded); the type tests are resolved at compile time and the conversion
+        // from `$t` to `Num` is the identity, so a row costs a truncating cast, no range check.
+        macro_rules! truncate {
+            ($($t:ty),*) => {$(
+                if std::any::TypeId::of::<Num>() == std::any::TypeId::of::<$t>() {
+                    return num_traits::cast(raw as $t).unwrap();
+                }
+            )*};
         }
+        truncate!(u8, u16, u32, u64, i8, i16, i32, i64);
+        unreachable!(
+            "{} is not frame of reference encodable",
+            std::any::type_name::<Num>()
+        )
     }
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {

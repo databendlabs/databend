@@ -56,11 +56,11 @@ use opendal::Operator;
 
 use crate::FuseTable;
 use crate::RetentionPolicy;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
 use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::snapshot_history;
 
 /// An assumption of the maximum duration from the time the first block is written to the time the
 /// snapshot is written.
@@ -359,10 +359,12 @@ impl FuseTable {
     where
         F: FnMut(&TableSnapshot) + Send,
     {
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let caches = FuseCaches::instance();
         let location_gen = self.meta_location_generator();
         let previous = match head.0.prev_snapshot_id {
-            Some((id, version)) => reader.snapshot_history(
+            Some((id, version)) => snapshot_history(
+                &caches.snapshots,
+                self.get_operator(),
                 location_gen.gen_snapshot_location(&id, version)?,
                 version,
                 location_gen.clone(),

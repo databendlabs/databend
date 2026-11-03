@@ -163,8 +163,8 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     }
 
     #[inline]
-    fn from_for_raw(raw: i128) -> Option<Self::Scalar> {
-        Num::from_i128(raw)
+    fn from_for_raw(raw: i128) -> Self::Scalar {
+        Num::from_i128_uncheck(raw)
     }
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
@@ -632,7 +632,10 @@ pub trait Decimal:
     const MAX_PRECISION: u8;
     fn default_decimal_size() -> DecimalSize;
 
-    fn from_float(value: f64) -> Self;
+    /// Scales the exact binary value by `10^size.scale()`, then truncates or
+    /// rounds half away from zero. Returns `None` for non-finite inputs or a
+    /// coefficient outside the target precision. `size` must fit this storage.
+    fn from_float(value: f64, size: DecimalSize, rounding_mode: bool) -> Option<Self>;
 
     fn from_i64(value: i64) -> Self;
     fn from_i128(value: impl Into<i128>) -> Option<Self>;
@@ -692,6 +695,132 @@ const U128_POW10: [u128; 39] = {
     }
     table
 };
+
+#[derive(Clone, Copy)]
+struct FloatDecimalScale {
+    pow5: u256,
+    max_mantissa_u64: u64,
+    max_mantissa_u128: u64,
+}
+
+/// One scale lookup supplies both the exact factor and native fast-path limits.
+/// `M * 5^scale` fits in W bits iff `M <= floor((2^W - 1) / 5^scale)`.
+/// Limits saturate at u64::MAX because the source mantissa has at most 53 bits.
+/// Narrow paths read only the low factor bits and still multiply in u64/u128.
+const FLOAT_DECIMAL_SCALES: [FloatDecimalScale; 77] = {
+    let mut table = [FloatDecimalScale {
+        pow5: u256::ONE,
+        max_mantissa_u64: 0,
+        max_mantissa_u128: 0,
+    }; 77];
+    let mut hi = 0_u128;
+    let mut lo = 1_u128;
+    let mut i = 0;
+    while i < table.len() {
+        let max_mantissa_u64 = if hi == 0 && lo <= u64::MAX as u128 {
+            u64::MAX / lo as u64
+        } else {
+            0
+        };
+        let max_mantissa_u128 = if hi == 0 {
+            let limit = u128::MAX / lo;
+            if limit > u64::MAX as u128 {
+                u64::MAX
+            } else {
+                limit as u64
+            }
+        } else {
+            0
+        };
+        table[i] = FloatDecimalScale {
+            pow5: u256::from_words(hi, lo),
+            max_mantissa_u64,
+            max_mantissa_u128,
+        };
+        // Const two-limb multiplication by five; the table needs only 177 bits.
+        let (times_four, carry_four) = (lo << 2, lo >> 126);
+        let (next_lo, carry_add) = times_four.overflowing_add(lo);
+        hi = hi * 5 + carry_four + carry_add as u128;
+        lo = next_lo;
+        i += 1;
+    }
+    table
+};
+
+/// `abs(value) * 10^scale = mantissa * 5^scale * 2^shift`.
+struct BinaryFloat {
+    mantissa: u64,
+    shift: i32,
+    negative: bool,
+}
+
+impl BinaryFloat {
+    fn new(value: f64, scale: u8) -> Option<Self> {
+        if !value.is_finite() {
+            return None;
+        }
+        let bits = value.to_bits();
+        let biased_exponent = ((bits >> 52) & 0x7ff) as i32;
+        let fraction = bits & ((1_u64 << 52) - 1);
+        let (mut mantissa, mut exponent) = if biased_exponent == 0 {
+            (fraction, -1074)
+        } else {
+            (fraction | (1_u64 << 52), biased_exponent - 1023 - 52)
+        };
+        if mantissa != 0 {
+            // Remove only zero bits, exactly, before multiplying by 5^scale.
+            // The smaller significand can stay on the native-width fast path.
+            let zeros = mantissa.trailing_zeros();
+            mantissa >>= zeros;
+            exponent += zeros as i32;
+        }
+        Some(Self {
+            mantissa,
+            shift: exponent + scale as i32,
+            negative: value.is_sign_negative(),
+        })
+    }
+}
+
+// Instantiate the same exact shift/rounding logic at native u128 and u256
+// widths. Only the positive magnitude is rounded; apply the sign afterwards.
+macro_rules! rescale_float {
+    ($name:ident, $uint:ty, $bits:literal) => {
+        fn $name(mut coefficient: $uint, shift: i32, max: $uint, rounding: bool) -> Option<$uint> {
+            if coefficient == 0 {
+                return Some(coefficient);
+            }
+            if shift >= 0 {
+                // checked_shl checks the count, not bits lost from the value.
+                if shift >= $bits || coefficient > (max >> shift as u32) {
+                    return None;
+                }
+                coefficient <<= shift as u32;
+            } else {
+                let shift = shift.unsigned_abs();
+                // Exactly `bits` discarded bits can still round up to one.
+                let round_up =
+                    rounding && shift <= $bits && ((coefficient >> (shift - 1)) & 1) != 0;
+                coefficient = if shift >= $bits {
+                    <$uint as From<u8>>::from(0)
+                } else {
+                    coefficient >> shift
+                };
+                if round_up {
+                    coefficient += 1;
+                }
+                if coefficient > max {
+                    return None;
+                }
+            }
+            Some(coefficient)
+        }
+    };
+}
+
+rescale_float!(rescale_float_u64, u64, 64);
+rescale_float!(rescale_float_u128, u128, 128);
+rescale_float!(rescale_float_u256, u256, 256);
 
 /// The float operations that decimal-to-float conversion needs, for `f32` and `f64`.
 trait DecimalTargetFloat:
@@ -941,8 +1070,25 @@ impl Decimal for i64 {
         }
     }
 
-    fn from_float(value: f64) -> Self {
-        value as i64
+    fn from_float(value: f64, size: DecimalSize, rounding_mode: bool) -> Option<Self> {
+        debug_assert!(size.precision() <= Self::MAX_PRECISION);
+        let value = BinaryFloat::new(value, size.scale())?;
+        let scale = &FLOAT_DECIMAL_SCALES[size.scale() as usize];
+        let max = Self::max_for_precision(size.precision()) as u64;
+        let coefficient = if value.mantissa <= scale.max_mantissa_u64 {
+            let coefficient = value.mantissa * scale.pow5.as_u64();
+            rescale_float_u64(coefficient, value.shift, max, rounding_mode)?
+        } else {
+            // The full product needs at most 53 + ceil(18 * log2(5)) = 95 bits.
+            let coefficient = value.mantissa as u128 * scale.pow5.as_u128();
+            rescale_float_u128(coefficient, value.shift, max as u128, rounding_mode)? as u64
+        };
+        let coefficient = coefficient as i64;
+        Some(if value.negative {
+            -coefficient
+        } else {
+            coefficient
+        })
     }
 
     #[inline]
@@ -1211,35 +1357,26 @@ impl Decimal for i128 {
         D::from_i128_uncheck(self)
     }
 
-    fn from_float(value: f64) -> Self {
-        // still needs to be optimized.
-        // An implementation similar to float64_as_i256 obtained from the ethnum library
-        const M: u64 = (f64::MANTISSA_DIGITS - 1) as u64;
-        const MAN_MASK: u64 = !(!0 << M);
-        const MAN_ONE: u64 = 1 << M;
-        const EXP_MASK: u64 = !0 >> f64::MANTISSA_DIGITS;
-        const EXP_OFFSET: u64 = EXP_MASK / 2;
-        const ABS_MASK: u64 = !0 >> 1;
-        const SIG_MASK: u64 = !ABS_MASK;
-
-        let abs = f64::from_bits(value.to_bits() & ABS_MASK);
-        let sign = -(((value.to_bits() & SIG_MASK) >> (u64::BITS - 2)) as i128).wrapping_sub(1); // if self >= 0. { 1 } else { -1 }
-        if abs >= 1.0 {
-            let bits = abs.to_bits();
-            let exponent = ((bits >> M) & EXP_MASK) - EXP_OFFSET;
-            let mantissa = (bits & MAN_MASK) | MAN_ONE;
-            if exponent <= M {
-                (<i128 as From<u64>>::from(mantissa >> (M - exponent))) * sign
-            } else if exponent < 127 {
-                (<i128 as From<u64>>::from(mantissa) << (exponent - M)) * sign
-            } else if sign > 0 {
-                i128::MAX
-            } else {
-                i128::MIN
-            }
+    fn from_float(value: f64, size: DecimalSize, rounding_mode: bool) -> Option<Self> {
+        debug_assert!(size.precision() <= Self::MAX_PRECISION);
+        let value = BinaryFloat::new(value, size.scale())?;
+        let scale = &FLOAT_DECIMAL_SCALES[size.scale() as usize];
+        let max = Self::max_for_precision(size.precision()) as u128;
+        let coefficient = if value.mantissa <= scale.max_mantissa_u128 {
+            let coefficient = value.mantissa as u128 * scale.pow5.as_u128();
+            rescale_float_u128(coefficient, value.shift, max, rounding_mode)?
         } else {
-            Self::zero()
-        }
+            // High-scale expansion is not the fast path. Its exact product
+            // needs at most 142 bits; round only once, after the full multiply.
+            let coefficient = u256::from(value.mantissa) * scale.pow5;
+            rescale_float_u256(coefficient, value.shift, u256::from(max), rounding_mode)?.as_u128()
+        };
+        let coefficient = coefficient as i128;
+        Some(if value.negative {
+            -coefficient
+        } else {
+            coefficient
+        })
     }
 
     #[inline]
@@ -1446,8 +1583,20 @@ impl Decimal for i256 {
         }
     }
 
-    fn from_float(value: f64) -> Self {
-        i256(value.as_i256())
+    fn from_float(value: f64, size: DecimalSize, rounding_mode: bool) -> Option<Self> {
+        debug_assert!(size.precision() <= Self::MAX_PRECISION);
+        let value = BinaryFloat::new(value, size.scale())?;
+        // At most 53 + ceil(76 * log2(5)) = 230 bits, including intermediates.
+        let scale = &FLOAT_DECIMAL_SCALES[size.scale() as usize];
+        let coefficient = u256::from(value.mantissa) * scale.pow5;
+        let max = Self::max_for_precision(size.precision()).as_u256();
+        let coefficient = rescale_float_u256(coefficient, value.shift, max, rounding_mode)?;
+        let coefficient = i256(coefficient.as_i256());
+        Some(if value.negative {
+            -coefficient
+        } else {
+            coefficient
+        })
     }
 
     #[inline]

@@ -302,3 +302,124 @@ fn test_take_expands_mixed_or_different_const() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn test_encoded_sort_order() -> Result<()> {
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::Float64Type;
+    use databend_common_expression::types::ForColumn;
+    use databend_common_expression::types::NarrowBuffer;
+    let dict = |values: Column, keys: &[u64]| {
+        let max = values.len().saturating_sub(1) as u64;
+        Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+            NarrowBuffer::pack(keys.iter().copied(), max),
+            values,
+        ))))
+    };
+    let for_col = |values: Vec<i64>| {
+        let base = *values.iter().min().unwrap() as i128;
+        let delta = (*values.iter().max().unwrap() as i128 - base) as u64;
+        let deltas =
+            NarrowBuffer::pack(values.into_iter().map(|v| (v as i128 - base) as u64), delta);
+        Column::Encoded(Box::new(EncodedColumn::For(ForColumn::new(
+            DataType::Number(NumberDataType::Int64),
+            base,
+            delta,
+            deltas,
+        ))))
+    };
+    let strings = dict(
+        StringType::from_data(vec!["z", "a", "a", "b", "unused"]),
+        &[0, 2, 3, 1, 2, 0],
+    );
+    let mut cases = vec![
+        vec![strings.clone()],
+        vec![
+            strings.clone().wrap_nullable(Some(
+                vec![true, false, true, true, false, true]
+                    .into_iter()
+                    .collect(),
+            )),
+        ],
+        vec![strings.clone().slice(1..5)],
+        vec![strings.slice(0..0)],
+        vec![dict(Int64Type::from_data(vec![9, -4, -4, 2]), &[
+            3, 0, 1, 2, 3, 1,
+        ])],
+        vec![dict(
+            Float64Type::from_data(vec![-0.0, 0.0, f64::NAN, f64::INFINITY, -1.0]),
+            &[2, 0, 1, 4, 3, 2],
+        )],
+        // Different local dictionaries/ranks must use the cross-block fallback.
+        vec![
+            dict(StringType::from_data(vec!["a", "z"]), &[1, 0]),
+            dict(StringType::from_data(vec!["b", "c"]), &[0, 1]),
+        ],
+        // Same delta does not imply the same value with different FOR bases.
+        vec![for_col(vec![-100, -99]), for_col(vec![1000, 1001])],
+    ];
+    for values in [
+        vec![-5, -3, -5, -4],
+        vec![i64::MIN, i64::MAX, i64::MIN + 1, i64::MAX - 1],
+        vec![7, 7, 7, 7],
+        vec![0, 255, 256, 0],
+        vec![0, 65535, 65536, 0],
+    ] {
+        cases.push(vec![for_col(values)]);
+    }
+    for keys in cases {
+        let mut start = 0;
+        let blocks = keys
+            .into_iter()
+            .map(|key| {
+                let n = key.len();
+                let ids = UInt64Type::from_data((start..start + n as u64).collect::<Vec<_>>());
+                start += n as u64;
+                DataBlock::new(vec![key.into(), ids.into()], n)
+            })
+            .collect::<Vec<_>>();
+        let plain = DataBlock::concat(
+            &blocks
+                .iter()
+                .map(|block| {
+                    DataBlock::new(
+                        block
+                            .columns()
+                            .iter()
+                            .map(|entry| BlockEntry::from(entry.to_column().decode_owned()))
+                            .collect(),
+                        block.num_rows(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        )?;
+        for asc in [false, true] {
+            for second_key in [false, true] {
+                let mut desc = vec![SortColumnDescription {
+                    offset: 0,
+                    asc,
+                    nulls_first: false,
+                }];
+                if second_key {
+                    desc.push(SortColumnDescription {
+                        offset: 1,
+                        asc: true,
+                        nulls_first: false,
+                    });
+                }
+                for limit in [
+                    LimitType::None,
+                    LimitType::LimitRows(2),
+                    LimitType::LimitRank(2),
+                ] {
+                    let expected = DataBlock::sort_with_type(plain.clone(), &desc, limit)?;
+                    let actual = DataBlockVec::from_blocks(blocks.clone())?
+                        .sort_limit(desc.clone().into(), limit)?;
+                    assert_blocks_equal(&actual, &expected);
+                }
+            }
+        }
+    }
+    Ok(())
+}

@@ -2635,46 +2635,46 @@ fn aggregate_filter(i: Input) -> IResult<Expr> {
 }
 
 pub fn function_call(i: Input) -> IResult<ExprElement> {
-    enum FunctionCallSuffix {
+    enum FunctionCallSuffix<Args> {
         Simple {
             distinct: bool,
-            args: Vec<Expr>,
+            args: Args,
         },
         Filter {
             distinct: bool,
-            args: Vec<Expr>,
+            args: Args,
             filter: Expr,
         },
         Window {
             distinct: bool,
-            args: Vec<Expr>,
+            args: Args,
             filter: Option<Expr>,
             window: WindowDesc,
         },
         ArgumentOrderBy {
             distinct: bool,
-            args: Vec<Expr>,
+            args: Args,
             order_by: Vec<OrderByExpr>,
             filter: Option<Expr>,
             window: Option<WindowDesc>,
         },
         WithInGroupWindow {
             distinct: bool,
-            args: Vec<Expr>,
+            args: Args,
             order_by: Vec<OrderByExpr>,
             filter: Option<Expr>,
             window: Option<WindowDesc>,
         },
         ParamsWindow {
             distinct: bool,
-            params: Vec<Expr>,
+            params: Args,
             args: Vec<Expr>,
             order_by: Vec<OrderByExpr>,
             filter: Option<Expr>,
             window: Option<WindowDesc>,
         },
         Lambda {
-            args: Vec<Expr>,
+            args: Args,
             params: Vec<Identifier>,
             expr: Box<Expr>,
         },
@@ -2695,26 +2695,20 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
 
     fn merge_args(
         first_param: Option<Expr>,
-        leading_params: Vec<Expr>,
-        params: Option<Vec<Expr>>,
-    ) -> Vec<Expr> {
-        first_param
-            .into_iter()
-            .chain(leading_params)
-            .chain(params.unwrap_or_default())
-            .collect()
+        params: impl IntoIterator<Item = Expr>,
+    ) -> impl Iterator<Item = Expr> {
+        first_param.into_iter().chain(params)
     }
 
-    fn ambiguous_lambda_arg(i: Input) -> IResult<(Expr, Lambda)> {
+    fn ambiguous_lambda_arg<'a>(i: Input<'a>, ordinary_rest: Input<'a>) -> IResult<'a, Lambda> {
         let original = i;
         let (rest, params) = followed_by_text(lambda_params, "->").parse(i)?;
         let (rest, _) = match_text("->").parse(rest)?;
         let (lambda_rest, expr) = subexpr(0).parse(rest)?;
 
-        // Preserve the complete ordinary-expression parse as well. Requiring
-        // both parses to stop immediately before the closing parenthesis keeps
-        // the ambiguity limited to the top-level trailing argument.
-        let (ordinary_rest, ordinary_expr) = subexpr(0).parse(original)?;
+        // Reuse the ordinary-expression parse. Requiring both parses to stop
+        // immediately before the closing parenthesis keeps the ambiguity
+        // limited to the top-level trailing argument.
         if lambda_rest.tokens.as_ptr() != ordinary_rest.tokens.as_ptr()
             || lambda_rest.tokens.len() != ordinary_rest.tokens.len()
             || match_text(")").parse(lambda_rest).is_err()
@@ -2725,19 +2719,47 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             )));
         }
 
-        Ok((
-            lambda_rest,
-            (ordinary_expr, Lambda {
-                params,
-                expr: Box::new(expr),
-            }),
-        ))
+        Ok((lambda_rest, Lambda {
+            params,
+            expr: Box::new(expr),
+        }))
     }
 
-    let leading_param = map(rule! { #subexpr(0) ~ "," }, |(arg, _)| arg);
+    fn remaining_args(mut i: Input) -> IResult<(Vec<Expr>, Option<Lambda>)> {
+        let mut args = Vec::new();
+        loop {
+            let (rest, arg) = match subexpr(0).parse(i) {
+                Ok(result) => result,
+                Err(nom::Err::Error(_)) => return Ok((i, (args, None))),
+                Err(error) => return Err(error),
+            };
+
+            args.push(arg);
+            if rest.tokens.first().is_some_and(|token| token.kind == Comma) {
+                i = rest.slice(1..);
+                continue;
+            }
+
+            // Keep the parsed final argument instead of requiring a comma and
+            // backtracking over the entire expression when the call closes.
+            if rest
+                .tokens
+                .first()
+                .is_some_and(|token| token.kind == RParen)
+            {
+                match ambiguous_lambda_arg(i, rest) {
+                    Ok((rest, lambda)) => return Ok((rest, (args, Some(lambda)))),
+                    Err(nom::Err::Error(_)) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            return Ok((rest, (args, None)));
+        }
+    }
+
     let function_call_body = map_res(
         rule! {
-            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ #leading_param* ~ #ambiguous_lambda_arg? ~ #comma_separated_list1(subexpr(0))? ~ #aggregate_order_by? ~ ")"
+            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ #remaining_args ~ #aggregate_order_by? ~ ")"
             ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ #aggregate_order_by? ~ ")")?
             ~ #within_group?
             ~ #aggregate_filter?
@@ -2748,9 +2770,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             opt_distinct_0,
             first_param,
             _,
-            leading_params,
-            ambiguous_lambda,
-            params_0,
+            (leading_params, ambiguous_lambda),
             argument_order_by,
             _,
             params_1,
@@ -2760,27 +2780,18 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         )| {
             let can_preserve_lambda = first_param.is_some()
                 && opt_distinct_0.is_none()
-                && params_0.is_none()
                 && argument_order_by.is_none()
                 && params_1.is_none()
                 && within_group_order_by.is_none()
                 && filter.is_none()
                 && window.is_none();
-            let (leading_params, ambiguous_lambda) = match ambiguous_lambda {
-                Some((ordinary_expr, _)) if !can_preserve_lambda => {
-                    let mut leading_params = leading_params;
-                    leading_params.push(ordinary_expr);
-                    (leading_params, None)
-                }
-                ambiguous_lambda => (leading_params, ambiguous_lambda),
-            };
+            let ambiguous_lambda = ambiguous_lambda.filter(|_| can_preserve_lambda);
 
             match (
                 first_param,
                 leading_params,
                 ambiguous_lambda,
                 opt_distinct_0,
-                params_0,
                 argument_order_by,
                 params_1,
                 within_group_order_by,
@@ -2790,8 +2801,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 (
                     Some(first_param),
                     leading_params,
-                    Some((ordinary_expr, lambda)),
-                    None,
+                    Some(lambda),
                     None,
                     None,
                     None,
@@ -2799,7 +2809,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     None,
                     None,
                 ) => Ok(FunctionCallSuffix::Lambda {
-                    args: merge_args(Some(first_param), leading_params, Some(vec![ordinary_expr])),
+                    args: merge_args(Some(first_param), leading_params),
                     params: lambda.params,
                     expr: lambda.expr,
                 }),
@@ -2808,14 +2818,13 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     leading_params,
                     None,
                     None,
-                    params_0,
                     None,
                     Some((_, opt_distinct_1, params_1, param_order_by, _)),
                     within_group_order_by,
                     filter,
                     window,
                 ) => {
-                    let params = merge_args(Some(first_param), leading_params, params_0);
+                    let params = merge_args(Some(first_param), leading_params);
                     let order_by = merge_aggregate_order_by(param_order_by, within_group_order_by)?;
 
                     Ok(FunctionCallSuffix::ParamsWindow {
@@ -2827,19 +2836,8 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                         window,
                     })
                 }
-                (
-                    first_param,
-                    leading_params,
-                    None,
-                    opt_distinct,
-                    params,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                ) => {
-                    let args = merge_args(first_param, leading_params, params);
+                (first_param, leading_params, None, opt_distinct, None, None, None, None, None) => {
+                    let args = merge_args(first_param, leading_params);
 
                     Ok(FunctionCallSuffix::Simple {
                         distinct: opt_distinct.is_some(),
@@ -2851,14 +2849,13 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     leading_params,
                     None,
                     opt_distinct,
-                    params,
                     None,
                     None,
                     None,
                     Some(filter),
                     None,
                 ) => {
-                    let args = merge_args(first_param, leading_params, params);
+                    let args = merge_args(first_param, leading_params);
 
                     Ok(FunctionCallSuffix::Filter {
                         distinct: opt_distinct.is_some(),
@@ -2871,14 +2868,13 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     leading_params,
                     None,
                     opt_distinct,
-                    params,
                     None,
                     None,
                     None,
                     filter,
                     Some(window),
                 ) => {
-                    let args = merge_args(first_param, leading_params, params);
+                    let args = merge_args(first_param, leading_params);
 
                     Ok(FunctionCallSuffix::Window {
                         distinct: opt_distinct.is_some(),
@@ -2892,14 +2888,13 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     leading_params,
                     None,
                     opt_distinct,
-                    params,
                     Some(order_by),
                     None,
                     None,
                     filter,
                     window,
                 ) => {
-                    let args = merge_args(first_param, leading_params, params);
+                    let args = merge_args(first_param, leading_params);
 
                     Ok(FunctionCallSuffix::ArgumentOrderBy {
                         distinct: opt_distinct.is_some(),
@@ -2914,14 +2909,13 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                     leading_params,
                     None,
                     opt_distinct,
-                    params,
                     None,
                     None,
                     Some(order_by),
                     filter,
                     window,
                 ) => {
-                    let args = merge_args(first_param, leading_params, params);
+                    let args = merge_args(first_param, leading_params);
 
                     Ok(FunctionCallSuffix::WithInGroupWindow {
                         distinct: opt_distinct.is_some(),
@@ -2931,7 +2925,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                         window,
                     })
                 }
-                (_, _, None, _, _, Some(_), None, Some(_), _, _) => {
+                (_, _, None, _, Some(_), None, Some(_), _, _) => {
                     Err(nom::Err::Error(ErrorKind::other(
                         "ORDER BY inside aggregate arguments cannot be combined with WITHIN GROUP",
                     )))
@@ -2955,7 +2949,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             func: FunctionCall {
                 distinct,
                 name,
-                args,
+                args: args.collect(),
                 params: vec![],
                 order_by: vec![],
                 filter: None,
@@ -2971,7 +2965,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             func: FunctionCall {
                 distinct,
                 name,
-                args,
+                args: args.collect(),
                 params: vec![],
                 order_by: vec![],
                 filter: Some(Box::new(filter)),
@@ -2988,7 +2982,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             func: FunctionCall {
                 distinct,
                 name,
-                args,
+                args: args.collect(),
                 params: vec![],
                 order_by: vec![],
                 filter: filter.map(Box::new),
@@ -3013,7 +3007,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             func: FunctionCall {
                 distinct,
                 name,
-                args,
+                args: args.collect(),
                 params: vec![],
                 order_by,
                 filter: filter.map(Box::new),
@@ -3025,7 +3019,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             func: FunctionCall {
                 distinct: false,
                 name,
-                args,
+                args: args.collect(),
                 params: vec![],
                 order_by: vec![],
                 filter: None,
@@ -3045,7 +3039,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 distinct,
                 name,
                 args,
-                params,
+                params: params.collect(),
                 order_by,
                 filter: filter.map(Box::new),
                 window,

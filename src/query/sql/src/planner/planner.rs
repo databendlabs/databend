@@ -137,9 +137,11 @@ impl Planner {
         .with_definition_scope(self.definition_scope.clone());
         // Attach before bind for the same reason as `plan_stmt`: table sources such as
         // ParquetRSTable::create read the query string during binding.
-        self.attach_masked_query_before_bind(query_kind, stmt);
+        let attached = self.attach_masked_query_before_bind(query_kind, stmt);
         let plan = binder.bind(stmt).await;
-        self.attach_masked_query(query_kind, stmt);
+        if !attached {
+            self.attach_masked_query(query_kind, stmt);
+        }
         plan
     }
 
@@ -361,10 +363,11 @@ impl Planner {
         .with_definition_scope(self.definition_scope.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.
-        self.attach_masked_query_before_bind(query_kind, stmt);
+        let attached = self.attach_masked_query_before_bind(query_kind, stmt);
         let plan = binder.bind(stmt).await;
-        // attach again to avoid the query kind is overwritten by the subquery
-        self.attach_masked_query(query_kind, stmt);
+        if !attached {
+            self.attach_masked_query(query_kind, stmt);
+        }
         let plan = plan?;
 
         // Lineage describes what the user wrote, so capture it before the optimizer
@@ -445,16 +448,23 @@ impl Planner {
 
 impl Planner {
     /// Dynamic SQL is attached by the binder after evaluating its script, and
-    /// the first attached query text wins: skip it here.
-    fn attach_masked_query_before_bind(&self, kind: QueryKind, stmt: &Statement) {
-        if !is_execute_immediate(stmt) {
-            self.attach_masked_query(kind, stmt);
+    /// the first attached query text wins: skip it here. Returns whether `stmt`
+    /// was attached. Then attaching it again after binding would repeat the same
+    /// text and secrets, and the first attached text (and kind) is kept anyway,
+    /// so callers skip it: masking formats the whole statement, which is costly
+    /// for long statements.
+    fn attach_masked_query_before_bind(&self, kind: QueryKind, stmt: &Statement) -> bool {
+        if is_execute_immediate(stmt) {
+            return false;
         }
+        self.attach_masked_query(kind, stmt);
+        true
     }
 
-    /// Call after binding, also if it failed. The first attached query text
-    /// wins, so for dynamic SQL this only records the statement, with its
-    /// expression's literals hidden, if binding failed before evaluating it.
+    /// Call after binding, also if it failed, unless `stmt` was attached before
+    /// binding. The first attached query text wins, so for dynamic SQL this only
+    /// records the statement, with its expression's literals hidden, if binding
+    /// failed before evaluating it.
     fn attach_masked_query(&self, kind: QueryKind, stmt: &Statement) {
         let (sql, secrets) = stmt.to_mask_sql_with_secrets();
         self.ctx.add_query_secrets(secrets);

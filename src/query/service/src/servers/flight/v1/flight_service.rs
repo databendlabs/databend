@@ -154,10 +154,11 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
-        let sender = DataExchangeManager::instance().handle_do_exchange(
+        let router = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
             &params.exchange_id,
             params.num_threads,
+            params.max_bytes_per_connection,
         )?;
 
         let mut stream = req.into_inner();
@@ -169,8 +170,9 @@ impl FlightService for DatabendQueryFlightService {
                     break;
                 };
 
-                if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
+                if router.route_frame(flight_data).await.is_err() {
+                    // Receiver closed
+                    break;
                 }
 
                 // Send pong (empty response signals readiness for next ping)
@@ -178,7 +180,7 @@ impl FlightService for DatabendQueryFlightService {
                     break;
                 }
             }
-            // sender is dropped here → closes sub-queues, notifies processors
+            // Dropping the router releases this connection's channel senders.
         });
 
         Ok(RawResponse::new(Box::pin(rx)))

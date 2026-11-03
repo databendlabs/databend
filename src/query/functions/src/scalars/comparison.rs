@@ -1766,6 +1766,11 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
 }
 
 fn register_like(registry: &mut FunctionRegistry) {
+    registry
+        .properties
+        .entry("like".to_string())
+        .or_default()
+        .dictionary_eval = true;
     registry.register_aliases("regexp", &["rlike"]);
 
     registry.register_passthrough_nullable_2_arg::<VariantType, StringType, BooleanType, _, _>(

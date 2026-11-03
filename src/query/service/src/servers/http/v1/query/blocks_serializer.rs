@@ -83,7 +83,7 @@ impl BlocksCollector {
 
     pub fn append_columns(&mut self, columns: Vec<Column>, num_rows: usize) {
         // Rows are encoded one at a time: decode encoded columns once per block.
-        let columns = columns.into_iter().map(Column::decode_encoded).collect();
+        let columns = columns.into_iter().map(Column::decode_owned).collect();
         self.columns.push((columns, num_rows));
     }
 

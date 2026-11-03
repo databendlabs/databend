@@ -235,14 +235,37 @@ impl OptimizeExprTask {
 
             let group = optimizer.memo.group(m_expr.children[child_index])?;
             if group.best_prop(&required_prop).is_none() {
-                let task = OptimizeGroupTask::new(
-                    self.ctx.clone(),
-                    Some((self.group_index, self.m_expr_index)),
-                    group.group_index,
-                    required_prop.clone(),
-                )
-                .with_parent(self.ref_count.clone());
-                scheduler.add_task(Task::OptimizeGroup(task));
+                let child_group_index = group.group_index;
+                // An in-flight task for the same `(group, required_prop)` computes exactly
+                // the result we need, so wait for it instead of scheduling a duplicate.
+                //
+                // Enforcer expressions (e.g. `Exchange`) have their own group as child and
+                // rely on `owner_expr` to skip themselves; those requests keep a private
+                // task so that the skip stays tied to the requesting expression.
+                let shareable = child_group_index != self.group_index;
+                let attached = shareable
+                    && scheduler.attach_optimize_group_waiter(
+                        child_group_index,
+                        &required_prop,
+                        &self.ref_count,
+                    );
+                if !attached {
+                    let task = OptimizeGroupTask::new(
+                        self.ctx.clone(),
+                        Some((self.group_index, self.m_expr_index)),
+                        child_group_index,
+                        required_prop.clone(),
+                    )
+                    .with_parent(self.ref_count.clone());
+                    if shareable {
+                        scheduler.register_optimize_group(
+                            child_group_index,
+                            required_prop.clone(),
+                            task.waiters.clone(),
+                        );
+                    }
+                    scheduler.add_task(Task::OptimizeGroup(task));
+                }
             }
 
             self.last_optimized_child_index = Some(child_index + 1);
