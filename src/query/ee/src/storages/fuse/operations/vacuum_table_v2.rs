@@ -114,8 +114,7 @@ pub async fn do_vacuum2(
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<()> {
-    // Maintenance, also from a table function or procedure: its reads do not fill the disk
-    // cache.
+    // Maintenance, also from a table function or procedure: its reads bypass the disk cache.
     ThreadTracker::maintenance_payload()
         .tracking(vacuum2(table, ctx, respect_flash_back))
         .await

@@ -151,9 +151,9 @@ pub struct TrackingPayload {
     pub processor_interrupt: Option<Arc<AtomicBool>>,
     pub perf_enabled: bool,
     pub process_rows: AtomicUsize,
-    /// Set for maintenance statements: their reads may be served by the disk cache, which
-    /// serves queries, but do not fill it.
-    pub disk_cache_read_only: bool,
+    /// Set for maintenance statements: their reads neither read nor fill the disk cache, which
+    /// serves queries.
+    pub bypass_disk_cache: bool,
 }
 
 #[derive(Debug, Default)]
@@ -361,7 +361,7 @@ impl Clone for TrackingPayload {
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
             ),
-            disk_cache_read_only: self.disk_cache_read_only,
+            bypass_disk_cache: self.bypass_disk_cache,
         }
     }
 }
@@ -447,7 +447,7 @@ impl ThreadTracker {
                 processor_interrupt: None,
                 perf_enabled: false,
                 process_rows: AtomicUsize::new(0),
-                disk_cache_read_only: false,
+                bypass_disk_cache: false,
             }),
         }
     }
@@ -561,19 +561,19 @@ impl ThreadTracker {
             .unwrap_or(None)
     }
 
-    /// The current payload for maintenance work: its reads do not fill the disk cache (see
-    /// `TrackingPayload::disk_cache_read_only`).
+    /// The current payload for maintenance work: its reads bypass the disk cache (see
+    /// `TrackingPayload::bypass_disk_cache`).
     pub fn maintenance_payload() -> TrackingPayload {
         let mut payload = Self::new_tracking_payload();
-        payload.disk_cache_read_only = true;
+        payload.bypass_disk_cache = true;
         payload
     }
 
-    /// Whether the current statement is a maintenance one, whose reads do not fill the disk
-    /// cache (see `TrackingPayload::disk_cache_read_only`).
-    pub fn disk_cache_read_only() -> bool {
+    /// Whether the current statement is a maintenance one, whose reads bypass the disk cache
+    /// (see `TrackingPayload::bypass_disk_cache`).
+    pub fn bypass_disk_cache() -> bool {
         TRACKER
-            .try_with(|tracker| tracker.borrow().payload.disk_cache_read_only)
+            .try_with(|tracker| tracker.borrow().payload.bypass_disk_cache)
             .unwrap_or(false)
     }
 

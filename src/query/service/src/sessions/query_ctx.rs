@@ -204,16 +204,16 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
-    /// Fragments of a maintenance statement run here: see `QueryEnv::disk_cache_read_only`.
-    pub fn set_disk_cache_read_only(&self, read_only: bool) {
+    /// Fragments of a maintenance statement run here: see `QueryEnv::bypass_disk_cache`.
+    pub fn set_bypass_disk_cache(&self, read_only: bool) {
         self.shared
-            .disk_cache_read_only
+            .bypass_disk_cache
             .store(read_only, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn get_disk_cache_read_only(&self) -> bool {
+    pub fn get_bypass_disk_cache(&self) -> bool {
         self.shared
-            .disk_cache_read_only
+            .bypass_disk_cache
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 

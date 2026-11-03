@@ -145,17 +145,18 @@ impl DiskCachedStorage {
         self.disk_for(kind, fill).is_some()
     }
 
-    /// `fill`, read only for maintenance statements (`ThreadTracker::disk_cache_read_only`):
-    /// the disk cache serves queries.
+    /// `fill`, or no disk cache at all for maintenance statements
+    /// (`ThreadTracker::bypass_disk_cache`): the disk cache serves queries.
     fn statement_fill(fill: DiskFill) -> DiskFill {
-        if ThreadTracker::disk_cache_read_only() {
-            fill.at_most(DiskFill::ReadOnly)
+        if ThreadTracker::bypass_disk_cache() {
+            DiskFill::Bypass
         } else {
             fill
         }
     }
 
     fn disk_for(&self, kind: CacheKind, fill: DiskFill) -> Option<&Arc<DiskCache>> {
+        let fill = Self::statement_fill(fill);
         self.disk
             .as_ref()
             .filter(|disk| fill.reads() && disk.is_enabled(kind))

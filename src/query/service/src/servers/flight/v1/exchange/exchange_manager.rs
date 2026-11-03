@@ -287,7 +287,7 @@ impl DataExchangeManager {
         ctx: Option<Arc<QueryContext>>,
     ) -> Result<()> {
         if let Some(ctx) = ctx.as_ref() {
-            ctx.set_disk_cache_read_only(env.disk_cache_read_only);
+            ctx.set_bypass_disk_cache(env.bypass_disk_cache);
         }
         if env.perf_config.is_perf_active() {
             if let Some(ctx) = ctx.as_ref() {

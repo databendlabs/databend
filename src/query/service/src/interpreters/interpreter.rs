@@ -82,8 +82,9 @@ pub trait Interpreter: Sync + Send {
 
     fn is_ddl(&self) -> bool;
 
-    /// Maintenance statements (ANALYZE, compaction, recluster, vacuum, refreshes) may read
-    /// from the disk cache but do not fill it: it serves queries.
+    /// Maintenance statements (ANALYZE, compaction, recluster, vacuum, refreshes) bypass the
+    /// disk cache, neither reading nor filling it: it serves queries. They still use the
+    /// memory caches.
     fn is_maintenance(&self) -> bool {
         false
     }
@@ -113,14 +114,14 @@ pub trait Interpreter: Sync + Send {
         let query_io_stats = ctx.get_local_io_stats();
         let already_tracked =
             ThreadTracker::io_stats().is_some_and(|current| Arc::ptr_eq(current, &query_io_stats));
-        let maintenance = self.is_maintenance() && !ThreadTracker::disk_cache_read_only();
+        let maintenance = self.is_maintenance() && !ThreadTracker::bypass_disk_cache();
         if already_tracked && !maintenance {
             return self.execute_with_hooks_inner(ctx, hooks).await;
         }
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.io_stats = Some(query_io_stats);
-        tracking_payload.disk_cache_read_only |= maintenance;
+        tracking_payload.bypass_disk_cache |= maintenance;
         tracking_payload
             .tracking(self.execute_with_hooks_inner(ctx, hooks))
             .await

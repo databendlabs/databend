@@ -71,7 +71,7 @@ pub(crate) async fn execute_analyze_hook(ctx: Arc<QueryContext>, desc: AnalyzeDe
         return Ok(());
     }
 
-    // Maintenance: its reads do not fill the disk cache.
+    // Maintenance: its reads bypass the disk cache.
     match ThreadTracker::maintenance_payload()
         .tracking(do_analyze(ctx, desc))
         .await

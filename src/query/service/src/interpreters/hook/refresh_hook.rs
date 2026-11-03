@@ -70,7 +70,7 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
 pub(crate) async fn execute_refresh_hook(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     info!("Table hook starting refresh job");
-    // Maintenance: its reads do not fill the disk cache.
+    // Maintenance: its reads bypass the disk cache.
     match ThreadTracker::maintenance_payload()
         .tracking(do_refresh(ctx, desc))
         .await

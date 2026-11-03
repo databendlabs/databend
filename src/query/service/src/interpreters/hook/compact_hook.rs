@@ -135,7 +135,7 @@ pub(crate) async fn execute_compact_hook(
     trace_ctx: CompactHookTraceCtx,
     lock_opt: LockTableOption,
 ) -> Result<()> {
-    // Maintenance: its reads do not fill the disk cache.
+    // Maintenance: its reads bypass the disk cache.
     ThreadTracker::maintenance_payload()
         .tracking(compact_after_write(
             ctx,

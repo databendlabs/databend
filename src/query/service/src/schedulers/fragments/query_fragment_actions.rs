@@ -200,11 +200,11 @@ impl QueryFragmentsActions {
         self.fragments_connections(&mut builder)?;
         self.statistics_connections(&mut builder)?;
 
-        // A maintenance statement's fragments do not fill the disk cache on any node, this one
+        // A maintenance statement's fragments bypass the disk cache on every node, this one
         // included: its own fragments are run under its context.
-        let disk_cache_read_only =
-            ThreadTracker::disk_cache_read_only() || self.ctx.get_disk_cache_read_only();
-        self.ctx.set_disk_cache_read_only(disk_cache_read_only);
+        let bypass_disk_cache =
+            ThreadTracker::bypass_disk_cache() || self.ctx.get_bypass_disk_cache();
+        self.ctx.set_bypass_disk_cache(bypass_disk_cache);
         Ok(QueryEnv {
             query_created_time: self.ctx.get_query_created_time(),
             workload_group,
@@ -221,7 +221,7 @@ impl QueryFragmentsActions {
                 .get_create_query_flight_client_with_current_rt()?,
             perf_config: self.ctx.get_perf_config(),
             user: self.ctx.get_current_user()?,
-            disk_cache_read_only,
+            bypass_disk_cache,
         })
     }
 

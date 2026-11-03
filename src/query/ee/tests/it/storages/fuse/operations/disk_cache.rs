@@ -112,6 +112,16 @@ fn disk_items() -> BTreeMap<String, u64> {
         .collect()
 }
 
+/// Lookups of the disk cache so far, hits and misses, over all kinds.
+fn disk_accesses() -> u64 {
+    CacheManager::instance()
+        .rows()
+        .into_iter()
+        .filter(|row| row.disk && row.kind.is_some())
+        .map(|row| row.hit + row.miss)
+        .sum()
+}
+
 async fn query(fixture: &TestFixture, sql: &str) -> Result<String> {
     let blocks: Vec<DataBlock> = fixture.execute_query(sql).await?.try_collect().await?;
     pretty_format_blocks(&blocks)
@@ -157,8 +167,9 @@ async fn check_rows(fixture: &TestFixture, name: &str) -> Result<()> {
 }
 
 /// Each maintenance operation, on a table no query read but for its current snapshot, which
-/// every statement on the table reads: whatever else it reads from storage, no entry is added
-/// to the disk cache. Its results are checked by a query afterwards.
+/// every statement on the table reads: it bypasses the disk cache, neither looking it up, the
+/// cached snapshot included, nor adding an entry. Its results are checked by a query
+/// afterwards.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_maintenance_does_not_fill_the_disk_cache() -> anyhow::Result<()> {
     let dir = TempDir::new()?;
@@ -219,10 +230,17 @@ async fn test_maintenance_does_not_fill_the_disk_cache() -> anyhow::Result<()> {
         )
         .await?;
         let before = disk_items();
+        let accesses = disk_accesses();
         for statement in run.iter() {
             fixture.execute_command(&sql(statement)).await?;
         }
         settle().await;
+        if disk_accesses() != accesses {
+            fills.push(format!(
+                "{operation}: {} disk cache lookups",
+                disk_accesses() - accesses
+            ));
+        }
         for (kind, items) in disk_items() {
             let was = before.get(&kind).copied().unwrap_or(0);
             if items > was {
@@ -233,7 +251,7 @@ async fn test_maintenance_does_not_fill_the_disk_cache() -> anyhow::Result<()> {
     }
     assert!(
         fills.is_empty(),
-        "filled by maintenance:\n{}",
+        "disk cache used by maintenance:\n{}",
         fills.join("\n")
     );
     Ok(())

@@ -541,10 +541,11 @@ async fn test_read_after_an_invalidation_does_not_join_one_before() {
     assert_eq!(before.await.unwrap().unwrap(), object().slice(0..10));
 }
 
-/// Reads of a maintenance statement (`ThreadTracker::maintenance_payload`) are served by the
-/// disk cache but do not fill it, whatever the reader asks for; a query's read fills it.
+/// Reads of a maintenance statement (`ThreadTracker::maintenance_payload`) bypass the disk
+/// cache, whatever the reader asks for: they fill nothing, and what queries cached is neither
+/// read nor refreshed by them. A query's read fills it.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_maintenance_reads_do_not_fill() {
+async fn test_maintenance_reads_bypass_the_disk_cache() {
     let dir = TempDir::new().unwrap();
     let (_op, disk, storage) = setup(&dir).await;
     let key = DiskKey::range(PATH, 0..10);
@@ -585,10 +586,15 @@ async fn test_maintenance_reads_do_not_fill() {
         .await
         .unwrap();
     wait_for(|| disk.contains(data(), &key));
-    // Served from disk now, still filling nothing.
-    let hits = || disk.pool_stats().iter().map(|(_, s)| s.hit).sum::<u64>();
-    let before = hits();
+    // Cached now, yet not read by maintenance, and still nothing filled.
+    let accesses = || {
+        disk.pool_stats()
+            .iter()
+            .map(|(_, s)| s.hit + s.miss)
+            .sum::<u64>()
+    };
+    let before = accesses();
     maintenance(storage).await;
-    assert!(hits() > before);
+    assert_eq!(accesses(), before);
     assert!(!disk.contains(data(), &DiskKey::range(PATH, 20..30)));
 }
