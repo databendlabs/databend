@@ -1028,3 +1028,40 @@ fn test_previous_run_file_under_a_key_being_written_stays_marked_until_deleted()
     assert!(!published.indexed);
     assert_consistent(&pool);
 }
+
+/// Such a file is deleted when the write of its key is abandoned: rejected at publish, here
+/// for a pool turned off meanwhile, or released after a failed write. It is not left on disk
+/// outside the capacity, and its key can be written again.
+#[test]
+fn test_previous_run_file_is_deleted_when_its_replacement_is_abandoned() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let rejected = DiskKey::whole("t/a").rel_path(data());
+    let released = DiskKey::whole("t/b").rel_path(data());
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    let rejected_file = write_file(&root, &rejected, 100);
+    let released_file = write_file(&root, &released, 100);
+    assert!(pool.reserve(&rejected, 100).reserved);
+    assert!(pool.reserve(&released, 100).reserved);
+    assert_eq!(pool.reload(), (0, 0));
+
+    assert!(pool.set_cap(0).is_empty());
+    let published = pool
+        .publish(rejected.clone(), 100, 100, 0, || panic!("not committed"))
+        .unwrap();
+    assert!(!published.indexed);
+    assert_eq!(published.victims, vec![rejected.clone()]);
+    pool.delete(&published.victims);
+    assert!(!rejected_file.exists());
+
+    pool.release(&released, 100);
+    assert!(!released_file.exists());
+
+    assert!(pool.set_cap(10_000).is_empty());
+    for rel in [&rejected, &released] {
+        let r = pool.reserve(rel, 1);
+        assert!(r.reserved, "{rel}");
+        pool.release(rel, 1);
+    }
+    assert_consistent(&pool);
+}

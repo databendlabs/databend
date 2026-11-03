@@ -205,19 +205,20 @@ impl DiskCache {
             .name("disk-cache-reload".to_string())
             .spawn(move || {
                 remove_old_layouts(&tenant_root);
-                for pool in &self.pools {
-                    pool.reload();
-                }
+                self.reload_now();
             });
         if let Err(e) = spawned {
             warn!("[DiskCache] failed to spawn the reload thread: {e}");
         }
     }
 
-    /// Reloads synchronously; for tests.
+    /// Reloads synchronously; for tests. The invalidations kept for a pool's scan are pruned
+    /// once it is done, as far as no running fill needs them: fills that finished during the
+    /// scan pruned nothing.
     pub fn reload_now(&self) {
         for pool in &self.pools {
             pool.reload();
+            pool.prune_invalidations(self.fence.frontier());
         }
     }
 

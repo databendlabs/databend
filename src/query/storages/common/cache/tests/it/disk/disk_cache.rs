@@ -644,6 +644,25 @@ fn test_invalidations_are_dropped_when_the_oldest_fill_finishes() {
     assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) == 0));
 }
 
+/// Invalidations kept for the restart scan are dropped once it is done, when no fill needs
+/// them; one kept for a fill still running stays until it finishes.
+#[test]
+fn test_invalidations_kept_for_the_scan_are_dropped_after_it() {
+    let dir = TempDir::new().unwrap();
+    let cache = Arc::new(cache(&dir));
+    let kind = CacheKind::of::<segment::Info>();
+    let (done, running) = ("1/2/_sg/done.mpk", "1/2/_sg/running.mpk");
+    drop(cache.begin_change(done).unwrap());
+    let fill = cache.begin_fill();
+    drop(cache.begin_change(running).unwrap());
+    assert!(cache.invalidation_of(kind, done) > 0);
+    cache.reload_now();
+    assert_eq!(cache.invalidation_of(kind, done), 0);
+    assert!(cache.invalidation_of(kind, running) > 0);
+    drop(fill);
+    assert_eq!(cache.invalidation_of(kind, running), 0);
+}
+
 /// While an object is being changed, its units are refused and nothing of it reaches the disk,
 /// for a crash to leave behind; once the change ends, they are cached again.
 #[tokio::test(flavor = "multi_thread")]

@@ -74,6 +74,12 @@ impl FillFence {
         }))
     }
 
+    /// A point no running fill started before: invalidations up to it reject nothing any more.
+    pub fn frontier(&self) -> u64 {
+        let state = self.state.lock();
+        state.active.first().copied().unwrap_or(state.clock)
+    }
+
     /// A point after every fill started so far, for an invalidation, and the start of the
     /// oldest fill still running: invalidations before it cannot reject anything any more.
     pub fn invalidation_point(&self) -> (u64, Option<u64>) {

@@ -256,6 +256,21 @@ impl State {
         }
     }
 
+    /// The file of a previous run the restart scan left under `rel` (see `shadowed`), whose
+    /// write is abandoned: marked for `delete`, as no write replaces it now.
+    fn take_shadowed(&mut self, rel: &str) -> Option<String> {
+        let object = object_of(rel)?;
+        let rels = self.shadowed.get_mut(object)?;
+        if !rels.remove(rel) {
+            return None;
+        }
+        if rels.is_empty() {
+            self.shadowed.remove(object);
+        }
+        self.mark_deleting(rel);
+        Some(rel.to_string())
+    }
+
     fn unmark_deleting(&mut self, rel: &str) {
         self.deleting.remove(rel);
         self.undeleted.remove(rel);
@@ -433,10 +448,16 @@ impl DiskPool {
         {
             return Ok(Published {
                 indexed: false,
-                victims: Vec::new(),
+                victims: state.take_shadowed(&rel).into_iter().collect(),
             });
         }
-        commit()?;
+        if let Err(e) = commit() {
+            // Not replaced: kept marked, for the next change of its object to delete it.
+            if let Some(rel) = state.take_shadowed(&rel) {
+                state.undeleted.insert(rel);
+            }
+            return Err(e);
+        }
         // The file the restart scan left under the key, if any, is replaced.
         if let Some(object) = object_of(&rel) {
             if let Some(rels) = state.shadowed.get_mut(object) {
@@ -462,9 +483,15 @@ impl DiskPool {
 
     /// Gives back the reservation of `rel`, whose write failed or was abandoned.
     pub fn release(&self, rel: &str, reserved: u64) {
-        let mut state = self.state.lock();
-        state.writing -= reserved;
-        state.in_flight.remove(rel);
+        let shadowed = {
+            let mut state = self.state.lock();
+            state.writing -= reserved;
+            state.in_flight.remove(rel);
+            state.take_shadowed(rel)
+        };
+        if let Some(rel) = shadowed {
+            self.delete(&[rel]);
+        }
     }
 
     /// Takes every entry of the object `object` (see `DiskKey::object_id`) out of the index, in
