@@ -44,6 +44,10 @@ pub const REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE: &str =
 /// raising the bytes in flight.
 pub const MAX_FRAMES_IN_FLIGHT: usize = 4;
 
+/// The largest frame a do_exchange connection sends: `exchange_frame_bytes` above it is
+/// clamped, so that the frames in flight fit in the receive window of the server.
+pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
+
 /// Response from a ping-pong exchange.
 pub struct PingPongResponse {
     pub data: Result<FlightData, Status>,

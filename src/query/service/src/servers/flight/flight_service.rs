@@ -33,6 +33,7 @@ use tonic::transport::ServerTlsConfig;
 use tonic::transport::server::TcpIncoming;
 
 use super::v1::DatabendQueryFlightService;
+use super::v1::network::MAX_FRAME_BYTES;
 use super::v1::network::MAX_FRAMES_IN_FLIGHT;
 use crate::servers::Server as DatabendQueryServer;
 
@@ -49,11 +50,11 @@ const FLIGHT_LISTEN_BACKLOG: i32 = 4096;
 /// HTTP/2 receive window of each flight stream and connection.
 ///
 /// Exchange frames flow from client to server over one do_exchange stream per
-/// connection. The window must hold the frames in flight at the default
-/// `exchange_frame_bytes`, or flow control holds them back until the server task
-/// runs again, which takes milliseconds on saturated cores. Send quota bounds
-/// the bytes in flight; the window only stops limiting them.
-const FLIGHT_RECEIVE_WINDOW_BYTES: u32 = (MAX_FRAMES_IN_FLIGHT * 1024 * 1024) as u32;
+/// connection. The window must hold the frames in flight at any `exchange_frame_bytes`,
+/// which is clamped to `MAX_FRAME_BYTES`, or flow control holds them back until the
+/// server task runs again, which takes milliseconds on saturated cores. Senders bound
+/// the bytes in flight by their frame size; the window only stops limiting them.
+const FLIGHT_RECEIVE_WINDOW_BYTES: u32 = (MAX_FRAMES_IN_FLIGHT * MAX_FRAME_BYTES) as u32;
 
 fn bind_flight_listener(addr: SocketAddr) -> std::io::Result<TcpIncoming> {
     let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;

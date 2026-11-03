@@ -30,6 +30,7 @@ use tokio::sync::Semaphore;
 use tonic::Code;
 use tonic::Status;
 
+use super::super::ping_pong_transport::MAX_FRAME_BYTES;
 use super::super::ping_pong_transport::MAX_FRAMES_IN_FLIGHT;
 use super::super::ping_pong_transport::PingPongCallback;
 use super::super::ping_pong_transport::PingPongResponse;
@@ -68,10 +69,12 @@ impl ExchangeSendBufferConfig {
     /// A destination has up to `MAX_FRAMES_IN_FLIGHT` frames awaiting responses, so
     /// too few bytes in flight leave the link idle for most of each round trip.
     /// Each destination gets half of its share of the queue for its frames in
-    /// flight, so the next frames can fill up meanwhile, bounded by `max_batch_bytes`.
+    /// flight, so the next frames can fill up meanwhile, bounded by `max_batch_bytes` and
+    /// `MAX_FRAME_BYTES`.
     fn batch_bytes(&self, num_remotes: usize) -> usize {
         let share = self.max_queued_bytes / (2 * num_remotes.max(1) * MAX_FRAMES_IN_FLIGHT);
-        share.max(MIN_BATCH_BYTES).min(self.max_batch_bytes).max(1)
+        let limit = self.max_batch_bytes.min(MAX_FRAME_BYTES);
+        share.max(MIN_BATCH_BYTES).min(limit).max(1)
     }
 }
 
@@ -645,6 +648,20 @@ mod tests {
     fn test_pop_front_empty_queue() {
         let mut queue = PendingSendQueue::default();
         assert!(queue.pop_batch(256 * 1024).is_none());
+    }
+
+    /// Frames are at most `MAX_FRAME_BYTES`, whatever `exchange_frame_bytes`, so the frames in
+    /// flight fit in the receive window of the server.
+    #[test]
+    fn test_batch_bytes_are_bounded_by_the_frame_limit() {
+        let config = ExchangeSendBufferConfig {
+            max_queued_bytes: 1 << 30,
+            max_batch_bytes: 64 * 1024 * 1024,
+        };
+        assert_eq!(config.batch_bytes(1), MAX_FRAME_BYTES);
+
+        let config = ExchangeSendBufferConfig::default();
+        assert_eq!(config.batch_bytes(1), config.max_batch_bytes);
     }
 
     #[test]

@@ -94,6 +94,7 @@ pub mod wire_format;
 
 pub use databend_common_pipeline::core::SyncTaskHandle;
 pub use databend_common_pipeline::core::SyncTaskSet;
+pub use ping_pong_transport::MAX_FRAME_BYTES;
 pub use ping_pong_transport::MAX_FRAMES_IN_FLIGHT;
 pub use ping_pong_transport::PingPongCallback;
 pub use ping_pong_transport::PingPongResponse;
