@@ -647,4 +647,51 @@ mod tests {
                 .starts_with("numeric join condition requires numeric statistics bounds")
         );
     }
+
+    fn int_comparison(func_name: &str, index: usize, value: i64) -> ScalarExpr {
+        ScalarExpr::FunctionCall(crate::plans::FunctionCall {
+            span: None,
+            func_name: func_name.to_string(),
+            params: vec![],
+            arguments: vec![
+                int_column(index),
+                ScalarExpr::ConstantExpr(crate::plans::ConstantExpr {
+                    span: None,
+                    value: databend_common_expression::Scalar::Number(
+                        databend_common_expression::types::NumberScalar::Int64(value),
+                    ),
+                }),
+            ],
+            return_type: Box::new(DataType::Boolean),
+        })
+    }
+
+    #[test]
+    fn residual_range_outside_statistics_keeps_small_selectivity() -> Result<()> {
+        // `c0` is recorded in [1, 50].
+        let input = statistics(100, [(Symbol::new(0), int_stat(1, 50, 50.0))]);
+        let estimate = |predicate: &ScalarExpr| {
+            NonEquiCondition::estimate_locally(
+                predicate,
+                &input,
+                StatCardinality::estimate(100.0),
+                &HashMap::new(),
+                &FunctionContext::default(),
+                FilterAndStrategy::Independent,
+            )
+            .map(|condition| condition.selectivity)
+        };
+
+        let Selectivity::StatisticsZero(selectivity) = estimate(&int_comparison("gt", 0, 100))?
+        else {
+            panic!("expected a small estimate for a range outside the column statistics");
+        };
+        assert!((selectivity - 1.0 / 2500.0).abs() < 1e-12);
+        // An equality outside the column statistics keeps the folded zero.
+        assert!(matches!(
+            estimate(&int_comparison("eq", 0, 100))?,
+            Selectivity::Zero
+        ));
+        Ok(())
+    }
 }

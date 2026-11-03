@@ -992,16 +992,13 @@ impl SelectivityVisitor<'_> {
         // SelectivityEstimator::apply. Fold here so domain contradictions and tautologies retain
         // their deterministic Zero/All semantics instead of becoming probability estimates.
         let input_domains = build_input_domains(&expr, column_stats)?;
-        let (expr, output_domain) = ConstantFolder::fold_with_domain(
-            Cow::Owned(expr),
+        let (folded, output_domain) = ConstantFolder::fold_with_domain(
+            Cow::Borrowed(&expr),
             &input_domains,
             func_ctx,
             &BUILTIN_FUNCTIONS,
         );
-        if let Some(selectivity) = deterministic_folded_selectivity(&expr, output_domain.as_ref()) {
-            return Ok(selectivity);
-        }
-        let mut visitor = SelectivityVisitor {
+        let visitor = SelectivityVisitor {
             cardinality,
             selectivity: Selectivity::Unknown,
             constraint_context: ConstraintContext::And,
@@ -1013,8 +1010,29 @@ impl SelectivityVisitor<'_> {
             constraints: ValueConstraintState::default(),
             and_strategy,
         };
-        visitor.visit_expr(expr.as_ref())?;
-        Ok(visitor.selectivity)
+        match deterministic_folded_selectivity(&folded, output_domain.as_ref()) {
+            // As in `SelectivityEstimator::apply_statistics_false_predicates`,
+            // a zero from statistics-derived domains keeps a small estimate when
+            // a range comparison outside the column statistics caused it.
+            Some(Selectivity::Zero) => {
+                let (folded, output_domain) =
+                    fold_with_constraint_domains(&expr, cardinality, column_stats, func_ctx);
+                if deterministic_folded_selectivity(&folded, output_domain.as_ref()).is_none() {
+                    let mut visitor = visitor;
+                    visitor.visit_expr(folded.as_ref())?;
+                    if let Selectivity::StatisticsZero(_) = visitor.selectivity {
+                        return Ok(visitor.selectivity);
+                    }
+                }
+                Ok(Selectivity::Zero)
+            }
+            Some(selectivity) => Ok(selectivity),
+            None => {
+                let mut visitor = visitor;
+                visitor.visit_expr(folded.as_ref())?;
+                Ok(visitor.selectivity)
+            }
+        }
     }
 
     fn column_row_scale(&self, index: Symbol) -> StatCardinality {
