@@ -19,7 +19,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
@@ -61,6 +63,7 @@ use opendal::Operator;
 use crate::FuseStorageFormat;
 use crate::io::BlockStatsBuilder;
 use crate::io::BloomIndexState;
+use crate::io::FuseCaches;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::write::JsonPathStatisticsBuilder;
 use crate::io::write::SpatialIndexState;
@@ -434,6 +437,7 @@ impl BlockWriter {
         Ok(())
     }
 
+    /// Writes a bloom index to a new path, or one no cache holds: a rebuilt missing index.
     pub async fn write_down_bloom_index_state(
         dal: &Operator,
         bloom_index_state: Option<BloomIndexState>,
@@ -443,8 +447,8 @@ impl BlockWriter {
 
             let location = &index_state.location.0;
             write_data(index_state.data, dal, location).await?;
-            // Bloom indexes are rewritten in place (ngram refresh, missing index rebuild): the
-            // disk cache drops the old bytes. The memory caches are evicted by the callers.
+            // The path may have been read before, missing: the disk cache keeps no such entry,
+            // but a unit read of it may be queued.
             DiskCachedStorage::new(dal.clone())
                 .evict_objects(&[location.to_string()])
                 .await?;
@@ -454,6 +458,32 @@ impl BlockWriter {
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(())
+    }
+
+    /// Rewrites a bloom index in place (ngram refresh) and drops the old one from the caches:
+    /// its meta and the filters `old_filter_keys` from memory, after the write, as a reader
+    /// may have put them back meanwhile from the file as it still was; its bytes from the disk
+    /// cache. The write and the evictions run to their end on the IO runtime when the caller
+    /// is cancelled: a rewrite that went through leaves no stale entry.
+    pub async fn rewrite_bloom_index_state(
+        dal: &Operator,
+        index_state: BloomIndexState,
+        old_filter_keys: Vec<String>,
+    ) -> Result<()> {
+        let dal = dal.clone();
+        GlobalIORuntime::instance()
+            .spawn(async move {
+                let location = index_state.location.0.clone();
+                Self::write_down_bloom_index_state(&dal, Some(index_state)).await?;
+                let caches = FuseCaches::instance();
+                caches.index_metas.bloom.evict(&location);
+                for key in &old_filter_keys {
+                    caches.bloom_filters.evict(key);
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("bloom index rewrite task failed: {e}")))?
     }
 
     pub(crate) async fn write_down_vector_index_files(

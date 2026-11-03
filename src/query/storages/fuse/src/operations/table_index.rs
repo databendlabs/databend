@@ -802,18 +802,11 @@ impl AsyncTransform for NgramIndexTransform {
 
             new_block_meta.bloom_filter_index_size = state.size();
             new_block_meta.ngram_filter_index_size = state.ngram_size();
-            // The old meta and filters leave the memory caches before the write, which has
-            // suspension points this transform may be cancelled at: a reader meanwhile reloads
-            // the file as it is, and after the write reads the new one. The disk cache is
-            // evicted by the write itself.
-            let caches = FuseCaches::instance();
-            caches.index_metas.bloom.evict(&index_path);
-            for old_ngram_name in old_ngram_names {
-                caches
-                    .bloom_filters
-                    .evict(&format!("{index_path}-{}", old_ngram_name));
-            }
-            BlockWriter::write_down_bloom_index_state(&self.operator, Some(state)).await?;
+            let old_filter_keys = old_ngram_names
+                .iter()
+                .map(|name| format!("{index_path}-{name}"))
+                .collect();
+            BlockWriter::rewrite_bloom_index_state(&self.operator, state, old_filter_keys).await?;
         } else {
             return Err(ErrorCode::RefreshIndexError(
                 "Refresh Ngram index failed".to_string(),
