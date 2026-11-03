@@ -186,8 +186,9 @@ struct Shared {
     room: Notify,
     /// Entries queued or being written, by pool and key, with their bytes and the ticket of the
     /// fill that read them: a second miss of the same key while the first is pending is not
-    /// queued again, and is served these bytes (see `DiskWriter::pending`).
-    pending: Mutex<HashMap<(usize, String), (Bytes, FillTicket)>>,
+    /// queued again, and is served these bytes (see `DiskWriter::pending`). Also the number of
+    /// the job, so that a job superseded by a newer one does not take the newer one off.
+    pending: Mutex<PendingSet>,
     drops: DropCounters,
     settings: WriterSettings,
     over_watermark: fn(&Path, u64) -> bool,
@@ -197,15 +198,19 @@ struct Shared {
     seq: AtomicU64,
 }
 
+/// Entries queued or being written, by pool index and key: their bytes, the ticket of their
+/// fill and the number of their job.
+type PendingSet = HashMap<(usize, String), (Bytes, FillTicket, u64)>;
+
 pub struct DiskWriter {
-    tx: crossbeam_channel::Sender<WriteJob>,
+    tx: crossbeam_channel::Sender<(WriteJob, u64)>,
     shared: Arc<Shared>,
 }
 
 impl DiskWriter {
     /// Writers over `pools`, in eviction order under disk pressure, all under `root`.
     pub fn start(pools: Vec<Arc<DiskPool>>, root: PathBuf, options: WriterOptions) -> DiskWriter {
-        let (tx, rx) = crossbeam_channel::unbounded::<WriteJob>();
+        let (tx, rx) = crossbeam_channel::unbounded::<(WriteJob, u64)>();
         let writers = options.writers;
         let shared = Arc::new(Shared {
             queued: AtomicU64::new(0),
@@ -224,10 +229,10 @@ impl DiskWriter {
             let spawned = std::thread::Builder::new()
                 .name(format!("disk-cache-writer-{i}"))
                 .spawn(move || {
-                    while let Ok(job) = rx.recv() {
+                    while let Ok((job, number)) = rx.recv() {
                         // A panic loses the entry, not the thread; `write` keeps the
                         // accounting right on unwind.
-                        if let Err(e) = catch_unwind(|| shared.write(job)) {
+                        if let Err(e) = catch_unwind(|| shared.write(job, number)) {
                             warn!("[DiskCache] writer {i} panicked writing an entry: {e}");
                         }
                     }
@@ -293,7 +298,7 @@ impl DiskWriter {
             .pending
             .lock()
             .get(&(pool, rel.to_string()))
-            .cloned()
+            .map(|(bytes, ticket, _)| (bytes.clone(), ticket.clone()))
     }
 
     /// Entries queued or being written.
@@ -328,7 +333,13 @@ impl DiskWriter {
         value: impl FnOnce() -> Bytes,
     ) -> bool {
         let key = (pool.pool().index(), rel);
-        if self.shared.pending.lock().contains_key(&key) {
+        // A fill its object was invalidated since is rejected now, before it waits for room or
+        // makes its bytes, and so does not keep a newer fill of the key out of the queue.
+        if !pool.accepts(&key.1, ticket.started()) {
+            self.shared.drops.add(&key.1, DropReason::Rejected);
+            return false;
+        }
+        if self.shared.blocks(&pool, &key) {
             return false;
         }
         let settings = &self.shared.settings;
@@ -364,25 +375,29 @@ impl DiskWriter {
         };
         let value = value();
         debug_assert_eq!(value.len() as u64, len);
+        let number = self.shared.seq.fetch_add(1, Ordering::Relaxed);
         {
             let mut pending = self.shared.pending.lock();
             // Queued by another caller while this one waited for room.
-            if pending.contains_key(&key) {
+            if Shared::blocks_in(&pending, &pool, &key) {
                 drop(pending);
                 give_back();
                 return false;
             }
-            pending.insert(key.clone(), (value.clone(), ticket.clone()));
+            pending.insert(key.clone(), (value.clone(), ticket.clone(), number));
         }
         let (pool, rel) = (pool, key.1.clone());
-        if let Err(e) = self.tx.send(WriteJob {
-            pool,
-            rel,
-            value,
-            ticket,
-        }) {
+        if let Err(e) = self.tx.send((
+            WriteJob {
+                pool,
+                rel,
+                value,
+                ticket,
+            },
+            number,
+        )) {
             // No writer left.
-            self.shared.pending.lock().remove(&key);
+            self.shared.remove_pending(&key, number);
             give_back();
             warn!("[DiskCache] writer threads are gone: {e}");
             return false;
@@ -393,28 +408,50 @@ impl DiskWriter {
 }
 
 impl Shared {
-    fn done(&self, pending_key: &(usize, String), len: u64) {
+    /// Whether an entry pending under `key` keeps another fill of it out of the queue: one
+    /// whose object was invalidated since its fill started does not, as it will be rejected.
+    fn blocks(&self, pool: &DiskPool, key: &(usize, String)) -> bool {
+        Self::blocks_in(&self.pending.lock(), pool, key)
+    }
+
+    fn blocks_in(pending: &PendingSet, pool: &DiskPool, key: &(usize, String)) -> bool {
+        pending
+            .get(key)
+            .is_some_and(|(_, ticket, _)| pool.accepts(&key.1, ticket.started()))
+    }
+
+    /// Takes job `number` off the pending set, unless a newer job of its key superseded it.
+    fn remove_pending(&self, key: &(usize, String), number: u64) {
+        let mut pending = self.pending.lock();
+        if pending.get(key).is_some_and(|(_, _, n)| *n == number) {
+            pending.remove(key);
+        }
+    }
+
+    fn done(&self, pending_key: &(usize, String), number: u64, len: u64) {
         self.queued.fetch_sub(len, Ordering::AcqRel);
-        self.pending.lock().remove(pending_key);
+        self.remove_pending(pending_key, number);
         self.room.notify_waiters();
     }
 
-    fn write(&self, job: WriteJob) {
+    fn write(&self, job: WriteJob, number: u64) {
         // Takes the entry off the queue when done, also on a panic.
         struct Queued<'a> {
             shared: &'a Shared,
             key: (usize, String),
+            number: u64,
             len: u64,
         }
         impl Drop for Queued<'_> {
             fn drop(&mut self) {
-                self.shared.done(&self.key, self.len);
+                self.shared.done(&self.key, self.number, self.len);
             }
         }
         let len = job.value.len() as u64;
         let _queued = Queued {
             shared: self,
             key: (job.pool.pool().index(), job.rel.clone()),
+            number,
             len,
         };
         self.relieve_disk_pressure();

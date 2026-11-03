@@ -988,3 +988,74 @@ async fn test_concurrent_enqueue_with_keeps_made_bytes_within_the_queue() {
     assert_eq!(made + queue_full, 16 * 100);
     assert_eq!(pool.stats().items + rejected + io_error, made);
 }
+
+static SUPERSEDE: Gate = Gate::new();
+fn supersede_gate(_: &Path, _: u64) -> bool {
+    SUPERSEDE.pass();
+    false
+}
+
+/// A fill of a key whose object was invalidated since the fill started is rejected before it
+/// waits for room or makes its bytes; one still queued from before the invalidation does not
+/// keep a newer fill of the key out of the queue. The newer fill is the one kept on disk.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fills_from_before_an_invalidation_do_not_keep_newer_ones_out() {
+    let dir = TempDir::new().unwrap();
+    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
+    let writer = DiskWriter::start(
+        vec![pool.clone()],
+        dir.path().to_path_buf(),
+        WriterOptions {
+            over_watermark: supersede_gate,
+            ..options(1, 10_000, Duration::from_millis(30))
+        },
+    );
+    let fence = Arc::new(FillFence::default());
+    let invalidate = |name: &str| {
+        let object = DiskKey::object_id(name);
+        let (at, oldest) = fence.invalidation_point();
+        let _ = pool.begin_change(&object);
+        pool.end_change(&object, at, oldest);
+    };
+    let enqueue = |name: &'static str, ticket: FillTicket, made: Arc<AtomicUsize>| {
+        let WriteJob { pool, rel, .. } = job_of(&pool, data_kind(), name, 50, ticket.clone());
+        writer.enqueue_with(pool, rel, 50, ticket, move || {
+            made.fetch_add(1, Ordering::SeqCst);
+            value_of(name, 50)
+        })
+    };
+    SUPERSEDE.close();
+    // Holds the writer, so that what follows stays queued.
+    assert!(writer.enqueue(job(&pool, data_kind(), "hold", 10)).await);
+    SUPERSEDE.wait_entered(1);
+
+    // Started before the invalidation, enqueued after it: rejected, never made.
+    let made = Arc::new(AtomicUsize::new(0));
+    let old = fence.begin();
+    invalidate("a");
+    assert!(!enqueue("a", old, made.clone()).await);
+    assert_eq!(made.load(Ordering::SeqCst), 0);
+    assert_eq!(drops(&writer).1, 1);
+    // A fill started after it is queued.
+    assert!(enqueue("a", fence.begin(), made.clone()).await);
+    assert_eq!(made.load(Ordering::SeqCst), 1);
+
+    // Queued before the invalidation: a newer fill supersedes it.
+    let old = fence.begin();
+    assert!(enqueue("b", old, made.clone()).await);
+    invalidate("b");
+    let newer = fence.begin();
+    assert!(enqueue("b", newer.clone(), made.clone()).await);
+    // A third fill of "b" is kept out by the newer one.
+    assert!(!enqueue("b", fence.begin(), made.clone()).await);
+    assert_eq!(made.load(Ordering::SeqCst), 3);
+
+    SUPERSEDE.open();
+    wait_for(|| idle(&writer));
+    let rel_b = DiskKey::whole("b").rel_path(data_kind());
+    assert!(pool.contains(&rel_b), "the newer fill of b is kept");
+    assert!(pool.contains(&DiskKey::whole("a").rel_path(data_kind())));
+    // The fill of "b" from before the invalidation is rejected.
+    assert_eq!(drops(&writer), (0, 2, 0));
+    assert_eq!(pool.stats().items, 3);
+}
