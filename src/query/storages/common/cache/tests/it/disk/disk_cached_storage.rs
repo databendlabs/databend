@@ -413,10 +413,10 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for Counting<A> {
     }
 }
 
-/// An object rewritten in place is read as rewritten once its change ends; until then
-/// the disk cache keeps serving the old bytes, which is what callers must prevent.
+/// An object rewritten in place is read as rewritten once it is evicted; until then the disk
+/// cache keeps serving the old bytes, which is what writers in place must prevent.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_change_after_rewrite_reads_the_new_bytes() {
+async fn test_eviction_after_rewrite_reads_the_new_bytes() {
     let dir = TempDir::new().unwrap();
     let (op, disk, storage) = setup(&dir).await;
     let prefixed = storage.clone().with_key_prefix("root/");
@@ -441,7 +441,7 @@ async fn test_change_after_rewrite_reads_the_new_bytes() {
         .unwrap();
     assert_eq!(stale, object().slice(0..10));
 
-    drop(storage.begin_change(PATH).unwrap());
+    storage.evict_objects(&[PATH.to_string()]).await.unwrap();
     for (range, expected) in [
         (None, rewritten.clone()),
         (Some(0..10), rewritten.slice(0..10)),
@@ -454,7 +454,7 @@ async fn test_change_after_rewrite_reads_the_new_bytes() {
     }
     // The prefixed object is another object; it is dropped through its own storage.
     assert!(disk.contains(data(), &DiskKey::range(format!("root/{PATH}"), 0..10)));
-    drop(prefixed.begin_change(PATH).unwrap());
+    prefixed.evict_objects(&[PATH.to_string()]).await.unwrap();
     assert!(!disk.contains(data(), &DiskKey::range(format!("root/{PATH}"), 0..10)));
 }
 
@@ -494,92 +494,6 @@ async fn test_cancelled_reader_hands_the_load_over() {
     assert_eq!(second.await.unwrap().unwrap(), object().slice(0..10));
     assert!(reads.load(std::sync::atomic::Ordering::Relaxed) <= 2);
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..10)));
-}
-
-/// A read in flight when the object is rewritten and evicted returns the bytes it read, but
-/// does not leave them in the disk cache: the next read gets the rewritten object.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_read_in_flight_during_a_rewrite_is_not_cached() {
-    let dir = TempDir::new().unwrap();
-    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let op = Operator::new(Memory::default())
-        .unwrap()
-        .finish()
-        .layer(CountingLayer(reads.clone()));
-    op.write(PATH, object()).await.unwrap();
-    let disk =
-        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
-    let storage = DiskCachedStorage::with_disk(op.clone(), Some(disk.clone()));
-    for range in [None, Some(0..10)] {
-        reads.store(0, std::sync::atomic::Ordering::Relaxed);
-        let read = {
-            let (storage, range) = (storage.clone(), range.clone());
-            databend_common_base::runtime::spawn(async move {
-                storage.read(data(), PATH, range, DiskFill::ReadWrite).await
-            })
-        };
-        // The old bytes are read; the object is rewritten before they reach the cache.
-        wait_for(|| reads.load(std::sync::atomic::Ordering::Relaxed) == 1);
-        op.write(PATH, object().slice(1..)).await.unwrap();
-        drop(storage.begin_change(PATH).unwrap());
-        let old = read.await.unwrap().unwrap();
-        wait_for(|| disk.stats().queued_bytes == 0);
-
-        let key = match &range {
-            Some(range) => DiskKey::range(PATH, range.clone()),
-            None => DiskKey::whole(PATH),
-        };
-        assert!(!disk.contains(data(), &key));
-        let new = storage
-            .read(data(), PATH, range.clone(), DiskFill::ReadWrite)
-            .await
-            .unwrap();
-        assert_ne!(old, new);
-        let rewritten = object().slice(1..);
-        let expected = match range {
-            Some(range) => rewritten.slice(range.start as usize..range.end as usize),
-            None => rewritten,
-        };
-        assert_eq!(new, expected);
-        op.write(PATH, object()).await.unwrap();
-        drop(storage.begin_change(PATH).unwrap());
-    }
-}
-
-/// A read started after the object was rewritten and invalidated does not join a read of it
-/// still in flight from before: it reads storage itself and gets the rewritten bytes.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_read_after_an_invalidation_does_not_join_one_before() {
-    let dir = TempDir::new().unwrap();
-    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let op = Operator::new(Memory::default())
-        .unwrap()
-        .finish()
-        .layer(CountingLayer(reads.clone()));
-    op.write(PATH, object()).await.unwrap();
-    let disk =
-        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
-    let storage = DiskCachedStorage::with_disk(op.clone(), Some(disk.clone()));
-    let before = {
-        let storage = storage.clone();
-        databend_common_base::runtime::spawn(async move {
-            storage
-                .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
-                .await
-        })
-    };
-    // The old bytes are read and wait to be returned; the object is rewritten meanwhile.
-    wait_for(|| reads.load(std::sync::atomic::Ordering::Relaxed) == 1);
-    let rewritten = Bytes::from(vec![7u8; 100]);
-    op.write(PATH, rewritten.clone()).await.unwrap();
-    drop(storage.begin_change(PATH).unwrap());
-    let after = storage
-        .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
-        .await
-        .unwrap();
-    assert_eq!(after, rewritten.slice(0..10));
-    assert_eq!(reads.load(std::sync::atomic::Ordering::Relaxed), 2);
-    assert_eq!(before.await.unwrap().unwrap(), object().slice(0..10));
 }
 
 /// Reads of a maintenance statement (`ThreadTracker::maintenance_payload`) bypass the disk
@@ -752,35 +666,6 @@ async fn test_cancelled_unit_reader_hands_the_read_over() {
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 200..300)));
 }
 
-/// A read of units in flight when the object is rewritten returns the bytes it read but does
-/// not cache them; a read started after the rewrite does not join it, reads storage itself
-/// and gets the rewritten bytes, which are cached.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_unit_read_after_a_rewrite_does_not_join_one_before() {
-    let dir = TempDir::new().unwrap();
-    let (op, reads, disk, storage) = counted_setup(&dir).await;
-    let before = spawn_read_units(&storage, &UNITS);
-    wait_for(|| reads_of(&reads) == 1);
-    let rewritten = Bytes::from(vec![7u8; 3_000]);
-    op.write(PATH, rewritten.clone()).await.unwrap();
-    drop(storage.begin_change(PATH).unwrap());
-    let after = read_units(&storage, PATH, &UNITS).await.unwrap();
-    assert_eq!(after, vec![
-        rewritten.slice(0..100),
-        rewritten.slice(200..300)
-    ]);
-    assert_eq!(reads_of(&reads), 2);
-    assert_eq!(before.await.unwrap().unwrap(), vec![
-        object().slice(0..100),
-        object().slice(200..300)
-    ]);
-    wait_for(|| disk.stats().queued_bytes == 0);
-    // Only the rewritten bytes are on disk.
-    let cached = read_units(&storage, PATH, &UNITS).await.unwrap();
-    assert_eq!(cached, after);
-    assert_eq!(reads_of(&reads), 2);
-}
-
 /// Many readers of the units of a few objects at once, as the scans of one query and of
 /// concurrent queries make them: each object is read from storage once, whatever the number of
 /// readers, and every reader gets its units.
@@ -822,12 +707,13 @@ async fn test_concurrent_readers_of_many_objects_read_each_once() {
     assert_eq!(reads_of(&reads), paths.len());
 }
 
-/// Readers of overlapping units race with rewrites of the object, each under a change, as
-/// queries race with compaction or vacuum. Every unit read is whole and of one version of the
-/// object, never newer than the last one written; once the rewrites are done every read gets
-/// the last version, from storage or from the disk cache, and nothing older stays cached.
+/// Readers of overlapping units race with rewrites of the object in place, each followed by an
+/// eviction, as queries race with ANALYZE. Every unit read is whole and of one version of the
+/// object, never newer than the last one written. Eviction is best effort: a read in flight
+/// across a rewrite may cache what it read before, so once the readers are done one more
+/// eviction leaves every read with the last version.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_unit_reads_racing_rewrites_never_return_stale_bytes_after() {
+async fn test_unit_reads_racing_rewrites_return_whole_units() {
     let dir = TempDir::new().unwrap();
     let op = Operator::new(Memory::default()).unwrap().finish();
     let version = |v: u8| Bytes::from(vec![v; 3_000]);
@@ -861,18 +747,18 @@ async fn test_unit_reads_racing_rewrites_never_return_stale_bytes_after() {
         })
         .collect();
     for v in 1..VERSIONS {
-        // As a fuse rewrite: the change begins before the object is written. The version is
-        // announced before it can be read.
-        let change = storage.begin_change(PATH).unwrap();
+        // As a fuse rewrite: written, then evicted. The version is announced before it can be
+        // read.
         written.store(v, std::sync::atomic::Ordering::SeqCst);
         op.write(PATH, version(v)).await.unwrap();
-        drop(change);
+        storage.evict_objects(&[PATH.to_string()]).await.unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(2)).await;
     }
     for reader in readers {
         reader.await.unwrap();
     }
     wait_for(|| disk.stats().queued_bytes == 0);
+    storage.evict_objects(&[PATH.to_string()]).await.unwrap();
     let last = VERSIONS - 1;
     for units in sets {
         for _ in 0..2 {
@@ -958,40 +844,18 @@ async fn test_unit_reads_of_prefixed_storages_are_their_own() {
     assert!(read_b.unwrap().iter().all(|u| u.iter().all(|x| *x == 2)));
     assert_eq!(reads_of(&reads), 2);
 
-    // A read of `a` in flight, then `a` rewritten: a read after it does not join.
-    let before = {
-        let a = a.clone();
-        databend_common_base::runtime::spawn(async move {
-            a.read_units(
-                data(),
-                PATH,
-                &[(9, 2_500..2_600)],
-                DiskFill::ReadWrite,
-                &merged(),
-            )
-            .await
-            .map(|r| r.unit(9).unwrap())
-        })
-    };
-    wait_for(|| reads_of(&reads) == 3);
+    // `a` rewritten and evicted: its reads get the new bytes, and `b` keeps its own entries.
+    wait_for(|| disk.stats().queued_bytes == 0);
     op_a.write(PATH, Bytes::from(vec![3u8; 3_000]))
         .await
         .unwrap();
-    drop(a.begin_change(PATH).unwrap());
-    let after = a
-        .read_units(
-            data(),
-            PATH,
-            &[(9, 2_500..2_600)],
-            DiskFill::ReadWrite,
-            &merged(),
-        )
-        .await
-        .unwrap()
-        .unit(9)
-        .unwrap();
-    assert!(after.iter().all(|x| *x == 3));
-    assert!(before.await.unwrap().unwrap().iter().all(|x| *x == 1));
+    a.evict_objects(&[PATH.to_string()]).await.unwrap();
+    let after = read_units(&a, PATH, &UNITS).await.unwrap();
+    assert!(after.iter().all(|u| u.iter().all(|x| *x == 3)));
+    assert_eq!(reads_of(&reads), 3);
+    let read_b = read_units(&b, PATH, &UNITS).await.unwrap();
+    assert!(read_b.iter().all(|u| u.iter().all(|x| *x == 2)));
+    assert_eq!(reads_of(&reads), 3, "b read from the disk cache");
 }
 
 /// A cold read of more units than the write queue holds returns every unit, and fills what
@@ -1031,8 +895,8 @@ async fn test_unit_reads_larger_than_the_write_queue() {
 }
 
 /// A path written with a leading slash names the same object as without one, as for the
-/// operator: a read either way hits what the other cached, and a change of the object either
-/// way drops it.
+/// operator: a read either way hits what the other cached, and an eviction of the object
+/// either way drops it.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_leading_slashes_name_the_same_object() {
     let dir = TempDir::new().unwrap();
@@ -1049,14 +913,14 @@ async fn test_leading_slashes_name_the_same_object() {
         .unwrap();
     assert_eq!(bytes, object().slice(0..100));
     assert_eq!(reads_of(&reads), 1);
-    let change = storage.begin_change(&format!("//{PATH}")).unwrap();
-    assert_eq!(change.as_ref().map(|c| c.dropped()), Some(1));
+    storage.evict_objects(&[format!("//{PATH}")]).await.unwrap();
     assert!(!disk.contains(data(), &DiskKey::range(PATH, 0..100)));
 }
 
-/// `begin_change_async` drops the object's units as `begin_change` does, from an async caller.
+/// `evict_objects` drops the units of every object it is given, and does nothing without a
+/// disk cache.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_begin_change_async_drops_the_units() {
+async fn test_evict_objects_drops_the_units() {
     let dir = TempDir::new().unwrap();
     let (_op, disk, storage) = setup(&dir).await;
     storage
@@ -1064,9 +928,12 @@ async fn test_begin_change_async_drops_the_units() {
         .await
         .unwrap();
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..100)));
-    let change = storage.begin_change_async(PATH).await.unwrap().unwrap();
-    assert_eq!(change.dropped(), 1);
+    storage
+        .evict_objects(&[PATH.to_string(), "1/2/_b/none.parquet".to_string()])
+        .await
+        .unwrap();
     assert!(!disk.contains(data(), &DiskKey::range(PATH, 0..100)));
+    assert_eq!(disk.kind_usage(data()), (0, 0));
     let without = DiskCachedStorage::with_disk(storage.operator().clone(), None);
-    assert!(without.begin_change_async(PATH).await.unwrap().is_none());
+    without.evict_objects(&[PATH.to_string()]).await.unwrap();
 }

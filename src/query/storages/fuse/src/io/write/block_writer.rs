@@ -442,13 +442,12 @@ impl BlockWriter {
             let start = Instant::now();
 
             let location = &index_state.location.0;
-            // Bloom indexes are rewritten in place (ngram refresh, missing index rebuild): keep
-            // the old bytes out of the disk cache. The memory caches are evicted by the callers.
-            let change = DiskCachedStorage::new(dal.clone())
-                .begin_change_async(location)
-                .await?;
             write_data(index_state.data, dal, location).await?;
-            drop(change);
+            // Bloom indexes are rewritten in place (ngram refresh, missing index rebuild): the
+            // disk cache drops the old bytes. The memory caches are evicted by the callers.
+            DiskCachedStorage::new(dal.clone())
+                .evict_objects(&[location.to_string()])
+                .await?;
 
             metrics_inc_block_index_write_nums(1);
             metrics_inc_block_index_write_nums(index_state.size);

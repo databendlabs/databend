@@ -55,7 +55,7 @@ fn value(i: usize) -> Bytes {
 }
 
 async fn put_and_wait(cache: &DiskCache, kind: CacheKind, key: &DiskKey, value: Bytes) {
-    assert!(cache.put(kind, key, value, &cache.begin_fill()).await);
+    assert!(cache.put(kind, key, value).await);
     wait_for(|| cache.contains(kind, key));
 }
 
@@ -149,15 +149,13 @@ async fn test_put_of_a_pending_key_is_dropped() {
     let dir = TempDir::new().unwrap();
     let cache = cache(&dir);
     let key = key(0);
-    let ticket = cache.begin_fill();
-    let puts =
-        futures::future::join_all((0..8).map(|_| cache.put(data(), &key, value(0), &ticket)));
+    let puts = futures::future::join_all((0..8).map(|_| cache.put(data(), &key, value(0))));
     let queued = puts.await.into_iter().filter(|q| *q).count();
     assert_eq!(queued, 1);
     wait_for(|| cache.contains(data(), &key));
     assert_eq!(cache.kind_usage(data()), (1, 904));
     // Once on disk, a put of the same key is dropped as well.
-    assert!(!cache.put(data(), &key, value(0), &cache.begin_fill()).await);
+    assert!(!cache.put(data(), &key, value(0)).await);
 }
 
 /// Puts of one key from many tasks while the first is written: whichever moment each comes,
@@ -171,10 +169,7 @@ async fn test_concurrent_puts_of_a_key_being_written_queue_it_once() {
         let tasks: Vec<_> = (0..8)
             .map(|_| {
                 let (cache, key) = (cache.clone(), key.clone());
-                spawn(async move {
-                    let ticket = cache.begin_fill();
-                    cache.put(data(), &key, value(0), &ticket).await
-                })
+                spawn(async move { cache.put(data(), &key, value(0)).await })
             })
             .collect();
         let mut queued = 0;
@@ -192,10 +187,7 @@ async fn test_entry_too_large_for_the_pool_is_rejected() {
     let cache = cache(&dir);
     // More than a quarter of the 4000 byte pool.
     let big = Bytes::from(vec![0; 1_100]);
-    assert!(
-        cache.put(data(), &key(0), big, &cache.begin_fill()).await,
-        "queued"
-    );
+    assert!(cache.put(data(), &key(0), big).await, "queued");
     wait_for(|| cache.stats().dropped_rejected == 1);
     assert!(!cache.contains(data(), &key(0)));
     assert_eq!(cache.stats().queued_bytes, 0);
@@ -289,11 +281,7 @@ async fn test_pool_capacity_at_runtime() {
     cache.set_pool_cap(Pool::Data, 0).unwrap();
     assert!(!cache.is_enabled(data()));
     assert_eq!(cache.get(data(), &key(0)).await, None);
-    assert!(
-        !cache
-            .put(data(), &key(1), value(1), &cache.begin_fill())
-            .await
-    );
+    assert!(!cache.put(data(), &key(1), value(1)).await);
     wait_for(|| files_under(&dir.path().join("v2/data")).is_empty());
 
     cache
@@ -334,11 +322,7 @@ async fn test_kind_switch_drops_only_that_kind() {
 
     cache.set_kind_enabled(filters, false);
     assert!(!cache.is_enabled(filters) && !cache.is_kind_enabled(filters));
-    assert!(
-        !cache
-            .put(filters, &key(1), small.clone(), &cache.begin_fill())
-            .await
-    );
+    assert!(!cache.put(filters, &key(1), small.clone()).await);
     assert_eq!(cache.get(filters, &key(0)).await, None);
     assert_eq!(cache.kind_usage(filters), (0, 0));
     assert!(cache.contains(lookups, &key(0)));
@@ -355,11 +339,7 @@ async fn test_license_switch() {
     put_and_wait(&cache, data(), &key(0), value(0)).await;
     cache.set_allowed(false);
     assert_eq!(cache.get(data(), &key(0)).await, None);
-    assert!(
-        !cache
-            .put(data(), &key(1), value(1), &cache.begin_fill())
-            .await
-    );
+    assert!(!cache.put(data(), &key(1), value(1)).await);
     cache.set_allowed(true);
     assert_eq!(cache.get(data(), &key(0)).await, Some(value(0)));
 }
@@ -435,9 +415,7 @@ async fn test_concurrent_use_keeps_entries_and_files_consistent() {
                     let i = (t * 13 + n * 7) % 48;
                     match n % 5 {
                         0 | 1 => {
-                            cache
-                                .put(data(), &stress_key(i), stress_value(i), &cache.begin_fill())
-                                .await;
+                            cache.put(data(), &stress_key(i), stress_value(i)).await;
                         }
                         2 | 3 => {
                             if let Some(bytes) = cache.get(data(), &stress_key(i)).await {
@@ -484,9 +462,7 @@ async fn test_reload_while_writing() {
     {
         let cache = cache(&dir);
         for i in 0..24 {
-            cache
-                .put(data(), &stress_key(i), stress_value(i), &cache.begin_fill())
-                .await;
+            cache.put(data(), &stress_key(i), stress_value(i)).await;
         }
         wait_for(|| cache.stats().queued_bytes == 0);
     }
@@ -496,9 +472,7 @@ async fn test_reload_while_writing() {
         Thread::spawn(move || cache.reload_now())
     };
     for i in 12..48 {
-        cache
-            .put(data(), &stress_key(i), stress_value(i), &cache.begin_fill())
-            .await;
+        cache.put(data(), &stress_key(i), stress_value(i)).await;
     }
     reload.join().unwrap();
     wait_for(|| cache.stats().queued_bytes == 0);
@@ -535,10 +509,10 @@ fn assert_quiet_and_consistent(cache: &DiskCache, dir: &TempDir) {
     assert_eq!(cache.kind_usage(data()), (stats.items, stats.bytes));
 }
 
-/// A change of an object drops every unit of it, whole or ranges, in every kind and pool, and
-/// leaves other objects alone.
+/// Evicting an object drops every unit of it, whole or ranges, in every kind and pool, files
+/// included, and leaves other objects alone.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_change_drops_all_units_of_the_object() {
+async fn test_evict_object_drops_all_its_units() {
     let dir = TempDir::new().unwrap();
     let cache = Arc::new(cache(&dir));
     let path = "1/2/_i_b_v2/index.parquet";
@@ -555,49 +529,20 @@ async fn test_change_drops_all_units_of_the_object() {
     let other = DiskKey::whole("1/2/_i_b_v2/other.parquet");
     put_and_wait(&cache, filters, &other, Bytes::from(vec![2; 100])).await;
 
-    assert_eq!(cache.begin_change(path).unwrap().dropped(), 3);
+    assert_eq!(cache.evict_object(path), 3);
     for (kind, key) in &units {
         assert!(!cache.contains(*kind, key), "{key}");
         assert_eq!(cache.get(*kind, key).await, None);
     }
     assert!(cache.contains(filters, &other));
     assert_eq!(files_under(&dir.path().join("v2")).len(), 1);
-    assert_eq!(cache.begin_change(path).unwrap().dropped(), 0);
+    assert_eq!(cache.evict_object(path), 0);
     // The object can be cached again, as rewritten.
     put_and_wait(&cache, filters, &units[0].1, Bytes::from(vec![3; 100])).await;
     assert_eq!(
         cache.get(filters, &units[0].1).await,
         Some(Bytes::from(vec![3; 100]))
     );
-}
-
-/// A unit whose fill started before a change of its object ended is not published after it: the
-/// bytes were read before the rewrite. Queued after the change, it is rejected at once, and
-/// counted as rejected. A fill started after is published.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_change_rejects_fills_started_before() {
-    let dir = TempDir::new().unwrap();
-    let cache = Arc::new(cache(&dir));
-    let path = "1/2/_sg/segment.mpk";
-    let kind = CacheKind::of::<segment::Info>();
-    let key = DiskKey::whole(path);
-    let read_before = cache.begin_fill();
-    // The object is rewritten before the old bytes are queued.
-    assert_eq!(cache.begin_change(path).unwrap().dropped(), 0);
-    // Rejected at once, before it is queued or its bytes are made.
-    assert!(
-        !cache
-            .put(kind, &key, Bytes::from(vec![1; 100]), &read_before)
-            .await
-    );
-    drop(read_before);
-    wait_for(|| cache.stats().queued_bytes == 0);
-    wait_for(|| cache.stats().dropped_rejected == 1);
-    assert!(!cache.contains(kind, &key));
-    assert!(files_under(&dir.path().join("v2")).is_empty());
-
-    put_and_wait(&cache, kind, &key, Bytes::from(vec![2; 100])).await;
-    assert_eq!(cache.get(kind, &key).await, Some(Bytes::from(vec![2; 100])));
 }
 
 /// Pools resized at once from many threads: each resize checks the pools' sum and updates its
@@ -646,85 +591,10 @@ async fn test_concurrent_kind_toggles_stay_consistent() {
         t.join().unwrap();
     }
     let key = key(0);
-    let queued = cache.put(data(), &key, value(0), &cache.begin_fill()).await;
+    let queued = cache.put(data(), &key, value(0)).await;
     wait_for(|| cache.stats().queued_bytes == 0);
     assert_eq!(cache.is_kind_enabled(data()), queued);
     assert_eq!(cache.is_kind_enabled(data()), cache.contains(data(), &key));
-}
-
-/// Invalidations kept while an old fill runs are dropped when it finishes, without waiting
-/// for another invalidation.
-#[test]
-fn test_invalidations_are_dropped_when_the_oldest_fill_finishes() {
-    let dir = TempDir::new().unwrap();
-    let cache = Arc::new(cache(&dir));
-    cache.reload_now();
-    let kind = CacheKind::of::<segment::Info>();
-    let paths: Vec<_> = (0..1_000).map(|i| format!("1/2/_sg/{i}.mpk")).collect();
-    let old = cache.begin_fill();
-    let newer = cache.begin_fill();
-    for path in &paths {
-        assert_eq!(cache.begin_change(path).unwrap().dropped(), 0);
-    }
-    assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) > 0));
-    // A fill that is not the oldest finishing changes nothing.
-    drop(newer);
-    assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) > 0));
-    drop(old);
-    assert!(paths.iter().all(|p| cache.invalidation_of(kind, p) == 0));
-}
-
-/// Invalidations kept for the restart scan are dropped once it is done, when no fill needs
-/// them; one kept for a fill still running stays until it finishes.
-#[test]
-fn test_invalidations_kept_for_the_scan_are_dropped_after_it() {
-    let dir = TempDir::new().unwrap();
-    let cache = Arc::new(cache(&dir));
-    let kind = CacheKind::of::<segment::Info>();
-    let (done, running) = ("1/2/_sg/done.mpk", "1/2/_sg/running.mpk");
-    drop(cache.begin_change(done).unwrap());
-    let fill = cache.begin_fill();
-    drop(cache.begin_change(running).unwrap());
-    assert!(cache.invalidation_of(kind, done) > 0);
-    cache.reload_now();
-    assert_eq!(cache.invalidation_of(kind, done), 0);
-    assert!(cache.invalidation_of(kind, running) > 0);
-    drop(fill);
-    assert_eq!(cache.invalidation_of(kind, running), 0);
-}
-
-/// While an object is being changed, its units are refused and nothing of it reaches the disk,
-/// for a crash to leave behind; once the change ends, they are cached again.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_units_are_refused_during_a_change() {
-    let dir = TempDir::new().unwrap();
-    let cache = Arc::new(cache(&dir));
-    let path = "1/2/_sg/segment.mpk";
-    let kind = CacheKind::of::<segment::Info>();
-    let key = DiskKey::whole(path);
-    let change = cache.begin_change(path).unwrap();
-    let during = cache.begin_fill();
-    // Rejected at once, before it is queued or its bytes are made.
-    assert!(
-        !cache
-            .put(kind, &key, Bytes::from(vec![1; 100]), &during)
-            .await
-    );
-    wait_for(|| cache.stats().queued_bytes == 0);
-    assert!(!cache.contains(kind, &key));
-    assert!(files_under(&dir.path().join("v2")).is_empty());
-    drop(change);
-    // Started during the change: still rejected after it.
-    // Rejected at once, before it is queued or its bytes are made.
-    assert!(
-        !cache
-            .put(kind, &key, Bytes::from(vec![1; 100]), &during)
-            .await
-    );
-    wait_for(|| cache.stats().queued_bytes == 0);
-    assert!(!cache.contains(kind, &key));
-    drop(during);
-    put_and_wait(&cache, kind, &key, Bytes::from(vec![2; 100])).await;
 }
 
 /// Bytes of the cache files under the pool `pool`, tmp files left out.
@@ -776,10 +646,7 @@ async fn test_concurrent_fills_and_resizes_stay_within_capacity() {
                     let p = (t + i) % 3;
                     let len = 1 + (i * 7919 + t * 104_729) % (caps[p] as usize / 4 - 4);
                     let key = DiskKey::range(format!("1/2/_b/{t}_{i}.parquet"), 0..len as u64);
-                    let fill = cache.begin_fill();
-                    cache
-                        .put(kinds[p], &key, Bytes::from(vec![1u8; len]), &fill)
-                        .await;
+                    cache.put(kinds[p], &key, Bytes::from(vec![1u8; len])).await;
                 }
             })
         })
@@ -886,16 +753,4 @@ async fn test_reads_past_capacity_evict_and_stay_correct() {
     assert!(kind.events.evicted[0] > 0, "{kind:?}");
     assert_eq!(kind.hits + kind.misses, 8 * 400);
     wait_for(|| file_bytes(&dir, Pool::Data) == stats.bytes);
-}
-
-/// An object invalidated at the first point of the fence has a generation of its own: reads
-/// after it never share a read from before, as before any invalidation.
-#[test]
-fn test_invalidation_at_the_first_point_has_a_generation() {
-    let dir = TempDir::new().unwrap();
-    let cache = Arc::new(cache(&dir));
-    let path = "1/2/_b/first.parquet";
-    assert_eq!(cache.invalidation_of(data(), path), 0);
-    drop(cache.begin_change(path).unwrap());
-    assert_eq!(cache.invalidation_of(data(), path), 1);
 }

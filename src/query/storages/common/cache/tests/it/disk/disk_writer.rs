@@ -38,8 +38,6 @@ use databend_storages_common_cache::disk::disk_writer::DiskWriter;
 use databend_storages_common_cache::disk::disk_writer::DropReason;
 use databend_storages_common_cache::disk::disk_writer::WriteJob;
 use databend_storages_common_cache::disk::disk_writer::WriterOptions;
-use databend_storages_common_cache::disk::fill_fence::FillFence;
-use databend_storages_common_cache::disk::fill_fence::FillTicket;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::segment;
 use parking_lot::Condvar;
@@ -113,22 +111,10 @@ fn pool_at(root: PathBuf, pool: Pool, cap: u64) -> Arc<DiskPool> {
 }
 
 fn job(pool: &Arc<DiskPool>, kind: CacheKind, name: &str, len: usize) -> WriteJob {
-    let ticket = Arc::new(FillFence::default()).begin();
-    job_of(pool, kind, name, len, ticket)
-}
-
-fn job_of(
-    pool: &Arc<DiskPool>,
-    kind: CacheKind,
-    name: &str,
-    len: usize,
-    ticket: FillTicket,
-) -> WriteJob {
     WriteJob {
         pool: pool.clone(),
         rel: DiskKey::whole(name).rel_path(kind),
         value: value_of(name, len),
-        ticket,
     }
 }
 
@@ -588,59 +574,6 @@ async fn test_cancelled_enqueue_leaves_nothing_pending() {
     assert_eq!(drops(&writer), (0, 0, 0));
 }
 
-static FENCE: Gate = Gate::new();
-fn fence_gate(_: &Path, _: u64) -> bool {
-    FENCE.pass();
-    false
-}
-
-/// An entry queued before its object is invalidated is not published: its file is deleted, it
-/// counts as rejected, and the ticket of its fill is released. An entry of a fill started after
-/// the invalidation is published.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_entry_of_an_invalidated_object_is_not_published() {
-    let dir = TempDir::new().unwrap();
-    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
-    let writer = DiskWriter::start(
-        vec![pool.clone()],
-        dir.path().to_path_buf(),
-        WriterOptions {
-            over_watermark: fence_gate,
-            ..options(1, 100_000, Duration::from_secs(30))
-        },
-    );
-    let fence = Arc::new(FillFence::default());
-    FENCE.close();
-    let stale = fence.begin();
-    assert!(
-        writer
-            .enqueue(job_of(&pool, data_kind(), "a", 60, stale))
-            .await
-    );
-    FENCE.wait_entered(1);
-    let (at, oldest) = fence.invalidation_point();
-    assert!(oldest.is_some());
-    assert!(
-        pool.remove_object(&DiskKey::object_id("a"), at, oldest)
-            .is_empty()
-    );
-    FENCE.open();
-    wait_for(|| idle(&writer));
-    assert_eq!(drops(&writer), (0, 1, 0));
-    assert_eq!(pool.stats().items, 0);
-    assert!(files_under(&dir.path().join("data")).is_empty());
-    // The ticket goes with the job, just after the writer is done with it.
-    wait_for(|| fence.invalidation_point().1.is_none());
-
-    assert!(
-        writer
-            .enqueue(job_of(&pool, data_kind(), "a", 60, fence.begin()))
-            .await
-    );
-    wait_for(|| idle(&writer));
-    assert!(pool.contains(&DiskKey::whole("a").rel_path(data_kind())));
-}
-
 static SERVE: Gate = Gate::new();
 fn serve_gate(_: &Path, _: u64) -> bool {
     SERVE.pass();
@@ -648,10 +581,9 @@ fn serve_gate(_: &Path, _: u64) -> bool {
 }
 
 /// An entry read and still waiting to be written is served by the disk cache, so concurrent
-/// scans of the same data read it from storage once; once its object changes, it is not, and
-/// it is never published. An entry that is published is then read from disk.
+/// scans of the same data read it from storage once. Once published it is read from disk.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_entries_waiting_to_be_written_are_served_until_their_object_changes() {
+async fn test_entries_waiting_to_be_written_are_served() {
     let dir = TempDir::new().unwrap();
     let cache = Arc::new(
         DiskCache::with_writer(
@@ -666,109 +598,97 @@ async fn test_entries_waiting_to_be_written_are_served_until_their_object_change
         .unwrap(),
     );
     let kind = data_kind();
-    let changed = DiskKey::range("1/2/_b/changed.parquet", 0..10);
-    let kept = DiskKey::range("1/2/_b/kept.parquet", 0..10);
+    let writing = DiskKey::range("1/2/_b/writing.parquet", 0..10);
+    let queued = DiskKey::range("1/2/_b/queued.parquet", 0..10);
     let value = Bytes::from_static(b"0123456789");
     SERVE.close();
-    let fill = cache.begin_fill();
-    assert!(cache.put(kind, &changed, value.clone(), &fill).await);
+    assert!(cache.put(kind, &writing, value.clone()).await);
     SERVE.wait_entered(1);
-    assert!(cache.put(kind, &kept, value.clone(), &fill).await);
-    drop(fill);
+    assert!(cache.put(kind, &queued, value.clone()).await);
 
-    for key in [&changed, &kept] {
+    for key in [&writing, &queued] {
         assert!(!cache.contains(kind, key));
         assert_eq!(cache.get(kind, key).await, Some(value.clone()), "{key}");
     }
-    let change = cache.begin_change("1/2/_b/changed.parquet").unwrap();
-    assert_eq!(cache.get(kind, &changed).await, None);
-    drop(change);
-    assert_eq!(cache.get(kind, &changed).await, None);
+    assert_eq!(cache.kind_stats(kind).queued_hits, 2);
 
     SERVE.open();
     wait_for(|| cache.stats().queued_bytes == 0);
-    assert!(!cache.contains(kind, &changed));
-    assert_eq!(cache.get(kind, &changed).await, None);
-    assert!(cache.contains(kind, &kept));
-    assert_eq!(cache.get(kind, &kept).await, Some(value));
+    for key in [&writing, &queued] {
+        assert!(cache.contains(kind, key));
+        assert_eq!(cache.get(kind, key).await, Some(value.clone()), "{key}");
+    }
+    assert_eq!(cache.kind_stats(kind).queued_hits, 2);
 }
 
-/// Readers look up entries while they are queued, written and published, and while their
-/// objects change: once a change of an object has begun, no lookup returns the bytes read
-/// before it, from the queue or from disk, during the change or after. Every lookup is counted
-/// once, as a hit or a miss, in the kind's figures.
+/// Readers look up entries while they are queued, written, published and evicted with their
+/// objects, from many tasks: a lookup returns the bytes put under its key or nothing, never a
+/// torn or foreign value, whether from the queue or from disk. Every lookup is counted once, as
+/// a hit or a miss, and once the writes are done and the objects evicted, nothing is served.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_lookups_racing_writes_and_changes_never_serve_changed_objects() {
+async fn test_lookups_racing_writes_and_evictions_return_whole_values() {
     let dir = TempDir::new().unwrap();
     let cache = Arc::new(
         DiskCache::with_writer(
             dir.path(),
             1 << 24,
             [1 << 22, 1 << 22, 1 << 23],
-            WriterOptions {
-                ..options(4, 1 << 20, Duration::from_millis(50))
-            },
+            options(4, 1 << 20, Duration::from_millis(50)),
         )
         .unwrap(),
     );
     let kind = data_kind();
     const OBJECTS: usize = 64;
     let path = |i: usize| format!("1/2/_b/race_{i}.parquet");
-    let changed: Arc<Vec<AtomicBool>> =
-        Arc::new((0..OBJECTS).map(|_| AtomicBool::new(false)).collect());
+    let value = |i: usize| Bytes::from(vec![i as u8; 1_000]);
     let lookups = Arc::new(AtomicU64::new(0));
-    let old = Bytes::from(vec![1u8; 1_000]);
-    for i in 0..OBJECTS {
-        let fill = cache.begin_fill();
-        let key = DiskKey::range(path(i), 0..1_000);
-        cache.put(kind, &key, old.clone(), &fill).await;
-    }
-    let readers: Vec<_> = (0..8)
-        .map(|r| {
-            let (cache, changed, lookups) = (cache.clone(), changed.clone(), lookups.clone());
+    let writers: Vec<_> = (0..4)
+        .map(|w| {
+            let cache = cache.clone();
             spawn(async move {
-                for n in 0..2_000 {
-                    let i = (r * 7 + n) % OBJECTS;
-                    let after = changed[i].load(Ordering::SeqCst);
-                    let got = cache.get(kind, &DiskKey::range(path(i), 0..1_000)).await;
-                    lookups.fetch_add(1, Ordering::Relaxed);
-                    if after {
-                        assert!(got.is_none(), "object {i} served after its change began");
+                for round in 0..20 {
+                    for i in (w..OBJECTS).step_by(4) {
+                        let key = DiskKey::range(path(i), 0..1_000);
+                        cache.put(kind, &key, value(i)).await;
+                        if (i + round) % 5 == 0 {
+                            cache.evict_object(&path(i));
+                        }
                     }
                 }
             })
         })
         .collect();
-    let changer = {
-        let (cache, changed) = (cache.clone(), changed.clone());
-        spawn(async move {
-            for i in (0..OBJECTS).rev() {
-                let change = cache.begin_change(&path(i)).unwrap();
-                changed[i].store(true, Ordering::SeqCst);
-                tokio::time::sleep(Duration::from_millis(1)).await;
-                drop(change);
-            }
+    let readers: Vec<_> = (0..8)
+        .map(|r| {
+            let (cache, lookups) = (cache.clone(), lookups.clone());
+            spawn(async move {
+                for n in 0..2_000 {
+                    let i = (r * 7 + n) % OBJECTS;
+                    let got = cache.get(kind, &DiskKey::range(path(i), 0..1_000)).await;
+                    lookups.fetch_add(1, Ordering::Relaxed);
+                    if let Some(bytes) = got {
+                        assert_eq!(bytes, value(i), "object {i}");
+                    }
+                }
+            })
         })
-    };
-    for reader in readers {
-        reader.await.unwrap();
+        .collect();
+    for task in writers.into_iter().chain(readers) {
+        task.await.unwrap();
     }
-    changer.await.unwrap();
     wait_for(|| cache.stats().queued_bytes == 0);
     for i in 0..OBJECTS {
-        assert!(
-            cache
-                .get(kind, &DiskKey::range(path(i), 0..1_000))
-                .await
-                .is_none()
-        );
+        cache.evict_object(&path(i));
     }
     let stats = cache.kind_stats(kind);
-    assert_eq!(
-        stats.hits + stats.misses,
-        lookups.load(Ordering::Relaxed) + OBJECTS as u64
-    );
+    assert_eq!(stats.hits + stats.misses, lookups.load(Ordering::Relaxed));
     assert!(stats.queued_hits <= stats.hits);
+    for i in 0..OBJECTS {
+        let key = DiskKey::range(path(i), 0..1_000);
+        assert!(!cache.contains(kind, &key));
+        assert!(cache.get(kind, &key).await.is_none());
+    }
+    assert_eq!(cache.kind_usage(kind), (0, 0));
 }
 
 static MADE: Gate = Gate::new();
@@ -795,11 +715,9 @@ async fn test_enqueue_with_makes_the_bytes_once_there_is_room() {
     let enqueue = |name: &'static str, len: usize| {
         let (writer, pool, made) = (writer.clone(), pool.clone(), made.clone());
         async move {
-            let WriteJob {
-                pool, rel, ticket, ..
-            } = job(&pool, data_kind(), name, len);
+            let WriteJob { pool, rel, .. } = job(&pool, data_kind(), name, len);
             writer
-                .enqueue_with(pool, rel, len as u64, ticket, move || {
+                .enqueue_with(pool, rel, len as u64, move || {
                     made.fetch_add(1, Ordering::SeqCst);
                     value_of(name, len)
                 })
@@ -854,12 +772,10 @@ async fn test_concurrent_enqueue_with_keeps_made_bytes_within_the_queue() {
                 for i in 0..100usize {
                     let len = 64 + (i * 7919 + t * 31) % 1_000;
                     let name = format!("t{t}_{i}");
-                    let WriteJob {
-                        pool, rel, ticket, ..
-                    } = job(&pool, data_kind(), &name, len);
+                    let WriteJob { pool, rel, .. } = job(&pool, data_kind(), &name, len);
                     let (writer2, made) = (writer.clone(), made.clone());
                     let ok = writer
-                        .enqueue_with(pool, rel, len as u64, ticket, move || {
+                        .enqueue_with(pool, rel, len as u64, move || {
                             // Room is held for this entry: it is counted in the queue.
                             let queued = writer2.queued_bytes();
                             assert!(queued >= len as u64 && queued <= QUEUE, "{queued}");
@@ -885,138 +801,6 @@ async fn test_concurrent_enqueue_with_keeps_made_bytes_within_the_queue() {
     assert_eq!(pool.stats().items + rejected + io_error, made);
 }
 
-static SUPERSEDE: Gate = Gate::new();
-fn supersede_gate(_: &Path, _: u64) -> bool {
-    SUPERSEDE.pass();
-    false
-}
-
-/// A fill of a key whose object was invalidated since the fill started is rejected before it
-/// waits for room or makes its bytes; one still queued from before the invalidation does not
-/// keep a newer fill of the key out of the queue. The newer fill is the one kept on disk.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fills_from_before_an_invalidation_do_not_keep_newer_ones_out() {
-    let dir = TempDir::new().unwrap();
-    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
-    let writer = DiskWriter::start(
-        vec![pool.clone()],
-        dir.path().to_path_buf(),
-        WriterOptions {
-            over_watermark: supersede_gate,
-            ..options(1, 10_000, Duration::from_millis(30))
-        },
-    );
-    let fence = Arc::new(FillFence::default());
-    let invalidate = |name: &str| {
-        let object = DiskKey::object_id(name);
-        let (at, oldest) = fence.invalidation_point();
-        let _ = pool.begin_change(&object);
-        pool.end_change(&object, at, oldest);
-    };
-    let enqueue = |name: &'static str, ticket: FillTicket, made: Arc<AtomicUsize>| {
-        let WriteJob { pool, rel, .. } = job_of(&pool, data_kind(), name, 50, ticket.clone());
-        writer.enqueue_with(pool, rel, 50, ticket, move || {
-            made.fetch_add(1, Ordering::SeqCst);
-            value_of(name, 50)
-        })
-    };
-    SUPERSEDE.close();
-    // Holds the writer, so that what follows stays queued.
-    assert!(writer.enqueue(job(&pool, data_kind(), "hold", 10)).await);
-    SUPERSEDE.wait_entered(1);
-
-    // Started before the invalidation, enqueued after it: rejected, never made.
-    let made = Arc::new(AtomicUsize::new(0));
-    let old = fence.begin();
-    invalidate("a");
-    assert!(!enqueue("a", old, made.clone()).await);
-    assert_eq!(made.load(Ordering::SeqCst), 0);
-    assert_eq!(drops(&writer).1, 1);
-    // A fill started after it is queued.
-    assert!(enqueue("a", fence.begin(), made.clone()).await);
-    assert_eq!(made.load(Ordering::SeqCst), 1);
-
-    // Queued before the invalidation: a newer fill supersedes it.
-    let old = fence.begin();
-    assert!(enqueue("b", old, made.clone()).await);
-    invalidate("b");
-    let newer = fence.begin();
-    assert!(enqueue("b", newer.clone(), made.clone()).await);
-    // A third fill of "b" is kept out by the newer one.
-    assert!(!enqueue("b", fence.begin(), made.clone()).await);
-    assert_eq!(made.load(Ordering::SeqCst), 3);
-
-    SUPERSEDE.open();
-    wait_for(|| idle(&writer));
-    let rel_b = DiskKey::whole("b").rel_path(data_kind());
-    assert!(pool.contains(&rel_b), "the newer fill of b is kept");
-    assert!(pool.contains(&DiskKey::whole("a").rel_path(data_kind())));
-    // The fill of "b" from before the invalidation is rejected.
-    assert_eq!(drops(&writer), (0, 2, 0));
-    assert_eq!(pool.stats().items, 3);
-}
-
-static STALE: Gate = Gate::new();
-fn stale_gate(_: &Path, _: u64) -> bool {
-    STALE.pass();
-    false
-}
-
-/// A fill queued before a change of its object, and written after the change ended, is
-/// rejected before it reserves room: on a full pool it evicts no entry, and writes no file.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fill_invalidated_while_queued_evicts_nothing() {
-    let dir = TempDir::new().unwrap();
-    // Room for two entries of 400 bytes and their crc.
-    let pool = pool_at(dir.path().join("data"), Pool::Data, 3_300);
-    let writer = DiskWriter::start(
-        vec![pool.clone()],
-        dir.path().to_path_buf(),
-        WriterOptions {
-            over_watermark: stale_gate,
-            ..options(1, 10_000, Duration::from_millis(30))
-        },
-    );
-    let fence = Arc::new(FillFence::default());
-    STALE.open();
-    for hot in ["hot1", "hot2"] {
-        assert!(
-            writer
-                .enqueue(job_of(&pool, data_kind(), hot, 400, fence.begin()))
-                .await
-        );
-    }
-    wait_for(|| idle(&writer));
-    assert_eq!(pool.stats().items, 2);
-
-    STALE.close();
-    assert!(writer.enqueue(job(&pool, data_kind(), "hold", 10)).await);
-    STALE.wait_entered(1);
-    let stale = job_of(&pool, data_kind(), "stale", 400, fence.begin());
-    assert!(writer.enqueue(stale).await);
-    // The change begins and ends while the fill waits in the queue.
-    let object = DiskKey::object_id("stale");
-    let (at, oldest) = fence.invalidation_point();
-    let _ = pool.begin_change(&object);
-    pool.end_change(&object, at, oldest);
-    STALE.open();
-    wait_for(|| idle(&writer));
-
-    for hot in ["hot1", "hot2"] {
-        assert!(
-            pool.contains(&DiskKey::whole(hot).rel_path(data_kind())),
-            "{hot}"
-        );
-    }
-    assert!(!pool.contains(&DiskKey::whole("stale").rel_path(data_kind())));
-    assert_eq!(drops(&writer).1, 1);
-    let stale_files = files_under(dir.path())
-        .into_iter()
-        .filter(|p| p.to_string_lossy().contains(&object))
-        .count();
-    assert_eq!(stale_files, 0);
-}
-
 /// Making the bytes of an entry unwinds, as an allocation over the query's memory limit does:
 /// the room the entry took is given back and nothing of it stays pending, so the queue keeps
 /// its capacity.
@@ -1032,11 +816,9 @@ async fn test_unwinding_while_making_the_bytes_gives_the_room_back() {
     let unwound = {
         let (writer, pool) = (writer.clone(), pool.clone());
         spawn(async move {
-            let WriteJob {
-                pool, rel, ticket, ..
-            } = job(&pool, data_kind(), "a", 100);
+            let WriteJob { pool, rel, .. } = job(&pool, data_kind(), "a", 100);
             writer
-                .enqueue_with(pool, rel, 100, ticket, || panic!("over the memory limit"))
+                .enqueue_with(pool, rel, 100, || panic!("over the memory limit"))
                 .await
         })
     };

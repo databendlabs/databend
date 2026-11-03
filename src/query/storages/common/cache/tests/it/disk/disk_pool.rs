@@ -59,9 +59,7 @@ fn put(pool: &DiskPool, rel: &str, size: u64) -> Vec<String> {
     let r = pool.reserve(rel, size);
     assert!(r.reserved, "{rel}");
     pool.delete(&r.victims);
-    let published = pool
-        .publish(rel.to_string(), size, size, 0, no_file)
-        .unwrap();
+    let published = pool.publish(rel.to_string(), size, size, no_file).unwrap();
     assert!(published.indexed && published.victims.is_empty(), "{rel}");
     r.victims
 }
@@ -364,9 +362,7 @@ fn test_concurrent_operations_keep_the_accounting() {
                             pool.delete(&r.victims);
                             if r.reserved {
                                 if rng.gen_bool(0.9) {
-                                    let started = rng.gen_range(0..100);
-                                    let published =
-                                        pool.publish(key, size, size, started, no_file).unwrap();
+                                    let published = pool.publish(key, size, size, no_file).unwrap();
                                     pool.delete(&published.victims);
                                 } else {
                                     pool.release(&key, size);
@@ -379,15 +375,7 @@ fn test_concurrent_operations_keep_the_accounting() {
                         6 if rng.gen_bool(0.5) => {
                             pool.remove(&key);
                         }
-                        6 => {
-                            let at = rng.gen_range(0..100);
-                            let oldest = rng.gen_bool(0.8).then(|| rng.gen_range(0..100));
-                            pool.delete(&pool.remove_object(
-                                &DiskKey::object_id(&name),
-                                at,
-                                oldest,
-                            ));
-                        }
+                        6 => pool.delete(&pool.remove_object(&DiskKey::object_id(&name))),
                         7 => pool.delete(&pool.evict_bytes(rng.gen_range(0..3_000))),
                         8 => pool.delete(&pool.set_cap(rng.gen_range(5_000..=10_000))),
                         _ => pool.delete(&pool.remove_kind(kind)),
@@ -435,15 +423,12 @@ fn test_remove_object_takes_all_its_units() {
         write_file(&root, rel, 100);
         put(&pool, rel, 100);
     }
-    let mut victims = pool.remove_object(&DiskKey::object_id("t/a"), 0, None);
+    let mut victims = pool.remove_object(&DiskKey::object_id("t/a"));
     victims.sort();
     let mut expected = units.to_vec();
     expected.sort();
     assert_eq!(victims, expected);
-    assert!(
-        pool.remove_object(&DiskKey::object_id("t/a"), 0, None)
-            .is_empty()
-    );
+    assert!(pool.remove_object(&DiskKey::object_id("t/a")).is_empty());
     pool.delete(&victims);
     assert!(units.iter().all(|rel| !root.join(rel).exists()));
     assert!(pool.contains(&other) && root.join(&other).exists());
@@ -452,20 +437,15 @@ fn test_remove_object_takes_all_its_units() {
     // A restart rebuilds the ids from the file names; an evicted unit leaves its object.
     let fresh = DiskPool::new(Pool::Data, root.clone(), 10_000);
     assert_eq!(fresh.reload(), (1, 0));
-    assert_eq!(
-        fresh.remove_object(&DiskKey::object_id("t/b"), 0, None),
-        vec![other.clone()]
-    );
+    assert_eq!(fresh.remove_object(&DiskKey::object_id("t/b")), vec![
+        other.clone()
+    ]);
     fresh.delete(&[other]);
     let b = DiskKey::range("t/b", 0..1).rel_path(data());
     put(&fresh, &b, 10);
     assert_eq!(fresh.evict_bytes(1), vec![b.clone()]);
     fresh.delete(&[b]);
-    assert!(
-        fresh
-            .remove_object(&DiskKey::object_id("t/b"), 0, None)
-            .is_empty()
-    );
+    assert!(fresh.remove_object(&DiskKey::object_id("t/b")).is_empty());
     assert_consistent(&fresh);
 }
 
@@ -484,7 +464,7 @@ fn test_reload_leaves_keys_being_written() {
     let file = write_file(&root, &a, 100);
     assert_eq!(pool.reload(), (0, 0));
     assert!(file.exists() && !pool.contains(&a));
-    let published = pool.publish(a.clone(), 100, 100, 0, no_file).unwrap();
+    let published = pool.publish(a.clone(), 100, 100, no_file).unwrap();
     assert!(published.indexed && published.victims.is_empty());
     assert!(pool.contains(&a));
     assert_consistent(&pool);
@@ -509,57 +489,13 @@ fn test_reload_rejects_then_frees_the_key() {
     assert_consistent(&pool);
 }
 
-/// An entry whose fill started before its object was invalidated is rejected when published:
-/// it was read before the rewrite or delete. Fills started after are published. Points no
-/// running fill started before are dropped.
-#[test]
-fn test_publish_rejects_fills_started_before_an_invalidation() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
-    // Before the restart scan every point is kept; see the reload test.
-    assert_eq!(pool.reload(), (0, 0));
-    let object = DiskKey::object_id("t/a");
-    let a = DiskKey::range("t/a", 0..10).rel_path(data());
-    let b = DiskKey::range("t/a", 10..20).rel_path(meta());
-
-    // Fills started at 3 and 4; the object is invalidated at 5 while they run.
-    for rel in [&a, &b] {
-        assert!(pool.reserve(rel, 100).reserved);
-    }
-    assert!(pool.remove_object(&object, 5, Some(3)).is_empty());
-    for (rel, started) in [(&a, 3), (&b, 4)] {
-        let commit = commit_file(&root, rel, 100);
-        let published = pool
-            .publish(rel.clone(), 100, 100, started, commit)
-            .unwrap();
-        assert!(!published.indexed && published.victims.is_empty());
-        // Its file was never put in place, for a restart to find.
-        assert!(!root.join(rel).exists() && !pool.contains(rel));
-    }
-    // A fill started after the invalidation.
-    put_file(&pool, &root, &a, 6);
-    assert!(pool.contains(&a));
-
-    // Once no fill started before it runs, the point is dropped with the next invalidation.
-    assert!(
-        pool.remove_object(&DiskKey::object_id("t/b"), 7, None)
-            .is_empty()
-    );
-    put_file(&pool, &root, &b, 0);
-    assert!(pool.contains(&b));
-    assert_consistent(&pool);
-}
-
-/// Reserves, writes and publishes `rel` with a file, for a fill started at `started`.
-fn put_file(pool: &DiskPool, root: &Path, rel: &str, started: u64) {
+/// Reserves, writes and publishes `rel` with a file.
+fn put_file(pool: &DiskPool, root: &Path, rel: &str) {
     let r = pool.reserve(rel, 100);
     assert!(r.reserved, "{rel}");
     pool.delete(&r.victims);
     let commit = commit_file(root, rel, 100);
-    let published = pool
-        .publish(rel.to_string(), 100, 100, started, commit)
-        .unwrap();
+    let published = pool.publish(rel.to_string(), 100, 100, commit).unwrap();
     assert!(published.indexed, "{rel}");
     pool.delete(&published.victims);
 }
@@ -582,7 +518,7 @@ fn test_publish_fits_a_pool_shrunk_under_writes() {
 
     let publish = |rel: &String, size: u64| {
         let commit = commit_file(&root, rel, size as usize);
-        let published = pool.publish(rel.clone(), size, size, 0, commit).unwrap();
+        let published = pool.publish(rel.clone(), size, size, commit).unwrap();
         pool.delete(&published.victims);
         published.indexed
     };
@@ -609,41 +545,6 @@ fn test_publish_fits_a_pool_shrunk_under_writes() {
     assert_consistent(&pool);
 }
 
-/// Objects invalidated before the restart scan got to their files: the scan deletes the files
-/// instead of indexing their old bytes, though no fill was running. Once the scan has run, the
-/// points are dropped with the next invalidation.
-#[test]
-fn test_reload_does_not_index_objects_invalidated_before_it() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    let units = [
-        DiskKey::whole("t/a").rel_path(data()),
-        DiskKey::range("t/a", 0..10).rel_path(meta()),
-    ];
-    let other = DiskKey::whole("t/b").rel_path(data());
-    for rel in units.iter().chain([&other]) {
-        write_file(&root, rel, 100);
-    }
-    let object = DiskKey::object_id("t/a");
-    assert!(pool.remove_object(&object, 1, None).is_empty());
-    assert_eq!(pool.invalidated_at(&object), Some(1));
-
-    assert_eq!(pool.reload(), (1, 2));
-    assert!(
-        units
-            .iter()
-            .all(|rel| !root.join(rel).exists() && !pool.contains(rel))
-    );
-    assert!(pool.contains(&other));
-    assert!(
-        pool.remove_object(&DiskKey::object_id("t/c"), 2, None)
-            .is_empty()
-    );
-    assert_eq!(pool.invalidated_at(&object), None);
-    assert_consistent(&pool);
-}
-
 /// A kind turned off is refused everywhere: its entries are taken out, a write reserved before
 /// is rejected at publish, a new reservation is refused, and the restart scan deletes its files.
 /// Turned on again, it is written as before.
@@ -654,7 +555,7 @@ fn test_kind_turned_off_is_refused_by_writes_and_the_scan() {
     let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
     let [indexed, writing, scanned] = ["a", "b", "c"].map(|name| rel(meta(), name));
     let other = rel(data(), "d");
-    put_file(&pool, &root, &indexed, 0);
+    put_file(&pool, &root, &indexed);
     assert!(pool.reserve(&writing, 100).reserved);
     write_file(&root, &scanned, 100);
     write_file(&root, &other, 100);
@@ -663,7 +564,7 @@ fn test_kind_turned_off_is_refused_by_writes_and_the_scan() {
     assert_eq!(victims, vec![indexed.clone()]);
     pool.delete(&victims);
     let commit = commit_file(&root, &writing, 100);
-    let published = pool.publish(writing.clone(), 100, 100, 0, commit).unwrap();
+    let published = pool.publish(writing.clone(), 100, 100, commit).unwrap();
     assert!(!published.indexed && !root.join(&writing).exists());
     assert!(!pool.reserve(&indexed, 100).reserved);
     assert_eq!(pool.reload(), (1, 1));
@@ -672,53 +573,8 @@ fn test_kind_turned_off_is_refused_by_writes_and_the_scan() {
     assert_eq!(pool.kind_usage(meta()), (0, 0));
 
     assert!(pool.set_kind_enabled(meta(), true).is_empty());
-    put_file(&pool, &root, &indexed, 0);
+    put_file(&pool, &root, &indexed);
     assert!(pool.contains(&indexed));
-    assert_consistent(&pool);
-}
-
-/// Invalidations reach a pool out of clock order: an older one, which saw no fill running,
-/// does not drop a newer point a fill still running needs.
-#[test]
-fn test_older_invalidation_keeps_newer_points() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
-    assert_eq!(pool.reload(), (0, 0));
-    let a = DiskKey::object_id("t/a");
-    let unit = DiskKey::whole("t/a").rel_path(data());
-    assert!(pool.reserve(&unit, 100).reserved);
-    // The fill started at 5; `t/a` is invalidated at 10 while it runs.
-    assert!(pool.remove_object(&a, 10, Some(5)).is_empty());
-    // An invalidation taken at 8, before the fill, when none ran, arrives late.
-    assert!(
-        pool.remove_object(&DiskKey::object_id("t/b"), 8, None)
-            .is_empty()
-    );
-    assert_eq!(pool.invalidated_at(&a), Some(10));
-    let commit = commit_file(&root, &unit, 100);
-    let published = pool.publish(unit.clone(), 100, 100, 5, commit).unwrap();
-    assert!(!published.indexed);
-    assert!(!root.join(&unit).exists());
-    assert_consistent(&pool);
-}
-
-/// Two invalidations of one object out of clock order: the older one does not lower the point,
-/// so a fill started between them is still rejected.
-#[test]
-fn test_older_invalidation_of_an_object_keeps_its_newer_point() {
-    let pool = pool(1000);
-    assert_eq!(pool.reload(), (0, 0));
-    let object = DiskKey::object_id("t/a");
-    let unit = DiskKey::whole("t/a").rel_path(data());
-    assert!(pool.reserve(&unit, 100).reserved);
-    // A fill started at 0 runs throughout; the object is invalidated at 1 and at 3, and the
-    // invalidation at 1 arrives last.
-    assert!(pool.remove_object(&object, 3, Some(0)).is_empty());
-    assert!(pool.remove_object(&object, 1, Some(0)).is_empty());
-    assert_eq!(pool.invalidated_at(&object), Some(3));
-    let published = pool.publish(unit.clone(), 100, 100, 2, no_file).unwrap();
-    assert!(!published.indexed);
     assert_consistent(&pool);
 }
 
@@ -734,403 +590,51 @@ fn test_remove_object_of_many_units() {
         put(&pool, rel, 1);
     }
     put(&pool, &rel(data(), "t/other"), 1);
-    let victims = pool.remove_object(&DiskKey::object_id("t/big"), 0, None);
+    let victims = pool.remove_object(&DiskKey::object_id("t/big"));
     assert_eq!(victims.len(), units.len());
     pool.delete(&victims);
     assert_eq!(pool.stats().items, 1);
-    assert!(
-        pool.remove_object(&DiskKey::object_id("t/big"), 1, None)
-            .is_empty()
-    );
+    assert!(pool.remove_object(&DiskKey::object_id("t/big")).is_empty());
     assert_consistent(&pool);
 }
 
-/// Points kept while an old fill runs are dropped in order once it is done: the next
-/// invalidation drops them all, and later ones find none to scan.
+/// A file that cannot be deleted stays marked: its key is not written until a restart, so no
+/// unindexed file is left for a `fuzzy` restart scan to index, and no write leaves it behind.
+/// Once deletable, a delete clears the mark.
+#[cfg(unix)]
 #[test]
-fn test_invalidation_points_are_pruned_in_order() {
-    let pool = pool(1000);
-    assert_eq!(pool.reload(), (0, 0));
-    let objects: Vec<_> = (0..1_000u64)
-        .map(|i| DiskKey::object_id(&format!("t/{i}")))
-        .collect();
-    // A fill started at 5 runs while they are invalidated.
-    for (i, object) in objects.iter().enumerate() {
-        assert!(
-            pool.remove_object(object, 10 + i as u64, Some(5))
-                .is_empty()
-        );
-    }
-    assert!(objects.iter().all(|o| pool.invalidated_at(o).is_some()));
-    // The fill is done: an invalidation sees none running.
-    assert!(
-        pool.remove_object(&DiskKey::object_id("t/x"), 2_000, None)
-            .is_empty()
-    );
-    assert!(objects.iter().all(|o| pool.invalidated_at(o).is_none()));
-    // An older fill still running keeps the points after it, and drops those before.
-    assert!(
-        pool.remove_object(&objects[0], 3_000, Some(2_500))
-            .is_empty()
-    );
-    assert!(
-        pool.remove_object(&objects[1], 3_001, Some(2_500))
-            .is_empty()
-    );
-    assert!(
-        pool.remove_object(&objects[2], 3_002, Some(3_000))
-            .is_empty()
-    );
-    assert_eq!(pool.invalidated_at(&objects[0]), None);
-    assert_eq!(pool.invalidated_at(&objects[1]), Some(3_001));
-    assert_eq!(pool.invalidated_at(&objects[2]), Some(3_002));
-}
-
-/// An object being rewritten or deleted has no entry until the change ends: its entries are
-/// taken out when it begins, and its writes and files are refused meanwhile, so a crash during
-/// the change leaves none for the restart scan. Fills started before the end are rejected.
-#[test]
-fn test_object_being_changed_has_no_entry() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    assert_eq!(pool.reload(), (0, 0));
-    let object = DiskKey::object_id("t/a");
-    let [indexed, writing, scanned] =
-        [0..1, 1..2, 2..3].map(|range| DiskKey::range("t/a", range).rel_path(data()));
-    put_file(&pool, &root, &indexed, 0);
-    assert!(pool.reserve(&writing, 100).reserved);
-
-    assert_eq!(pool.begin_change(&object).unwrap(), 1);
-    assert!(!root.join(&indexed).exists());
-    // A write reserved before, and new reservations, are refused while the change runs.
-    let commit = commit_file(&root, &writing, 100);
-    let published = pool.publish(writing.clone(), 100, 100, 1, commit).unwrap();
-    assert!(!published.indexed && !root.join(&writing).exists());
-    assert!(!pool.reserve(&indexed, 100).reserved);
-    // A file of the object found by the scan meanwhile, left by an earlier run.
-    write_file(&root, &scanned, 100);
-    assert_eq!(pool.reload(), (0, 1));
-    assert!(files_under(&root).is_empty());
-
-    // A second change of the object overlaps the first; the object stays out until both end.
-    assert_eq!(pool.begin_change(&object).unwrap(), 0);
-    assert!(pool.end_change(&object, 5, Some(2)).is_empty());
-    assert!(!pool.reserve(&indexed, 100).reserved);
-    assert!(pool.end_change(&object, 6, Some(2)).is_empty());
-    // The fill started at 2, before the end, is rejected; one started after is published.
-    assert!(pool.reserve(&indexed, 100).reserved);
-    let published = pool.publish(indexed.clone(), 100, 100, 2, no_file).unwrap();
-    assert!(!published.indexed);
-    put_file(&pool, &root, &indexed, 7);
-    assert!(pool.contains(&indexed));
-    assert_consistent(&pool);
-}
-
-/// A change begun before the restart scan has run deletes the object's files the scan has not
-/// indexed yet: a crash after the change would otherwise leave them to the next scan.
-#[test]
-fn test_change_before_the_scan_deletes_unindexed_files() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    let units = [
-        DiskKey::whole("t/a").rel_path(data()),
-        DiskKey::range("t/a", 0..10).rel_path(meta()),
-    ];
-    let other = DiskKey::whole("t/b").rel_path(data());
-    for rel in units.iter().chain([&other]) {
-        write_file(&root, rel, 100);
-    }
-    let object = DiskKey::object_id("t/a");
-    assert_eq!(pool.begin_change(&object).unwrap(), 0);
-    assert!(units.iter().all(|rel| !root.join(rel).exists()));
-    assert!(root.join(&other).exists());
-    assert!(pool.end_change(&object, 1, None).is_empty());
-    // As after a restart: nothing of the object is left to index.
-    let fresh = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    assert_eq!(fresh.reload(), (1, 0));
-    assert!(fresh.contains(&other));
-    assert_consistent(&fresh);
-}
-
-/// Entries of an object taken out earlier, whose files a background delete has not removed
-/// yet, as after a resize: a change of the object deletes those files before it proceeds,
-/// and leaves the pending delete to clear their marks.
-#[test]
-fn test_change_finishes_pending_deletes_of_the_object() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    assert_eq!(pool.reload(), (0, 0));
-    let unit = DiskKey::whole("t/a").rel_path(data());
-    let other = DiskKey::whole("t/b").rel_path(data());
-    put_file(&pool, &root, &unit, 0);
-    put_file(&pool, &root, &other, 0);
-    // The resize takes both out; their delete has not run.
-    let pending = pool.set_cap(0);
-    assert_eq!(pending.len(), 2);
-
-    let object = DiskKey::object_id("t/a");
-    assert_eq!(pool.begin_change(&object).unwrap(), 0);
-    assert!(!root.join(&unit).exists());
-    assert!(
-        root.join(&other).exists(),
-        "another object's delete is left alone"
-    );
-    assert!(pool.end_change(&object, 1, None).is_empty());
-    pool.delete(&pending);
-    assert!(files_under(&root).is_empty());
-    pool.delete(&pool.set_cap(10_000));
-    put_file(&pool, &root, &unit, 2);
-    assert_consistent(&pool);
-}
-
-/// A file of the object that cannot be deleted, as on a volume remounted read-only, fails the
-/// change, and every retry while it stays: the object must not change while a copy of it would
-/// be read after a restart. The change still ends; the file stays tracked until deleted.
-#[test]
-fn test_change_fails_when_a_file_cannot_be_deleted() {
+fn test_undeletable_file_keeps_its_key_marked() {
     use std::os::unix::fs::PermissionsExt;
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    assert_eq!(pool.reload(), (0, 0));
-    let unit = DiskKey::whole("t/a").rel_path(data());
-    put_file(&pool, &root, &unit, 0);
-    let parent = root.join(&unit).parent().unwrap().to_path_buf();
-    fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
-    // As root, permissions do not stop the delete; nothing to check then.
-    if fs::File::create(parent.join("probe")).is_ok() {
-        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+    // Root deletes from a read-only directory.
+    let uid = std::process::Command::new("id").arg("-u").output().unwrap();
+    if String::from_utf8_lossy(&uid.stdout).trim() == "0" {
         return;
     }
-
-    let object = DiskKey::object_id("t/a");
-    assert!(pool.begin_change(&object).is_err());
-    assert!(root.join(&unit).exists() && !pool.contains(&unit));
-    assert!(pool.end_change(&object, 1, None).is_empty());
-    // A retry fails as well while the file stays, and its key is not written meanwhile.
-    assert!(pool.begin_change(&object).is_err());
-    assert!(pool.end_change(&object, 2, None).is_empty());
-    assert!(!pool.reserve(&unit, 100).reserved);
-    fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
-    // A later change deletes the file, and the key can be written again.
-    assert_eq!(pool.begin_change(&object).unwrap(), 0);
-    assert!(!root.join(&unit).exists());
-    assert!(pool.end_change(&object, 3, None).is_empty());
-    put_file(&pool, &root, &unit, 4);
-    assert!(pool.contains(&unit));
-    assert_consistent(&pool);
-}
-
-/// A restart scan that cannot read a directory is incomplete: the pool stays as before the
-/// scan, and a change of an object still looks for its files on disk, failing while it cannot
-/// read them. Once readable, the change deletes them. The invalidations are not kept for a scan
-/// any more: with no fill running, none is.
-#[test]
-fn test_incomplete_scan_keeps_changes_looking_on_disk() {
-    use std::os::unix::fs::PermissionsExt;
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_path_buf();
     let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    let unit = DiskKey::whole("t/a").rel_path(data());
-    let file = write_file(&root, &unit, 100);
+    let a = rel(data(), "t/a");
+    put_file(&pool, &root, &a);
+    let file = root.join(&a);
     let parent = file.parent().unwrap().to_path_buf();
-    fs::set_permissions(&parent, fs::Permissions::from_mode(0o000)).unwrap();
-    // As root, permissions do not stop the scan; nothing to check then.
-    if fs::read_dir(&parent).is_ok() {
-        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
-        return;
-    }
-    assert_eq!(pool.reload(), (0, 0));
-    let object = DiskKey::object_id("t/a");
-    assert!(pool.begin_change(&object).is_err());
-    assert!(pool.end_change(&object, 1, None).is_empty());
-    assert_eq!(pool.invalidated_at(&object), None);
-
-    fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
-    assert!(file.exists());
-    assert_eq!(pool.begin_change(&object).unwrap(), 0);
-    assert!(!file.exists());
-    assert!(pool.end_change(&object, 2, None).is_empty());
-    assert_eq!(pool.invalidated_at(&object), None);
-    assert_consistent(&pool);
-}
-
-/// A file of a previous run under a key being written is left by the restart scan, which
-/// still completes. A change of its object before the write publishes deletes it: the write is
-/// then rejected, and no restart finds the object's old bytes. A write that publishes replaces
-/// it, and a change after finds nothing more to delete.
-#[test]
-fn test_change_deletes_previous_run_file_under_a_key_being_written() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    let rel = DiskKey::whole("t/a").rel_path(data());
-    let object = DiskKey::object_id("t/a");
-    let old = write_file(&root, &rel, 100);
-    assert!(pool.reserve(&rel, 100).reserved);
-    assert_eq!(pool.reload(), (0, 0));
-    assert!(old.exists());
-
-    assert_eq!(pool.begin_change(&object).unwrap(), 0);
-    assert!(!old.exists());
-    let published = pool
-        .publish(rel.clone(), 100, 100, 0, || panic!("not committed"))
-        .unwrap();
-    assert!(!published.indexed);
-    assert!(pool.end_change(&object, 1, None).is_empty());
-    assert_consistent(&pool);
-    let restarted = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    assert_eq!(restarted.reload(), (0, 0));
-
-    // Replaced by a write: nothing is left to delete for it.
-    let old = write_file(&root, &rel, 100);
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    assert!(pool.reserve(&rel, 100).reserved);
-    assert_eq!(pool.reload(), (0, 0));
-    let published = pool
-        .publish(rel.clone(), 100, 100, 0, || fs::write(&old, vec![2u8; 100]))
-        .unwrap();
-    assert!(published.indexed);
-    assert_eq!(pool.begin_change(&object).unwrap(), 1);
-    assert!(!old.exists());
-    assert!(pool.end_change(&object, 2, None).is_empty());
-    assert_consistent(&pool);
-}
-
-/// Such a file stays marked until it is deleted: while it cannot be, every change of its
-/// object fails, an overlapping one included, and none can complete and let the storage
-/// mutation run with the file left for a restart.
-#[test]
-fn test_previous_run_file_under_a_key_being_written_stays_marked_until_deleted() {
-    use std::os::unix::fs::PermissionsExt;
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    let rel = DiskKey::whole("t/a").rel_path(data());
-    let object = DiskKey::object_id("t/a");
-    let old = write_file(&root, &rel, 100);
-    assert!(pool.reserve(&rel, 100).reserved);
-    assert_eq!(pool.reload(), (0, 0));
-
-    let parent = old.parent().unwrap().to_path_buf();
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
-    // As root, permissions do not stop the delete; nothing to check then.
-    if fs::remove_file(parent.join("probe")).is_ok() || fs::write(parent.join("probe"), b"").is_ok()
-    {
-        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
-        return;
-    }
-    assert!(pool.begin_change(&object).is_err());
-    assert!(pool.begin_change(&object).is_err());
-    assert!(old.exists());
+
+    assert_eq!(pool.remove_object(&DiskKey::object_id("t/a")), vec![
+        a.clone()
+    ]);
+    pool.delete(std::slice::from_ref(&a));
+    assert!(file.exists(), "the delete failed");
+    assert!(!pool.contains(&a));
+    let r = pool.reserve(&a, 10);
+    assert!(!r.reserved && r.victims.is_empty(), "still marked");
+    // Other keys are written as before.
+    put(&pool, &rel(data(), "t/b"), 10);
+
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
-    assert_eq!(pool.begin_change(&object).unwrap(), 0);
-    assert!(!old.exists());
-    // The write started before the changes, at 0, still runs: it is rejected.
-    for at in 1..=3 {
-        pool.end_change(&object, at, Some(0));
-    }
-    let published = pool
-        .publish(rel.clone(), 100, 100, 0, || panic!("not committed"))
-        .unwrap();
-    assert!(!published.indexed);
+    pool.delete(std::slice::from_ref(&a));
+    assert!(!file.exists());
+    let r = pool.reserve(&a, 10);
+    assert!(r.reserved);
+    pool.release(&a, 10);
     assert_consistent(&pool);
-}
-
-/// Such a file is deleted when the write of its key is abandoned: rejected at publish, here
-/// for a pool turned off meanwhile, or released after a failed write. It is not left on disk
-/// outside the capacity, and its key can be written again.
-#[test]
-fn test_previous_run_file_is_deleted_when_its_replacement_is_abandoned() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_path_buf();
-    let rejected = DiskKey::whole("t/a").rel_path(data());
-    let released = DiskKey::whole("t/b").rel_path(data());
-    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
-    let rejected_file = write_file(&root, &rejected, 100);
-    let released_file = write_file(&root, &released, 100);
-    assert!(pool.reserve(&rejected, 100).reserved);
-    assert!(pool.reserve(&released, 100).reserved);
-    assert_eq!(pool.reload(), (0, 0));
-
-    assert!(pool.set_cap(0).is_empty());
-    let published = pool
-        .publish(rejected.clone(), 100, 100, 0, || panic!("not committed"))
-        .unwrap();
-    assert!(!published.indexed);
-    assert_eq!(published.victims, vec![rejected.clone()]);
-    pool.delete(&published.victims);
-    assert!(!rejected_file.exists());
-
-    pool.release(&released, 100);
-    assert!(!released_file.exists());
-
-    assert!(pool.set_cap(10_000).is_empty());
-    for rel in [&rejected, &released] {
-        let r = pool.reserve(rel, 1);
-        assert!(r.reserved, "{rel}");
-        pool.release(rel, 1);
-    }
-    assert_consistent(&pool);
-}
-
-/// Changes of an object race the write of one of its keys that has a previous run's file under
-/// it, from several threads. At the end the previous run's bytes are gone: the file is deleted,
-/// or replaced by the write, then indexed. Nothing is left marked, and the key can be written
-/// again.
-#[test]
-fn test_changes_racing_a_shadowed_write_leave_no_file() {
-    for round in 0..50 {
-        let dir = TempDir::new().unwrap();
-        let root = dir.path().to_path_buf();
-        let pool = Arc::new(DiskPool::new(Pool::Data, root.clone(), 10_000));
-        let rel = DiskKey::whole("t/a").rel_path(data());
-        let object = DiskKey::object_id("t/a");
-        let old = write_file(&root, &rel, 100);
-        assert!(pool.reserve(&rel, 100).reserved);
-        assert_eq!(pool.reload(), (0, 0));
-        let changers: Vec<_> = (0..4u64)
-            .map(|t| {
-                let (pool, object) = (pool.clone(), object.clone());
-                Thread::spawn(move || {
-                    for i in 0..20 {
-                        let _ = pool.begin_change(&object);
-                        pool.end_change(&object, 1 + t * 100 + i, Some(0));
-                    }
-                })
-            })
-            .collect();
-        let writer = {
-            let (pool, rel, path) = (pool.clone(), rel.clone(), old.clone());
-            Thread::spawn(move || {
-                if round % 2 == 0 {
-                    let commit = || fs::write(&path, vec![2u8; 100]);
-                    let published = pool.publish(rel.clone(), 100, 100, 0, commit).unwrap();
-                    pool.delete(&published.victims);
-                } else {
-                    pool.release(&rel, 100);
-                }
-            })
-        };
-        for t in changers {
-            t.join().unwrap();
-        }
-        writer.join().unwrap();
-        if old.exists() {
-            assert!(
-                pool.contains(&rel),
-                "round {round}: an unindexed file is left"
-            );
-            assert_eq!(fs::read(&old).unwrap(), vec![2u8; 100], "round {round}");
-            pool.remove(&rel);
-        }
-        assert!(!old.exists(), "round {round}");
-        let r = pool.reserve(&rel, 1);
-        assert!(r.reserved, "round {round}");
-        pool.release(&rel, 1);
-        assert_consistent(&pool);
-    }
 }

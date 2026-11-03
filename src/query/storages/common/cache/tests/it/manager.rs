@@ -171,13 +171,8 @@ async fn test_disk_rows_count_hits_and_entries() {
     let kind = CacheKind::of::<column::Data>();
     let key = DiskKey::range("1/2/_b/x.parquet", 0..10);
     assert!(
-        disk.put(
-            kind,
-            &key,
-            Bytes::from_static(b"0123456789"),
-            &disk.begin_fill()
-        )
-        .await
+        disk.put(kind, &key, Bytes::from_static(b"0123456789"))
+            .await
     );
     wait_for(|| disk.contains(kind, &key));
     assert!(disk.get(kind, &key).await.is_some());
@@ -638,7 +633,7 @@ async fn test_restart_reloads_only_with_fuzzy() {
         let manager = manager(&fuzzy, true);
         let disk = manager.disk().unwrap();
         let value = Bytes::from_static(b"0123456789");
-        assert!(disk.put(kind, &key, value, &disk.begin_fill()).await);
+        assert!(disk.put(kind, &key, value).await);
         wait_for(|| disk.contains(kind, &key));
     }
     {

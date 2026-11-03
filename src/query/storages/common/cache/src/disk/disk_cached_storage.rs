@@ -30,6 +30,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::ReadSettings;
 use futures::future::try_join_all;
 use opendal::Buffer;
@@ -39,8 +40,6 @@ use crate::CacheKind;
 use crate::CacheManager;
 use crate::DiskCache;
 use crate::DiskKey;
-use crate::ObjectChange;
-use crate::disk::FillTicket;
 
 /// What a read may do with the disk cache.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,7 +94,7 @@ impl DiskCachedStorage {
     }
 
     /// The object at `path` as the disk cache names it: the key prefix, then the path without
-    /// leading slashes, which the operator ignores. Reads, and changes of the object, so name
+    /// leading slashes, which the operator ignores. Reads and evictions of the object so name
     /// one object alike whichever way its path is written.
     fn object_path(&self, path: &str) -> String {
         let path = path.trim_start_matches('/');
@@ -113,29 +112,23 @@ impl DiskCachedStorage {
         }
     }
 
-    /// Drops what the disk cache holds of the object at `path`, which is about to be rewritten
-    /// in place or deleted, and keeps it out until the returned change is dropped, once the
-    /// object is written or deleted (see `DiskCache::begin_change`). Paths of fuse tables are
-    /// never reused otherwise, so only such callers need it; the memory caches of the decoded
-    /// values are evicted by their own handles. Fails when the cached files cannot be deleted:
-    /// the object must not change then.
-    pub fn begin_change(&self, path: &str) -> Result<Option<ObjectChange>> {
-        let Some(disk) = self.disk.as_ref() else {
-            return Ok(None);
+    /// Drops what the disk cache holds of the objects at `paths`, after they were rewritten in
+    /// place or deleted (see `DiskCache::evict_object`). Paths of fuse tables are never reused
+    /// otherwise; the memory caches of the decoded values are evicted by their own handles.
+    /// Deleting the cached files is file system work, on a blocking thread, which runs to its
+    /// end when the caller is cancelled: the objects are gone from storage either way.
+    pub async fn evict_objects(&self, paths: &[String]) -> Result<()> {
+        let Some(disk) = self.disk.clone() else {
+            return Ok(());
         };
-        disk.begin_change(&self.object_path(path)).map(Some)
-    }
-
-    /// `begin_change` on a blocking thread, for async callers: dropping the object's files, and
-    /// before the restart scan has run looking for them, is file system work.
-    pub async fn begin_change_async(&self, path: &str) -> Result<Option<ObjectChange>> {
-        if self.disk.is_none() {
-            return Ok(None);
-        }
-        let (storage, path) = (self.clone(), path.to_string());
-        databend_common_base::runtime::spawn_blocking(move || storage.begin_change(&path))
-            .await
-            .map_err(|e| ErrorCode::Internal(format!("disk cache change task failed: {e}")))?
+        let objects: Vec<String> = paths.iter().map(|p| self.object_path(p)).collect();
+        databend_common_base::runtime::spawn_blocking(move || {
+            for object in &objects {
+                disk.evict_object(object);
+            }
+        })
+        .await
+        .map_err(|e| ErrorCode::Internal(format!("disk cache eviction task failed: {e}")))
     }
 
     /// For writes, listing and deletes, which do not go through the disk cache.
@@ -191,26 +184,15 @@ impl DiskCachedStorage {
             );
             return Ok(bytes);
         }
-        // Before the storage read: an invalidation from here on rejects the bytes. Held until
-        // the shared read is cleaned up, after `run`: the invalidation point kept for the
-        // object, which keeps later readers off this read, lives as long as the ticket.
-        let ticket = disk.begin_fill();
         let load = async {
             let bytes = self.read_storage(path, range.clone()).await?;
             disk.record_storage_read(kind, bytes.len() as u64);
             if fill.writes() {
-                disk.put(kind, &key, bytes.clone(), &ticket).await;
+                disk.put(kind, &key, bytes.clone()).await;
             }
             Ok(bytes)
         };
-        // A read started after the object was invalidated does not join one started before.
-        let generation = disk.invalidation_of(kind, key.path());
-        let read = disk
-            .flight()
-            .run(&format!("{kind:?}/{key}@{generation}"), load)
-            .await;
-        drop(ticket);
-        read
+        disk.flight().run(&format!("{kind:?}/{key}"), load).await
     }
 
     async fn read_storage(&self, path: &str, range: Option<Range<u64>>) -> Result<Bytes> {
@@ -260,34 +242,27 @@ impl DiskCachedStorage {
             }
         }
         if misses.is_empty() {
-            let fetched =
-                MergeIOReader::merge_io_read(settings, self.op.clone(), path, &misses).await?;
+            let fetched = MergeIOReadResult::create(
+                OwnerMemory::create(vec![]),
+                HashMap::new(),
+                path.to_string(),
+            );
             return Ok(UnitsRead { cached, fetched });
         }
-        // Before the storage read: an invalidation from here on rejects the units. Held until
-        // the shared read is cleaned up, as in `read`.
-        let ticket = disk.begin_fill();
-        let load = self.fetch_units(kind, path, &misses, fill, settings, disk, &ticket);
+        let load = self.fetch_units(kind, path, &misses, fill, settings, disk);
         // Readers missing the same units at once, as scans of the same columns do, share one
-        // storage read; one started after the object was invalidated does not join.
-        // The object as the disk cache names it, prefix included: two storages sharing the
-        // disk cache read different objects under one relative path.
+        // storage read. The object as the disk cache names it, prefix included: two storages
+        // sharing the disk cache read different objects under one relative path.
         let object = self.key(path, None);
-        let generation = disk.invalidation_of(kind, object.path());
-        let mut flight_key = format!("{kind:?}/{object}@{generation}");
+        let mut flight_key = format!("{kind:?}/{object}");
         for (id, range) in &misses {
             flight_key.push_str(&format!(":{id}={}-{}", range.start, range.end));
         }
-        let fetched = disk.units_flight().run(&flight_key, load).await;
-        drop(ticket);
-        Ok(UnitsRead {
-            cached,
-            fetched: fetched?,
-        })
+        let fetched = disk.units_flight().run(&flight_key, load).await?;
+        Ok(UnitsRead { cached, fetched })
     }
 
     /// Reads `misses` from storage with merge IO and queues them to disk unit by unit.
-    #[allow(clippy::too_many_arguments)]
     async fn fetch_units(
         &self,
         kind: CacheKind,
@@ -296,7 +271,6 @@ impl DiskCachedStorage {
         fill: DiskFill,
         settings: &ReadSettings,
         disk: &DiskCache,
-        ticket: &FillTicket,
     ) -> Result<MergeIOReadResult> {
         let fetched = MergeIOReader::merge_io_read(settings, self.op.clone(), path, misses).await?;
         let miss_bytes: u64 = misses.iter().map(|(_, r)| r.end - r.start).sum();
@@ -313,8 +287,7 @@ impl DiskCachedStorage {
                 let key = self.key(path, Some(range.clone()));
                 // One copy, also of a buffer of several chunks.
                 let copy = || Bytes::from(unit.to_vec());
-                disk.put_with(kind, &key, unit.len() as u64, copy, ticket)
-                    .await;
+                disk.put_with(kind, &key, unit.len() as u64, copy).await;
             });
             futures::future::join_all(puts).await;
         }

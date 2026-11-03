@@ -73,7 +73,6 @@ pub use disk::DiskKey;
 pub use disk::DiskKindEvents;
 pub use disk::DiskKindStats;
 pub use disk::DiskPoolStats;
-pub use disk::ObjectChange;
 pub use disk::UnitsRead;
 pub use disk::split_caps;
 pub use handle::CacheRef;

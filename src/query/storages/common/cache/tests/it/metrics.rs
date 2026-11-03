@@ -133,33 +133,19 @@ async fn test_disk_gauges_follow_cache_rows() {
     let disk = manager.disk().unwrap();
     let kind = CacheKind::of::<column::Data>();
     let key = DiskKey::whole("1/2/_b/x.parquet");
-    assert!(
-        disk.put(kind, &key, Bytes::from_static(b"bytes"), &disk.begin_fill())
-            .await
-    );
+    assert!(disk.put(kind, &key, Bytes::from_static(b"bytes")).await);
     wait_for(|| disk.contains(kind, &key));
     // Larger than a quarter of the data pool: dropped.
     let big = Bytes::from(vec![0; (disk.default_pool_cap(Pool::Data) / 2) as usize]);
-    assert!(
-        disk.put(kind, &DiskKey::whole("big"), big, &disk.begin_fill())
-            .await
-    );
+    assert!(disk.put(kind, &DiskKey::whole("big"), big).await);
     wait_for(|| disk.stats().dropped_rejected == 1);
     // A hit, a miss, and an object written then changed.
     assert!(disk.get(kind, &key).await.is_some());
     assert!(disk.get(kind, &DiskKey::whole("missing")).await.is_none());
     let changed = DiskKey::whole("1/2/_b/y.parquet");
-    assert!(
-        disk.put(
-            kind,
-            &changed,
-            Bytes::from_static(b"old"),
-            &disk.begin_fill()
-        )
-        .await
-    );
+    assert!(disk.put(kind, &changed, Bytes::from_static(b"old")).await);
     wait_for(|| disk.contains(kind, &changed));
-    drop(disk.begin_change("1/2/_b/y.parquet").unwrap());
+    assert_eq!(disk.evict_object("1/2/_b/y.parquet"), 1);
 
     let text = scrape(CacheMetricsCollector::of(manager.clone()));
     let rows = manager.rows();

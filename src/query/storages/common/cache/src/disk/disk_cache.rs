@@ -56,8 +56,6 @@ use crate::disk::disk_writer::DiskWriter;
 use crate::disk::disk_writer::DropReason;
 use crate::disk::disk_writer::WriteJob;
 use crate::disk::disk_writer::WriterOptions;
-use crate::disk::fill_fence::FillFence;
-use crate::disk::fill_fence::FillTicket;
 
 /// `cache.disk.max_bytes` at or below this turns the disk cache off: the cloud platform sets a
 /// tiny size rather than 0 to disable it without unmounting the volume.
@@ -127,8 +125,6 @@ pub struct DiskCache {
     /// Concurrent misses of the same units of one object, as scans of the same columns at
     /// once make them, read storage once (`DiskCachedStorage::read_units`).
     units_flight: SingleFlight<MergeIOReadResult>,
-    /// Orders fills against changes of objects (`begin_change`).
-    fence: Arc<FillFence>,
     /// Serializes runtime updates: `set_pool_cap`, the check of the pools' sum and the update,
     /// and `set_kind_enabled`, the flag read by `is_enabled` and the pool's.
     updates: Mutex<()>,
@@ -210,7 +206,6 @@ impl DiskCache {
                 ))
             })?;
         }
-        let fenced = pools.clone();
         let pressure_order = Pool::RECLAIM_ORDER
             .iter()
             .map(|pool| pools[pool.index()].clone())
@@ -226,11 +221,6 @@ impl DiskCache {
             counters: CacheKind::all().map(|_| KindCounters::default()).collect(),
             flight: SingleFlight::default(),
             units_flight: SingleFlight::default(),
-            fence: Arc::new(FillFence::with_on_advance(Box::new(move |point| {
-                for pool in &fenced {
-                    pool.prune_invalidations(point);
-                }
-            }))),
             updates: Mutex::new(()),
         })
     }
@@ -249,13 +239,10 @@ impl DiskCache {
         }
     }
 
-    /// Reloads synchronously; for tests. The invalidations kept for a pool's scan are pruned
-    /// once it is done, as far as no running fill needs them: fills that finished during the
-    /// scan pruned nothing.
+    /// Reloads synchronously; for tests.
     pub fn reload_now(&self) {
         for pool in &self.pools {
             pool.reload();
-            pool.prune_invalidations(self.fence.frontier());
         }
     }
 
@@ -315,18 +302,12 @@ impl DiskCache {
             counters.misses.fetch_add(1, Ordering::Relaxed);
         };
         let Some((path, size)) = pool.lookup(&rel) else {
-            // Read before and still waiting to be written: served, as the entry it becomes,
-            // unless its object changed since. Concurrent scans of the same data then read it
-            // from storage once.
-            // The fill's ticket is held across the check: an invalidation of the object since
-            // the fill started is not pruned meanwhile, even if the job is rejected and drops
-            // its own ticket.
-            if let Some((bytes, ticket)) = self.writer.pending(pool.pool().index(), &rel) {
-                if pool.accepts(&rel, ticket.started()) {
-                    hit(&bytes);
-                    counters.queued_hits.fetch_add(1, Ordering::Relaxed);
-                    return Some(bytes);
-                }
+            // Read before and still waiting to be written: served, as the entry it becomes.
+            // Concurrent scans of the same data then read it from storage once.
+            if let Some(bytes) = self.writer.pending(pool.pool().index(), &rel) {
+                hit(&bytes);
+                counters.queued_hits.fetch_add(1, Ordering::Relaxed);
+                return Some(bytes);
             }
             miss();
             return None;
@@ -359,21 +340,8 @@ impl DiskCache {
         self.is_enabled(kind) && self.pool(kind).contains(&key.rel_path(kind))
     }
 
-    /// Starts a fill: taken before the bytes to put are read from storage, so an invalidation
-    /// of their object meanwhile rejects them.
-    pub fn begin_fill(&self) -> FillTicket {
-        self.fence.begin()
-    }
-
-    /// Queues `value`, read by the fill `ticket`, to be written under `key`. Returns false when
-    /// it was dropped.
-    pub async fn put(
-        &self,
-        kind: CacheKind,
-        key: &DiskKey,
-        value: Bytes,
-        ticket: &FillTicket,
-    ) -> bool {
+    /// Queues `value` to be written under `key`. Returns false when it was dropped.
+    pub async fn put(&self, kind: CacheKind, key: &DiskKey, value: Bytes) -> bool {
         if !self.is_enabled(kind) {
             return false;
         }
@@ -382,15 +350,7 @@ impl DiskCache {
         if pool.contains(&rel) {
             return false;
         }
-        let ticket = ticket.clone();
-        self.writer
-            .enqueue(WriteJob {
-                pool,
-                rel,
-                value,
-                ticket,
-            })
-            .await
+        self.writer.enqueue(WriteJob { pool, rel, value }).await
     }
 
     /// `put` of an entry of `len` bytes made by `value` once the write queue has room for it:
@@ -401,7 +361,6 @@ impl DiskCache {
         key: &DiskKey,
         len: u64,
         value: impl FnOnce() -> Bytes,
-        ticket: &FillTicket,
     ) -> bool {
         if !self.is_enabled(kind) {
             return false;
@@ -411,52 +370,28 @@ impl DiskCache {
         if pool.contains(&rel) {
             return false;
         }
-        self.writer
-            .enqueue_with(pool, rel, len, ticket.clone(), value)
-            .await
+        self.writer.enqueue_with(pool, rel, len, value).await
+    }
+
+    /// Drops every unit of the object at `path`, in every kind and pool, after it was rewritten
+    /// in place or deleted; their files are deleted. Best effort, as for the memory caches: a
+    /// read of the object in flight meanwhile may still cache what it read before, and a file
+    /// that cannot be deleted stays unindexed. Returns the entries dropped.
+    pub fn evict_object(&self, path: &str) -> usize {
+        let object = DiskKey::object_id(path);
+        self.pools
+            .iter()
+            .map(|pool| {
+                let victims = pool.remove_object(&object);
+                pool.delete(&victims);
+                victims.len()
+            })
+            .sum()
     }
 
     /// Drops `key` from the disk cache.
     pub fn evict(&self, kind: CacheKind, key: &DiskKey) -> bool {
         self.pool(kind).remove(&key.rel_path(kind))
-    }
-
-    /// The generation of the object at `path`: one past the last point it was invalidated at,
-    /// as kept by the pool of `kind` while fills started before may run; 0 if none kept. The
-    /// first point is 0, so the generation of an object invalidated there is 1, not 0. Reads
-    /// of an object in flight across an invalidation are not shared with reads started after
-    /// it.
-    pub fn invalidation_of(&self, kind: CacheKind, path: &str) -> u64 {
-        self.pool(kind)
-            .invalidated_at(&DiskKey::object_id(path))
-            .map_or(0, |at| at + 1)
-    }
-
-    /// The object at `path` is about to be rewritten in place or deleted: drops every unit of it
-    /// on disk, in every kind and pool, files included, and refuses its units until the
-    /// returned change is dropped, once the object is written or deleted. Then the units of
-    /// fills started before are rejected too, still queued or being written. Its cached bytes
-    /// are so never read again, also after a crash during the change. Fails when a file of the
-    /// object cannot be deleted, as on a volume remounted read-only: it would be read again
-    /// after a restart, so the object must not change.
-    pub fn begin_change(self: &Arc<Self>, path: &str) -> Result<ObjectChange> {
-        let mut change = ObjectChange {
-            cache: self.clone(),
-            object: DiskKey::object_id(path),
-            begun: 0,
-            dropped: 0,
-        };
-        for pool in &self.pools {
-            // Counted first: the pool's change is ended on drop, also when it fails.
-            change.begun += 1;
-            change.dropped += pool.begin_change(&change.object).map_err(|e| {
-                ErrorCode::StorageOther(format!(
-                    "[DiskCache] cannot delete the cached files of {path} before it is \
-                     rewritten or deleted: {e}"
-                ))
-            })?;
-        }
-        Ok(change)
     }
 
     /// Runtime capacity of a pool, in bytes; 0 empties it and stops reads and writes. Files are
@@ -557,33 +492,6 @@ impl DiskCache {
             dropped_queue_full: drops.total(DropReason::QueueFull),
             dropped_rejected: drops.total(DropReason::Rejected),
             dropped_io_error: drops.total(DropReason::IoError),
-        }
-    }
-}
-
-/// An object being rewritten or deleted, from `DiskCache::begin_change` until dropped: when the
-/// change is done, or abandoned by an error or a cancelled caller.
-#[must_use]
-pub struct ObjectChange {
-    cache: Arc<DiskCache>,
-    object: String,
-    /// The pools the change was begun in, in order.
-    begun: usize,
-    dropped: usize,
-}
-
-impl ObjectChange {
-    /// The entries dropped when the change began.
-    pub fn dropped(&self) -> usize {
-        self.dropped
-    }
-}
-
-impl Drop for ObjectChange {
-    fn drop(&mut self) {
-        let (at, oldest_fill) = self.cache.fence.invalidation_point();
-        for pool in self.cache.pools.iter().take(self.begun) {
-            pool.delete(&pool.end_change(&self.object, at, oldest_fill));
         }
     }
 }

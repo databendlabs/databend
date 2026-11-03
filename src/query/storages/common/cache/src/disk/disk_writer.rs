@@ -16,8 +16,8 @@
 //! entry does not fit waits a short while for room, then drops the entry and counts it. Writer
 //! threads reserve room in the entry's pool, delete the victims' files, write the entry under a
 //! temporary name, then publish it; the pool renames the file into place if it accepts the
-//! entry. It may reject it then, when its object was invalidated meanwhile or the pool shrank,
-//! and the temporary file is deleted.
+//! entry. It may reject it then, when the pool shrank or the kind was turned off, and the
+//! temporary file is deleted.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -38,7 +38,6 @@ use crate::CacheKind;
 use crate::disk::disk_file::tmp_path;
 use crate::disk::disk_file::write_tmp;
 use crate::disk::disk_pool::DiskPool;
-use crate::disk::fill_fence::FillTicket;
 
 /// Bytes evicted per pool per pass when the file system is over the watermark.
 const WATERMARK_EVICT_BYTES: u64 = 64 * 1024 * 1024;
@@ -79,9 +78,6 @@ pub struct WriteJob {
     /// Index key and path under the pool root.
     pub rel: String,
     pub value: Bytes,
-    /// Taken before the value was read from storage; held until the entry is published or
-    /// dropped.
-    pub ticket: FillTicket,
 }
 
 /// Why an entry was not written, for `cache_disk_dropped`.
@@ -148,10 +144,9 @@ impl DropCounters {
 struct Shared {
     queued: AtomicU64,
     room: Notify,
-    /// Entries queued or being written, by pool and key, with their bytes and the ticket of the
-    /// fill that read them: a second miss of the same key while the first is pending is not
-    /// queued again, and is served these bytes (see `DiskWriter::pending`). Also the number of
-    /// the job, so that a job superseded by a newer one does not take the newer one off.
+    /// Entries queued or being written, by pool and key, with their bytes: a second miss of the
+    /// same key while the first is pending is not queued again, and is served these bytes (see
+    /// `DiskWriter::pending`).
     pending: Mutex<PendingSet>,
     drops: DropCounters,
     options: WriterOptions,
@@ -162,19 +157,18 @@ struct Shared {
     seq: AtomicU64,
 }
 
-/// Entries queued or being written, by pool index and key: their bytes, the ticket of their
-/// fill and the number of their job.
-type PendingSet = HashMap<(usize, String), (Bytes, FillTicket, u64)>;
+/// Entries queued or being written, by pool index and key, with their bytes.
+type PendingSet = HashMap<(usize, String), Bytes>;
 
 pub struct DiskWriter {
-    tx: crossbeam_channel::Sender<(WriteJob, u64)>,
+    tx: crossbeam_channel::Sender<WriteJob>,
     shared: Arc<Shared>,
 }
 
 impl DiskWriter {
     /// Writers over `pools`, in eviction order under disk pressure, all under `root`.
     pub fn start(pools: Vec<Arc<DiskPool>>, root: PathBuf, options: WriterOptions) -> DiskWriter {
-        let (tx, rx) = crossbeam_channel::unbounded::<(WriteJob, u64)>();
+        let (tx, rx) = crossbeam_channel::unbounded::<WriteJob>();
         let writers = options.writers;
         let shared = Arc::new(Shared {
             queued: AtomicU64::new(0),
@@ -193,10 +187,10 @@ impl DiskWriter {
             let spawned = std::thread::Builder::new()
                 .name(format!("disk-cache-writer-{i}"))
                 .spawn(move || {
-                    while let Ok((job, number)) = rx.recv() {
+                    while let Ok(job) = rx.recv() {
                         // A panic loses the entry, not the thread; `write` keeps the
                         // accounting right on unwind.
-                        if let Err(e) = catch_unwind(|| shared.write(job, number)) {
+                        if let Err(e) = catch_unwind(|| shared.write(job)) {
                             warn!("[DiskCache] writer {i} panicked writing an entry: {e}");
                         }
                     }
@@ -221,15 +215,13 @@ impl DiskWriter {
         self.shared.queued.load(Ordering::Relaxed)
     }
 
-    /// The bytes queued or being written under `rel` of the pool with index `pool`, and the
-    /// ticket of the fill that read them. Held while the bytes are checked against the pool:
-    /// the invalidations of their object since the fill started are kept as long as it is.
-    pub fn pending(&self, pool: usize, rel: &str) -> Option<(Bytes, FillTicket)> {
+    /// The bytes queued or being written under `rel` of the pool with index `pool`.
+    pub fn pending(&self, pool: usize, rel: &str) -> Option<Bytes> {
         self.shared
             .pending
             .lock()
             .get(&(pool, rel.to_string()))
-            .map(|(bytes, ticket, _)| (bytes.clone(), ticket.clone()))
+            .cloned()
     }
 
     /// Entries queued or being written.
@@ -240,15 +232,9 @@ impl DiskWriter {
     /// Queues `job`, waiting up to `queue_wait` for room. Returns false when dropped, or when
     /// the same entry is already queued or being written.
     pub async fn enqueue(&self, job: WriteJob) -> bool {
-        let WriteJob {
-            pool,
-            rel,
-            value,
-            ticket,
-        } = job;
+        let WriteJob { pool, rel, value } = job;
         let len = value.len() as u64;
-        self.enqueue_with(pool, rel, len, ticket, move || value)
-            .await
+        self.enqueue_with(pool, rel, len, move || value).await
     }
 
     /// `enqueue` of an entry of `len` bytes made by `value` once the queue has room for them:
@@ -260,17 +246,10 @@ impl DiskWriter {
         pool: Arc<DiskPool>,
         rel: String,
         len: u64,
-        ticket: FillTicket,
         value: impl FnOnce() -> Bytes,
     ) -> bool {
         let key = (pool.pool().index(), rel);
-        // A fill its object was invalidated since is rejected now, before it waits for room or
-        // makes its bytes, and so does not keep a newer fill of the key out of the queue.
-        if !pool.accepts(&key.1, ticket.started()) {
-            self.shared.drops.add(&key.1, DropReason::Rejected);
-            return false;
-        }
-        if self.shared.blocks(&pool, &key) {
+        if self.shared.pending.lock().contains_key(&key) {
             return false;
         }
         let options = &self.shared.options;
@@ -306,7 +285,7 @@ impl DiskWriter {
             shared: &'a Shared,
             key: &'a (usize, String),
             len: u64,
-            listed: Option<u64>,
+            listed: bool,
             handed_over: bool,
         }
         impl Drop for Held<'_> {
@@ -314,8 +293,8 @@ impl DiskWriter {
                 if self.handed_over {
                     return;
                 }
-                if let Some(number) = self.listed {
-                    self.shared.remove_pending(self.key, number);
+                if self.listed {
+                    self.shared.pending.lock().remove(self.key);
                 }
                 self.shared.queued.fetch_sub(self.len, Ordering::AcqRel);
                 self.shared.room.notify_waiters();
@@ -325,30 +304,28 @@ impl DiskWriter {
             shared: &self.shared,
             key: &key,
             len,
-            listed: None,
+            listed: false,
             handed_over: false,
         };
         let value = value();
         debug_assert_eq!(value.len() as u64, len);
-        let number = self.shared.seq.fetch_add(1, Ordering::Relaxed);
         {
             let mut pending = self.shared.pending.lock();
             // Queued by another caller while this one waited for room, or written already: a
             // writer indexes its entry before it takes the key off the pending set, so under
             // this lock a key not pending is indexed if it was written.
-            if Shared::blocks_in(&pending, &pool, &key) || pool.contains(&key.1) {
+            if pending.contains_key(&key) || pool.contains(&key.1) {
                 return false;
             }
-            pending.insert(key.clone(), (value.clone(), ticket.clone(), number));
-            held.listed = Some(number);
+            pending.insert(key.clone(), value.clone());
+            held.listed = true;
         }
         let job = WriteJob {
             pool,
             rel: key.1.clone(),
             value,
-            ticket,
         };
-        if let Err(e) = self.tx.send((job, number)) {
+        if let Err(e) = self.tx.send(job) {
             // No writer left: the guard gives the room back and takes the key off.
             warn!("[DiskCache] writer threads are gone: {e}");
             return false;
@@ -360,58 +337,33 @@ impl DiskWriter {
 }
 
 impl Shared {
-    /// Whether an entry pending under `key` keeps another fill of it out of the queue: one
-    /// whose object was invalidated since its fill started does not, as it will be rejected.
-    fn blocks(&self, pool: &DiskPool, key: &(usize, String)) -> bool {
-        Self::blocks_in(&self.pending.lock(), pool, key)
-    }
-
-    fn blocks_in(pending: &PendingSet, pool: &DiskPool, key: &(usize, String)) -> bool {
-        pending
-            .get(key)
-            .is_some_and(|(_, ticket, _)| pool.accepts(&key.1, ticket.started()))
-    }
-
-    /// Takes job `number` off the pending set, unless a newer job of its key superseded it.
-    fn remove_pending(&self, key: &(usize, String), number: u64) {
-        let mut pending = self.pending.lock();
-        if pending.get(key).is_some_and(|(_, _, n)| *n == number) {
-            pending.remove(key);
-        }
-    }
-
-    fn done(&self, pending_key: &(usize, String), number: u64, len: u64) {
+    fn done(&self, pending_key: &(usize, String), len: u64) {
         self.queued.fetch_sub(len, Ordering::AcqRel);
-        self.remove_pending(pending_key, number);
+        self.pending.lock().remove(pending_key);
         self.room.notify_waiters();
     }
 
-    fn write(&self, job: WriteJob, number: u64) {
+    fn write(&self, job: WriteJob) {
         // Takes the entry off the queue when done, also on a panic.
         struct Queued<'a> {
             shared: &'a Shared,
             key: (usize, String),
-            number: u64,
             len: u64,
         }
         impl Drop for Queued<'_> {
             fn drop(&mut self) {
-                self.shared.done(&self.key, self.number, self.len);
+                self.shared.done(&self.key, self.len);
             }
         }
         let len = job.value.len() as u64;
         let _queued = Queued {
             shared: self,
             key: (job.pool.pool().index(), job.rel.clone()),
-            number,
             len,
         };
-        // A fill its object was invalidated since, while it waited in the queue, is rejected
-        // before it evicts anything to make room, under disk pressure or in its pool. `publish`
-        // checks again, for an invalidation from here on.
-        // Nor is one too large for its pool ever to be kept: it would evict entries under disk
-        // pressure, then be refused by `reserve`.
-        if !job.pool.accepts(&job.rel, job.ticket.started()) || !job.pool.admits(len) {
+        // An entry too large for its pool ever to be kept is refused before it evicts entries
+        // under disk pressure, which `reserve` would refuse after.
+        if !job.pool.admits(len) {
             self.drops.add(&job.rel, DropReason::Rejected);
             return;
         }
@@ -447,10 +399,7 @@ impl Shared {
                 write_tmp(&tmp, &job.value, self.options.sync_data).and_then(|written| {
                     held.published = true;
                     let commit = || std::fs::rename(&tmp, &path);
-                    let started = job.ticket.started();
-                    Ok(job
-                        .pool
-                        .publish(job.rel.clone(), bytes, written, started, commit)?)
+                    Ok(job.pool.publish(job.rel.clone(), bytes, written, commit)?)
                 });
             match published {
                 Ok(published) => {
