@@ -496,3 +496,62 @@ fn test_select_like_with_column_escape_is_not_compiled() {
         }
     }
 }
+
+/// `ns = 'ok' AND parse_json(v) = ..` with a nullable `ns` gets `CAST(.. AS Boolean NULL)`
+/// around the JSON comparison. The selector looks through that cast but must not reorder the
+/// conjuncts across blocks: `parse_json` would then run on the rows `ns = 'ok'` rejected and
+/// raise their errors.
+#[test]
+fn test_select_nullable_boolean_cast_keeps_conjunct_order() {
+    let num_rows = 6;
+    let block = DataBlock::new_from_columns(vec![
+        StringType::from_opt_data(vec![
+            Some("ok"),
+            Some("no"),
+            Some("ok"),
+            None,
+            Some("ok"),
+            Some("no"),
+        ]),
+        StringType::from_data(vec!["{}", "invalid", "[]", "invalid", "{}", "invalid"]),
+        Int32Type::from_data((0..num_rows as i32).collect()),
+    ]);
+    let columns = [
+        ("ns", DataType::Nullable(Box::new(DataType::String))),
+        ("v", DataType::String),
+        ("k", DataType::Number(NumberDataType::Int32)),
+    ];
+    let func_ctx = FunctionContext::default();
+    let text = "ns = 'ok' AND parse_json(v) = parse_json('{}')";
+    let expr = type_check::check(
+        &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+    let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+        .0
+        .into_owned();
+    assert!(
+        expr.sql_display().contains("CAST"),
+        "{}",
+        expr.sql_display()
+    );
+
+    let mut executor = FilterExecutor::new(
+        expr,
+        func_ctx.clone(),
+        num_rows,
+        None,
+        &BUILTIN_FUNCTIONS,
+        true,
+    );
+    // Adaptive reordering would swap two reorderable conjuncts after the first block.
+    for _ in 0..16 {
+        let actual = executor.filter(block.clone()).unwrap();
+        assert_eq!(
+            actual.get_by_offset(2).to_column(),
+            Int32Type::from_data(vec![0, 4]),
+            "{text}"
+        );
+    }
+}
