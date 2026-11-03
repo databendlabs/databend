@@ -82,16 +82,16 @@ impl UserApiProvider {
         }
     }
 
-    // Drop a stage by name.
+    /// Drop a stage by name, returning whether a stage was dropped.
     #[async_backtrace::framed]
-    pub async fn drop_stage(&self, tenant: &Tenant, name: &str, if_exists: bool) -> Result<()> {
+    pub async fn drop_stage(&self, tenant: &Tenant, name: &str, if_exists: bool) -> Result<bool> {
         let stage_api_provider = self.stage_api(tenant);
         let drop_stage = stage_api_provider.drop_stage(name);
         match drop_stage.await {
-            Ok(res) => Ok(res),
+            Ok(()) => Ok(true),
             Err(e) => {
                 if if_exists && e.code() == ErrorCode::UNKNOWN_STAGE {
-                    Ok(())
+                    Ok(false)
                 } else {
                     Err(e.add_message_back(" (while drop stage)"))
                 }

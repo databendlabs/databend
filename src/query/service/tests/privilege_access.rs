@@ -234,6 +234,44 @@ async fn test_connection_and_sequence_access_is_always_checked() -> anyhow::Resu
     Ok(())
 }
 
+/// A DROP ... IF EXISTS that drops nothing must not revoke ownership: an object of the
+/// same name created concurrently would lose its owner. The ownership record of a
+/// missing object stands in for such a concurrent creation.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_drop_if_exists_keeps_ownership_when_nothing_is_dropped() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let tenant = fixture.default_tenant();
+    let api = UserApiProvider::instance();
+    let name = "drop_if_exists_absent".to_string();
+    for (object, sql) in [
+        (
+            OwnershipObject::Stage { name: name.clone() },
+            "DROP STAGE IF EXISTS drop_if_exists_absent",
+        ),
+        (
+            OwnershipObject::UDF { name: name.clone() },
+            "DROP FUNCTION IF EXISTS drop_if_exists_absent",
+        ),
+        (
+            OwnershipObject::Connection { name: name.clone() },
+            "DROP CONNECTION IF EXISTS drop_if_exists_absent",
+        ),
+        (
+            OwnershipObject::Sequence { name: name.clone() },
+            "DROP SEQUENCE IF EXISTS drop_if_exists_absent",
+        ),
+    ] {
+        api.grant_ownership_to_role(&tenant, &object, BUILTIN_ROLE_ACCOUNT_ADMIN)
+            .await?;
+        fixture.execute_command(sql).await?;
+        assert!(
+            api.get_ownership(&tenant, &object).await?.is_some(),
+            "{sql}"
+        );
+    }
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sequence_visibility_checker_is_cached_per_query() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;

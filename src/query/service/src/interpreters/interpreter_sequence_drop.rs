@@ -67,14 +67,17 @@ impl Interpreter for DropSequenceInterpreter {
                 )));
             }
 
-            // Revoke ownership after the drop succeeds: a failed drop keeps its owner.
-            let tenant = self.plan.ident.tenant();
-            let name = self.plan.ident.name().to_string();
-            let role_api = UserApiProvider::instance().role_api(tenant);
-            role_api
-                .revoke_ownership(&OwnershipObject::Sequence { name })
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(tenant);
+            // Revoke ownership only if this statement dropped the sequence: a failed drop
+            // keeps its owner, and an object created concurrently under the name keeps its own.
+            if reply.success {
+                let tenant = self.plan.ident.tenant();
+                let name = self.plan.ident.name().to_string();
+                let role_api = UserApiProvider::instance().role_api(tenant);
+                role_api
+                    .revoke_ownership(&OwnershipObject::Sequence { name })
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(tenant);
+            }
 
             Ok(PipelineBuildResult::create())
         })

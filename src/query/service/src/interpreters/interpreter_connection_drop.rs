@@ -63,17 +63,21 @@ impl Interpreter for DropConnectionInterpreter {
             let user_mgr = UserApiProvider::instance();
 
             // 1. Drop the connection first
-            user_mgr
+            let dropped = user_mgr
                 .drop_connection(&tenant, &plan.name, plan.if_exists)
                 .await?;
 
-            // 2. Revoke ownership (after drop succeeds to prevent permission leak)
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            let owner_object = OwnershipObject::Connection {
-                name: self.plan.name.clone(),
-            };
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+            // 2. Revoke ownership only if this statement dropped the connection: a failed
+            // drop keeps its owner, and an object created concurrently under the name keeps
+            // its own.
+            if dropped {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                let owner_object = OwnershipObject::Connection {
+                    name: self.plan.name.clone(),
+                };
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
 
             // 3. Clean up tag references (must be after drop for concurrency safety)
             let taggable_object = TaggableObject::Connection {

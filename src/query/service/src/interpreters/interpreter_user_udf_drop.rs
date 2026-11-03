@@ -63,18 +63,21 @@ impl Interpreter for DropUserUDFScript {
 
             // TODO: if it is appropriate to return an ErrorCode that contains either meta-service error and UdfNotFound error?
 
-            UserApiProvider::instance()
+            let dropped = UserApiProvider::instance()
                 .drop_udf(&tenant, plan.udf.as_str(), plan.if_exists)
                 .await??;
 
-            // Revoke ownership after the drop succeeds: a failed drop keeps its owner.
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .revoke_ownership(&OwnershipObject::UDF {
-                    name: plan.udf.clone(),
-                })
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+            // Revoke ownership only if this statement dropped the UDF: a failed drop keeps
+            // its owner, and an object created concurrently under the name keeps its own.
+            if dropped {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .revoke_ownership(&OwnershipObject::UDF {
+                        name: plan.udf.clone(),
+                    })
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
 
             cleanup_object_tags(&tenant, TaggableObject::UDF {
                 name: plan.udf.clone(),

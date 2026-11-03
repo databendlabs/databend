@@ -115,14 +115,14 @@ impl UserApiProvider {
         Ok(udfs)
     }
 
-    // Drop a UDF by name.
+    /// Drop a UDF by name, returning whether a UDF was dropped.
     #[async_backtrace::framed]
     pub async fn drop_udf(
         &self,
         tenant: &Tenant,
         udf_name: &str,
         allow_no_change: bool,
-    ) -> std::result::Result<std::result::Result<(), UdfError>, UdfApiError> {
+    ) -> std::result::Result<std::result::Result<bool, UdfError>, UdfApiError> {
         if self.get_configured_udf(udf_name).is_some() {
             return Ok(Err(UdfError::Exists {
                 tenant: tenant.tenant_name().to_string(),
@@ -138,7 +138,7 @@ impl UserApiProvider {
 
         let drop_result = if dropped.is_none() {
             if allow_no_change {
-                Ok(())
+                Ok(false)
             } else {
                 Err(UdfError::NotFound {
                     tenant: tenant.tenant_name().to_string(),
@@ -147,7 +147,7 @@ impl UserApiProvider {
                 })
             }
         } else {
-            Ok(())
+            Ok(true)
         };
 
         Ok(drop_result)

@@ -68,22 +68,22 @@ impl UserApiProvider {
         }
     }
 
-    // Drop a connection by name.
+    /// Drop a connection by name, returning whether a connection was dropped.
     #[async_backtrace::framed]
     pub async fn drop_connection(
         &self,
         tenant: &Tenant,
         name: &str,
         if_exists: bool,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let connection_api_provider = self.connection_api(tenant);
         let drop_connection = connection_api_provider.remove(name, MatchSeq::GE(1));
         match drop_connection.await {
-            Ok(res) => Ok(res),
+            Ok(()) => Ok(true),
             Err(e) => {
                 let e = ErrorCode::from(e);
                 if if_exists && e.code() == ErrorCode::UNKNOWN_CONNECTION {
-                    Ok(())
+                    Ok(false)
                 } else {
                     Err(e.add_message_back(" (while drop connection)"))
                 }
