@@ -169,6 +169,7 @@ impl UnionAll {
         Ok(Arc::new(StatInfo {
             cardinality,
             max_cardinality,
+            statistics_zero_bound: false,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,

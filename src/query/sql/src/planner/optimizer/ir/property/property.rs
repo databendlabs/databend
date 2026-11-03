@@ -70,6 +70,15 @@ pub struct StatInfo {
     /// decisions. Operators that bound or selectively reduce their output
     /// reset it to their own estimate.
     pub max_cardinality: f64,
+    /// Whether `max_cardinality` exceeds `cardinality` only because a range
+    /// comparison that column statistics estimate to match no rows is bounded
+    /// as an unknown filter (`Selectivity::StatisticsZero`). Scan and Filter
+    /// set it, operators that return their input rows (such as EvalScalar,
+    /// Exchange, Sort or Window without a limit, and CTE references) pass it
+    /// on, and every other operator clears it. The broadcast guard then
+    /// applies its row limit to `cardinality` and leaves the bound to the
+    /// underestimation check.
+    pub statistics_zero_bound: bool,
     pub statistics: Statistics,
 }
 

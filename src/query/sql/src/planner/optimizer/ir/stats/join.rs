@@ -442,6 +442,7 @@ impl JoinStatsEstimator {
             return Ok(Arc::new(StatInfo {
                 cardinality: 0.0,
                 max_cardinality: 0.0,
+                statistics_zero_bound: false,
                 statistics: Statistics {
                     precise_cardinality: Some(0),
                     column_stats: HashMap::new(),
@@ -466,6 +467,7 @@ impl JoinStatsEstimator {
         Ok(Arc::new(StatInfo {
             cardinality: output_rows,
             max_cardinality: self.max_output_cardinality(output_rows),
+            statistics_zero_bound: false,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
