@@ -939,6 +939,7 @@ mod tests {
             NarrowBuffer::pack(keys.into_iter(), 2),
             StringType::from_data(vec!["other", "match", "unused"]),
         ))));
+        let int_type = DataType::Number(NumberDataType::Int32);
         let func_ctx = FunctionContext::default();
 
         for nullable in [false, true] {
@@ -967,8 +968,15 @@ mod tests {
 
             for (raw_expr, single_comparison) in [
                 (eq.clone(), true),
-                // Both OR children have the column's nullability, so the type checker adds no
-                // cast and the predicate stays on the selector path.
+                // With the nullable column the type checker wraps `id > 5` in
+                // `CAST(.. AS Boolean NULL)`; the selector looks through it.
+                (
+                    call("or", vec![
+                        eq.clone(),
+                        call("gt", vec![column(1, int_type.clone()), int_constant(5)]),
+                    ]),
+                    false,
+                ),
                 (
                     call("or", vec![
                         eq.clone(),
@@ -1207,6 +1215,53 @@ mod tests {
                     ]),
                 ]),
                 true,
+            ),
+            // OR over a nullable and a non-nullable comparison: the type checker wraps the
+            // non-nullable side in `CAST(.. AS Boolean NULL)`, which the builder looks through.
+            (
+                call("or", vec![
+                    call("eq", vec![
+                        column(2, nullable_string_type.clone()),
+                        string_constant("v"),
+                    ]),
+                    call("gt", vec![column(1, int_type.clone()), int_constant(1)]),
+                ]),
+                true,
+            ),
+            // `'match' = ns OR id < 2` in `09_0064`.
+            (
+                call("or", vec![
+                    call("eq", vec![
+                        string_constant("v"),
+                        column(2, nullable_string_type.clone()),
+                    ]),
+                    call("lt", vec![column(1, int_type.clone()), int_constant(2)]),
+                ]),
+                true,
+            ),
+            // The same OR nested under a top-level conjunct, and negated.
+            (
+                call("and_filters", vec![
+                    eq.clone(),
+                    call("not", vec![call("or", vec![
+                        call("eq", vec![
+                            column(2, nullable_string_type.clone()),
+                            string_constant("a"),
+                        ]),
+                        call("lt", vec![column(1, int_type.clone()), int_constant(5)]),
+                    ])]),
+                ]),
+                true,
+            ),
+            // A cast to another type is still an `Others` leaf.
+            (
+                call("and", vec![eq.clone(), RawExpr::Cast {
+                    span: None,
+                    is_try: false,
+                    expr: Box::new(column(1, int_type.clone())),
+                    dest_type: DataType::Boolean,
+                }]),
+                false,
             ),
             // An `Others` leaf.
             (

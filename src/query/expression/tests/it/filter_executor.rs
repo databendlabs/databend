@@ -311,3 +311,86 @@ fn test_contains_string_column_eq_constant() {
         );
     }
 }
+
+/// `and` / `or` over a nullable and a non-nullable predicate wrap the non-nullable one in
+/// `CAST(.. AS Boolean NULL)`. The selector looks through that cast, also under NOT, and must
+/// select the same rows as the evaluator, including rows where the nullable column is NULL.
+#[test]
+fn test_select_mixed_nullability_and_or_not() {
+    let num_rows = 8;
+    let block = DataBlock::new_from_columns(vec![
+        StringType::from_opt_data(vec![
+            Some("a"),
+            None,
+            Some("b"),
+            Some("a"),
+            None,
+            Some("b"),
+            Some("a"),
+            None,
+        ]),
+        StringType::from_data(vec!["x", "x", "y", "y", "x", "y", "x", "y"]),
+        Int32Type::from_data((0..num_rows as i32).collect()),
+    ]);
+    let columns = [
+        ("ns", DataType::Nullable(Box::new(DataType::String))),
+        ("s", DataType::String),
+        ("k", DataType::Number(NumberDataType::Int32)),
+    ];
+    let func_ctx = FunctionContext::default();
+
+    for text in [
+        "ns = 'a' OR k < 5",
+        "'a' = ns OR k < 2",
+        "s = 'x' AND (ns = 'a' OR k < 5)",
+        "(ns = 'b' AND k > 1) OR s = 'x'",
+        "NOT (ns = 'a' OR k < 5)",
+        "NOT (ns = 'a' AND k > 2)",
+        "NOT (ns = 'a') OR k > 5",
+        "s = 'y' AND NOT (ns <> 'b' OR k = 2)",
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let (select_expr, _): (SelectExpr, bool) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+            .build(&expr)
+            .into();
+        let debug = format!("{select_expr:?}");
+        assert!(!debug.contains("Others"), "{text}: {debug}");
+
+        let truth = type_check::check(
+            &parse_raw_expr(&format!("is_true({text})"), &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expected = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+            .run(&truth)
+            .unwrap()
+            .try_downcast::<BooleanType>()
+            .unwrap();
+        let expected = block.clone().filter_boolean_value(&expected).unwrap();
+
+        let mut executor = FilterExecutor::new(
+            expr,
+            func_ctx.clone(),
+            num_rows,
+            None,
+            &BUILTIN_FUNCTIONS,
+            true,
+        );
+        for _ in 0..8 {
+            let actual = executor.filter(block.clone()).unwrap();
+            assert_eq!(actual.num_rows(), expected.num_rows(), "{text}");
+            assert_eq!(
+                actual.get_by_offset(2).value(),
+                expected.get_by_offset(2).value(),
+                "{text}"
+            );
+        }
+    }
+}

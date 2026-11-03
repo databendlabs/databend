@@ -14,7 +14,9 @@ USE db_09_0064
 # selector buffers are grown and the whole block is evaluated once, so
 # `max_block_size = 3` here exercises that growth. The selected rows must match
 # the evaluator path (`enable_selector_executor = 0`) for AND/OR predicates,
-# nullable columns and block-sensitive functions. `payload` is not referenced
+# including OR over a nullable and a non-nullable column, and LIKE. Predicates
+# with function calls (here `running_difference`) or LIKE over a constant column
+# keep the evaluator path and are checked as well. `payload` is not referenced
 # by the filters, so they run as prewhere.
 # ---------------------------------------------------------------------------
 
@@ -64,6 +66,12 @@ SELECT count(payload) FROM t WHERE s = 'nothing'
 ----
 0
 
+# OR over a nullable and a non-nullable column, nested under a conjunct.
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' AND (ns = 'other' OR id < 4)
+----
+p0,p3,p9
+
 # LIKE over a regular column on the selector path.
 query T
 SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' AND ns LIKE 'ma%'
@@ -81,6 +89,11 @@ SELECT count(payload) FROM t WHERE s = 'match' AND running_difference(id) > 0
 
 statement ok
 SET enable_selector_executor = 0
+
+query T
+SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' AND (ns = 'other' OR id < 4)
+----
+p0,p3,p9
 
 query T
 SELECT string_agg(payload, ',' ORDER BY id) FROM t WHERE s = 'match' AND ns LIKE 'ma%'
