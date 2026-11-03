@@ -91,11 +91,11 @@ fn test_top_n_bound_keeps_input_bound_up_to_row_limit() -> Result<()> {
         assert_stats(&stats, 10.0, 20.0, None);
     }
 
-    // A bound below the estimate does not lower the TopN bound below its
-    // estimate.
+    // A bound below the estimate falls back to the estimate, capped at the
+    // limit.
     for stage in FINAL_STAGES {
         let stats = derive(stage, 20, 30, Input(45.0, 0.0, None))?;
-        assert_stats(&stats, 15.0, 15.0, None);
+        assert_stats(&stats, 15.0, 20.0, None);
     }
 
     // A saturated candidate capacity keeps the input bound.
@@ -115,11 +115,12 @@ fn test_top_n_bound_separates_proven_empty_from_estimated_empty() -> Result<()> 
         assert_stats(&stats, 0.0, 20.0, None);
     }
 
-    // An input bound within the offset gives a final bound of 0, but it is
-    // still an estimate.
+    // The input bound of 25 rows is not exact, so the offset is not
+    // subtracted from it: a larger input can still fill all 20 rows. The
+    // estimate skips the offset and drops to 0 without proving emptiness.
     for stage in FINAL_STAGES {
         let stats = derive(stage, 20, 30, Input(10.0, 25.0, None))?;
-        assert_stats(&stats, 0.0, 0.0, None);
+        assert_stats(&stats, 0.0, 20.0, None);
     }
 
     // A proven-empty input stays proven empty in every stage.
