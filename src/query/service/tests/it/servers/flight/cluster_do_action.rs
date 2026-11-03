@@ -277,3 +277,50 @@ async fn test_concurrent_do_action_waits_for_started_requests_after_error() -> a
     drop(hung_listener);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_concurrent_do_action_bounds_connect_to_blackholed_node() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let config = GlobalConfig::instance();
+
+    // A listener with backlog 0 whose only queue slot is taken by a held connection:
+    // Linux drops further SYNs, so without a bound the connect would wait for the kernel
+    // connect timeout.
+    let socket = tokio::net::TcpSocket::new_v4()?;
+    socket.bind("127.0.0.1:0".parse()?)?;
+    let full_listener = socket.listen(0)?;
+    let full_address = full_listener.local_addr()?;
+    let _held = std::net::TcpStream::connect(full_address)?;
+
+    let (dead, blackholed) = (node_id("dead"), node_id("blackholed"));
+    let nodes = vec![
+        node(&dead, &unreachable_address()),
+        node(&blackholed, &full_address.to_string()),
+    ];
+    let cluster = Cluster::create(nodes, config.query.node_id.clone());
+
+    for reuse in [false, true] {
+        let params = FlightParams {
+            timeout: 2,
+            ..flight_params(true, reuse)
+        };
+        let started = std::time::Instant::now();
+        let result: Result<HashMap<String, ()>> = cluster
+            .do_action(FINISH_QUERY, finish_packets(&[&dead, &blackholed]), params)
+            .await;
+        let elapsed = started.elapsed();
+
+        let error = result.expect_err("an unreachable node must fail the whole action");
+        assert_eq!(
+            error.code(),
+            ErrorCode::CANNOT_CONNECT_NODE,
+            "reuse = {reuse}, got {error}"
+        );
+        assert!(
+            elapsed < std::time::Duration::from_secs(10),
+            "reuse = {reuse}, waited {elapsed:?} for the connect to a blackholed node"
+        );
+    }
+
+    Ok(())
+}
