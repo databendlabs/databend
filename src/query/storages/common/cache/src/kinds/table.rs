@@ -21,7 +21,6 @@ use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_storages_common_table_meta::meta::SnapshotSegmentLayout;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
@@ -69,9 +68,8 @@ impl CacheDef for PruneResult {
 
 impl CachedItem for TableSnapshot {
     fn mem_bytes(&self) -> usize {
-        // Layouts grow after admission, so reserve their fixed upper bound up front.
         size_of::<Self>()
-            + SnapshotSegmentLayout::MAX_HEAP_BYTES
+            + self.segment_layout.heap_bytes()
             + table_schema(&self.schema)
             + statistics(&self.summary)
             + vec(&self.segments, location)

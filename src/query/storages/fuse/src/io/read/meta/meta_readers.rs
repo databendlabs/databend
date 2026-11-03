@@ -73,7 +73,11 @@ impl Reader for SnapshotReader {
     async fn read(&self, (location, ver): &SnapshotKey) -> Result<Arc<TableSnapshot>> {
         let version = SnapshotVersion::try_from(*ver)?;
         let buffer = bytes_reader(&self.operator, location, None).await?;
-        Ok(Arc::new(version.read(buffer.reader())?))
+        let snapshot = version.read(buffer.reader())?;
+        snapshot
+            .segment_layout
+            .prepare(snapshot.cluster_key_meta.is_some());
+        Ok(Arc::new(snapshot))
     }
 }
 

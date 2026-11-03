@@ -187,7 +187,7 @@ pub(crate) fn index_meta(columns: u32) -> IndexMeta {
 
 #[test]
 fn test_table_snapshot() {
-    for columns in [1, 500] {
+    for (columns, prepare_layout) in [(1, false), (1, true), (500, false), (500, true)] {
         assert_accurate("table_snapshot", || {
             let segments = (0..1000)
                 .map(|i| {
@@ -197,7 +197,7 @@ fn test_table_snapshot() {
                     )
                 })
                 .collect();
-            TableSnapshot::try_new(
+            let snapshot = TableSnapshot::try_new(
                 None,
                 None,
                 schema(columns),
@@ -207,7 +207,9 @@ fn test_table_snapshot() {
                 None,
                 TableMetaTimestamps::new(None, chrono::Duration::hours(1)),
             )
-            .unwrap()
+            .unwrap();
+            snapshot.segment_layout.prepare(prepare_layout);
+            snapshot
         });
     }
 }

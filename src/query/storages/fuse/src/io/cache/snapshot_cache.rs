@@ -60,6 +60,9 @@ impl SnapshotCache {
     }
 
     pub fn put(&self, location: &str, snapshot: Arc<TableSnapshot>) {
+        snapshot
+            .segment_layout
+            .prepare(snapshot.cluster_key_meta.is_some());
         self.snapshots.put(location, snapshot);
     }
 
