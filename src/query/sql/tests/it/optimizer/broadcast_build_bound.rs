@@ -274,6 +274,18 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             operator: RelOp::Join,
         },
         StatsCase {
+            name: "observed_ndv_after_one_to_one_join",
+            description: "A join on keys that are unique on both sides keeps the observed NDV of its output keys.",
+            sql: "SELECT * FROM (SELECT x.k FROM s AS x JOIN s AS y ON x.k = y.k) AS j JOIN d ON j.k = d.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
+            name: "observed_ndv_dropped_after_fan_out_join",
+            description: "A join that may repeat the rows of `s` drops its observed NDV, so the key does not bound the next join.",
+            sql: "SELECT * FROM (SELECT s.k FROM s JOIN u ON s.k = u.k) AS j JOIN d ON j.k = d.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
             name: "inner_join_unique_key_with_fallback_ndv",
             description: "An NDV filled from the row count caps only the expected output.",
             sql: "SELECT * FROM d JOIN f ON d.k = f.k",
