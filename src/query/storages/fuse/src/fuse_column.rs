@@ -49,18 +49,22 @@ impl FuseTableColumnStatisticsProvider {
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                // `get_useful_stat` fills a missing NDV from the row count and
-                // marks it as inferred.
-                let ndv = distinct_map
-                    .and_then(|map| map.get(&column_id).cloned())
-                    .or(stat.distinct_of_values);
+                // Only the table-level HLL counts each value once. The summary
+                // NDV sums per-block NDVs, so values in several blocks are
+                // counted more than once. `get_useful_stat` fills a missing NDV
+                // from the row count and marks it as inferred.
+                let (ndv, ndv_is_inferred) =
+                    match distinct_map.and_then(|map| map.get(&column_id).copied()) {
+                        Some(ndv) => (Some(ndv), false),
+                        None => (stat.distinct_of_values, stat.distinct_of_values.is_some()),
+                    };
                 let stat = BasicColumnStatistics {
                     min: stat.min.to_datum(),
                     max: stat.max.to_datum(),
                     ndv,
                     null_count: stat.null_count,
                     in_memory_size: stat.in_memory_size,
-                    ndv_is_inferred: false,
+                    ndv_is_inferred,
                 };
                 (column_id, stat.get_useful_stat(row_count, stats_row_count))
             })
@@ -128,13 +132,19 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_ndv_is_marked_as_inferred() {
+    fn test_ndv_without_table_hll_is_marked_as_inferred() {
+        // Column 2 has a table-level HLL NDV. Column 1 only has the summary NDV,
+        // which sums per-block NDVs, and column 0 has no NDV at all.
         let provider = FuseTableColumnStatisticsProvider::new(
-            HashMap::from([(0, int_column_stat(None)), (1, int_column_stat(Some(500)))]),
+            HashMap::from([
+                (0, int_column_stat(None)),
+                (1, int_column_stat(Some(1_000))),
+                (2, int_column_stat(Some(1_000))),
+            ]),
             HashMap::new(),
             Default::default(),
             Default::default(),
-            None,
+            Some(HashMap::from([(2, 500)])),
             1_000,
             1_000,
         );
@@ -144,7 +154,11 @@ mod tests {
         assert_eq!(missing.ndv, Some(1_000));
         assert!(missing.ndv_is_inferred);
 
-        let collected = provider.column_statistics(1).unwrap();
+        let summed = provider.column_statistics(1).unwrap();
+        assert_eq!(summed.ndv, Some(1_000));
+        assert!(summed.ndv_is_inferred);
+
+        let collected = provider.column_statistics(2).unwrap();
         assert_eq!(collected.ndv, Some(500));
         assert!(!collected.ndv_is_inferred);
     }
