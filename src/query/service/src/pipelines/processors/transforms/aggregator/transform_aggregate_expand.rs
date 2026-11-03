@@ -42,21 +42,15 @@ impl AccumulatingTransform for TransformExpandGroupingSets {
         let num_rows = data.num_rows();
         let num_group_bys = self.group_bys.len();
         let mut output_blocks = Vec::with_capacity(self.grouping_ids.len());
-        let dup_group_by_cols = self
-            .group_bys
-            .iter()
-            .map(|i| data.get_by_offset(*i).clone())
-            .collect::<Vec<_>>();
+        let mut entries = data.columns().to_vec();
 
-        let mut entries = data
-            .columns()
-            .iter()
-            .cloned()
-            .chain(dup_group_by_cols.clone())
-            .collect::<Vec<_>>();
-
-        // all group columns should be nullable
+        // Keys that some grouping set nulls out must be nullable. Keys present
+        // in every set, such as correlated columns, keep their input type.
+        let nulled_keys = self.grouping_ids.iter().fold(0, |bits, id| bits | id);
         for i in 0..num_group_bys {
+            if nulled_keys & (1 << i) == 0 {
+                continue;
+            }
             let entry = unsafe {
                 let offset = self.group_bys.get_unchecked(i);
                 entries.get_unchecked_mut(*offset)

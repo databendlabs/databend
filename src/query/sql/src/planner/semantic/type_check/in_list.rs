@@ -35,6 +35,7 @@ use super::TypeChecker;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::Visibility;
+use crate::binder::ExprContext;
 use crate::binder::wrap_cast;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
@@ -78,7 +79,12 @@ where A: super::TypeCheckAdapter
         not: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let inlist_to_join_threshold = self.adapter.inlist_to_join_threshold()?;
-        if list.len() >= inlist_to_join_threshold {
+        // A lambda body is evaluated per element and cannot host a subquery.
+        let in_lambda = matches!(
+            self.bind_context.expr_context,
+            ExprContext::InLambdaFunction
+        );
+        if list.len() >= inlist_to_join_threshold && !in_lambda {
             let deref!((expr_scalar, expr_ty)) = self.resolve_core(arena, expr)?;
             let deref!((subquery, data_type)) =
                 self.resolve_in_list_as_subquery(arena, span, expr_scalar, expr_ty, list)?;

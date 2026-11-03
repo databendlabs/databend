@@ -505,7 +505,13 @@ impl<'a> WindowRewriter<'a> {
             // For window expr works with group by expr alias, we need to replace the expr with the alias index
             // eg: select number %3 a, number %4 b ,  row_number() over(partition by b % 2) from range(1, 10) t(number)  group by a,b;
             let mut arg = arg.clone();
-            for group_expr in self.bind_context.aggregate_info.group_items() {
+            // GROUPING SETS keys are bound to their outputs during binding.
+            let agg_info = &self.bind_context.aggregate_info;
+            let group_items = match agg_info.grouping_sets() {
+                Some(_) => &[],
+                None => agg_info.group_items(),
+            };
+            for group_expr in group_items {
                 if !group_expr.scalar.is_column_ref() {
                     let column = ColumnBindingBuilder::new(
                         "group_item".to_string(),

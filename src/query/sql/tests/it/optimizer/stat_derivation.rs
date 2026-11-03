@@ -280,6 +280,24 @@ async fn test_sort_and_window_statistics_golden() -> Result<()> {
             sql: "SELECT ROW_NUMBER() OVER (PARTITION BY p ORDER BY k), NTILE(4) OVER (PARTITION BY p ORDER BY k), LAG(k) OVER (PARTITION BY p ORDER BY k) FROM t",
             operator: RelOp::WindowGroup,
         },
+        StatsCase {
+            name: "rollup_group_key_statistics",
+            description: "A ROLLUP key keeps its input statistics through the nullable grouping symbol.",
+            sql: "SELECT p, count(*) FROM t GROUP BY ROLLUP(p)",
+            operator: RelOp::Aggregate,
+        },
+        StatsCase {
+            name: "cube_group_key_statistics",
+            description: "CUBE keys keep their input statistics through the nullable grouping symbols.",
+            sql: "SELECT k, p, count(*) FROM t GROUP BY CUBE(k, p)",
+            operator: RelOp::Aggregate,
+        },
+        StatsCase {
+            name: "rollup_having_key_is_null_statistics",
+            description: "A predicate over a ROLLUP output must account for the NULLs added by summary rows.",
+            sql: "SELECT p, count(*) FROM t GROUP BY ROLLUP(p) HAVING p IS NULL",
+            operator: RelOp::Filter,
+        },
     ];
 
     for case in &cases {

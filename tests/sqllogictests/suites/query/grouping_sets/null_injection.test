@@ -1,0 +1,220 @@
+# Values of GROUPING SETS queries: keys absent from a set are NULL in its rows,
+# expressions over them see those NULLs, and aggregates read the input. Run
+# with native expansion and both UNION rewrites.
+# run-with-settings: grouping_sets_to_union=1
+# run-with-settings: grouping_sets_to_union=1,enable_cascading_grouping_sets=1
+
+statement ok
+CREATE OR REPLACE DATABASE grouping_sets_null_injection
+
+statement ok
+USE grouping_sets_null_injection
+
+statement ok
+CREATE TABLE t(a INT NOT NULL)
+
+statement ok
+INSERT INTO t VALUES (1), (2)
+
+statement ok
+CREATE TABLE v(b INT NULL, s STRING NOT NULL, arr ARRAY(INT) NOT NULL)
+
+statement ok
+INSERT INTO v VALUES (NULL, 'x', [1]), (20, 'y', [2, 3])
+
+## Kinds of grouping sets
+
+query II rowsort
+SELECT a, coalesce(a, 100) FROM t GROUP BY CUBE(a)
+----
+1 1
+2 2
+NULL 100
+
+# AVG makes the UNION rewrite fall back from the hierarchical form.
+query IIRI rowsort
+SELECT a, grouping(a), avg(a), coalesce(a, 100) FROM t GROUP BY GROUPING SETS ((a), ())
+----
+1 0 1.0 1
+2 0 2.0 2
+NULL 1 1.5 100
+
+# Three levels exercise the hierarchical rewrite, with a nullable input key.
+query IIIIII rowsort
+SELECT a, b, grouping(a, b), count(a), sum(a), coalesce(a, 100) + coalesce(b, 100)
+FROM (SELECT a, if(a = 1, NULL, a % 2) AS b FROM t) t
+GROUP BY ROLLUP(a, b)
+----
+1 NULL 0 1 1 101
+1 NULL 1 1 1 101
+2 0 0 1 2 2
+2 NULL 1 1 2 102
+NULL NULL 3 2 3 200
+
+## Key types
+
+# An input NULL and an injected NULL differ in grouping().
+query IIII rowsort
+SELECT b, grouping(b), count(*), coalesce(b, -1) FROM v GROUP BY ROLLUP(b)
+----
+20 0 1 20
+NULL 0 1 -1
+NULL 1 2 -1
+
+query TTIII rowsort
+SELECT s, arr, grouping(s, arr), length(arr), count(*) FROM v GROUP BY ROLLUP(s, arr)
+----
+NULL NULL 3 NULL 2
+x NULL 1 NULL 1
+x [1] 0 1 1
+y NULL 1 NULL 1
+y [2,3] 0 2 1
+
+## Aggregates read the input
+
+query IIIII rowsort
+SELECT a + 1 AS k, grouping(k), sum(a + 1), count(a + 1), min(a + 1) FROM t GROUP BY ROLLUP(1)
+----
+2 0 2 1 2
+3 0 3 1 3
+NULL 1 5 2 2
+
+query IIII rowsort
+SELECT a, coalesce(a, 100) AS k, sum(coalesce(a, 100)), count(if(a IS NULL, NULL, a))
+FROM t WHERE a IS NOT NULL AND k < 3 GROUP BY ROLLUP(a)
+----
+1 1 1 1
+2 2 2 1
+NULL 100 3 2
+
+query IT rowsort
+SELECT a + 1 AS k, string_agg(to_string(a), ',') WITHIN GROUP (ORDER BY a + 1) FROM t GROUP BY ROLLUP(1)
+----
+2 1
+3 2
+NULL 1,2
+
+## Windows and set-returning functions over keys
+
+# The total row contributes NULL to the first sum and 100 to the second.
+query IIII rowsort
+SELECT a + 1 AS k, grouping(k), sum(a + 1 + 1) OVER (), sum(coalesce(k + 1, 100)) OVER ()
+FROM t GROUP BY ROLLUP(1)
+----
+2 0 7 107
+3 0 7 107
+NULL 1 7 107
+
+query II rowsort
+SELECT a, sum(coalesce(a, 100)) OVER () AS total FROM t GROUP BY ROLLUP(a) QUALIFY total = 103
+----
+1 103
+2 103
+NULL 103
+
+query II rowsort
+SELECT a + 1 AS k, count(a + 1) OVER () FROM t GROUP BY ROLLUP(1)
+----
+2 2
+3 2
+NULL 2
+
+query III rowsort
+SELECT a + 1 AS k, lag(k, 1, 0) OVER (ORDER BY k NULLS FIRST), lag(k, 1, 0) OVER (ORDER BY k NULLS FIRST)
+FROM t GROUP BY ROLLUP(1)
+----
+2 NULL NULL
+3 2 2
+NULL 0 0
+
+query II rowsort
+SELECT a, unnest([a, a + 1]) FROM t GROUP BY ROLLUP(a)
+----
+1 1
+1 2
+2 2
+2 3
+NULL NULL
+NULL NULL
+
+# A SQL UDF over a key sees the injected NULL.
+statement ok
+CREATE OR REPLACE FUNCTION grouping_sets_default AS (x) -> coalesce(x, 100)
+
+query II rowsort
+SELECT a, grouping_sets_default(a) FROM t GROUP BY ROLLUP(a)
+----
+1 1
+2 2
+NULL 100
+
+statement ok
+DROP FUNCTION grouping_sets_default
+
+## Consumers of the output
+
+# Every consumer of a CTE sees the nullable key type, including nested types.
+query II rowsort
+WITH x AS (SELECT a FROM t GROUP BY ROLLUP(a))
+SELECT x1.a, x2.a FROM x x1 JOIN x x2 ON x1.a = x2.a
+----
+1 1
+2 2
+
+query II rowsort
+WITH x AS (SELECT a FROM t GROUP BY ROLLUP(a))
+SELECT x1.a, x2.a FROM x x1 JOIN x x2 ON x1.a = x2.a WHERE x1.a > 1
+----
+2 2
+
+query T
+WITH x AS (SELECT a FROM t GROUP BY ROLLUP(a))
+SELECT typeof(x1.a) FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a LIMIT 1
+----
+INT NULL
+
+query IIII rowsort
+WITH x AS (SELECT a, coalesce(a, 100) AS k FROM t GROUP BY ROLLUP(a))
+SELECT x1.a, x2.a, x1.k, x2.k FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a
+----
+1 1 1 1
+2 2 2 2
+NULL NULL 100 100
+
+query III rowsort
+WITH x AS (SELECT a, [a] AS v FROM t GROUP BY ROLLUP(a))
+SELECT x1.a, x1.v[1], x2.v[1] FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a
+----
+1 1 1
+2 2 2
+NULL NULL NULL
+
+query III rowsort
+WITH x AS (SELECT a, first_value([a]) OVER (ORDER BY a NULLS LAST) AS v FROM t GROUP BY ROLLUP(a))
+SELECT x1.a, x1.v[1], x2.v[1] FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a
+----
+1 1 1
+2 1 1
+NULL 1 1
+
+## Limits
+
+# `_grouping_id` is UInt32, so at most 32 distinct keys, the last one taking
+# the highest bit.
+query I
+SELECT count(*) FROM (
+  SELECT grouping(a + 31) g FROM t
+  GROUP BY GROUPING SETS (a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7, a + 8, a + 9, a + 10, a + 11, a + 12, a + 13, a + 14, a + 15, a + 16, a + 17, a + 18, a + 19, a + 20, a + 21, a + 22, a + 23, a + 24, a + 25, a + 26, a + 27, a + 28, a + 29, a + 30, a + 31)
+) WHERE g = 0
+----
+2
+
+statement error 1065.*at most 32 distinct grouping expressions, got 33
+SELECT count(*) FROM t
+GROUP BY GROUPING SETS (a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7, a + 8, a + 9, a + 10, a + 11, a + 12, a + 13, a + 14, a + 15, a + 16, a + 17, a + 18, a + 19, a + 20, a + 21, a + 22, a + 23, a + 24, a + 25, a + 26, a + 27, a + 28, a + 29, a + 30, a + 31, a + 32)
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE grouping_sets_null_injection

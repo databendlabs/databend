@@ -98,3 +98,37 @@ column_stat: ROW_NUMBER() OVER (PARTITION BY p ORDER BY k) (#2) min=1, max=100, 
 column_stat: NTILE(4) OVER (PARTITION BY p ORDER BY k) (#3) min=1, max=4, ndv=?[..4.0], null_count=0, histogram=none
 column_stat: LAG(k) OVER (PARTITION BY p ORDER BY k) (#4) min=1, max=100, ndv=100.0, null_count=~14.5[..100.0], histogram=none
 
+=== rollup_group_key_statistics ===
+description: A ROLLUP key keeps its input statistics through the nullable grouping symbol.
+sql: SELECT p, count(*) FROM t GROUP BY ROLLUP(p)
+operator: Aggregate
+cardinality: 6.000
+precise_cardinality: None
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: p (#2) min=1, max=5, ndv=5.0, null_count=~1.0[..6.0], histogram=some
+column_stat: _grouping_id (#3) min=0, max=1, ndv=2.0, null_count=0, histogram=none
+
+=== cube_group_key_statistics ===
+description: CUBE keys keep their input statistics through the nullable grouping symbols.
+sql: SELECT k, p, count(*) FROM t GROUP BY CUBE(k, p)
+operator: Aggregate
+cardinality: 206.000
+precise_cardinality: None
+column_stat: t.k (#0) min=1, max=100, ndv=100.0, null_count=10, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=5.0, null_count=0, histogram=some
+column_stat: k (#2) min=1, max=100, ndv=100.0, null_count=~16.0[..206.0], histogram=none
+column_stat: p (#3) min=1, max=5, ndv=5.0, null_count=~101.0[..206.0], histogram=some
+column_stat: _grouping_id (#4) min=0, max=3, ndv=4.0, null_count=0, histogram=none
+
+=== rollup_having_key_is_null_statistics ===
+description: A predicate over a ROLLUP output must account for the NULLs added by summary rows.
+sql: SELECT p, count(*) FROM t GROUP BY ROLLUP(p) HAVING p IS NULL
+operator: Filter
+cardinality: 1.000
+precise_cardinality: None
+column_stat: t.k (#0) min=1, max=100, ndv=0.0, null_count=~1.6666666666666663, histogram=none
+column_stat: t.p (#1) min=1, max=5, ndv=~4.869579733477056[..5.0], null_count=0, histogram=some
+column_stat: p (#2) min=1, max=5, ndv=0.8333333333333331, null_count=~0.16666666666666663[..0.9999999999999998], histogram=none
+column_stat: _grouping_id (#3) min=0, max=1, ndv=~0.8425925925925923[..0.9999999999999998], null_count=0, histogram=none
+

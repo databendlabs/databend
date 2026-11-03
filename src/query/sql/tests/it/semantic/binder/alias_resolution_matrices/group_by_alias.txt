@@ -58,12 +58,12 @@ key: G2N2G0_1_0
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))
 status: ok
 EvalScalar
-├── scalars: [t.i (#0) AS (#0), COUNT(*) (#5) AS (#5), abs(k) (#1) AS (#6)]
+├── scalars: [k (#1) AS (#1), abs(k) (#2) AS (#2), COUNT(*) (#4) AS (#4)]
 └── Aggregate(Initial)
-    ├── group items: [t.i (#0) AS (#0), abs(t.i (#0)) AS (#1), _grouping_id (#4) AS (#4)]
-    ├── aggregate functions: [count() AS (#5)]
+    ├── group items: [k (#1) AS (#1), abs(k) (#2) AS (#2), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
     └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#0), abs(t.i (#0)) AS (#1)]
+        ├── scalars: [t.i (#0) AS (#1), abs(t.i (#0)) AS (#2)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []
@@ -77,12 +77,12 @@ key: G1N2G0_2_1
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k, abs(k)))
 status: ok
 EvalScalar
-├── scalars: [t.i (#0) AS (#0), COUNT(*) (#5) AS (#5), abs(k) (#1) AS (#6)]
+├── scalars: [k (#1) AS (#1), abs(k) (#2) AS (#2), COUNT(*) (#4) AS (#4)]
 └── Aggregate(Initial)
-    ├── group items: [t.i (#0) AS (#0), abs(t.i (#0)) AS (#1), _grouping_id (#4) AS (#4)]
-    ├── aggregate functions: [count() AS (#5)]
+    ├── group items: [k (#1) AS (#1), abs(k) (#2) AS (#2), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
     └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#0), abs(t.i (#0)) AS (#1)]
+        ├── scalars: [t.i (#0) AS (#1), abs(t.i (#0)) AS (#2)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []
@@ -112,12 +112,12 @@ key: G4N2G0_4_
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, GROUPING SETS ((abs(k)))
 status: ok
 EvalScalar
-├── scalars: [t.i (#0) AS (#0), COUNT(*) (#5) AS (#5), abs(k) (#1) AS (#6)]
+├── scalars: [k (#1) AS (#1), abs(k) (#2) AS (#2), COUNT(*) (#4) AS (#4)]
 └── Aggregate(Initial)
-    ├── group items: [t.i (#0) AS (#0), abs(t.i (#0)) AS (#1), _grouping_id (#4) AS (#4)]
-    ├── aggregate functions: [count() AS (#5)]
+    ├── group items: [k (#1) AS (#1), abs(k) (#2) AS (#2), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
     └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#0), abs(t.i (#0)) AS (#1)]
+        ├── scalars: [t.i (#0) AS (#1), abs(t.i (#0)) AS (#2)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []
@@ -343,12 +343,12 @@ key: G4N2S1_12_
 sql: SELECT 1 AS k, count(*) FROM t GROUP BY k + 1, GROUPING SETS (())
 status: ok
 EvalScalar
-├── scalars: [COUNT(*) (#4) AS (#4), 1 AS (#5)]
+├── scalars: [COUNT(*) (#3) AS (#3), 1 AS (#4)]
 └── Aggregate(Initial)
-    ├── group items: [2 AS (#1), _grouping_id (#3) AS (#3)]
-    ├── aggregate functions: [count() AS (#4)]
+    ├── group items: [k + 1 (#1) AS (#1), _grouping_id (#2) AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
     └── EvalScalar
-        ├── scalars: [2 AS (#1)]
+        ├── scalars: [CAST(2 AS UInt8 NULL) AS (#1)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []

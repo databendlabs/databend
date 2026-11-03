@@ -1,0 +1,218 @@
+# Correlated subqueries and GROUPING SETS: subqueries over the keys of an outer
+# grouped SELECT or derived table, and grouping sets inside a correlated
+# subquery, whose outer columns decorrelation adds as keys. Run with native
+# expansion and both UNION rewrites.
+# run-with-settings: grouping_sets_to_union=1
+# run-with-settings: grouping_sets_to_union=1,enable_cascading_grouping_sets=1
+
+statement ok
+CREATE OR REPLACE DATABASE grouping_sets_correlated
+
+statement ok
+USE grouping_sets_correlated
+
+statement ok
+CREATE TABLE t(a INT NOT NULL)
+
+statement ok
+INSERT INTO t VALUES (1), (2)
+
+statement ok
+CREATE TABLE u(n INT NOT NULL)
+
+statement ok
+INSERT INTO u VALUES (1), (2), (3)
+
+## Subqueries in a grouped SELECT
+
+# Outer references bind to the nullable key outputs; the total row sees NULL.
+query II rowsort
+SELECT a, (SELECT max(n) FROM u WHERE n > t.a) FROM t GROUP BY ROLLUP(a)
+----
+1 3
+2 3
+NULL NULL
+
+query IIII rowsort
+SELECT a, (SELECT t.a + 1), (SELECT coalesce(t.a, 100)), (SELECT max(coalesce(t.a, 100) + s.a) FROM t s)
+FROM t GROUP BY ROLLUP(a)
+----
+1 2 1 3
+2 3 2 4
+NULL NULL 100 102
+
+query II rowsort
+SELECT a, (SELECT n FROM u ORDER BY t.a, n DESC LIMIT 1) FROM t GROUP BY ROLLUP(a)
+----
+1 3
+2 3
+NULL 3
+
+query II rowsort
+SELECT a, (SELECT n + t.a FROM u ORDER BY n DESC LIMIT 1) FROM t GROUP BY ROLLUP(a)
+----
+1 4
+2 5
+NULL NULL
+
+query II rowsort
+SELECT a, (SELECT first_value(n + t.a) OVER (ORDER BY n) FROM u LIMIT 1) FROM t GROUP BY ROLLUP(a)
+----
+1 2
+2 3
+NULL NULL
+
+query IB rowsort
+SELECT a, EXISTS (SELECT 1 FROM u WHERE n > t.a) FROM t GROUP BY ROLLUP(a)
+----
+1 1
+2 1
+NULL 0
+
+# UNION branches are coerced to the nullable key type, nested types included.
+query II rowsort
+SELECT a, (SELECT max(v) FROM (SELECT n + t.a AS v FROM u UNION ALL SELECT n + t.a + 1 AS v FROM u) s)
+FROM t GROUP BY ROLLUP(a)
+----
+1 5
+2 6
+NULL NULL
+
+query II rowsort
+SELECT a, (SELECT max(v) FROM (SELECT n + t.a AS v FROM u UNION ALL SELECT n + 1 AS v FROM u) s)
+FROM t GROUP BY ROLLUP(a)
+----
+1 4
+2 5
+NULL 4
+
+query II rowsort
+SELECT a, (SELECT max(v[1]) FROM (SELECT [n + t.a] AS v FROM u UNION ALL SELECT [2] AS v) s)
+FROM t GROUP BY ROLLUP(a)
+----
+1 4
+2 5
+NULL 2
+
+query III rowsort
+WITH x AS (SELECT a, (SELECT [t.a]) AS v FROM t GROUP BY ROLLUP(a))
+SELECT x1.a, x1.v[1], x2.v[1] FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a
+----
+1 1 1
+2 2 2
+NULL NULL NULL
+
+# An equality with the nullable key output may reuse a NOT NULL inner column;
+# the total row matches nothing.
+query II rowsort
+SELECT a, (SELECT count(*) FROM u WHERE n = t.a) FROM t GROUP BY ROLLUP(a)
+----
+1 1
+2 1
+NULL 0
+
+query IB rowsort
+SELECT a, EXISTS (SELECT 1 FROM u WHERE t.a = n) FROM t GROUP BY ROLLUP(a)
+----
+1 1
+2 1
+NULL 0
+
+# TODO: two levels of subqueries over an outer column fail in decorrelation,
+# with or without GROUP BY, see decorrelate/mod.rs.
+statement error Missing derived column
+SELECT a, (SELECT (SELECT t.a + 1)) FROM t GROUP BY ROLLUP(a)
+
+## Subqueries over a grouped derived table
+
+query II rowsort
+SELECT x.a, q.n
+FROM (SELECT a FROM t GROUP BY ROLLUP(a)) x
+JOIN LATERAL (SELECT n FROM u WHERE n > x.a) q ON true
+----
+1 2
+1 3
+2 3
+
+query III rowsort
+SELECT x.a, x.s, q.n
+FROM (SELECT a, sum(a + 1) AS s FROM t GROUP BY ROLLUP(a)) x
+JOIN LATERAL (SELECT n FROM u WHERE n > x.a) q ON true
+----
+1 2 2
+1 2 3
+2 3 3
+
+query II rowsort
+SELECT x.a, q.m
+FROM (SELECT a FROM t GROUP BY ROLLUP(a)) x, LATERAL (SELECT max(n) m FROM u WHERE n = x.a) q
+----
+1 1
+2 2
+NULL NULL
+
+query II rowsort
+SELECT x.a, (SELECT max(n) FROM u WHERE n > x.a) FROM (SELECT a FROM t GROUP BY ROLLUP(a)) x
+----
+1 3
+2 3
+NULL NULL
+
+query IB rowsort
+SELECT x.a, EXISTS (SELECT 1 FROM u WHERE n > x.a) FROM (SELECT a FROM t GROUP BY ROLLUP(a)) x
+----
+1 1
+2 1
+NULL 0
+
+## Grouping sets in a correlated subquery
+
+# The outer columns added as keys belong to every grouping set, so they keep
+# their values and aggregates may read them.
+query II rowsort
+SELECT a, (SELECT count(*) FROM u WHERE n <= t.a GROUP BY ROLLUP(n) HAVING n IS NULL) FROM t
+----
+1 1
+2 2
+
+query II rowsort
+SELECT a, (SELECT max(t.a * 10 + n) FROM u WHERE n <= t.a GROUP BY ROLLUP(n) ORDER BY 1 DESC LIMIT 1) FROM t
+----
+1 11
+2 22
+
+query II rowsort
+SELECT a, (SELECT count(t.a) + count(*) * 100 FROM u WHERE n <= t.a GROUP BY CUBE(n) ORDER BY 1 DESC LIMIT 1) FROM t
+----
+1 101
+2 202
+
+query II rowsort
+SELECT a, (SELECT grouping(n) FROM u WHERE n <= t.a GROUP BY ROLLUP(n) ORDER BY 1 DESC LIMIT 1) FROM t
+----
+1 1
+2 1
+
+# They take no bit of `_grouping_id`, so 32 keys still fit.
+query II rowsort
+SELECT a, (SELECT count(*) FROM (
+  SELECT count(*) FROM u WHERE n <= t.a
+  GROUP BY GROUPING SETS (n, n + 1, n + 2, n + 3, n + 4, n + 5, n + 6, n + 7, n + 8, n + 9, n + 10, n + 11, n + 12, n + 13, n + 14, n + 15, n + 16, n + 17, n + 18, n + 19, n + 20, n + 21, n + 22, n + 23, n + 24, n + 25, n + 26, n + 27, n + 28, n + 29, n + 30, n + 31)
+)) FROM t
+----
+1 32
+2 64
+
+# TODO: with GROUP BY, a count over no matching rows should be NULL, not 0,
+# see flatten_plan.rs.
+query II rowsort
+SELECT a, (SELECT count(*) FROM u WHERE n = t.a + 10 GROUP BY ROLLUP(n) HAVING n IS NOT NULL) FROM t
+----
+1 0
+2 0
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE grouping_sets_correlated

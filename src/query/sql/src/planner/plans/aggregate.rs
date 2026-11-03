@@ -17,13 +17,17 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
+use databend_common_statistics::NdvEstimate;
+use databend_common_statistics::StatCount;
 use databend_common_statistics::TypedHistogram;
+use itertools::Itertools;
 
 use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::Symbol;
+use crate::binder::is_grouping_id_item;
 use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -41,16 +45,56 @@ use crate::plans::sort::SortItem;
 const DEFAULT_AGGREGATE_RATIO: f64 = 1f64 / 3f64;
 const AGGREGATE_COLUMN_CORRELATION_COEFFICIENT: f64 = 0.75_f64;
 
+/// The maximum number of distinct keys under GROUPING SETS, ROLLUP or CUBE:
+/// each key takes one bit of the `UInt32` `_grouping_id` column.
+pub const MAX_GROUPING_KEYS: usize = u32::BITS as usize;
+
 /// Information for `GROUPING SETS`.
 /// See the comment of [`crate::planner::binder::aggregate::GroupingSetsInfo`].
+///
+/// Every key of a grouping-sets aggregate is a dedicated nullable symbol that
+/// receives the injected NULLs. Aggregate arguments and sort keys never read
+/// these symbols; they read their own pre-aggregate inputs.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct GroupingSets {
     /// The index of the virtual column `_grouping_id`. It's valid only if `grouping_sets` is not empty.
     pub grouping_id_index: Symbol,
-    /// See the comment in `GroupingSetsInfo`.
+    /// The keys of each grouping set.
     pub sets: Vec<Vec<Symbol>>,
-    /// See the comment in `GroupingSetsInfo`.
-    pub dup_group_items: Vec<(Symbol, DataType)>,
+}
+
+impl GroupingSets {
+    /// Whether `key` is absent from some grouping set and therefore receives
+    /// injected NULLs. Keys present in every set, such as correlated columns
+    /// added by decorrelation, keep their input values.
+    pub fn is_rolled_up(&self, key: Symbol) -> bool {
+        self.sets.iter().any(|set| !set.contains(&key))
+    }
+
+    /// The `_grouping_id` value of each set, given the keys in group item
+    /// order (`_grouping_id` itself is skipped). Bit `i` is set when the
+    /// `i`-th key is absent from the set, i.e. NULL in its rows. Example: for
+    /// keys `[a, b]`, sets `[[a, b], [a], [b], []]` have ids `00, 10, 01, 11`.
+    ///
+    /// Only absent keys set a bit. The binder caps the keys of a GROUP BY at
+    /// [`MAX_GROUPING_KEYS`], and keys added later by decorrelation follow them
+    /// and belong to every set, so every bit fits in `_grouping_id`.
+    pub fn grouping_ids(&self, group_bys: impl IntoIterator<Item = Symbol>) -> Vec<u32> {
+        let group_bys = group_bys
+            .into_iter()
+            .filter(|index| *index != self.grouping_id_index)
+            .collect::<Vec<_>>();
+        self.sets
+            .iter()
+            .map(|set| {
+                group_bys
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, key)| !set.contains(key))
+                    .fold(0u32, |id, (i, _)| id | (1 << i))
+            })
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -103,14 +147,17 @@ impl Aggregate {
             }));
         }
 
-        if self
-            .group_items
-            .iter()
-            .any(|item| match column_stats.get(&item.index) {
-                Some(stat) => stat.ndv().is_upper_only(),
-                None => true,
-            })
-        {
+        if let Some(grouping_sets) = &self.grouping_sets {
+            return Ok(Arc::new(
+                self.derive_grouping_sets_stats(grouping_sets, &stat_info),
+            ));
+        }
+
+        let Some(cardinality) = estimate_group_count(
+            column_stats,
+            self.group_items.iter().map(|item| item.index),
+            stat_info.cardinality,
+        ) else {
             return Ok(Arc::new(StatInfo {
                 cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
                 statistics: Statistics {
@@ -120,31 +167,7 @@ impl Aggregate {
                     count_min_sketch: Default::default(),
                 },
             }));
-        }
-
-        let groups_ndv = self
-            .group_items
-            .iter()
-            .map(|group| {
-                column_stats[&group.index]
-                    .ndv()
-                    .expected
-                    .expect("upper-only group NDV should have used aggregate fallback")
-            })
-            .collect::<Vec<_>>();
-
-        let cardinality = groups_ndv
-            .into_iter()
-            .enumerate()
-            .fold(1.0, |acc, (i, ndv)| {
-                let x = if i > 1 {
-                    ndv * AGGREGATE_COLUMN_CORRELATION_COEFFICIENT.powi((i - 1) as i32)
-                } else {
-                    ndv
-                };
-                acc * x.max(1.0)
-            })
-            .min(stat_info.cardinality);
+        };
 
         let mut column_stats = stat_info.statistics.column_stats.clone();
         for item in self.group_items.iter() {
@@ -152,13 +175,7 @@ impl Aggregate {
             if self.group_items.len() == 1 {
                 item_stat.set_ndv(item_stat.ndv().reduce(cardinality));
             }
-            match item_stat {
-                ColumnStat::Int { histogram, .. } => collapse_dense_histogram(histogram),
-                ColumnStat::UInt { histogram, .. } => collapse_dense_histogram(histogram),
-                ColumnStat::Float { histogram, .. } => collapse_dense_histogram(histogram),
-                ColumnStat::Bytes { histogram, .. } => collapse_dense_histogram(histogram),
-                ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => {}
-            }
+            collapse_group_key_histogram(item_stat);
         }
 
         Ok(Arc::new(StatInfo {
@@ -170,6 +187,112 @@ impl Aggregate {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+
+    /// GROUPING SETS output the union of one aggregation per set. A key column
+    /// is NULL in every row of the sets that omit it, and `_grouping_id`
+    /// identifies the set of each row; the estimate keeps both visible to
+    /// predicates and joins above the aggregate.
+    fn derive_grouping_sets_stats(
+        &self,
+        grouping_sets: &GroupingSets,
+        stat_info: &StatInfo,
+    ) -> StatInfo {
+        let input_stats = &stat_info.statistics.column_stats;
+        let fallback = (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0);
+        let set_cardinalities = grouping_sets
+            .sets
+            .iter()
+            .map(|set| {
+                if set.is_empty() {
+                    // The grand-total set produces one row.
+                    return 1.0;
+                }
+                estimate_group_count(input_stats, set.iter().copied(), stat_info.cardinality)
+                    .unwrap_or(fallback)
+            })
+            .collect::<Vec<_>>();
+        let cardinality = set_cardinalities.iter().sum::<f64>();
+
+        let mut column_stats = input_stats.clone();
+        for item in self.group_items.iter() {
+            if is_grouping_id_item(item, grouping_sets.grouping_id_index) {
+                continue;
+            }
+            let Some(item_stat) = column_stats.get_mut(&item.index) else {
+                continue;
+            };
+            let summary_rows = grouping_sets
+                .sets
+                .iter()
+                .zip(&set_cardinalities)
+                .filter(|(set, _)| !set.contains(&item.index))
+                .map(|(_, rows)| *rows)
+                .sum::<f64>();
+            let null_count = if summary_rows > 0.0 {
+                StatCount::sum(
+                    item_stat.null_count(),
+                    StatCount::estimate(summary_rows, cardinality),
+                )
+            } else {
+                item_stat.null_count()
+            };
+            item_stat.set_null_count(null_count.reduce(cardinality));
+            item_stat.set_ndv(item_stat.ndv().reduce(cardinality));
+            collapse_group_key_histogram(item_stat);
+        }
+
+        let grouping_ids =
+            grouping_sets.grouping_ids(self.group_items.iter().map(|item| item.index));
+        if let (Some(min), Some(max)) = (grouping_ids.iter().min(), grouping_ids.iter().max()) {
+            column_stats.insert(grouping_sets.grouping_id_index, ColumnStat::UInt {
+                min: *min as u64,
+                max: *max as u64,
+                ndv: NdvEstimate::exact(grouping_ids.iter().unique().count() as f64),
+                null_count: StatCount::exact(0),
+                histogram: None,
+            });
+        }
+
+        StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
+            },
+        }
+    }
+}
+
+/// Estimate the number of groups over `keys`, or `None` if any key lacks an
+/// expected NDV.
+fn estimate_group_count(
+    column_stats: &ColumnStatSet,
+    keys: impl Iterator<Item = Symbol>,
+    input_cardinality: f64,
+) -> Option<f64> {
+    let mut cardinality = 1.0;
+    for (i, key) in keys.enumerate() {
+        let ndv = column_stats.get(&key)?.ndv().expected?;
+        let x = if i > 1 {
+            ndv * AGGREGATE_COLUMN_CORRELATION_COEFFICIENT.powi((i - 1) as i32)
+        } else {
+            ndv
+        };
+        cardinality *= x.max(1.0);
+    }
+    Some(cardinality.min(input_cardinality))
+}
+
+fn collapse_group_key_histogram(stat: &mut ColumnStat) {
+    match stat {
+        ColumnStat::Int { histogram, .. } => collapse_dense_histogram(histogram),
+        ColumnStat::UInt { histogram, .. } => collapse_dense_histogram(histogram),
+        ColumnStat::Float { histogram, .. } => collapse_dense_histogram(histogram),
+        ColumnStat::Bytes { histogram, .. } => collapse_dense_histogram(histogram),
+        ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => {}
     }
 }
 

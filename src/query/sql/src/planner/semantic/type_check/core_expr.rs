@@ -57,6 +57,7 @@ impl<'a> CoreExprArena<'a> {
             week_start,
             aggregate_function_registry: &AGGR_REGISTRY,
             in_lambda_function: false,
+            grouping_key_memo: Default::default(),
         }
     }
 
@@ -69,6 +70,7 @@ impl<'a> CoreExprArena<'a> {
             week_start,
             aggregate_function_registry,
             in_lambda_function: false,
+            grouping_key_memo: Default::default(),
         }
     }
 
@@ -517,6 +519,20 @@ where A: TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         id: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if let Some(position) = self.binding_grouping_key_input_of() {
+            return self.resolve_grouping_key_input_node(arena, id, position);
+        }
+        self.resolve_core_node(arena, id)
+    }
+
+    pub(super) fn resolve_core_node(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        id: CoreExprId,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if let Some(resolved) = self.try_resolve_grouping_key(arena, id)? {
+            return Ok(resolved);
+        }
         match arena.get(id) {
             CoreExpr::Literal { span, value } => {
                 let (value, data_type) = infer_literal_data_type(value.clone());

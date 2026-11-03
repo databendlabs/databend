@@ -264,6 +264,9 @@ where A: TypeCheckAdapter
         let in_window = self.in_window_function;
         self.in_window_function = self.in_window_function || in_window_call;
         let in_aggregate_function = self.in_aggregate_function;
+        // The arguments of a grouped aggregate are evaluated before it, those of
+        // a window aggregate after it.
+        let suspended = !in_window_call && self.suspend_grouping_key_scope();
         let result = self.resolve_core_aggregate_call_inner(
             arena,
             display_name,
@@ -275,6 +278,7 @@ where A: TypeCheckAdapter
             order_by,
             new_params,
         );
+        self.resume_grouping_key_scope(suspended);
         self.in_window_function = in_window;
         self.in_aggregate_function = in_aggregate_function;
         result

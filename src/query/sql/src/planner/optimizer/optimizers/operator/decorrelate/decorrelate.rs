@@ -24,6 +24,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
@@ -572,16 +573,24 @@ impl SubqueryDecorrelatorOptimizer {
                 && let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
                     (&func.arguments[0], &func.arguments[1])
             {
-                if correlated_columns.contains(&left.column.index)
-                    && !correlated_columns.contains(&right.column.index)
+                let (outer, inner) = match (
+                    correlated_columns.contains(&left.column.index),
+                    correlated_columns.contains(&right.column.index),
+                ) {
+                    (true, false) => (left, right),
+                    (false, true) => (right, left),
+                    _ => return true,
+                };
+                // The inner column stands for the outer one in the subquery,
+                // cast to the outer type where they differ; that cast must not
+                // fail on inner rows that match no outer row.
+                let (outer_type, inner_type) = (&*outer.column.data_type, &*inner.column.data_type);
+                if inner_type.remove_nullable() != outer_type.remove_nullable()
+                    && !classify_conversion(inner_type, outer_type).is_lossless_injective()
                 {
-                    derived_columns.record(left.column.index, right.column.index);
+                    return false;
                 }
-                if !correlated_columns.contains(&left.column.index)
-                    && correlated_columns.contains(&right.column.index)
-                {
-                    derived_columns.record(right.column.index, left.column.index);
-                }
+                derived_columns.record(outer.column.index, inner.column.index);
                 true
             } else {
                 false

@@ -38,11 +38,11 @@ use crate::plans::ScalarExpr;
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
-    pub(super) fn resolve_column_ref(
-        &mut self,
-        span: Span,
+    /// Resolve the name of a column reference.
+    pub(super) fn resolve_column_name(
+        &self,
         column_ref: &ColumnRef,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<NameResolutionResult> {
         let ColumnRef {
             database,
             table,
@@ -54,7 +54,7 @@ where A: TypeCheckAdapter
         let table = table
             .as_ref()
             .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
-        let result = match ident {
+        Ok(match ident {
             ColumnID::Name(ident) => {
                 let column = normalize_identifier(ident, self.name_resolution_ctx);
                 self.bind_context.resolve_name_with_alias_fallback(
@@ -72,7 +72,23 @@ where A: TypeCheckAdapter
                 table.as_deref(),
                 pos.pos,
             )?,
-        };
+        })
+    }
+
+    pub(super) fn resolve_column_ref(
+        &mut self,
+        span: Span,
+        column_ref: &ColumnRef,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let database = column_ref
+            .database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+        let table = column_ref
+            .table
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+        let result = self.resolve_column_name(column_ref)?;
 
         let (scalar, data_type) = match result {
             NameResolutionResult::Column(column) => {
@@ -202,6 +218,7 @@ where A: TypeCheckAdapter
                         }
                     }
 
+                    self.check_grouping_key_outer_column(span, &column)?;
                     let data_type = *column.data_type.clone();
                     (BoundColumnRef { span, column }.into(), data_type)
                 }
@@ -217,30 +234,59 @@ where A: TypeCheckAdapter
                 let data_type = *column.data_type.clone();
                 (BoundColumnRef { span, column }.into(), data_type)
             }
-            NameResolutionResult::Alias { alias, scalar } => {
-                let original = self
-                    .masking_where_aliases
-                    .as_ref()
-                    .and_then(|aliases| aliases.iter().find(|(name, _)| name == &alias))
-                    .map(|(_, expr)| expr.clone());
-                if !self.in_masking_policy
-                    && let Some(original) = original
-                {
-                    if self.resolving_masking_where_aliases.contains(&alias) {
-                        return Err(
-                            ErrorCode::SemanticError("Recursive WHERE alias").set_span(span)
-                        );
-                    }
-                    self.resolving_masking_where_aliases.push(alias);
-                    let result = self.resolve(&original);
-                    self.resolving_masking_where_aliases.pop();
+            NameResolutionResult::Alias {
+                alias,
+                scalar,
+                index,
+            } => {
+                if let Some(result) = self.resolve_masking_where_alias(span, &alias) {
                     return result;
                 }
-                (scalar.clone(), scalar.data_type().into_owned())
+                let scalar = self.resolve_grouping_sets_alias(index, scalar)?;
+                let data_type = scalar.data_type().into_owned();
+                (scalar, data_type)
+            }
+            NameResolutionResult::SelectItems { alias, positions } => {
+                if let Some(result) = self.resolve_masking_where_alias(span, &alias) {
+                    return result;
+                }
+                let scalar = self.resolve_pre_aggregate_alias(span, &alias, &positions)?;
+                let data_type = scalar.data_type().into_owned();
+                (scalar, data_type)
             }
         };
 
         Ok(Box::new((scalar, data_type)))
+    }
+
+    /// In a SELECT WHERE that uses unmasked values, an alias stands for its
+    /// expression bound in place, see `Binder::bind_select_where`.
+    fn resolve_masking_where_alias(
+        &mut self,
+        span: Span,
+        alias: &str,
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        if self.in_masking_policy {
+            return None;
+        }
+        let original = self
+            .masking_where_aliases
+            .as_ref()
+            .and_then(|aliases| aliases.iter().find(|(name, _)| name == alias))
+            .map(|(_, expr)| expr.clone())?;
+        if self
+            .resolving_masking_where_aliases
+            .iter()
+            .any(|name| name == alias)
+        {
+            return Some(Err(
+                ErrorCode::SemanticError("Recursive WHERE alias").set_span(span)
+            ));
+        }
+        self.resolving_masking_where_aliases.push(alias.to_string());
+        let result = self.resolve(&original);
+        self.resolving_masking_where_aliases.pop();
+        Some(result)
     }
 
     /// Get masking policy expression for a column reference

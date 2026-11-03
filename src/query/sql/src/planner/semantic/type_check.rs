@@ -47,6 +47,7 @@ use super::name_resolution::NameResolutionContext;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::binder::AliasLookup;
+use crate::binder::PreAggregateItemsMut;
 use crate::optimizer::ir::SExpr;
 use crate::planner::expression::UDFValidator;
 use crate::planner::expression::UdfValidationConfig;
@@ -61,10 +62,12 @@ mod async_functions;
 mod column;
 mod core_expr;
 mod date;
+mod grouping_key;
 mod in_list;
 mod lambda;
 mod literal;
 mod persisted;
+mod pre_aggregate;
 pub use persisted::PersistedTypeCheckAdapter;
 mod resolve;
 mod rewrite_function;
@@ -98,6 +101,8 @@ pub struct CoreExprArena<'a> {
     week_start: u64,
     pub(super) aggregate_function_registry: &'static AggregateRegistry,
     pub(super) in_lambda_function: bool,
+    // Memoized grouping-key matching work, see `grouping_key.rs`.
+    grouping_key_memo: std::cell::RefCell<grouping_key::GroupingKeyMemo>,
 }
 
 enum CoreExpr<'a> {
@@ -509,6 +514,9 @@ pub struct TypeChecker<'a, A> {
 
     aliases: AliasLookup<'a>,
     fallback_aliases: Option<AliasLookup<'a>>,
+    // The pre-aggregate SELECT items of a GROUPING SETS query that the aliases
+    // may resolve to, see `type_check/pre_aggregate.rs`.
+    pre_aggregate: Option<PreAggregateItemsMut<'a>>,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
@@ -527,6 +535,9 @@ pub struct TypeChecker<'a, A> {
     masking_where_aliases: Option<&'a [(String, Expr)]>,
     resolving_masking_where_aliases: Vec<String>,
     forbid_virtual_computed_column: bool,
+
+    // Grouping-key matching state, see `grouping_key.rs`.
+    grouping_key: grouping_key::GroupingKeyState,
 }
 
 #[cfg(test)]

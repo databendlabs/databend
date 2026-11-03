@@ -41,6 +41,7 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
+use crate::planner::binder::GroupBySelectItems;
 use crate::planner::binder::SelectInfo;
 use crate::plans::Limit;
 
@@ -237,7 +238,7 @@ impl Dataframe {
         let group_by_aliases = alias_catalog.group_by_bindings();
         self.binder.analyze_group_items(
             &mut self.bind_context,
-            &select_list,
+            GroupBySelectItems::Bound(&select_list),
             &group_by_aliases,
             &groupby,
         )?;
@@ -251,9 +252,12 @@ impl Dataframe {
         }
 
         if let Some(having) = &having {
-            let having =
-                self.binder
-                    .analyze_aggregate_having(&mut self.bind_context, aliases, having)?;
+            let having = self.binder.analyze_aggregate_having(
+                &mut self.bind_context,
+                aliases,
+                None,
+                having,
+            )?;
             self.s_expr = self
                 .binder
                 .bind_having(&mut self.bind_context, having, self.s_expr)?;
@@ -363,6 +367,7 @@ impl Dataframe {
             &mut self.bind_context,
             &mut select_info,
             &aliases,
+            None,
             None,
             &order,
             distinct,
