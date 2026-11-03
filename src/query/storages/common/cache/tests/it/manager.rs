@@ -191,8 +191,10 @@ async fn test_disk_rows_count_hits_and_entries() {
         (None, Unit::Bytes)
     );
     assert!(column_data.disk && column_data.pool.is_none());
+    // From metric families shared by every disk cache of the process, other tests' included:
+    // read one after the other, while they may change.
     assert!(column_data.hit >= 1 && column_data.miss >= 1);
-    assert_eq!(column_data.access, column_data.hit + column_data.miss);
+    assert!(column_data.access >= 2);
 
     let pool = row(&manager, "__disk_pool:data").unwrap();
     assert_eq!((pool.num_items, pool.size, pool.in_cache_size), (1, 14, 14));

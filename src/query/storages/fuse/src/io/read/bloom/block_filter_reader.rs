@@ -375,7 +375,8 @@ mod tests {
     #[test]
     fn test_should_read_whole_bloom_index_by_threshold_and_cache() -> Result<()> {
         init_test_globals()?;
-        let path = "bloom_index";
+        // Its own path: the meta cache is shared by the tests running alongside.
+        let path = "should_read_whole/bloom_index";
         let settings = ReadSettings {
             max_gap_size: 0,
             max_range_size: 0,

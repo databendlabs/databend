@@ -858,3 +858,15 @@ async fn test_reads_past_capacity_evict_and_stay_correct() {
     assert_eq!(kind.hits + kind.misses, 8 * 400);
     wait_for(|| file_bytes(&dir, Pool::Data) == stats.bytes);
 }
+
+/// An object invalidated at the first point of the fence has a generation of its own: reads
+/// after it never share a read from before, as before any invalidation.
+#[test]
+fn test_invalidation_at_the_first_point_has_a_generation() {
+    let dir = TempDir::new().unwrap();
+    let cache = Arc::new(cache(&dir));
+    let path = "1/2/_b/first.parquet";
+    assert_eq!(cache.invalidation_of(data(), path), 0);
+    drop(cache.begin_change(path).unwrap());
+    assert_eq!(cache.invalidation_of(data(), path), 1);
+}

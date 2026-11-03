@@ -112,14 +112,18 @@ fn disk_items() -> BTreeMap<String, u64> {
         .collect()
 }
 
-/// Lookups of the disk cache so far, hits and misses, over all kinds.
-fn disk_accesses() -> u64 {
-    CacheManager::instance()
-        .rows()
-        .into_iter()
-        .filter(|row| row.disk && row.kind.is_some())
-        .map(|row| row.hit + row.miss)
-        .sum()
+/// Lookups of this test's disk cache so far, hits and misses, by kind. From the cache's own
+/// counters: the `system.caches` rows read metric families shared by every disk cache of the
+/// process, those of the tests running alongside included.
+fn disk_accesses() -> BTreeMap<String, u64> {
+    let disk = CacheManager::instance().disk().expect("a disk cache");
+    CacheKind::all()
+        .map(|kind| {
+            let stats = disk.kind_stats(kind);
+            (kind.name().to_string(), stats.hits + stats.misses)
+        })
+        .filter(|(_, n)| *n > 0)
+        .collect()
 }
 
 async fn query(fixture: &TestFixture, sql: &str) -> Result<String> {
@@ -235,11 +239,14 @@ async fn test_maintenance_does_not_fill_the_disk_cache() -> anyhow::Result<()> {
             fixture.execute_command(&sql(statement)).await?;
         }
         settle().await;
-        if disk_accesses() != accesses {
-            fills.push(format!(
-                "{operation}: {} disk cache lookups",
-                disk_accesses() - accesses
-            ));
+        for (kind, n) in disk_accesses() {
+            let was = accesses.get(&kind).copied().unwrap_or(0);
+            if n > was {
+                fills.push(format!(
+                    "{operation}: {} {kind} disk cache lookups",
+                    n - was
+                ));
+            }
         }
         for (kind, items) in disk_items() {
             let was = before.get(&kind).copied().unwrap_or(0);

@@ -402,13 +402,15 @@ impl DiskCache {
         self.pool(kind).remove(&key.rel_path(kind))
     }
 
-    /// The last point the object at `path` was invalidated at, as kept by the pool of `kind`
-    /// while fills started before may run; 0 if none. Reads of an object in flight across an
-    /// invalidation are not shared with reads started after it.
+    /// The generation of the object at `path`: one past the last point it was invalidated at,
+    /// as kept by the pool of `kind` while fills started before may run; 0 if none kept. The
+    /// first point is 0, so the generation of an object invalidated there is 1, not 0. Reads
+    /// of an object in flight across an invalidation are not shared with reads started after
+    /// it.
     pub fn invalidation_of(&self, kind: CacheKind, path: &str) -> u64 {
         self.pool(kind)
             .invalidated_at(&DiskKey::object_id(path))
-            .unwrap_or(0)
+            .map_or(0, |at| at + 1)
     }
 
     /// The object at `path` is about to be rewritten in place or deleted: drops every unit of it
