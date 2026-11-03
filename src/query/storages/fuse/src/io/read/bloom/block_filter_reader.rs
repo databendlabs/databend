@@ -28,9 +28,6 @@ use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::ReadSettings;
@@ -44,7 +41,8 @@ use parquet::schema::types::SchemaDescPtr;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::IndexMetaReader;
 use crate::io::read::bloom::BloomIndexColumnOrdinal;
 use crate::io::read::bloom::column_filter_reader::BloomColumnFilterReader;
 
@@ -199,29 +197,17 @@ pub async fn load_index_meta(
     length: u64,
     whole_file: Option<&Arc<Bytes>>,
 ) -> Result<Arc<BloomIndexMeta>> {
+    let cache = FuseCaches::instance().index_metas.bloom.clone();
     if let Some(whole_file) = whole_file {
         let meta = load_index_meta_from_bytes(whole_file)?;
-        if let Some(cache) = BloomIndexMeta::cache() {
-            return Ok(cache.insert(path.to_owned(), meta));
-        }
-        return Ok(Arc::new(meta));
+        return Ok(Arc::clone(&cache.fill(path, Arc::new(meta))));
     }
 
-    let path_owned = path.to_owned();
+    let key = (path.to_owned(), Some(length));
     async move {
-        let reader = MetaReaders::bloom_index_meta_reader(dal);
-        // Format of FileMetaData is not versioned, version argument is ignored by the underlying reader,
-        // so we just pass a zero to reader
-        let version = 0;
-
-        let load_params = LoadParams {
-            location: path_owned,
-            len_hint: Some(length),
-            ver: version,
-            put_cache: true,
-        };
-
-        reader.read(&load_params).await
+        let reader = IndexMetaReader::<BloomIndexMeta>::new(dal);
+        let meta = cache.get(&reader, key).await?;
+        Ok(Arc::clone(&meta))
     }
     .execute_in_runtime(&GlobalIORuntime::instance())
     .await?
@@ -246,7 +232,7 @@ fn should_read_whole_bloom_index(path: &str, settings: &ReadSettings, index_leng
         return false;
     }
 
-    !BloomIndexMeta::cache().is_some_and(|cache| cache.contains_key(path))
+    !FuseCaches::instance().index_metas.bloom.contains(path)
 }
 
 fn load_index_meta_from_bytes(data: &Bytes) -> Result<BloomIndexMeta> {
@@ -318,8 +304,6 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::Int32Type;
     use databend_storages_common_blocks::blocks_to_parquet;
-    use databend_storages_common_cache::CacheAccessor;
-    use databend_storages_common_cache::CachedObject;
     use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::BloomIndexBuilder;
     use databend_storages_common_index::BloomIndexType;
@@ -375,16 +359,35 @@ mod tests {
             parquet_fast_read_bytes: 1024,
         };
 
-        if let Some(cache) = BloomIndexMeta::cache() {
-            cache.evict(path);
-        }
+        let cache = &FuseCaches::instance().index_metas.bloom;
+        cache.evict(path);
         assert!(should_read_whole_bloom_index(path, &settings, 512));
         assert!(!should_read_whole_bloom_index(path, &settings, 2048));
 
-        if let Some(cache) = BloomIndexMeta::cache() {
-            cache.insert(path.to_string(), BloomIndexMeta { columns: vec![] });
-        }
+        cache.put(path, Arc::new(BloomIndexMeta { columns: vec![] }));
         assert!(!should_read_whole_bloom_index(path, &settings, 512));
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_load_index_meta_reads_through_cache() -> Result<()> {
+        init_test_globals()?;
+        let (data, _) = write_bloom_index_bytes()?;
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let path = "bloom_index_meta_through_cache";
+        operator.write(path, data.clone()).await?;
+        FuseCaches::instance().index_metas.bloom.evict(path);
+
+        let len = data.len() as u64;
+        let meta = load_index_meta(operator.clone(), path, len, None).await?;
+        assert_eq!(meta.columns.len(), 1);
+
+        // Served from the cache once the file is gone.
+        operator.delete(path).await?;
+        let cached = load_index_meta(operator.clone(), path, len, None).await?;
+        assert!(Arc::ptr_eq(&meta, &cached));
+        FuseCaches::instance().index_metas.bloom.evict(path);
+        assert!(load_index_meta(operator, path, len, None).await.is_err());
         Ok(())
     }
 
@@ -397,12 +400,9 @@ mod tests {
         let path = "bloom_index";
         operator.write(path, data.clone()).await?;
 
-        if let Some(cache) = BloomIndexMeta::cache() {
-            cache.evict(path);
-        }
-        if let Some(cache) = FilterImpl::cache() {
-            cache.evict(&format!("{path}-{filter_name}"));
-        }
+        let caches = FuseCaches::instance();
+        caches.index_metas.bloom.evict(path);
+        caches.bloom_filters.evict(&format!("{path}-{filter_name}"));
 
         let settings = ReadSettings {
             max_gap_size: 0,

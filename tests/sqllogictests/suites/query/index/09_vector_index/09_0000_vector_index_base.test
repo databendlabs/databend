@@ -435,6 +435,82 @@ SELECT id FROM t_refine_desc WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) >
 ----
 4
 
+# Rows that tie with the last TopN row are kept, so a second sort key chooses
+# among all of them. From [0,0,0,0], the distance 2.0 (ids 7 and 5) ties across the
+# two blocks, and 3.0 (ids 2, 4 and 6) across and within them. From [0,0,3,0], ids 4
+# and 6 (the same vector) tie at 0 within one block, so HNSW search with limit 1
+# must return both. vector_refine_factor 0 uses SQ8 scores; 1 refines a candidate
+# budget of one row, which must keep its ties too.
+statement ok
+CREATE TABLE t_topn_ties(id Int NOT NULL, embedding Vector(4) NOT NULL,
+  VECTOR INDEX idx(embedding) distance='l2' refine=true)
+
+statement ok
+INSERT INTO t_topn_ties VALUES (7,[2,0,0,0]), (2,[0,0,0,3])
+
+statement ok
+INSERT INTO t_topn_ties VALUES (5,[0,2,0,0]), (4,[0,0,3,0]), (6,[0,0,3,0])
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)), id LIMIT 1
+----
+5
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)), id DESC LIMIT 1
+----
+7
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,3,0]::Vector(4)), id LIMIT 1
+----
+4
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,3,0]::Vector(4)), id DESC LIMIT 1
+----
+6
+
+query I
+SETTINGS (vector_refine_factor = 1) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)), id LIMIT 1
+----
+5
+
+query I
+SETTINGS (vector_refine_factor = 1) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)), id DESC LIMIT 1
+----
+7
+
+query I
+SETTINGS (vector_refine_factor = 1) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,3,0]::Vector(4)), id LIMIT 1
+----
+4
+
+query I
+SETTINGS (vector_refine_factor = 1) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,3,0]::Vector(4)), id DESC LIMIT 1
+----
+6
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC, id LIMIT 1
+----
+2
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)) DESC, id DESC LIMIT 1
+----
+6
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) > 1.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)), id LIMIT 1
+----
+5
+
+query I
+SETTINGS (vector_refine_factor = 0) SELECT id FROM t_topn_ties WHERE l2_distance(embedding,[0,0,0,0]::Vector(4)) > 1.5 ORDER BY l2_distance(embedding,[0,0,0,0]::Vector(4)), id DESC LIMIT 1
+----
+7
+
 statement ok
 use default
 

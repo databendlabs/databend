@@ -498,6 +498,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_aggregate_final_top_n", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Lets the final aggregation of a GROUP BY ordered by aggregate results with a LIMIT of at most max_push_down_limit output only the first rows of each hash table.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",

@@ -20,6 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::SortColumnDescription;
 use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
@@ -43,6 +44,10 @@ pub struct AggregatorParams {
 
     pub max_block_rows: usize,
     pub max_block_bytes: usize,
+
+    /// Set when the final aggregation feeds a top N: its output only needs the first rows
+    /// ordered by these columns of the result, see `PartitionedPayload::top_n_result`.
+    pub top_n: Option<(Vec<SortColumnDescription>, usize)>,
 }
 
 impl AggregatorParams {
@@ -73,6 +78,7 @@ impl AggregatorParams {
             cluster_aggregator,
             max_block_rows,
             max_block_bytes,
+            top_n: None,
         }))
     }
 

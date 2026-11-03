@@ -247,6 +247,12 @@ impl MemStat {
         }
 
         if let Err(cause) = self.check_limit(used) {
+            if alloc_memory > 0
+                && memory_requester.is_none()
+                && matches!(self.parent_memory_stat, ParentMemStat::Root)
+            {
+                self.reclaim_outside_queries();
+            }
             // parent has memory free, try exceeding limit.
             if let Err(mut cause) = self.exceeding_limit(used, memory_requester, cause) {
                 if NEED_ROLLBACK {
@@ -261,6 +267,16 @@ impl MemStat {
         }
 
         Ok(())
+    }
+
+    /// Over the global limit outside any query: nothing waits or fails there, but cache memory
+    /// is reclaimed.
+    fn reclaim_outside_queries(&self) {
+        if std::thread::panicking() || LimitMemGuard::is_unlimited() {
+            return;
+        }
+        let _guard = LimitMemGuard::enter_unlimited();
+        self.queries_memory_manager.reclaim_outside_queries(self);
     }
 
     pub fn wait_memory(&self, id: Option<&String>, oom: OutOfLimit) -> Result<(), OutOfLimit> {
