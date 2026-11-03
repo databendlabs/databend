@@ -64,11 +64,18 @@ impl BasicColumnStatistics {
     }
 
     pub fn merge(&mut self, other: BasicColumnStatistics) {
+        // The sum of two NDVs counts values present in both parts twice, and
+        // the NDV of one part says nothing about the other part, so neither is
+        // an NDV collected over the merged rows. Merging into an empty
+        // statistic, such as `new_null()`, keeps the part's NDV as is.
+        let inferred_ndv = match (self.ndv, other.ndv) {
+            (Some(_), Some(_)) => true,
+            (Some(_), None) => !other.is_empty(),
+            (None, Some(_)) => !self.is_empty(),
+            (None, None) => false,
+        };
         self.min = Datum::min(self.min.clone(), other.min);
         self.max = Datum::max(self.max.clone(), other.max);
-        // The sum of two NDVs counts values present in both parts twice, so it
-        // is not an NDV collected over the merged rows.
-        let summed_ndv = self.ndv.is_some() && other.ndv.is_some();
         self.ndv = match (self.ndv, other.ndv) {
             (Some(x), Some(y)) => Some(x + y),
             (Some(x), None) | (None, Some(x)) => Some(x),
@@ -76,7 +83,15 @@ impl BasicColumnStatistics {
         };
         self.null_count += other.null_count;
         self.in_memory_size += other.in_memory_size;
-        self.ndv_is_inferred |= other.ndv_is_inferred || summed_ndv;
+        self.ndv_is_inferred |= other.ndv_is_inferred || inferred_ndv;
+    }
+
+    fn is_empty(&self) -> bool {
+        self.min.is_none()
+            && self.max.is_none()
+            && self.ndv.is_none()
+            && self.null_count == 0
+            && self.in_memory_size == 0
     }
 
     // Only exactly computed discrete domains are valid NDV upper bounds.
@@ -274,12 +289,18 @@ mod tests {
         assert_eq!(useful.ndv, Some(1_000));
         assert!(useful.ndv_is_inferred);
 
-        // A part without NDV leaves an NDV below the merged row count, which
-        // cannot make the column look unique.
+        // A part without NDV leaves the NDV of the other part only.
         let mut partial = single;
         partial.merge(part(None));
         assert_eq!(partial.ndv, Some(500));
-        assert!(!partial.ndv_is_inferred);
+        assert!(partial.ndv_is_inferred);
+
+        // The same when the part without NDV comes first.
+        let mut partial = BasicColumnStatistics::new_null();
+        partial.merge(part(None));
+        partial.merge(part(Some(500)));
+        assert_eq!(partial.ndv, Some(500));
+        assert!(partial.ndv_is_inferred);
     }
 
     #[test]
