@@ -14,6 +14,7 @@
 
 mod context;
 mod interpreters_impl;
+mod when_condition;
 
 pub mod system_tables;
 pub mod table_functions;
@@ -21,3 +22,4 @@ pub mod table_functions;
 pub use context::TaskContext;
 pub use interpreters_impl::TaskInterpreter;
 pub use interpreters_impl::TaskInterpreterManager;
+pub use when_condition::task_when_sql;

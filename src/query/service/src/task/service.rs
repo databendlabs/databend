@@ -66,6 +66,7 @@ use databend_common_version::BUILD_INFO;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::WatchResponse;
+use databend_query_task_support::task_when_sql;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use futures_util::stream::BoxStream;
@@ -706,9 +707,8 @@ impl TaskService {
             return Ok(true);
         };
         let context = task_service.create_task_context(user.clone(), task).await?;
-        let result = task_service
-            .execute_sql_in_context(context, &format!("SELECT {when_condition}"))
-            .await?;
+        let sql = task_when_sql(when_condition, context.get_settings().get_sql_dialect()?)?;
+        let result = task_service.execute_sql_in_context(context, &sql).await?;
         Ok(result
             .first()
             .and_then(|block| block.get_by_offset(0).index(0))

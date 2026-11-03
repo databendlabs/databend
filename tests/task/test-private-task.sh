@@ -431,6 +431,83 @@ fi
 response=$(query_sql_with_auth "root:" "ALTER TASK when_error_task SUSPEND")
 check_response_error "$response"
 
+# STREAM_STATUS is a table function in ordinary SQL. Private task WHEN must
+# evaluate its has_data result, including inside compound boolean expressions.
+response=$(query_sql_with_auth "root:" "CREATE DATABASE private_task_stream_when")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE TABLE private_task_stream_when.source (v INT)")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE STREAM private_task_stream_when.changes ON TABLE private_task_stream_when.source")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE TABLE private_task_stream_when.sink (v INT)")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE TASK stream_when_task SCHEDULE = 500 MILLISECOND WHEN STREAM_STATUS('private_task_stream_when.changes') = TRUE AND NOT (STREAM_STATUS('private_task_stream_when.changes') = FALSE) AS INSERT INTO private_task_stream_when.sink SELECT v FROM private_task_stream_when.changes")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "ALTER TASK stream_when_task RESUME")
+check_response_error "$response"
+
+wait_for_task_when_result() {
+    local sql="$1"
+    local expected="$2"
+    local description="$3"
+    local response actual attempt
+    for ((attempt = 0; attempt < 30; attempt++)); do
+        response=$(query_sql_with_auth "root:" "$sql")
+        check_response_error "$response"
+        actual=$(echo "$response" | jq -r '.data[0][0]')
+        if [ "$actual" = "$expected" ]; then
+            echo "✅ $description"
+            return
+        fi
+        sleep 1
+    done
+    echo "❌ $description: expected $expected, got $actual"
+    exit 1
+}
+
+wait_for_task_when_result \
+    "SELECT count(*) > 0 FROM TASK_HISTORY(TASK_NAME => 'stream_when_task') WHERE state = 'SKIPPED' AND exception_text LIKE 'WHEN_CONDITION_FALSE:%'" \
+    "true" "Empty streams skip the task and record the reason"
+
+response=$(query_sql_with_auth "root:" "INSERT INTO private_task_stream_when.source VALUES (42)")
+check_response_error "$response"
+wait_for_task_when_result \
+    "SELECT count(*) > 0 FROM TASK_HISTORY(TASK_NAME => 'stream_when_task') WHERE state = 'SUCCEEDED'" \
+    "true" "STREAM_STATUS conditions allow the scheduled task to consume stream data"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK stream_when_task SUSPEND")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "SELECT v FROM private_task_stream_when.sink ORDER BY v")
+check_response_error "$response"
+actual=$(echo "$response" | jq -c '.data')
+if [ "$actual" != '[["42"]]' ]; then
+    echo "❌ Expected the stream task to write exactly one row, got $actual"
+    exit 1
+fi
+response=$(query_sql_with_auth "root:" "SELECT * FROM STREAM_STATUS('private_task_stream_when.changes')")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" != "false" ]; then
+    echo "❌ Expected the task to consume the stream, got has_data=$actual"
+    exit 1
+fi
+
+# An invalid stream reference must be visible as a condition evaluation failure,
+# not silently skip the body or terminate future scheduling.
+response=$(query_sql_with_auth "root:" "ALTER TASK stream_when_task MODIFY WHEN STREAM_STATUS('private_task_stream_when.missing')")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "ALTER TASK stream_when_task RESUME")
+check_response_error "$response"
+wait_for_task_when_result \
+    "SELECT count(*) >= 2 FROM TASK_HISTORY(TASK_NAME => 'stream_when_task', ERROR_ONLY => TRUE) WHERE state = 'FAILED' AND exception_code != 0 AND exception_text LIKE 'WHEN_CONDITION_EVALUATION_ERROR:%'" \
+    "true" "Invalid stream references record repeated condition evaluation failures"
+response=$(query_sql_with_auth "root:" "ALTER TASK stream_when_task SUSPEND")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "DROP TASK stream_when_task")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "DROP DATABASE private_task_stream_when")
+check_response_error "$response"
+
 response=$(query_sql_with_auth "root:" "CREATE TABLE t_failed_task_recovery (c1 int)")
 check_response_error "$response"
 
