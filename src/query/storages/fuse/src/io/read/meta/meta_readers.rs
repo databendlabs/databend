@@ -23,10 +23,10 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_FOOTER_READ_SIZE;
 use databend_storages_common_cache::CacheDef;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
-use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::segment;
@@ -88,7 +88,7 @@ impl Reader for SnapshotReader {
     async fn read(
         &self,
         (location, ver): &SnapshotKey,
-        ctx: &ReadCtx,
+        ctx: &CachePolicy,
     ) -> Result<Arc<TableSnapshot>> {
         let version = SnapshotVersion::try_from(*ver)?;
         let bytes = read_whole::<table::Snapshot>(&self.storage, location, ctx.disk).await?;
@@ -122,7 +122,7 @@ impl Reader for SnapshotStatsReader {
     async fn read(
         &self,
         (location, ver): &SnapshotKey,
-        ctx: &ReadCtx,
+        ctx: &CachePolicy,
     ) -> Result<Arc<TableSnapshotStatistics>> {
         let version = TableSnapshotStatisticsVersion::try_from(*ver)?;
         let bytes = read_whole::<table::SnapshotStats>(&self.storage, location, ctx.disk).await?;
@@ -158,7 +158,7 @@ impl Reader for SegmentInfoReader {
     async fn read(
         &self,
         (location, ver): &Location,
-        ctx: &ReadCtx,
+        ctx: &CachePolicy,
     ) -> Result<Arc<CompactSegmentInfo>> {
         let version = SegmentInfoVersion::try_from(*ver)?;
         let bytes = read_whole::<segment::Info>(&self.storage, location, ctx.disk).await?;
@@ -194,7 +194,7 @@ impl Reader for SegmentStatsReader {
     async fn read(
         &self,
         (location, ver): &Location,
-        ctx: &ReadCtx,
+        ctx: &CachePolicy,
     ) -> Result<Arc<SegmentStatistics>> {
         let version = SegmentStatisticsVersion::try_from(*ver)?;
         let bytes = read_whole::<segment::Stats>(&self.storage, location, ctx.disk).await?;
@@ -221,7 +221,7 @@ impl<T> IndexMetaReader<T> {
         &self,
         kind: CacheKind,
         (path, len): &IndexMetaKey,
-        fill: DiskFill,
+        fill: CacheFill,
     ) -> Result<ParquetMetaData> {
         read_cached_thrift_file_metadata(&self.storage, kind, path, *len, fill)
             .await
@@ -244,7 +244,7 @@ macro_rules! index_meta_reader {
             }
 
             #[async_backtrace::framed]
-            async fn read(&self, key: &IndexMetaKey, ctx: &ReadCtx) -> Result<Arc<$ty>> {
+            async fn read(&self, key: &IndexMetaKey, ctx: &CachePolicy) -> Result<Arc<$ty>> {
                 let $meta = self
                     .read_footer(CacheKind::of::<$kind>(), key, ctx.disk)
                     .await?;
@@ -271,7 +271,7 @@ index_meta_reader!(VirtualColumnFileMeta, virtual_column::Meta, |meta| {
 pub async fn read_whole<D: CacheDef>(
     storage: &DiskCachedStorage,
     path: &str,
-    fill: DiskFill,
+    fill: CacheFill,
 ) -> Result<bytes::Bytes> {
     storage.read(CacheKind::of::<D>(), path, None, fill).await
 }
@@ -342,7 +342,7 @@ mod thrift_file_meta_read {
         kind: CacheKind,
         path: &str,
         len_hint: Option<u64>,
-        fill: DiskFill,
+        fill: CacheFill,
     ) -> Result<ParquetMetaData> {
         read_footer(storage.operator(), path, len_hint, |range| async move {
             storage.read(kind, path, Some(range), fill).await

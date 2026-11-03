@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashSet;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -153,7 +154,7 @@ impl IPhysicalPlan for CompactSource {
         let block_reader = table.create_block_reader(
             builder.ctx.clone(),
             Projection::Columns(table.all_column_indices()),
-            false,
+            CachePolicy::READ_ONLY,
         )?;
         let stream_ctx = if table.change_tracking_enabled() {
             Some(StreamContext::try_create(

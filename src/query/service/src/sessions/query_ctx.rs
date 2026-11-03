@@ -55,6 +55,7 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::lock::LockTableOption;
@@ -204,21 +205,6 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
-    /// Fragments of a maintenance statement run here: see `QueryEnv::maintenance`.
-    pub fn set_maintenance(&self, maintenance: bool) {
-        self.shared
-            .maintenance
-            .store(maintenance, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    /// Whether this query is a maintenance statement run here as fragments
-    /// (`QueryEnv::maintenance`).
-    pub fn is_maintenance(&self) -> bool {
-        self.shared
-            .maintenance
-            .load(std::sync::atomic::Ordering::Relaxed)
-    }
-
     // Each table will create a new QueryContext
     // So partition_queue could be independent in each table context
     // see `builder_join.rs` for more details

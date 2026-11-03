@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_metrics::storage::metrics_inc_block_index_read_bytes;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::kinds::bloom;
@@ -53,6 +54,7 @@ impl BloomColumnFilterReader {
         column_chunk_meta: &SingleColumnMeta,
         operator: Operator,
         schema_desc: SchemaDescPtr,
+        policy: CachePolicy,
     ) -> Self {
         let cache_key = format!("{index_path}-{filter_name}");
 
@@ -73,7 +75,7 @@ impl BloomColumnFilterReader {
         };
 
         BloomColumnFilterReader {
-            cache: FuseCaches::instance().bloom_filters.clone(),
+            cache: FuseCaches::instance().bloom_filters.with_policy(policy),
             loader,
             index_path,
         }
@@ -117,7 +119,7 @@ impl BloomFilterLoader {
                 CacheKind::of::<bloom::Filter>(),
                 path,
                 Some(range),
-                cache.disk_fill(),
+                cache.policy().disk,
             )
             .await?;
         self.decode_filter(chunk)

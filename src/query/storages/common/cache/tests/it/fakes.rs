@@ -21,10 +21,10 @@ use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
-use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::backend::KindStore;
 use databend_storages_common_cache::kinds::bloom;
@@ -127,7 +127,7 @@ impl Reader for FakeReader {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, _key: &String, _ctx: &ReadCtx) -> Result<Item> {
+    async fn read(&self, _key: &String, _ctx: &CachePolicy) -> Result<Item> {
         if !self.delay.is_zero() {
             tokio::time::sleep(self.delay).await;
         }

@@ -276,7 +276,7 @@ Flow:
 1. Use the same deterministic routing decision derived from `plan.push_downs`.
 2. Resolve the selected target table.
 3. Build a delegated `DataSourcePlan`, preserving partitions, pushdowns, projections, internal columns, and other read metadata, while replacing `source_info` with the target table info.
-4. Call `target_table.read_data(ctx, &delegated_plan, pipeline, put_cache)`.
+4. Call `target_table.read_data(ctx, &delegated_plan, pipeline, cache_policy)`.
 
 It is not enough to let the default `dyn Table::read_plan` build a proxy `source_info` and then pass that plan to the target table. During execution, `build_table_from_source_plan` rebuilds the table from `source_info`:
 
@@ -290,7 +290,7 @@ fn read_data(
     ctx: Arc<dyn TableContext>,
     plan: &DataSourcePlan,
     pipeline: &mut Pipeline,
-    put_cache: bool,
+    cache_policy: CachePolicy,
 ) -> Result<()> {
     let decision = self.router.route(plan.push_downs.as_ref())?;
     let target_table = block_on(self.resolve_target_table(ctx.clone(), &decision.target))?;
@@ -298,7 +298,7 @@ fn read_data(
     let mut delegated_plan = plan.clone();
     delegated_plan.source_info = target_table.get_data_source_info();
 
-    target_table.read_data(ctx, &delegated_plan, pipeline, put_cache)
+    target_table.read_data(ctx, &delegated_plan, pipeline, cache_policy)
 }
 ```
 

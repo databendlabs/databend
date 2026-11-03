@@ -93,7 +93,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
 use databend_common_storage::init_operator_with_policy_scope;
-use databend_storages_common_cache::ReadCtx;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::RangeIndex;
@@ -505,22 +505,49 @@ impl FuseTable {
         &self,
         snapshot: Option<&Arc<TableSnapshot>>,
     ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
+        self.read_table_snapshot_statistics_with_policy(snapshot, CachePolicy::DEFAULT)
+            .await
+    }
+
+    /// The statistics of `snapshot`, read under `policy`.
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_statistics_with_policy(
+        &self,
+        snapshot: Option<&Arc<TableSnapshot>>,
+        policy: CachePolicy,
+    ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
         if let Some(snapshot) = snapshot {
             if let Some(loc) = &snapshot.table_statistics_location {
                 let reader = SnapshotStatsReader::new(self.get_operator());
                 let ver = TableMetaLocationGenerator::table_statistics_version(loc);
-                let cache = &FuseCaches::instance().snapshots;
+                let cache = &FuseCaches::instance().snapshots.with_policy(policy);
                 return Ok(Some(cache.get_stats(&reader, loc.clone(), ver).await?));
             }
         }
         Ok(None)
     }
 
+    /// The current snapshot, read as queries read it (`CachePolicy::DEFAULT`).
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
-        self.read_table_snapshot_with_location(self.snapshot_loc())
+        self.read_table_snapshot_with_policy(CachePolicy::DEFAULT)
             .await
+    }
+
+    /// The current snapshot, read under `policy`, as maintenance reads it with the policy of
+    /// its statement.
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_with_policy(
+        &self,
+        policy: CachePolicy,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        let loc = self.snapshot_loc();
+        let ver = self.snapshot_format_version(loc.clone())?;
+        let cache = &FuseCaches::instance().snapshots.with_policy(policy);
+        Self::read_table_snapshot_at(cache, self.get_operator(), loc, ver).await
     }
 
     #[fastrace::trace]
@@ -566,7 +593,7 @@ impl FuseTable {
         match snapshot_location {
             Some(location) => Ok(Some(
                 SnapshotReader::new(operator)
-                    .read(&(location, ver), &ReadCtx::BYPASS)
+                    .read(&(location, ver), &CachePolicy::BYPASS)
                     .await?,
             )),
             None => Ok(None),
@@ -1219,11 +1246,11 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        put_cache: bool,
+        cache_policy: CachePolicy,
     ) -> Result<()> {
         self.check_data_sharing_license(ctx.as_ref())?;
         self.check_format_supported()?;
-        self.do_read_data(ctx, plan, pipeline, put_cache)
+        self.do_read_data(ctx, plan, pipeline, cache_policy)
     }
 
     fn append_data(
@@ -1438,7 +1465,7 @@ impl Table for FuseTable {
 
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
             let segments = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
                 .await?;
             let mut partial_col_stats = Vec::with_capacity(chunk_size);
             // 1. Carry the previously reduced ranges

@@ -23,9 +23,9 @@ use std::sync::atomic::Ordering;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::CachedItem;
-use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
@@ -141,7 +141,7 @@ impl<K: Sample> Reader for SampleReader<K> {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, key: &String, _ctx: &ReadCtx) -> Result<K::Value> {
+    async fn read(&self, key: &String, _ctx: &CachePolicy) -> Result<K::Value> {
         if self.yields {
             yield_once().await;
         }
@@ -202,7 +202,7 @@ impl<K: Sample> KindCase for Case<K> {
         assert_eq!(stats.resident, charge(&first) + charge(&second), "{name}");
 
         // A read-only view hits, but does not fill.
-        let view = cache.read_only();
+        let view = cache.with_policy(CachePolicy::READ_ONLY);
         assert!(view.lookup("a").is_some(), "{name}");
         view.fill("b", K::sample(3));
         assert!(!cache.contains("b"), "{name}");
@@ -268,7 +268,9 @@ impl<K: Sample> KindCase for Case<K> {
             2 => cache.lookup(&key),
             3 => Some(block_on(cache.get(&SampleReader::<K>::new(), key)).unwrap()),
             4 => {
-                cache.read_only().fill(&key, K::sample(rng.r#gen()));
+                cache
+                    .with_policy(CachePolicy::READ_ONLY)
+                    .fill(&key, K::sample(rng.r#gen()));
                 None
             }
             _ => {

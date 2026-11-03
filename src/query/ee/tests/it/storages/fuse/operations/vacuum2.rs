@@ -58,7 +58,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
 use databend_query::test_kits::query_count;
-use databend_storages_common_cache::ReadCtx;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -666,7 +666,7 @@ async fn inverted_index_locations(table: &FuseTable) -> Result<HashSet<String>> 
     let mut locations = HashSet::new();
     for (location, ver) in &snapshot.segments {
         let segment = reader
-            .read(&(location.clone(), *ver), &ReadCtx::BYPASS)
+            .read(&(location.clone(), *ver), &CachePolicy::BYPASS)
             .await?;
         for block in segment.block_metas()? {
             locations.extend(
@@ -947,7 +947,7 @@ async fn test_staged_clone_pins_only_selected_root_during_vacuum() -> anyhow::Re
     let reader = SegmentInfoReader::new(fuse.get_operator(), fuse.schema());
     for (location, ver) in &pinned.segments {
         let segment = reader
-            .read(&(location.clone(), *ver), &ReadCtx::BYPASS)
+            .read(&(location.clone(), *ver), &CachePolicy::BYPASS)
             .await?;
         pinned_files.push(location.clone());
         pinned_files.extend(
@@ -1211,7 +1211,13 @@ async fn test_clone_tag_scan_after_lvt_publication() -> anyhow::Result<()> {
     assert_eq!(mark.descendant_ids.len(), 2);
     let mut tag_segments = HashSet::new();
     source
-        .extend_clone_descendant_tag_segments(&catalog, &mark.descendant_ids, 1, &mut tag_segments)
+        .extend_clone_descendant_tag_segments(
+            &catalog,
+            &mark.descendant_ids,
+            1,
+            &mut tag_segments,
+            CachePolicy::DEFAULT,
+        )
         .await?;
     assert_eq!(tag_segments, expected);
     Ok(())
@@ -1548,7 +1554,7 @@ async fn test_vacuum2_protected_segments_span_multiple_chunks() -> anyhow::Resul
     let mut live_blocks = Vec::new();
     for chunk in snapshot.segments.chunks(500) {
         let segments = segments_io
-            .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+            .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
             .await?;
         for segment in segments {
             for block in segment?.block_metas()?.iter() {

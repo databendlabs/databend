@@ -23,11 +23,11 @@ use std::time::Instant;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::PoolCaps;
-use databend_storages_common_cache::ReadCtx;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::TTLReader;
 use databend_storages_common_cache::TTLValue;
@@ -89,7 +89,7 @@ impl Reader for CountingReader {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, _key: &String, _ctx: &ReadCtx) -> Result<Value> {
+    async fn read(&self, _key: &String, _ctx: &CachePolicy) -> Result<Value> {
         while self.hold.load(Ordering::SeqCst) {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }

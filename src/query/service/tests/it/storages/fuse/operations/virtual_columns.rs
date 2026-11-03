@@ -32,7 +32,7 @@ use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::ReadCtx;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::Table;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -161,7 +161,7 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
 
     for (location, ver) in &snapshot.segments {
         let segment_info = segment_reader
-            .read(&(location.to_string(), *ver), &ReadCtx::BYPASS)
+            .read(&(location.to_string(), *ver), &CachePolicy::BYPASS)
             .await?;
 
         let block_metas = segment_info.block_metas()?;
@@ -235,7 +235,7 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let (seg_loc, seg_ver) = snapshot.segments[0].clone();
 
     let seg = reader
-        .read(&(seg_loc.clone(), seg_ver), &ReadCtx::BYPASS)
+        .read(&(seg_loc.clone(), seg_ver), &CachePolicy::BYPASS)
         .await?;
 
     let mut seg_info = SegmentInfo::try_from(seg.as_ref())?;
@@ -308,7 +308,7 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let tampered_segment = reader
         .read(
             &(new_seg_loc.clone(), SegmentInfo::VERSION),
-            &ReadCtx::BYPASS,
+            &CachePolicy::BYPASS,
         )
         .await?;
     assert_eq!(
@@ -320,7 +320,7 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let mut legacy_ref_count = 0;
     for (loc, ver) in &snap.segments {
         let seg = reader
-            .read(&(loc.to_string(), *ver), &ReadCtx::BYPASS)
+            .read(&(loc.to_string(), *ver), &CachePolicy::BYPASS)
             .await?;
         for bm in seg.block_metas()? {
             if let Some(vbm) = &bm.virtual_block_meta

@@ -18,8 +18,8 @@ use std::sync::Arc;
 use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -51,7 +51,14 @@ pub trait SegmentReader: Send + Sync + 'static {
         projection: &HashSet<String>,
         table_schema: TableSchemaRef,
     ) -> Result<Arc<Self::CompactSegment>> {
-        Self::read_compact_segment(dal, location, projection, table_schema, true).await
+        Self::read_compact_segment(
+            dal,
+            location,
+            projection,
+            table_schema,
+            CachePolicy::DEFAULT,
+        )
+        .await
     }
 
     async fn read_compact_segment(
@@ -59,7 +66,7 @@ pub trait SegmentReader: Send + Sync + 'static {
         location: Location,
         projection: &HashSet<String>,
         table_schema: TableSchemaRef,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Arc<Self::CompactSegment>>;
 
     async fn read_segment(
@@ -67,7 +74,7 @@ pub trait SegmentReader: Send + Sync + 'static {
         location: Location,
         projection: &HashSet<String>,
         table_schema: TableSchemaRef,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Self::Segment>;
 }
 
@@ -84,9 +91,9 @@ impl SegmentReader for RowOrientedSegmentReader {
         location: Location,
         _projection: &HashSet<String>,
         table_schema: TableSchemaRef,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Arc<Self::CompactSegment>> {
-        SegmentsIO::read_compact_segment(dal, location, table_schema, put_cache).await
+        SegmentsIO::read_compact_segment(dal, location, table_schema, policy).await
     }
 
     async fn read_segment(
@@ -94,10 +101,10 @@ impl SegmentReader for RowOrientedSegmentReader {
         location: Location,
         projection: &HashSet<String>,
         table_schema: TableSchemaRef,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Self::Segment> {
         let segment =
-            Self::read_compact_segment(dal, location, projection, table_schema, put_cache).await?;
+            Self::read_compact_segment(dal, location, projection, table_schema, policy).await?;
         Ok(segment.try_into()?)
     }
 }
@@ -115,9 +122,9 @@ impl SegmentReader for ColumnOrientedSegmentReader {
         location: Location,
         projection: &HashSet<String>,
         _table_schema: TableSchemaRef,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Arc<Self::CompactSegment>> {
-        read_column_oriented_segment(dal, &location.0, projection, put_cache)
+        read_column_oriented_segment(dal, &location.0, projection, policy)
             .await
             .map(Arc::new)
     }
@@ -127,21 +134,16 @@ impl SegmentReader for ColumnOrientedSegmentReader {
         location: Location,
         projection: &HashSet<String>,
         _table_schema: TableSchemaRef,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Self::Segment> {
-        read_column_oriented_segment(dal, &location.0, projection, put_cache).await
+        read_column_oriented_segment(dal, &location.0, projection, policy).await
     }
 }
 
 /// The whole column-oriented segment, through the disk cache. Columns are decoded on demand, so
 /// a later projection reads the object again; the disk keeps it local.
-async fn read_whole_segment(dal: Operator, location: &str, put_cache: bool) -> Result<Bytes> {
-    let fill = if put_cache {
-        DiskFill::ReadWrite
-    } else {
-        DiskFill::ReadOnly
-    };
-    read_whole::<segment::ColumnOriented>(&DiskCachedStorage::new(dal), location, fill).await
+async fn read_whole_segment(dal: Operator, location: &str, policy: CachePolicy) -> Result<Bytes> {
+    read_whole::<segment::ColumnOriented>(&DiskCachedStorage::new(dal), location, policy.disk).await
 }
 
 /// Read a column-oriented segment from the storage or cache.
@@ -155,7 +157,7 @@ async fn read_whole_segment(dal: Operator, location: &str, put_cache: bool) -> R
 /// * `dal`: The operator to read the segment from the storage.
 /// * `location`: The location of the segment.
 /// * `projection`: The names of the columns to be read.
-/// * `put_cache`: Whether to put the segment into the cache.
+/// * `policy`: What the read may do with the memory and disk caches.
 ///
 /// # Returns
 ///
@@ -164,9 +166,9 @@ pub async fn read_column_oriented_segment(
     dal: Operator,
     location: &str,
     projection: &HashSet<String>,
-    put_cache: bool,
+    policy: CachePolicy,
 ) -> Result<ColumnOrientedSegment> {
-    let cache = &FuseCaches::instance().segments;
+    let cache = &FuseCaches::instance().segments.with_policy(policy);
     let cached_segment = cache.lookup_column_oriented(location);
     let need_summary = cached_segment.is_none();
     match cached_segment {
@@ -180,7 +182,7 @@ pub async fn read_column_oriented_segment(
             if missed_cols.is_empty() {
                 return Ok((*segment).clone());
             }
-            let bytes = read_whole_segment(dal, location, put_cache).await?;
+            let bytes = read_whole_segment(dal, location, policy).await?;
             let (block_metas, schema, _) =
                 deserialize_column_oriented_segment(bytes, &missed_cols, need_summary)?;
 
@@ -194,13 +196,11 @@ pub async fn read_column_oriented_segment(
                 segment_schema: merged_schema,
             };
 
-            if put_cache {
-                cache.fill_column_oriented(location, Arc::new(merged_segment.clone()));
-            }
+            cache.fill_column_oriented(location, Arc::new(merged_segment.clone()));
             Ok(merged_segment)
         }
         None => {
-            let bytes = read_whole_segment(dal, location, put_cache).await?;
+            let bytes = read_whole_segment(dal, location, policy).await?;
             let (block_metas, segment_schema, summary) =
                 deserialize_column_oriented_segment(bytes, projection, need_summary)?;
             let segment = ColumnOrientedSegment {
@@ -209,9 +209,7 @@ pub async fn read_column_oriented_segment(
                 segment_schema,
             };
 
-            if put_cache {
-                cache.fill_column_oriented(location, Arc::new(segment.clone()));
-            }
+            cache.fill_column_oriented(location, Arc::new(segment.clone()));
             Ok(segment)
         }
     }

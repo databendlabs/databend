@@ -24,9 +24,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_index::VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE;
@@ -54,10 +55,14 @@ pub async fn load_bundle_footer(
     operator: Operator,
     location: &str,
     size: u64,
+    policy: CachePolicy,
 ) -> Result<Arc<VectorBundleFooter>> {
     // Parsed footers live in the vector index meta cache, keyed by location (bundle
     // and legacy files have different paths), so hits need no I/O or parsing.
-    let cache = &FuseCaches::instance().index_metas.vector;
+    let cache = &FuseCaches::instance()
+        .index_metas
+        .vector
+        .with_policy(policy);
     if let Some(meta) = cache.lookup(location) {
         return match meta.as_ref() {
             VectorIndexMeta::Bundle(footer) => Ok(footer.clone()),
@@ -76,7 +81,7 @@ pub async fn load_bundle_footer(
     // The tail and, when larger, the footer are units of the disk cache.
     let storage = DiskCachedStorage::new(operator);
     let meta_kind = CacheKind::of::<vector::Meta>();
-    let fill = cache.disk_fill();
+    let fill = cache.policy().disk;
     let tail = storage
         .read(meta_kind, location, Some(tail_start..size), fill)
         .await?;
@@ -177,7 +182,7 @@ async fn load_bundle_reads_inner(
         // without a memory cache (decoded into the HNSW cache) do not.
         let fill = cache
             .as_ref()
-            .map_or(DiskFill::Bypass, |cache| cache.disk_fill());
+            .map_or(CacheFill::Bypass, |cache| cache.policy().disk);
         let read = DiskCachedStorage::new(operator)
             .read_units(
                 CacheKind::of::<vector::Refine>(),

@@ -39,6 +39,7 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
@@ -189,8 +190,8 @@ pub struct QueryContextShared {
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
-    /// On a node running fragments of a maintenance statement (`QueryEnv::maintenance`).
-    pub(super) maintenance: AtomicBool,
+    /// What the reads of the statement may do with the caches (`TableContextCachePolicy`).
+    pub(super) cache_policy: RwLock<CachePolicy>,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
@@ -286,7 +287,7 @@ impl QueryContextShared {
             remote_io_stats: Default::default(),
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
-            maintenance: AtomicBool::new(false),
+            cache_policy: RwLock::new(CachePolicy::DEFAULT),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),

@@ -29,6 +29,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_index::BloomIndexMeta;
@@ -57,6 +58,7 @@ pub trait BloomBlockFilterReader {
         settings: &ReadSettings,
         columns: &[String],
         index_length: u64,
+        policy: CachePolicy,
     ) -> Result<BlockFilter>;
 }
 
@@ -71,6 +73,7 @@ impl BloomBlockFilterReader for Location {
         settings: &ReadSettings,
         columns: &[String],
         index_length: u64,
+        policy: CachePolicy,
     ) -> Result<BlockFilter> {
         let (path, ver) = &self;
         let index_version = BlockBloomFilterIndexVersion::try_from(*ver)?;
@@ -81,8 +84,15 @@ impl BloomBlockFilterReader for Location {
             BlockBloomFilterIndexVersion::V2(_)
             | BlockBloomFilterIndexVersion::V3(_)
             | BlockBloomFilterIndexVersion::V4(_) => {
-                let res = load_bloom_filter_by_columns(dal, settings, columns, path, index_length)
-                    .await?;
+                let res = load_bloom_filter_by_columns(
+                    dal,
+                    settings,
+                    columns,
+                    path,
+                    index_length,
+                    policy,
+                )
+                .await?;
                 Ok(res)
             }
         }
@@ -97,13 +107,20 @@ pub async fn load_bloom_filter_by_columns<'a>(
     column_needed: &'a [String],
     index_path: &'a str,
     index_length: u64,
+    policy: CachePolicy,
 ) -> Result<BlockFilter> {
     let whole_file =
-        prepare_bloom_index_read_source(&dal, settings, index_path, index_length).await?;
+        prepare_bloom_index_read_source(&dal, settings, index_path, index_length, policy).await?;
 
     // 1. load index meta
-    let bloom_index_meta =
-        load_index_meta(dal.clone(), index_path, index_length, whole_file.as_ref()).await?;
+    let bloom_index_meta = load_index_meta(
+        dal.clone(),
+        index_path,
+        index_length,
+        whole_file.as_ref(),
+        policy,
+    )
+    .await?;
 
     // 2. filter out columns that needed and exist in the index
     // 2.1 dedup the columns
@@ -141,6 +158,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
                 &dal,
                 bloom_index_schema_desc.clone(),
                 whole_file.as_ref(),
+                policy,
             )
         })
         .collect::<Vec<_>>();
@@ -172,6 +190,7 @@ async fn load_column_bloom_filter<'a>(
     dal: &'a Operator,
     bloom_index_schema_desc: SchemaDescPtr,
     whole_file: Option<&Arc<Bytes>>,
+    policy: CachePolicy,
 ) -> Result<Arc<FilterImpl>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
@@ -182,6 +201,7 @@ async fn load_column_bloom_filter<'a>(
             col_chunk_meta,
             dal.clone(),
             bloom_index_schema_desc,
+            policy,
         );
         let whole_file = whole_file.cloned();
         async move { column_data_reader.read(whole_file.as_ref()).await }
@@ -199,8 +219,9 @@ pub async fn load_index_meta(
     path: &str,
     length: u64,
     whole_file: Option<&Arc<Bytes>>,
+    policy: CachePolicy,
 ) -> Result<Arc<BloomIndexMeta>> {
-    let cache = FuseCaches::instance().index_metas.bloom.clone();
+    let cache = FuseCaches::instance().index_metas.bloom.with_policy(policy);
     if let Some(whole_file) = whole_file {
         let meta = load_index_meta_from_bytes(whole_file)?;
         return Ok(Arc::clone(&cache.fill(path, Arc::new(meta))));
@@ -223,12 +244,12 @@ async fn prepare_bloom_index_read_source(
     settings: &ReadSettings,
     path: &str,
     index_length: u64,
+    policy: CachePolicy,
 ) -> Result<Option<Arc<Bytes>>> {
     let storage = DiskCachedStorage::new(dal.clone());
-    if should_read_whole_bloom_index(path, settings, index_length, &storage) {
-        let fill = FuseCaches::instance().index_metas.bloom.disk_fill();
+    if should_read_whole_bloom_index(path, settings, index_length, &storage, policy) {
         let data = storage
-            .read(CacheKind::of::<bloom::Filter>(), path, None, fill)
+            .read(CacheKind::of::<bloom::Filter>(), path, None, policy.disk)
             .await?;
         return Ok(Some(Arc::new(data)));
     }
@@ -244,15 +265,15 @@ fn should_read_whole_bloom_index(
     settings: &ReadSettings,
     index_length: u64,
     storage: &DiskCachedStorage,
+    policy: CachePolicy,
 ) -> bool {
     if index_length > settings.parquet_fast_read_bytes {
         return false;
     }
-    let metas = &FuseCaches::instance().index_metas.bloom;
-    if metas.contains(path) {
+    if policy.memory.reads() && FuseCaches::instance().index_metas.bloom.contains(path) {
         return false;
     }
-    let fill = metas.disk_fill();
+    let fill = policy.disk;
     storage.admits(CacheKind::of::<bloom::Filter>(), index_length, fill)
         || !storage.uses_disk(CacheKind::of::<bloom::IndexMeta>(), fill)
 }
@@ -387,11 +408,12 @@ mod tests {
         let storage = DiskCachedStorage::with_disk(operator.clone(), None);
         let cache = &FuseCaches::instance().index_metas.bloom;
         cache.evict(path);
+        let policy = CachePolicy::DEFAULT;
         assert!(should_read_whole_bloom_index(
-            path, &settings, 512, &storage
+            path, &settings, 512, &storage, policy
         ));
         assert!(!should_read_whole_bloom_index(
-            path, &settings, 2048, &storage
+            path, &settings, 2048, &storage, policy
         ));
 
         // With a disk cache: read whole when the file can be kept whole in the index pool,
@@ -402,7 +424,7 @@ mod tests {
             let disk = DiskCache::new(dir.path(), 1 << 30, [1 << 20, index_pool, 1 << 20], false)?;
             let storage = DiskCachedStorage::with_disk(operator.clone(), Some(Arc::new(disk)));
             assert_eq!(
-                should_read_whole_bloom_index(path, &settings, 512, &storage),
+                should_read_whole_bloom_index(path, &settings, 512, &storage, policy),
                 whole,
                 "index pool {index_pool}"
             );
@@ -410,7 +432,15 @@ mod tests {
 
         cache.put(path, Arc::new(BloomIndexMeta { columns: vec![] }));
         assert!(!should_read_whole_bloom_index(
-            path, &settings, 512, &storage
+            path, &settings, 512, &storage, policy
+        ));
+        // A read that bypasses the disk cache keeps no footer there: read whole.
+        assert!(should_read_whole_bloom_index(
+            path,
+            &settings,
+            512,
+            &storage,
+            CachePolicy::BYPASS
         ));
         Ok(())
     }
@@ -425,15 +455,20 @@ mod tests {
         FuseCaches::instance().index_metas.bloom.evict(path);
 
         let len = data.len() as u64;
-        let meta = load_index_meta(operator.clone(), path, len, None).await?;
+        let policy = CachePolicy::DEFAULT;
+        let meta = load_index_meta(operator.clone(), path, len, None, policy).await?;
         assert_eq!(meta.columns.len(), 1);
 
         // Served from the cache once the file is gone.
         operator.delete(path).await?;
-        let cached = load_index_meta(operator.clone(), path, len, None).await?;
+        let cached = load_index_meta(operator.clone(), path, len, None, policy).await?;
         assert!(Arc::ptr_eq(&meta, &cached));
         FuseCaches::instance().index_metas.bloom.evict(path);
-        assert!(load_index_meta(operator, path, len, None).await.is_err());
+        assert!(
+            load_index_meta(operator, path, len, None, policy)
+                .await
+                .is_err()
+        );
         Ok(())
     }
 
@@ -462,6 +497,7 @@ mod tests {
             &[filter_name.clone()],
             path,
             data.len() as u64,
+            CachePolicy::DEFAULT,
         )
         .await?;
 

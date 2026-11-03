@@ -19,6 +19,7 @@ use std::time::Instant;
 use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::Fp16QueryScorer;
 use databend_storages_common_index::HNSWIndex;
@@ -47,6 +48,7 @@ impl VectorIndexReader {
     pub fn create(
         operator: Operator,
         settings: ReadSettings,
+        policy: CachePolicy,
         distance_type: DistanceType,
         query_values: Vec<f32>,
         identity: VectorIndexIdentity,
@@ -58,8 +60,14 @@ impl VectorIndexReader {
             .refine_factor
             .map(|_| Arc::new(Fp16QueryScorer::new(query_values.clone(), distance_type)));
         let query_values = HNSWIndex::preprocess_query(distance_type, query_values);
-        let loader =
-            VectorIndexLoader::new(operator.clone(), settings, distance_type, dim, identity);
+        let loader = VectorIndexLoader::new(
+            operator.clone(),
+            settings,
+            policy,
+            distance_type,
+            dim,
+            identity,
+        );
         Self {
             loader,
             query_values,
@@ -138,8 +146,14 @@ impl VectorIndexReader {
             .refine_scorer
             .as_deref()
             .ok_or_else(|| ErrorCode::BadArguments("FP16 refinement is not enabled"))?;
-        let refine =
-            RefineData::open(&self.operator, location, self.loader.identity(), row_count).await?;
+        let refine = RefineData::open(
+            &self.operator,
+            location,
+            self.loader.identity(),
+            row_count,
+            self.loader.policy(),
+        )
+        .await?;
         if refine.dimension != scorer.dimension() {
             return Err(ErrorCode::StorageOther("FP16 bundle dimension mismatch"));
         }
@@ -216,6 +230,7 @@ mod tests {
                 max_range_size: 1024 * 1024,
                 parquet_fast_read_bytes: 0,
             },
+            CachePolicy::DEFAULT,
             DistanceType::L2,
             vec![1.0; DIM],
             VectorIndexIdentity {
@@ -306,7 +321,8 @@ mod tests {
             max_range_size: 1024 * 1024,
             parquet_fast_read_bytes: 0,
         };
-        let mut refine = RefineData::open(&operator, &location, &identity, ROWS).await?;
+        let mut refine =
+            RefineData::open(&operator, &location, &identity, ROWS, CachePolicy::DEFAULT).await?;
         let whole = refine.read_pages(&settings, &[0]).await?.remove(0);
         assert_eq!(whole.len(), ROWS * DIM * 2);
 

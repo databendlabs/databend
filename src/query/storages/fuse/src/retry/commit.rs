@@ -25,6 +25,7 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_session::TxnTableDelta;
@@ -303,6 +304,7 @@ async fn try_rebuild_req(
                 statistics_row_count,
                 &BlockTopN::new(),
                 false,
+                CachePolicy::DEFAULT,
             )
             .await?;
         let stats_location = stats_gen.table_statistics_location();

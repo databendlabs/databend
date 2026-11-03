@@ -76,10 +76,10 @@ where
             let cache = self.cache.clone();
             let reader = self.reader.clone();
             let key = key.to_string();
-            let ctx = cache.read_ctx();
+            let policy = cache.policy();
             databend_common_base::runtime::spawn(async move {
                 let start = Instant::now();
-                match reader.read(&key, &ctx).await {
+                match reader.read(&key, &policy).await {
                     Ok(value) => {
                         metrics_inc_cache_miss_load_millisecond(
                             start.elapsed().as_millis() as u64,
@@ -120,7 +120,7 @@ where
         let start = Instant::now();
         let value = self
             .reader
-            .read(&key.to_string(), &self.cache.read_ctx())
+            .read(&key.to_string(), &self.cache.policy())
             .await?;
         if !self.cache.is_enabled() {
             return Ok(self.cache.fill(key, value));

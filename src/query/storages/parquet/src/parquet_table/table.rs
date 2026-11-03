@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use arrow_schema::Schema as ArrowSchema;
 use chrono::DateTime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
@@ -264,7 +265,7 @@ impl Table for ParquetTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline)
     }

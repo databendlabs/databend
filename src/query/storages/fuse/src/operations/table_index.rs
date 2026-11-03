@@ -42,6 +42,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::AsyncTransform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::FilterImpl;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_io::ReadSettings;
@@ -115,7 +116,10 @@ pub async fn do_refresh_table_index(
         .get(&index_name)
         .ok_or_else(|| ErrorCode::RefreshIndexError(format!("Index: {index_name} not found")))?;
 
-    let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
+    let Some(snapshot) = fuse_table
+        .read_table_snapshot_with_policy(ctx.cache_policy())
+        .await?
+    else {
         // no snapshot
         return Ok(0);
     };
@@ -134,11 +138,13 @@ pub async fn do_refresh_table_index(
     // Read data here to keep the order of blocks in segment.
     let projection = Projection::Columns(field_indices);
 
-    let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
+    let block_reader =
+        fuse_table.create_block_reader(ctx.clone(), projection, CachePolicy::READ_ONLY)?;
 
     let meta_locations = fuse_table.meta_location_generator().clone();
     let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
-    let segment_cache = FuseCaches::instance().segments.read_only();
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     if snapshot.segments.is_empty() {
         return Ok(0);
@@ -165,7 +171,7 @@ pub async fn do_refresh_table_index(
         let stats = match segment_info.summary.additional_stats_loc() {
             Some(loc) => {
                 let mut stats =
-                    Arc::unwrap_or_clone(read_segment_stats(operator.clone(), loc).await?);
+                    Arc::unwrap_or_clone(read_segment_stats(operator.clone(), loc, policy).await?);
                 stats.align_to_blocks(blocks.len())?;
                 Some(Arc::new(stats))
             }
@@ -182,6 +188,7 @@ pub async fn do_refresh_table_index(
                     block_meta,
                     stats.clone(),
                     &index_arg,
+                    ctx.cache_policy(),
                 )
             })
             .buffered(REFRESH_CHECK_CONCURRENCY)
@@ -245,6 +252,7 @@ pub async fn do_refresh_table_index(
             pipeline.add_async_transformer(|| {
                 VectorIndexTransform::new(
                     operator.clone(),
+                    ctx.cache_policy(),
                     active_versions.clone(),
                     table_indexes.clone(),
                     index_schema.clone(),
@@ -259,6 +267,7 @@ pub async fn do_refresh_table_index(
                 SpatialIndexTransform::new(
                     operator.clone(),
                     settings,
+                    ctx.cache_policy(),
                     table_indexes.clone(),
                     index_schema.clone(),
                     meta_locations.clone(),
@@ -380,6 +389,7 @@ async fn check_index_generated(
     block_meta: Arc<BlockMeta>,
     stats: Option<Arc<SegmentStatistics>>,
     index_arg: &RefreshIndexArg,
+    policy: CachePolicy,
 ) -> Result<Option<RefreshIndexMeta>> {
     match index_arg {
         RefreshIndexArg::Ngram(ngram_index_arg) => {
@@ -390,6 +400,7 @@ async fn check_index_generated(
                 block_meta,
                 stats,
                 ngram_index_arg,
+                policy,
             )
             .await
         }
@@ -412,6 +423,7 @@ async fn check_index_generated(
                 block_meta,
                 stats,
                 spatial_index_arg,
+                policy,
             )
             .await
         }
@@ -425,6 +437,7 @@ async fn check_ngram_index_generated(
     block_meta: Arc<BlockMeta>,
     stats: Option<Arc<SegmentStatistics>>,
     ngram_index_arg: &RefreshNgramIndexArg,
+    policy: CachePolicy,
 ) -> Result<Option<RefreshIndexMeta>> {
     let index_location = TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
         &block_meta.location.0,
@@ -435,8 +448,14 @@ async fn check_ngram_index_generated(
         .await
         .map(|meta| meta.content_length())
     {
-        let bloom_index_meta =
-            load_index_meta(operator.clone(), &index_location, content_length, None).await?;
+        let bloom_index_meta = load_index_meta(
+            operator.clone(),
+            &index_location,
+            content_length,
+            None,
+            policy,
+        )
+        .await?;
 
         let mut all_generated = true;
         for ngram_index_name in &ngram_index_arg.ngram_index_names {
@@ -529,6 +548,7 @@ async fn check_spatial_index_generated(
     block_meta: Arc<BlockMeta>,
     stats: Option<Arc<SegmentStatistics>>,
     spatial_index_arg: &RefreshSpatialIndexArg,
+    policy: CachePolicy,
 ) -> Result<Option<RefreshIndexMeta>> {
     let mut index_columns = None;
     let mut index_meta = None;
@@ -548,7 +568,7 @@ async fn check_spatial_index_generated(
             .map(|meta| meta.content_length())
         {
             let spatial_index_meta =
-                load_spatial_index_meta(operator.clone(), index_location).await?;
+                load_spatial_index_meta(operator.clone(), index_location, policy).await?;
 
             let current_index_generated = spatial_index_meta
                 .metadata
@@ -749,6 +769,7 @@ impl AsyncTransform for NgramIndexTransform {
                     &index_columns,
                     &index_path,
                     block_meta.bloom_filter_index_size,
+                    self.ctx.cache_policy(),
                 )
                 .await?;
                 let new_ngram_columns = new_ngram_index.serialize_to_data_block()?.take_columns();
@@ -818,6 +839,7 @@ impl AsyncTransform for NgramIndexTransform {
 
 pub struct VectorIndexTransform {
     operator: Operator,
+    cache_policy: CachePolicy,
     active_versions: BTreeMap<String, String>,
     table_indexes: BTreeMap<String, TableIndex>,
     index_schema: TableSchemaRef,
@@ -827,6 +849,7 @@ pub struct VectorIndexTransform {
 impl VectorIndexTransform {
     pub fn new(
         operator: Operator,
+        cache_policy: CachePolicy,
         active_versions: BTreeMap<String, String>,
         table_indexes: BTreeMap<String, TableIndex>,
         index_schema: TableSchemaRef,
@@ -834,6 +857,7 @@ impl VectorIndexTransform {
     ) -> Self {
         Self {
             operator,
+            cache_policy,
             active_versions,
             table_indexes,
             index_schema,
@@ -903,6 +927,7 @@ impl AsyncTransform for VectorIndexTransform {
                     &location.0,
                     &self.active_versions,
                     &metas,
+                    self.cache_policy,
                 )
                 .await?
             }
@@ -944,6 +969,7 @@ impl AsyncTransform for VectorIndexTransform {
 pub struct SpatialIndexTransform {
     operator: Operator,
     settings: ReadSettings,
+    cache_policy: CachePolicy,
     table_indexes: BTreeMap<String, TableIndex>,
     index_schema: TableSchemaRef,
     meta_locations: TableMetaLocationGenerator,
@@ -954,6 +980,7 @@ impl SpatialIndexTransform {
     pub fn new(
         operator: Operator,
         settings: ReadSettings,
+        cache_policy: CachePolicy,
         table_indexes: BTreeMap<String, TableIndex>,
         index_schema: TableSchemaRef,
         meta_locations: TableMetaLocationGenerator,
@@ -962,6 +989,7 @@ impl SpatialIndexTransform {
         Self {
             operator,
             settings,
+            cache_policy,
             table_indexes,
             index_schema,
             meta_locations,
@@ -1000,6 +1028,7 @@ impl AsyncTransform for SpatialIndexTransform {
             .finalize_with_existing(
                 self.operator.clone(),
                 &self.settings,
+                self.cache_policy,
                 &spatial_index_location,
                 existing_location.as_ref(),
                 index_columns.clone(),
@@ -1072,6 +1101,7 @@ async fn legacy_serves_other_index(
     path: &str,
     active_versions: &BTreeMap<String, String>,
     metas: &[BlockIndexMeta],
+    policy: CachePolicy,
 ) -> Result<bool> {
     // Keep borrowed iterator state out of the framed async future. Only the few
     // missing indexes' owned names/versions cross the metadata-read await.
@@ -1090,7 +1120,7 @@ async fn legacy_serves_other_index(
     if unmigrated.is_empty() {
         return Ok(false);
     }
-    let meta = load_vector_index_meta(operator.clone(), path).await?;
+    let meta = load_vector_index_meta(operator.clone(), path, policy).await?;
     let VectorIndexMeta::Legacy(meta) = meta.as_ref() else {
         return Ok(false);
     };

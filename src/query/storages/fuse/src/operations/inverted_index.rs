@@ -40,6 +40,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -95,7 +96,10 @@ impl FuseTable {
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<u64> {
-        let Some(snapshot) = self.read_table_snapshot().await? else {
+        let Some(snapshot) = self
+            .read_table_snapshot_with_policy(ctx.cache_policy())
+            .await?
+        else {
             return Ok(0);
         };
 
@@ -110,10 +114,12 @@ impl FuseTable {
         // Read data here to keep the order of blocks in segment.
         let projection = Projection::Columns(field_indices);
 
-        let block_reader = self.create_block_reader(ctx.clone(), projection, false)?;
+        let block_reader =
+            self.create_block_reader(ctx.clone(), projection, CachePolicy::READ_ONLY)?;
 
         let segment_reader = SegmentInfoReader::new(self.get_operator(), table_schema);
-        let segment_cache = FuseCaches::instance().segments.read_only();
+        let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+        let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
         let target_segments = segment_locs.map(|locations| {
             locations
@@ -142,8 +148,9 @@ impl FuseTable {
             let blocks = segment_info.block_metas()?;
             let stats = match segment_info.summary.additional_stats_loc() {
                 Some(location) => {
-                    let mut stats =
-                        Arc::unwrap_or_clone(read_segment_stats(operator.clone(), location).await?);
+                    let mut stats = Arc::unwrap_or_clone(
+                        read_segment_stats(operator.clone(), location, policy).await?,
+                    );
                     stats.align_to_blocks(blocks.len())?;
                     Some(stats)
                 }

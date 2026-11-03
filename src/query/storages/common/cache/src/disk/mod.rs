@@ -30,6 +30,5 @@ pub use disk_cache::DiskKindStats;
 pub use disk_cache::DiskPoolStats;
 pub use disk_cache::split_caps;
 pub use disk_cached_storage::DiskCachedStorage;
-pub use disk_cached_storage::DiskFill;
 pub use disk_cached_storage::UnitsRead;
 pub use key::DiskKey;

@@ -47,7 +47,6 @@ use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_io::ReadSettings;
@@ -173,7 +172,7 @@ impl VirtualColumnReader {
                 CacheKind::of::<column::Data>(),
                 virtual_loc,
                 &ranges,
-                DiskFill::ReadWrite,
+                self.policy.disk,
                 read_settings,
             )
             .await;

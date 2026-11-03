@@ -17,10 +17,10 @@ use std::sync::Arc;
 use bytes::Bytes;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::spawn;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
@@ -734,7 +734,7 @@ async fn test_reads_past_capacity_evict_and_stay_correct() {
                     let i = (t * 37 + n * 13) % objects;
                     let path = format!("1/2/_b/{i}.parquet");
                     let bytes = storage
-                        .read(data(), &path, Some(0..900), DiskFill::ReadWrite)
+                        .read(data(), &path, Some(0..900), CacheFill::ReadWrite)
                         .await
                         .unwrap();
                     assert_eq!(bytes, value(i), "{path}");

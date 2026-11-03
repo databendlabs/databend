@@ -84,7 +84,7 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_storages_common_cache::CacheKind;
     use databend_storages_common_cache::CacheManager;
-    use databend_storages_common_cache::ReadCtx;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_cache::Reader;
     use databend_storages_common_cache::kinds::table;
     use databend_storages_common_cache::legacy::LegacyCapacity;
@@ -165,14 +165,14 @@ mod tests {
 
         let reader = SnapshotReader::new(operator);
         let decoded = reader
-            .read(&(first, TableSnapshot::VERSION), &ReadCtx::default())
+            .read(&(first, TableSnapshot::VERSION), &CachePolicy::DEFAULT)
             .await?;
         assert!(decoded.prev_snapshot_id.is_none());
 
         let missing = reader
             .read(
                 &("1/2/missing".to_string(), TableSnapshot::VERSION),
-                &ReadCtx::default(),
+                &CachePolicy::DEFAULT,
             )
             .await;
         assert_eq!(missing.unwrap_err().code(), ErrorCode::STORAGE_NOT_FOUND);

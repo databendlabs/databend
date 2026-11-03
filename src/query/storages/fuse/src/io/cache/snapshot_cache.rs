@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -68,10 +69,10 @@ impl SnapshotCache {
         self.snapshots.evict(location)
     }
 
-    pub fn read_only(&self) -> Self {
+    pub fn with_policy(&self, policy: CachePolicy) -> Self {
         SnapshotCache {
-            snapshots: self.snapshots.read_only(),
-            stats: self.stats.read_only(),
+            snapshots: self.snapshots.with_policy(policy),
+            stats: self.stats.with_policy(policy),
         }
     }
 }
@@ -87,7 +88,6 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_storages_common_cache::CacheKind;
     use databend_storages_common_cache::CacheManager;
-    use databend_storages_common_cache::ReadCtx;
     use databend_storages_common_cache::Reader;
     use databend_storages_common_cache::kinds::table;
     use databend_storages_common_cache::legacy::LegacyCapacity;
@@ -136,7 +136,7 @@ mod tests {
         async fn read(
             &self,
             (location, _): &SnapshotKey,
-            _ctx: &ReadCtx,
+            _ctx: &CachePolicy,
         ) -> Result<Arc<TableSnapshot>> {
             self.reads.fetch_add(1, Ordering::Relaxed);
             if location.starts_with("missing") {
@@ -159,7 +159,7 @@ mod tests {
         async fn read(
             &self,
             _key: &SnapshotKey,
-            _ctx: &ReadCtx,
+            _ctx: &CachePolicy,
         ) -> Result<Arc<TableSnapshotStatistics>> {
             Ok(Arc::new(TableSnapshotStatistics::new(
                 HashMap::new(),
@@ -211,7 +211,7 @@ mod tests {
     #[tokio::test]
     async fn test_snapshot_read_only_does_not_fill() -> Result<()> {
         let (manager, caches) = caches(10);
-        let read_only = caches.read_only();
+        let read_only = caches.with_policy(CachePolicy::READ_ONLY);
         let files = SnapshotFiles::default();
 
         read_only.snapshots.get(&files, "s1".into(), 4).await?;

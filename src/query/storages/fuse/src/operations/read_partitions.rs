@@ -713,7 +713,7 @@ impl FuseTable {
             ExtractSegmentTransform::create(
                 input,
                 output,
-                true,
+                pruning_ctx.ctx.cache_policy(),
                 pruning_ctx.clone(),
                 pruning_cost.clone(),
             )

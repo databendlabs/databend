@@ -22,6 +22,7 @@ use std::time::Duration;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -698,6 +699,16 @@ impl TableContextSettings for CtxDelegation {
 
     fn get_shared_settings(&self) -> Arc<Settings> {
         Settings::create(Tenant::new_literal("fake_shared_settings"))
+    }
+}
+
+impl TableContextCachePolicy for CtxDelegation {
+    fn cache_policy(&self) -> CachePolicy {
+        self.ctx.cache_policy()
+    }
+
+    fn set_cache_policy(&self, policy: CachePolicy) {
+        self.ctx.set_cache_policy(policy)
     }
 }
 

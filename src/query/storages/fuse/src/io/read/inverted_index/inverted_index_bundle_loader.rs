@@ -30,9 +30,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_index::BundleExternalFiles;
@@ -347,7 +348,7 @@ impl RemoteBundleFileHandle {
     async fn fetch_unit(
         &self,
         kind: CacheKind,
-        fill: DiskFill,
+        fill: CacheFill,
         range: Range<usize>,
     ) -> io::Result<Bytes> {
         self.fetch(range, Some((kind, fill))).await
@@ -356,7 +357,7 @@ impl RemoteBundleFileHandle {
     async fn fetch(
         &self,
         range: Range<usize>,
-        disk: Option<(CacheKind, DiskFill)>,
+        disk: Option<(CacheKind, CacheFill)>,
     ) -> io::Result<Bytes> {
         let absolute = self.absolute_range(&range)?;
         let start = Instant::now();
@@ -394,11 +395,11 @@ impl RemoteBundleFileHandle {
         let (disk_kind, fill) = match kind {
             PageCacheKind::Lookup => (
                 CacheKind::of::<inverted::Lookup>(),
-                self.lookup_cache.disk_fill(),
+                self.lookup_cache.policy().disk,
             ),
             PageCacheKind::Payload => (
                 CacheKind::of::<inverted::Payload>(),
-                self.payload_cache.disk_fill(),
+                self.payload_cache.policy().disk,
             ),
         };
         if self.storage.uses_disk(disk_kind, fill) {
@@ -430,7 +431,7 @@ impl RemoteBundleFileHandle {
     async fn fetch_disk_pages(
         &self,
         disk_kind: CacheKind,
-        fill: DiskFill,
+        fill: CacheFill,
         kind: PageCacheKind,
         first_page: usize,
         last_page: usize,
@@ -494,7 +495,7 @@ impl RemoteBundleFileHandle {
         let data = self
             .fetch_unit(
                 CacheKind::of::<inverted::FullPayload>(),
-                self.full_payload_cache.disk_fill(),
+                self.full_payload_cache.policy().disk,
                 0..self.len(),
             )
             .await?;
@@ -535,7 +536,7 @@ impl RemoteBundleFileHandle {
         let data = self
             .fetch_unit(
                 CacheKind::of::<inverted::Lookup>(),
-                self.lookup_cache.disk_fill(),
+                self.lookup_cache.policy().disk,
                 0..self.len(),
             )
             .await?;
@@ -561,7 +562,7 @@ impl RemoteBundleFileHandle {
         let lookup_cached = self.lookup_cache.is_enabled()
             || self
                 .storage
-                .uses_disk(lookup, self.lookup_cache.disk_fill());
+                .uses_disk(lookup, self.lookup_cache.policy().disk);
         match self.cache_policy {
             RangeCachePolicy::LookupWhole if lookup_cached => {
                 return self.read_cached_lookup_file(range).await;
@@ -577,7 +578,7 @@ impl RemoteBundleFileHandle {
                             || self.full_payload_cache.is_enabled()
                             || self
                                 .storage
-                                .uses_disk(full_payload, self.full_payload_cache.disk_fill()))
+                                .uses_disk(full_payload, self.full_payload_cache.policy().disk))
                     {
                         return self.read_full_postings_file().await;
                     }
@@ -588,7 +589,7 @@ impl RemoteBundleFileHandle {
                         self.payload_cache.is_enabled()
                             || self.storage.uses_disk(
                                 CacheKind::of::<inverted::Payload>(),
-                                self.payload_cache.disk_fill(),
+                                self.payload_cache.policy().disk,
                             )
                     }
                 };
@@ -917,7 +918,7 @@ impl FooterCacheState {
         let tail_start = self.object_size.saturating_sub(initial_read_size);
         // The tail and, when larger, the footer are units of the disk cache.
         let meta_kind = CacheKind::of::<inverted::Meta>();
-        let fill = self.meta_cache.disk_fill();
+        let fill = self.meta_cache.policy().disk;
         let start = Instant::now();
         let tail_bytes = storage
             .read(
@@ -985,8 +986,9 @@ pub(crate) async fn load_bundle_search_directory(
     operator: &Operator,
     location: &str,
     object_size: u64,
+    policy: CachePolicy,
 ) -> Result<BundleSearchDirectory> {
-    let caches = &FuseCaches::instance().inverted;
+    let caches = &FuseCaches::instance().inverted.with_policy(policy);
     let cache_state = FooterCacheState::new(
         location,
         object_size,

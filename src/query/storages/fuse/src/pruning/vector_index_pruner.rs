@@ -117,6 +117,7 @@ impl VectorIndexPruner {
         let vector_reader = VectorIndexReader::create(
             pruning_ctx.dal.clone(),
             settings,
+            pruning_ctx.ctx.cache_policy(),
             distance_type,
             query_values.clone(),
             VectorIndexIdentity {

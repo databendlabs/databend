@@ -43,7 +43,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::ReadCtx;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -80,7 +80,7 @@ async fn check_segment_column_ids(
     let reader = SnapshotReader::new(fuse_table.get_operator());
     let snapshot = FuseCaches::instance()
         .snapshots
-        .read_only()
+        .with_policy(CachePolicy::READ_ONLY)
         .get(&reader, snapshot_loc.clone(), TableSnapshot::VERSION)
         .await?;
     if let Some(expected_column_min_max) = expected_column_min_max {
@@ -101,7 +101,10 @@ async fn check_segment_column_ids(
         );
         for (seg_loc, _) in &snapshot.segments {
             let compact_segment_info = compact_segment_reader
-                .read(&(seg_loc.clone(), SegmentInfo::VERSION), &ReadCtx::BYPASS)
+                .read(
+                    &(seg_loc.clone(), SegmentInfo::VERSION),
+                    &CachePolicy::BYPASS,
+                )
                 .await?;
             let segment_info = SegmentInfo::try_from(compact_segment_info)?;
 

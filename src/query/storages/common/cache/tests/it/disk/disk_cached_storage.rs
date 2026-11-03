@@ -15,12 +15,10 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
-use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrackingPayloadExt;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_io::ReadSettings;
@@ -63,12 +61,12 @@ async fn test_read_fills_on_miss_and_hits_after() {
     let (op, disk, storage) = setup(&dir).await;
 
     let range = storage
-        .read(data(), PATH, Some(10..20), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(10..20), CacheFill::ReadWrite)
         .await
         .unwrap();
     assert_eq!(range, object().slice(10..20));
     let whole = storage
-        .read(data(), PATH, None, DiskFill::ReadWrite)
+        .read(data(), PATH, None, CacheFill::ReadWrite)
         .await
         .unwrap();
     assert_eq!(whole, object());
@@ -77,7 +75,7 @@ async fn test_read_fills_on_miss_and_hits_after() {
 
     // Served from disk once the object is gone.
     op.delete(PATH).await.unwrap();
-    for fill in [DiskFill::ReadWrite, DiskFill::ReadOnly] {
+    for fill in [CacheFill::ReadWrite, CacheFill::ReadOnly] {
         let hit = storage
             .read(data(), PATH, Some(10..20), fill)
             .await
@@ -86,7 +84,7 @@ async fn test_read_fills_on_miss_and_hits_after() {
     }
     assert!(
         storage
-            .read(data(), PATH, Some(10..20), DiskFill::Bypass)
+            .read(data(), PATH, Some(10..20), CacheFill::Bypass)
             .await
             .is_err(),
         "bypass reads storage"
@@ -97,7 +95,7 @@ async fn test_read_fills_on_miss_and_hits_after() {
 async fn test_read_only_and_bypass_do_not_fill() {
     let dir = TempDir::new().unwrap();
     let (_op, disk, storage) = setup(&dir).await;
-    for (fill, range) in [(DiskFill::ReadOnly, 0..5), (DiskFill::Bypass, 5..10)] {
+    for (fill, range) in [(CacheFill::ReadOnly, 0..5), (CacheFill::Bypass, 5..10)] {
         let bytes = storage
             .read(data(), PATH, Some(range.clone()), fill)
             .await
@@ -116,7 +114,7 @@ async fn test_key_prefix_separates_objects() {
     let (_op, disk, storage) = setup(&dir).await;
     let prefixed = storage.clone().with_key_prefix("s3://bucket/");
     prefixed
-        .read(data(), PATH, None, DiskFill::ReadWrite)
+        .read(data(), PATH, None, CacheFill::ReadWrite)
         .await
         .unwrap();
     wait_for(|| disk.contains(data(), &DiskKey::whole(format!("s3://bucket/{PATH}"))));
@@ -136,13 +134,13 @@ async fn test_read_units_mixes_disk_and_storage() {
 
     // Unit 1 is on disk first.
     storage
-        .read(data(), PATH, Some(100..300), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(100..300), CacheFill::ReadWrite)
         .await
         .unwrap();
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 100..300)));
 
     let read = storage
-        .read_units(data(), PATH, &units, DiskFill::ReadWrite, &settings)
+        .read_units(data(), PATH, &units, CacheFill::ReadWrite, &settings)
         .await
         .unwrap();
     assert_eq!(read.cached.keys().collect::<Vec<_>>(), vec![&1]);
@@ -158,7 +156,7 @@ async fn test_read_units_mixes_disk_and_storage() {
 
     // All on disk now.
     let read = storage
-        .read_units(data(), PATH, &units, DiskFill::ReadOnly, &settings)
+        .read_units(data(), PATH, &units, CacheFill::ReadOnly, &settings)
         .await
         .unwrap();
     assert_eq!(read.cached.len(), 3);
@@ -180,7 +178,7 @@ async fn test_read_units_without_disk() {
         DiskCachedStorage::with_disk(op.clone(), Some(disk.clone())),
     ] {
         let read = storage
-            .read_units(data(), PATH, &units, DiskFill::Bypass, &settings)
+            .read_units(data(), PATH, &units, CacheFill::Bypass, &settings)
             .await
             .unwrap();
         assert!(read.cached.is_empty());
@@ -194,9 +192,9 @@ async fn test_disabled_kind_reads_storage() {
     let dir = TempDir::new().unwrap();
     let (_op, disk, storage) = setup(&dir).await;
     disk.set_kind_enabled(data(), false);
-    assert!(!storage.uses_disk(data(), DiskFill::ReadWrite));
+    assert!(!storage.uses_disk(data(), CacheFill::ReadWrite));
     let bytes = storage
-        .read(data(), PATH, Some(0..8), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(0..8), CacheFill::ReadWrite)
         .await
         .unwrap();
     assert_eq!(bytes, object().slice(0..8));
@@ -219,7 +217,7 @@ async fn test_concurrent_misses_read_storage_once() {
         let storage = storage.clone();
         async move {
             storage
-                .read(data(), PATH, Some(0..100), DiskFill::ReadWrite)
+                .read(data(), PATH, Some(0..100), CacheFill::ReadWrite)
                 .await
                 .unwrap()
         }
@@ -254,7 +252,7 @@ async fn test_concurrent_unit_misses_read_storage_once() {
         let units = units.clone();
         async move {
             let read = storage
-                .read_units(data(), PATH, &units, DiskFill::ReadWrite, &settings)
+                .read_units(data(), PATH, &units, CacheFill::ReadWrite, &settings)
                 .await
                 .unwrap();
             (read.unit(0).unwrap(), read.unit(1).unwrap())
@@ -287,7 +285,7 @@ async fn test_storage_error_is_shared_and_not_cached() {
         let storage = storage.clone();
         async move {
             storage
-                .read(data(), "missing", Some(0..10), DiskFill::ReadWrite)
+                .read(data(), "missing", Some(0..10), CacheFill::ReadWrite)
                 .await
         }
     }))
@@ -298,7 +296,7 @@ async fn test_storage_error_is_shared_and_not_cached() {
     // The next miss reads storage again.
     assert!(
         storage
-            .read(data(), "missing", Some(0..10), DiskFill::ReadWrite)
+            .read(data(), "missing", Some(0..10), CacheFill::ReadWrite)
             .await
             .is_err()
     );
@@ -312,7 +310,7 @@ async fn test_damaged_entry_falls_back_to_storage_and_refills() {
     let (_op, disk, storage) = setup(&dir).await;
     let key = DiskKey::range(PATH, 0..50);
     storage
-        .read(data(), PATH, Some(0..50), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(0..50), CacheFill::ReadWrite)
         .await
         .unwrap();
     wait_for(|| disk.contains(data(), &key));
@@ -320,7 +318,7 @@ async fn test_damaged_entry_falls_back_to_storage_and_refills() {
         std::fs::write(file, b"garbage").unwrap();
     }
     let bytes = storage
-        .read(data(), PATH, Some(0..50), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(0..50), CacheFill::ReadWrite)
         .await
         .unwrap();
     assert_eq!(bytes, object().slice(0..50));
@@ -335,7 +333,7 @@ async fn test_read_ranges_are_units() {
     let (_op, disk, storage) = setup(&dir).await;
     let ranges = vec![0..10, 100..300, 2_000..3_000];
     let read = storage
-        .read_ranges(data(), PATH, ranges.clone(), DiskFill::ReadWrite)
+        .read_ranges(data(), PATH, ranges.clone(), CacheFill::ReadWrite)
         .await
         .unwrap();
     assert_eq!(read.len(), 3);
@@ -422,11 +420,11 @@ async fn test_eviction_after_rewrite_reads_the_new_bytes() {
     let prefixed = storage.clone().with_key_prefix("root/");
     for storage in [&storage, &prefixed] {
         storage
-            .read(data(), PATH, None, DiskFill::ReadWrite)
+            .read(data(), PATH, None, CacheFill::ReadWrite)
             .await
             .unwrap();
         storage
-            .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+            .read(data(), PATH, Some(0..10), CacheFill::ReadWrite)
             .await
             .unwrap();
     }
@@ -436,7 +434,7 @@ async fn test_eviction_after_rewrite_reads_the_new_bytes() {
     let rewritten = Bytes::from(vec![9u8; 3_000]);
     op.write(PATH, rewritten.clone()).await.unwrap();
     let stale = storage
-        .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(0..10), CacheFill::ReadWrite)
         .await
         .unwrap();
     assert_eq!(stale, object().slice(0..10));
@@ -447,7 +445,7 @@ async fn test_eviction_after_rewrite_reads_the_new_bytes() {
         (Some(0..10), rewritten.slice(0..10)),
     ] {
         let bytes = storage
-            .read(data(), PATH, range, DiskFill::ReadWrite)
+            .read(data(), PATH, range, CacheFill::ReadWrite)
             .await
             .unwrap();
         assert_eq!(bytes, expected);
@@ -476,7 +474,7 @@ async fn test_cancelled_reader_hands_the_load_over() {
         let storage = storage.clone();
         databend_common_base::runtime::spawn(async move {
             storage
-                .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+                .read(data(), PATH, Some(0..10), CacheFill::ReadWrite)
                 .await
         })
     };
@@ -485,7 +483,7 @@ async fn test_cancelled_reader_hands_the_load_over() {
         let storage = storage.clone();
         databend_common_base::runtime::spawn(async move {
             storage
-                .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+                .read(data(), PATH, Some(0..10), CacheFill::ReadWrite)
                 .await
         })
     };
@@ -496,38 +494,36 @@ async fn test_cancelled_reader_hands_the_load_over() {
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..10)));
 }
 
-/// Reads of a maintenance statement (`ThreadTracker::maintenance_payload`) bypass the disk
-/// cache, whatever the reader asks for: they fill nothing, and what queries cached is neither
-/// read nor refreshed by them. A query's read fills it.
+/// Bypassing reads, as those of maintenance statements (`CachePolicy::MAINTENANCE`), whole
+/// ranges and units alike: they fill nothing, and what queries cached is neither read nor
+/// refreshed by them. A filling read fills.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_maintenance_reads_bypass_the_disk_cache() {
+async fn test_bypass_reads_neither_look_up_nor_fill_the_disk_cache() {
     let dir = TempDir::new().unwrap();
     let (_op, disk, storage) = setup(&dir).await;
     let key = DiskKey::range(PATH, 0..10);
-    let maintenance = |storage: DiskCachedStorage| {
-        ThreadTracker::maintenance_payload().tracking(async move {
-            let range = storage
-                .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
-                .await
-                .unwrap();
-            let units = storage
-                .read_units(
-                    data(),
-                    PATH,
-                    &[(1, 20..30)],
-                    DiskFill::ReadWrite,
-                    &ReadSettings {
-                        max_gap_size: 0,
-                        max_range_size: 1_000,
-                        parquet_fast_read_bytes: 0,
-                    },
-                )
-                .await
-                .unwrap();
-            (range, units.unit(1).unwrap())
-        })
+    let bypass = |storage: DiskCachedStorage| async move {
+        let range = storage
+            .read(data(), PATH, Some(0..10), CacheFill::Bypass)
+            .await
+            .unwrap();
+        let units = storage
+            .read_units(
+                data(),
+                PATH,
+                &[(1, 20..30)],
+                CacheFill::Bypass,
+                &ReadSettings {
+                    max_gap_size: 0,
+                    max_range_size: 1_000,
+                    parquet_fast_read_bytes: 0,
+                },
+            )
+            .await
+            .unwrap();
+        (range, units.unit(1).unwrap())
     };
-    let (range, unit) = maintenance(storage.clone()).await;
+    let (range, unit) = bypass(storage.clone()).await;
     assert_eq!(
         (range, unit),
         (object().slice(0..10), object().slice(20..30))
@@ -537,11 +533,11 @@ async fn test_maintenance_reads_bypass_the_disk_cache() {
     assert!(!disk.contains(data(), &DiskKey::range(PATH, 20..30)));
 
     storage
-        .read(data(), PATH, Some(0..10), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(0..10), CacheFill::ReadWrite)
         .await
         .unwrap();
     wait_for(|| disk.contains(data(), &key));
-    // Cached now, yet not read by maintenance, and still nothing filled.
+    // Cached now, yet not read by the bypassing reads, and still nothing filled.
     let accesses = || {
         disk.pool_stats()
             .iter()
@@ -549,7 +545,7 @@ async fn test_maintenance_reads_bypass_the_disk_cache() {
             .sum::<u64>()
     };
     let before = accesses();
-    maintenance(storage).await;
+    bypass(storage).await;
     assert_eq!(accesses(), before);
     assert!(!disk.contains(data(), &DiskKey::range(PATH, 20..30)));
 }
@@ -592,7 +588,7 @@ async fn read_units(
     units: &[(u32, std::ops::Range<u64>)],
 ) -> databend_common_exception::Result<Vec<Bytes>> {
     let read = storage
-        .read_units(data(), path, units, DiskFill::ReadWrite, &merged())
+        .read_units(data(), path, units, CacheFill::ReadWrite, &merged())
         .await?;
     Ok(units
         .iter()
@@ -771,11 +767,11 @@ async fn test_unit_reads_racing_rewrites_return_whole_units() {
     }
 }
 
-/// Maintenance and queries read the same objects at once, on the same runtime: the flag is per
-/// statement, so maintenance reads never touch the disk cache while the queries' reads fill
-/// and hit it. Every disk cache lookup is a query's.
+/// Bypassing reads (maintenance) and filling reads (queries) of the same objects at once, on
+/// the same runtime: each read keeps its own fill, so the bypassing reads never touch the disk
+/// cache while the filling reads fill and hit it. Every disk cache lookup is a filling read's.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_maintenance_and_queries_at_once_keep_their_own_disk_policy() {
+async fn test_bypass_and_filling_reads_at_once_keep_their_own_fill() {
     let dir = TempDir::new().unwrap();
     let (_op, disk, storage) = setup(&dir).await;
     let query_reads = Arc::new(std::sync::atomic::AtomicU64::new(0));
@@ -786,13 +782,13 @@ async fn test_maintenance_and_queries_at_once_keep_their_own_disk_policy() {
                 for i in 0..50u64 {
                     let range = Some((i % 10) * 100..(i % 10) * 100 + 100);
                     if t % 2 == 0 {
-                        ThreadTracker::maintenance_payload()
-                            .tracking(storage.read(data(), PATH, range, DiskFill::ReadWrite))
+                        storage
+                            .read(data(), PATH, range, CacheFill::Bypass)
                             .await
                             .unwrap();
                     } else {
                         storage
-                            .read(data(), PATH, range, DiskFill::ReadWrite)
+                            .read(data(), PATH, range, CacheFill::ReadWrite)
                             .await
                             .unwrap();
                         query_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -903,12 +899,12 @@ async fn test_leading_slashes_name_the_same_object() {
     let (_op, reads, disk, storage) = counted_setup(&dir).await;
     let slashed = format!("/{PATH}");
     storage
-        .read(data(), &slashed, Some(0..100), DiskFill::ReadWrite)
+        .read(data(), &slashed, Some(0..100), CacheFill::ReadWrite)
         .await
         .unwrap();
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..100)));
     let bytes = storage
-        .read(data(), PATH, Some(0..100), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(0..100), CacheFill::ReadWrite)
         .await
         .unwrap();
     assert_eq!(bytes, object().slice(0..100));
@@ -924,7 +920,7 @@ async fn test_evict_objects_drops_the_units() {
     let dir = TempDir::new().unwrap();
     let (_op, disk, storage) = setup(&dir).await;
     storage
-        .read(data(), PATH, Some(0..100), DiskFill::ReadWrite)
+        .read(data(), PATH, Some(0..100), CacheFill::ReadWrite)
         .await
         .unwrap();
     wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 0..100)));

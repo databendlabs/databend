@@ -913,7 +913,9 @@ impl ReclusterMutator {
         decode_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<Vec<ReclusterBlock>>> {
         let segment_count = compact_segments.len();
-        let segment_cache = FuseCaches::instance().segments.clone();
+        let segment_cache = FuseCaches::instance()
+            .segments
+            .with_policy(self.ctx.cache_policy());
         let tasks = compact_segments
             .into_iter()
             .map(|(segment_idx, location, v)| {
@@ -983,10 +985,12 @@ impl ReclusterMutator {
             .into_iter()
             .map(|(segment_idx, (loc, ver), block_count, blocks)| {
                 let dal = self.operator.clone();
+                let policy = self.ctx.cache_policy();
                 async move {
                     let reader = SegmentStatsReader::new(dal);
                     let stats = FuseCaches::instance()
                         .segments
+                        .with_policy(policy)
                         .get_stats(&reader, (loc, ver))
                         .await?;
                     let mut stats = Arc::unwrap_or_clone(stats);

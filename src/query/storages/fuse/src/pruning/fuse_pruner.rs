@@ -81,6 +81,7 @@ use crate::pruning_pipeline::ExtractSegmentTransform;
 const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 
 use databend_common_catalog::plan::VirtualPredicateRef;
+use databend_storages_common_cache::CachePolicy;
 
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
@@ -203,6 +204,7 @@ impl PruningContext {
                 &table_schema,
                 dal.clone(),
                 ReadSettings::from_ctx(ctx)?,
+                ctx.cache_policy(),
                 filter_expr.as_ref(),
                 bloom_index_cols,
                 ngram_args,
@@ -215,14 +217,14 @@ impl PruningContext {
         let inverted_index_pruner = if lightweight_pruning {
             None
         } else {
-            InvertedIndexPruner::try_create(dal.clone(), push_down)?
+            InvertedIndexPruner::try_create(dal.clone(), ctx.cache_policy(), push_down)?
         };
 
         // virtual column pruner, used to read virtual column metas and ignore source columns.
         let virtual_column_pruner = if lightweight_pruning {
             None
         } else {
-            VirtualColumnPruner::try_create(dal.clone(), push_down)?
+            VirtualColumnPruner::try_create(dal.clone(), ctx.cache_policy(), push_down)?
         };
 
         let virtual_column_paths: Option<Arc<[(ColumnId, ProjectedVirtualPath)]>> = push_down
@@ -260,6 +262,7 @@ impl PruningContext {
                 &spatial_index_columns,
                 dal.clone(),
                 ReadSettings::from_ctx(ctx)?,
+                ctx.cache_policy(),
             )?
         };
 
@@ -471,11 +474,10 @@ impl FusePruner {
                             // do not populate the block meta cache for deletion operations,
                             // since block metas touched by deletion are not likely to
                             // be accessed soon.
-                            let populate_block_meta_cache = false;
                             let block_metas = ExtractSegmentTransform::extract_block_metas(
                                 &segment_location.location.0,
                                 compact_segment_info,
-                                populate_block_meta_cache,
+                                CachePolicy::READ_ONLY.at_most(pruning_ctx.ctx.cache_policy()),
                                 &pruning_cost,
                             )?;
                             let projected_virtual_schema = pruning_ctx
@@ -498,7 +500,7 @@ impl FusePruner {
                             let mut block_metas = ExtractSegmentTransform::extract_block_metas(
                                 &location.location.0,
                                 &info,
-                                true,
+                                pruning_ctx.ctx.cache_policy(),
                                 &pruning_cost,
                             )?;
                             if let Some(probability) = sample_probability {

@@ -40,6 +40,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_storage::read_metadata_async;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -194,11 +195,12 @@ async fn build_segment_virtual_columns(
     let location = (segment_location.to_string(), SegmentInfo::VERSION);
     let segment = FuseCaches::instance()
         .segments
-        .read_only()
+        .with_policy(CachePolicy::READ_ONLY.at_most(ctx.cache_policy()))
         .get(&reader, location)
         .await?;
     let segment = SegmentInfo::try_from(segment.as_ref())?;
-    let block_reader = table.create_block_reader(ctx.clone(), projection, false)?;
+    let block_reader =
+        table.create_block_reader(ctx.clone(), projection, CachePolicy::READ_ONLY)?;
     let settings = ReadSettings::from_ctx(ctx)?;
     let storage_format = table.get_write_settings().storage_format;
     let mut blocks = Vec::with_capacity(segment.blocks.len());
@@ -349,7 +351,7 @@ async fn read_block_location(
         })?
         .compression()
         .try_into()?;
-    let reader = table.create_block_reader(ctx.clone(), projection, false)?;
+    let reader = table.create_block_reader(ctx.clone(), projection, CachePolicy::READ_ONLY)?;
     let settings = ReadSettings::from_ctx(ctx)?;
     let data = reader
         .read_columns_data_by_merge_io(&settings, block_location, &column_metas, &None)

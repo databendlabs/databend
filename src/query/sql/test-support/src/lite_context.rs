@@ -1583,6 +1583,8 @@ impl TableContextSettings for LiteTableContext {
     }
 }
 
+impl TableContextCachePolicy for LiteTableContext {}
+
 impl TableContextLicense for LiteTableContext {
     fn get_license_key(&self) -> String {
         self.license_key.read().unwrap().clone()

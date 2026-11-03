@@ -151,10 +151,6 @@ pub struct TrackingPayload {
     pub processor_interrupt: Option<Arc<AtomicBool>>,
     pub perf_enabled: bool,
     pub process_rows: AtomicUsize,
-    /// Set while a maintenance statement runs (ANALYZE, compaction, recluster, refresh, vacuum,
-    /// purge), as opposed to a query or DML. What it means is left to the layers that read it:
-    /// the disk cache, which serves queries, is bypassed.
-    pub maintenance: bool,
 }
 
 #[derive(Debug, Default)]
@@ -362,7 +358,6 @@ impl Clone for TrackingPayload {
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
             ),
-            maintenance: self.maintenance,
         }
     }
 }
@@ -448,7 +443,6 @@ impl ThreadTracker {
                 processor_interrupt: None,
                 perf_enabled: false,
                 process_rows: AtomicUsize::new(0),
-                maintenance: false,
             }),
         }
     }
@@ -560,20 +554,6 @@ impl ThreadTracker {
                 unsafe { std::mem::transmute(tracker.payload.workload_group_resource.as_ref()) }
             })
             .unwrap_or(None)
-    }
-
-    /// The current payload, for maintenance work (see `TrackingPayload::maintenance`).
-    pub fn maintenance_payload() -> TrackingPayload {
-        let mut payload = Self::new_tracking_payload();
-        payload.maintenance = true;
-        payload
-    }
-
-    /// Whether the current statement is a maintenance one (see `TrackingPayload::maintenance`).
-    pub fn is_maintenance() -> bool {
-        TRACKER
-            .try_with(|tracker| tracker.borrow().payload.maintenance)
-            .unwrap_or(false)
     }
 
     pub fn query_id() -> Option<&'static String> {

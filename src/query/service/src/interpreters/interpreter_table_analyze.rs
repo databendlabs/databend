@@ -44,6 +44,7 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextTableAccess;
 
 pub struct AnalyzeTableInterpreter {
@@ -181,7 +182,10 @@ impl Interpreter for AnalyzeTableInterpreter {
                 Err(_) => return Ok(PipelineBuildResult::create()),
             };
 
-            let Some(snapshot) = table.read_table_snapshot().await? else {
+            let Some(snapshot) = table
+                .read_table_snapshot_with_policy(self.ctx.cache_policy())
+                .await?
+            else {
                 return Ok(PipelineBuildResult::create());
             };
 

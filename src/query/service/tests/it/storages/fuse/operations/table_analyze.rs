@@ -50,7 +50,7 @@ use databend_query::sessions::TableContextTableManagement;
 use databend_query::sql::Planner;
 use databend_query::sql::plans::Plan;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::ReadCtx;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -262,7 +262,7 @@ async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
     );
     for segment in after_update.segments.iter() {
         let compact_segment = segment_reader
-            .read(&(segment.0.clone(), segment.1), &ReadCtx::BYPASS)
+            .read(&(segment.0.clone(), segment.1), &CachePolicy::BYPASS)
             .await?;
         let segment_info = SegmentInfo::try_from(compact_segment)?;
         merge_statistics_mut(
@@ -490,7 +490,7 @@ async fn latest_statistics(
     let ver = TableMetaLocationGenerator::table_statistics_version(location);
     let statistics = FuseCaches::instance()
         .snapshots
-        .read_only()
+        .with_policy(CachePolicy::READ_ONLY)
         .get_stats(
             &SnapshotStatsReader::new(table.get_operator()),
             location.clone(),
@@ -886,7 +886,7 @@ async fn test_analyze_does_not_publish_virtual_column_statistics() -> anyhow::Re
     let mut segment_paths = Vec::new();
     for (location, ver) in snapshot.segments.iter() {
         let segment = segment_reader
-            .read(&(location.clone(), *ver), &ReadCtx::BYPASS)
+            .read(&(location.clone(), *ver), &CachePolicy::BYPASS)
             .await?;
         let summary = SegmentInfo::try_from(segment)?.summary;
         let schema = summary

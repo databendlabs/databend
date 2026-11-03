@@ -22,7 +22,6 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
@@ -36,31 +35,11 @@ use futures::future::try_join_all;
 use opendal::Buffer;
 use opendal::Operator;
 
+use crate::CacheFill;
 use crate::CacheKind;
 use crate::CacheManager;
 use crate::DiskCache;
 use crate::DiskKey;
-
-/// What a read may do with the disk cache.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DiskFill {
-    /// Read the disk cache; write the bytes read from storage to it.
-    ReadWrite,
-    /// Read the disk cache; do not write to it. Maintenance and background tasks read this way.
-    ReadOnly,
-    /// Neither read nor write the disk cache.
-    Bypass,
-}
-
-impl DiskFill {
-    fn reads(self) -> bool {
-        self != DiskFill::Bypass
-    }
-
-    fn writes(self) -> bool {
-        self == DiskFill::ReadWrite
-    }
-}
 
 /// Object storage behind the disk cache of the node. Cheap to clone.
 #[derive(Clone)]
@@ -137,28 +116,17 @@ impl DiskCachedStorage {
     }
 
     /// Whether a read of `len` bytes of `kind` with `fill` may be kept by the disk cache.
-    pub fn admits(&self, kind: CacheKind, len: u64, fill: DiskFill) -> bool {
+    pub fn admits(&self, kind: CacheKind, len: u64, fill: CacheFill) -> bool {
         self.disk_for(kind, fill)
             .is_some_and(|disk| disk.admits(kind, len))
     }
 
     /// Whether reads of `kind` with `fill` go through the disk cache.
-    pub fn uses_disk(&self, kind: CacheKind, fill: DiskFill) -> bool {
+    pub fn uses_disk(&self, kind: CacheKind, fill: CacheFill) -> bool {
         self.disk_for(kind, fill).is_some()
     }
 
-    /// `fill`, or no disk cache at all for maintenance statements
-    /// (`ThreadTracker::is_maintenance`): the disk cache serves queries.
-    fn statement_fill(fill: DiskFill) -> DiskFill {
-        if ThreadTracker::is_maintenance() {
-            DiskFill::Bypass
-        } else {
-            fill
-        }
-    }
-
-    fn disk_for(&self, kind: CacheKind, fill: DiskFill) -> Option<&Arc<DiskCache>> {
-        let fill = Self::statement_fill(fill);
+    fn disk_for(&self, kind: CacheKind, fill: CacheFill) -> Option<&Arc<DiskCache>> {
         self.disk
             .as_ref()
             .filter(|disk| fill.reads() && disk.is_enabled(kind))
@@ -170,9 +138,8 @@ impl DiskCachedStorage {
         kind: CacheKind,
         path: &str,
         range: Option<Range<u64>>,
-        fill: DiskFill,
+        fill: CacheFill,
     ) -> Result<Bytes> {
-        let fill = Self::statement_fill(fill);
         let key = self.key(path, range.clone());
         let Some(disk) = self.disk_for(kind, fill) else {
             return self.read_storage(path, range).await;
@@ -211,10 +178,9 @@ impl DiskCachedStorage {
         kind: CacheKind,
         path: &str,
         units: &[(ColumnId, Range<u64>)],
-        fill: DiskFill,
+        fill: CacheFill,
         settings: &ReadSettings,
     ) -> Result<UnitsRead> {
-        let fill = Self::statement_fill(fill);
         let Some(disk) = self.disk_for(kind, fill) else {
             let fetched =
                 MergeIOReader::merge_io_read(settings, self.op.clone(), path, units).await?;
@@ -268,7 +234,7 @@ impl DiskCachedStorage {
         kind: CacheKind,
         path: &str,
         misses: &[(ColumnId, Range<u64>)],
-        fill: DiskFill,
+        fill: CacheFill,
         settings: &ReadSettings,
         disk: &DiskCache,
     ) -> Result<MergeIOReadResult> {
@@ -300,7 +266,7 @@ impl DiskCachedStorage {
         kind: CacheKind,
         path: &str,
         ranges: Vec<Range<u64>>,
-        fill: DiskFill,
+        fill: CacheFill,
     ) -> Result<HashMap<Range<u64>, Bytes>> {
         let reads = ranges.into_iter().map(|range| async move {
             let bytes = self.read(kind, path, Some(range.clone()), fill).await?;

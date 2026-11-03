@@ -35,6 +35,7 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -289,6 +290,7 @@ impl SpatialIndexBuilder {
         &mut self,
         operator: Operator,
         settings: &ReadSettings,
+        cache_policy: CachePolicy,
         location: &Location,
         existing_location: Option<&Location>,
         existing_column_metas: Option<Vec<(String, SingleColumnMeta)>>,
@@ -320,6 +322,7 @@ impl SpatialIndexBuilder {
                 settings,
                 &existing_column_names,
                 &existing_location.0,
+                cache_policy,
             )
             .await?
         };

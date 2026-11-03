@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
 use databend_common_metrics::storage::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -150,7 +151,7 @@ impl BlockCompactMutator {
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
             let mut segment_infos = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
                 .await?
                 .into_iter()
                 .map(|sg| {
@@ -283,6 +284,7 @@ impl BlockCompactMutator {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
         let semaphore = Arc::new(Semaphore::new(max_concurrency));
+        let cache_policy = ctx.cache_policy();
 
         let total_parts = lazy_parts.len();
         let mut remain = total_parts % max_threads;
@@ -309,6 +311,7 @@ impl BlockCompactMutator {
                 for lazy_part in batch {
                     let mut builder = CompactTaskBuilder::new(
                         dal.clone(),
+                        cache_policy,
                         cluster_key_info.clone(),
                         partition_key_count,
                         partition_key_id,
@@ -513,6 +516,8 @@ impl SegmentCompactChecker {
 
 struct CompactTaskBuilder {
     dal: Operator,
+    // How the segment statistics are read: the policy of the compaction.
+    cache_policy: CachePolicy,
     cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
     partition_key_id: Option<u32>,
@@ -535,6 +540,7 @@ enum TailMergeSource {
 impl CompactTaskBuilder {
     fn new(
         dal: Operator,
+        cache_policy: CachePolicy,
         cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
         partition_key_id: Option<u32>,
@@ -543,6 +549,7 @@ impl CompactTaskBuilder {
     ) -> Self {
         Self {
             dal,
+            cache_policy,
             cluster_key_info,
             partition_key_count,
             partition_key_id,
@@ -687,12 +694,14 @@ impl CompactTaskBuilder {
         for segment in compact_segments.into_iter().rev() {
             let permit = acquire_task_permit(semaphore.clone()).await?;
             let op = self.dal.clone();
+            let cache_policy = self.cache_policy;
             let handler = runtime.spawn(async move {
                 let blocks = segment.block_metas()?;
                 let stats = match segment.summary.additional_stats_loc() {
                     Some(loc) => {
-                        let mut stats =
-                            Arc::unwrap_or_clone(read_segment_stats(op.clone(), loc).await?);
+                        let mut stats = Arc::unwrap_or_clone(
+                            read_segment_stats(op.clone(), loc, cache_policy).await?,
+                        );
                         stats.align_to_blocks(blocks.len())?;
                         Some(stats)
                     }

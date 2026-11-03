@@ -27,11 +27,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::DataType;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_io::ReadSettings;
@@ -90,9 +91,15 @@ pub trait IndexLoadSpec {
 }
 
 #[fastrace::trace]
-pub async fn load_index_meta<S: IndexLoadSpec>(dal: Operator, path: &str) -> Result<Arc<S::Meta>>
-where IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>> {
-    let cache = S::meta_cache(&FuseCaches::instance().index_metas).clone();
+pub async fn load_index_meta<S: IndexLoadSpec>(
+    dal: Operator,
+    path: &str,
+    policy: CachePolicy,
+) -> Result<Arc<S::Meta>>
+where
+    IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>>,
+{
+    let cache = S::meta_cache(&FuseCaches::instance().index_metas).with_policy(policy);
     let key = (path.to_owned(), None);
     async move {
         let reader = IndexMetaReader::<S::Meta>::new(dal);
@@ -109,6 +116,7 @@ pub async fn load_index_files<S: IndexLoadSpec>(
     settings: &ReadSettings,
     column_names: &[String],
     location: &str,
+    policy: CachePolicy,
 ) -> Result<Vec<Column>>
 where
     IndexMetaReader<S::Meta>: Reader<Key = IndexMetaKey, Item = Arc<S::Meta>>,
@@ -116,7 +124,7 @@ where
     let start = Instant::now();
 
     // 1. load index meta
-    let index_meta = load_index_meta::<S>(operator.clone(), location).await?;
+    let index_meta = load_index_meta::<S>(operator.clone(), location, policy).await?;
 
     // 2. build index schema
     let index_fields: Vec<_> = S::meta_columns(&index_meta)
@@ -147,7 +155,8 @@ where
     let mut names_map = HashMap::new();
     let mut column_data = HashMap::new();
     let caches = FuseCaches::instance();
-    let index_file_cache = S::file_cache(&caches);
+    let index_file_cache = S::file_cache(&caches).map(|cache| cache.with_policy(policy));
+    let index_file_cache = index_file_cache.as_ref();
     for (i, (name, col_meta)) in column_indices
         .iter()
         .zip(projected_column_metas.into_iter())
@@ -170,7 +179,7 @@ where
         // Each index column is a unit of the disk cache; misses are merged into fewer reads.
         // Kinds whose columns are not cached (legacy vector indexes, cached decoded) do not
         // cache them on disk either, as the bundle loaders.
-        let fill = index_file_cache.map_or(DiskFill::Bypass, |cache| cache.disk_fill());
+        let fill = index_file_cache.map_or(CacheFill::Bypass, |cache| cache.policy().disk);
         let units = DiskCachedStorage::new(operator.clone())
             .read_units(S::file_kind(), location, &ranges, fill, settings)
             .await?;

@@ -25,9 +25,8 @@ use databend_common_metrics::cache::metrics_inc_cache_miss_load_millisecond;
 use log::warn;
 
 use crate::CacheKind;
+use crate::CachePolicy;
 use crate::CachedItem;
-use crate::DiskFill;
-use crate::ReadCtx;
 use crate::Reader;
 use crate::SingleFlight;
 use crate::backend::InsertOutcome;
@@ -38,7 +37,8 @@ use crate::handle::cache_ref::CacheRef;
 /// Typed handle to one kind's memory cache, optionally sharing loads. Cheap to clone; clones
 /// share in-flight loads, and so do all handles of a kind from one `CacheManager`, for kinds
 /// that share loads (`CacheDef::SHARE_LOADS`). The disk cache is below the readers
-/// (`DiskCachedStorage`); a handle tells a reader, through `ReadCtx`, whether it may fill it.
+/// (`DiskCachedStorage`); a handle passes its `CachePolicy` to a reader on a miss, and applies
+/// its `memory` part itself.
 pub struct MemCache<T: CachedItem> {
     kind: CacheKind,
     store: Arc<dyn KindStore>,
@@ -46,9 +46,8 @@ pub struct MemCache<T: CachedItem> {
     flight: Option<Arc<SingleFlight<CacheRef<T>>>>,
     /// Counted on every lookup, so looked up once.
     counters: Arc<CacheLookupCounters>,
-    read_only: bool,
-    /// What reads through this handle may do with the disk cache.
-    disk: DiskFill,
+    /// What reads through this handle may do with the caches.
+    policy: CachePolicy,
 }
 
 impl<T: CachedItem> Clone for MemCache<T> {
@@ -58,8 +57,7 @@ impl<T: CachedItem> Clone for MemCache<T> {
             store: self.store.clone(),
             flight: self.flight.clone(),
             counters: self.counters.clone(),
-            read_only: self.read_only,
-            disk: self.disk,
+            policy: self.policy,
         }
     }
 }
@@ -87,20 +85,20 @@ impl<T: CachedItem> MemCache<T> {
             store,
             flight,
             counters,
-            read_only: false,
-            disk: DiskFill::ReadWrite,
+            policy: CachePolicy::DEFAULT,
         }
     }
 
-    /// Same cache, but reads never refill it. `put` and `evict` still apply.
+    /// Same cache, read under both its policy and `policy` (`CachePolicy::at_most`). With a
+    /// `memory` that does not write, reads never refill it; `put` and `evict` still apply.
+    /// With one that does not read, lookups miss.
     ///
     /// Shares in-flight loads with the cache it came from: a caller on the full cache that
     /// joins a load started by a read-only view gets the value, but nothing is cached. The
     /// next lookup misses again and fills then.
-    pub fn read_only(&self) -> Self {
+    pub fn with_policy(&self, policy: CachePolicy) -> Self {
         MemCache {
-            read_only: true,
-            disk: DiskFill::ReadOnly,
+            policy: self.policy.at_most(policy),
             ..self.clone()
         }
     }
@@ -110,20 +108,9 @@ impl<T: CachedItem> MemCache<T> {
         self.store.is_enabled(self.kind)
     }
 
-    pub fn is_read_only(&self) -> bool {
-        self.read_only
-    }
-
-    /// What a read through this handle may do with the disk cache.
-    pub fn disk_fill(&self) -> DiskFill {
-        self.disk
-    }
-
-    /// The context a reader gets on a miss.
-    pub fn read_ctx(&self) -> ReadCtx {
-        ReadCtx {
-            disk: self.disk_fill(),
-        }
+    /// What reads through this handle may do with the caches; a reader gets it on a miss.
+    pub fn policy(&self) -> CachePolicy {
+        self.policy
     }
 
     pub fn kind(&self) -> CacheKind {
@@ -158,10 +145,10 @@ impl<T: CachedItem> MemCache<T> {
             return Ok(hit);
         }
         let cache_key = cache_key.into_owned();
-        let ctx = self.read_ctx();
+        let policy = self.policy;
         let load = async {
             let start = Instant::now();
-            let value = reader.read(&key, &ctx).await?;
+            let value = reader.read(&key, &policy).await?;
             if self.is_enabled() {
                 let millis = start.elapsed().as_millis() as u64;
                 metrics_inc_cache_miss_load_millisecond(millis, self.name());
@@ -175,7 +162,12 @@ impl<T: CachedItem> MemCache<T> {
                 None => Box::pin(load),
                 Some(flight) => Box::pin(flight.run(&cache_key, async {
                     // A load that completed between the miss and joining the flight.
-                    match self.memory_hit(&cache_key) {
+                    let hit = self
+                        .policy
+                        .memory
+                        .reads()
+                        .then(|| self.memory_hit(&cache_key));
+                    match hit.flatten() {
                         Some(hit) => Ok(hit),
                         None => load.await,
                     }
@@ -191,7 +183,7 @@ impl<T: CachedItem> MemCache<T> {
         Ok(self.fill(key, compute()?))
     }
 
-    /// Read-path refill; a no-op in read-only mode.
+    /// Read-path refill; a no-op unless the policy writes the memory cache.
     pub fn fill(&self, key: &str, value: T) -> CacheRef<T> {
         self.store_value(key, value, true)
     }
@@ -224,7 +216,7 @@ impl<T: CachedItem> MemCache<T> {
     }
 
     fn lookup_tiers(&self, key: &str, len: Option<u64>) -> Option<CacheRef<T>> {
-        if !self.is_enabled() {
+        if !self.is_enabled() || !self.policy.memory.reads() {
             return None;
         }
         self.counters.access();
@@ -247,7 +239,7 @@ impl<T: CachedItem> MemCache<T> {
 
     /// `fill`: a read-path refill, skipped in read-only mode.
     fn store_value(&self, key: &str, value: T, fill: bool) -> CacheRef<T> {
-        if fill && self.read_only {
+        if fill && !self.policy.memory.writes() {
             return CacheRef::new(value);
         }
         if !self.is_enabled() {

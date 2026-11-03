@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use opendal::Operator;
 use tantivy::Index;
@@ -34,6 +35,7 @@ pub type InvertedIndexFilterResult = Option<(Vec<usize>, Option<Vec<F32>>)>;
 #[derive(Clone)]
 pub struct InvertedIndexReader {
     dal: Operator,
+    policy: CachePolicy,
     has_score: bool,
     top_k: Option<usize>,
     tokenizer_manager: TokenizerManager,
@@ -43,12 +45,14 @@ pub struct InvertedIndexReader {
 impl InvertedIndexReader {
     pub fn create(
         dal: Operator,
+        policy: CachePolicy,
         has_score: bool,
         tokenizer_manager: TokenizerManager,
         warmup: InvertedIndexWarmupInfo,
     ) -> Self {
         Self {
             dal,
+            policy,
             has_score,
             top_k: None,
             tokenizer_manager,
@@ -90,7 +94,8 @@ impl InvertedIndexReader {
         query: Box<dyn Query>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
-        let bundle = load_bundle_search_directory(&self.dal, index_path, object_size).await?;
+        let bundle =
+            load_bundle_search_directory(&self.dal, index_path, object_size, self.policy).await?;
         let mut index = Index::open(bundle.directory.clone())?;
         index.set_tokenizers(self.tokenizer_manager.clone());
 
@@ -196,6 +201,7 @@ mod tests {
     fn reader(has_score: bool, top_k: Option<usize>) -> InvertedIndexReader {
         InvertedIndexReader::create(
             Operator::new(Memory::default()).unwrap().finish(),
+            CachePolicy::DEFAULT,
             has_score,
             TokenizerManager::default(),
             InvertedIndexWarmupInfo::default(),

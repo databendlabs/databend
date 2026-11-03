@@ -23,7 +23,6 @@ use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
 use databend_common_metrics::storage::*;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_io::ReadSettings;
@@ -66,8 +65,9 @@ impl BlockReadContext {
 
         let mut ranges = vec![];
         // for async read, try using table data cache (if enabled in settings)
-        let caches = FuseCaches::instance();
-        let column_array_cache = &caches.column_arrays;
+        let column_array_cache = &FuseCaches::instance()
+            .column_arrays
+            .with_policy(self.policy());
         let mut cached_column_array = vec![];
 
         let column_cache_key_builder = ColumnCacheKeyBuilder::new(location);
@@ -113,18 +113,12 @@ impl BlockReadContext {
             }
         }
 
-        // Background tasks (`put_cache = false`) use the disk cache but do not fill it.
-        let fill = if self.put_cache() {
-            DiskFill::ReadWrite
-        } else {
-            DiskFill::ReadOnly
-        };
         let units = DiskCachedStorage::new(self.operator().clone())
             .read_units(
                 CacheKind::of::<column::Data>(),
                 location,
                 &ranges,
-                fill,
+                self.policy().disk,
                 settings,
             )
             .await?;

@@ -21,9 +21,9 @@ use bytes::Bytes;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::kinds::column;
 use opendal::Operator;
 use parquet::arrow::ProjectionMask;
@@ -498,9 +498,9 @@ pub async fn cached_range_read(
     // overwritten under its name is read as rewritten. Iceberg, Hive and result cache reads
     // turn it on.
     let fill = if enable_cache {
-        DiskFill::ReadWrite
+        CacheFill::ReadWrite
     } else {
-        DiskFill::Bypass
+        CacheFill::Bypass
     };
     // Paths of external files are relative to the operator root, so keys carry it. The units
     // are the merged ranges, not column chunks: the same column read under another projection

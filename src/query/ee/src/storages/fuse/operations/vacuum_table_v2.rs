@@ -21,8 +21,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -114,18 +113,9 @@ pub async fn do_vacuum2(
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<()> {
-    // Maintenance, also from a table function or procedure: its reads bypass the disk cache.
-    ThreadTracker::maintenance_payload()
-        .tracking(vacuum2(table, ctx, respect_flash_back))
-        .await
-}
-
-#[async_backtrace::framed]
-async fn vacuum2(
-    table: &dyn Table,
-    ctx: Arc<dyn TableContext>,
-    respect_flash_back: bool,
-) -> Result<()> {
+    // Maintenance, also from a table function or procedure: `CachePolicy::MAINTENANCE` for the
+    // rest of the statement, whose reads are this vacuum's.
+    ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
     let table_info = table.get_table_info();
     {
         if ctx.txn_mgr().lock().is_active() {
@@ -239,7 +229,7 @@ async fn vacuum2(
         }
 
         let segments = segments_io
-            .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
+            .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, CachePolicy::READ_ONLY)
             .await?;
         for segment in segments {
             let blocks = segment?.block_metas()?;
@@ -937,6 +927,7 @@ async fn vacuum_base_snapshot_phase(
             &mark.descendant_ids,
             concurrency,
             &mut protected_segments,
+            ctx.cache_policy(),
         )
         .await?;
     fuse_table
@@ -945,6 +936,7 @@ async fn vacuum_base_snapshot_phase(
             &selection.gc_root_path,
             &mut selection.snapshots_to_gc,
             &mut protected_segments,
+            ctx.cache_policy(),
         )
         .await?;
 

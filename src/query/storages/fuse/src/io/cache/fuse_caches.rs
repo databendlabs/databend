@@ -18,6 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CachedVectorIndex;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::SizedColumnArray;
@@ -77,12 +78,12 @@ pub struct InvertedIndexCache {
 }
 
 impl InvertedIndexCache {
-    pub fn read_only(&self) -> Self {
+    pub fn with_policy(&self, policy: CachePolicy) -> Self {
         InvertedIndexCache {
-            meta: self.meta.read_only(),
-            lookup: self.lookup.read_only(),
-            payload: self.payload.read_only(),
-            full_payload: self.full_payload.read_only(),
+            meta: self.meta.with_policy(policy),
+            lookup: self.lookup.with_policy(policy),
+            payload: self.payload.with_policy(policy),
+            full_payload: self.full_payload.with_policy(policy),
         }
     }
 }
@@ -97,12 +98,12 @@ pub struct IndexMetaCache {
 }
 
 impl IndexMetaCache {
-    pub fn read_only(&self) -> Self {
+    pub fn with_policy(&self, policy: CachePolicy) -> Self {
         IndexMetaCache {
-            bloom: self.bloom.read_only(),
-            vector: self.vector.read_only(),
-            spatial: self.spatial.read_only(),
-            virtual_column: self.virtual_column.read_only(),
+            bloom: self.bloom.with_policy(policy),
+            vector: self.vector.with_policy(policy),
+            spatial: self.spatial.with_policy(policy),
+            virtual_column: self.virtual_column.with_policy(policy),
         }
     }
 }
@@ -146,19 +147,21 @@ impl FuseCaches {
         GlobalInstance::set(Self::new(manager));
     }
 
-    /// Lookups as usual, but values read on a miss are not cached. Writes still go in.
-    pub fn read_only(&self) -> Arc<Self> {
+    /// The caches read under `policy` too (`MemCache::with_policy`): with
+    /// `CachePolicy::READ_ONLY`, lookups as usual, but values read on a miss are not cached;
+    /// writes still go in.
+    pub fn with_policy(&self, policy: CachePolicy) -> Arc<Self> {
         Arc::new(FuseCaches {
-            snapshots: self.snapshots.read_only(),
-            segments: self.segments.read_only(),
-            index_metas: self.index_metas.read_only(),
-            bloom_filters: self.bloom_filters.read_only(),
-            spatial_files: self.spatial_files.read_only(),
-            vector_refine_pages: self.vector_refine_pages.read_only(),
-            prune_results: self.prune_results.read_only(),
-            inverted: self.inverted.read_only(),
-            vector_indexes: self.vector_indexes.read_only(),
-            column_arrays: self.column_arrays.read_only(),
+            snapshots: self.snapshots.with_policy(policy),
+            segments: self.segments.with_policy(policy),
+            index_metas: self.index_metas.with_policy(policy),
+            bloom_filters: self.bloom_filters.with_policy(policy),
+            spatial_files: self.spatial_files.with_policy(policy),
+            vector_refine_pages: self.vector_refine_pages.with_policy(policy),
+            prune_results: self.prune_results.with_policy(policy),
+            inverted: self.inverted.with_policy(policy),
+            vector_indexes: self.vector_indexes.with_policy(policy),
+            column_arrays: self.column_arrays.with_policy(policy),
         })
     }
 

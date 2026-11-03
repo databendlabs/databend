@@ -37,11 +37,12 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::DiskCachedStorage;
-use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::SegmentInfo;
 use databend_storages_common_cache::kinds::bloom;
@@ -272,7 +273,7 @@ async fn assert_reads_as_stored(
     range: Option<std::ops::Range<u64>>,
 ) -> Result<()> {
     let cached = DiskCachedStorage::new(op.clone())
-        .read(kind, path, range.clone(), DiskFill::ReadOnly)
+        .read(kind, path, range.clone(), CacheFill::ReadOnly)
         .await?;
     let stored = match range {
         Some(range) => op.read_with(path).range(range).await?,
@@ -298,7 +299,7 @@ async fn fill(
         None => DiskKey::whole(path),
     };
     DiskCachedStorage::new(op.clone())
-        .read(kind, path, range, DiskFill::ReadWrite)
+        .read(kind, path, range, CacheFill::ReadWrite)
         .await?;
     settle().await;
     assert!(disk().contains(kind, &key), "{path} is not on disk");
@@ -381,7 +382,7 @@ async fn bloom_indexes(fixture: &TestFixture, name: &str) -> Result<Vec<String>>
     let table = FuseTable::try_from_table(table.as_ref())?;
     let snapshot = table.read_table_snapshot().await?.expect("a snapshot");
     let segments = SegmentsIO::create(ctx, table.get_operator(), table.schema())
-        .read_segments::<SegmentInfo>(&snapshot.segments, false)
+        .read_segments::<SegmentInfo>(&snapshot.segments, CachePolicy::READ_ONLY)
         .await?;
     let mut paths = Vec::new();
     for segment in segments {
@@ -503,7 +504,7 @@ async fn test_vacuumed_files_are_not_read_back() -> anyhow::Result<()> {
     }
     for path in deleted {
         let read = DiskCachedStorage::new(op.clone())
-            .read(kind_of(path), path, None, DiskFill::ReadOnly)
+            .read(kind_of(path), path, None, CacheFill::ReadOnly)
             .await;
         assert!(
             read.is_err(),

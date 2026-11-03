@@ -18,7 +18,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,6 +35,7 @@ use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextPerf;
 use crate::sessions::TableContextQueryIdentity;
@@ -200,10 +200,6 @@ impl QueryFragmentsActions {
         self.fragments_connections(&mut builder)?;
         self.statistics_connections(&mut builder)?;
 
-        // A maintenance statement's fragments run as such on every node, this one included:
-        // its own fragments are run under its context.
-        let maintenance = ThreadTracker::is_maintenance() || self.ctx.is_maintenance();
-        self.ctx.set_maintenance(maintenance);
         Ok(QueryEnv {
             query_created_time: self.ctx.get_query_created_time(),
             workload_group,
@@ -220,7 +216,7 @@ impl QueryFragmentsActions {
                 .get_create_query_flight_client_with_current_rt()?,
             perf_config: self.ctx.get_perf_config(),
             user: self.ctx.get_current_user()?,
-            maintenance,
+            cache_policy: self.ctx.cache_policy(),
         })
     }
 

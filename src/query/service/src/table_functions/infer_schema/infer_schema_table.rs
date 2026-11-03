@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
@@ -252,7 +253,7 @@ impl Table for InferSchemaTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let Some(part) = ctx.get_partition() else {
             return Ok(());

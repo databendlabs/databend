@@ -38,7 +38,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::ReadCtx;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use futures_util::TryStreamExt;
 
@@ -214,7 +214,7 @@ async fn check_index_data(
     let mut block_metas = Vec::new();
     for (segment_loc, ver) in &snapshot.segments {
         let segment_info = segment_reader
-            .read(&(segment_loc.to_string(), *ver), &ReadCtx::BYPASS)
+            .read(&(segment_loc.to_string(), *ver), &CachePolicy::BYPASS)
             .await?;
         for block_meta in segment_info.block_metas()? {
             block_metas.push(block_meta);

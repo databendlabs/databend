@@ -16,15 +16,20 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
 use log::debug;
 
-use super::fragments_tracking_payload;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::sessions::TableContextCluster;
 
 pub static START_PREPARED_QUERY: &str = "/actions/start_prepared_query";
 
 pub async fn start_prepared_query(id: String) -> Result<()> {
     let ctx = DataExchangeManager::instance().get_query_ctx(&id)?;
 
-    let _guard = ThreadTracker::tracking(fragments_tracking_payload(&id, &ctx));
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(id.clone());
+    tracking_payload.io_stats = Some(ctx.get_local_io_stats());
+    tracking_payload.warehouse_id = ctx.get_cluster().get_warehouse_id().ok();
+    tracking_payload.mem_stat = ctx.get_query_memory_tracking();
+    let _guard = ThreadTracker::tracking(tracking_payload);
 
     debug!("start prepared query {}", id);
     if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&id) {

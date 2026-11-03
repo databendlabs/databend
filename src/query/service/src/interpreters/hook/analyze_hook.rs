@@ -18,8 +18,7 @@ databend_common_tracing::register_module_tag!("[ANALYZE-HOOK]");
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -34,6 +33,7 @@ use crate::interpreters::hook::table_id_matches_target;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
@@ -66,16 +66,15 @@ pub(crate) fn analyze_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
 }
 
 pub(crate) async fn execute_analyze_hook(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
+    // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context of
+    // the write, whose own reads are done by now.
+    ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
     info!("Table hook starting analyze job");
     if !analyze_after_write_enabled(&ctx) {
         return Ok(());
     }
 
-    // Maintenance: its reads bypass the disk cache.
-    match ThreadTracker::maintenance_payload()
-        .tracking(do_analyze(ctx, desc))
-        .await
-    {
+    match do_analyze(ctx, desc).await {
         Ok(_) => {
             info!("Analyze job completed successfully");
         }
@@ -123,7 +122,10 @@ pub(crate) async fn execute_analyze(
     table: &FuseTable,
     options: AnalyzeOptions,
 ) -> Result<()> {
-    let Some(snapshot) = table.read_table_snapshot().await? else {
+    let Some(snapshot) = table
+        .read_table_snapshot_with_policy(ctx.cache_policy())
+        .await?
+    else {
         return Ok(());
     };
     let mut pipeline = Pipeline::create();
