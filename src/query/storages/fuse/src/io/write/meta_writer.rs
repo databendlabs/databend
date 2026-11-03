@@ -60,15 +60,16 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
     ) -> Result<()> {
         let bytes = self.marshal()?;
         data_accessor.write(location, bytes.clone()).await?;
-        // Segments are rewritten in place by ANALYZE: the disk cache drops the old bytes, as
-        // the memory cache replaces them below.
-        DiskCachedStorage::new(data_accessor.clone())
-            .evict_objects(&[location.to_string()])
-            .await?;
+        // Segments are rewritten in place by ANALYZE. The memory cache takes the new value
+        // right after the write, before the await below, at which the caller may be cancelled;
+        // the disk cache drops the old bytes.
         let segments = &FuseCaches::instance().segments;
         if segments.is_enabled() {
             segments.put(location, Arc::new(self.try_into()?));
         }
+        DiskCachedStorage::new(data_accessor.clone())
+            .evict_objects(&[location.to_string()])
+            .await?;
         Ok(())
     }
 }
