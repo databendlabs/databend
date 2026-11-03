@@ -712,6 +712,14 @@ fn test_encoded_row_serialization() {
         }
     };
     assert_eq!(keys(&columns), keys(&decoded));
+
+    // Rows selecting a long value more often than the others: the serialized keys must fit
+    // the size reserved for them.
+    let long = "x".repeat(100);
+    let skewed = StringType::from_data(vec!["a", "b", long.as_str(), long.as_str(), long.as_str()]);
+    let column = build_dict(&skewed);
+    assert!(column.serialize_size() >= skewed.serialize_size());
+    assert_eq!(keys(&[column]), keys(&[skewed]));
 }
 
 /// Dictionary encoded chunks, e.g. of a hash join build side, keep one merged dictionary and

@@ -1955,10 +1955,18 @@ impl Column {
             // Encoded columns are decoded before serialization.
             Column::Encoded(col) => match col.as_ref() {
                 EncodedColumn::For(c) => c.len() * c.decoded_width(),
-                EncodedColumn::Dict(c) => {
-                    let values = c.values.len().max(1);
-                    c.values.serialize_size() * c.len() / values
-                }
+                // Rows can select some values more often than others: the size of variable
+                // size values is summed over the rows.
+                EncodedColumn::Dict(c) => match &c.values {
+                    Column::String(values) => {
+                        c.len() * 8
+                            + c.keys
+                                .iter()
+                                .map(|key| values.index(key as usize).unwrap().len())
+                                .sum::<usize>()
+                    }
+                    values => values.serialize_size() / values.len().max(1) * c.len(),
+                },
             },
         }
     }
