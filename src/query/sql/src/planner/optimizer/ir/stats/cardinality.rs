@@ -18,11 +18,12 @@ use databend_common_statistics::StatCount;
 use crate::optimizer::ir::StatInfo;
 
 /// Caps statistics by an operator-enforced row limit. Like `Limit`, the limit
-/// also caps `max_cardinality`.
+/// also caps `max_cardinality` and clears `statistics_zero_bound`.
 pub(crate) fn cap_stat_info_by_rows(mut stat_info: StatInfo, limit: usize) -> StatInfo {
     let input_cardinality = stat_info.cardinality;
     let limit = limit as f64;
     stat_info.max_cardinality = stat_info.max_cardinality.max(input_cardinality).min(limit);
+    stat_info.statistics_zero_bound = false;
     if limit == 0.0 {
         stat_info.cardinality = 0.0;
         stat_info.statistics.precise_cardinality =
@@ -80,6 +81,7 @@ mod tests {
         StatInfo {
             cardinality,
             max_cardinality: cardinality,
+            statistics_zero_bound: false,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat::Int {

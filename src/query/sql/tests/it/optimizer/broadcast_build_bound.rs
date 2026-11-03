@@ -41,8 +41,9 @@ use crate::framework::golden::write_case_title;
 // `m` is a large table with a unique key, and `u` has no column statistics.
 // `s` is a large table with a unique key whose NDV is below the size of its
 // value domain, and `f` has the same statistics except that its NDV was filled
-// from the row count. `p` is the large probe table. `r` and `w` record `t` in
-// [1, 1000], so a range above 1000 is estimated to match no rows.
+// from the row count. `p` is the large probe table. `r`, `w` and `e` record `t`
+// in [1, 1000], so a range above 1000 is estimated to match no rows. `e` is `r`
+// with an extra column `v` for a selective equality.
 const PROBE_TABLE: &str = "CREATE TABLE p(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const LEFT_RANGE_TABLE: &str = "CREATE TABLE a(k BIGINT NOT NULL)";
 const RIGHT_RANGE_TABLE: &str = "CREATE TABLE b(k BIGINT NOT NULL)";
@@ -53,6 +54,8 @@ const SPARSE_KEY_TABLE: &str = "CREATE TABLE s(k BIGINT NOT NULL)";
 const FALLBACK_NDV_TABLE: &str = "CREATE TABLE f(k BIGINT NOT NULL)";
 const LARGE_RANGE_TABLE: &str = "CREATE TABLE r(k BIGINT NOT NULL, t BIGINT NOT NULL)";
 const MEDIUM_RANGE_TABLE: &str = "CREATE TABLE w(k BIGINT NOT NULL, t BIGINT NOT NULL)";
+const LARGE_RANGE_EQUALITY_TABLE: &str =
+    "CREATE TABLE e(k BIGINT NOT NULL, t BIGINT NOT NULL, v BIGINT NOT NULL)";
 
 struct StatsCase {
     name: &'static str,
@@ -147,6 +150,15 @@ async fn create_context(cluster_node_num: u64) -> Result<Arc<LiteTableContext>> 
                 ("t".to_string(), int_stat(1, 1000, 1000)),
             ]),
         ),
+        (
+            LARGE_RANGE_EQUALITY_TABLE,
+            1_000_000_000,
+            HashMap::from([
+                ("k".to_string(), int_stat(1, 1_000_000, 1_000_000)),
+                ("t".to_string(), int_stat(1, 1000, 1000)),
+                ("v".to_string(), int_stat(1, 1000, 1000)),
+            ]),
+        ),
     ];
     for (sql, rows, column_stats) in tables {
         ctx.register_table_sql_with_stats(
@@ -192,6 +204,11 @@ async fn write_stats_case(file: &mut impl Write, case: &StatsCase) -> Result<()>
     writeln!(file, "operator: {:?}", case.operator)?;
     writeln!(file, "cardinality: {:.3}", stats.cardinality)?;
     writeln!(file, "max_cardinality: {:.3}", stats.max_cardinality)?;
+    writeln!(
+        file,
+        "statistics_zero_bound: {}",
+        stats.statistics_zero_bound
+    )?;
     writeln!(file)?;
     Ok(())
 }
@@ -388,6 +405,48 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             sql: "SELECT * FROM r WHERE t > 999",
             operator: RelOp::Filter,
         },
+        StatsCase {
+            name: "eval_scalar_over_range_outside_statistics",
+            description: "A projection keeps the rows of its input and the source of their bound.",
+            sql: "SELECT k + 1 AS x FROM r WHERE t > 1000",
+            operator: RelOp::EvalScalar,
+        },
+        StatsCase {
+            name: "filter_over_range_outside_statistics",
+            description: "A filter keeps the bound of a range outside the recorded min/max below it.",
+            sql: "SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE k > 10",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "filter_over_window_over_range_outside_statistics",
+            description: "A window function keeps the rows of its input, so a filter on its result keeps the bound of the range below.",
+            sql: "SELECT * FROM (SELECT k, row_number() OVER (PARTITION BY k ORDER BY t) AS n FROM r WHERE t > 1000) AS x WHERE n <> 5",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "filter_proven_empty_over_range_outside_statistics",
+            description: "A filter proven empty bounds its output at zero rows.",
+            sql: "SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE k IS NULL",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "filter_range_outside_statistics_over_join",
+            description: "A range outside the recorded min/max above a join whose bound exceeds its estimate keeps the strict row limit.",
+            sql: "SELECT * FROM d JOIN r ON d.k = r.k WHERE r.t > 1000",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "join_over_range_outside_statistics",
+            description: "A join derives its own bound, which may include fan-out.",
+            sql: "SELECT * FROM d JOIN (SELECT * FROM r WHERE t > 1000) AS x ON d.k = x.k",
+            operator: RelOp::Join,
+        },
+        StatsCase {
+            name: "limit_over_range_outside_statistics",
+            description: "LIMIT caps the bound and keeps the strict row limit.",
+            sql: "SELECT * FROM r WHERE t > 1000 LIMIT 300000000",
+            operator: RelOp::Limit,
+        },
     ];
 
     for case in &cases {
@@ -471,9 +530,30 @@ async fn test_broadcast_build_bound_plan_golden() -> Result<()> {
             settings: NO_REORDER,
         },
         PlanCase {
-            name: "range_outside_statistics_build_is_shuffled",
-            description: "A build side filtered by a range outside the recorded min/max is not broadcast when its unknown-filter bound exceeds max_broadcast_join_build_rows.",
+            name: "range_outside_statistics_build_is_broadcast",
+            description: "A build side filtered by a range outside the recorded min/max is broadcast when its expected rows are within max_broadcast_join_build_rows, although its unknown-filter bound exceeds the limit.",
             sql: "SELECT p.v FROM p JOIN r ON p.k = r.k WHERE r.t > 1000",
+            settings: NO_REORDER,
+        },
+        PlanCase {
+            name: "range_outside_statistics_or_build_is_broadcast",
+            description: "An OR with a range outside the recorded min/max keeps the range's bound source, so the build side is broadcast by its expected rows.",
+            sql: "SELECT p.v FROM p JOIN r ON p.k = r.k WHERE r.t > 1000 OR r.k = 5",
+            settings: NO_REORDER,
+        },
+        PlanCase {
+            name: "range_outside_statistics_expected_rows_over_row_limit_is_shuffled",
+            description: "A build side filtered by a range outside the recorded min/max is not broadcast when its expected rows exceed max_broadcast_join_build_rows.",
+            sql: "SELECT p.v FROM p JOIN r ON p.k = r.k WHERE r.t > 1000",
+            settings: &[
+                ("disable_join_reorder", "1"),
+                ("max_broadcast_join_build_rows", "100000"),
+            ],
+        },
+        PlanCase {
+            name: "range_outside_statistics_severe_underestimate_is_shuffled",
+            description: "A selective equality next to a range outside the recorded min/max lowers the expected rows far below the unknown-filter bound, so the build side is not broadcast.",
+            sql: "SELECT p.v FROM p JOIN e ON p.k = e.k WHERE e.t > 1000 AND e.v = 5",
             settings: NO_REORDER,
         },
         PlanCase {

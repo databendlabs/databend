@@ -44,6 +44,7 @@ impl ProjectSet {
         // The bound expands by the same factor.
         input_stat.max_cardinality = input_stat.max_cardinality.max(input_stat.cardinality) * 3.0;
         input_stat.cardinality *= 3.0;
+        input_stat.statistics_zero_bound = false;
         Ok(Arc::new(input_stat.clone()))
     }
 }

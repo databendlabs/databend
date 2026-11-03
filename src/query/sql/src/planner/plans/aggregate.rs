@@ -95,6 +95,7 @@ impl Aggregate {
             return Ok(Arc::new(StatInfo {
                 cardinality: 1.0,
                 max_cardinality: 1.0,
+                statistics_zero_bound: false,
                 statistics: Statistics {
                     precise_cardinality: Some(1),
                     column_stats: column_stats.clone(),
@@ -123,6 +124,7 @@ impl Aggregate {
             return Ok(Arc::new(StatInfo {
                 cardinality,
                 max_cardinality,
+                statistics_zero_bound: false,
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
@@ -175,6 +177,7 @@ impl Aggregate {
         Ok(Arc::new(StatInfo {
             cardinality,
             max_cardinality: cardinality,
+            statistics_zero_bound: false,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
