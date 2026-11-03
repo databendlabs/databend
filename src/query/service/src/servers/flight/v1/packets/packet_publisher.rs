@@ -19,7 +19,12 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::IoStats;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::workload_group::WorkloadGroupResource;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
@@ -168,9 +173,10 @@ pub struct QueryEnv {
     #[serde(default)]
     pub perf_config: PerfConfig,
     pub user: UserInfo,
-    /// A maintenance statement: its reads on every node bypass the disk cache.
+    /// A maintenance statement: its fragments run as such on every node
+    /// (`TrackingPayload::maintenance`).
     #[serde(default)]
-    pub bypass_disk_cache: bool,
+    pub maintenance: bool,
 }
 
 impl QueryEnv {
@@ -189,6 +195,23 @@ impl QueryEnv {
             .await?;
 
         Ok(())
+    }
+
+    /// The payload `init_query_env` runs under on a node, with the query's memory stat and
+    /// workload group there.
+    pub fn tracking_payload(
+        &self,
+        mem_stat: Arc<MemStat>,
+        workload_group_resource: Option<Arc<WorkloadGroupResource>>,
+    ) -> TrackingPayload {
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.query_id = Some(self.query_id.clone());
+        payload.io_stats = Some(Arc::new(IoStats::default()));
+        payload.warehouse_id = self.cluster.get_warehouse_id().ok();
+        payload.mem_stat = Some(mem_stat);
+        payload.workload_group_resource = workload_group_resource;
+        payload.maintenance = self.maintenance;
+        payload
     }
 
     pub async fn create_query_ctx(&self) -> Result<Arc<QueryContext>> {
@@ -216,6 +239,8 @@ impl QueryEnv {
 
         query_ctx.update_init_query_id(self.query_id.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());
+        // Read by `fragments_tracking_payload` for the fragments run here.
+        query_ctx.set_maintenance(self.maintenance);
 
         Ok(query_ctx)
     }

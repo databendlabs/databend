@@ -18,7 +18,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -43,17 +42,7 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     let name = Some(env.query_id.clone());
     let query_mem_stat = MemStat::create_child(name, 0, parent_mem_stat);
 
-    let mut tracking_payload = ThreadTracker::new_tracking_payload();
-    tracking_payload.query_id = Some(env.query_id.clone());
-    tracking_payload.io_stats = Some(std::sync::Arc::new(
-        databend_common_base::runtime::IoStats::default(),
-    ));
-    tracking_payload.warehouse_id = env.cluster.get_warehouse_id().ok();
-    tracking_payload.mem_stat = Some(query_mem_stat.clone());
-    tracking_payload.workload_group_resource = tracking_workload_group;
-    tracking_payload.bypass_disk_cache = env.bypass_disk_cache;
-
-    tracking_payload
+    env.tracking_payload(query_mem_stat, tracking_workload_group)
         .tracking(async move {
             let ctx = match env.request_server_id == GlobalConfig::instance().query.node_id {
                 true => None,

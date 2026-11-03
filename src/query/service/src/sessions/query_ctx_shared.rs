@@ -189,9 +189,8 @@ pub struct QueryContextShared {
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
-    /// On a node running fragments of a maintenance statement: their reads bypass the disk
-    /// cache (`QueryEnv::bypass_disk_cache`).
-    pub(super) bypass_disk_cache: AtomicBool,
+    /// On a node running fragments of a maintenance statement (`QueryEnv::maintenance`).
+    pub(super) maintenance: AtomicBool,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
@@ -287,7 +286,7 @@ impl QueryContextShared {
             remote_io_stats: Default::default(),
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
-            bypass_disk_cache: AtomicBool::new(false),
+            maintenance: AtomicBool::new(false),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),

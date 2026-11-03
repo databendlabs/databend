@@ -515,17 +515,21 @@ async fn test_vacuumed_files_are_not_read_back() -> anyhow::Result<()> {
 }
 
 /// Writes leave the disk cache as it was: the blocks, segments and indexes an INSERT writes
-/// are not put on disk, nor is any of them read back from it. Only the snapshot the INSERT
-/// reads to commit, as a query would, may be cached.
+/// are not put on disk, nor is any of them looked up there. Only the snapshot the INSERT reads
+/// to commit, as a query would, may be. The compaction and recluster the INSERT triggers after
+/// its commit run as maintenance, and `test_maintenance_does_not_fill_the_disk_cache` covers
+/// them on their own.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_writes_do_not_fill_the_disk_cache() -> anyhow::Result<()> {
     let dir = TempDir::new()?;
     let fixture = setup(&dir).await?;
-    let before = disk_items();
     create_table(&fixture, "w", "cluster by (a) enable_virtual_column = true").await?;
     fixture
         .execute_command(&format!("create ngram index idx_w on {DB}.w(s)"))
         .await?;
+    settle().await;
+    let before = disk_items();
+    let accesses = disk_accesses();
     fixture
         .execute_command(&format!(
             "insert into {DB}.w select number, concat('k', number::string), \
@@ -546,6 +550,16 @@ async fn test_writes_do_not_fill_the_disk_cache() -> anyhow::Result<()> {
         filled.is_empty(),
         "filled by writes:\n{}",
         filled.join("\n")
+    );
+    let looked_up: Vec<String> = disk_accesses()
+        .into_iter()
+        .filter(|(kind, n)| kind != snapshot && *n > accesses.get(kind).copied().unwrap_or(0))
+        .map(|(kind, n)| format!("{kind}: {n}"))
+        .collect();
+    assert!(
+        looked_up.is_empty(),
+        "looked up by writes:\n{}",
+        looked_up.join("\n")
     );
     Ok(())
 }

@@ -155,9 +155,9 @@ impl DiskCachedStorage {
     }
 
     /// `fill`, or no disk cache at all for maintenance statements
-    /// (`ThreadTracker::bypass_disk_cache`): the disk cache serves queries.
+    /// (`ThreadTracker::is_maintenance`): the disk cache serves queries.
     fn statement_fill(fill: DiskFill) -> DiskFill {
-        if ThreadTracker::bypass_disk_cache() {
+        if ThreadTracker::is_maintenance() {
             DiskFill::Bypass
         } else {
             fill

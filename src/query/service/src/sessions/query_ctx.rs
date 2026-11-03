@@ -204,16 +204,18 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
-    /// Fragments of a maintenance statement run here: see `QueryEnv::bypass_disk_cache`.
-    pub fn set_bypass_disk_cache(&self, read_only: bool) {
+    /// Fragments of a maintenance statement run here: see `QueryEnv::maintenance`.
+    pub fn set_maintenance(&self, maintenance: bool) {
         self.shared
-            .bypass_disk_cache
-            .store(read_only, std::sync::atomic::Ordering::Relaxed);
+            .maintenance
+            .store(maintenance, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn get_bypass_disk_cache(&self) -> bool {
+    /// Whether this query is a maintenance statement run here as fragments
+    /// (`QueryEnv::maintenance`).
+    pub fn is_maintenance(&self) -> bool {
         self.shared
-            .bypass_disk_cache
+            .maintenance
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 

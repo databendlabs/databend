@@ -25,6 +25,8 @@ mod truncate_table;
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -42,8 +44,23 @@ pub use start_prepared_query::START_PREPARED_QUERY;
 pub use system_action::SYSTEM_ACTION;
 pub use truncate_table::TRUNCATE_TABLE;
 
+use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
+use crate::sessions::TableContextCluster;
+
+/// The payload the fragments of the query of `ctx` are prepared and run under on this node
+/// (`init_query_fragments`, `start_prepared_query`). Preparation may already read storage, as
+/// the lazy pruning of a DELETE / UPDATE source, so the query's IO counter is bound for both.
+pub fn fragments_tracking_payload(query_id: &str, ctx: &QueryContext) -> TrackingPayload {
+    let mut payload = ThreadTracker::new_tracking_payload();
+    payload.query_id = Some(query_id.to_string());
+    payload.io_stats = Some(ctx.get_local_io_stats());
+    payload.warehouse_id = ctx.get_cluster().get_warehouse_id().ok();
+    payload.mem_stat = ctx.get_query_memory_tracking();
+    payload.maintenance = ctx.is_maintenance();
+    payload
+}
 
 pub(crate) fn create_session() -> Result<Arc<Session>> {
     let config = GlobalConfig::instance();

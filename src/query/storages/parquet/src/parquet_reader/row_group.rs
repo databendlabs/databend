@@ -493,6 +493,10 @@ pub async fn cached_range_read(
     merged_ranges: Vec<Range<u64>>,
     enable_cache: bool,
 ) -> Result<HashMap<Range<u64>, Bytes>> {
+    // `enable_cache` is off for stage tables, COPY included, and small files read whole: they
+    // stay off the disk cache altogether, as off the memory cache on main, so a stage file
+    // overwritten under its name is read as rewritten. Iceberg, Hive and result cache reads
+    // turn it on.
     let fill = if enable_cache {
         DiskFill::ReadWrite
     } else {

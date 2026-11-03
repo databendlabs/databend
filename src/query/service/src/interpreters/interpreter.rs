@@ -114,14 +114,14 @@ pub trait Interpreter: Sync + Send {
         let query_io_stats = ctx.get_local_io_stats();
         let already_tracked =
             ThreadTracker::io_stats().is_some_and(|current| Arc::ptr_eq(current, &query_io_stats));
-        let maintenance = self.is_maintenance() && !ThreadTracker::bypass_disk_cache();
+        let maintenance = self.is_maintenance() && !ThreadTracker::is_maintenance();
         if already_tracked && !maintenance {
             return self.execute_with_hooks_inner(ctx, hooks).await;
         }
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.io_stats = Some(query_io_stats);
-        tracking_payload.bypass_disk_cache |= maintenance;
+        tracking_payload.maintenance |= maintenance;
         tracking_payload
             .tracking(self.execute_with_hooks_inner(ctx, hooks))
             .await
