@@ -66,6 +66,14 @@ impl SelectExpr {
             _ => false,
         }
     }
+
+    /// Evaluates the children of every AND/OR in the order of the predicate.
+    pub fn disable_reorder(&mut self) {
+        if let SelectExpr::And((exprs, permutation)) | SelectExpr::Or((exprs, permutation)) = self {
+            permutation.disable_reorder();
+            exprs.iter_mut().for_each(SelectExpr::disable_reorder);
+        }
+    }
 }
 
 fn is_string_column(expr: &Expr) -> bool {

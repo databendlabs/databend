@@ -94,15 +94,21 @@ impl PrewhereSelector {
             ),
             _ => None,
         };
+        let mut executor = FilterExecutor::new(
+            filter.clone(),
+            func_ctx.clone(),
+            max_block_size,
+            None,
+            &BUILTIN_FUNCTIONS,
+            false,
+        );
+        // The evaluator path evaluates the conjuncts in order, so a row error in a later one
+        // (e.g. `parse_json` on an invalid value) is not raised for rows an earlier one
+        // rejected. Reordering would make a query fail depending on which blocks a worker
+        // read before, so keep the order of the predicate.
+        executor.disable_reorder();
         Some(Self {
-            executor: FilterExecutor::new(
-                filter.clone(),
-                func_ctx.clone(),
-                max_block_size,
-                None,
-                &BUILTIN_FUNCTIONS,
-                false,
-            ),
+            executor,
             single_comparison_columns,
         })
     }
@@ -967,6 +973,40 @@ mod tests {
                 "{}",
                 expr.sql_display()
             );
+        }
+    }
+
+    /// Rows with an invalid JSON value are all rejected by the first conjunct. The evaluator
+    /// never parses them, so the selector must not reorder the conjuncts across blocks and
+    /// parse them first.
+    #[test]
+    fn test_prewhere_selector_keeps_conjunct_order() {
+        let num_rows = 6;
+        let func_ctx = FunctionContext::default();
+        let block = DataBlock::new_from_columns(vec![
+            StringType::from_data(vec!["ok", "no", "ok", "no", "ok", "no"]),
+            StringType::from_data(vec!["{}", "invalid", "[]", "invalid", "{}", "invalid"]),
+        ]);
+        let raw_expr = call("and", vec![
+            call("eq", vec![
+                column(0, DataType::String),
+                string_constant("ok"),
+            ]),
+            call("eq", vec![
+                call("parse_json", vec![column(1, DataType::String)]),
+                call("parse_json", vec![string_constant("{}")]),
+            ]),
+        ]);
+        let expr = prewhere_expr(&raw_expr, &func_ctx);
+        let expected = evaluator_bitmap(&expr, &block, &func_ctx);
+        assert_eq!(expected, vec![true, false, false, false, true, false]);
+
+        let mut selector = PrewhereSelector::try_create(&expr, &func_ctx, num_rows).unwrap();
+        assert!(selector.applies_to(&block));
+        // Adaptive reordering would swap the two conjuncts after the first block.
+        for _ in 0..16 {
+            let actual = filter_with_selector(&mut selector.executor, &block, num_rows).unwrap();
+            assert_eq!(actual.iter().collect::<Vec<_>>(), expected);
         }
     }
 
