@@ -26,6 +26,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Cast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
@@ -36,6 +37,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FilterExecutor;
+use databend_common_expression::FunctionCall;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::SelectExpr;
 use databend_common_expression::SelectExprBuilder;
@@ -73,7 +75,7 @@ impl PrewhereSelector {
         func_ctx: &FunctionContext,
         max_block_size: usize,
     ) -> Option<Self> {
-        if !func_ctx.enable_selector_executor {
+        if !func_ctx.enable_selector_executor || has_negated_is_true(filter, false) {
             return None;
         }
 
@@ -146,6 +148,26 @@ impl PrewhereSelector {
             }
             BlockEntry::Column(_) => true,
         })
+    }
+}
+
+/// Whether an `is_true` appears under a `not`.
+///
+/// `SelectExprBuilder` pushes a negation through `is_true` into its argument, so
+/// `NOT is_true(ns <> 'x')` selects as `ns = 'x'` and drops NULL rows, while the evaluator
+/// computes `NOT is_true(NULL)` as true and keeps them. Such predicates keep the evaluator path.
+fn has_negated_is_true(expr: &Expr, negated: bool) -> bool {
+    match expr {
+        Expr::FunctionCall(FunctionCall { function, args, .. }) => {
+            let name = function.signature.name.as_str();
+            if negated && name == "is_true" {
+                return true;
+            }
+            let negated = negated || name == "not";
+            args.iter().any(|arg| has_negated_is_true(arg, negated))
+        }
+        Expr::Cast(Cast { expr, .. }) => has_negated_is_true(expr, negated),
+        _ => false,
     }
 }
 
@@ -1081,6 +1103,45 @@ mod tests {
             let actual = filter_with_selector(&mut executor, &block, num_rows).unwrap();
             assert_eq!(actual.iter().collect::<Vec<_>>(), expected);
         }
+    }
+
+    /// `NOT is_true(ns <> 'x')` keeps the rows where `ns` is NULL. The selector would push the
+    /// negation through `is_true` and drop them, so the predicate keeps the evaluator path.
+    #[test]
+    fn test_prewhere_selector_rejects_negated_is_true() {
+        let func_ctx = FunctionContext::default();
+        let nullable_string_type = DataType::Nullable(Box::new(DataType::String));
+        let block = DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![
+            Some("x"),
+            None,
+            Some("y"),
+        ])]);
+        let noteq = call("noteq", vec![
+            column(0, nullable_string_type.clone()),
+            string_constant("x"),
+        ]);
+        let negated = prewhere_expr(
+            &call("not", vec![call("is_true", vec![noteq.clone()])]),
+            &func_ctx,
+        );
+        assert_eq!(evaluator_bitmap(&negated, &block, &func_ctx), vec![
+            true, true, false
+        ]);
+        let (select_expr, _) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+            .build(&negated)
+            .into();
+        assert!(select_expr.contains_string_column_eq_constant());
+        assert!(PrewhereSelector::try_create(&negated, &func_ctx, 8).is_none());
+
+        // `is_true` without a negation keeps the selector path.
+        let eq = prewhere_expr(
+            &call("eq", vec![
+                column(0, nullable_string_type),
+                string_constant("x"),
+            ]),
+            &func_ctx,
+        );
+        assert!(PrewhereSelector::try_create(&eq, &func_ctx, 8).is_some());
     }
 
     #[test]
