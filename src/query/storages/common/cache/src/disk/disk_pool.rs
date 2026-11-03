@@ -173,6 +173,18 @@ impl State {
         kind_of(rel).is_some_and(|kind| self.kinds_off[kind.index()])
     }
 
+    /// Whether `reserve` takes `rel` of `bytes`: see `DiskPool::reserve`. Room held by writes
+    /// in flight cannot be evicted, so an entry they alone leave no room for is refused.
+    fn reservable(&self, rel: &str, bytes: u64) -> bool {
+        self.cap > 0
+            && bytes <= self.cap / OVERSIZED_DIVISOR
+            && self.writing + bytes <= self.cap
+            && !self.kind_off(rel)
+            && !self.index.contains(rel)
+            && !self.deleting.contains(rel)
+            && !self.in_flight.contains(rel)
+    }
+
     /// Takes every entry of `object` out of the index.
     fn take_object(&mut self, object: &str) -> Vec<String> {
         // Detached first: taking each entry out then finds no set to update.
@@ -331,34 +343,32 @@ impl DiskPool {
         self.state.lock().index.contains(rel)
     }
 
-    /// Whether `reserve` would take an entry `rel` of `len` bytes, its file `len` plus the
-    /// checksum, as things stand: the pool and the kind are on, it is no larger than a quarter
-    /// of the pool, and the key is not indexed (as by the restart scan since it was queued),
-    /// being deleted or being written. Checked before anything is evicted for the entry.
+    /// Whether an entry of `len` bytes, its file `len` plus the checksum, can be kept: the pool
+    /// and the kind are on, and it is no larger than a quarter of the pool.
     pub fn admits(&self, rel: &str, len: u64) -> bool {
         let state = self.state.lock();
         state.cap > 0
             && !state.kind_off(rel)
             && len.saturating_add(4) <= state.cap / OVERSIZED_DIVISOR
-            && !state.index.contains(rel)
-            && !state.deleting.contains(rel)
-            && !state.in_flight.contains(rel)
+    }
+
+    /// Whether `reserve` would take `rel`, its file `bytes`, as things stand, by evicting
+    /// entries if need be: the same conditions, under one lock. The writer checks it before
+    /// evicting anything for the entry under disk pressure, so an entry `reserve` refuses
+    /// anyway evicts nothing.
+    pub fn would_reserve(&self, rel: &str, bytes: u64) -> bool {
+        self.state.lock().reservable(rel, bytes)
     }
 
     /// Reserves `bytes` for `rel`, taking least recently used entries out of the index until
     /// they fit. Rejects an entry larger than a quarter of the pool, any entry when the pool is
-    /// off, and `rel` while it is indexed (found by the restart scan since it was queued), its
-    /// previous file is being deleted, or another write of it runs.
+    /// off, one that outstanding writes alone leave no room for, and `rel` while it is indexed
+    /// (found by the restart scan since it was queued), its previous file is being deleted, or
+    /// another write of it runs.
     pub fn reserve(&self, rel: &str, bytes: u64) -> Reservation {
         let mut state = self.state.lock();
         let mut victims = Vec::new();
-        if state.cap == 0
-            || bytes > state.cap / OVERSIZED_DIVISOR
-            || state.index.contains(rel)
-            || state.deleting.contains(rel)
-            || state.in_flight.contains(rel)
-            || state.kind_off(rel)
-        {
+        if !state.reservable(rel, bytes) {
             return Reservation {
                 reserved: false,
                 victims,

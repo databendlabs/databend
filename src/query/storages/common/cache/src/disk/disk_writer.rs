@@ -361,9 +361,12 @@ impl Shared {
             key: (job.pool.pool().index(), job.rel.clone()),
             len,
         };
-        // An entry `reserve` would refuse (too large, its kind off, its key indexed meanwhile)
-        // is refused before it evicts entries under disk pressure.
-        if !job.pool.admits(&job.rel, len) {
+        // The file holds the value and its 4 byte crc.
+        let bytes = len + 4;
+        // An entry `reserve` would refuse (too large, its kind off, no room beside the writes
+        // in flight, its key indexed meanwhile) is refused before it evicts entries under disk
+        // pressure.
+        if !job.pool.would_reserve(&job.rel, bytes) {
             self.drops.add(&job.rel, DropReason::Rejected);
             return;
         }
@@ -382,8 +385,6 @@ impl Shared {
                 }
             }
         }
-        // The file holds the value and its 4 byte crc.
-        let bytes = len + 4;
         let reservation = job.pool.reserve(&job.rel, bytes);
         job.pool.delete(&reservation.victims);
         if reservation.reserved {
