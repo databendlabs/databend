@@ -31,7 +31,7 @@ Aggregate(Final)
 
 
 === count_over_out_of_range_filter ===
-description: COUNT(*) over a statistics-derived zero estimate must not be folded.
+description: COUNT(*) over a range that only contradicts column statistics must not be folded.
 sql: SELECT count(*) FROM t WHERE k > 5000
 Aggregate(Final)
 ├── group items: []
@@ -64,7 +64,7 @@ EvalScalar
 
 === left_join_builds_proven_empty_side ===
 description: On a zero-cardinality tie, LEFT JOIN is commuted so that the proven-empty side is built.
-sql: SELECT * FROM (SELECT * FROM e WHERE v > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k > 5000) AS b ON a.k = b.k
+sql: SELECT * FROM (SELECT * FROM e WHERE v > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k = 5000) AS b ON a.k = b.k
 Join(Right)
 ├── build keys: [e.k (#0)]
 ├── probe keys: [k (#4)]
@@ -78,14 +78,14 @@ Join(Right)
     ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3), CAST(t.k (#2) AS Int64 NULL) AS (#4), CAST(t.v (#3) AS Int64 NULL) AS (#5), t.k (#2) AS (#6)]
     └── Scan
         ├── table: default.t (#1)
-        ├── filters: [gt(t.k (#2), 5000)]
+        ├── filters: [eq(t.k (#2), 5000)]
         ├── order by: []
         └── limit: NONE
 
 
 === right_join_keeps_proven_empty_build_side ===
 description: On a zero-cardinality tie, RIGHT JOIN is not commuted when the proven-empty side is already built.
-sql: SELECT * FROM (SELECT * FROM t WHERE k > 5000) AS a RIGHT JOIN (SELECT * FROM e WHERE v > 10) AS b ON a.k = b.k
+sql: SELECT * FROM (SELECT * FROM t WHERE k = 5000) AS a RIGHT JOIN (SELECT * FROM e WHERE v > 10) AS b ON a.k = b.k
 Join(Right)
 ├── build keys: [e.k (#2)]
 ├── probe keys: [k (#4)]
@@ -99,14 +99,14 @@ Join(Right)
     ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1), CAST(t.k (#0) AS Int64 NULL) AS (#4), CAST(t.v (#1) AS Int64 NULL) AS (#5), t.k (#0) AS (#6)]
     └── Scan
         ├── table: default.t (#0)
-        ├── filters: [gt(t.k (#0), 5000)]
+        ├── filters: [eq(t.k (#0), 5000)]
         ├── order by: []
         └── limit: NONE
 
 
 === left_join_builds_all_null_proven_empty_side ===
 description: On a zero-cardinality tie, a filter proven empty by an all-NULL column is built instead of an estimated-zero input.
-sql: SELECT * FROM (SELECT * FROM z WHERE n > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k > 5000) AS b ON a.k = b.k
+sql: SELECT * FROM (SELECT * FROM z WHERE n > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k = 5000) AS b ON a.k = b.k
 Join(Right)
 ├── build keys: [z.k (#0)]
 ├── probe keys: [k (#4)]
@@ -120,14 +120,14 @@ Join(Right)
     ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3), CAST(t.k (#2) AS Int64 NULL) AS (#4), CAST(t.v (#3) AS Int64 NULL) AS (#5), t.k (#2) AS (#6)]
     └── Scan
         ├── table: default.t (#1)
-        ├── filters: [gt(t.k (#2), 5000)]
+        ├── filters: [eq(t.k (#2), 5000)]
         ├── order by: []
         └── limit: NONE
 
 
 === left_join_estimated_zero_tie ===
 description: A zero-cardinality tie between two estimates keeps the existing LEFT JOIN order.
-sql: SELECT * FROM (SELECT * FROM t WHERE k > 5000) AS a LEFT JOIN (SELECT * FROM t WHERE v > 500) AS b ON a.k = b.k
+sql: SELECT * FROM (SELECT * FROM t WHERE k = 5000) AS a LEFT JOIN (SELECT * FROM t WHERE v = 500) AS b ON a.k = b.k
 Join(Left)
 ├── build keys: [k (#4)]
 ├── probe keys: [t.k (#0)]
@@ -136,12 +136,12 @@ Join(Left)
 │   ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3), CAST(t.k (#2) AS Int64 NULL) AS (#4), CAST(t.v (#3) AS Int64 NULL) AS (#5), t.v (#3) AS (#6)]
 │   └── Scan
 │       ├── table: default.t (#1)
-│       ├── filters: [gt(t.v (#3), 500), gt(t.k (#2), 5000)]
+│       ├── filters: [eq(t.v (#3), 500), eq(t.k (#2), 5000)]
 │       ├── order by: []
 │       └── limit: NONE
 └── Scan
     ├── table: default.t (#0)
-    ├── filters: [gt(t.k (#0), 5000)]
+    ├── filters: [eq(t.k (#0), 5000)]
     ├── order by: []
     └── limit: NONE
 

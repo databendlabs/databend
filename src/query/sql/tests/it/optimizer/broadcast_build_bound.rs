@@ -41,7 +41,8 @@ use crate::framework::golden::write_case_title;
 // `m` is a large table with a unique key, and `u` has no column statistics.
 // `s` is a large table with a unique key whose NDV is below the size of its
 // value domain, and `f` has the same statistics except that its NDV was filled
-// from the row count. `p` is the large probe table.
+// from the row count. `p` is the large probe table. `r` and `w` record `t` in
+// [1, 1000], so a range above 1000 is estimated to match no rows.
 const PROBE_TABLE: &str = "CREATE TABLE p(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const LEFT_RANGE_TABLE: &str = "CREATE TABLE a(k BIGINT NOT NULL)";
 const RIGHT_RANGE_TABLE: &str = "CREATE TABLE b(k BIGINT NOT NULL)";
@@ -50,6 +51,8 @@ const LARGE_TABLE: &str = "CREATE TABLE m(k BIGINT NOT NULL)";
 const NO_STATS_TABLE: &str = "CREATE TABLE u(k BIGINT NOT NULL)";
 const SPARSE_KEY_TABLE: &str = "CREATE TABLE s(k BIGINT NOT NULL)";
 const FALLBACK_NDV_TABLE: &str = "CREATE TABLE f(k BIGINT NOT NULL)";
+const LARGE_RANGE_TABLE: &str = "CREATE TABLE r(k BIGINT NOT NULL, t BIGINT NOT NULL)";
+const MEDIUM_RANGE_TABLE: &str = "CREATE TABLE w(k BIGINT NOT NULL, t BIGINT NOT NULL)";
 
 struct StatsCase {
     name: &'static str,
@@ -127,6 +130,22 @@ async fn create_context(cluster_node_num: u64) -> Result<Arc<LiteTableContext>> 
                 ndv_is_inferred: true,
                 ..int_stat(1, 1_000_000_000, 200_000_000)
             })]),
+        ),
+        (
+            LARGE_RANGE_TABLE,
+            1_000_000_000,
+            HashMap::from([
+                ("k".to_string(), int_stat(1, 1_000_000, 1_000_000)),
+                ("t".to_string(), int_stat(1, 1000, 1000)),
+            ]),
+        ),
+        (
+            MEDIUM_RANGE_TABLE,
+            10_000_000,
+            HashMap::from([
+                ("k".to_string(), int_stat(1, 1_000_000, 1_000_000)),
+                ("t".to_string(), int_stat(1, 1000, 1000)),
+            ]),
         ),
     ];
     for (sql, rows, column_stats) in tables {
@@ -309,6 +328,30 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             sql: "SELECT * FROM u FULL JOIN s ON u.k = s.k",
             operator: RelOp::Join,
         },
+        StatsCase {
+            name: "filter_range_outside_statistics",
+            description: "A range outside the recorded min/max expects 1/2500 of the input and keeps the 1/5 unknown-filter bound.",
+            sql: "SELECT * FROM r WHERE t > 1000",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "filter_range_outside_statistics_and_equality",
+            description: "A selective predicate in the same conjunction lowers the expectation but not the bound.",
+            sql: "SELECT * FROM r WHERE t > 1000 AND k = 5",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "filter_equality_outside_statistics",
+            description: "An equality outside the recorded min/max is still estimated as no rows.",
+            sql: "SELECT * FROM r WHERE t = 2000",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "filter_range_inside_statistics",
+            description: "A range inside the recorded min/max is bounded by its estimate.",
+            sql: "SELECT * FROM r WHERE t > 999",
+            operator: RelOp::Filter,
+        },
     ];
 
     for case in &cases {
@@ -391,17 +434,37 @@ async fn test_broadcast_build_bound_plan_golden() -> Result<()> {
             sql: "SELECT p.v FROM p JOIN (SELECT d.k FROM d JOIN m ON d.k = m.k) AS j ON p.k = j.k",
             settings: NO_REORDER,
         },
+        PlanCase {
+            name: "range_outside_statistics_build_is_shuffled",
+            description: "A build side filtered by a range outside the recorded min/max is not broadcast when its unknown-filter bound exceeds max_broadcast_join_build_rows.",
+            sql: "SELECT p.v FROM p JOIN r ON p.k = r.k WHERE r.t > 1000",
+            settings: NO_REORDER,
+        },
+        PlanCase {
+            name: "range_outside_statistics_build_within_limit_is_broadcast",
+            description: "A build side filtered by a range outside the recorded min/max is broadcast when its unknown-filter bound is within max_broadcast_join_build_rows.",
+            sql: "SELECT p.v FROM p JOIN w ON p.k = w.k WHERE w.t > 1000",
+            settings: NO_REORDER,
+        },
     ];
     for case in &distributed_cases {
         write_plan_case(&mut file, case, 2).await?;
     }
 
-    let local_cases = [PlanCase {
-        name: "left_join_does_not_build_underestimated_join",
-        description: "CommuteJoin ranks an underestimated join by its bound, so the small table stays the build side.",
-        sql: "SELECT j.k, d.v FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j LEFT JOIN d ON j.k = d.k",
-        settings: &[],
-    }];
+    let local_cases = [
+        PlanCase {
+            name: "left_join_does_not_build_underestimated_join",
+            description: "CommuteJoin ranks an underestimated join by its bound, so the small table stays the build side.",
+            sql: "SELECT j.k, d.v FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j LEFT JOIN d ON j.k = d.k",
+            settings: &[],
+        },
+        PlanCase {
+            name: "left_join_builds_range_outside_statistics",
+            description: "CommuteJoin ranks a range outside the recorded min/max by its small expected rows, so it becomes the build side instead of the larger table.",
+            sql: "SELECT r.k, a.k FROM r LEFT JOIN a ON r.k = a.k WHERE r.t > 1000",
+            settings: &[],
+        },
+    ];
     for case in &local_cases {
         write_plan_case(&mut file, case, 1).await?;
     }

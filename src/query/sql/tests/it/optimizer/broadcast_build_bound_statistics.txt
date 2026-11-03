@@ -117,3 +117,31 @@ operator: Join
 cardinality: 201000000.000
 max_cardinality: 201000000.000
 
+=== filter_range_outside_statistics ===
+description: A range outside the recorded min/max expects 1/2500 of the input and keeps the 1/5 unknown-filter bound.
+sql: SELECT * FROM r WHERE t > 1000
+operator: Filter
+cardinality: 400000.000
+max_cardinality: 200000000.000
+
+=== filter_range_outside_statistics_and_equality ===
+description: A selective predicate in the same conjunction lowers the expectation but not the bound.
+sql: SELECT * FROM r WHERE t > 1000 AND k = 5
+operator: Filter
+cardinality: 0.400
+max_cardinality: 200000000.000
+
+=== filter_equality_outside_statistics ===
+description: An equality outside the recorded min/max is still estimated as no rows.
+sql: SELECT * FROM r WHERE t = 2000
+operator: Filter
+cardinality: 0.000
+max_cardinality: 0.000
+
+=== filter_range_inside_statistics ===
+description: A range inside the recorded min/max is bounded by its estimate.
+sql: SELECT * FROM r WHERE t > 999
+operator: Filter
+cardinality: 1000000.000
+max_cardinality: 1000000.000
+

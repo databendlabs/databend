@@ -40,8 +40,10 @@ use crate::framework::golden::write_case_title;
 // only used for estimation. The harness evaluates `now()` and `today()` at the
 // Unix epoch while the statistics of `w` cover 2020, so a window such as
 // `ts >= '1969-01-01 00:00:00' AND ts < now()` is satisfiable on its own but
-// contradicts the column statistics. Every row of `z.n` is NULL, and both the
-// row count and the null count of `z` are exact.
+// contradicts the column statistics. An equality outside the statistics of
+// `t`, such as `k = 5000`, is estimated as no rows without being proven empty.
+// Every row of `z.n` is NULL, and both the row count and the null count of `z`
+// are exact.
 const EMPTY_TABLE: &str = "CREATE TABLE e(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const TABLE: &str = "CREATE TABLE t(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const TIME_TABLE: &str = "CREATE TABLE w(ts TIMESTAMP NOT NULL, d DATE NOT NULL)";
@@ -210,7 +212,7 @@ async fn test_proven_empty_statistics_golden() -> Result<()> {
         },
         StatsCase {
             name: "out_of_range_filter",
-            description: "A zero estimate from column statistics stays imprecise.",
+            description: "A range that only contradicts column statistics stays imprecise.",
             sql: "SELECT k FROM t WHERE k > 5000",
             operator: RelOp::Filter,
         },
@@ -259,7 +261,7 @@ async fn test_proven_empty_statistics_golden() -> Result<()> {
         StatsCase {
             name: "inner_join_estimated_zero_side",
             description: "An estimated-zero side does not make INNER JOIN precise.",
-            sql: "SELECT * FROM t INNER JOIN (SELECT * FROM t WHERE k > 5000) AS f ON t.k = f.k",
+            sql: "SELECT * FROM t INNER JOIN (SELECT * FROM t WHERE k = 5000) AS f ON t.k = f.k",
             operator: RelOp::Join,
         },
         StatsCase {
@@ -298,7 +300,7 @@ async fn test_proven_empty_plan_golden() -> Result<()> {
         },
         PlanCase {
             name: "count_over_out_of_range_filter",
-            description: "COUNT(*) over a statistics-derived zero estimate must not be folded.",
+            description: "COUNT(*) over a range that only contradicts column statistics must not be folded.",
             sql: "SELECT count(*) FROM t WHERE k > 5000",
         },
         PlanCase {
@@ -314,22 +316,22 @@ async fn test_proven_empty_plan_golden() -> Result<()> {
         PlanCase {
             name: "left_join_builds_proven_empty_side",
             description: "On a zero-cardinality tie, LEFT JOIN is commuted so that the proven-empty side is built.",
-            sql: "SELECT * FROM (SELECT * FROM e WHERE v > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k > 5000) AS b ON a.k = b.k",
+            sql: "SELECT * FROM (SELECT * FROM e WHERE v > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k = 5000) AS b ON a.k = b.k",
         },
         PlanCase {
             name: "right_join_keeps_proven_empty_build_side",
             description: "On a zero-cardinality tie, RIGHT JOIN is not commuted when the proven-empty side is already built.",
-            sql: "SELECT * FROM (SELECT * FROM t WHERE k > 5000) AS a RIGHT JOIN (SELECT * FROM e WHERE v > 10) AS b ON a.k = b.k",
+            sql: "SELECT * FROM (SELECT * FROM t WHERE k = 5000) AS a RIGHT JOIN (SELECT * FROM e WHERE v > 10) AS b ON a.k = b.k",
         },
         PlanCase {
             name: "left_join_builds_all_null_proven_empty_side",
             description: "On a zero-cardinality tie, a filter proven empty by an all-NULL column is built instead of an estimated-zero input.",
-            sql: "SELECT * FROM (SELECT * FROM z WHERE n > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k > 5000) AS b ON a.k = b.k",
+            sql: "SELECT * FROM (SELECT * FROM z WHERE n > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k = 5000) AS b ON a.k = b.k",
         },
         PlanCase {
             name: "left_join_estimated_zero_tie",
             description: "A zero-cardinality tie between two estimates keeps the existing LEFT JOIN order.",
-            sql: "SELECT * FROM (SELECT * FROM t WHERE k > 5000) AS a LEFT JOIN (SELECT * FROM t WHERE v > 500) AS b ON a.k = b.k",
+            sql: "SELECT * FROM (SELECT * FROM t WHERE k = 5000) AS a LEFT JOIN (SELECT * FROM t WHERE v = 500) AS b ON a.k = b.k",
         },
     ];
 
