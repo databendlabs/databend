@@ -15,11 +15,7 @@
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_base::runtime::MemStat;
-use databend_common_base::runtime::ParentMemStat;
-use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::MemoryMeter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
@@ -55,52 +51,6 @@ const DECISION_ROWS: usize = 64 * 1024;
 /// the arena, such as the values of `array_agg` or a distinct set, which grow with the rows of
 /// a group whatever the number of groups.
 const MAX_HOT_MEMORY: usize = 256 * 1024 * 1024;
-
-/// Memory the table allocated since it was last emitted, including what the aggregate states
-/// allocate on their own. The calls into the table are tracked under a child of the memory stat
-/// of the processor, so the plan and the query still account for them; the states are freed by
-/// the final aggregate, so only the growth since the last emission is meaningful.
-#[derive(Default)]
-struct HotMemory {
-    /// Created on the first call, from the tracking payload of the processor.
-    tracking: Option<(Arc<TrackingPayload>, Arc<MemStat>)>,
-    emitted_at: usize,
-}
-
-impl HotMemory {
-    fn track<R>(&mut self, f: impl FnOnce() -> R) -> R {
-        let (payload, _) = self.tracking.get_or_insert_with(|| {
-            let mut payload = ThreadTracker::new_tracking_payload();
-            let parent = match payload.mem_stat.take() {
-                Some(mem_stat) => ParentMemStat::Normal(mem_stat),
-                None => ParentMemStat::StaticRef(&GLOBAL_MEM_STAT),
-            };
-            let mem_stat = MemStat::create_child(None, 0, parent);
-            payload.mem_stat = Some(mem_stat.clone());
-            (Arc::new(payload), mem_stat)
-        });
-        let guard = ThreadTracker::tracking_inner(payload.clone());
-        let result = f();
-        // Allocations are buffered per thread; flush them into the child before reading it. The
-        // parents still enforce their limits on the allocations that follow.
-        let _ = guard.flush();
-        result
-    }
-
-    fn usage(&self) -> usize {
-        self.tracking
-            .as_ref()
-            .map_or(0, |(_, mem_stat)| mem_stat.get_memory_usage())
-    }
-
-    fn bytes(&self) -> usize {
-        self.usage().saturating_sub(self.emitted_at)
-    }
-
-    fn emitted(&mut self) {
-        self.emitted_at = self.usage();
-    }
-}
 
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum HashTable {
@@ -145,7 +95,9 @@ pub struct TransformPartialAggregate {
     /// by the index, so emit it once it holds `flush_bytes`.
     windowed: bool,
     flush_bytes: usize,
-    hot_memory: HotMemory,
+    /// Memory the table allocated since it was last emitted, including what the aggregate
+    /// states own outside the arena.
+    hot_memory: MemoryMeter,
     output_rows: usize,
     /// Stats of all calls to the table, times the index grew and shrank back, and times the
     /// table was emitted for its memory.
@@ -182,7 +134,7 @@ impl TransformPartialAggregate {
                 state: PartialState::new(mode),
                 windowed: false,
                 flush_bytes: params.max_block_bytes,
-                hot_memory: HotMemory::default(),
+                hot_memory: MemoryMeter::default(),
                 output_rows: 0,
                 total: PartialAddStats::default(),
                 grows: 0,
@@ -272,7 +224,7 @@ impl TransformPartialAggregate {
         }
         self.memory_flushes += memory_full as usize;
         let hot = hashtable.take_partial_hot();
-        self.hot_memory.emitted();
+        self.hot_memory.mark();
         self.windowed = false;
         self.output_rows += hot.len();
         Ok(Self::partitioned_blocks(hot, &self.params))
@@ -356,30 +308,5 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 Self::partitioned_blocks(hashtable.payload, &self.params)
             }
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const MIB: usize = 1024 * 1024;
-
-    #[test]
-    fn test_hot_memory_counts_what_calls_keep() {
-        let mut hot = HotMemory::default();
-        let kept = hot.track(|| vec![1u8; 8 * MIB]);
-        assert!(hot.bytes() >= 8 * MIB);
-
-        // What a call frees before it returns does not count.
-        let before = hot.bytes();
-        hot.track(|| drop(std::hint::black_box(vec![1u8; 8 * MIB])));
-        assert!(hot.bytes() < before + MIB);
-
-        hot.emitted();
-        assert_eq!(hot.bytes(), 0);
-        let more = hot.track(|| vec![1u8; 4 * MIB]);
-        assert!(hot.bytes() >= 4 * MIB && hot.bytes() < 5 * MIB);
-        drop((kept, more));
     }
 }

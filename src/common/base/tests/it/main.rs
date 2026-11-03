@@ -17,6 +17,7 @@ use databend_common_base::mem_allocator::TrackingGlobalAllocator;
 mod executor_stats;
 mod ext;
 mod fixed_heap;
+mod memory_meter;
 mod metrics;
 mod progress;
 mod range_merger;
