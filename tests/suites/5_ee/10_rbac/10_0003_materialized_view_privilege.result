@@ -37,5 +37,6 @@ Source SELECT permits MV rewrite without MV SELECT: OK
 Rewritten source query returns correct results: OK
 Unselected MV candidates require no MV SELECT: OK
 Source SELECT still authorizes existing MV management operations: OK
-Database SELECT authorizes MV SELECT: OK
+SELECT on mv_rbac_db_0020.* authorizes MV reads and visibility: OK
+SELECT on *.* authorizes MV reads and visibility: OK
 DROP still requires database DROP: OK

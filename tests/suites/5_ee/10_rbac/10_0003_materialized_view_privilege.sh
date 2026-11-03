@@ -193,11 +193,13 @@ user_sql 'create inverted index mv_rbac_idx_0020 on mv_rbac_db_0020.mv(content)'
 user_sql 'drop inverted index mv_rbac_idx_0020 on mv_rbac_db_0020.mv' >/dev/null
 echo 'Source SELECT still authorizes existing MV management operations: OK'
 
-# Broader database grants apply to MV reads without creating MV ownership.
-root_sql 'grant select on mv_rbac_db_0020.* to role mv_priv_role;'
-expect_result 'Database SELECT authorizes MV SELECT' \
-	'select c from mv_rbac_db_0020.mv order by c' $'1\n3\n4'
-root_sql 'revoke select on mv_rbac_db_0020.* from role mv_priv_role;'
+# Database/global SELECT covers MV reads and visibility, without granting ownership.
+for scope in 'mv_rbac_db_0020.*' '*.*'; do
+	root_sql "grant select on $scope to role mv_priv_role"
+	expect_result "SELECT on $scope authorizes MV reads and visibility" \
+		"select (select count(*) from mv_rbac_db_0020.mv), (select count(*) from system.materialized_views where database = 'mv_rbac_db_0020' and name = 'mv')" $'3\t1'
+	root_sql "revoke select on $scope from role mv_priv_role"
+done
 expect_error user_sql 'DROP still requires database DROP' 1063 \
 	'drop materialized view mv_rbac_db_0020.mv'
 root_sql 'grant drop on mv_rbac_db_0020.* to role mv_priv_role;'
