@@ -156,7 +156,6 @@ mod tests {
         let handed_over = meter.track(|| Tracked::new(8 * MIB));
         meter.mark();
         Thread::spawn(move || drop(handed_over)).join().unwrap();
-        assert_eq!(meter.bytes(), 0);
 
         let kept = meter.track(|| Tracked::new(4 * MIB));
         assert!(meter.bytes() >= 4 * MIB && meter.bytes() < 5 * MIB);

@@ -328,6 +328,15 @@ impl Payload {
         page.row_ptr(row, self.tuple_size)
     }
 
+    /// Calls `f` with the group hash of each row.
+    pub(super) fn for_each_hash(&self, mut f: impl FnMut(u64)) {
+        for page in &self.pages {
+            for row in 0..page.rows {
+                f(self.data_ptr(page, row).hash(&self.row_layout));
+            }
+        }
+    }
+
     pub(super) fn reserve_append_rows(
         &mut self,
         select_vector: &[RowID],

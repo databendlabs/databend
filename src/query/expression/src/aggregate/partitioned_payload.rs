@@ -78,6 +78,13 @@ unsafe impl Send for PartitionedPayload {}
 unsafe impl Sync for PartitionedPayload {}
 
 impl PartitionedPayload {
+    /// Calls `f` with the group hash of each row.
+    pub(super) fn for_each_hash(&self, mut f: impl FnMut(u64)) {
+        for payload in &self.payloads {
+            payload.for_each_hash(&mut f);
+        }
+    }
+
     pub fn new(
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateCallRef>,

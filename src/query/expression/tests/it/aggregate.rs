@@ -56,6 +56,7 @@ use databend_common_expression::partial_table_bytes;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -966,6 +967,40 @@ fn test_distinct_sampler_estimates_string_keys() {
             assert!(error < 0.05, "{keys} keys '{name}': estimated {estimate}");
         }
     }
+}
+
+/// The distinct estimate counts the groups of the first window too: unique keys are estimated
+/// near their number, not near the keys after the first window.
+#[test]
+fn test_distinct_sampler_counts_the_first_window() -> Result<()> {
+    const KEYS: u64 = 50_000;
+    const BLOCK_ROWS: u64 = 8192;
+    let mut table = AggregateHashTable::new(
+        vec![DataType::Number(NumberDataType::UInt64)],
+        vec![],
+        HashTableConfig::partial_aggregate(),
+        Arc::new(Bump::new()),
+    );
+    let mut partial = PartialState::new(PartialAggregateMode::Auto);
+    let mut probe = ProbeState::default();
+    for start in (0..KEYS).step_by(BLOCK_ROWS as usize) {
+        let end = (start + BLOCK_ROWS).min(KEYS);
+        let entries = vec![UInt64Type::from_data((start..end).collect::<Vec<_>>()).into()];
+        let capacity = partial.capacity();
+        table.add_groups_partial(
+            &mut probe,
+            (&entries).into(),
+            &[],
+            (end - start) as usize,
+            capacity,
+            partial.sampler(),
+        )?;
+    }
+    assert!(table.partial_restarted());
+    let estimate = partial.sampler().unwrap().distinct().unwrap() as f64;
+    let error = (estimate / KEYS as f64 - 1.0).abs();
+    assert!(error < 0.05, "estimated {estimate}");
+    Ok(())
 }
 
 /// Memory pressure is only checked for a grown table.

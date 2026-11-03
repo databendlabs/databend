@@ -66,7 +66,8 @@ pub fn parse_partial_aggregate_mode(mode: &str) -> Result<PartialAggregateMode> 
 /// input blocks are forwarded unchanged as raw rows for the final aggregate to aggregate. The
 /// partial aggregate never spills: the state bounds the table and the final aggregate spills.
 pub struct TransformPartialAggregate {
-    table: AggregateHashTable,
+    /// Taken out when the input ends.
+    table: Option<AggregateHashTable>,
     probe_state: ProbeState,
     params: Arc<AggregatorParams>,
     statistics: AggregationStatistics,
@@ -126,7 +127,7 @@ impl TransformPartialAggregate {
             input,
             output,
             TransformPartialAggregate {
-                table,
+                table: Some(table),
                 probe_state: ProbeState::default(),
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
                 statistics: AggregationStatistics::new("PartialAggregate"),
@@ -161,12 +162,15 @@ impl TransformPartialAggregate {
         let mut start = 0;
         while start < rows_num {
             if matches!(self.state, PartialState::Bypass) {
-                // The rows are forwarded as is: the shuffle routes them by their group keys.
+                // The rows are forwarded as is: the shuffle routes them by their group keys. The
+                // final aggregate reads a block with a meta as states, so an upstream meta goes.
                 self.output_rows += rows_num - start;
-                output.push(match start {
+                let mut rows = match start {
                     0 => block,
                     _ => block.slice(start..rows_num),
-                });
+                };
+                rows.take_meta();
+                output.push(rows);
                 break;
             }
             let end = (start + DECISION_ROWS).min(rows_num);
@@ -185,9 +189,12 @@ impl TransformPartialAggregate {
         let group_columns = ProjectedBlock::project(&self.params.group_columns, block);
         let params_columns =
             Self::aggregate_arguments(block, &self.params.aggregate_functions_arguments);
+        let Some(table) = self.table.as_mut() else {
+            unreachable!("[TRANSFORM-AGGREGATOR] Partial table already taken")
+        };
         let capacity = self.state.capacity();
         let stats = self.memory.track(|| {
-            self.table.add_groups_partial(
+            table.add_groups_partial(
                 &mut self.probe_state,
                 group_columns,
                 &params_columns,
@@ -201,9 +208,9 @@ impl TransformPartialAggregate {
         let observation = PartialObservation {
             stats,
             held_bytes: self.memory.bytes(),
-            group_bytes: self.group_bytes(),
-            payload_full: self.table.partial_restarted()
-                && self.table.partial_hot_bytes() >= self.params.max_block_bytes,
+            group_bytes: Self::group_bytes(&self.memory, &self.total),
+            payload_full: table.partial_restarted()
+                && table.partial_hot_bytes() >= self.params.max_block_bytes,
         };
         let settings = &self.settings;
         let Some(reason) = self
@@ -213,17 +220,18 @@ impl TransformPartialAggregate {
             return Ok(vec![]);
         };
         self.emits.add(reason);
-        Ok(self.emit())
+        let payload = table.take_partial_hot();
+        Ok(self.emit(payload))
     }
 
-    /// The memory a group took so far besides the index: its row, its states and what they own.
-    fn group_bytes(&self) -> usize {
-        self.memory.total_bytes() / self.total.new_groups.max(1)
+    /// The memory a group took so far: its row, its states and what they own, and once grown, its
+    /// share of the index.
+    fn group_bytes(memory: &MemoryMeter, total: &PartialAddStats) -> usize {
+        memory.total_bytes() / total.new_groups.max(1)
     }
 
-    /// Hand the groups of the table to the final aggregate and restart it.
-    fn emit(&mut self) -> Vec<DataBlock> {
-        let payload = self.table.take_partial_hot();
+    /// Hand `payload`, the groups taken from the table, to the final aggregate.
+    fn emit(&mut self, payload: PartitionedPayload) -> Vec<DataBlock> {
         self.memory.mark();
         self.output_rows += payload.len();
         Self::partitioned_blocks(payload, &self.params)
@@ -281,12 +289,12 @@ impl AccumulatingTransform for TransformPartialAggregate {
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
-        if !output {
+        let Some(table) = self.table.take() else {
             return Ok(vec![]);
-        }
+        };
         self.statistics.log_partial_finish_statistics(
-            self.output_rows + self.table.len(),
-            self.table.hash_index_resize_count(),
+            self.output_rows + table.len(),
+            table.hash_index_resize_count(),
         );
         let total = &self.total;
         log::info!(
@@ -296,8 +304,11 @@ impl AccumulatingTransform for TransformPartialAggregate {
             total.new_groups,
             total.windows,
             self.emits,
-            self.group_bytes(),
+            Self::group_bytes(&self.memory, total),
         );
-        Ok(self.emit())
+        if !output {
+            return Ok(vec![]);
+        }
+        Ok(self.emit(table.payload))
     }
 }

@@ -86,8 +86,9 @@ impl AddAssign for PartialAddStats {
 /// Estimates the distinct groups since learning started from their group hashes, with a
 /// HyperLogLog.
 ///
-/// Sampling starts at the first window of a learning period: before it, the index was never
-/// restarted and its groups are exactly the distinct groups, recorded as a lower bound.
+/// Sampling starts at the first window of a learning period, with the groups of that window:
+/// before it, the index was never restarted and its groups are exactly the distinct groups, also
+/// recorded as a lower bound.
 #[derive(Default)]
 pub struct DistinctSampler {
     hll: HyperLogLog<HLL_PRECISION>,
@@ -109,8 +110,13 @@ impl DistinctSampler {
     #[inline]
     pub fn observe(&mut self, hashes: &[u64]) {
         for &hash in hashes {
-            self.hll.add_hash(mix_hash(hash));
+            self.observe_hash(hash);
         }
+    }
+
+    #[inline]
+    pub fn observe_hash(&mut self, hash: u64) {
+        self.hll.add_hash(mix_hash(hash));
     }
 
     /// Estimated distinct groups since learning started, if sampling has started.
@@ -141,11 +147,12 @@ pub enum PartialAggregateMode {
     Bypass,
 }
 
-/// Share of `max_memory_usage`, in percent, that the partial tables of a query hold together.
+/// Share of `max_memory_usage`, in percent, that the partial tables of one partial aggregate hold
+/// together; each partial aggregate of a query has its own share.
 const PARTIAL_TABLE_MEMORY_PERCENT: usize = 2;
 
 /// The most memory a partial table holds, index included: [`PARTIAL_TABLE_MEMORY_PERCENT`] of
-/// `max_memory_usage` shared by the `threads` instances of a query, within
+/// `max_memory_usage` shared by the `threads` instances of a partial aggregate, within
 /// [`MIN_PARTIAL_TABLE_BYTES`] and [`MAX_PARTIAL_TABLE_BYTES`], 128 MiB with 8 GB per core. A
 /// grown table must fit in it, and the table is emitted once it holds that much, which mostly
 /// bounds the memory aggregate states own outside the arena (the values of `array_agg`, a
@@ -163,8 +170,9 @@ pub struct PartialObservation {
     pub stats: PartialAddStats,
     /// Memory the table holds, index included, since it was last emitted.
     pub held_bytes: usize,
-    /// Memory a group took so far besides the index (its row, its states and what they own),
-    /// or 0 if unknown.
+    /// Memory a group took so far (its row, its states and what they own), or 0 if unknown. The
+    /// index is not included while learning, the only state that uses it: it only grows, inside
+    /// the measured calls, when the table leaves learning.
     pub group_bytes: usize,
     /// The index restarted since the table was last emitted, and the payload reached the size
     /// of a block.

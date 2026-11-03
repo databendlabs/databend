@@ -466,9 +466,14 @@ impl AggregateHashTable {
                 // the payload holds one row per key and can rebuild it.
                 self.resize(capacity);
             } else {
-                // The first window holds exactly the distinct groups seen so far.
-                if let Some(sampler) = sampler.as_deref_mut() {
+                // The first window holds exactly the distinct groups seen so far, one row each in
+                // the payload, as the index was not restarted since the payload was taken.
+                if let Some(sampler) = sampler.as_deref_mut()
+                    && !sampler.is_started()
+                {
                     sampler.start(self.hash_index.count());
+                    self.payload
+                        .for_each_hash(|hash| sampler.observe_hash(hash));
                 }
                 // Restart the index in place and keep appending to the payload.
                 self.hash_index.reset();
