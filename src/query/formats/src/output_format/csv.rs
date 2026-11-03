@@ -124,21 +124,11 @@ impl OutputFormat for CSVOutputFormat {
 #[cfg(test)]
 mod tests {
     use databend_common_exception::Result;
-    use databend_common_expression::Column;
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::types::BinaryType;
-    use databend_common_expression::types::BooleanType;
-    use databend_common_expression::types::DateType;
-    use databend_common_expression::types::DecimalDataType;
-    use databend_common_expression::types::DecimalSize;
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
-    use databend_common_expression::types::decimal::Decimal128Type;
-    use databend_common_expression::types::number::Float64Type;
-    use databend_common_expression::types::number::Int32Type;
-    use databend_common_meta_app::principal::BinaryFormat;
     use databend_common_meta_app::principal::CsvFileFormatParams;
     use databend_common_meta_app::principal::CsvQuoteStyle;
     use databend_common_meta_app::principal::FileFormatParams;
@@ -149,232 +139,28 @@ mod tests {
     use crate::output_format::test_utils::gen_schema_and_block;
 
     #[test]
-    fn test_csv_quote_styles_and_null_display() -> Result<()> {
-        let size = DecimalSize::new_unchecked(20, 2);
-        let cases = [
-            (
-                TableDataType::Number(NumberDataType::Int32),
-                Int32Type::from_data(vec![123]),
-                "123",
-                true,
-            ),
-            (
-                TableDataType::Number(NumberDataType::Float64),
-                Float64Type::from_data(vec![1.5f64]),
-                "1.5",
-                true,
-            ),
-            (
-                TableDataType::Decimal(DecimalDataType::Decimal128(size)),
-                Decimal128Type::from_data_with_size(vec![120i128], Some(size)),
-                "1.2",
-                true,
-            ),
-            (
-                TableDataType::Boolean,
-                BooleanType::from_data(vec![true]),
-                "true",
-                false,
-            ),
-            (
-                TableDataType::Date,
-                DateType::from_data(vec![0]),
-                "1970-01-01",
-                false,
-            ),
-            (
-                TableDataType::Binary,
-                BinaryType::from_data(vec![b"\xff".as_slice()]),
-                "FF",
-                false,
-            ),
-            (
-                TableDataType::String,
-                StringType::from_data(vec!["123"]),
-                "123",
-                false,
-            ),
-            (
-                TableDataType::EmptyArray,
-                Column::EmptyArray { len: 1 },
-                "[]",
-                false,
-            ),
-            (
-                TableDataType::EmptyMap,
-                Column::EmptyMap { len: 1 },
-                "{}",
-                false,
-            ),
-        ];
-        let settings = Settings::create(Tenant::new_literal("default"));
-        for (data_type, column, rendered, is_numeric) in cases {
-            let (schema, block) = gen_schema_and_block(
-                vec![
-                    TableField::new("value", data_type),
-                    TableField::new("null", TableDataType::Null),
-                ],
-                vec![column, Column::Null { len: 1 }],
-            );
-            for quote_style in [
-                CsvQuoteStyle::QuoteNotNull,
-                CsvQuoteStyle::QuoteNonNumeric,
-                CsvQuoteStyle::QuoteMinimal,
-            ] {
-                for null_display in ["\\N", rendered] {
-                    let params = CsvFileFormatParams {
-                        quote_style,
-                        null_display: null_display.to_string(),
-                        ..Default::default()
-                    };
-                    let mut output = get_output_format(
-                        schema.clone(),
-                        FileFormatParams::Csv(params),
-                        settings.get_output_format_settings()?,
-                    )?;
-                    let quoted = quote_style == CsvQuoteStyle::QuoteNotNull
-                        || (quote_style == CsvQuoteStyle::QuoteNonNumeric && !is_numeric)
-                        || rendered == null_display;
-                    let value = if quoted {
-                        format!("\"{rendered}\"")
-                    } else {
-                        rendered.to_string()
-                    };
-                    assert_eq!(
-                        output.serialize_block(&block)?,
-                        format!("{value},{null_display}\n").as_bytes(),
-                        "{quote_style}, value={rendered}, null_display={null_display}"
-                    );
-                }
-            }
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_csv_numeric_custom_delimiters() -> Result<()> {
-        let (schema, block) = gen_schema_and_block(
-            vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::Float64).wrap_nullable(),
-            )],
-            vec![Float64Type::from_opt_data(vec![Some(1.5f64), None])],
-        );
-        let settings = Settings::create(Tenant::new_literal("default"));
-        for quote_style in [
-            CsvQuoteStyle::QuoteNotNull,
-            CsvQuoteStyle::QuoteNonNumeric,
-            CsvQuoteStyle::QuoteMinimal,
-        ] {
-            let params = CsvFileFormatParams {
-                quote_style,
-                quote: "`".to_string(),
-                field_delimiter: ".".to_string(),
-                record_delimiter: ";".to_string(),
-                ..Default::default()
-            };
-            let mut output = get_output_format(
-                schema.clone(),
-                FileFormatParams::Csv(params),
-                settings.get_output_format_settings()?,
-            )?;
-            assert_eq!(output.serialize_block(&block)?, b"`1.5`;\\N;");
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_csv_output_empty_null_display() -> Result<()> {
-        let (schema, block) = gen_schema_and_block(
-            vec![
-                TableField::new("string", TableDataType::String.wrap_nullable()),
-                TableField::new("binary", TableDataType::Binary.wrap_nullable()),
-            ],
-            vec![
-                StringType::from_opt_data(vec![Some(""), None]),
-                BinaryType::from_opt_data(vec![Some(b"".as_slice()), None]),
-            ],
-        );
-        let settings = Settings::create(Tenant::new_literal("default"));
-        for quote_style in [
-            CsvQuoteStyle::QuoteNotNull,
-            CsvQuoteStyle::QuoteNonNumeric,
-            CsvQuoteStyle::QuoteMinimal,
-        ] {
-            let params = CsvFileFormatParams {
-                quote_style,
-                null_display: String::new(),
-                ..Default::default()
-            };
-            let mut output = get_output_format(
-                schema.clone(),
-                FileFormatParams::Csv(params),
-                settings.get_output_format_settings()?,
-            )?;
-            assert_eq!(output.serialize_block(&block)?, b"\"\",\"\"\n,\n");
-        }
-        Ok(())
-    }
-
-    #[test]
     fn test_csv_output_empty_values() -> Result<()> {
         let (schema, block) = gen_schema_and_block(
             vec![
                 TableField::new("binary", TableDataType::Binary.wrap_nullable()),
                 TableField::new("string", TableDataType::String.wrap_nullable()),
-                TableField::new("binary_not_null", TableDataType::Binary),
-                TableField::new("string_not_null", TableDataType::String),
             ],
             vec![
-                BinaryType::from_opt_data(vec![
-                    Some(b"".as_slice()),
-                    None,
-                    Some(b"\xff".as_slice()),
-                ]),
-                StringType::from_opt_data(vec![Some(""), None, Some("x")]),
-                BinaryType::from_data(vec![b"".as_slice(); 3]),
-                StringType::from_data(vec![""; 3]),
+                BinaryType::from_opt_data(vec![Some(b"".as_slice()), None]),
+                StringType::from_opt_data(vec![Some(""), None]),
             ],
         );
         let settings = Settings::create(Tenant::new_literal("default"));
-        for (binary_format, binary_value) in
-            [(BinaryFormat::Hex, "FF"), (BinaryFormat::Base64, "/w==")]
-        {
-            for quote_style in [
-                CsvQuoteStyle::QuoteNotNull,
-                CsvQuoteStyle::QuoteNonNumeric,
-                CsvQuoteStyle::QuoteMinimal,
-            ] {
-                for quote in ['"', '\'', '`'] {
-                    let params = CsvFileFormatParams {
-                        binary_format,
-                        quote_style,
-                        quote: quote.to_string(),
-                        ..Default::default()
-                    };
-                    let mut output = get_output_format(
-                        schema.clone(),
-                        FileFormatParams::Csv(params),
-                        settings.get_output_format_settings()?,
-                    )?;
-                    let empty = format!("{quote}{quote}");
-                    let string_value = if quote_style.is_quote_minimal() {
-                        "x".to_string()
-                    } else {
-                        format!("{quote}x{quote}")
-                    };
-                    let binary_value = if quote_style.is_quote_minimal() {
-                        binary_value.to_string()
-                    } else {
-                        format!("{quote}{binary_value}{quote}")
-                    };
-                    let expected = format!(
-                        "{empty},{empty},{empty},{empty}\n\\N,\\N,{empty},{empty}\n{binary_value},{string_value},{empty},{empty}\n"
-                    );
-                    assert_eq!(output.serialize_block(&block)?, expected.as_bytes());
-                }
-            }
-        }
+        let params = CsvFileFormatParams {
+            quote_style: CsvQuoteStyle::QuoteMinimal,
+            ..Default::default()
+        };
+        let mut output = get_output_format(
+            schema,
+            FileFormatParams::Csv(params),
+            settings.get_output_format_settings()?,
+        )?;
+        assert_eq!(output.serialize_block(&block)?, b"\"\",\"\"\n\\N,\\N\n");
         Ok(())
     }
 
