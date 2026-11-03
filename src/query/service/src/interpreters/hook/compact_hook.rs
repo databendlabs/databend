@@ -195,11 +195,19 @@ pub(crate) async fn compact_table(
     compaction_limits: CompactionLimits,
     lock_opt: LockTableOption,
 ) -> Result<()> {
+    let settings = ctx.get_settings();
     let Some(compact_target) = resolve_compact_target(&ctx, compact_target).await? else {
         return Ok(());
     };
 
-    let settings = ctx.get_settings();
+    // evict the table from cache
+    ctx.evict_table_from_cache(
+        &compact_target.catalog,
+        &compact_target.database,
+        &compact_target.table,
+    )?;
+    ctx.clear_table_meta_timestamps_cache();
+
     let compact_start = Instant::now();
     let compact_result: Result<()> = async {
         // do compact.

@@ -302,18 +302,18 @@ impl ReclusterTableInterpreter {
         } = &self.plan;
         // Callers that already own the lifecycle lock (for example, MV refresh) disable segment
         // claims to avoid reacquiring the shared table lock at the commit gate.
-        let allow_segment_claims = self.allow_segment_claims && settings.get_enable_table_lock()?;
+        let use_segment_claims = self.allow_segment_claims && settings.get_enable_table_lock()?;
 
         // Concurrent planning must evict this cache so the claim set is matched against the
         // latest snapshot.
-        if allow_segment_claims {
+        if use_segment_claims {
             self.ctx.evict_table_from_cache(catalog, database, table)?;
         }
         let mut tbl = self.ctx.get_table(catalog, database, table).await?;
         // Temporary tables are session-local, and their IDs are intentionally unsupported by
         // the segment-claim and lock catalog APIs.
         let claim_manager =
-            (allow_segment_claims && !tbl.is_temp()).then(CoordinationManager::instance);
+            (use_segment_claims && !tbl.is_temp()).then(CoordinationManager::instance);
         let mut claim_retries = 0;
         let (parts, snapshot, claim_guard) = loop {
             check_maintenance_target(tbl.as_ref(), &self.plan.target)?;

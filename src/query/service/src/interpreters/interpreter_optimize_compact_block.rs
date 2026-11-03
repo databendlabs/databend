@@ -29,7 +29,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
-use crate::sessions::TableContextTableManagement;
 
 pub struct OptimizeCompactBlockInterpreter {
     ctx: Arc<QueryContext>,
@@ -77,10 +76,6 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
                 .clone()
                 .acquire_table_lock(&catalog, &database, &table, &self.lock_opt)
                 .await?;
-
-            self.ctx
-                .evict_table_from_cache(&catalog, &database, &table)?;
-            self.ctx.clear_table_meta_timestamps_cache();
 
             let mut build_res = PipelineBuildResult::create();
             let mut builder =
