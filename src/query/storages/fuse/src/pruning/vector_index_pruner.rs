@@ -318,11 +318,14 @@ impl VectorIndexPruner {
             top_queue.push(score);
         }
         let top_scores = top_queue.into_sorted_vec();
-        // Only an ascending TopN with score filters only can read just its rows. In
-        // descending order the placeholder `f32::MAX` ranks first, and other filters
-        // run after reading. Ties at the last row fall back to reading all rows.
+        // Read only the TopN rows for ascending order with deterministic score
+        // filters only, and no ties at the last row. The filter runs again after
+        // reading, so a volatile one (`d > rand()`) needs the other rows too.
         let rows_only = param.asc
-            && param.filter_expr.is_some()
+            && param
+                .filter_expr
+                .as_ref()
+                .is_some_and(|filter| filter.is_deterministic(&BUILTIN_FUNCTIONS))
             && fills_topn(&top_scores, param.limit)
             && !leaves_out_ties(&top_scores, ranked_scores(&results, &passed, true));
         if rows_only {
