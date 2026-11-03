@@ -677,19 +677,19 @@ impl ReclusterMutator {
         }
 
         let mut virtual_schemas = Vec::new();
-        let retained = removed_segment_infos
-            .into_iter()
-            .filter_map(|(segment_idx, segment)| {
-                let indices = (0..segment.blocks.len())
-                    .filter(|block_idx| !selected_block_keys.contains(&(segment_idx, *block_idx)))
-                    .collect::<Vec<_>>();
-                if indices.is_empty() {
-                    return None;
-                }
-                virtual_schemas.push(segment.summary.virtual_segment_schema.clone().map(Arc::new));
-                Some((segment, indices))
-            })
-            .collect();
+        let mut retained = Vec::new();
+        for (segment_idx, segment) in removed_segment_infos {
+            let indices = (0..segment.blocks.len())
+                .filter(|block_idx| !selected_block_keys.contains(&(segment_idx, *block_idx)))
+                .collect::<Vec<_>>();
+            if indices.is_empty() {
+                continue;
+            }
+            // Carry the schema index with its segment instead of deriving it from read order.
+            let virtual_schema_index = virtual_schemas.len();
+            virtual_schemas.push(segment.summary.virtual_segment_schema.clone().map(Arc::new));
+            retained.push((virtual_schema_index, segment, indices));
+        }
         let remained_blocks = self.gather_retained_blocks(retained).await?;
 
         Ok((selected_block_count, ReclusterParts {
@@ -951,7 +951,7 @@ impl ReclusterMutator {
     #[async_backtrace::framed]
     async fn gather_retained_blocks(
         &self,
-        retained: Vec<(Arc<SegmentInfo>, Vec<usize>)>,
+        retained: Vec<(usize, Arc<SegmentInfo>, Vec<usize>)>,
     ) -> Result<Vec<RetainedBlockMeta>> {
         if retained.is_empty() {
             return Ok(Vec::new());
@@ -959,8 +959,7 @@ impl ReclusterMutator {
 
         let tasks = retained
             .into_iter()
-            .enumerate()
-            .map(|(schema_index, (segment, indices))| {
+            .map(|(virtual_schema_index, segment, indices)| {
                 let dal = self.operator.clone();
                 async move {
                     let stats = if let Some((loc, ver)) = segment.summary.additional_stats_loc() {
@@ -987,7 +986,7 @@ impl ReclusterMutator {
                                 .as_ref()
                                 .and_then(|stats| stats.block_top_ns.get(index))
                                 .cloned(),
-                            virtual_schema_index: schema_index,
+                            virtual_schema_index,
                         })
                         .collect::<Vec<_>>())
                 }

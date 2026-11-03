@@ -630,6 +630,18 @@ impl CompactTaskBuilder {
         }
     }
 
+    fn can_start_compact(&self, block_meta: &BlockMeta) -> bool {
+        let Some(cluster_key_info) = self.cluster_key_info.as_ref() else {
+            return true;
+        };
+        match block_meta.cluster_stats.as_ref() {
+            Some(stats) if stats.cluster_key_id == cluster_key_info.cluster_key_id() => {
+                stats.level == 0
+            }
+            _ => true,
+        }
+    }
+
     fn flush_pending(
         &mut self,
         tasks: &mut VecDeque<CompactTask>,
@@ -753,15 +765,17 @@ impl CompactTaskBuilder {
             previous_partition = current_partition.map(<[Scalar]>::to_vec);
             seen_block = true;
 
-            if self.is_empty() && is_perfect_block(block_meta, self.thresholds) {
-                // Healthy blocks may join an existing group or be reused by tail merging.
-                let blocks = vec![block.clone()];
-                tail_merge_source =
-                    self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
-                continue;
+            if self.is_empty() {
+                if !self.can_start_compact(block_meta) {
+                    // Reclustered blocks can be carried by an existing compact group,
+                    // but they should not start one by themselves.
+                    let blocks = vec![block.clone()];
+                    tail_merge_source =
+                        self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
+                    continue;
+                }
             }
 
-            // Physical size, not clustering maturity, admits size-only work.
             let (unchanged, need_take) = self.add(block);
             if need_take {
                 tail_merge_source =
@@ -849,12 +863,4 @@ impl CompactTaskBuilder {
         ))));
         Ok(partitions)
     }
-}
-
-fn is_perfect_block(block: &BlockMeta, thresholds: BlockThresholds) -> bool {
-    thresholds.check_perfect_block(
-        block.row_count as usize,
-        block.block_size as usize,
-        block.file_size as usize,
-    )
 }
