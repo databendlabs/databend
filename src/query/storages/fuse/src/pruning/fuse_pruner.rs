@@ -34,9 +34,6 @@ use databend_common_metrics::storage::metrics_inc_bytes_block_topn_pruning_after
 use databend_common_metrics::storage::metrics_inc_bytes_block_topn_pruning_before;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::SegmentBlockMetasCache;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::ReadSettings;
@@ -52,7 +49,6 @@ use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use log::info;
@@ -81,6 +77,7 @@ use crate::pruning::SpatialIndexPruner;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
 use crate::pruning::segment_pruner::SegmentPruner;
+use crate::pruning_pipeline::ExtractSegmentTransform;
 
 const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 
@@ -328,7 +325,6 @@ pub struct FusePruner {
     pub push_down: Option<PushDownInfo>,
     pub inverse_range_index: Option<RangeIndex>,
     pub deleted_segments: Vec<DeletedSegmentInfo>,
-    pub block_meta_cache: Option<SegmentBlockMetasCache>,
 }
 
 impl FusePruner {
@@ -407,7 +403,6 @@ impl FusePruner {
             pruning_ctx,
             inverse_range_index: None,
             deleted_segments: vec![],
-            block_meta_cache: CacheManager::instance().get_segment_block_metas_cache(),
         })
     }
 
@@ -497,7 +492,7 @@ impl FusePruner {
                             // since block metas touched by deletion are not likely to
                             // be accessed soon.
                             let populate_block_meta_cache = false;
-                            let block_metas = Self::extract_block_metas(
+                            let block_metas = ExtractSegmentTransform::extract_block_metas(
                                 &segment_location.location.0,
                                 compact_segment_info,
                                 populate_block_meta_cache,
@@ -520,7 +515,7 @@ impl FusePruner {
                     } else {
                         let sample_probability = table_sample(&push_down)?;
                         for (location, info) in pruned_segments {
-                            let mut block_metas = Self::extract_block_metas(
+                            let mut block_metas = ExtractSegmentTransform::extract_block_metas(
                                 &location.location.0,
                                 &info,
                                 true,
@@ -597,32 +592,6 @@ impl FusePruner {
             // TopN pruner.
             let metas = self.topn_pruning(metas)?;
             self.vector_pruning(metas).await
-        }
-    }
-
-    fn extract_block_metas(
-        segment_path: &str,
-        segment: &CompactSegmentInfo,
-        populate_cache: bool,
-        pruning_cost: &PruningCostController,
-    ) -> Result<Arc<Vec<Arc<BlockMeta>>>> {
-        if let Some(cache) = CacheManager::instance().get_segment_block_metas_cache() {
-            if let Some(metas) = cache.get(segment_path) {
-                Ok(metas)
-            } else {
-                let metas = pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
-                    segment.block_metas()
-                })?;
-                match populate_cache {
-                    true => Ok(cache.insert(segment_path.to_string(), metas)),
-                    false => Ok(Arc::new(metas)),
-                }
-            }
-        } else {
-            let metas = pruning_cost.measure(PruningCostKind::SegmentsDecompress, || {
-                segment.block_metas()
-            })?;
-            Ok(Arc::new(metas))
         }
     }
 

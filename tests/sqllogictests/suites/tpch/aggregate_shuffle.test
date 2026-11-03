@@ -5,9 +5,6 @@ set sandbox_tenant = 'test_tenant';
 statement ok
 use tpch_test;
 
-statement ok
-set force_aggregate_shuffle_mode = 'row';
-
 # TPC-H TEST
 include ./queries.test
 
@@ -16,16 +13,6 @@ set force_aggregate_data_spill = 1;
 
 # TPC-H TEST
 include ./queries.test
-
-
-statement ok
-set force_aggregate_shuffle_mode = 'bucket';
-
-# TPC-H TEST
-include ./queries.test
-
-statement ok
-set force_aggregate_data_spill = 1;
 
 statement ok
 set max_aggregate_spill_level = 2;

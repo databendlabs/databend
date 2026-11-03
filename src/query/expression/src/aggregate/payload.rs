@@ -19,7 +19,6 @@ use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use log::info;
-use strength_reduce::StrengthReducedU64;
 
 use super::AggrState;
 use super::BATCH_SIZE;
@@ -29,9 +28,12 @@ use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
+use super::group_hash_route_index;
+use super::payload_row::IsInArena;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
+use super::payload_row::visit_row_type;
 use super::probe_state::SelectVector;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowMut;
@@ -66,6 +68,12 @@ pub struct Payload {
 
     // if set, the payload contains at least duplicate rows
     min_cardinality: Option<usize>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum GroupRows<'a> {
+    Columns(ProjectedBlock<'a>),
+    Rows(&'a [RowPtr; BATCH_SIZE]),
 }
 
 pub(super) struct PayloadTransferBatch<'a> {
@@ -320,13 +328,23 @@ impl Payload {
         page.row_ptr(row, self.tuple_size)
     }
 
+    /// Calls `f` with the group hash of each row.
+    pub(super) fn for_each_hash(&self, mut f: impl FnMut(u64)) {
+        for page in &self.pages {
+            for row in 0..page.rows {
+                f(self.data_ptr(page, row).hash(&self.row_layout));
+            }
+        }
+    }
+
     pub(super) fn reserve_append_rows(
         &mut self,
         select_vector: &[RowID],
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
-        group_columns: ProjectedBlock,
+        groups: GroupRows,
+        source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
@@ -347,13 +365,42 @@ impl Payload {
             }
         }
 
-        self.append_rows(
-            select_vector,
-            group_hashes,
-            address,
-            page_index,
-            group_columns,
-        )
+        match groups {
+            GroupRows::Columns(group_columns) => {
+                self.append_rows(select_vector, group_hashes, address, group_columns)
+            }
+            GroupRows::Rows(rows) => self.append_copied_rows(select_vector, rows, address),
+        }
+        self.append_states(select_vector, address, page_index, source_states);
+    }
+
+    fn append_copied_rows(
+        &mut self,
+        select_vector: &[RowID],
+        rows: &[RowPtr; BATCH_SIZE],
+        address: &mut [RowMut; BATCH_SIZE],
+    ) {
+        for row in select_vector {
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    rows[*row].as_ptr(),
+                    address[*row].as_mut_ptr(),
+                    self.tuple_size,
+                )
+            };
+        }
+
+        for (idx, data_type) in self.group_types.iter().enumerate() {
+            if visit_row_type(&data_type.remove_nullable(), IsInArena) {
+                let offset = self.row_layout.group_offsets[idx];
+                for row in select_vector {
+                    unsafe {
+                        let data = self.arena.alloc_slice_copy(rows[*row].read_bytes(offset));
+                        address[*row].write_bytes(offset, data);
+                    }
+                }
+            }
+        }
     }
 
     fn append_rows(
@@ -361,7 +408,6 @@ impl Payload {
         select_vector: &[RowID],
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowMut; BATCH_SIZE],
-        page_index: &mut [usize],
         group_columns: ProjectedBlock,
     ) {
         let mut write_offset = 0;
@@ -440,15 +486,25 @@ impl Payload {
         }
 
         debug_assert!(write_offset + 8 == self.row_layout.state_offset);
+    }
+
+    fn append_states(
+        &mut self,
+        select_vector: &[RowID],
+        address: &mut [RowMut; BATCH_SIZE],
+        page_index: &mut [usize],
+        source_states: Option<&[StateAddr; BATCH_SIZE]>,
+    ) {
         let states = self.row_layout.states_layout.as_ref().map(|states_layout| {
             (
                 states_layout.layout.repeat(select_vector.len()).unwrap(),
+                states_layout.layout.size(),
                 states_layout.states_loc.clone(),
                 self.aggrs.clone(),
             )
         });
 
-        if let Some(((array_layout, padded_size), states_loc, aggrs)) = states {
+        if let Some(((array_layout, padded_size), state_size, states_loc, aggrs)) = states {
             // write states
             // Bump only allocates but does not drop, so there is no use after free for any item.
             let place = self.arena.alloc_layout(array_layout);
@@ -461,8 +517,21 @@ impl Payload {
                 let place = StateAddr::from(place);
                 address[row].set_state_addr(&self.row_layout, &place);
                 let page = &mut self.pages[page_index[row]];
+                // Copying a state that needs no manual drop equals initializing it and merging
+                // the source state into it. The caller merges the other states.
+                if let Some(source_states) = source_states {
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            source_states[row].as_ptr(),
+                            place.as_ptr(),
+                            state_size,
+                        )
+                    };
+                }
                 for (aggr, loc) in aggrs.iter().zip(states_loc.iter()) {
-                    aggr.init_state(AggrState::new(place, loc));
+                    if source_states.is_none() || aggr.state().need_manual_drop() {
+                        aggr.init_state(AggrState::new(place, loc));
+                    }
                     page.state_offsets += 1;
                 }
             }
@@ -491,6 +560,45 @@ impl Payload {
 
         self.total_rows += other.total_rows;
         self.pages.append(other.pages.as_mut());
+    }
+
+    /// Move the pages into payloads of at most `max_rows` rows and `max_bytes` bytes each,
+    /// without copying rows; a page over a limit makes a payload of its own. The payloads share
+    /// the arena of the states, which is freed with the last of them.
+    pub fn split_pages(mut self, max_rows: usize, max_bytes: usize) -> Vec<Payload> {
+        if self.total_rows <= max_rows && self.memory_size() <= max_bytes {
+            return vec![self];
+        }
+
+        let mut payloads = vec![];
+        let mut current = self.empty_like();
+        for page in std::mem::take(&mut self.pages) {
+            if page.rows == 0 {
+                continue;
+            }
+            let rows = current.total_rows + page.rows;
+            if current.total_rows != 0 && (rows > max_rows || rows * self.tuple_size > max_bytes) {
+                payloads.push(std::mem::replace(&mut current, self.empty_like()));
+            }
+            current.total_rows += page.rows;
+            current.pages.push(page);
+            current.current_write_page = current.pages.len();
+        }
+        if current.total_rows != 0 {
+            payloads.push(current);
+        }
+        self.total_rows = 0;
+        self.current_write_page = 0;
+        payloads
+    }
+
+    fn empty_like(&self) -> Payload {
+        Payload::new(
+            self.arena.clone(),
+            self.group_types.clone(),
+            self.aggrs.clone(),
+            self.row_layout.states_layout.clone(),
+        )
     }
 
     pub(super) fn mark_min_cardinality(&mut self) {
@@ -568,12 +676,11 @@ impl Payload {
                 let state = &mut *flush_state.probe_state;
                 state.reset_partitions(partition_count);
 
-                let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
-
                 for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
                     *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
                     let hash = row_ptr.hash(&self.row_layout);
-                    let partition_idx = (hash % mods) as usize;
+                    let partition_idx =
+                        group_hash_route_index(hash, partition_count as u64) as usize;
 
                     let (count, sel) = &mut state.partition_entries[partition_idx];
                     sel[*count as usize] = idx.into();
@@ -586,6 +693,8 @@ impl Payload {
         }
     }
 
+    /// Split the rows into `buckets` payloads by `group_hash_route_index` of their group hash, the
+    /// routing of raw rows with the same group keys.
     pub fn scatter_into_buckets(mut self, buckets: usize) -> Vec<Payload> {
         if buckets == 0 {
             return vec![];

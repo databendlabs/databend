@@ -18,7 +18,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_expression::TableDataType as DataType;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
@@ -53,7 +52,7 @@ async fn test_user_lambda_udf() -> anyhow::Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(&tenant, isempty_udf.clone(), false, None)
         .await?;
 
     // add isnotempty.
@@ -64,7 +63,7 @@ async fn test_user_lambda_udf() -> anyhow::Result<()> {
         description,
     );
     user_mgr
-        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(&tenant, isnotempty_udf.clone(), false, None)
         .await?;
 
     // get all.
@@ -137,7 +136,7 @@ async fn test_user_udf_server() -> anyhow::Result<()> {
         None,
     );
     user_mgr
-        .add_udf(&tenant, isempty_udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(&tenant, isempty_udf.clone(), false, None)
         .await?;
 
     // add isnotempty.
@@ -154,7 +153,7 @@ async fn test_user_udf_server() -> anyhow::Result<()> {
         None,
     );
     user_mgr
-        .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(&tenant, isnotempty_udf.clone(), false, None)
         .await?;
 
     // get all.

@@ -28,6 +28,8 @@ use arrow_ipc::writer;
 use arrow_schema::Schema as ArrowSchema;
 use async_stream::stream;
 use bytes::Bytes;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -150,8 +152,10 @@ impl FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
 
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.perf_query_token = context.get_perf_query_token();
         let mut planner = Planner::new(context.clone());
-        planner.plan_sql(query).await
+        tracking_payload.tracking(planner.plan_sql(query)).await
     }
 
     #[async_backtrace::framed]

@@ -105,9 +105,12 @@ impl RuleFactory {
             RuleID::PushDownLimitWindow => Ok(Box::new(RulePushDownLimitWindow::new(
                 ctx.get_max_push_down_limit(),
             ))),
-            RuleID::PushDownRankLimitAggregate => Ok(Box::new(
-                RulePushDownRankLimitAggregate::new(ctx.get_max_push_down_limit()),
-            )),
+            RuleID::PushDownRankLimitAggregate => {
+                Ok(Box::new(RulePushDownRankLimitAggregate::new(
+                    ctx.get_max_push_down_limit(),
+                    ctx.get_enable_aggregate_final_top_n(),
+                )))
+            }
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
             RuleID::PushDownFilterWindowTopN => {

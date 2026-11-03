@@ -27,22 +27,22 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use petgraph::graph::NodeIndex;
 
-use crate::servers::flight::v1::network::InboundChannel;
 use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
+use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
 
 pub struct HashSendSource {
     id: NodeIndex,
     output: Arc<OutputPort>,
     tasks: SyncTaskSet,
-    receiver: Arc<dyn InboundChannel>,
+    receiver: Arc<ExchangeQueueReceiver>,
     handle: Option<SyncTaskHandle<'static, Result<Option<DataBlock>>>>,
 }
 
 impl HashSendSource {
     pub fn create_item(
         worker_id: usize,
-        receiver: Arc<dyn InboundChannel>,
+        receiver: Arc<ExchangeQueueReceiver>,
         waker: Arc<ExecutorWaker>,
     ) -> PipeItem {
         let output = OutputPort::create();
@@ -80,7 +80,7 @@ impl Processor for HashSendSource {
 
         if self.handle.is_none() && !self.receiver.is_closed() {
             let receiver = self.receiver.clone();
-            let recv_fut = Box::pin(async move { receiver.recv().await });
+            let recv_fut = Box::pin(async move { receiver.recv_block().await });
             self.handle = Some(self.tasks.spawn(self.id, recv_fut));
         }
 
