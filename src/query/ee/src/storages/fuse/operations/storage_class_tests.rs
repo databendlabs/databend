@@ -264,6 +264,7 @@ mod real_s3 {
                     &fixture.default_tenant(),
                     UserDefinedConnection::new("storage_class_s3", "s3".to_owned(), params),
                     &CreateOption::Create,
+                    None,
                 )
                 .await?;
             let case = AwsCase {

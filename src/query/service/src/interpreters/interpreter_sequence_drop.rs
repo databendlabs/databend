@@ -16,18 +16,14 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
 use databend_common_meta_app::KeyWithTenant;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_sql::plans::DropSequencePlan;
 use databend_common_users::RoleCacheManager;
-use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 pub struct DropSequenceInterpreter {
@@ -59,22 +55,10 @@ impl Interpreter for DropSequenceInterpreter {
                 if_exists: self.plan.if_exists,
             };
             let catalog = self.ctx.get_default_catalog()?;
-            // we should do `drop ownership` after actually drop object, and object maybe not exists.
-            // drop the ownership
-            if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_sequence_privilege_check()?
-            {
-                let tenant = self.plan.ident.tenant();
-                let name = self.plan.ident.name().to_string();
-                let role_api = UserApiProvider::instance().role_api(tenant);
-                let owner_object = OwnershipObject::Sequence { name };
-                role_api.revoke_ownership(&owner_object).await?;
-                RoleCacheManager::instance().invalidate_cache(tenant);
-            }
-
             let reply = catalog.drop_sequence(req).await?;
+
+            // The catalog deletes metadata and ownership in the same Meta transaction.
+            RoleCacheManager::instance().invalidate_cache(self.plan.ident.tenant());
 
             if !reply.success && !self.plan.if_exists {
                 return Err(ErrorCode::UnknownSequence(format!(

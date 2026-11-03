@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use databend_common_meta_app::KeyUnknownBuilder;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::SequenceError;
 use databend_common_meta_app::app_error::UnsupportedSequenceStorageVersion;
 use databend_common_meta_app::app_error::WrongSequenceCount;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -32,23 +35,21 @@ use databend_common_meta_app::value_id::ValueId;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
-use databend_meta_client::types::ConditionResult;
+use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
-use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 
 use super::sequence_nextval_impl::NextVal;
 use crate::SequenceApi;
+use crate::kv::ownership::create_owned_object;
+use crate::kv::ownership::drop_owned_object;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_condition_util::txn_cond_eq_seq;
-use crate::txn_condition_util::txn_cond_seq;
-use crate::txn_core_util::send_txn;
-use crate::txn_del;
 use crate::txn_op_builder_util::txn_put_pb;
 
 #[async_trait::async_trait]
@@ -65,20 +66,28 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
         let storage_value = ValueId::<SequenceStorageValue>::new(req.start);
 
-        let conditions = if req.override_existing {
-            vec![]
+        // Callers report an existing sequence themselves, so do not fail on it here.
+        let create_option = if req.override_existing {
+            CreateOption::CreateOrReplace
         } else {
-            vec![txn_cond_eq_seq(&req.ident, 0)]
+            CreateOption::CreateIfNotExists
         };
+        let object = OwnershipObject::Sequence {
+            name: req.ident.name().to_string(),
+        };
+        let success = create_owned_object(
+            self,
+            &req.ident,
+            &meta,
+            &create_option,
+            req.ident.tenant(),
+            &object,
+            req.owner_role.as_deref(),
+            &[txn_put_pb(&storage_ident, &storage_value)],
+        )
+        .await?;
 
-        let txn = TxnRequest::new(conditions, vec![
-            txn_put_pb(&req.ident, &meta),
-            txn_put_pb(&storage_ident, &storage_value),
-        ]);
-
-        let (succ, _response) = send_txn(self, txn).await?;
-
-        Ok(CreateSequenceReply { success: succ })
+        Ok(CreateSequenceReply { success })
     }
 
     async fn get_sequence(
@@ -214,12 +223,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
-        let txn = TxnRequest::new(
-            vec![txn_cond_seq(&req.ident, ConditionResult::Gt, 0)],
-            vec![txn_del(&req.ident), txn_del(&storage_ident)],
-        );
-        let (success, _response) = send_txn(self, txn).await?;
+        let object = OwnershipObject::Sequence {
+            name: req.ident.name().to_string(),
+        };
+        let removed = drop_owned_object(
+            self,
+            &req.ident,
+            MatchSeq::GE(1),
+            req.ident.tenant(),
+            &object,
+            &[storage_ident.to_string_key()],
+        )
+        .await?;
 
-        Ok(DropSequenceReply { success })
+        Ok(DropSequenceReply {
+            success: removed.is_some(),
+        })
     }
 }

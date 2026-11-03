@@ -25,13 +25,26 @@ use crate::UserApiProvider;
 
 /// UDF operations.
 impl UserApiProvider {
-    /// Add a UDF, returning whether metadata changed.
+    /// Add a UDF, returning whether it was written.
     #[async_backtrace::framed]
     pub async fn add_udf(
         &self,
         tenant: &Tenant,
         info: UserDefinedFunction,
         create_option: &CreateOption,
+    ) -> Result<bool> {
+        self.add_udf_with_owner(tenant, info, create_option, None)
+            .await
+    }
+
+    /// Add a UDF and set `owner` as its owner in the same transaction.
+    #[async_backtrace::framed]
+    pub async fn add_udf_with_owner(
+        &self,
+        tenant: &Tenant,
+        info: UserDefinedFunction,
+        create_option: &CreateOption,
+        owner: Option<&str>,
     ) -> Result<bool> {
         if self.get_configured_udf(&info.name).is_some() {
             return Err(ErrorCode::UdfAlreadyExists(format!(
@@ -41,7 +54,9 @@ impl UserApiProvider {
         }
 
         let udf_api = self.udf_api(tenant);
-        Ok(udf_api.add_udf(info, create_option).await??)
+        Ok(udf_api
+            .add_udf_with_owner(info, create_option, owner)
+            .await??)
     }
 
     // Update a UDF.

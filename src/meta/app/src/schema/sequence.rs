@@ -73,6 +73,11 @@ pub struct CreateSequenceReq {
 
     /// See: [`SequenceMeta::storage_version`]
     pub storage_version: u64,
+
+    /// Role that owns the sequence when it is written. It is recorded in the same
+    /// transaction as the sequence. `None` records no owner; a replaced sequence
+    /// keeps its owner.
+    pub owner_role: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

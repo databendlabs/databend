@@ -14,9 +14,12 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::connection_ident;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_client::types::MatchSeq;
 
 use crate::UserApiProvider;
@@ -24,18 +27,21 @@ use crate::meta_service_error;
 
 /// user connection operations.
 impl UserApiProvider {
-    // Add a new connection.
+    /// Add a connection and set `owner` as its owner in the same transaction.
     #[async_backtrace::framed]
     pub async fn add_connection(
         &self,
         tenant: &Tenant,
         connection: UserDefinedConnection,
         create_option: &CreateOption,
+        owner: Option<&str>,
     ) -> Result<()> {
-        let connection_api_provider = self.connection_api(tenant);
-        connection_api_provider
-            .add(connection, create_option)
-            .await?;
+        let object = OwnershipObject::Connection {
+            name: connection.name.clone(),
+        };
+        self.connection_api(tenant)
+            .add_with_ownership(connection, create_option, object, owner)
+            .await??;
         Ok(())
     }
 
@@ -72,17 +78,20 @@ impl UserApiProvider {
         if_exists: bool,
     ) -> Result<()> {
         let connection_api_provider = self.connection_api(tenant);
-        let drop_connection = connection_api_provider.remove(name, MatchSeq::GE(1));
-        match drop_connection.await {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                let e = ErrorCode::from(e);
-                if if_exists && e.code() == ErrorCode::UNKNOWN_CONNECTION {
-                    Ok(())
-                } else {
-                    Err(e.add_message_back(" (while drop connection)"))
-                }
-            }
+        let dropped = connection_api_provider
+            .remove_with_ownership(name, MatchSeq::GE(1), OwnershipObject::Connection {
+                name: name.to_string(),
+            })
+            .await?;
+        if dropped || if_exists {
+            Ok(())
+        } else {
+            let error = UnknownError::<connection_ident::Resource>::new_match_seq(
+                name.to_string(),
+                MatchSeq::GE(1),
+                "NotFound when remove, seq of existing record: 0",
+            );
+            Err(ErrorCode::from(error).add_message_back(" (while drop connection)"))
         }
     }
 }

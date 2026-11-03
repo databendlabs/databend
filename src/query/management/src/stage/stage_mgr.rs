@@ -16,14 +16,16 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv::ownership::create_owned_object;
+use databend_common_meta_api::kv::ownership::ownership_change;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
-use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_cond_eq_seq;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_del;
 use databend_common_meta_api::txn_put_pb;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageFileIdent;
 use databend_common_meta_app::principal::StageIdent;
@@ -36,11 +38,9 @@ use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::ConditionResult::Eq;
-use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_client::types::With;
 use futures::TryStreamExt;
 
 use crate::errors::meta_service_error;
@@ -82,24 +82,34 @@ impl StageMgr {
 impl StageApi for StageMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn add_stage(&self, info: StageInfo, create_option: &CreateOption) -> Result<()> {
+    async fn add_stage_with_owner(
+        &self,
+        info: StageInfo,
+        create_option: &CreateOption,
+        owner: Option<&str>,
+    ) -> Result<()> {
         let ident = self.stage_ident(&info.stage_name);
-        let seq = MatchSeq::from(*create_option);
-        let upsert = UpsertPB::update(ident, info.clone()).with(seq);
+        let object = OwnershipObject::Stage {
+            name: info.stage_name.clone(),
+        };
+        let written = create_owned_object(
+            self.kv_api.as_ref(),
+            &ident,
+            &info,
+            create_option,
+            &self.tenant,
+            &object,
+            owner,
+            &[],
+        )
+        .await
+        .map_err(ErrorCode::from)?;
 
-        let res = self
-            .kv_api
-            .upsert_pb(&upsert)
-            .await
-            .map_err(meta_service_error)?;
-
-        if let CreateOption::Create = create_option {
-            if res.prev.is_some() {
-                return Err(ErrorCode::StageAlreadyExists(format!(
-                    "Stage '{}' already exists.",
-                    info.stage_name
-                )));
-            }
+        if !written && create_option.if_return_error() {
+            return Err(ErrorCode::StageAlreadyExists(format!(
+                "Stage '{}' already exists.",
+                info.stage_name
+            )));
         }
 
         Ok(())
@@ -166,6 +176,11 @@ impl StageApi for StageMgr {
                 .map(|(key, _)| TxnOp::delete(key))
                 .collect();
             dels.push(txn_del(&stage_ident));
+            // The stage's ownership is deleted together with its metadata.
+            let object = OwnershipObject::Stage {
+                name: name.to_string(),
+            };
+            dels.push(ownership_change(&self.tenant, &object, None));
 
             let txn_req = TxnRequest::new(
                 vec![

@@ -23,16 +23,19 @@ use crate::UserApiProvider;
 
 /// user stage operations.
 impl UserApiProvider {
-    // Add a new stage.
+    /// Add a stage and set `owner` as its owner in the same transaction.
     #[async_backtrace::framed]
     pub async fn add_stage(
         &self,
         tenant: &Tenant,
         info: StageInfo,
         create_option: &CreateOption,
+        owner: Option<&str>,
     ) -> Result<()> {
         let stage_api_provider = self.stage_api(tenant);
-        stage_api_provider.add_stage(info, create_option).await
+        stage_api_provider
+            .add_stage_with_owner(info, create_option, owner)
+            .await
     }
 
     // Get one stage from by tenant.

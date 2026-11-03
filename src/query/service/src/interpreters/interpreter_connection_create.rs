@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_sql::plans::CreateConnectionPlan;
 use databend_common_users::RoleCacheManager;
@@ -28,7 +26,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextQueryIdentity;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -68,29 +65,13 @@ impl Interpreter for CreateConnectionInterpreter {
             );
 
             let tenant = self.ctx.get_tenant();
+            // The connection and its ownership are written in one Meta transaction.
+            // IF NOT EXISTS on an existing connection writes neither.
+            let owner = self.ctx.get_current_role().map(|role| role.name);
             user_mgr
-                .add_connection(&tenant, conn, &plan.create_option)
+                .add_connection(&tenant, conn, &plan.create_option, owner.as_deref())
                 .await?;
-
-            // Grant ownership as the current role
-            if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_connection_privilege_check()?
-            {
-                if let Some(current_role) = self.ctx.get_current_role() {
-                    let role_api = UserApiProvider::instance().role_api(&tenant);
-                    role_api
-                        .grant_ownership(
-                            &OwnershipObject::Connection {
-                                name: self.plan.name.clone(),
-                            },
-                            &current_role.name,
-                        )
-                        .await?;
-                    RoleCacheManager::instance().invalidate_cache(&tenant);
-                }
-            }
+            RoleCacheManager::instance().invalidate_cache(&tenant);
 
             Ok(PipelineBuildResult::create())
         })

@@ -20,7 +20,21 @@ use databend_common_meta_app::schema::CreateOption;
 #[async_trait::async_trait]
 pub trait StageApi: Sync + Send {
     // Add a stage info to /tenant/stage-name.
-    async fn add_stage(&self, stage: StageInfo, create_option: &CreateOption) -> Result<()>;
+    async fn add_stage(&self, stage: StageInfo, create_option: &CreateOption) -> Result<()> {
+        self.add_stage_with_owner(stage, create_option, None).await
+    }
+
+    /// Add stage metadata and set `owner` as its owner in the same transaction.
+    ///
+    /// An existing stage is kept with its owner: `CreateIfNotExists` writes
+    /// nothing and `Create` returns an exists error. `owner` of `None` records
+    /// no owner; a replaced stage keeps its owner.
+    async fn add_stage_with_owner(
+        &self,
+        stage: StageInfo,
+        create_option: &CreateOption,
+        owner: Option<&str>,
+    ) -> Result<()>;
 
     async fn get_stage(&self, name: &str) -> Result<(u64, StageInfo)>;
 

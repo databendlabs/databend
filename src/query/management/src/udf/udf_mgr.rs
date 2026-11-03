@@ -16,8 +16,12 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_functions::is_builtin_function;
+use databend_common_meta_api::kv::ownership::create_owned_object;
+use databend_common_meta_api::kv::ownership::drop_owned_object;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_api::meta_txn_error::MetaTxnError;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::CreateOption;
@@ -48,7 +52,7 @@ impl UdfMgr {
         }
     }
 
-    /// Add a UDF to /tenant/udf-name.
+    /// Add a UDF to /tenant/udf-name, returning whether it was written.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn add_udf(
@@ -56,28 +60,51 @@ impl UdfMgr {
         info: UserDefinedFunction,
         create_option: &CreateOption,
     ) -> Result<Result<bool, UdfError>, UdfApiError> {
+        self.add_udf_with_owner(info, create_option, None).await
+    }
+
+    /// Add a UDF and set `owner` as its owner in the same transaction.
+    ///
+    /// An existing UDF is kept with its owner: `CreateIfNotExists` returns
+    /// `false` and `Create` returns an exists error. `owner` of `None` records
+    /// no owner; a replaced UDF keeps its owner.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn add_udf_with_owner(
+        &self,
+        info: UserDefinedFunction,
+        create_option: &CreateOption,
+        owner: Option<&str>,
+    ) -> Result<Result<bool, UdfError>, UdfApiError> {
         if let Err(e) = self.ensure_non_builtin(info.name.as_str()) {
             return Ok(Err(e));
         }
 
-        let seq = MatchSeq::from(*create_option);
-
         let key = UdfIdent::new(&self.tenant, &info.name);
-        let req = UpsertPB::insert(key, info.clone()).with(seq);
-        let res = self.kv_api.upsert_pb(&req).await?;
+        let object = OwnershipObject::UDF {
+            name: info.name.clone(),
+        };
+        let written = create_owned_object(
+            self.kv_api.as_ref(),
+            &key,
+            &info,
+            create_option,
+            &self.tenant,
+            &object,
+            owner,
+            &[],
+        )
+        .await?;
 
-        if let CreateOption::Create = create_option {
-            if res.prev.is_some() {
-                let err = UdfError::Exists {
-                    tenant: self.tenant.tenant_name().to_string(),
-                    name: info.name.to_string(),
-                    reason: "".to_string(),
-                };
-                return Ok(Err(err));
-            }
+        if !written && create_option.if_return_error() {
+            return Ok(Err(UdfError::Exists {
+                tenant: self.tenant.tenant_name().to_string(),
+                name: info.name.to_string(),
+                reason: "".to_string(),
+            }));
         }
 
-        Ok(Ok(res.is_changed()))
+        Ok(Ok(written))
     }
 
     /// Update a UDF to /tenant/udf-name.
@@ -162,16 +189,12 @@ impl UdfMgr {
         &self,
         udf_name: &str,
         seq: MatchSeq,
-    ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
+    ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaTxnError> {
         let key = UdfIdent::new(&self.tenant, udf_name);
-        let req = UpsertPB::delete(key).with(seq);
-        let res = self.kv_api.upsert_pb(&req).await?;
-
-        if res.is_changed() {
-            Ok(res.prev)
-        } else {
-            Ok(None)
-        }
+        let object = OwnershipObject::UDF {
+            name: udf_name.to_string(),
+        };
+        drop_owned_object(self.kv_api.as_ref(), &key, seq, &self.tenant, &object, &[]).await
     }
 
     fn ensure_non_builtin(&self, name: &str) -> Result<(), UdfError> {

@@ -19,6 +19,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
@@ -40,8 +41,11 @@ use futures::TryStreamExt;
 use log::info;
 use seq_marked::SeqValue;
 
+use crate::kv::ownership::create_owned_object;
+use crate::kv::ownership::drop_owned_object;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
+use crate::meta_txn_error::MetaTxnError;
 
 /// A generic CRUD interface for meta data operations.
 ///
@@ -128,6 +132,38 @@ where
         }
 
         Ok(())
+    }
+
+    /// Add a record and set its owner in the same transaction.
+    ///
+    /// An existing record is kept with its owner: `CreateIfNotExists` writes
+    /// nothing and `Create` returns an exist error. `owner` of `None` records no
+    /// owner; a replaced record keeps its owner.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn add_with_ownership(
+        &self,
+        value: ValueOf<R>,
+        create_option: &CreateOption,
+        object: OwnershipObject,
+        owner: Option<&str>,
+    ) -> Result<Result<(), ExistError<R>>, MetaTxnError> {
+        let name = value.name().to_string();
+        let written = create_owned_object(
+            self.kv_api.as_ref(),
+            &self.ident(&name),
+            &value,
+            create_option,
+            &self.tenant,
+            &object,
+            owner,
+            &[],
+        )
+        .await?;
+        if !written && create_option.if_return_error() {
+            return Ok(Err(ExistError::new(name, "Exist when add")));
+        }
+        Ok(Ok(()))
     }
 
     #[async_backtrace::framed]
@@ -230,6 +266,27 @@ where
         })?;
 
         Ok(())
+    }
+
+    /// Remove an owned object and its ownership in the same transaction.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn remove_with_ownership(
+        &self,
+        name: &str,
+        seq: MatchSeq,
+        object: OwnershipObject,
+    ) -> Result<bool, MetaTxnError> {
+        let removed = drop_owned_object(
+            self.kv_api.as_ref(),
+            &self.ident(name),
+            seq,
+            &self.tenant,
+            &object,
+            &[],
+        )
+        .await?;
+        Ok(removed.is_some())
     }
 
     #[async_backtrace::framed]
