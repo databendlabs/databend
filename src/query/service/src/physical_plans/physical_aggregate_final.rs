@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -21,6 +22,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
@@ -69,6 +71,9 @@ pub struct AggregateFinal {
     /// The input comes through a global shuffle, which delivers each final aggregate its
     /// partition, rather than scattered on this node.
     pub global_shuffled: bool,
+
+    /// Set when the output feeds a top N of `limit` rows ordered by these output columns.
+    pub top_n: Option<(Vec<SortDesc>, usize)>,
 }
 
 #[typetag::serde]
@@ -146,6 +151,7 @@ impl IPhysicalPlan for AggregateFinal {
             group_by_display: self.group_by_display.clone(),
             stat_info: self.stat_info.clone(),
             global_shuffled: self.global_shuffled,
+            top_n: self.top_n.clone(),
         })
     }
 
@@ -158,7 +164,7 @@ impl IPhysicalPlan for AggregateFinal {
             is_cluster_aggregate = true;
         }
 
-        let params = PipelineBuilder::build_aggregator_params(
+        let mut params = PipelineBuilder::build_aggregator_params(
             &builder.ctx,
             self.before_group_by_schema.clone(),
             &self.group_by,
@@ -167,6 +173,21 @@ impl IPhysicalPlan for AggregateFinal {
             max_block_rows,
             max_block_bytes,
         )?;
+        if let Some((order_by, limit)) = &self.top_n {
+            let schema = self.output_schema()?;
+            let order_by = order_by
+                .iter()
+                .map(|desc| {
+                    Ok(SortColumnDescription {
+                        offset: schema.index_of(&desc.order_by.to_string())?,
+                        asc: desc.asc,
+                        nulls_first: desc.nulls_first,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            // Just created, so not shared yet.
+            Arc::get_mut(&mut params).unwrap().top_n = Some((order_by, *limit));
+        }
 
         if params.group_columns.is_empty() {
             self.input.build_pipeline(builder)?;
@@ -254,6 +275,18 @@ impl PhysicalPlanBuilder {
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
         let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
+        let rank_limit = agg.rank_limit.map(|(item, limit)| {
+            let desc = item
+                .iter()
+                .map(|v| SortDesc {
+                    asc: v.asc,
+                    nulls_first: v.nulls_first,
+                    order_by: v.index,
+                    display_name: self.metadata.read().column(v.index).name(),
+                })
+                .collect::<Vec<_>>();
+            (desc, limit)
+        });
 
         let result: PhysicalPlan = match mode {
             AggregateMode::Partial => {
@@ -287,18 +320,9 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
-                let rank_limit = agg.rank_limit.map(|(item, limit)| {
-                    let desc = item
-                        .iter()
-                        .map(|v| SortDesc {
-                            asc: v.asc,
-                            nulls_first: v.nulls_first,
-                            order_by: v.index,
-                            display_name: self.metadata.read().column(v.index).name(),
-                        })
-                        .collect::<Vec<_>>();
-                    (desc, limit)
-                });
+                // Ranking the input rows needs the order to be by group keys only.
+                let rank_limit = rank_limit
+                    .filter(|(descs, _)| descs.iter().all(|d| group_items.contains(&d.order_by)));
 
                 if group_by_shuffle_mode == "before_merge"
                     && let Some(exchange) = Exchange::from_physical_plan(&input)
@@ -430,6 +454,7 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
+                let top_n = rank_limit.filter(|_| agg.grouping_sets.is_none());
                 if let Some(partial) = AggregatePartial::from_physical_plan(&input) {
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
@@ -443,6 +468,7 @@ impl PhysicalPlanBuilder {
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
                         global_shuffled: false,
+                        top_n,
                     })
                 } else {
                     let Some(exchange) = Exchange::from_physical_plan(&input) else {
@@ -473,6 +499,7 @@ impl PhysicalPlanBuilder {
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
                         global_shuffled,
+                        top_n,
                     })
                 }
             }

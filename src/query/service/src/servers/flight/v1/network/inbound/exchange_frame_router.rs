@@ -113,7 +113,7 @@ mod tests {
             let router = ExchangeFrameRouter::new(&queues, flight_data_size(&frame(0)));
             router.route_frame(frame(0)).await.unwrap();
 
-            let mut pending = Box::pin(router.route_frame(frame(1)));
+            let mut pending = std::pin::pin!(router.route_frame(frame(1)));
             assert!(futures::poll!(pending.as_mut()).is_pending());
             assert!(queues.receivers[1].is_empty());
 

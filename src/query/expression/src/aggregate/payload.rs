@@ -29,9 +29,11 @@ use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
 use super::group_hash_route_index;
+use super::payload_row::IsInArena;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
+use super::payload_row::visit_row_type;
 use super::probe_state::SelectVector;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowMut;
@@ -66,6 +68,12 @@ pub struct Payload {
 
     // if set, the payload contains at least duplicate rows
     min_cardinality: Option<usize>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum GroupRows<'a> {
+    Columns(ProjectedBlock<'a>),
+    Rows(&'a [RowPtr; BATCH_SIZE]),
 }
 
 pub(super) struct PayloadTransferBatch<'a> {
@@ -326,7 +334,8 @@ impl Payload {
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
-        group_columns: ProjectedBlock,
+        groups: GroupRows,
+        source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
@@ -347,13 +356,42 @@ impl Payload {
             }
         }
 
-        self.append_rows(
-            select_vector,
-            group_hashes,
-            address,
-            page_index,
-            group_columns,
-        )
+        match groups {
+            GroupRows::Columns(group_columns) => {
+                self.append_rows(select_vector, group_hashes, address, group_columns)
+            }
+            GroupRows::Rows(rows) => self.append_copied_rows(select_vector, rows, address),
+        }
+        self.append_states(select_vector, address, page_index, source_states);
+    }
+
+    fn append_copied_rows(
+        &mut self,
+        select_vector: &[RowID],
+        rows: &[RowPtr; BATCH_SIZE],
+        address: &mut [RowMut; BATCH_SIZE],
+    ) {
+        for row in select_vector {
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    rows[*row].as_ptr(),
+                    address[*row].as_mut_ptr(),
+                    self.tuple_size,
+                )
+            };
+        }
+
+        for (idx, data_type) in self.group_types.iter().enumerate() {
+            if visit_row_type(&data_type.remove_nullable(), IsInArena) {
+                let offset = self.row_layout.group_offsets[idx];
+                for row in select_vector {
+                    unsafe {
+                        let data = self.arena.alloc_slice_copy(rows[*row].read_bytes(offset));
+                        address[*row].write_bytes(offset, data);
+                    }
+                }
+            }
+        }
     }
 
     fn append_rows(
@@ -361,7 +399,6 @@ impl Payload {
         select_vector: &[RowID],
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowMut; BATCH_SIZE],
-        page_index: &mut [usize],
         group_columns: ProjectedBlock,
     ) {
         let mut write_offset = 0;
@@ -440,15 +477,25 @@ impl Payload {
         }
 
         debug_assert!(write_offset + 8 == self.row_layout.state_offset);
+    }
+
+    fn append_states(
+        &mut self,
+        select_vector: &[RowID],
+        address: &mut [RowMut; BATCH_SIZE],
+        page_index: &mut [usize],
+        source_states: Option<&[StateAddr; BATCH_SIZE]>,
+    ) {
         let states = self.row_layout.states_layout.as_ref().map(|states_layout| {
             (
                 states_layout.layout.repeat(select_vector.len()).unwrap(),
+                states_layout.layout.size(),
                 states_layout.states_loc.clone(),
                 self.aggrs.clone(),
             )
         });
 
-        if let Some(((array_layout, padded_size), states_loc, aggrs)) = states {
+        if let Some(((array_layout, padded_size), state_size, states_loc, aggrs)) = states {
             // write states
             // Bump only allocates but does not drop, so there is no use after free for any item.
             let place = self.arena.alloc_layout(array_layout);
@@ -461,8 +508,21 @@ impl Payload {
                 let place = StateAddr::from(place);
                 address[row].set_state_addr(&self.row_layout, &place);
                 let page = &mut self.pages[page_index[row]];
+                // Copying a state that needs no manual drop equals initializing it and merging
+                // the source state into it. The caller merges the other states.
+                if let Some(source_states) = source_states {
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            source_states[row].as_ptr(),
+                            place.as_ptr(),
+                            state_size,
+                        )
+                    };
+                }
                 for (aggr, loc) in aggrs.iter().zip(states_loc.iter()) {
-                    aggr.init_state(AggrState::new(place, loc));
+                    if source_states.is_none() || aggr.state().need_manual_drop() {
+                        aggr.init_state(AggrState::new(place, loc));
+                    }
                     page.state_offsets += 1;
                 }
             }

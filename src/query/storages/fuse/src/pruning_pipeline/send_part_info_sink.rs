@@ -41,13 +41,12 @@ use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_storage::ColumnNodes;
 use databend_common_storage::StorageMetrics;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use parking_lot::Mutex;
 
 use crate::FuseTable;
+use crate::io::FuseCaches;
 use crate::pruning::FusePruner;
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 
@@ -100,14 +99,14 @@ impl SendPartState {
             return;
         }
 
-        type CacheItem = (PartStatistics, Partitions);
         let send_part_cache = self.cache.lock();
         if let Some(cache_key) = &send_part_cache.derterministic_cache_key {
-            if let Some(cache) = CacheItem::cache() {
+            let cache = &FuseCaches::instance().prune_results;
+            if cache.is_enabled() {
                 let mut cache_statistics = send_part_cache.statistics.clone();
                 cache_statistics.pruning_stats = Default::default();
-                cache.insert(
-                    cache_key.clone(),
+                cache.fill(
+                    cache_key,
                     (cache_statistics, send_part_cache.partitions.clone()),
                 );
             }

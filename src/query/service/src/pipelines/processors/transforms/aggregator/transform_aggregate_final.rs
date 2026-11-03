@@ -32,6 +32,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::InputPort;
@@ -411,6 +412,9 @@ impl TransformFinalAggregate {
         let hash_index_resizes = hashtable.hash_index_resize_count();
         self.flush_state.clear();
 
+        // With a top N above, only the first rows of each table are needed: the groups of
+        // different tables are distinct.
+        let mut top_n_blocks = Vec::new();
         // Consuming the hash table drops its index before result materialization. Each
         // payload owns its arena, so finishing one partition also releases its states.
         for payload in hashtable.into_payloads() {
@@ -420,7 +424,12 @@ impl TransformFinalAggregate {
                     self.flush_state.clear();
                     break;
                 };
-                if let Some(output_stream) = output_stream.as_mut() {
+                if let Some((order_by, limit)) = &self.params.top_n {
+                    top_n_blocks.push(block);
+                    if top_n_blocks.len() >= TOP_N_PRUNE_BLOCKS {
+                        top_n_blocks = vec![sort_blocks(&top_n_blocks, order_by, *limit)?];
+                    }
+                } else if let Some(output_stream) = output_stream.as_mut() {
                     let num_rows = block.num_rows();
                     let ready = output_stream.partition(vec![0; num_rows], block, true);
                     self.output_data
@@ -429,6 +438,12 @@ impl TransformFinalAggregate {
                     self.output_data.push_back(block);
                 }
             }
+        }
+        if let Some((order_by, limit)) = &self.params.top_n
+            && !top_n_blocks.is_empty()
+        {
+            self.output_data
+                .push_back(sort_blocks(&top_n_blocks, order_by, *limit)?);
         }
         if let Some(block) = output_stream.and_then(|mut stream| stream.finalize_partition(0)) {
             self.output_data.push_back(block);
@@ -610,6 +625,18 @@ impl Processor for TransformFinalAggregate {
 
         Ok(())
     }
+}
+
+/// The blocks of a top N are reduced to its first rows once there are this many.
+const TOP_N_PRUNE_BLOCKS: usize = 32;
+
+/// The first `limit` rows of `blocks` ordered by `order_by`.
+fn sort_blocks(
+    blocks: &[DataBlock],
+    order_by: &[SortColumnDescription],
+    limit: usize,
+) -> Result<DataBlock> {
+    DataBlock::sort(&DataBlock::concat(blocks)?, order_by, Some(limit))
 }
 
 #[cfg(test)]

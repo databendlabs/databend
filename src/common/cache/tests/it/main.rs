@@ -15,3 +15,5 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod cache;
+mod hit_rate;
+mod s3fifo;
