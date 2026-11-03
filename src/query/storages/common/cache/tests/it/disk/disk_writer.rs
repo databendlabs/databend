@@ -584,7 +584,8 @@ fn cancel_gate(_: &Path, _: u64) -> bool {
 }
 
 /// A reader cancelled while it waits for room leaves nothing pending: the same entry can be
-/// queued again later.
+/// queued again later. An entry waiting for room is not pending yet: its bytes are made, and it
+/// is listed, once it has room.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_cancelled_enqueue_leaves_nothing_pending() {
     let dir = TempDir::new().unwrap();
@@ -604,7 +605,11 @@ async fn test_cancelled_enqueue_leaves_nothing_pending() {
         let (writer, pool) = (writer.clone(), pool.clone());
         spawn(async move { writer.enqueue(job(&pool, data_kind(), "b", 60)).await })
     };
-    wait_for(|| writer.pending_entries() == 2);
+    // Waiting for room: listed nowhere, holding no room.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(!waiting.is_finished());
+    assert_eq!(writer.pending_entries(), 1);
+    assert_eq!(writer.queued_bytes(), 60);
     waiting.abort();
     assert!(waiting.await.unwrap_err().is_cancelled());
     assert_eq!(writer.pending_entries(), 1);
