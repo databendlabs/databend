@@ -43,7 +43,7 @@ use crate::framework::golden::write_case_title;
 // value domain, and `f` has the same statistics except that its NDV was filled
 // from the row count. `p` is the large probe table. `r`, `w` and `e` record `t`
 // in [1, 1000], so a range above 1000 is estimated to match no rows. `e` is `r`
-// with an extra column `v` for a selective equality.
+// with an extra column `v` in [1, 1000] for a second predicate.
 const PROBE_TABLE: &str = "CREATE TABLE p(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const LEFT_RANGE_TABLE: &str = "CREATE TABLE a(k BIGINT NOT NULL)";
 const RIGHT_RANGE_TABLE: &str = "CREATE TABLE b(k BIGINT NOT NULL)";
@@ -389,7 +389,7 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
         },
         StatsCase {
             name: "filter_range_outside_statistics_and_equality",
-            description: "A selective predicate in the same conjunction lowers the expectation but not the bound.",
+            description: "A selective predicate in the same conjunction lowers the expectation and the bound, in which only the range counts as an unknown filter.",
             sql: "SELECT * FROM r WHERE t > 1000 AND k = 5",
             operator: RelOp::Filter,
         },
@@ -413,13 +413,19 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
         },
         StatsCase {
             name: "filter_over_range_outside_statistics",
-            description: "A filter keeps the bound of a range outside the recorded min/max below it.",
+            description: "A filter keeps the bound of a range outside the recorded min/max below it, reduced by its own selectivity.",
             sql: "SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE k > 10",
             operator: RelOp::Filter,
         },
         StatsCase {
+            name: "filter_equality_over_range_outside_statistics",
+            description: "A selective equality above a range outside the recorded min/max lowers the bound as much as the expected rows.",
+            sql: "SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE k = 5",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
             name: "filter_over_window_over_range_outside_statistics",
-            description: "A window function keeps the rows of its input, so a filter on its result keeps the bound of the range below.",
+            description: "A window function keeps the rows of its input, so a filter on its result keeps the bound of the range below, reduced by its own selectivity.",
             sql: "SELECT * FROM (SELECT k, row_number() OVER (PARTITION BY k ORDER BY t) AS n FROM r WHERE t > 1000) AS x WHERE n <> 5",
             operator: RelOp::Filter,
         },
@@ -427,6 +433,12 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             name: "filter_proven_empty_over_range_outside_statistics",
             description: "A filter proven empty bounds its output at zero rows.",
             sql: "SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE k IS NULL",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "filter_two_ranges_outside_statistics",
+            description: "Two ranges outside the recorded min/max each count as an unknown filter in the bound.",
+            sql: "SELECT * FROM e WHERE t > 1000 AND v > 1000",
             operator: RelOp::Filter,
         },
         StatsCase {
@@ -551,9 +563,15 @@ async fn test_broadcast_build_bound_plan_golden() -> Result<()> {
             ],
         },
         PlanCase {
-            name: "range_outside_statistics_severe_underestimate_is_shuffled",
-            description: "A selective equality next to a range outside the recorded min/max lowers the expected rows far below the unknown-filter bound, so the build side is not broadcast.",
+            name: "range_outside_statistics_and_equality_build_is_broadcast",
+            description: "A selective equality next to a range outside the recorded min/max lowers the expected rows and the bound alike, so the build side is broadcast.",
             sql: "SELECT p.v FROM p JOIN e ON p.k = e.k WHERE e.t > 1000 AND e.v = 5",
+            settings: NO_REORDER,
+        },
+        PlanCase {
+            name: "two_ranges_outside_statistics_severe_underestimate_is_shuffled",
+            description: "Two ranges outside the recorded min/max each count as an unknown filter in the bound, which stays far above the expected rows, so the build side is not broadcast.",
+            sql: "SELECT p.v FROM p JOIN e ON p.k = e.k WHERE e.t > 1000 AND e.v > 1000",
             settings: NO_REORDER,
         },
         PlanCase {
@@ -578,6 +596,12 @@ async fn test_broadcast_build_bound_plan_golden() -> Result<()> {
             name: "left_join_builds_range_outside_statistics",
             description: "CommuteJoin ranks a range outside the recorded min/max by its small expected rows, so it becomes the build side instead of the larger table.",
             sql: "SELECT r.k, a.k FROM r LEFT JOIN a ON r.k = a.k WHERE r.t > 1000",
+            settings: &[],
+        },
+        PlanCase {
+            name: "left_join_builds_range_outside_statistics_and_equality",
+            description: "A selective equality next to a range outside the recorded min/max keeps the bound within 1000x of the small expected rows, so CommuteJoin still makes this side the build side.",
+            sql: "SELECT e.k, a.k FROM e LEFT JOIN a ON e.k = a.k WHERE e.t > 1000 AND e.v = 5",
             settings: &[],
         },
     ];

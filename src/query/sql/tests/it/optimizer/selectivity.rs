@@ -2171,7 +2171,7 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
     write_case_title(
         &mut file,
         "range_outside_statistics",
-        "A range comparison outside the column min/max expects 1/2500 of the input rows and keeps the 1/5 unknown-filter bound as max; ranges that contradict each other and other predicates estimated as no rows keep a zero bound.",
+        "A range comparison outside the column min/max expects 1/2500 of the input rows and counts as a 1/5 unknown filter in max, where the other predicates keep their estimates; ranges that contradict each other and other predicates estimated as no rows keep a zero bound. Column c has no statistics.",
     )?;
     let stats = ColumnStatSet::from_iter([
         (Symbol::new(0), ColumnStat::UInt {
@@ -2192,6 +2192,7 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
     let columns = &[
         ("a", UInt64Type::data_type()),
         ("b", UInt64Type::data_type()),
+        ("c", UInt64Type::data_type()),
     ];
     for predicates in [
         &["a > 25"][..],
@@ -2216,6 +2217,9 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         &["a = 25"],
         &["and_filters(a > 25, b = 500)"],
         &["a + 1 > 100"],
+        &["and_filters(a > 25, b < 50)"],
+        &["and_filters(a > 25, c > 1)"],
+        &["or_filters(and_filters(a > 25, b = 5), and_filters(a > 25, b = 6))"],
     ] {
         run_case_with_predicates(
             &mut file,
@@ -2229,6 +2233,18 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
             },
         )?;
     }
+    run_case_with_predicates(
+        &mut file,
+        &["and_filters(a > 25, b = 5)"],
+        columns,
+        stats,
+        StatCardinality::estimate(1_000_000.0),
+        CaseOptions {
+            and_strategy: Some(FilterAndStrategy::Min),
+            show_max_cardinality: true,
+            ..Default::default()
+        },
+    )?;
 
     Ok(())
 }

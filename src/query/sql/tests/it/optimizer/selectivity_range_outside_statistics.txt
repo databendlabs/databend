@@ -1,5 +1,5 @@
 === range_outside_statistics ===
-description: A range comparison outside the column min/max expects 1/2500 of the input rows and keeps the 1/5 unknown-filter bound as max; ranges that contradict each other and other predicates estimated as no rows keep a zero bound.
+description: A range comparison outside the column min/max expects 1/2500 of the input rows and counts as a 1/5 unknown filter in max, where the other predicates keep their estimates; ranges that contradict each other and other predicates estimated as no rows keep a zero bound. Column c has no statistics.
 expr          : a > 25
 cardinality   : 1000000
 estimated     : 400
@@ -36,7 +36,7 @@ out stats     :
 expr          : a > 25, b = 5
 cardinality   : 1000000
 estimated     : 4.000000000000001
-max           : 200000
+max           : 2000
 in stats      :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
@@ -47,7 +47,7 @@ out stats     :
 expr          : and_filters(a > 25, b = 5)
 cardinality   : 1000000
 estimated     : 4.000000000000001
-max           : 200000
+max           : 2000
 in stats      :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
@@ -190,7 +190,7 @@ out stats     :
 expr          : not(or_filters(a <= 19, b = 5))
 cardinality   : 1000000
 estimated     : 396.00000000000006
-max           : 200000
+max           : 198000
 in stats      :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
@@ -241,4 +241,49 @@ in stats      :
 out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a > 25, b < 50)
+cardinality   : 1000000
+estimated     : 200
+max           : 100000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~9.999999979429651[..10.0], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(49), ndv: 50.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a > 25, c > 1)
+cardinality   : 1000000
+estimated     : 400
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: ~98.16990116683098[..100.0], null_count: 0, histogram: None }
+
+expr          : or_filters(and_filters(a > 25, b = 5), and_filters(a > 25, b = 6))
+cardinality   : 1000000
+estimated     : 7.999984000000001
+max           : 3995.9999999999995
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~5.506717548117608[..7.999984000000001], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: ~7.688380131262829[..7.999984000000001], null_count: 0, histogram: None }
+
+expr          : and_filters(a > 25, b = 5)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 400
+max           : 10000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
 
