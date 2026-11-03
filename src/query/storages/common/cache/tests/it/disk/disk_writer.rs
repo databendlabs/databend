@@ -309,54 +309,15 @@ async fn test_waiting_entry_goes_in_when_room_frees() {
     assert_eq!(pool.stats().items, 2);
 }
 
-static GROW: Gate = Gate::new();
-fn grow_gate(_: &Path, _: u64) -> bool {
-    GROW.pass();
-    false
-}
-
-/// A larger queue set at runtime lets a reader waiting for room in at once, while the write
-/// that fills the queue is still running.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_larger_queue_lets_a_waiting_entry_in() {
-    let dir = TempDir::new().unwrap();
-    let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
-    let writer = Arc::new(DiskWriter::start(
-        vec![pool.clone()],
-        dir.path().to_path_buf(),
-        WriterOptions {
-            over_watermark: grow_gate,
-            ..options(1, 100, Duration::from_secs(30))
-        },
-    ));
-    GROW.close();
-    assert!(writer.enqueue(job(&pool, data_kind(), "a", 80)).await);
-    GROW.wait_entered(1);
-    let waiting = {
-        let (writer, pool) = (writer.clone(), pool.clone());
-        spawn(async move { writer.enqueue(job(&pool, data_kind(), "b", 80)).await })
-    };
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert!(!waiting.is_finished());
-    writer.set_queue_bytes(1_000);
-    let queued = tokio::time::timeout(Duration::from_secs(10), waiting).await;
-    assert!(queued.expect("the entry still waits").unwrap());
-    assert_eq!(writer.settings().queue_bytes(), 1_000);
-    GROW.open();
-    wait_for(|| idle(&writer));
-    assert_eq!(pool.stats().items, 2);
-}
-
 static RATIO: AtomicU64 = AtomicU64::new(0);
 fn ratio_seen(_: &Path, ratio: u64) -> bool {
     RATIO.store(ratio, Ordering::Relaxed);
     false
 }
 
-/// The writer checks the file system against the watermark as last set, and syncs entries as
-/// last set; a shorter wait applies to the next reader.
+/// The writer checks the file system against the configured watermark before it writes.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_settings_apply_to_later_entries() {
+async fn test_writer_checks_the_configured_watermark() {
     let dir = TempDir::new().unwrap();
     let pool = pool_at(dir.path().join("data"), Pool::Data, 100_000);
     let writer = DiskWriter::start(
@@ -364,23 +325,14 @@ async fn test_settings_apply_to_later_entries() {
         dir.path().to_path_buf(),
         WriterOptions {
             over_watermark: ratio_seen,
+            watermark_ratio: 75,
             ..options(1, 1 << 20, Duration::from_millis(50))
         },
     );
     assert!(writer.enqueue(job(&pool, data_kind(), "a", 10)).await);
     wait_for(|| idle(&writer));
-    assert_eq!(RATIO.load(Ordering::Relaxed), 90);
-
-    writer.set_watermark_ratio(75);
-    writer.set_sync_data(true);
-    writer.set_queue_wait(Duration::ZERO);
-    assert!(writer.enqueue(job(&pool, data_kind(), "b", 10)).await);
-    wait_for(|| idle(&writer));
     assert_eq!(RATIO.load(Ordering::Relaxed), 75);
-    let settings = writer.settings();
-    assert!(settings.sync_data());
-    assert_eq!(settings.queue_wait(), Duration::ZERO);
-    assert_eq!(pool.stats().items, 2);
+    assert_eq!(pool.stats().items, 1);
 }
 
 /// An entry larger than a quarter of its pool is dropped as rejected, and leaves no room
@@ -817,71 +769,6 @@ async fn test_lookups_racing_writes_and_changes_never_serve_changed_objects() {
         lookups.load(Ordering::Relaxed) + OBJECTS as u64
     );
     assert!(stats.queued_hits <= stats.hits);
-}
-
-/// The writer settings change while entries are queued from many tasks: every entry queued is
-/// written or counted as dropped, the queue drains, and the settings end as last set.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_settings_change_while_entries_are_queued() {
-    let dir = TempDir::new().unwrap();
-    let pool = pool_at(dir.path().join("data"), Pool::Data, 1 << 30);
-    let writer = Arc::new(DiskWriter::start(
-        vec![pool.clone()],
-        dir.path().to_path_buf(),
-        options(2, 4 * 1024, Duration::from_millis(5)),
-    ));
-    let queued = Arc::new(AtomicU64::new(0));
-    let tasks: Vec<_> = (0..8)
-        .map(|t| {
-            let (writer, pool, queued) = (writer.clone(), pool.clone(), queued.clone());
-            spawn(async move {
-                for i in 0..200 {
-                    if writer
-                        .enqueue(job(&pool, data_kind(), &format!("t{t}_{i}"), 512))
-                        .await
-                    {
-                        queued.fetch_add(1, Ordering::Relaxed);
-                    }
-                }
-            })
-        })
-        .collect();
-    let tuner = {
-        let writer = writer.clone();
-        spawn(async move {
-            for i in 0..200u64 {
-                writer.set_queue_bytes(1_024 * (1 + i % 16));
-                writer.set_queue_wait(Duration::from_millis(i % 3));
-                writer.set_watermark_ratio(50 + i % 50);
-                writer.set_sync_data(i % 2 == 0);
-                tokio::time::sleep(Duration::from_micros(200)).await;
-            }
-            writer.set_queue_bytes(1 << 20);
-            writer.set_queue_wait(Duration::from_millis(50));
-            writer.set_watermark_ratio(90);
-            writer.set_sync_data(false);
-        })
-    };
-    for task in tasks {
-        task.await.unwrap();
-    }
-    tuner.await.unwrap();
-    wait_for(|| idle(&writer));
-    let (_, rejected, io_error) = drops(&writer);
-    assert_eq!(
-        pool.stats().items + rejected + io_error,
-        queued.load(Ordering::Relaxed)
-    );
-    let settings = writer.settings();
-    assert_eq!(
-        (
-            settings.queue_bytes(),
-            settings.queue_wait(),
-            settings.watermark_ratio(),
-            settings.sync_data()
-        ),
-        (1 << 20, Duration::from_millis(50), 90, false)
-    );
 }
 
 static MADE: Gate = Gate::new();

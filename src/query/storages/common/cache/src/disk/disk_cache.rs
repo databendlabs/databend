@@ -48,7 +48,6 @@ use crate::CacheKind;
 use crate::DiskKey;
 use crate::Pool;
 use crate::SingleFlight;
-use crate::disk::DiskOption;
 use crate::disk::disk_file::read_entry;
 pub use crate::disk::disk_pool::DiskKindEvents;
 use crate::disk::disk_pool::DiskPool;
@@ -116,8 +115,6 @@ pub struct DiskCache {
     default_caps: [u64; 3],
     max_bytes: u64,
     writer: DiskWriter,
-    /// The writer's settings as configured: what `default` restores.
-    default_writer: WriterOptions,
     /// Off when the license does not allow the disk cache.
     allowed: AtomicBool,
     /// Per kind, by kind index: false after `set_cache_capacity('disk:<kind>', 0)`.
@@ -220,7 +217,6 @@ impl DiskCache {
             .collect();
         Ok(DiskCache {
             writer: DiskWriter::start(pressure_order, root, writer),
-            default_writer: writer,
             pools,
             default_caps: caps,
             max_bytes,
@@ -494,38 +490,9 @@ impl DiskCache {
         self.max_bytes
     }
 
-    /// The current value of a writer setting.
-    pub fn option(&self, option: DiskOption) -> u64 {
-        let settings = self.writer.settings();
-        match option {
-            DiskOption::QueueBytes => settings.queue_bytes(),
-            DiskOption::QueueWaitMs => settings.queue_wait().as_millis() as u64,
-            DiskOption::WatermarkRatio => settings.watermark_ratio(),
-            DiskOption::SyncData => settings.sync_data() as u64,
-        }
-    }
-
-    /// The value of a writer setting from `cache.disk`.
-    pub fn default_option(&self, option: DiskOption) -> u64 {
-        let writer = &self.default_writer;
-        match option {
-            DiskOption::QueueBytes => writer.queue_bytes,
-            DiskOption::QueueWaitMs => writer.queue_wait.as_millis() as u64,
-            DiskOption::WatermarkRatio => writer.watermark_ratio,
-            DiskOption::SyncData => writer.sync_data as u64,
-        }
-    }
-
-    /// Changes a writer setting, for the entries queued from now on.
-    pub fn set_option(&self, option: DiskOption, value: u64) -> Result<()> {
-        option.check(value)?;
-        match option {
-            DiskOption::QueueBytes => self.writer.set_queue_bytes(value),
-            DiskOption::QueueWaitMs => self.writer.set_queue_wait(Duration::from_millis(value)),
-            DiskOption::WatermarkRatio => self.writer.set_watermark_ratio(value),
-            DiskOption::SyncData => self.writer.set_sync_data(value == 1),
-        }
-        Ok(())
+    /// How the writer was started, from `cache.disk`.
+    pub fn writer_options(&self) -> WriterOptions {
+        *self.writer.options()
     }
 
     /// Turns the disk cache of `kind` on or off. Turning it off drops the kind's entries, and
@@ -623,13 +590,16 @@ impl Drop for ObjectChange {
 
 /// The writer as `cache.disk` configures it, checked.
 fn writer_options(disk: &DiskCacheInnerConfig) -> Result<WriterOptions> {
-    let invalid = |e: ErrorCode| ErrorCode::InvalidConfig(e.message());
-    for (option, value) in [
-        (DiskOption::QueueBytes, disk.queue_bytes),
-        (DiskOption::QueueWaitMs, disk.queue_wait_ms),
-        (DiskOption::WatermarkRatio, disk.watermark_ratio),
-    ] {
-        option.check(value).map_err(invalid)?;
+    if disk.queue_bytes == 0 {
+        return Err(ErrorCode::InvalidConfig(
+            "cache.disk.queue_bytes must be more than 0".to_string(),
+        ));
+    }
+    if !(1..=100).contains(&disk.watermark_ratio) {
+        return Err(ErrorCode::InvalidConfig(format!(
+            "cache.disk.watermark_ratio must be 1 to 100, got {}",
+            disk.watermark_ratio
+        )));
     }
     if !(1..=MAX_WRITER_THREADS).contains(&disk.writer_threads) {
         return Err(ErrorCode::InvalidConfig(format!(

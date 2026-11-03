@@ -20,7 +20,6 @@
 mod disk_cache;
 mod disk_cached_storage;
 pub mod disk_file;
-mod disk_option;
 pub mod disk_pool;
 pub mod disk_writer;
 pub mod fill_fence;
@@ -36,6 +35,5 @@ pub use disk_cache::split_caps;
 pub use disk_cached_storage::DiskCachedStorage;
 pub use disk_cached_storage::DiskFill;
 pub use disk_cached_storage::UnitsRead;
-pub use disk_option::DiskOption;
 pub use fill_fence::FillTicket;
 pub use key::DiskKey;

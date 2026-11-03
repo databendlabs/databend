@@ -23,7 +23,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -45,7 +44,7 @@ use crate::disk::fill_fence::FillTicket;
 const WATERMARK_EVICT_BYTES: u64 = 64 * 1024 * 1024;
 
 /// How the writer starts, from `cache.disk`; tests shrink the queue and replace the file
-/// system check. All but `writers` and `over_watermark` change at runtime (`WriterSettings`).
+/// system check.
 #[derive(Clone, Copy)]
 pub struct WriterOptions {
     pub writers: usize,
@@ -72,41 +71,6 @@ impl WriterOptions {
             watermark_ratio: 90,
             over_watermark: fs_over_watermark,
         }
-    }
-}
-
-/// The writer's settings that change at runtime, read at each entry.
-pub struct WriterSettings {
-    queue_bytes: AtomicU64,
-    queue_wait_ms: AtomicU64,
-    watermark_ratio: AtomicU64,
-    sync_data: AtomicBool,
-}
-
-impl WriterSettings {
-    fn new(options: &WriterOptions) -> Self {
-        WriterSettings {
-            queue_bytes: AtomicU64::new(options.queue_bytes),
-            queue_wait_ms: AtomicU64::new(options.queue_wait.as_millis() as u64),
-            watermark_ratio: AtomicU64::new(options.watermark_ratio),
-            sync_data: AtomicBool::new(options.sync_data),
-        }
-    }
-
-    pub fn queue_bytes(&self) -> u64 {
-        self.queue_bytes.load(Ordering::Relaxed)
-    }
-
-    pub fn queue_wait(&self) -> Duration {
-        Duration::from_millis(self.queue_wait_ms.load(Ordering::Relaxed))
-    }
-
-    pub fn watermark_ratio(&self) -> u64 {
-        self.watermark_ratio.load(Ordering::Relaxed)
-    }
-
-    pub fn sync_data(&self) -> bool {
-        self.sync_data.load(Ordering::Relaxed)
     }
 }
 
@@ -190,7 +154,7 @@ struct Shared {
     /// the job, so that a job superseded by a newer one does not take the newer one off.
     pending: Mutex<PendingSet>,
     drops: DropCounters,
-    settings: WriterSettings,
+    options: WriterOptions,
     over_watermark: fn(&Path, u64) -> bool,
     /// Pools in eviction order under disk pressure: data, index, meta.
     pools: Vec<Arc<DiskPool>>,
@@ -217,7 +181,7 @@ impl DiskWriter {
             room: Notify::new(),
             pending: Mutex::new(HashMap::new()),
             drops: DropCounters::default(),
-            settings: WriterSettings::new(&options),
+            options,
             over_watermark: options.over_watermark,
             pools,
             root,
@@ -248,41 +212,8 @@ impl DiskWriter {
         &self.shared.drops
     }
 
-    pub fn settings(&self) -> &WriterSettings {
-        &self.shared.settings
-    }
-
-    /// Bytes queued at most; readers waiting for room retry at once.
-    pub fn set_queue_bytes(&self, bytes: u64) {
-        self.shared
-            .settings
-            .queue_bytes
-            .store(bytes, Ordering::Relaxed);
-        self.shared.room.notify_waiters();
-    }
-
-    /// How long a reader waits for room in a full queue, from its next entry on.
-    pub fn set_queue_wait(&self, wait: Duration) {
-        self.shared
-            .settings
-            .queue_wait_ms
-            .store(wait.as_millis() as u64, Ordering::Relaxed);
-    }
-
-    /// Percent of the file system in use above which entries evict before they are written.
-    pub fn set_watermark_ratio(&self, percent: u64) {
-        self.shared
-            .settings
-            .watermark_ratio
-            .store(percent, Ordering::Relaxed);
-    }
-
-    /// Whether entries written from now on are synced to disk.
-    pub fn set_sync_data(&self, sync: bool) {
-        self.shared
-            .settings
-            .sync_data
-            .store(sync, Ordering::Relaxed);
+    pub fn options(&self) -> &WriterOptions {
+        &self.shared.options
     }
 
     /// Bytes queued or being written.
@@ -342,15 +273,15 @@ impl DiskWriter {
         if self.shared.blocks(&pool, &key) {
             return false;
         }
-        let settings = &self.shared.settings;
-        let deadline = Instant::now() + settings.queue_wait();
+        let options = &self.shared.options;
+        let deadline = Instant::now() + options.queue_wait;
         loop {
             let room = self.shared.room.notified();
             tokio::pin!(room);
             room.as_mut().enable();
             let queued = self.shared.queued.load(Ordering::Acquire);
             // An entry larger than the whole queue still goes in when the queue is empty.
-            if queued == 0 || queued + len <= settings.queue_bytes() {
+            if queued == 0 || queued + len <= options.queue_bytes {
                 if self
                     .shared
                     .queued
@@ -513,7 +444,7 @@ impl Shared {
             let path = job.pool.root().join(&job.rel);
             let tmp = tmp_path(&path, self.seq.fetch_add(1, Ordering::Relaxed));
             let published =
-                write_tmp(&tmp, &job.value, self.settings.sync_data()).and_then(|written| {
+                write_tmp(&tmp, &job.value, self.options.sync_data).and_then(|written| {
                     held.published = true;
                     let commit = || std::fs::rename(&tmp, &path);
                     let started = job.ticket.started();
@@ -543,7 +474,7 @@ impl Shared {
     /// Evicts from the data, index and meta pools, in this order, while the file system is
     /// over the watermark: other data share the disk, spill files among them.
     fn relieve_disk_pressure(&self) {
-        let ratio = self.settings.watermark_ratio();
+        let ratio = self.options.watermark_ratio;
         for pool in &self.pools {
             if !(self.over_watermark)(&self.root, ratio) {
                 return;
