@@ -674,25 +674,23 @@ fn fills_topn(top_scores: &[VectorScore], limit: usize) -> bool {
             .all(|score| score.score < F32::from(f32::MAX))
 }
 
-/// The blocks with TopN rows, each with its TopN rows attached.
+/// The blocks with TopN rows, each with its TopN rows attached. The `index` of a
+/// score is the position of its block in `results`, as returned by `score_blocks`.
 fn topn_block_metas(
     results: Vec<VectorPruneResult>,
     top_scores: Vec<VectorScore>,
     rows_only: bool,
 ) -> Vec<(BlockMetaIndex, Arc<BlockMeta>)> {
-    let mut top_rows: HashMap<usize, Vec<(u32, F32)>> = HashMap::new();
+    debug_assert!(results.iter().enumerate().all(|(i, r)| r.block_idx == i));
+    let mut top_rows: Vec<Vec<(u32, F32)>> = vec![Vec::new(); results.len()];
     for score in top_scores {
-        top_rows
-            .entry(score.index)
-            .or_default()
-            .push((score.row_idx, score.score));
+        top_rows[score.index].push((score.row_idx, score.score));
     }
     results
         .into_iter()
-        .filter_map(|result| {
-            let scores = top_rows.remove(&result.block_idx)?;
-            Some(result.into_block_meta(scores, rows_only))
-        })
+        .zip(top_rows)
+        .filter(|(_, scores)| !scores.is_empty())
+        .map(|(result, scores)| result.into_block_meta(scores, rows_only))
         .collect()
 }
 
@@ -762,7 +760,8 @@ impl VectorPruneCandidate {
 }
 
 struct VectorPruneResult {
-    // the block index in segment
+    /// The index of the block in this pruning batch: its position in the results
+    /// of `score_blocks`, which numbers the blocks again after refinement.
     block_idx: usize,
     scores: Vec<VectorScore>,
     block_meta_index: BlockMetaIndex,
