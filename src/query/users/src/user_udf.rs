@@ -17,7 +17,6 @@ use databend_common_exception::Result;
 use databend_common_management::udf::UdfApiError;
 use databend_common_management::udf::UdfError;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 
@@ -25,13 +24,14 @@ use crate::UserApiProvider;
 
 /// UDF operations.
 impl UserApiProvider {
-    /// Add a UDF, returning whether metadata changed.
+    /// Writes the UDF and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
-    pub async fn add_udf(
+    pub async fn add_udf_with_owner(
         &self,
         tenant: &Tenant,
         info: UserDefinedFunction,
-        create_option: &CreateOption,
+        replace: bool,
+        owner: Option<&str>,
     ) -> Result<bool> {
         if self.get_configured_udf(&info.name).is_some() {
             return Err(ErrorCode::UdfAlreadyExists(format!(
@@ -41,7 +41,7 @@ impl UserApiProvider {
         }
 
         let udf_api = self.udf_api(tenant);
-        Ok(udf_api.add_udf(info, create_option).await??)
+        Ok(udf_api.add_udf_with_owner(info, replace, owner).await??)
     }
 
     // Update a UDF.
@@ -100,14 +100,14 @@ impl UserApiProvider {
         Ok(udfs)
     }
 
-    // Drop a UDF by name.
+    /// Drop a UDF by name, returning whether a UDF was dropped.
     #[async_backtrace::framed]
     pub async fn drop_udf(
         &self,
         tenant: &Tenant,
         udf_name: &str,
         allow_no_change: bool,
-    ) -> std::result::Result<std::result::Result<(), UdfError>, UdfApiError> {
+    ) -> std::result::Result<std::result::Result<bool, UdfError>, UdfApiError> {
         if self.get_configured_udf(udf_name).is_some() {
             return Ok(Err(UdfError::Exists {
                 tenant: tenant.tenant_name().to_string(),
@@ -123,7 +123,7 @@ impl UserApiProvider {
 
         let drop_result = if dropped.is_none() {
             if allow_no_change {
-                Ok(())
+                Ok(false)
             } else {
                 Err(UdfError::NotFound {
                     tenant: tenant.tenant_name().to_string(),
@@ -132,7 +132,7 @@ impl UserApiProvider {
                 })
             }
         } else {
-            Ok(())
+            Ok(true)
         };
 
         Ok(drop_result)

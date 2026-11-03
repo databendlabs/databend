@@ -498,6 +498,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_aggregate_final_top_n", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Lets the final aggregation of a GROUP BY ordered by aggregate results with a LIMIT of at most max_push_down_limit output only the first rows of each hash table.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
@@ -841,6 +848,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["before_partial".into(), "before_merge".into()])),
+                }),
+                ("partial_aggregate_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("auto")),
+                    desc: "Partial aggregation mode. 'auto' adapts per thread at runtime; 'bypass' forwards every row to the final aggregation.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["auto".into(), "bypass".into()])),
                 }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
@@ -1188,13 +1202,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["rounding".into(), "truncating".into()])),
                 }),
-                ("enable_experimental_rbac_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting enable stage and udf privilege check(enable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_table_snapshot_stats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable analyze table statistics for snapshots",
@@ -1212,20 +1219,6 @@ impl DefaultSettings {
                 ("enable_experimental_row_access_policy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting enable row access policy(disable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_connection_privilege_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting enable connection object privilege check(disable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_sequence_privilege_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting enable sequence object privilege check(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1804,13 +1797,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("force_aggregate_shuffle_mode", DefaultSettingValue {
-                    value: UserSettingValue::String(String::from("auto")),
-                    desc: "For testing only. Shuffle mode for aggregation. Options are 'auto', 'row', 'bucket'. Default is 'auto'.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
                 }),
             ]);
 

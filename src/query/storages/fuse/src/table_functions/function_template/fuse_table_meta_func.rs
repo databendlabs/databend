@@ -27,8 +27,8 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 
 use crate::FuseTable;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
+use crate::io::snapshot_history;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
 use crate::table_functions::check_shared_table_select;
@@ -82,8 +82,10 @@ async fn location_snapshot(
             let snapshot_location = tbl
                 .meta_location_generator
                 .gen_snapshot_location(&snapshot.snapshot_id, snapshot_version)?;
-            let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
-            let mut snapshot_stream = reader.snapshot_history(
+            let caches = FuseCaches::instance();
+            let mut snapshot_stream = snapshot_history(
+                &caches.snapshots,
+                tbl.get_operator(),
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),

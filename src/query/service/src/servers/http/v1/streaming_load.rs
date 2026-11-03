@@ -218,13 +218,13 @@ async fn streaming_load_handler_inner(
     let settings = query_context.get_settings();
 
     let mut planner = Planner::new(query_context.clone());
-    let (mut plan, extras) = planner
+    let (mut plan, _) = planner
         .plan_sql(sql)
         .await
         .map_err(|err| err.display_with_sql(sql))
         .map_err(BadRequest)?;
 
-    let entry = QueryEntry::create(&query_context, &plan, &extras).map_err(InternalServerError)?;
+    let entry = QueryEntry::create(&query_context, &plan).map_err(InternalServerError)?;
     let _guard = QueriesQueueManager::instance()
         .acquire(entry)
         .await

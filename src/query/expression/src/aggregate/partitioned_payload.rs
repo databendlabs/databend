@@ -19,9 +19,11 @@ use itertools::Itertools;
 
 use super::BATCH_SIZE;
 use super::PayloadFlushState;
+use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::get_states_layout;
+use super::payload::GroupRows;
 use super::payload::Payload;
 use super::payload::PayloadTransferBatch;
 use super::payload::PayloadTransferStateOffsets;
@@ -30,8 +32,10 @@ use super::row_ptr::RowLayout;
 use crate::ProjectedBlock;
 use crate::types::DataType;
 
+/// Maps a group hash to its radix partition. Every producer of rows for the same partitioned
+/// aggregate (payloads and raw rows) must use the same mask so that a key lands in one bucket.
 #[derive(Debug, Clone, Copy)]
-struct PartitionMask {
+pub struct PartitionMask {
     mask: u64,
     shift: u64,
 }
@@ -41,7 +45,7 @@ impl PartitionMask {
         Self::with_start_bit(partition_count, 0)
     }
 
-    fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
+    pub fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
         debug_assert!(start_bit + radix_bits <= 48);
@@ -52,7 +56,7 @@ impl PartitionMask {
         Self { mask, shift }
     }
 
-    fn index(&self, hash: u64) -> usize {
+    pub fn index(&self, hash: u64) -> usize {
         ((hash & self.mask) >> self.shift) as _
     }
 }
@@ -74,6 +78,13 @@ unsafe impl Send for PartitionedPayload {}
 unsafe impl Sync for PartitionedPayload {}
 
 impl PartitionedPayload {
+    /// Calls `f` with the group hash of each row.
+    pub(super) fn for_each_hash(&self, mut f: impl FnMut(u64)) {
+        for payload in &self.payloads {
+            payload.for_each_hash(&mut f);
+        }
+    }
+
     pub fn new(
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateCallRef>,
@@ -161,7 +172,8 @@ impl PartitionedPayload {
         &mut self,
         state: &mut ProbeState,
         new_group_rows: usize,
-        group_columns: ProjectedBlock,
+        groups: GroupRows,
+        source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
         if self.payloads.len() == 1 {
             self.payloads[0].reserve_append_rows(
@@ -169,7 +181,8 @@ impl PartitionedPayload {
                 &state.group_hashes,
                 &mut state.addresses,
                 &mut state.page_index,
-                group_columns,
+                groups,
+                source_states,
             );
         } else {
             // generate partition selection indices
@@ -194,7 +207,8 @@ impl PartitionedPayload {
                         &state.group_hashes,
                         &mut state.addresses,
                         &mut state.page_index,
-                        group_columns,
+                        groups,
+                        source_states,
                     );
                 }
             }

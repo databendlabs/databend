@@ -205,6 +205,11 @@ pub struct QueryContextShared {
     /// Shared across all QueryContext instances within this query.
     pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
 
+    /// Sequence visibility checker shared by the query: `nextval` asks for it per VALUES row
+    /// and per block, and building it lists all sequence ownerships.
+    pub(super) sequence_visibility_checker_cache:
+        tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
+
     /// Limits concurrent RowFetch reads and decodes across all pipelines and
     /// QueryContext instances belonging to this query on the local node.
     row_fetch_io_semaphore: OnceLock<Arc<Semaphore>>,
@@ -290,6 +295,7 @@ impl QueryContextShared {
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
+            sequence_visibility_checker_cache: Default::default(),
             row_fetch_io_semaphore: Default::default(),
             #[cfg(feature = "python-udf")]
             python_udf_workers: Default::default(),

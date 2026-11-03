@@ -33,10 +33,10 @@ use opendal::EntryMode;
 use super::changes::estimate_change_rows;
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FuseTable;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::snapshot_history;
 
 const V4_SNAPSHOT_SUFFIX: &str = "_v4.mpk";
 
@@ -215,8 +215,10 @@ impl FuseTable {
                     .and_then(|snapshot| snapshot.timestamp);
                 let snapshot_version =
                     TableMetaLocationGenerator::snapshot_version(&latest_location);
-                let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-                let mut snapshot_stream = reader.snapshot_history(
+                let caches = FuseCaches::instance();
+                let mut snapshot_stream = snapshot_history(
+                    &caches.snapshots,
+                    self.get_operator(),
                     latest_location,
                     snapshot_version,
                     self.meta_location_generator().clone(),

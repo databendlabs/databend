@@ -850,7 +850,12 @@ impl CreateTableInterpreter {
             req.table_meta.drop_on = Some(Utc::now());
         }
         let reply = catalog.create_table(req.clone()).await?;
-        if staged && !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+        // IF NOT EXISTS on an existing table creates nothing: keep its owner and skip setup.
+        if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+            // Keep the previous idempotent registration/TTL refresh for temporary tables.
+            if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
+                self.register_temp_table(prefix).await?;
+            }
             return Ok(PipelineBuildResult::create());
         }
         if let Err(e) = self

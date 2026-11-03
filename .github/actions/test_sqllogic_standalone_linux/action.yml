@@ -17,6 +17,10 @@ inputs:
     description: "Enable table meta cache"
     required: false
     default: "true"
+  shared_cache:
+    description: "Use the shared cache backend"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -31,4 +35,11 @@ runs:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_PARALLEL: ${{ inputs.parallel }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
-      run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
+        CACHE_SHARED_MEMORY_ENABLED: ${{ inputs.shared_cache }}
+      run: |
+        if [ "$CACHE_SHARED_MEMORY_ENABLED" = "true" ]; then
+          # The shared cache backend requires a server memory limit: 80% of the runner memory.
+          export QUERY_MAX_MEMORY_LIMIT_ENABLED=true
+          export QUERY_MAX_SERVER_MEMORY_USAGE=$(( $(awk '/MemTotal/{print $2}' /proc/meminfo) * 1024 * 8 / 10 ))
+        fi
+        bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}

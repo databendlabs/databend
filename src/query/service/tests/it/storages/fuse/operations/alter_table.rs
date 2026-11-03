@@ -33,7 +33,9 @@ use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::FuseCaches;
+use databend_common_storages_fuse::io::SegmentInfoReader;
+use databend_common_storages_fuse::io::SnapshotReader;
 use databend_query::interpreters::AddTableColumnInterpreter;
 use databend_query::interpreters::DropTableColumnInterpreter;
 use databend_query::interpreters::Interpreter;
@@ -41,7 +43,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -74,15 +76,12 @@ async fn check_segment_column_ids(
         .unwrap();
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-    let snapshot_reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-    let params = LoadParams {
-        location: snapshot_loc.clone(),
-        len_hint: None,
-        ver: TableSnapshot::VERSION,
-        put_cache: false,
-    };
-
-    let snapshot = snapshot_reader.read(&params).await?;
+    let reader = SnapshotReader::new(fuse_table.get_operator());
+    let snapshot = FuseCaches::instance()
+        .snapshots
+        .read_only()
+        .get(&reader, snapshot_loc.clone(), TableSnapshot::VERSION)
+        .await?;
     if let Some(expected_column_min_max) = expected_column_min_max {
         for (column_id, (min, max)) in &expected_column_min_max {
             if let Some(stat) = snapshot.summary.col_stats.get(column_id) {
@@ -95,19 +94,14 @@ async fn check_segment_column_ids(
     if let Some(expected_column_ids) = expected_column_ids {
         let expected_column_ids =
             HashSet::<ColumnId>::from_iter(expected_column_ids.clone().iter().cloned());
-        let compact_segment_reader = MetaReaders::segment_info_reader(
+        let compact_segment_reader = SegmentInfoReader::new(
             fuse_table.get_operator(),
             TestFixture::default_table_schema(),
         );
         for (seg_loc, _) in &snapshot.segments {
-            let params = LoadParams {
-                location: seg_loc.clone(),
-                len_hint: None,
-                ver: SegmentInfo::VERSION,
-                put_cache: false,
-            };
-
-            let compact_segment_info = compact_segment_reader.read(&params).await?;
+            let compact_segment_info = compact_segment_reader
+                .read(&(seg_loc.clone(), SegmentInfo::VERSION))
+                .await?;
             let segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
             segment_info.blocks.iter().for_each(|block_meta| {

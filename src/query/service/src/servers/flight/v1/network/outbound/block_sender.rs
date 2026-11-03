@@ -59,7 +59,7 @@ impl BlockSender for LocalBlockSender {
     }
 
     async fn send_block(&self, block: DataBlock) -> Result<()> {
-        let size = block.memory_size().min(self.max_bytes_local_channel);
+        let size = block_owned_bytes(&block).min(self.max_bytes_local_channel);
         let permit = self
             .semaphore
             .clone()
@@ -72,6 +72,18 @@ impl BlockSender for LocalBlockSender {
             Ok(()) | Err(TrySendError::Closed(_)) => Ok(()),
             Err(TrySendError::Full(_)) => unreachable!("local receive queue is unbounded"),
         }
+    }
+}
+
+/// Bytes held by `block`. A block without columns may carry its data in its meta, e.g. the
+/// payload of a hash table, which only the meta can tell.
+pub fn block_owned_bytes(block: &DataBlock) -> usize {
+    match block.num_columns() {
+        0 => block
+            .get_meta()
+            .and_then(|meta| meta.output_stats())
+            .map_or(0, |stats| stats.bytes),
+        _ => block.memory_size(),
     }
 }
 

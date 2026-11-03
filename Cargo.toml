@@ -324,7 +324,6 @@ jsonb = "0.5.6"
 jsonwebtoken = "9.3.1"
 jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
-levenshtein_automata = "0.2.1"
 lexical-core = "1"
 libc = { version = "0.2.158" }
 libm = "0.2.6"
@@ -465,7 +464,6 @@ sys-info = "0.9"
 sysinfo = "0.34.2"
 tantivy = { version = "0.26.2", features = ["quickwit"] }
 tantivy-common = "0.11.0"
-tantivy-fst = "0.5"
 tantivy-jieba = "0.20.0"
 tantivy-query-grammar = "0.26.0"
 temp-env = "0.3.0"
@@ -473,7 +471,6 @@ tempfile = "3.4.0"
 terminal_size = "0.4.2"
 test-harness = "0.3.0"
 testcontainers = "0.23"
-testcontainers-modules = { version = "0.11.5", features = ["mysql", "redis"] }
 thiserror = { version = "1" }
 thrift = "0.17.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }

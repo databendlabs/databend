@@ -48,6 +48,7 @@ pub use memory::GLOBAL_QUERIES_MANAGER;
 pub use memory::GlobalStatBuffer;
 pub use memory::MemStat;
 pub use memory::MemStatBuffer;
+pub use memory::MemoryMeter;
 pub use memory::OutOfLimit;
 pub use memory::ParentMemStat;
 pub use memory::is_alloc_error_panic;
