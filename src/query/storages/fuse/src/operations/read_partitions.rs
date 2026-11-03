@@ -682,8 +682,7 @@ impl FuseTable {
         // point in having more processors than segments to prune on this node
         // (`partitions_total` is the number of lazy segments handed to it): the
         // surplus would only add processors to the executor graph.
-        let (max_threads, max_io_requests) =
-            Self::prune_pipeline_widths(&ctx, self.adjust_io_request(&ctx)?, partitions_total)?;
+        let (max_threads, max_io_requests) = self.prune_pipeline_widths(&ctx, partitions_total)?;
         prune_pipeline.add_source(
             |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
             max_threads,
@@ -872,11 +871,12 @@ impl FuseTable {
     /// Parallelism of the segment pruning pipeline: `(max_threads, max_io_requests)`,
     /// both capped by the number of segments this node has to prune.
     fn prune_pipeline_widths(
+        &self,
         ctx: &Arc<dyn TableContext>,
-        max_io_requests: usize,
         num_segments: usize,
     ) -> Result<(usize, usize)> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = self.adjust_io_request(ctx)?;
         let num_segments = num_segments.max(1);
         Ok((
             max_threads.min(num_segments).max(1),
@@ -915,8 +915,7 @@ impl FuseTable {
         internal_column_names: HashSet<String>,
         num_segments: usize,
     ) -> Result<()> {
-        let (max_threads, _) =
-            Self::prune_pipeline_widths(&ctx, self.adjust_io_request(&ctx)?, num_segments)?;
+        let (max_threads, _) = self.prune_pipeline_widths(&ctx, num_segments)?;
         let push_down = &pruner.push_down;
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
         let runtime_filter_prune_context =

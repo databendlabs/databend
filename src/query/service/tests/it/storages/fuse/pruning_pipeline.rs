@@ -443,6 +443,13 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
 
 /// Runs a lazy prune pipeline built by `build_prune_pipeline` and returns the
 /// parts it produced.
+///
+/// The pipeline runs to completion before the receiver is drained, so it only
+/// works while the parts produced fit into the part channel created by
+/// `do_build_prune_pipeline` (capacity `max(max_threads,
+/// max_storage_io_requests)`, 8 in the tests below). Callers keep `num_blocks`
+/// of `create_test_table` at or below that setting; with more parts the sink
+/// blocks on `send` and the test hangs instead of failing.
 async fn execute_lazy_prune_pipeline(
     ctx: Arc<QueryContext>,
     fuse_table: &FuseTable,
