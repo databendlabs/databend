@@ -386,6 +386,10 @@ impl DiskPool {
     /// visible under its name, and runs only for an accepted entry, under the lock: a removal
     /// of the object waits for it, then finds the entry indexed. Its error is returned, the
     /// entry not indexed.
+    ///
+    /// A reservation given back without an entry, here or by `release`, leaves no file under
+    /// the key: the restart scan skips a reserved key, so a file of the previous run under it
+    /// would otherwise stay, unindexed.
     pub fn publish(
         &self,
         rel: String,
@@ -397,12 +401,16 @@ impl DiskPool {
         state.writing -= reserved;
         state.in_flight.remove(&rel);
         if state.cap == 0 || written > state.cap / OVERSIZED_DIVISOR || state.kind_off(&rel) {
+            let _ = fs::remove_file(self.root.join(&rel));
             return Ok(Published {
                 indexed: false,
                 victims: Vec::new(),
             });
         }
-        commit()?;
+        if let Err(e) = commit() {
+            let _ = fs::remove_file(self.root.join(&rel));
+            return Err(e);
+        }
         state.insert(rel.clone(), written);
         if let Some(events) = state.events_of(&rel) {
             events.written += 1;
@@ -426,6 +434,7 @@ impl DiskPool {
         let mut state = self.state.lock();
         state.writing -= reserved;
         state.in_flight.remove(rel);
+        let _ = fs::remove_file(self.root.join(rel));
     }
 
     /// Takes every entry of the object `object` (see `DiskKey::object_id`) out of the index, in

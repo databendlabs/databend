@@ -470,6 +470,38 @@ fn test_reload_leaves_keys_being_written() {
     assert_consistent(&pool);
 }
 
+/// A write given up on, rejected at publication or released, leaves no file under its key: a
+/// file of the previous run the scan skipped, the key being reserved, is deleted with it rather
+/// than left unindexed.
+#[test]
+fn test_abandoned_write_leaves_no_file_under_its_key() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let pool = DiskPool::new(Pool::Data, root.clone(), 1000);
+    let kind = data();
+    // Rejected: the kind was turned off while the write ran.
+    let a = rel(kind, "a");
+    assert!(pool.reserve(&a, 100).reserved);
+    let stale = write_file(&root, &a, 100);
+    assert_eq!(pool.reload(), (0, 0));
+    assert!(stale.exists());
+    pool.delete(&pool.set_kind_enabled(kind, false));
+    let published = pool.publish(a.clone(), 100, 100, no_file).unwrap();
+    assert!(!published.indexed);
+    assert!(!stale.exists() && !pool.contains(&a));
+    pool.set_kind_enabled(kind, true);
+    // Released: the write failed.
+    let b = rel(kind, "b");
+    assert!(pool.reserve(&b, 100).reserved);
+    let stale = write_file(&root, &b, 100);
+    assert_eq!(pool.reload(), (0, 0));
+    pool.release(&b, 100);
+    assert!(!stale.exists() && !pool.contains(&b));
+    // Its key can be written again.
+    put_file(&pool, &root, &b);
+    assert_consistent(&pool);
+}
+
 /// A file the scan rejects is deleted, and its key can be written again afterwards.
 #[test]
 fn test_reload_rejects_then_frees_the_key() {
