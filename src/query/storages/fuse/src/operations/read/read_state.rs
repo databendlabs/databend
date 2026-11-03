@@ -26,7 +26,6 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Cast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
@@ -37,7 +36,6 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FilterExecutor;
-use databend_common_expression::FunctionCall;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::SelectExpr;
 use databend_common_expression::SelectExprBuilder;
@@ -75,7 +73,7 @@ impl PrewhereSelector {
         func_ctx: &FunctionContext,
         max_block_size: usize,
     ) -> Option<Self> {
-        if !func_ctx.enable_selector_executor || has_negated_is_true(filter, false) {
+        if !func_ctx.enable_selector_executor {
             return None;
         }
 
@@ -148,26 +146,6 @@ impl PrewhereSelector {
             }
             BlockEntry::Column(_) => true,
         })
-    }
-}
-
-/// Whether an `is_true` appears under a `not`.
-///
-/// `SelectExprBuilder` pushes a negation through `is_true` into its argument, so
-/// `NOT is_true(ns <> 'x')` selects as `ns = 'x'` and drops NULL rows, while the evaluator
-/// computes `NOT is_true(NULL)` as true and keeps them. Such predicates keep the evaluator path.
-fn has_negated_is_true(expr: &Expr, negated: bool) -> bool {
-    match expr {
-        Expr::FunctionCall(FunctionCall { function, args, .. }) => {
-            let name = function.signature.name.as_str();
-            if negated && name == "is_true" {
-                return true;
-            }
-            let negated = negated || name == "not";
-            args.iter().any(|arg| has_negated_is_true(arg, negated))
-        }
-        Expr::Cast(Cast { expr, .. }) => has_negated_is_true(expr, negated),
-        _ => false,
     }
 }
 
@@ -1119,8 +1097,9 @@ mod tests {
         }
     }
 
-    /// `NOT is_true(ns <> 'x')` keeps the rows where `ns` is NULL. The selector would push the
-    /// negation through `is_true` and drop them, so the predicate keeps the evaluator path.
+    /// `NOT is_true(ns <> 'x')` keeps the rows where `ns` is NULL. The builder does not push
+    /// the negation through `is_true`, so the predicate is an `Others` leaf and keeps the
+    /// evaluator path.
     #[test]
     fn test_prewhere_selector_rejects_negated_is_true() {
         let func_ctx = FunctionContext::default();
@@ -1144,7 +1123,10 @@ mod tests {
         let (select_expr, _) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
             .build(&negated)
             .into();
-        assert!(select_expr.contains_string_column_eq_constant());
+        assert!(
+            matches!(select_expr, SelectExpr::Others(_)),
+            "{select_expr:?}"
+        );
         assert!(PrewhereSelector::try_create(&negated, &func_ctx, 8).is_none());
 
         // `is_true` without a negation keeps the selector path.
@@ -1262,6 +1244,30 @@ mod tests {
                     dest_type: DataType::Boolean,
                 }]),
                 false,
+            ),
+            // A LIKE whose escape is read from a column needs the evaluator.
+            (
+                call("and_filters", vec![
+                    eq.clone(),
+                    call("like", vec![
+                        column(0, string_type.clone()),
+                        string_constant("a!_%"),
+                        column(3, string_type.clone()),
+                    ]),
+                ]),
+                false,
+            ),
+            // A constant escape is compiled into the pattern.
+            (
+                call("and_filters", vec![
+                    eq.clone(),
+                    call("like", vec![
+                        column(0, string_type.clone()),
+                        string_constant("a!_%"),
+                        string_constant("!"),
+                    ]),
+                ]),
+                true,
             ),
             // An `Others` leaf.
             (

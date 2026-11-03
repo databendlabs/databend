@@ -233,13 +233,21 @@ impl SelectExprBuilder {
                                     .can_push_down_not(false);
                                 }
                             };
-                            let option_escape = args.get(2).and_then(|expr| match expr {
-                                Expr::Constant(Constant {
+                            // Only a constant escape can be compiled into the pattern. An escape
+                            // read from a column needs the evaluator.
+                            let option_escape = match args.get(2) {
+                                None => None,
+                                Some(Expr::Constant(Constant {
                                     scalar: Scalar::String(escape),
                                     ..
-                                }) => Some(escape),
-                                _ => None,
-                            });
+                                })) => Some(escape),
+                                Some(_) => {
+                                    return SelectExprBuildResult::new(SelectExpr::Others(
+                                        expr.clone(),
+                                    ))
+                                    .can_push_down_not(false);
+                                }
+                            };
                             let can_reorder = Self::can_reorder(column);
                             let is_string = matches!(
                                 column_data_type,
@@ -271,7 +279,9 @@ impl SelectExprBuilder {
                                     .can_reorder(can_reorder),
                             }
                         }
-                        "is_true" => self.build_select_expr(&args[0], not),
+                        // `is_true` turns NULL into false, so a negation must not be pushed
+                        // through it: `NOT is_true(NULL)` is true while `NOT NULL` is NULL.
+                        "is_true" if !not => self.build_select_expr(&args[0], not),
                         _ => self
                             .other_select_expr(expr, not)
                             .can_reorder(Self::can_reorder(expr)),

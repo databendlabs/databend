@@ -394,3 +394,105 @@ fn test_select_mixed_nullability_and_or_not() {
         }
     }
 }
+
+/// `is_true` turns NULL into false, so a negation must not be pushed through it, including
+/// when `is_true` sits under a nullable boolean cast added by `or`. The selector must select
+/// the same rows as the evaluator.
+#[test]
+fn test_select_negated_is_true() {
+    let num_rows = 6;
+    let block = DataBlock::new_from_columns(vec![
+        StringType::from_opt_data(vec![Some("x"), None, Some("y"), None, Some("x"), Some("z")]),
+        StringType::from_opt_data(vec![Some("y"), Some("z"), None, Some("y"), Some("z"), None]),
+        StringType::from_data(vec!["a_1", "ab", "a_2", "a!_", "b_", "a_"]),
+        StringType::from_data(vec!["!", "!", "#", "!", "!", "!"]),
+        Int32Type::from_data((0..num_rows as i32).collect()),
+    ]);
+    let columns = [
+        ("ns", DataType::Nullable(Box::new(DataType::String))),
+        ("ns2", DataType::Nullable(Box::new(DataType::String))),
+        ("v", DataType::String),
+        ("e", DataType::String),
+        ("k", DataType::Number(NumberDataType::Int32)),
+    ];
+    let func_ctx = FunctionContext::default();
+
+    for text in [
+        "NOT is_true(ns <> 'x')",
+        "NOT (is_true(ns <> 'x') OR ns2 = 'y')",
+        "k > 0 AND NOT (is_true(ns <> 'x') AND ns2 = 'z')",
+        r#""like"(v, 'a!_%', '!')"#,
+        r#"NOT "like"(v, 'a!_%', '!')"#,
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let truth = type_check::check(
+            &parse_raw_expr(&format!("is_true({text})"), &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expected = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+            .run(&truth)
+            .unwrap()
+            .try_downcast::<BooleanType>()
+            .unwrap();
+        let expected = block.clone().filter_boolean_value(&expected).unwrap();
+
+        let mut executor = FilterExecutor::new(
+            expr,
+            func_ctx.clone(),
+            num_rows,
+            None,
+            &BUILTIN_FUNCTIONS,
+            true,
+        );
+        for _ in 0..8 {
+            let actual = executor.filter(block.clone()).unwrap();
+            assert_eq!(actual.num_rows(), expected.num_rows(), "{text}");
+            assert_eq!(
+                actual.get_by_offset(4).value(),
+                expected.get_by_offset(4).value(),
+                "{text}"
+            );
+        }
+    }
+}
+
+/// The selector compiles only a constant LIKE escape into the pattern. An escape read from a
+/// column is left to the evaluator instead of being ignored.
+#[test]
+fn test_select_like_with_column_escape_is_not_compiled() {
+    let columns = [("v", DataType::String), ("e", DataType::String)];
+    let func_ctx = FunctionContext::default();
+    for (text, compiled) in [
+        (r#""like"(v, 'a!_%', '!')"#, true),
+        (r#""like"(v, 'a!_%', e)"#, false),
+        (r#"NOT "like"(v, 'a!_%', e)"#, false),
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let (select_expr, _): (SelectExpr, bool) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+            .build(&expr)
+            .into();
+        assert_eq!(
+            matches!(select_expr, SelectExpr::Like(_)),
+            compiled,
+            "{text}: {select_expr:?}"
+        );
+        if !compiled {
+            assert!(matches!(select_expr, SelectExpr::Others(_)), "{text}");
+        }
+    }
+}
