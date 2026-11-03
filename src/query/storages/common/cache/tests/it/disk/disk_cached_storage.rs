@@ -670,3 +670,248 @@ async fn test_content_length_is_cached_until_the_object_changes() {
             .is_err()
     );
 }
+
+/// A memory operator holding `object()` at `PATH`, counting and delaying its reads, behind a
+/// disk cache: for the shared reads of units.
+async fn counted_setup(
+    dir: &TempDir,
+) -> (
+    Operator,
+    Arc<std::sync::atomic::AtomicUsize>,
+    Arc<DiskCache>,
+    DiskCachedStorage,
+) {
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .finish()
+        .layer(CountingLayer(reads.clone()));
+    op.write(PATH, object()).await.unwrap();
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op.clone(), Some(disk.clone()));
+    (op, reads, disk, storage)
+}
+
+const UNITS: [(u32, std::ops::Range<u64>); 2] = [(0, 0..100), (1, 200..300)];
+
+fn merged() -> ReadSettings {
+    ReadSettings {
+        max_gap_size: 1_000,
+        max_range_size: 10_000,
+        parquet_fast_read_bytes: 0,
+    }
+}
+
+async fn read_units(
+    storage: &DiskCachedStorage,
+    path: &str,
+    units: &[(u32, std::ops::Range<u64>)],
+) -> databend_common_exception::Result<Vec<Bytes>> {
+    let read = storage
+        .read_units(data(), path, units, DiskFill::ReadWrite, &merged())
+        .await?;
+    Ok(units
+        .iter()
+        .map(|(id, _)| read.unit(*id).unwrap())
+        .collect())
+}
+
+fn spawn_read_units(
+    storage: &DiskCachedStorage,
+    units: &'static [(u32, std::ops::Range<u64>)],
+) -> databend_common_base::runtime::JoinHandle<databend_common_exception::Result<Vec<Bytes>>> {
+    let storage = storage.clone();
+    databend_common_base::runtime::spawn(async move { read_units(&storage, PATH, units).await })
+}
+
+fn reads_of(reads: &std::sync::atomic::AtomicUsize) -> usize {
+    reads.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Concurrent misses of different units of one object do not share a read: each reader gets
+/// its own units.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_misses_of_different_units_read_their_own() {
+    let dir = TempDir::new().unwrap();
+    let (_op, reads, _disk, storage) = counted_setup(&dir).await;
+    static FIRST: [(u32, std::ops::Range<u64>); 1] = [(0, 0..100)];
+    let (one, both) = futures::future::join(
+        read_units(&storage, PATH, &FIRST),
+        read_units(&storage, PATH, &UNITS),
+    )
+    .await;
+    assert_eq!(one.unwrap(), vec![object().slice(0..100)]);
+    assert_eq!(both.unwrap(), vec![
+        object().slice(0..100),
+        object().slice(200..300)
+    ]);
+    assert_eq!(reads_of(&reads), 2);
+}
+
+/// A failed storage read of units is returned to every reader sharing it and fills nothing;
+/// the next miss reads storage again.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unit_read_error_is_shared_and_not_cached() {
+    let dir = TempDir::new().unwrap();
+    let (_op, reads, disk, storage) = counted_setup(&dir).await;
+    let results =
+        futures::future::join_all((0..8).map(|_| read_units(&storage, "missing", &UNITS))).await;
+    assert!(results.iter().all(|r| r.is_err()));
+    assert_eq!(reads_of(&reads), 1);
+    assert_not_filled(&disk, &DiskKey::range("missing", 0..100));
+    assert!(read_units(&storage, "missing", &UNITS).await.is_err());
+    assert_eq!(reads_of(&reads), 2);
+}
+
+/// When the reader running a shared read of units is cancelled, a reader waiting on it takes
+/// the read over and gets the units, which are cached.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cancelled_unit_reader_hands_the_read_over() {
+    let dir = TempDir::new().unwrap();
+    let (_op, reads, disk, storage) = counted_setup(&dir).await;
+    let first = spawn_read_units(&storage, &UNITS);
+    wait_for(|| reads_of(&reads) == 1);
+    let second = spawn_read_units(&storage, &UNITS);
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    first.abort();
+    assert_eq!(second.await.unwrap().unwrap(), vec![
+        object().slice(0..100),
+        object().slice(200..300)
+    ]);
+    assert!(reads_of(&reads) <= 2);
+    wait_for(|| disk.contains(data(), &DiskKey::range(PATH, 200..300)));
+}
+
+/// A read of units in flight when the object is rewritten returns the bytes it read but does
+/// not cache them; a read started after the rewrite does not join it, reads storage itself
+/// and gets the rewritten bytes, which are cached.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unit_read_after_a_rewrite_does_not_join_one_before() {
+    let dir = TempDir::new().unwrap();
+    let (op, reads, disk, storage) = counted_setup(&dir).await;
+    let before = spawn_read_units(&storage, &UNITS);
+    wait_for(|| reads_of(&reads) == 1);
+    let rewritten = Bytes::from(vec![7u8; 3_000]);
+    op.write(PATH, rewritten.clone()).await.unwrap();
+    drop(storage.begin_change(PATH).unwrap());
+    let after = read_units(&storage, PATH, &UNITS).await.unwrap();
+    assert_eq!(after, vec![
+        rewritten.slice(0..100),
+        rewritten.slice(200..300)
+    ]);
+    assert_eq!(reads_of(&reads), 2);
+    assert_eq!(before.await.unwrap().unwrap(), vec![
+        object().slice(0..100),
+        object().slice(200..300)
+    ]);
+    wait_for(|| disk.stats().queued_bytes == 0);
+    // Only the rewritten bytes are on disk.
+    let cached = read_units(&storage, PATH, &UNITS).await.unwrap();
+    assert_eq!(cached, after);
+    assert_eq!(reads_of(&reads), 2);
+}
+
+/// Many readers of the units of a few objects at once, as the scans of one query and of
+/// concurrent queries make them: each object is read from storage once, whatever the number of
+/// readers, and every reader gets its units.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_readers_of_many_objects_read_each_once() {
+    let dir = TempDir::new().unwrap();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .finish()
+        .layer(CountingLayer(reads.clone()));
+    let paths: Vec<String> = (0..8)
+        .map(|i| format!("1/2/_b/block_{i}.parquet"))
+        .collect();
+    for path in &paths {
+        op.write(path, object()).await.unwrap();
+    }
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op, Some(disk.clone()));
+    let results = futures::future::join_all((0..64).map(|i| {
+        let storage = storage.clone();
+        let path = paths[i % paths.len()].clone();
+        async move { read_units(&storage, &path, &UNITS).await.unwrap() }
+    }))
+    .await;
+    let expected = vec![object().slice(0..100), object().slice(200..300)];
+    assert!(results.iter().all(|r| *r == expected));
+    assert_eq!(reads_of(&reads), paths.len());
+    // All on disk now: the same reads again touch no storage.
+    wait_for(|| {
+        paths
+            .iter()
+            .all(|p| disk.contains(data(), &DiskKey::range(p.as_str(), 200..300)))
+    });
+    for path in &paths {
+        assert_eq!(read_units(&storage, path, &UNITS).await.unwrap(), expected);
+    }
+    assert_eq!(reads_of(&reads), paths.len());
+}
+
+/// Readers of overlapping units race with rewrites of the object, each under a change, as
+/// queries race with compaction or vacuum. Every unit read is whole and of one version of the
+/// object, never newer than the last one written; once the rewrites are done every read gets
+/// the last version, from storage or from the disk cache, and nothing older stays cached.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unit_reads_racing_rewrites_never_return_stale_bytes_after() {
+    let dir = TempDir::new().unwrap();
+    let op = Operator::new(Memory::default()).unwrap().finish();
+    let version = |v: u8| Bytes::from(vec![v; 3_000]);
+    op.write(PATH, version(0)).await.unwrap();
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op.clone(), Some(disk.clone()));
+    let written = Arc::new(std::sync::atomic::AtomicU8::new(0));
+    const VERSIONS: u8 = 20;
+    let sets: [&[(u32, std::ops::Range<u64>)]; 3] = [
+        &[(0, 0..100), (1, 200..300)],
+        &[(1, 200..300), (2, 1_000..1_500)],
+        &[(0, 0..100), (2, 1_000..1_500), (3, 2_000..3_000)],
+    ];
+    let readers: Vec<_> = (0..8)
+        .map(|r| {
+            let (storage, written) = (storage.clone(), written.clone());
+            databend_common_base::runtime::spawn(async move {
+                for i in 0..200 {
+                    let units = sets[(r + i) % sets.len()];
+                    let read = read_units(&storage, PATH, units).await.unwrap();
+                    for (bytes, (_, range)) in read.iter().zip(units) {
+                        assert_eq!(bytes.len() as u64, range.end - range.start);
+                        let v = bytes[0];
+                        assert!(bytes.iter().all(|b| *b == v), "a torn unit");
+                        // Never a version not written yet.
+                        assert!(v <= written.load(std::sync::atomic::Ordering::SeqCst));
+                    }
+                }
+            })
+        })
+        .collect();
+    for v in 1..VERSIONS {
+        // As a fuse rewrite: the change begins before the object is written. The version is
+        // announced before it can be read.
+        let change = storage.begin_change(PATH).unwrap();
+        written.store(v, std::sync::atomic::Ordering::SeqCst);
+        op.write(PATH, version(v)).await.unwrap();
+        drop(change);
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+    }
+    for reader in readers {
+        reader.await.unwrap();
+    }
+    wait_for(|| disk.stats().queued_bytes == 0);
+    let last = VERSIONS - 1;
+    for units in sets {
+        for _ in 0..2 {
+            let read = read_units(&storage, PATH, units).await.unwrap();
+            assert!(
+                read.iter().all(|b| b.iter().all(|x| *x == last)),
+                "stale bytes after the rewrites"
+            );
+        }
+    }
+}
