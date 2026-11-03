@@ -28,6 +28,7 @@ use std::time::Instant;
 use bytes::Bytes;
 use databend_common_base::runtime::spawn;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
@@ -671,4 +672,56 @@ async fn test_entry_of_an_invalidated_object_is_not_published() {
     );
     wait_for(|| idle(&writer));
     assert!(pool.contains(&DiskKey::whole("a").rel_path(data_kind())));
+}
+
+static SERVE: Gate = Gate::new();
+fn serve_gate(_: &Path, _: u64) -> bool {
+    SERVE.pass();
+    false
+}
+
+/// An entry read and still waiting to be written is served by the disk cache, so concurrent
+/// scans of the same data read it from storage once; once its object changes, it is not, and
+/// it is never published. An entry that is published is then read from disk.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_entries_waiting_to_be_written_are_served_until_their_object_changes() {
+    let dir = TempDir::new().unwrap();
+    let cache = Arc::new(
+        DiskCache::with_writer(
+            dir.path(),
+            1 << 20,
+            [1 << 18, 1 << 18, 1 << 18],
+            WriterOptions {
+                over_watermark: serve_gate,
+                ..options(1, 1 << 20, Duration::from_millis(50))
+            },
+        )
+        .unwrap(),
+    );
+    let kind = data_kind();
+    let changed = DiskKey::range("1/2/_b/changed.parquet", 0..10);
+    let kept = DiskKey::range("1/2/_b/kept.parquet", 0..10);
+    let value = Bytes::from_static(b"0123456789");
+    SERVE.close();
+    let fill = cache.begin_fill();
+    assert!(cache.put(kind, &changed, value.clone(), &fill).await);
+    SERVE.wait_entered(1);
+    assert!(cache.put(kind, &kept, value.clone(), &fill).await);
+    drop(fill);
+
+    for key in [&changed, &kept] {
+        assert!(!cache.contains(kind, key));
+        assert_eq!(cache.get(kind, key).await, Some(value.clone()), "{key}");
+    }
+    let change = cache.begin_change("1/2/_b/changed.parquet").unwrap();
+    assert_eq!(cache.get(kind, &changed).await, None);
+    drop(change);
+    assert_eq!(cache.get(kind, &changed).await, None);
+
+    SERVE.open();
+    wait_for(|| cache.stats().queued_bytes == 0);
+    assert!(!cache.contains(kind, &changed));
+    assert_eq!(cache.get(kind, &changed).await, None);
+    assert!(cache.contains(kind, &kept));
+    assert_eq!(cache.get(kind, &kept).await, Some(value));
 }

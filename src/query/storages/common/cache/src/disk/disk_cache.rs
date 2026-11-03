@@ -260,6 +260,16 @@ impl DiskCache {
         metrics_inc_cache_access_count(1, name);
         let rel = key.rel_path(kind);
         let Some((path, size)) = pool.lookup(&rel) else {
+            // Read before and still waiting to be written: served, as the entry it becomes,
+            // unless its object changed since. Concurrent scans of the same data then read it
+            // from storage once.
+            if let Some((bytes, started)) = self.writer.pending(pool.pool().index(), &rel) {
+                if pool.accepts(&rel, started) {
+                    pool.record(true);
+                    metrics_inc_cache_hit_count(1, name);
+                    return Some(bytes);
+                }
+            }
             pool.record(false);
             metrics_inc_cache_miss_count(1, name);
             return None;

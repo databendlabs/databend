@@ -412,6 +412,17 @@ impl DiskPool {
         self.state.lock().index.contains(rel)
     }
 
+    /// Whether `publish` would accept, as things stand, the entry `rel` read by a fill started at
+    /// `started`: its object is not being changed nor invalidated since, and its kind is on.
+    /// Bytes still waiting to be written are served only then.
+    pub fn accepts(&self, rel: &str, started: u64) -> bool {
+        let state = self.state.lock();
+        let stale = object_of(rel)
+            .and_then(|object| state.invalidated.get(object))
+            .is_some_and(|at| *at > started);
+        !stale && state.cap > 0 && !state.changing(rel) && !state.kind_off(rel)
+    }
+
     /// Whether an entry of `len` bytes, its file `len` plus the checksum, is small enough to be
     /// kept: no larger than a quarter of the pool.
     pub fn admits(&self, len: u64) -> bool {

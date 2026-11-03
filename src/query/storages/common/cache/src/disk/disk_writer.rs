@@ -19,7 +19,7 @@
 //! entry. It may reject it then, when its object was invalidated meanwhile or the pool shrank,
 //! and the temporary file is deleted.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -130,9 +130,10 @@ pub struct DropCounters {
 struct Shared {
     queued: AtomicU64,
     room: Notify,
-    /// Entries queued or being written, by pool and key: a second miss of the same key while
-    /// the first is pending is not queued again.
-    pending: Mutex<HashSet<(usize, String)>>,
+    /// Entries queued or being written, by pool and key, with their bytes and the start of the
+    /// fill that read them: a second miss of the same key while the first is pending is not
+    /// queued again, and is served these bytes (see `DiskWriter::pending`).
+    pending: Mutex<HashMap<(usize, String), (Bytes, u64)>>,
     drops: DropCounters,
     settings: WriterSettings,
     over_watermark: fn(&Path, u64) -> bool,
@@ -155,7 +156,7 @@ impl DiskWriter {
         let shared = Arc::new(Shared {
             queued: AtomicU64::new(0),
             room: Notify::new(),
-            pending: Mutex::new(HashSet::new()),
+            pending: Mutex::new(HashMap::new()),
             drops: DropCounters::default(),
             settings: WriterSettings::new(&options),
             over_watermark: options.over_watermark,
@@ -230,6 +231,16 @@ impl DiskWriter {
         self.shared.queued.load(Ordering::Relaxed)
     }
 
+    /// The bytes queued or being written under `rel` of the pool with index `pool`, and the
+    /// start of the fill that read them.
+    pub fn pending(&self, pool: usize, rel: &str) -> Option<(Bytes, u64)> {
+        self.shared
+            .pending
+            .lock()
+            .get(&(pool, rel.to_string()))
+            .cloned()
+    }
+
     /// Entries queued or being written.
     pub fn pending_entries(&self) -> usize {
         self.shared.pending.lock().len()
@@ -253,8 +264,12 @@ impl DiskWriter {
             }
         }
         let key = (job.pool.pool().index(), job.rel.clone());
-        if !self.shared.pending.lock().insert(key.clone()) {
-            return false;
+        {
+            let mut pending = self.shared.pending.lock();
+            if pending.contains_key(&key) {
+                return false;
+            }
+            pending.insert(key.clone(), (job.value.clone(), job.ticket.started()));
         }
         let mut pending = Pending {
             shared: &self.shared,
