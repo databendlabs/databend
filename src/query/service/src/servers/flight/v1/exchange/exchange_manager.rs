@@ -27,9 +27,10 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::CpuProfiler;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::ProfileScope;
 use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -1290,7 +1291,8 @@ impl QueryCoordinator {
         let perf_guard = {
             let pc = info.query_ctx.get_perf_config();
             if pc.profiler_enabled && !self.is_request_server {
-                Some(QueryPerf::start(pc.frequency)?)
+                let scope = ProfileScope::Query(info.query_ctx.get_perf_query_token());
+                Some(CpuProfiler::start(scope, pc.frequency)?)
             } else {
                 None
             }
