@@ -392,10 +392,12 @@ fn test_concurrent_operations_keep_the_accounting() {
     let stats = pool.stats();
     assert!(stats.bytes <= stats.cap, "{stats:?}");
     pool.delete(&pool.set_cap(10_000));
-    // Nothing is left marked: every key can be reserved again.
+    // Nothing is left marked or reserved: every key can be reserved again once its entry, if
+    // one is left, is removed.
     for kind in [data(), meta()] {
         for i in 0..64 {
             let key = rel(kind, &format!("k{i}"));
+            pool.remove(&key);
             let r = pool.reserve(&key, 1);
             assert!(r.reserved, "{key}");
             pool.delete(&r.victims);
