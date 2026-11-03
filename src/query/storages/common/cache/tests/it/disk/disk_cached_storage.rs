@@ -1005,3 +1005,72 @@ async fn test_maintenance_and_queries_at_once_keep_their_own_disk_policy() {
         query_reads.load(std::sync::atomic::Ordering::Relaxed)
     );
 }
+
+/// Two storages sharing the disk cache under different key prefixes read different objects at
+/// one relative path: their concurrent unit reads do not share bytes, and a rewrite of one is
+/// seen by the reads after it, prefix included.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unit_reads_of_prefixed_storages_are_their_own() {
+    let dir = TempDir::new().unwrap();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let disk =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 20_000, 70_000], false).unwrap());
+    let storage_of = |value: u8| {
+        let reads = reads.clone();
+        let disk = disk.clone();
+        async move {
+            let op = Operator::new(Memory::default())
+                .unwrap()
+                .finish()
+                .layer(CountingLayer(reads));
+            op.write(PATH, Bytes::from(vec![value; 3_000]))
+                .await
+                .unwrap();
+            let storage = DiskCachedStorage::with_disk(op.clone(), Some(disk))
+                .with_key_prefix(format!("tenant_{value}/"));
+            (op, storage)
+        }
+    };
+    let (op_a, a) = storage_of(1).await;
+    let (_op_b, b) = storage_of(2).await;
+    let (read_a, read_b) =
+        futures::future::join(read_units(&a, PATH, &UNITS), read_units(&b, PATH, &UNITS)).await;
+    assert!(read_a.unwrap().iter().all(|u| u.iter().all(|x| *x == 1)));
+    assert!(read_b.unwrap().iter().all(|u| u.iter().all(|x| *x == 2)));
+    assert_eq!(reads_of(&reads), 2);
+
+    // A read of `a` in flight, then `a` rewritten: a read after it does not join.
+    let before = {
+        let a = a.clone();
+        databend_common_base::runtime::spawn(async move {
+            a.read_units(
+                data(),
+                PATH,
+                &[(9, 2_500..2_600)],
+                DiskFill::ReadWrite,
+                &merged(),
+            )
+            .await
+            .map(|r| r.unit(9).unwrap())
+        })
+    };
+    wait_for(|| reads_of(&reads) == 3);
+    op_a.write(PATH, Bytes::from(vec![3u8; 3_000]))
+        .await
+        .unwrap();
+    drop(a.begin_change(PATH).unwrap());
+    let after = a
+        .read_units(
+            data(),
+            PATH,
+            &[(9, 2_500..2_600)],
+            DiskFill::ReadWrite,
+            &merged(),
+        )
+        .await
+        .unwrap()
+        .unit(9)
+        .unwrap();
+    assert!(after.iter().all(|x| *x == 3));
+    assert!(before.await.unwrap().unwrap().iter().all(|x| *x == 1));
+}

@@ -299,8 +299,11 @@ impl DiskCachedStorage {
         let load = self.fetch_units(kind, path, &misses, fill, settings, disk, &ticket);
         // Readers missing the same units at once, as scans of the same columns do, share one
         // storage read; one started after the object was invalidated does not join.
-        let generation = disk.invalidation_of(kind, path);
-        let mut flight_key = format!("{kind:?}/{path}@{generation}");
+        // The object as the disk cache names it, prefix included: two storages sharing the
+        // disk cache read different objects under one relative path.
+        let object = self.key(path, None);
+        let generation = disk.invalidation_of(kind, object.path());
+        let mut flight_key = format!("{kind:?}/{object}@{generation}");
         for (id, range) in &misses {
             flight_key.push_str(&format!(":{id}={}-{}", range.start, range.end));
         }

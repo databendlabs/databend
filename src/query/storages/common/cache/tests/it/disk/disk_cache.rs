@@ -19,8 +19,11 @@ use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::spawn;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCache;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::DiskFill;
 use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::inverted;
@@ -693,4 +696,165 @@ async fn test_units_are_refused_during_a_change() {
     assert!(!cache.contains(kind, &key));
     drop(during);
     put_and_wait(&cache, kind, &key, Bytes::from(vec![2; 100])).await;
+}
+
+/// Bytes of the cache files under the pool `pool`, tmp files left out.
+fn file_bytes(dir: &TempDir, pool: Pool) -> u64 {
+    files_under(&dir.path().join("v2").join(pool.name()))
+        .iter()
+        .filter(|p| !p.to_string_lossy().ends_with(TMP_SUFFIX))
+        .map(|p| std::fs::metadata(p).map_or(0, |m| m.len()))
+        .sum()
+}
+
+/// Many tasks fill all three pools at once with entries of every size up to a quarter of
+/// their pool, while the pools are shrunk and grown back, far more bytes than they hold. At
+/// every moment no pool indexes more than its capacity. Once the queue drains, the files on
+/// disk are exactly what the pools account, within capacity, and each kind's figures add up:
+/// entries written less those evicted are those held.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_fills_and_resizes_stay_within_capacity() {
+    let dir = TempDir::new().unwrap();
+    let caps = [20_000u64, 40_000, 80_000];
+    let cache = Arc::new(DiskCache::new(dir.path(), 140_000, caps, false).unwrap());
+    let kinds = [
+        CacheKind::of::<segment::Info>(),
+        CacheKind::of::<bloom::Filter>(),
+        data(),
+    ];
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let sampler = {
+        let (cache, done) = (cache.clone(), done.clone());
+        Thread::spawn(move || {
+            let mut samples = 0;
+            while !done.load(std::sync::atomic::Ordering::SeqCst) {
+                for (pool, stats) in cache.pool_stats() {
+                    assert!(
+                        stats.bytes <= stats.cap,
+                        "{pool:?} over capacity: {stats:?}"
+                    );
+                }
+                samples += 1;
+            }
+            samples
+        })
+    };
+    let fillers: Vec<_> = (0..16)
+        .map(|t| {
+            let cache = cache.clone();
+            spawn(async move {
+                for i in 0..300usize {
+                    let p = (t + i) % 3;
+                    let len = 1 + (i * 7919 + t * 104_729) % (caps[p] as usize / 4 - 4);
+                    let key = DiskKey::range(format!("1/2/_b/{t}_{i}.parquet"), 0..len as u64);
+                    let fill = cache.begin_fill();
+                    cache
+                        .put(kinds[p], &key, Bytes::from(vec![1u8; len]), &fill)
+                        .await;
+                }
+            })
+        })
+        .collect();
+    let resizer = {
+        let cache = cache.clone();
+        spawn(async move {
+            for i in 0..100u64 {
+                let pool = Pool::ALL[(i % 3) as usize];
+                let cap = caps[pool.index()];
+                let _ = cache.set_pool_cap(pool, cap / 2 + (i * 31) % (cap / 2));
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+            for pool in Pool::ALL {
+                cache.set_pool_cap(pool, caps[pool.index()]).unwrap();
+            }
+        })
+    };
+    for filler in fillers {
+        filler.await.unwrap();
+    }
+    resizer.await.unwrap();
+    wait_for(|| cache.stats().queued_bytes == 0);
+    done.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(sampler.join().unwrap() > 0);
+
+    for (pool, stats) in cache.pool_stats() {
+        assert!(stats.bytes <= stats.cap, "{pool:?}: {stats:?}");
+        assert_eq!(stats.writing, 0, "{pool:?}");
+        // Deletes of entries evicted by a resize run in the background.
+        wait_for(|| file_bytes(&dir, pool) == stats.bytes);
+        let kind = kinds[pool.index()];
+        assert_eq!(
+            cache.kind_usage(kind),
+            (stats.items, stats.bytes),
+            "{pool:?}"
+        );
+        let events = cache.kind_stats(kind).events;
+        let evicted: u64 = events.evicted.iter().sum();
+        assert_eq!(
+            events.written - evicted,
+            stats.items,
+            "{pool:?}: {events:?}"
+        );
+        let evicted_bytes: u64 = events.evicted_bytes.iter().sum();
+        assert_eq!(
+            events.written_bytes - evicted_bytes,
+            stats.bytes,
+            "{pool:?}"
+        );
+        assert!(
+            evicted > 0,
+            "{pool:?}: filled past its capacity, so it evicted"
+        );
+    }
+    let total: u64 = cache.pool_stats().iter().map(|(_, s)| s.bytes).sum();
+    assert!(total <= 140_000);
+}
+
+/// Reads of more distinct objects than the data pool holds, through the storage, from many
+/// tasks at once: every read returns its object's bytes, the pool stays within capacity, and
+/// evicted objects are read again from storage, not from disk.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_reads_past_capacity_evict_and_stay_correct() {
+    let dir = TempDir::new().unwrap();
+    let op = opendal::Operator::new(opendal::services::Memory::default())
+        .unwrap()
+        .finish();
+    let objects = 200usize;
+    let value = |i: usize| Bytes::from(vec![(i % 251) as u8; 900]);
+    for i in 0..objects {
+        op.write(&format!("1/2/_b/{i}.parquet"), value(i))
+            .await
+            .unwrap();
+    }
+    // The data pool holds about 40 of them.
+    let cache =
+        Arc::new(DiskCache::new(dir.path(), 100_000, [10_000, 10_000, 40_000], false).unwrap());
+    let storage = DiskCachedStorage::with_disk(op, Some(cache.clone()));
+    let readers: Vec<_> = (0..8)
+        .map(|t| {
+            let storage = storage.clone();
+            spawn(async move {
+                for n in 0..400usize {
+                    let i = (t * 37 + n * 13) % objects;
+                    let path = format!("1/2/_b/{i}.parquet");
+                    let bytes = storage
+                        .read(data(), &path, Some(0..900), DiskFill::ReadWrite)
+                        .await
+                        .unwrap();
+                    assert_eq!(bytes, value(i), "{path}");
+                }
+            })
+        })
+        .collect();
+    for reader in readers {
+        reader.await.unwrap();
+    }
+    wait_for(|| cache.stats().queued_bytes == 0);
+    let (_, stats) = cache.pool_stats()[Pool::Data.index()];
+    assert!(stats.bytes <= stats.cap, "{stats:?}");
+    assert!(stats.items < objects as u64);
+    let kind = cache.kind_stats(data());
+    assert!(kind.events.evicted[0] > 0, "{kind:?}");
+    assert_eq!(kind.hits + kind.misses, 8 * 400);
+    wait_for(|| file_bytes(&dir, Pool::Data) == stats.bytes);
 }
