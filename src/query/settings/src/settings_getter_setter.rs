@@ -640,6 +640,10 @@ impl Settings {
         self.try_get_string("partial_aggregate_mode")
     }
 
+    pub fn get_partial_aggregate_memory_ratio(&self) -> Result<u64> {
+        self.try_get_u64("partial_aggregate_memory_ratio")
+    }
+
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }

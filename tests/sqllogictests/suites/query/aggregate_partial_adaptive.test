@@ -87,3 +87,19 @@ unset force_aggregate_data_spill
 
 statement ok
 unset max_threads
+
+# The partial tables of a query hold a share of max_memory_usage, kept between 64 MiB and 256 MiB
+# per thread; results do not depend on it.
+statement ok
+set partial_aggregate_memory_ratio = 1
+
+query II
+select count(), sum(c) from (select number % 50000 as k, count() c from numbers(2000000) group by k)
+----
+50000	2000000
+
+statement ok
+unset partial_aggregate_memory_ratio
+
+statement error
+set partial_aggregate_memory_ratio = 0

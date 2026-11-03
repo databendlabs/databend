@@ -25,6 +25,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+use databend_common_expression::partial_table_bytes;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -198,6 +199,11 @@ impl IPhysicalPlan for AggregatePartial {
 
         let partial_mode =
             parse_partial_aggregate_mode(&builder.settings.get_partial_aggregate_mode()?)?;
+        let max_table_bytes = partial_table_bytes(
+            builder.settings.get_max_memory_usage()? as usize,
+            builder.settings.get_partial_aggregate_memory_ratio()?,
+            builder.main_pipeline.output_len(),
+        );
         let partial_agg_config = HashTableConfig::partial_aggregate();
 
         // For rank limit, we can filter data using sort with rank before partial.
@@ -225,6 +231,7 @@ impl IPhysicalPlan for AggregatePartial {
                 params.clone(),
                 partial_agg_config.clone(),
                 partial_mode,
+                max_table_bytes,
             )?))
         })?;
 
