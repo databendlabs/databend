@@ -341,6 +341,9 @@ pub(crate) struct JoinStatsEstimator {
     contributions: Vec<JoinConditionContribution>,
     unique_key_output_bound: Option<f64>,
     confident_unique_key_output_bound: Option<f64>,
+    /// Whether the rows of the left/right input appear at most once in the
+    /// output, so its observed NDV columns stay observed.
+    keeps_observed_ndv: (bool, bool),
 }
 
 impl JoinStatsEstimator {
@@ -356,6 +359,7 @@ impl JoinStatsEstimator {
             contributions: Vec::new(),
             unique_key_output_bound: None,
             confident_unique_key_output_bound: None,
+            keeps_observed_ndv: (false, false),
         }
     }
 
@@ -377,12 +381,11 @@ impl JoinStatsEstimator {
         let right_rows = self.right_input.cardinality;
         self.unique_key_output_bound =
             self.unique_key_bound(join, left_rows, right_rows, UniqueKeyEvidence::Expected);
-        self.confident_unique_key_output_bound = self.unique_key_bound(
-            join,
-            self.left_input.max_cardinality.max(left_rows),
-            self.right_input.max_cardinality.max(right_rows),
-            UniqueKeyEvidence::Confident,
-        );
+        let left_bound = self.left_input.max_cardinality.max(left_rows);
+        let right_bound = self.right_input.max_cardinality.max(right_rows);
+        self.confident_unique_key_output_bound =
+            self.unique_key_bound(join, left_bound, right_bound, UniqueKeyEvidence::Confident);
+        self.keeps_observed_ndv = self.rows_kept_at_most_once(join, left_bound, right_bound);
         for condition in &join.equi_conditions {
             let (left, right) = condition.canonical_keys();
             let evaluated = EquiCondition::estimate_locally(
@@ -468,13 +471,7 @@ impl JoinStatsEstimator {
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
-                observed_ndv_columns: self
-                    .left_input
-                    .statistics
-                    .observed_ndv_columns
-                    .union(&self.right_input.statistics.observed_ndv_columns)
-                    .copied()
-                    .collect(),
+                observed_ndv_columns: self.output_observed_ndv_columns(),
             },
         }))
     }
@@ -504,14 +501,8 @@ impl JoinStatsEstimator {
         right_rows: f64,
         evidence: UniqueKeyEvidence,
     ) -> Option<f64> {
-        let (left, right) = condition.canonical_keys();
-        let is_unique = |key: &ScalarExpr, input: &StatInfo, rows: f64| {
-            identity_column(key).is_some_and(|column| {
-                evidence.is_unique(&input.statistics, column, rows, condition.is_null_equal)
-            })
-        };
-        let left_unique = is_unique(left, &self.left_input, left_rows);
-        let right_unique = is_unique(right, &self.right_input, right_rows);
+        let (left_unique, right_unique) =
+            self.condition_unique_keys(condition, left_rows, right_rows, evidence);
         match self.join_type {
             JoinType::Inner | JoinType::InnerAny => match (left_unique, right_unique) {
                 (true, true) => Some(left_rows.min(right_rows)),
@@ -524,6 +515,86 @@ impl JoinStatsEstimator {
             JoinType::Full if left_unique || right_unique => Some(left_rows + right_rows),
             _ => None,
         }
+    }
+
+    /// Whether the left/right key of `condition` is unique with `evidence`.
+    fn condition_unique_keys(
+        &self,
+        condition: &JoinEquiCondition,
+        left_rows: f64,
+        right_rows: f64,
+        evidence: UniqueKeyEvidence,
+    ) -> (bool, bool) {
+        let (left, right) = condition.canonical_keys();
+        let is_unique = |key: &ScalarExpr, input: &StatInfo, rows: f64| {
+            identity_column(key).is_some_and(|column| {
+                evidence.is_unique(&input.statistics, column, rows, condition.is_null_equal)
+            })
+        };
+        (
+            is_unique(left, &self.left_input, left_rows),
+            is_unique(right, &self.right_input, right_rows),
+        )
+    }
+
+    /// Whether each input row appears at most once in the output, per side.
+    /// Joins bounded by one input keep that input's rows at most once; other
+    /// joins do so for a side only when the peer key is confidently unique.
+    fn rows_kept_at_most_once(
+        &self,
+        join: &Join,
+        left_bound: f64,
+        right_bound: f64,
+    ) -> (bool, bool) {
+        match self.join_type {
+            JoinType::LeftSemi
+            | JoinType::LeftAnti
+            | JoinType::LeftAny
+            | JoinType::LeftSingle
+            | JoinType::RightMark => (true, false),
+            JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::RightAny
+            | JoinType::RightSingle
+            | JoinType::LeftMark => (false, true),
+            JoinType::Inner
+            | JoinType::InnerAny
+            | JoinType::Left
+            | JoinType::Right
+            | JoinType::Full => join
+                .equi_conditions
+                .iter()
+                .map(|condition| {
+                    self.condition_unique_keys(
+                        condition,
+                        left_bound,
+                        right_bound,
+                        UniqueKeyEvidence::Confident,
+                    )
+                })
+                .fold(
+                    (false, false),
+                    |(left, right), (left_unique, right_unique)| {
+                        (left || right_unique, right || left_unique)
+                    },
+                ),
+            _ => (false, false),
+        }
+    }
+
+    /// Observed NDV columns of the inputs whose rows appear at most once in
+    /// the output. A join that may repeat an input row repeats its key values,
+    /// so that input's NDV no longer shows uniqueness.
+    fn output_observed_ndv_columns(&self) -> ColumnSet {
+        let (left, right) = self.keeps_observed_ndv;
+        let mut columns = ColumnSet::new();
+        if left {
+            columns.extend(&self.left_input.statistics.observed_ndv_columns);
+        }
+        if right {
+            columns.extend(&self.right_input.statistics.observed_ndv_columns);
+        }
+        columns
     }
 
     /// Conservative bound of the rows that may reach the join output. Joins
