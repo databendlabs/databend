@@ -72,10 +72,12 @@ pub struct HashShuffleWriter {
     /// Rows decide whether there is anything to send: a block may have no columns
     /// (e.g. under `count(*)`) or only NULL columns, and so a zero memory size.
     buffered_rows: usize,
+    /// Bytes of the buffered rows and of the routed blocks.
     buffered_bytes: usize,
     /// Blocks routed whole to each partition, sent after its rows.
     routed: Vec<Vec<DataBlock>>,
     routed_blocks: usize,
+    routed_bytes: usize,
     budget: usize,
     nodes: Vec<ShuffleNode>,
 }
@@ -102,6 +104,7 @@ impl HashShuffleWriter {
             buffered_bytes: 0,
             routed: vec![vec![]; num_partitions],
             routed_blocks: 0,
+            routed_bytes: 0,
             budget,
             nodes,
         }
@@ -150,7 +153,7 @@ impl HashShuffleWriter {
         self.stream.partition(partition_ids, block, false);
         // Constants stay constant in the partitions they fill alone, but are counted
         // as if expanded, so a block of constants still reaches the budget.
-        self.buffered_bytes = self.stream.memory_size();
+        self.buffered_bytes = self.stream.memory_size() + self.routed_bytes;
         Ok(self.buffered_bytes >= self.budget)
     }
 
@@ -172,7 +175,9 @@ impl HashShuffleWriter {
             if part.is_empty() && part.get_meta().is_none() {
                 continue;
             }
-            self.buffered_bytes += block_owned_bytes(&part);
+            let bytes = block_owned_bytes(&part);
+            self.routed_bytes += bytes;
+            self.buffered_bytes += bytes;
             self.routed[partition].push(part);
             self.routed_blocks += 1;
         }
@@ -192,6 +197,7 @@ impl HashShuffleWriter {
         self.buffered_rows = 0;
         self.buffered_bytes = 0;
         self.routed_blocks = 0;
+        self.routed_bytes = 0;
 
         let mut rows: Vec<Option<DataBlock>> = vec![None; self.num_partitions];
         for (partition, block) in self.stream.take_partitions(&HashSet::new()) {
@@ -576,6 +582,30 @@ mod tests {
             blocks[partition] = data_block;
             Ok(Some(blocks))
         }
+    }
+
+    /// Rows buffered after routed blocks still count the bytes of the routed blocks, as when a
+    /// partial aggregate emits its states and then forwards raw rows.
+    #[test]
+    fn test_writer_counts_routed_bytes_with_rows() -> Result<()> {
+        let (nodes, _receivers) = local_nodes(1, 4);
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(StatesScatter { num_partitions: 4 }));
+        let states_bytes = 1 << 20;
+        let rows = make_block(0..100);
+        assert!(rows.memory_size() < states_bytes);
+        let mut writer =
+            HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, states_bytes + 1);
+
+        assert!(!writer.add_block(states_block(2, states_bytes))?);
+        // The rows alone are far below the budget, the rows and the states reach it.
+        assert!(writer.add_block(rows)?);
+        assert!(writer.buffered_bytes > states_bytes);
+
+        writer.flush(None)?;
+        assert_eq!(writer.buffered_bytes, 0);
+        assert_eq!(writer.routed_bytes, 0);
+        Ok(())
     }
 
     /// Blocks routed whole count the bytes of their meta against the budget, and are delivered
