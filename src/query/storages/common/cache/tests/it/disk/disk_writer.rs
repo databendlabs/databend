@@ -35,6 +35,7 @@ use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
 use databend_storages_common_cache::disk::disk_file::read_entry;
 use databend_storages_common_cache::disk::disk_pool::DiskPool;
 use databend_storages_common_cache::disk::disk_writer::DiskWriter;
+use databend_storages_common_cache::disk::disk_writer::DropReason;
 use databend_storages_common_cache::disk::disk_writer::WriteJob;
 use databend_storages_common_cache::disk::disk_writer::WriterOptions;
 use databend_storages_common_cache::disk::fill_fence::FillFence;
@@ -148,9 +149,9 @@ fn idle(writer: &DiskWriter) -> bool {
 fn drops(writer: &DiskWriter) -> (u64, u64, u64) {
     let d = writer.drops();
     (
-        d.queue_full.load(Ordering::Relaxed),
-        d.rejected.load(Ordering::Relaxed),
-        d.io_error.load(Ordering::Relaxed),
+        d.total(DropReason::QueueFull),
+        d.total(DropReason::Rejected),
+        d.total(DropReason::IoError),
     )
 }
 

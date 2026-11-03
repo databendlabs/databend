@@ -22,8 +22,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use bytes::Bytes;
 use databend_common_base::runtime::spawn_blocking;
@@ -35,6 +37,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::cache::metrics_inc_cache_access_count;
 use databend_common_metrics::cache::metrics_inc_cache_hit_count;
+use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
 use databend_common_metrics::cache::metrics_inc_cache_miss_count;
 use log::info;
 use log::warn;
@@ -46,9 +49,11 @@ use crate::Pool;
 use crate::SingleFlight;
 use crate::disk::DiskOption;
 use crate::disk::disk_file::read_entry;
+pub use crate::disk::disk_pool::DiskKindEvents;
 use crate::disk::disk_pool::DiskPool;
 pub use crate::disk::disk_pool::DiskPoolStats;
 use crate::disk::disk_writer::DiskWriter;
+use crate::disk::disk_writer::DropReason;
 use crate::disk::disk_writer::WriteJob;
 use crate::disk::disk_writer::WriterOptions;
 use crate::disk::fill_fence::FillFence;
@@ -74,8 +79,38 @@ pub struct DiskCacheStats {
     pub dropped_io_error: u64,
 }
 
+/// What the disk cache did for one kind since it started, for its metrics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DiskKindStats {
+    /// Lookups served, the bytes served, and those served from the write queue.
+    pub hits: u64,
+    pub hit_bytes: u64,
+    pub queued_hits: u64,
+    /// Time spent reading cached files, in microseconds.
+    pub read_micros: u64,
+    pub misses: u64,
+    /// Bytes read from storage on misses of reads through the disk cache.
+    pub storage_read_bytes: u64,
+    /// Entries not written, by `DropReason`.
+    pub dropped: [u64; 3],
+    /// Written, evicted and invalidated entries.
+    pub events: DiskKindEvents,
+}
+
+#[derive(Default)]
+struct KindCounters {
+    hits: AtomicU64,
+    hit_bytes: AtomicU64,
+    queued_hits: AtomicU64,
+    read_micros: AtomicU64,
+    misses: AtomicU64,
+    storage_read_bytes: AtomicU64,
+}
+
 pub struct DiskCache {
     pools: [Arc<DiskPool>; 3],
+    /// By kind index.
+    counters: Box<[KindCounters]>,
     /// Capacities from the configured ratios, by pool index: what `default` restores.
     default_caps: [u64; 3],
     max_bytes: u64,
@@ -188,6 +223,7 @@ impl DiskCache {
             allowed: AtomicBool::new(true),
             kinds_enabled: CacheKind::all().map(|_| AtomicBool::new(true)).collect(),
             names: CacheKind::all().map(disk_name).collect(),
+            counters: CacheKind::all().map(|_| KindCounters::default()).collect(),
             flight: SingleFlight::default(),
             fence: Arc::new(FillFence::with_on_advance(Box::new(move |point| {
                 for pool in &fenced {
@@ -259,39 +295,53 @@ impl DiskCache {
         let name = self.metric_name(kind);
         metrics_inc_cache_access_count(1, name);
         let rel = key.rel_path(kind);
+        let counters = &self.counters[kind.index()];
+        let hit = |bytes: &Bytes| {
+            pool.record(true);
+            metrics_inc_cache_hit_count(1, name);
+            counters.hits.fetch_add(1, Ordering::Relaxed);
+            counters
+                .hit_bytes
+                .fetch_add(bytes.len() as u64, Ordering::Relaxed);
+        };
+        let miss = || {
+            pool.record(false);
+            metrics_inc_cache_miss_count(1, name);
+            counters.misses.fetch_add(1, Ordering::Relaxed);
+        };
         let Some((path, size)) = pool.lookup(&rel) else {
             // Read before and still waiting to be written: served, as the entry it becomes,
             // unless its object changed since. Concurrent scans of the same data then read it
             // from storage once.
             if let Some((bytes, started)) = self.writer.pending(pool.pool().index(), &rel) {
                 if pool.accepts(&rel, started) {
-                    pool.record(true);
-                    metrics_inc_cache_hit_count(1, name);
+                    hit(&bytes);
+                    counters.queued_hits.fetch_add(1, Ordering::Relaxed);
                     return Some(bytes);
                 }
             }
-            pool.record(false);
-            metrics_inc_cache_miss_count(1, name);
+            miss();
             return None;
         };
+        let start = Instant::now();
         let read = spawn_blocking(move || read_entry(path, size as usize)).await;
+        counters
+            .read_micros
+            .fetch_add(start.elapsed().as_micros() as u64, Ordering::Relaxed);
         match read {
             Ok(Ok(bytes)) => {
-                pool.record(true);
-                metrics_inc_cache_hit_count(1, name);
+                hit(&bytes);
                 Some(bytes)
             }
             Ok(Err(e)) => {
                 warn!("[DiskCache] dropping unreadable entry of {key}: {e}");
                 pool.remove(&rel);
-                pool.record(false);
-                metrics_inc_cache_miss_count(1, name);
+                miss();
                 None
             }
             Err(e) => {
                 warn!("[DiskCache] read task failed: {e}");
-                pool.record(false);
-                metrics_inc_cache_miss_count(1, name);
+                miss();
                 None
             }
         }
@@ -472,13 +522,37 @@ impl DiskCache {
         self.pool(kind).kind_usage(kind)
     }
 
+    /// Counts `bytes` read from storage for `kind` on a miss of a read through the disk cache.
+    pub(crate) fn record_storage_read(&self, kind: CacheKind, bytes: u64) {
+        metrics_inc_cache_miss_bytes(bytes, self.metric_name(kind));
+        self.counters[kind.index()]
+            .storage_read_bytes
+            .fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    /// See `DiskKindStats`.
+    pub fn kind_stats(&self, kind: CacheKind) -> DiskKindStats {
+        let c = &self.counters[kind.index()];
+        let drops = self.writer.drops();
+        DiskKindStats {
+            hits: c.hits.load(Ordering::Relaxed),
+            hit_bytes: c.hit_bytes.load(Ordering::Relaxed),
+            queued_hits: c.queued_hits.load(Ordering::Relaxed),
+            read_micros: c.read_micros.load(Ordering::Relaxed),
+            misses: c.misses.load(Ordering::Relaxed),
+            storage_read_bytes: c.storage_read_bytes.load(Ordering::Relaxed),
+            dropped: DropReason::ALL.map(|reason| drops.of(kind, reason)),
+            events: self.pool(kind).kind_events(kind),
+        }
+    }
+
     pub fn stats(&self) -> DiskCacheStats {
         let drops = self.writer.drops();
         DiskCacheStats {
             queued_bytes: self.writer.queued_bytes(),
-            dropped_queue_full: drops.queue_full.load(Ordering::Relaxed),
-            dropped_rejected: drops.rejected.load(Ordering::Relaxed),
-            dropped_io_error: drops.io_error.load(Ordering::Relaxed),
+            dropped_queue_full: drops.total(DropReason::QueueFull),
+            dropped_rejected: drops.total(DropReason::Rejected),
+            dropped_io_error: drops.total(DropReason::IoError),
         }
     }
 }

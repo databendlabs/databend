@@ -145,6 +145,21 @@ async fn test_disk_gauges_follow_cache_rows() {
             .await
     );
     wait_for(|| disk.stats().dropped_rejected == 1);
+    // A hit, a miss, and an object written then changed.
+    assert!(disk.get(kind, &key).await.is_some());
+    assert!(disk.get(kind, &DiskKey::whole("missing")).await.is_none());
+    let changed = DiskKey::whole("1/2/_b/y.parquet");
+    assert!(
+        disk.put(
+            kind,
+            &changed,
+            Bytes::from_static(b"old"),
+            &disk.begin_fill()
+        )
+        .await
+    );
+    wait_for(|| disk.contains(kind, &changed));
+    drop(disk.begin_change("1/2/_b/y.parquet").unwrap());
 
     let text = scrape(CacheMetricsCollector::of(manager.clone()));
     let rows = manager.rows();
@@ -187,15 +202,35 @@ async fn test_disk_gauges_follow_cache_rows() {
         sample(&text, "cache_disk_dropped_total", "reason=\"queue_full\""),
         Some(0)
     );
-    for reason in ["capacity", "disk_pressure"] {
-        let labels = format!("pool=\"data\",reason=\"{reason}\"");
+    // Per kind: what it served, wrote, lost. Files hold the value and a 4 byte checksum.
+    let get = |name: &str, extra: &str| {
+        sample(&text, &format!("{name}_total"), &format!("{labels}{extra}"))
+    };
+    assert_eq!(get("cache_disk_hit_bytes", ""), Some(5));
+    assert_eq!(get("cache_disk_queued_hit_count", ""), Some(0));
+    assert_eq!(get("cache_disk_write_count", ""), Some(2));
+    assert_eq!(get("cache_disk_write_bytes", ""), Some(9 + 7));
+    assert_eq!(get("cache_disk_invalidation_count", ""), Some(1));
+    assert_eq!(get("cache_disk_invalidation_bytes", ""), Some(7));
+    assert!(get("cache_disk_read_microseconds", "").is_some());
+    assert_eq!(get("cache_disk_storage_read_bytes", ""), Some(0));
+    for (reason, count) in [("queue_full", 0), ("rejected", 1), ("io_error", 0)] {
+        let reason = format!(",reason=\"{reason}\"");
         assert_eq!(
-            sample(&text, "cache_disk_eviction_count_total", &labels),
+            get("cache_disk_drop_count", &reason),
+            Some(count),
+            "{reason}"
+        );
+    }
+    for reason in ["capacity", "disk_pressure"] {
+        let reason = format!(",reason=\"{reason}\"");
+        assert_eq!(
+            get("cache_disk_eviction_count", &reason),
             Some(0),
             "{reason}"
         );
         assert_eq!(
-            sample(&text, "cache_disk_eviction_bytes_total", &labels),
+            get("cache_disk_eviction_bytes", &reason),
             Some(0),
             "{reason}"
         );

@@ -34,9 +34,15 @@
 //! `cache_pool_capacity_bytes`. Per disk pool: `cache_disk_pool_items`,
 //! `cache_disk_pool_used_bytes` and `cache_disk_pool_capacity_bytes`; for the disk cache as a
 //! whole, `cache_disk_queue_bytes` and the counter `cache_disk_dropped` by `reason`
-//! (`queue_full`, `rejected`, `io_error`). Counters per disk pool, by `reason` (`capacity`:
-//! room for a write or a lowered capacity; `disk_pressure`: the file system over
-//! `cache.disk.watermark_ratio`): `cache_disk_eviction_count` and `cache_disk_eviction_bytes`.
+//! (`queue_full`, `rejected`, `io_error`).
+//!
+//! Counters per kind on disk, since the process started (see `disk_kind_families`):
+//! `cache_disk_hit_bytes`, `cache_disk_queued_hit_count`, `cache_disk_read_microseconds`,
+//! `cache_disk_storage_read_bytes`, `cache_disk_write_count`, `cache_disk_write_bytes`,
+//! `cache_disk_drop_count` by `reason`, `cache_disk_eviction_count` and
+//! `cache_disk_eviction_bytes` by `reason` (`capacity`: room for a write or a lowered
+//! capacity; `disk_pressure`: the file system over `cache.disk.watermark_ratio`), and
+//! `cache_disk_invalidation_count` and `cache_disk_invalidation_bytes`.
 //!
 //! Counters, shared backend only, since the process started:
 //! - `cache_eviction_count` and `cache_eviction_bytes` per kind, by `reason`: `capacity` (room in
@@ -62,8 +68,11 @@ use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::counter::ConstCounter;
 use prometheus_client::metrics::gauge::ConstGauge;
 
+use crate::CacheKind;
 use crate::CacheManager;
+use crate::DiskCache;
 use crate::disk::disk_pool::Eviction;
+use crate::disk::disk_writer::DropReason;
 use crate::manager::CacheRow;
 
 /// Collects the metrics of one manager, or of the global one.
@@ -281,6 +290,92 @@ impl Families {
     }
 }
 
+/// Counters per kind on disk, labelled like its gauges (`cache_name` `disk_cache_<...>`, `pool`
+/// `disk`) and, where given, by `reason`. With `cache_hit_count`, `cache_miss_count` and
+/// `cache_miss_bytes` of the same names, they tell what each kind serves, misses, writes and
+/// loses, and how much.
+fn disk_kind_families(disk: &DiskCache) -> Vec<Family> {
+    let counter = Family::counter;
+    let mut hit_bytes = counter("cache_disk_hit_bytes", "Bytes served by the disk cache.");
+    let mut queued_hits = counter(
+        "cache_disk_queued_hit_count",
+        "Lookups served from entries still waiting to be written.",
+    );
+    let mut read_micros = counter(
+        "cache_disk_read_microseconds",
+        "Time spent reading disk cache files.",
+    );
+    let mut storage_read = counter(
+        "cache_disk_storage_read_bytes",
+        "Bytes read from storage on disk cache misses.",
+    );
+    let mut written = counter(
+        "cache_disk_write_count",
+        "Entries written to the disk cache.",
+    );
+    let mut written_bytes = counter("cache_disk_write_bytes", "Bytes written to the disk cache.");
+    let mut dropped = counter(
+        "cache_disk_drop_count",
+        "Entries not written to the disk cache, by reason.",
+    );
+    let mut evicted = counter(
+        "cache_disk_eviction_count",
+        "Entries evicted from the disk cache, by reason.",
+    );
+    let mut evicted_bytes = counter(
+        "cache_disk_eviction_bytes",
+        "Bytes evicted from the disk cache, by reason.",
+    );
+    let mut invalidated = counter(
+        "cache_disk_invalidation_count",
+        "Entries dropped because their object was rewritten or deleted.",
+    );
+    let mut invalidated_bytes = counter(
+        "cache_disk_invalidation_bytes",
+        "Bytes dropped because their object was rewritten or deleted.",
+    );
+    for kind in CacheKind::all().filter(|kind| kind.on_disk()) {
+        let stats = disk.kind_stats(kind);
+        let labels: Labels = vec![
+            ("cache_name", disk.metric_name(kind).to_string()),
+            ("pool", "disk".to_string()),
+        ];
+        hit_bytes.push(labels.clone(), stats.hit_bytes);
+        queued_hits.push(labels.clone(), stats.queued_hits);
+        read_micros.push(labels.clone(), stats.read_micros);
+        storage_read.push(labels.clone(), stats.storage_read_bytes);
+        written.push(labels.clone(), stats.events.written);
+        written_bytes.push(labels.clone(), stats.events.written_bytes);
+        invalidated.push(labels.clone(), stats.events.invalidated);
+        invalidated_bytes.push(labels.clone(), stats.events.invalidated_bytes);
+        for reason in DropReason::ALL {
+            dropped.push(
+                with(&labels, "reason", reason.name()),
+                stats.dropped[reason as usize],
+            );
+        }
+        for reason in Eviction::ALL {
+            let i = reason as usize;
+            let reason = with(&labels, "reason", reason.name());
+            evicted.push(reason.clone(), stats.events.evicted[i]);
+            evicted_bytes.push(reason, stats.events.evicted_bytes[i]);
+        }
+    }
+    vec![
+        hit_bytes,
+        queued_hits,
+        read_micros,
+        storage_read,
+        written,
+        written_bytes,
+        dropped,
+        evicted,
+        evicted_bytes,
+        invalidated,
+        invalidated_bytes,
+    ]
+}
+
 impl Collector for CacheMetricsCollector {
     fn encode(&self, mut encoder: DescriptorEncoder) -> Result<(), std::fmt::Error> {
         let Some(manager) = self.manager() else {
@@ -332,26 +427,8 @@ impl Collector for CacheMetricsCollector {
             ] {
                 dropped.push(vec![("reason", reason.to_string())], count);
             }
-            let mut evicted = Family::counter(
-                "cache_disk_eviction_count",
-                "Entries evicted from a disk cache pool, by reason.",
-            );
-            let mut evicted_bytes = Family::counter(
-                "cache_disk_eviction_bytes",
-                "Bytes evicted from a disk cache pool, by reason.",
-            );
-            for (pool, stats) in disk.pool_stats() {
-                for reason in Eviction::ALL {
-                    let labels: Labels = vec![
-                        ("pool", pool.name().to_string()),
-                        ("reason", reason.name().to_string()),
-                    ];
-                    let i = reason as usize;
-                    evicted.push(labels.clone(), stats.evicted[i]);
-                    evicted_bytes.push(labels, stats.evicted_bytes[i]);
-                }
-            }
-            families.extend([queued, dropped, evicted, evicted_bytes]);
+            families.extend([queued, dropped]);
+            families.extend(disk_kind_families(&disk));
         }
         if let Some(stats) = manager.reclaim_stats() {
             for (name, help, value) in [

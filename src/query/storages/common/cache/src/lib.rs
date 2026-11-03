@@ -70,6 +70,8 @@ pub use disk::DiskCacheStats;
 pub use disk::DiskCachedStorage;
 pub use disk::DiskFill;
 pub use disk::DiskKey;
+pub use disk::DiskKindEvents;
+pub use disk::DiskKindStats;
 pub use disk::DiskOption;
 pub use disk::DiskPoolStats;
 pub use disk::ObjectChange;

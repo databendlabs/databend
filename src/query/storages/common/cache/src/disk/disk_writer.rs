@@ -35,6 +35,7 @@ use log::warn;
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
+use crate::CacheKind;
 use crate::disk::disk_file::tmp_path;
 use crate::disk::disk_file::write_tmp;
 use crate::disk::disk_pool::DiskPool;
@@ -120,11 +121,64 @@ pub struct WriteJob {
 }
 
 /// Why an entry was not written, for `cache_disk_dropped`.
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DropReason {
+    /// The queue stayed full for `queue_wait`.
+    QueueFull,
+    /// Refused by its pool: too large, the pool or kind off, no room, or its object changed.
+    Rejected,
+    /// The file could not be written.
+    IoError,
+}
+
+impl DropReason {
+    pub const ALL: [DropReason; 3] = [
+        DropReason::QueueFull,
+        DropReason::Rejected,
+        DropReason::IoError,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            DropReason::QueueFull => "queue_full",
+            DropReason::Rejected => "rejected",
+            DropReason::IoError => "io_error",
+        }
+    }
+}
+
+/// Entries not written, by kind index and `DropReason`.
 pub struct DropCounters {
-    pub queue_full: AtomicU64,
-    pub rejected: AtomicU64,
-    pub io_error: AtomicU64,
+    per_kind: Box<[[AtomicU64; 3]]>,
+}
+
+impl Default for DropCounters {
+    fn default() -> Self {
+        DropCounters {
+            per_kind: CacheKind::all().map(|_| Default::default()).collect(),
+        }
+    }
+}
+
+impl DropCounters {
+    fn add(&self, rel: &str, reason: DropReason) {
+        if let Some(kind) = rel.split('/').next().and_then(CacheKind::from_name) {
+            self.per_kind[kind.index()][reason as usize].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Entries of `kind` dropped for `reason`.
+    pub fn of(&self, kind: CacheKind, reason: DropReason) -> u64 {
+        self.per_kind[kind.index()][reason as usize].load(Ordering::Relaxed)
+    }
+
+    /// Entries of every kind dropped for `reason`.
+    pub fn total(&self, reason: DropReason) -> u64 {
+        self.per_kind
+            .iter()
+            .map(|counts| counts[reason as usize].load(Ordering::Relaxed))
+            .sum()
+    }
 }
 
 struct Shared {
@@ -298,7 +352,7 @@ impl DiskWriter {
             }
             let now = Instant::now();
             if now >= deadline {
-                self.shared.drops.queue_full.fetch_add(1, Ordering::Relaxed);
+                self.shared.drops.add(&pending.key.1, DropReason::QueueFull);
                 return false;
             }
             let _ = tokio::time::timeout(deadline - now, room).await;
@@ -383,18 +437,18 @@ impl Shared {
                 Ok(published) => {
                     job.pool.delete(&published.victims);
                     if !published.indexed {
-                        self.drops.rejected.fetch_add(1, Ordering::Relaxed);
+                        self.drops.add(&job.rel, DropReason::Rejected);
                     }
                 }
                 Err(e) => {
-                    self.drops.io_error.fetch_add(1, Ordering::Relaxed);
+                    self.drops.add(&job.rel, DropReason::IoError);
                     warn!("[DiskCache] failed to write {path:?}: {e}");
                 }
             }
             // Left when the entry was rejected or its write failed.
             let _ = std::fs::remove_file(&tmp);
         } else {
-            self.drops.rejected.fetch_add(1, Ordering::Relaxed);
+            self.drops.add(&job.rel, DropReason::Rejected);
         }
     }
 

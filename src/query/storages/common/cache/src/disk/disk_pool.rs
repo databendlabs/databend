@@ -115,6 +115,20 @@ pub struct DiskPoolStats {
     pub evicted_bytes: [u64; 2],
 }
 
+/// What happened to the entries of one kind in a pool since it started.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DiskKindEvents {
+    /// Entries written and indexed, and their bytes.
+    pub written: u64,
+    pub written_bytes: u64,
+    /// Entries evicted, and their bytes, by `Eviction` reason.
+    pub evicted: [u64; 2],
+    pub evicted_bytes: [u64; 2],
+    /// Entries dropped because their object was rewritten or deleted (`begin_change`).
+    pub invalidated: u64,
+    pub invalidated_bytes: u64,
+}
+
 /// Why least recently used entries leave a pool.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Eviction {
@@ -179,9 +193,8 @@ struct State {
     scanned: bool,
     /// Kinds turned off, by kind index.
     kinds_off: Vec<bool>,
-    /// See `DiskPoolStats::evicted`.
-    evicted: [u64; 2],
-    evicted_bytes: [u64; 2],
+    /// By kind index.
+    events: Vec<DiskKindEvents>,
 }
 
 impl State {
@@ -198,8 +211,21 @@ impl State {
         // Detached first: taking each entry out then finds no set to update.
         let rels = self.objects.remove(object).unwrap_or_default();
         rels.into_iter()
-            .filter(|rel| self.pop(rel).is_some())
+            .filter(|rel| {
+                let Some(size) = self.pop(rel) else {
+                    return false;
+                };
+                if let Some(events) = self.events_of(rel) {
+                    events.invalidated += 1;
+                    events.invalidated_bytes += size;
+                }
+                true
+            })
             .collect()
+    }
+
+    fn events_of(&mut self, rel: &str) -> Option<&mut DiskKindEvents> {
+        kind_of(rel).map(|kind| &mut self.events[kind.index()])
     }
 
     /// Records `object` as invalidated at `at`, unless at a later point already: invalidations
@@ -266,8 +292,10 @@ impl State {
         let (rel, size) = self.index.pop_by_policy()?;
         let size = size.get_inner().0;
         self.taken(&rel, size);
-        self.evicted[reason.index()] += 1;
-        self.evicted_bytes[reason.index()] += size;
+        if let Some(events) = self.events_of(&rel) {
+            events.evicted[reason.index()] += 1;
+            events.evicted_bytes[reason.index()] += size;
+        }
         Some((rel, size))
     }
 
@@ -380,8 +408,9 @@ impl DiskPool {
                 reloaded: false,
                 scanned: false,
                 kinds_off: CacheKind::all().map(|_| false).collect(),
-                evicted: [0; 2],
-                evicted_bytes: [0; 2],
+                events: CacheKind::all()
+                    .map(|_| DiskKindEvents::default())
+                    .collect(),
             }),
             hit: AtomicU64::new(0),
             miss: AtomicU64::new(0),
@@ -520,6 +549,10 @@ impl DiskPool {
             }
         }
         state.insert(rel.clone(), written);
+        if let Some(events) = state.events_of(&rel) {
+            events.written += 1;
+            events.written_bytes += written;
+        }
         let mut victims = Vec::new();
         while state.used() > state.cap {
             match state.pop_lru(Eviction::Capacity) {
@@ -743,8 +776,8 @@ impl DiskPool {
             cap: state.cap,
             hit: self.hit.load(Ordering::Relaxed),
             miss: self.miss.load(Ordering::Relaxed),
-            evicted: state.evicted,
-            evicted_bytes: state.evicted_bytes,
+            evicted: [0, 1].map(|i| state.events.iter().map(|e| e.evicted[i]).sum()),
+            evicted_bytes: [0, 1].map(|i| state.events.iter().map(|e| e.evicted_bytes[i]).sum()),
         }
     }
 
@@ -791,6 +824,11 @@ impl DiskPool {
     /// Items and bytes of `kind` in the pool.
     pub fn kind_usage(&self, kind: CacheKind) -> (u64, u64) {
         self.state.lock().kinds[kind.index()]
+    }
+
+    /// See `DiskKindEvents`.
+    pub fn kind_events(&self, kind: CacheKind) -> DiskKindEvents {
+        self.state.lock().events[kind.index()]
     }
 
     /// Rebuilds the index from the files under the root, in scan order, and deletes what does

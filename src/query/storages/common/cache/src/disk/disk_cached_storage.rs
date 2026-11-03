@@ -27,7 +27,6 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
 use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
@@ -188,7 +187,7 @@ impl DiskCachedStorage {
         let ticket = disk.begin_fill();
         let load = async {
             let bytes = self.read_storage(path, range.clone()).await?;
-            metrics_inc_cache_miss_bytes(bytes.len() as u64, disk.metric_name(kind));
+            disk.record_storage_read(kind, bytes.len() as u64);
             if fill.writes() {
                 disk.put(kind, &key, bytes.clone(), &ticket).await;
             }
@@ -280,7 +279,7 @@ impl DiskCachedStorage {
             MergeIOReader::merge_io_read(settings, self.op.clone(), path, &misses).await?;
         let miss_bytes: u64 = misses.iter().map(|(_, r)| r.end - r.start).sum();
         if miss_bytes > 0 {
-            metrics_inc_cache_miss_bytes(miss_bytes, disk.metric_name(kind));
+            disk.record_storage_read(kind, miss_bytes);
         }
         if fill.writes() {
             let puts = misses.iter().map(|(id, range)| {

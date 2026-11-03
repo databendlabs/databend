@@ -28,6 +28,8 @@ mod key;
 
 pub use disk_cache::DiskCache;
 pub use disk_cache::DiskCacheStats;
+pub use disk_cache::DiskKindEvents;
+pub use disk_cache::DiskKindStats;
 pub use disk_cache::DiskPoolStats;
 pub use disk_cache::ObjectChange;
 pub use disk_cache::split_caps;
