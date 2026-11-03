@@ -518,7 +518,7 @@ impl InvertedIndexMerger {
         for output in &mut self.outputs {
             let fieldnorm_file = output.segment.open_read(SegmentComponent::FieldNorms)?;
             fieldnorms.push(FieldNormReaders::open(fieldnorm_file)?);
-            serializers.push(InvertedIndexSerializer::open(&mut output.segment)?);
+            serializers.push(InvertedIndexSerializer::open(&output.segment)?);
         }
 
         self.check_interrupt()?;
@@ -800,6 +800,7 @@ impl InvertedIndexMerger {
             let segment = output.segment.clone().with_max_doc(output.num_rows);
             let meta = IndexMeta {
                 index_settings: output.index.settings().clone(),
+                persisted_custom_extensions: Vec::new(),
                 segments: vec![segment.meta().clone()],
                 schema: self.schema.clone(),
                 opstamp: 0,
@@ -933,14 +934,15 @@ mod tests {
     use opendal::raw::RpRead;
     use opendal::raw::RpWrite;
     use opendal::services::Memory;
+    use tantivy::IndexBuilder;
     use tantivy::IndexSettings;
-    use tantivy::SingleSegmentIndexWriter;
     use tantivy::directory::CompositeFile;
     use tantivy::directory::RamDirectory;
     use tantivy::schema::JsonObjectOptions;
     use tantivy::schema::OwnedValue;
     use tantivy::schema::TextFieldIndexing;
     use tantivy::schema::TextOptions;
+    use tantivy::tokenizer::RAW_TOKENIZER_NAME;
 
     use super::*;
     use crate::init_test_runtime;
@@ -965,7 +967,7 @@ mod tests {
                 "meta",
                 JsonObjectOptions::default()
                     .set_indexing_options(indexing)
-                    .set_fast(Some("raw")),
+                    .set_fast(RAW_TOKENIZER_NAME),
             );
         }
         builder.build()
@@ -1002,8 +1004,11 @@ mod tests {
     }
 
     fn build<D: Directory>(directory: D, schema: &Schema, ids: &[u32]) -> Index {
-        let index = Index::create(directory, schema.clone(), settings()).unwrap();
-        let mut writer = SingleSegmentIndexWriter::new(index, 16 * 1024 * 1024).unwrap();
+        let mut writer = IndexBuilder::new()
+            .schema(schema.clone())
+            .settings(settings())
+            .single_segment_index_writer(directory, 16 * 1024 * 1024)
+            .unwrap();
         for id in ids {
             writer.add_document(document(schema, *id)).unwrap();
         }
@@ -1045,7 +1050,7 @@ mod tests {
         }
     }
 
-    fn meta_path(component: SegmentComponent) -> &'static str {
+    fn meta_path(component: &SegmentComponent) -> &'static str {
         match component {
             SegmentComponent::Terms => ".term",
             SegmentComponent::Postings => ".idx",
@@ -1124,10 +1129,10 @@ mod tests {
                 SegmentComponent::Store,
             ] {
                 assert_eq!(
-                    component_bytes(&directory, &index, component),
-                    component_bytes(&reference_directory, &reference, component),
+                    component_bytes(&directory, &index, component.clone()),
+                    component_bytes(&reference_directory, &reference, component.clone()),
                     "output {output} {:?}",
-                    meta_path(component)
+                    meta_path(&component)
                 );
             }
             let merged = component_bytes(&directory, &index, SegmentComponent::Postings);
@@ -1286,10 +1291,10 @@ mod tests {
                 SegmentComponent::FieldNorms,
             ] {
                 assert_eq!(
-                    component_bytes(&heap_dir, &heap_index, component),
-                    component_bytes(&sorted_dir, &sorted_index, component),
+                    component_bytes(&heap_dir, &heap_index, component.clone()),
+                    component_bytes(&sorted_dir, &sorted_index, component.clone()),
                     "output {output} {:?}",
-                    meta_path(component)
+                    meta_path(&component)
                 );
             }
         }
