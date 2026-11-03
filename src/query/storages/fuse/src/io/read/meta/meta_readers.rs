@@ -344,7 +344,13 @@ mod thrift_file_meta_read {
         len_hint: Option<u64>,
         fill: DiskFill,
     ) -> Result<ParquetMetaData> {
-        read_footer(storage.operator(), path, len_hint, |range| async move {
+        // The length, when no hint gives it, from the disk cache too: a cached footer then
+        // needs no storage request.
+        let len = match len_hint {
+            Some(len) => len,
+            None => storage.content_length(kind, path, fill).await?,
+        };
+        read_footer(storage.operator(), path, Some(len), |range| async move {
             storage.read(kind, path, Some(range), fill).await
         })
         .await

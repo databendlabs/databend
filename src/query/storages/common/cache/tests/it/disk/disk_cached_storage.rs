@@ -598,3 +598,34 @@ async fn test_maintenance_reads_bypass_the_disk_cache() {
     assert_eq!(accesses(), before);
     assert!(!disk.contains(data(), &DiskKey::range(PATH, 20..30)));
 }
+
+/// The length of an object is cached as one of its units: once cached it needs no storage
+/// request, here none can succeed, and it is dropped with the object's other units when the
+/// object changes.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_content_length_is_cached_until_the_object_changes() {
+    let dir = TempDir::new().unwrap();
+    let (op, disk, storage) = setup(&dir).await;
+    let len = storage
+        .content_length(data(), PATH, DiskFill::ReadWrite)
+        .await
+        .unwrap();
+    assert_eq!(len, object().len() as u64);
+    wait_for(|| disk.contains(data(), &DiskKey::length(PATH)));
+    op.delete(PATH).await.unwrap();
+    assert_eq!(
+        storage
+            .content_length(data(), PATH, DiskFill::ReadWrite)
+            .await
+            .unwrap(),
+        len
+    );
+    drop(storage.begin_change(PATH).unwrap());
+    assert!(!disk.contains(data(), &DiskKey::length(PATH)));
+    assert!(
+        storage
+            .content_length(data(), PATH, DiskFill::ReadWrite)
+            .await
+            .is_err()
+    );
+}
