@@ -515,7 +515,7 @@ async fn test_entry_indexed_while_queued_evicts_nothing() {
     // could not make it fit, and the watermark is not checked for it either.
     // Four writes of a quarter of the pool each, in flight.
     let held: Vec<String> = (0..4)
-        .map(|i| DiskKey::whole(&format!("held{i}")).rel_path(meta_kind))
+        .map(|i| DiskKey::whole(format!("held{i}")).rel_path(meta_kind))
         .collect();
     for rel in &held {
         let r = meta.reserve(rel, 2_400);
