@@ -122,6 +122,31 @@ SELECT length(array_filter([now()], x -> x < now() + interval 1 second)) FROM t 
 ----
 1
 
+# COUNT can be folded from statistics derived with the query time. The
+# expected count is computed from now() in the same query, so the result is 1
+# for every execution; a plan reused across seconds of different parity would
+# return 0.
+query B
+SELECT count(v) = if(to_second(now()) % 2 = 0, 3, 0) FROM (SELECT lag(if(to_second(now()) % 2 = 0, 1, NULL), 0) OVER (ORDER BY a) AS v FROM t) AS w;
+----
+1
+
+statement ok
+SELECT sleep(1);
+
+query B
+SELECT count(v) = if(to_second(now()) % 2 = 0, 3, 0) FROM (SELECT lag(if(to_second(now()) % 2 = 0, 1, NULL), 0) OVER (ORDER BY a) AS v FROM t) AS w;
+----
+1
+
+statement ok
+SELECT sleep(1);
+
+query B
+SELECT count(v) = if(to_second(now()) % 2 = 0, 3, 0) FROM (SELECT lag(if(to_second(now()) % 2 = 0, 1, NULL), 0) OVER (ORDER BY a) AS v FROM t) AS w;
+----
+1
+
 # Binding flags the result cache as ineligible. A planner-cache hit must also
 # restore that flag, even though binding is skipped.
 statement ok

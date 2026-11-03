@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_sql::plans::Plan;
 
+use super::table_statistics;
+use crate::framework::LiteTableContext;
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::setup_context;
 
@@ -23,6 +28,13 @@ use crate::framework::golden::setup_context;
 /// store such plans.
 async fn holds_query_specific_value(case: &SqlTestCase) -> Result<bool> {
     let ctx = setup_context(case).await?;
+    plan_holds_query_specific_value(&ctx, case).await
+}
+
+async fn plan_holds_query_specific_value(
+    ctx: &Arc<LiteTableContext>,
+    case: &SqlTestCase,
+) -> Result<bool> {
     let raw_plan = ctx.bind_sql(case.sql).await?;
     let optimized_plan = ctx.optimize_plan(raw_plan).await?;
     let Plan::Query { metadata, .. } = &optimized_plan else {
@@ -111,4 +123,57 @@ const RIGHT_TABLE: &str = "CREATE TABLE plan_cache_right
 (
     k INTEGER,
     ts TIMESTAMP
+)";
+
+/// `RuleFoldCountAggregate` replaces `count(v)` with a constant computed from statistics. The
+/// statistics are derived with the query's function context, so with `now()` in the input the
+/// constant is valid only for this query. The test context fixes `now()` to the Unix epoch
+/// (second 0), so the `if` below yields 1 and the window output has exactly zero NULLs.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_count_folded_from_time_dependent_statistics() -> Result<()> {
+    let cases = [
+        (true, SqlTestCase {
+            name: "count_over_now_dependent_window",
+            description: "The exact NULL count of the lag output depends on now().",
+            setup_sqls: &[],
+            sql: "SELECT count(v) FROM (SELECT lag(if(to_second(now()) % 2 = 0, 1, NULL), 0) OVER (ORDER BY k) AS v FROM plan_cache_counted) AS w",
+        }),
+        (false, SqlTestCase {
+            name: "count_over_constant_window",
+            description: "The same fold over a constant does not depend on the query.",
+            setup_sqls: &[],
+            sql: "SELECT count(v) FROM (SELECT lag(1, 0) OVER (ORDER BY k) AS v FROM plan_cache_counted) AS w",
+        }),
+        (false, SqlTestCase {
+            name: "count_star",
+            description: "count(*) is folded from the table row count alone.",
+            setup_sqls: &[],
+            sql: "SELECT count(*) FROM plan_cache_counted",
+        }),
+    ];
+
+    for (expected, case) in &cases {
+        let ctx = LiteTableContext::create().await?;
+        ctx.register_table_sql_with_stats(
+            COUNTED_TABLE,
+            Some(table_statistics(2)),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .await?;
+        assert_eq!(
+            plan_holds_query_specific_value(&ctx, case).await?,
+            *expected,
+            "{}: {}",
+            case.name,
+            case.description
+        );
+    }
+
+    Ok(())
+}
+
+const COUNTED_TABLE: &str = "CREATE TABLE plan_cache_counted
+(
+    k INTEGER NOT NULL
 )";
