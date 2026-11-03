@@ -47,10 +47,12 @@ use crate::plans::TopN;
 pub struct RulePushDownRankLimitAggregate {
     matchers: Vec<Matcher>,
     max_limit: usize,
+    // Whether ordering by aggregate results also pushes the limit down, see `apply_sort`.
+    enable_final_top_n: bool,
 }
 
 impl RulePushDownRankLimitAggregate {
-    pub fn new(max_limit: usize) -> Self {
+    pub fn new(max_limit: usize, enable_final_top_n: bool) -> Self {
         Self {
             matchers: vec![
                 match_op!(Limit -> Aggregate -> *),
@@ -60,6 +62,7 @@ impl RulePushDownRankLimitAggregate {
                 match_op!(TopN -> EvalScalar -> Aggregate -> *),
             ],
             max_limit,
+            enable_final_top_n,
         }
     }
 
@@ -188,7 +191,20 @@ impl RulePushDownRankLimitAggregate {
         let is_order_subset = order_items
             .iter()
             .all(|k| agg_limit.group_items.iter().any(|g| g.index == k.index));
-        if !is_order_subset {
+        // Ordered by aggregate results too: only the final aggregation can rank the groups, and
+        // it keeps the first `limit` rows while producing them, so `limit` must be small.
+        let is_order_output = self.enable_final_top_n
+            && limit <= self.max_limit
+            && !agg_limit.group_items.is_empty()
+            && agg_limit.grouping_sets.is_none()
+            && order_items.iter().all(|k| {
+                agg_limit.group_items.iter().any(|g| g.index == k.index)
+                    || agg_limit
+                        .aggregate_functions
+                        .iter()
+                        .any(|f| f.index == k.index)
+            });
+        if !is_order_subset && !is_order_output {
             return Ok(());
         }
 
@@ -213,7 +229,7 @@ impl RulePushDownRankLimitAggregate {
 
         agg_limit.rank_limit = Some((sort_items.clone(), limit));
 
-        let aggregate_input = if sort_items.len() == 1 {
+        let aggregate_input = if is_order_subset && sort_items.len() == 1 {
             Arc::new(Self::push_down_scan_order(
                 agg_limit_expr.unary_child(),
                 &sort_items,

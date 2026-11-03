@@ -45,6 +45,7 @@ pub struct OptimizerContext {
     enable_dphyp: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
     enable_top_n: RwLock<bool>,
+    enable_aggregate_final_top_n: RwLock<bool>,
     skip_list: HashSet<String>,
     skip_list_str: String,
     grouping_sets_to_union: bool,
@@ -92,6 +93,7 @@ impl OptimizerContext {
             enable_dphyp: RwLock::new(true),
             max_push_down_limit: RwLock::new(10000),
             enable_top_n: RwLock::new(false),
+            enable_aggregate_final_top_n: RwLock::new(false),
             sample_executor: RwLock::new(None),
             skip_list,
             skip_list_str,
@@ -106,6 +108,7 @@ impl OptimizerContext {
         *self.enable_dphyp.write() = settings.get_enable_dphyp()?;
         *self.max_push_down_limit.write() = settings.get_max_push_down_limit()?;
         *self.enable_top_n.write() = settings.get_enable_top_n()?;
+        *self.enable_aggregate_final_top_n.write() = settings.get_enable_aggregate_final_top_n()?;
         *self.enable_trace.write() = settings.get_enable_optimizer_trace()?;
 
         Ok(self)
@@ -177,6 +180,10 @@ impl OptimizerContext {
 
     pub fn get_enable_top_n(&self) -> bool {
         *self.enable_top_n.read()
+    }
+
+    pub fn get_enable_aggregate_final_top_n(&self) -> bool {
+        *self.enable_aggregate_final_top_n.read()
     }
 
     pub fn set_flag(self: &Arc<Self>, name: &str, value: bool) -> &Arc<Self> {

@@ -27,9 +27,11 @@ use super::HashTableConfig;
 use super::LOAD_FACTOR;
 use super::MAX_PAGE_SIZE;
 use super::Payload;
+use super::StateAddr;
 use super::group_hash_entries;
 use super::hash_index_adapter::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
+use super::payload::GroupRows;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
@@ -345,7 +347,8 @@ impl AggregateHashTable {
             for (i, entry) in state.empty_vector[..row_count].iter_mut().enumerate() {
                 *entry = i.into();
             }
-            self.payload.append_rows(state, row_count, group_columns);
+            self.payload
+                .append_rows(state, row_count, GroupRows::Columns(group_columns), None);
             row_count
         } else if let Some(new_group_count) =
             self.probe_and_create_by_codes(state, group_columns, row_count, group_state)
@@ -359,7 +362,7 @@ impl AggregateHashTable {
                 group_state.dict_hashes(row_count),
                 0..row_count,
             );
-            self.probe_and_create(state, group_columns, row_count)
+            self.probe_and_create(state, GroupRows::Columns(group_columns), row_count, None)
         };
 
         if !self.payload.aggrs.is_empty() {
@@ -486,7 +489,8 @@ impl AggregateHashTable {
             // Functions map dictionary values without changing codes, so distinct codes can
             // produce equal values. Probe representatives normally to find their actual groups
             // before reusing the addresses for rows with the same code.
-            let count = self.probe_and_create(state, (&keys).into(), distinct);
+            let count =
+                self.probe_and_create(state, GroupRows::Columns((&keys).into()), distinct, None);
             for (rank, row) in representatives.iter().enumerate() {
                 let code = row_codes[*row as usize] as usize;
                 group_state.code_addresses[code] = state.addresses[rank];
@@ -505,8 +509,9 @@ impl AggregateHashTable {
     fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
-        group_columns: ProjectedBlock,
+        groups: GroupRows,
         row_count: usize,
+        source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) -> usize {
         // exceed capacity or should resize
         if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
@@ -516,7 +521,8 @@ impl AggregateHashTable {
 
         let mut adapter = AdapterImpl {
             payload: &mut self.payload,
-            group_columns,
+            groups,
+            source_states,
         };
         self.hash_index
             .probe_and_create(state, row_count, &mut adapter)
@@ -564,28 +570,45 @@ impl AggregateHashTable {
     ) -> Result<()> {
         flush_state.clear();
 
-        while payload.flush(flush_state) {
+        // Probe with the rows, without building their group columns.
+        while payload.scan_rows(flush_state) {
             let row_count = flush_state.row_count;
 
             let state = &mut *flush_state.probe_state;
-            let _ = self.probe_and_create(state, (&flush_state.group_columns).into(), row_count);
+            state.new_groups[..row_count].fill(false);
+            let _ = self.probe_and_create(
+                state,
+                GroupRows::Rows(&flush_state.addresses),
+                row_count,
+                Some(&flush_state.state_places),
+            );
 
+            let Some(layout) = self.payload.row_layout.states_layout.as_ref() else {
+                continue;
+            };
             let places = &mut state.state_places[..row_count];
+            for (place, ptr) in places.iter_mut().zip(&state.addresses[..row_count]) {
+                *place = ptr.state_addr(&self.payload.row_layout)
+            }
+            let rhses = &mut flush_state.state_places[..row_count];
+            let aggrs = self.payload.aggrs.iter().zip(layout.states_loc.iter());
 
-            // set state places
-            if !self.payload.aggrs.is_empty() {
-                for (place, ptr) in places.iter_mut().zip(&state.addresses[..row_count]) {
-                    *place = ptr.state_addr(&self.payload.row_layout)
+            // The new groups initialized the states that need manual drop,
+            for (aggr, loc) in aggrs.clone().filter(|(a, _)| a.state().need_manual_drop()) {
+                aggr.merge_states_keys(AggregateStateSet::new(places, loc), rhses)?;
+            }
+            // and copied the others: only merge those of the found groups.
+            let mut found = 0;
+            for row in 0..row_count {
+                if !state.new_groups[row] {
+                    places[found] = places[row];
+                    rhses[found] = rhses[row];
+                    found += 1;
                 }
             }
-
-            if let Some(layout) = self.payload.row_layout.states_layout.as_ref() {
-                let rhses = &flush_state.state_places[..row_count];
-                for (aggr, loc) in self.payload.aggrs.iter().zip(layout.states_loc.iter()) {
-                    for (place, rhs) in places.iter().zip(rhses.iter()) {
-                        aggr.merge_states(AggrState::new(*place, loc), AggrState::new(*rhs, loc))?;
-                    }
-                }
+            for (aggr, loc) in aggrs.filter(|(a, _)| !a.state().need_manual_drop()) {
+                let places = AggregateStateSet::new(&places[..found], loc);
+                aggr.merge_states_keys(places, &rhses[..found])?;
             }
         }
 

@@ -93,12 +93,12 @@ fn test_select_like_over_dictionary() {
         // correct results. Ordinary strings must instead use the fallback.
         assert!(
             evaluator
-                .try_like_encoded(&column_ref, &pattern, false)
+                .try_like_encoded(&column_ref, &pattern, false, None)
                 .is_some()
         );
         assert!(
             Evaluator::new(&plain, &func_ctx, &BUILTIN_FUNCTIONS)
-                .try_like_encoded(&column_ref, &pattern, false)
+                .try_like_encoded(&column_ref, &pattern, false, None)
                 .is_none()
         );
 
