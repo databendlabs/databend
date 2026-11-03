@@ -237,7 +237,7 @@ async fn prepare_bloom_index_read_source(
 }
 
 /// Whether to read the index file whole: it is small, its footer is not in memory, and the
-/// disk cache keeps it whole, as a filter unit, or keeps no footer either. Read whole, the
+/// disk cache can keep it whole, as a filter unit, or keeps no footer either. Read whole, the
 /// footer is not read through the meta pool, which would then never serve it.
 fn should_read_whole_bloom_index(
     path: &str,
@@ -253,7 +253,7 @@ fn should_read_whole_bloom_index(
         return false;
     }
     let fill = metas.disk_fill();
-    storage.uses_disk(CacheKind::of::<bloom::Filter>(), fill)
+    storage.admits(CacheKind::of::<bloom::Filter>(), index_length, fill)
         || !storage.uses_disk(CacheKind::of::<bloom::IndexMeta>(), fill)
 }
 
@@ -393,10 +393,11 @@ mod tests {
             path, &settings, 2048, &storage
         ));
 
-        // With a disk cache: read whole when the file is kept whole in the index pool, not
-        // when only the footer would be kept, in the meta pool.
+        // With a disk cache: read whole when the file can be kept whole in the index pool,
+        // not when only the footer would be kept, in the meta pool: the index pool is off, or
+        // too small for the file (an entry is at most a quarter of its pool).
         let dir = tempfile::TempDir::new()?;
-        for (index_pool, whole) in [(1 << 20, true), (0, false)] {
+        for (index_pool, whole) in [(1 << 20, true), (0, false), (1_000, false)] {
             let disk = DiskCache::new(dir.path(), 1 << 30, [1 << 20, index_pool, 1 << 20], false)?;
             let storage = DiskCachedStorage::with_disk(operator.clone(), Some(Arc::new(disk)));
             assert_eq!(

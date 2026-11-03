@@ -134,6 +134,12 @@ impl DiskCachedStorage {
         &self.op
     }
 
+    /// Whether a read of `len` bytes of `kind` with `fill` may be kept by the disk cache.
+    pub fn admits(&self, kind: CacheKind, len: u64, fill: DiskFill) -> bool {
+        self.disk_for(kind, fill)
+            .is_some_and(|disk| disk.admits(kind, len))
+    }
+
     /// Whether reads of `kind` with `fill` go through the disk cache.
     pub fn uses_disk(&self, kind: CacheKind, fill: DiskFill) -> bool {
         self.disk_for(kind, fill).is_some()

@@ -243,6 +243,12 @@ impl DiskCache {
             && self.pool(kind).cap() > 0
     }
 
+    /// Whether an entry of `kind` of `len` bytes can be kept: the kind is on and the entry not
+    /// too large for its pool.
+    pub fn admits(&self, kind: CacheKind, len: u64) -> bool {
+        self.is_enabled(kind) && self.pool(kind).admits(len)
+    }
+
     /// The bytes of `key`, or `None`. A file missing or failing its checksum is dropped from
     /// the index and reported as a miss.
     pub async fn get(&self, kind: CacheKind, key: &DiskKey) -> Option<Bytes> {
