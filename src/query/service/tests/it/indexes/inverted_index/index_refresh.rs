@@ -326,10 +326,10 @@ async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_batch_reads_each_block_once_and_commits_once() -> anyhow::Result<()> {
+async fn test_refresh_batch_shared_reads_and_hint_scope() -> anyhow::Result<()> {
     for mode in [
         RefreshBatchMode::VirtualMetadata,
-        RefreshBatchMode::PrewarmedAsync,
+        RefreshBatchMode::StaleAndValid,
     ] {
         let fixture = refresh_batch_fixture(mode).await?;
         let (before, before_blocks) = refresh_batch_blocks(&fixture).await?;
@@ -352,32 +352,68 @@ async fn test_refresh_batch_reads_each_block_once_and_commits_once() -> anyhow::
             .map(|index| index.name.clone())
             .collect::<Vec<_>>();
         let mut pipeline = Pipeline::create();
-        // Duplicate and stale hints must neither duplicate work nor broaden its scope.
-        let mut hints = before.segments.clone();
-        hints.extend(before.segments.clone());
-        hints.push(("not-in-current-snapshot".into(), 4));
         assert_eq!(
-            fuse.do_refresh_indexes(ctx.clone(), &names, Some(hints), &mut pipeline)
+            fuse.do_refresh_indexes(ctx.clone(), &names, Some(vec![]), &mut pipeline)
                 .await?,
-            3
+            0
         );
-        // Retain the sum of per-index budgets after fan-in, not just the lane count.
+        assert!(pipeline.is_empty());
+        assert_eq!(ctx.get_scan_progress().get_values().rows, 0);
         assert_eq!(
-            pipeline.get_max_threads(),
-            if mode == RefreshBatchMode::VirtualMetadata {
-                16
-            } else {
-                8
-            }
+            refresh_batch_blocks(&fixture).await?.0.snapshot_id,
+            before.snapshot_id
         );
-        PipelineCompleteExecutor::try_create(pipeline, ExecutorSettings::try_create(ctx.clone())?)?
+
+        let mut previous_snapshot = before.snapshot_id;
+        for segments in [&before.segments[..1], &before.segments[1..]] {
+            let ctx = fixture.new_query_ctx().await?;
+            let table = fixture.latest_default_table().await?;
+            let fuse = FuseTable::try_from_table(table.as_ref())?;
+            let mut pipeline = Pipeline::create();
+            // Duplicate and stale hints must neither duplicate work nor broaden its scope.
+            let mut hints = segments.to_vec();
+            hints.extend_from_slice(segments);
+            hints.push(("not-in-current-snapshot".into(), 4));
+            assert_eq!(
+                fuse.do_refresh_indexes(ctx.clone(), &names, Some(hints), &mut pipeline)
+                    .await?,
+                segments.len() as u64
+            );
+            // Retain the sum of per-index budgets after fan-in, not just the lane count.
+            let indexes_per_block = if mode == RefreshBatchMode::VirtualMetadata {
+                8
+            } else {
+                4
+            };
+            assert_eq!(
+                pipeline.get_max_threads(),
+                indexes_per_block * segments.len()
+            );
+            PipelineCompleteExecutor::try_create(
+                pipeline,
+                ExecutorSettings::try_create(ctx.clone())?,
+            )?
             .execute()
             .await?;
-        assert_eq!(ctx.get_scan_progress().get_values().rows, 6);
-        // Each input row also has a 64-KiB unrelated column, which must not be read.
-        assert!(ctx.get_scan_progress().get_values().bytes < 16 * 1024);
+            assert_eq!(
+                ctx.get_scan_progress().get_values().rows,
+                segments.len() * 2
+            );
+            // Each row also has a 64-KiB unrelated column, which must not be read.
+            assert!(ctx.get_scan_progress().get_values().bytes < 16 * 1024);
+            let (published, blocks) = refresh_batch_blocks(&fixture).await?;
+            assert_eq!(published.prev_snapshot_id.unwrap().0, previous_snapshot);
+            previous_snapshot = published.snapshot_id;
+            if segments.len() == 1 {
+                for old in &before_blocks[1..] {
+                    assert_eq!(
+                        blocks.iter().find(|block| block.location == old.location),
+                        Some(old)
+                    );
+                }
+            }
+        }
         let (after, after_blocks) = refresh_batch_blocks(&fixture).await?;
-        assert_eq!(after.prev_snapshot_id.unwrap().0, before.snapshot_id);
         assert_eq!(after.summary.row_count, before.summary.row_count);
         assert_eq!(
             refresh_batch_non_index_metadata(&fixture).await?,
@@ -388,8 +424,16 @@ async fn test_refresh_batch_reads_each_block_once_and_commits_once() -> anyhow::
         for block in &after_blocks {
             assert_eq!(block.inverted_index_metas.as_ref().unwrap().len(), 2);
             assert_eq!(block.vector_index_metas.as_ref().unwrap().len(), 2);
-            assert_eq!(block.vector_stats.as_ref().unwrap().len(), 2);
-            // The unindexed third geometry's statistics are retained too.
+            // Changing the distance adds statistics without dropping the old distance.
+            assert_eq!(
+                block.vector_stats.as_ref().unwrap().len(),
+                if mode == RefreshBatchMode::VirtualMetadata {
+                    2
+                } else {
+                    3
+                }
+            );
+            // Statistics of geometries outside the current index are retained too.
             assert_eq!(block.spatial_stats.as_ref().unwrap().len(), 3);
             let bloom_location = block.bloom_filter_index_location.as_ref().unwrap();
             let old = before_blocks
@@ -408,21 +452,32 @@ async fn test_refresh_batch_reads_each_block_once_and_commits_once() -> anyhow::
                 None,
             )
             .await?;
-            for name in ["Ngram(0)_3_1048576", "Ngram(1)_3_1048576"] {
-                assert!(bloom.columns.iter().any(|(column, _)| column == name));
+            let gram = if mode == RefreshBatchMode::VirtualMetadata {
+                3
+            } else {
+                4
+            };
+            for name in [
+                "Ngram(0)_3_1048576".to_string(),
+                format!("Ngram(1)_{gram}_1048576"),
+            ] {
+                assert!(bloom.columns.iter().any(|(column, _)| column == &name));
             }
             let spatial = load_spatial_index_meta(
                 fuse.get_operator(),
                 &block.spatial_index_location.as_ref().unwrap().0,
             )
             .await?;
-            assert!(spatial.metadata.contains_key("geo0"));
-            assert!(spatial.metadata.contains_key("geo1"));
+            for name in ["geo0", "geo1"] {
+                assert_eq!(
+                    spatial.metadata[name],
+                    table.get_table_info().meta.indexes[name].version
+                );
+            }
             if mode != RefreshBatchMode::VirtualMetadata {
-                let old = before_blocks
-                    .iter()
-                    .find(|old| old.location == block.location)
-                    .unwrap();
+                for (key, value) in old.vector_stats.as_ref().unwrap() {
+                    assert_eq!(block.vector_stats.as_ref().unwrap().get(key), Some(value));
+                }
                 assert_eq!(
                     block.inverted_index_meta("inv0"),
                     old.inverted_index_meta("inv0")
@@ -431,15 +486,37 @@ async fn test_refresh_batch_reads_each_block_once_and_commits_once() -> anyhow::
                     block.vector_index_meta("vec0"),
                     old.vector_index_meta("vec0")
                 );
+                for (name, new, old) in [
+                    (
+                        "inv1",
+                        block.inverted_index_meta("inv1"),
+                        old.inverted_index_meta("inv1"),
+                    ),
+                    (
+                        "vec1",
+                        block.vector_index_meta("vec1"),
+                        old.vector_index_meta("vec1"),
+                    ),
+                ] {
+                    assert_ne!(new, old);
+                    assert_eq!(
+                        new.unwrap().index_version,
+                        table.get_table_info().meta.indexes[name].version
+                    );
+                }
             }
         }
         // Ordinary Bloom (including unprojected columns) and prebuilt Ngram
-        // payloads must survive unchanged; only missing Ngram filters are added.
+        // payloads must survive unchanged; obsolete Ngram definitions are removed.
         let after_filters = refresh_batch_filters(&fixture).await?;
         for (block, filters) in before_filters {
             assert!(filters.keys().any(|name| name.starts_with("Bloom(")));
             for (name, bytes) in filters {
-                assert_eq!(after_filters[&block][&name], bytes);
+                if mode == RefreshBatchMode::StaleAndValid && name == "Ngram(1)_3_1048576" {
+                    assert!(!after_filters[&block].contains_key(&name));
+                } else {
+                    assert_eq!(after_filters[&block][&name], bytes);
+                }
             }
         }
         let mut pipeline = Pipeline::create();
@@ -461,67 +538,8 @@ async fn test_refresh_batch_reads_each_block_once_and_commits_once() -> anyhow::
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_batch_empty_and_partial_hints() -> anyhow::Result<()> {
-    let fixture = refresh_batch_fixture(RefreshBatchMode::VirtualMetadata).await?;
-    let (before, _) = refresh_batch_blocks(&fixture).await?;
-    let ctx = fixture.new_query_ctx().await?;
-    let table = fixture.latest_default_table().await?;
-    let fuse = FuseTable::try_from_table(table.as_ref())?;
-    let names = table
-        .get_table_info()
-        .meta
-        .indexes
-        .keys()
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut pipeline = Pipeline::create();
-    assert_eq!(
-        fuse.do_refresh_indexes(ctx.clone(), &names, Some(vec![]), &mut pipeline)
-            .await?,
-        0
-    );
-    assert!(pipeline.is_empty());
-    assert_eq!(
-        fuse.do_refresh_indexes(
-            ctx.clone(),
-            &names,
-            Some(vec![before.segments[0].clone()]),
-            &mut pipeline
-        )
-        .await?,
-        1
-    );
-    PipelineCompleteExecutor::try_create(pipeline, ExecutorSettings::try_create(ctx.clone())?)?
-        .execute()
-        .await?;
-    assert_eq!(ctx.get_scan_progress().get_values().rows, 2);
-    let (_, blocks) = refresh_batch_blocks(&fixture).await?;
-    assert_eq!(
-        blocks
-            .iter()
-            .filter(|block| block
-                .inverted_index_metas
-                .as_ref()
-                .is_some_and(|metas| !metas.is_empty()))
-            .count(),
-        1
-    );
-    assert_eq!(
-        blocks
-            .iter()
-            .filter(|block| block
-                .vector_index_metas
-                .as_ref()
-                .is_some_and(|metas| !metas.is_empty()))
-            .count(),
-        1
-    );
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_refresh_batch_conflict_does_not_publish_snapshot() -> anyhow::Result<()> {
-    let fixture = refresh_batch_fixture(RefreshBatchMode::PrewarmedAsync).await?;
+    let fixture = refresh_batch_fixture(RefreshBatchMode::StaleAndValid).await?;
     let (before, _) = refresh_batch_blocks(&fixture).await?;
     let ctx = fixture.new_query_ctx().await?;
     let table = fixture.latest_default_table().await?;
@@ -549,7 +567,7 @@ async fn test_refresh_batch_conflict_does_not_publish_snapshot() -> anyhow::Resu
             tenant: ctx.get_tenant(),
             table_id: table.get_id(),
             name: "concurrent".into(),
-            column_ids: vec![6],
+            column_ids: vec![8],
             sync_creation: true,
             options: BTreeMap::new(),
             index_type: TableIndexType::Inverted,
@@ -568,154 +586,10 @@ async fn test_refresh_batch_conflict_does_not_publish_snapshot() -> anyhow::Resu
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_batch_replaces_stale_indexes_without_rebuilding_valid_ones()
--> anyhow::Result<()> {
-    let fixture = refresh_batch_fixture(RefreshBatchMode::PrewarmedAsync).await?;
-    let mut ctx = fixture.new_query_ctx().await?;
-    let mut table = fixture.latest_default_table().await?;
-    let names = table
-        .get_table_info()
-        .meta
-        .indexes
-        .keys()
-        .cloned()
-        .collect::<Vec<_>>();
-    let mut pipeline = Pipeline::create();
-    FuseTable::try_from_table(table.as_ref())?
-        .do_refresh_indexes(ctx.clone(), &names, None, &mut pipeline)
-        .await?;
-    PipelineCompleteExecutor::try_create(pipeline, ExecutorSettings::try_create(ctx)?)?
-        .execute()
-        .await?;
-    let (before, before_blocks) = refresh_batch_blocks(&fixture).await?;
-    ctx = fixture.new_query_ctx().await?;
-    table = fixture.latest_default_table().await?;
-    let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
-    let changed = ["inv0", "ngram0", "vec0", "geo0"].map(str::to_string);
-    for name in &changed {
-        let index = &table.get_table_info().meta.indexes[name];
-        catalog
-            .create_table_index(CreateTableIndexReq {
-                create_option: CreateOption::CreateOrReplace,
-                tenant: ctx.get_tenant(),
-                table_id: table.get_id(),
-                name: name.clone(),
-                // Identical definitions retain their version; genuinely change each one.
-                column_ids: match index.index_type {
-                    TableIndexType::Inverted => vec![6],
-                    TableIndexType::Spatial => vec![9],
-                    _ => index.column_ids.clone(),
-                },
-                sync_creation: false,
-                options: match index.index_type {
-                    TableIndexType::Ngram => BTreeMap::from([("gram_size".into(), "4".into())]),
-                    TableIndexType::Vector => {
-                        BTreeMap::from([("distance".into(), "cosine".into())])
-                    }
-                    _ => index.options.clone(),
-                },
-                index_type: index.index_type.clone(),
-            })
-            .await?;
-    }
-    table = fixture.latest_default_table().await?;
-    let fuse = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = Pipeline::create();
-    assert_eq!(
-        fuse.do_refresh_indexes(ctx.clone(), &changed, None, &mut pipeline)
-            .await?,
-        3
-    );
-    PipelineCompleteExecutor::try_create(pipeline, ExecutorSettings::try_create(ctx.clone())?)?
-        .execute()
-        .await?;
-    let (after, after_blocks) = refresh_batch_blocks(&fixture).await?;
-    assert_eq!(after.prev_snapshot_id.unwrap().0, before.snapshot_id);
-    for block in after_blocks {
-        let old = before_blocks
-            .iter()
-            .find(|old| old.location == block.location)
-            .unwrap();
-        for (name, new_meta, old_meta) in [
-            (
-                "inv0",
-                block.inverted_index_meta("inv0"),
-                old.inverted_index_meta("inv0"),
-            ),
-            (
-                "vec0",
-                block.vector_index_meta("vec0"),
-                old.vector_index_meta("vec0"),
-            ),
-        ] {
-            assert_eq!(
-                new_meta.unwrap().index_version,
-                table.get_table_info().meta.indexes[name].version
-            );
-            assert_ne!(new_meta, old_meta);
-        }
-        assert_eq!(
-            block.inverted_index_meta("inv1"),
-            old.inverted_index_meta("inv1")
-        );
-        assert_eq!(
-            block.vector_index_meta("vec1"),
-            old.vector_index_meta("vec1")
-        );
-        let spatial = load_spatial_index_meta(
-            fuse.get_operator(),
-            &block.spatial_index_location.as_ref().unwrap().0,
-        )
-        .await?;
-        for name in ["geo0", "geo1"] {
-            assert_eq!(
-                spatial.metadata[name],
-                table.get_table_info().meta.indexes[name].version
-            );
-        }
-        let bloom = load_index_meta(
-            fuse.get_operator(),
-            &block.bloom_filter_index_location.as_ref().unwrap().0,
-            block.bloom_filter_index_size,
-            None,
-        )
-        .await?;
-        assert!(
-            bloom
-                .columns
-                .iter()
-                .any(|(name, _)| name == "Ngram(0)_4_1048576")
-        );
-        assert!(
-            bloom
-                .columns
-                .iter()
-                .any(|(name, _)| name == "Ngram(1)_3_1048576")
-        );
-        assert!(
-            !bloom
-                .columns
-                .iter()
-                .any(|(name, _)| name == "Ngram(0)_3_1048576")
-        );
-    }
-    let table = fixture.latest_default_table().await?;
-    let fuse = FuseTable::try_from_table(table.as_ref())?;
-    let mut pipeline = Pipeline::create();
-    assert_eq!(
-        fuse.do_refresh_indexes(ctx, &names, None, &mut pipeline)
-            .await?,
-        0
-    );
-    assert!(pipeline.is_empty());
-    Ok(())
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RefreshBatchMode {
     VirtualMetadata,
-    PrewarmedAsync,
+    StaleAndValid,
 }
 
 async fn refresh_batch_fixture(mode: RefreshBatchMode) -> anyhow::Result<TestFixture> {
@@ -764,52 +638,52 @@ async fn refresh_batch_fixture(mode: RefreshBatchMode) -> anyhow::Result<TestFix
             .execute()
             .await?;
     }
-    let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
-    for (kind, prefix, ids) in [
-        (TableIndexType::Inverted, "inv", [0, 1]),
-        (TableIndexType::Ngram, "ngram", [0, 1]),
-        (TableIndexType::Vector, "vec", [2, 3]),
-        (TableIndexType::Spatial, "geo", [4, 5]),
+    for (kind, prefix, columns) in [
+        ("INVERTED", "inv", ["a", "b"]),
+        ("NGRAM", "ngram", ["a", "b"]),
+        ("VECTOR", "vec", ["v1", "v2"]),
+        ("SPATIAL", "geo", ["g1", "g2"]),
     ] {
-        for (position, id) in ids.into_iter().enumerate() {
-            catalog
-                .create_table_index(CreateTableIndexReq {
-                    create_option: CreateOption::Create,
-                    tenant: ctx.get_tenant(),
-                    table_id: table.get_id(),
-                    name: format!("{prefix}{position}"),
-                    column_ids: vec![id],
-                    sync_creation: false,
-                    options: if kind == TableIndexType::Vector {
-                        BTreeMap::from([("distance".into(), "l2".into())])
-                    } else {
-                        BTreeMap::new()
-                    },
-                    index_type: kind.clone(),
-                })
+        for (position, column) in columns.into_iter().enumerate() {
+            let options = if kind == "VECTOR" {
+                "distance='l2'"
+            } else {
+                ""
+            };
+            fixture
+                .execute_command(&format!(
+                    "CREATE ASYNC {kind} INDEX {prefix}{position} ON {name}({column}) {options}"
+                ))
                 .await?;
         }
     }
     if mode != RefreshBatchMode::VirtualMetadata {
-        for (kind, index_name) in [
-            (AstTableIndexType::Inverted, "inv0"),
-            (AstTableIndexType::Ngram, "ngram0"),
-            (AstTableIndexType::Vector, "vec0"),
-            (AstTableIndexType::Spatial, "geo0"),
+        // Each type has one valid sibling and one stale definition to rebuild.
+        for (kind, prefix) in [
+            ("INVERTED", "inv"),
+            ("NGRAM", "ngram"),
+            ("VECTOR", "vec"),
+            ("SPATIAL", "geo"),
         ] {
-            let ctx = fixture.new_query_ctx().await?;
-            RefreshTableIndexInterpreter::try_create(ctx.clone(), RefreshTableIndexPlan {
-                index_type: kind,
-                catalog: fixture.default_catalog_name(),
-                database: fixture.default_db_name(),
-                table: fixture.default_table_name(),
-                index_name: index_name.into(),
-                segment_locs: None,
-            })?
-            .execute(ctx)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+            for position in 0..2 {
+                fixture
+                    .execute_command(&format!(
+                        "REFRESH {kind} INDEX {prefix}{position} ON {name}"
+                    ))
+                    .await?;
+            }
+        }
+        for (kind, index, definition) in [
+            ("INVERTED", "inv1", "(unused)"),
+            ("NGRAM", "ngram1", "(b) gram_size=4"),
+            ("VECTOR", "vec1", "(v2) distance='cosine'"),
+            ("SPATIAL", "geo1", "(g3)"),
+        ] {
+            fixture
+                .execute_command(&format!(
+                    "CREATE OR REPLACE ASYNC {kind} INDEX {index} ON {name}{definition}"
+                ))
+                .await?;
         }
     }
     Ok(fixture)
@@ -1064,76 +938,35 @@ async fn test_refresh_batch_legacy_spatial_statistics_and_indexes() -> anyhow::R
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_legacy_spatial_statistics_preserve_query_semantics() -> anyhow::Result<()> {
-    let (fixture, name) = legacy_spatial_fixture(
-        "g GEOMETRY",
-        "(to_geometry('POINT(1 1)')), (to_geometry('POINT EMPTY')), (NULL), (to_geometry('POINT(3 3)'))",
-    )
-    .await?;
-    let (_, blocks) = refresh_batch_blocks(&fixture).await?;
-    replace_refresh_batch_legacy_spatial_block(&fixture, (*blocks[0]).clone()).await?;
-    for indexed in [false, true] {
-        if indexed {
-            fixture
-                .execute_command(&format!("REFRESH SPATIAL INDEX geo ON {name}"))
-                .await?;
-        }
-        for (predicate, expected) in [
-            ("g IS NULL", "1"),
-            ("ST_ASWKT(g) LIKE '%EMPTY%'", "1"),
-            ("ST_INTERSECTS(g,to_geometry('POINT(1 1)'))", "1"),
-            ("ST_INTERSECTS(g,to_geometry('POINT(2 2)'))", "0"),
-            ("NOT ST_INTERSECTS(g,to_geometry('POINT(100 100)'))", "3"),
-        ] {
-            assert_eq!(
-                refresh_batch_query_count(&fixture, predicate).await?,
-                expected
-            );
-        }
-        let error = async {
-            fixture.execute_query(&format!(
-                "SELECT count() FROM {name} WHERE ST_INTERSECTS(g,to_geometry('SRID=4326;POINT(100 100)'))"
-            )).await?.try_collect::<Vec<_>>().await
-        }.await.unwrap_err();
-        assert!(error.to_string().contains("Incompatible SRID"));
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_rejects_invalid_requests_without_publishing() -> anyhow::Result<()> {
-    let fixture = refresh_batch_fixture(RefreshBatchMode::PrewarmedAsync).await?;
-    let (before, before_blocks) = refresh_batch_blocks(&fixture).await?;
+async fn test_refresh_rejects_stale_internal_definitions() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {}.{} (a STRING, v VECTOR(4), g GEOMETRY)",
+            fixture.default_db_name(),
+            fixture.default_table_name()
+        ))
+        .await?;
     let name = format!(
         "{}.{}",
         fixture.default_db_name(),
         fixture.default_table_name()
     );
-    let indexes = [
-        ("INVERTED", "inv1"),
-        ("NGRAM", "ngram1"),
-        ("VECTOR", "vec1"),
-        ("SPATIAL", "geo1"),
-    ];
-    for (requested, _) in indexes {
-        for (actual, index) in indexes {
-            if requested == actual {
-                continue;
-            }
-            let error = async {
-                fixture
-                    .execute_query(&format!("REFRESH {requested} INDEX {index} ON {name}"))
-                    .await?
-                    .try_collect::<Vec<_>>()
-                    .await
-            }
-            .await
-            .unwrap_err();
-            assert_eq!(error.code(), ErrorCode::REFRESH_INDEX_ERROR);
-        }
+    for (kind, index, definition) in [
+        ("INVERTED", "inv0", "(a)"),
+        ("NGRAM", "ngram0", "(a)"),
+        ("VECTOR", "vec0", "(v) distance='l2'"),
+        ("SPATIAL", "geo0", "(g)"),
+    ] {
+        fixture
+            .execute_command(&format!(
+                "CREATE ASYNC {kind} INDEX {index} ON {name}{definition}"
+            ))
+            .await?;
     }
-
-    // Reuse the same snapshot to check schema and Inverted-specific definitions.
+    // SQL type mismatches are covered by sqllogic. These malformed definitions
+    // can only be supplied by internal callers; reject them before any scan.
     let ctx = fixture.new_query_ctx().await?;
     let table = fixture.latest_default_table().await?;
     let fuse = FuseTable::try_from_table(table.as_ref())?;
@@ -1225,20 +1058,21 @@ async fn test_refresh_rejects_invalid_requests_without_publishing() -> anyhow::R
         assert!(pipeline.is_empty());
     }
     assert_eq!(ctx.get_scan_progress().get_values().rows, 0);
-    let (after, blocks) = refresh_batch_blocks(&fixture).await?;
-    assert_eq!(after.snapshot_id, before.snapshot_id);
-    assert_eq!(blocks, before_blocks);
+    assert!(fuse.read_table_snapshot().await?.is_none());
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_refresh_batch_preserves_legacy_spatial_query_semantics() -> anyhow::Result<()> {
-    for indexed in [false, true] {
+async fn test_refresh_preserves_legacy_spatial_query_semantics() -> anyhow::Result<()> {
+    for (empty, indexed) in [
+        ("POINT EMPTY", false),
+        ("POLYGON EMPTY", false),
+        ("POLYGON EMPTY", true),
+    ] {
         let (fixture, name) = legacy_spatial_fixture(
             "g GEOMETRY, a STRING",
-            "(to_geometry('POINT(1 1)'),'alpha'),(to_geometry('POLYGON EMPTY'),'beta')",
-        )
-        .await?;
+            &format!("(to_geometry('POINT(1 1)'),'alpha'),(to_geometry('{empty}'),'beta'),(NULL,'gamma'),(to_geometry('POINT(3 3)'),'delta')"),
+        ).await?;
         fixture
             .execute_command(&format!("CREATE ASYNC NGRAM INDEX ng ON {name}(a)"))
             .await?;
@@ -1250,58 +1084,83 @@ async fn test_refresh_batch_preserves_legacy_spatial_query_semantics() -> anyhow
         let (_, blocks) = refresh_batch_blocks(&fixture).await?;
         let old_location = blocks[0].spatial_index_location.clone();
         replace_refresh_batch_legacy_spatial_block(&fixture, (*blocks[0]).clone()).await?;
-        for rewritten in [false, true] {
-            if rewritten {
+        let mut predicates = vec![
+            ("g IS NULL", "1"),
+            ("ST_ASWKT(g) LIKE '%EMPTY%'", "1"),
+            ("ST_INTERSECTS(g,to_geometry('POINT(1 1)'))", "1"),
+            ("ST_INTERSECTS(g,to_geometry('POINT(2 2)'))", "0"),
+            ("NOT ST_INTERSECTS(g,to_geometry('POINT(100 100)'))", "3"),
+        ];
+        if empty == "POLYGON EMPTY" {
+            // In current scalar semantics a Polygon EMPTY has zero distance.
+            predicates.extend([
+                ("ST_DWITHIN(g,to_geometry('POINT(100 100)'),0)", "1"),
+                ("ST_DWITHIN(g,to_geometry('POLYGON EMPTY'),0)", "3"),
+                ("ST_DWITHIN(to_geometry('POLYGON EMPTY'),g,0)", "3"),
+                ("NOT ST_DWITHIN(g,to_geometry('POINT(100 100)'),0)", "2"),
+            ]);
+        }
+        // Check legacy semantics across unrelated refresh and Spatial planning.
+        // As before, complete the POINT EMPTY refresh, but only plan the missing
+        // POLYGON EMPTY tree: valid-statistics distance pruning has a separate
+        // EMPTY-geometry issue, also reproducible without any Spatial index.
+        for stage in 0..3 {
+            if stage == 1 {
                 fixture
                     .execute_command(&format!("REFRESH NGRAM INDEX ng ON {name}"))
                     .await?;
+            } else if stage == 2 {
+                let (before, _) = refresh_batch_blocks(&fixture).await?;
+                let table = fixture.latest_default_table().await?;
+                let ctx = fixture.new_query_ctx().await?;
+                let mut pipeline = Pipeline::create();
+                assert_eq!(
+                    FuseTable::try_from_table(table.as_ref())?
+                        .do_refresh_indexes(ctx.clone(), &["geo".into()], None, &mut pipeline)
+                        .await?,
+                    u64::from(!indexed)
+                );
+                assert_eq!(pipeline.is_empty(), indexed);
+                assert_eq!(
+                    refresh_batch_blocks(&fixture).await?.0.snapshot_id,
+                    before.snapshot_id
+                );
+                if !indexed && empty == "POINT EMPTY" {
+                    PipelineCompleteExecutor::try_create(
+                        pipeline,
+                        ExecutorSettings::try_create(ctx)?,
+                    )?
+                    .execute()
+                    .await?;
+                }
             }
-            let (_, blocks) = refresh_batch_blocks(&fixture).await?;
-            assert!(!blocks[0].spatial_stats.as_ref().unwrap()[&0].is_valid);
-            assert_eq!(blocks[0].spatial_index_location, old_location);
-            // Unrelated refreshes must preserve the existing false default for
-            // legacy statistics, not enable bbox or tree pruning. In current
-            // scalar semantics, a Polygon EMPTY has zero distance.
-            for (predicate, expected) in [
-                ("ST_DWITHIN(g,to_geometry('POINT(100 100)'),0)", "1"),
-                ("ST_DWITHIN(g,to_geometry('POLYGON EMPTY'),0)", "2"),
-                ("ST_DWITHIN(to_geometry('POLYGON EMPTY'),g,0)", "2"),
-                ("NOT ST_DWITHIN(g,to_geometry('POINT(100 100)'),0)", "1"),
-            ] {
+            if stage < 2 || indexed || empty == "POLYGON EMPTY" {
+                let (_, blocks) = refresh_batch_blocks(&fixture).await?;
+                // Unrelated refreshes must not enable pruning with legacy stats.
+                assert!(!blocks[0].spatial_stats.as_ref().unwrap()[&0].is_valid);
+                assert_eq!(blocks[0].spatial_index_location, old_location);
+            }
+            for (predicate, expected) in &predicates {
                 assert_eq!(
                     refresh_batch_query_count(&fixture, predicate).await?,
-                    expected
+                    *expected,
+                    "{empty}, indexed={indexed}, stage={stage}, predicate={predicate}"
                 );
             }
+            let error = async {
+                fixture.execute_query(&format!(
+                    "SELECT count() FROM {name} WHERE ST_INTERSECTS(g,to_geometry('SRID=4326;POINT(100 100)'))"
+                )).await?.try_collect::<Vec<_>>().await
+            }.await.unwrap_err();
+            assert!(error.to_string().contains("Incompatible SRID"));
         }
-        let (before, _) = refresh_batch_blocks(&fixture).await?;
-        let table = fixture.latest_default_table().await?;
-        let mut pipeline = Pipeline::create();
-        assert_eq!(
-            FuseTable::try_from_table(table.as_ref())?
-                .do_refresh_indexes(
-                    fixture.new_query_ctx().await?,
-                    &["geo".into()],
-                    None,
-                    &mut pipeline,
-                )
-                .await?,
-            u64::from(!indexed)
-        );
-        assert_eq!(pipeline.is_empty(), indexed);
-        // Planning a missing tree must not publish; an existing legacy tree is
-        // retained without changing its conservative query semantics.
-        assert_eq!(
-            refresh_batch_blocks(&fixture).await?.0.snapshot_id,
-            before.snapshot_id
-        );
     }
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_refresh_batch_failed_vector_upload_does_not_publish_snapshot() -> anyhow::Result<()> {
-    let fixture = refresh_batch_fixture(RefreshBatchMode::PrewarmedAsync).await?;
+    let fixture = refresh_batch_fixture(RefreshBatchMode::StaleAndValid).await?;
     let (before, old_blocks) = refresh_batch_blocks(&fixture).await?;
     let before_stats = refresh_batch_non_index_metadata(&fixture).await?;
     let table = fixture.latest_default_table().await?;

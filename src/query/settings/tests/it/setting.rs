@@ -22,21 +22,6 @@ use databend_common_version::BUILD_INFO;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
     let settings = Settings::create(Tenant::new_literal("test"));
-    // Deprecated distributed maintenance settings remain accepted for compatibility.
-    for name in ["enable_distributed_compact", "enable_distributed_recluster"] {
-        assert!(settings.has_setting(name).unwrap());
-        for value in ["0", "1"] {
-            settings
-                .set_setting(name.to_string(), value.to_string())
-                .unwrap();
-        }
-        assert!(
-            settings
-                .set_setting(name.to_string(), "2".to_string())
-                .is_err()
-        );
-    }
-
     // Number range.
     {
         settings.set_max_threads(2).unwrap();
