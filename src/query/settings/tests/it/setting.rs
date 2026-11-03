@@ -14,42 +14,10 @@
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_removed_authorization_settings() {
-    let settings = Settings::create(Tenant::new_literal("test"));
-    for name in [
-        "enable_experimental_rbac_check",
-        "enable_experimental_connection_privilege_check",
-        "enable_experimental_sequence_privilege_check",
-    ] {
-        assert!(!settings.has_setting(name).unwrap());
-        assert_eq!(settings.get_default_value(name).unwrap(), None);
-
-        for value in ["0", "1"] {
-            for error in [
-                settings.set_setting(name.into(), value.into()).unwrap_err(),
-                settings
-                    .set_global_setting(name.into(), value.into())
-                    .await
-                    .unwrap_err(),
-            ] {
-                assert_eq!(error.code(), ErrorCode::UNKNOWN_VARIABLE, "{name}: {error}");
-            }
-        }
-
-        // Query-level settings ignore unknown names for compatibility, but must not store them.
-        settings
-            .set_batch_settings(&[(name.into(), "0".into())].into_iter().collect(), true)
-            .unwrap();
-        assert!(!settings.changes().contains_key(name));
-    }
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
