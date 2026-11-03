@@ -54,7 +54,7 @@ HashJoin
 └── EvalScalar(Probe)
     ├── output columns: [k (#3)]
     ├── expressions: [CAST(t.k (#2) AS Int32 NULL)]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 0.04
     └── TableScan
         ├── table: default.explain_proven_empty_all_null.t
         ├── scan id: 1
@@ -65,7 +65,7 @@ HashJoin
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
         ├── push downs: [filters: [t.k (#2) > 500], limit: NONE]
-        └── estimated rows: 0.00
+        └── estimated rows: 0.04
 
 statement ok
 INSERT INTO z VALUES (100, 20)
