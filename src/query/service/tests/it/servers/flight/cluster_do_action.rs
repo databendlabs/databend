@@ -33,7 +33,6 @@ use databend_query::servers::flight::FlightService;
 use databend_query::servers::flight::v1::actions::FINISH_QUERY;
 use databend_query::servers::flight::v1::actions::FinishQueryPacket;
 use databend_query::servers::flight::v1::actions::finish_query_on_nodes;
-use databend_query::servers::flight::v1::exchange::DataExchangeManager;
 use databend_query::test_kits::TestFixture;
 
 fn node(id: &str, flight_address: &str) -> Arc<NodeInfo> {
@@ -322,66 +321,6 @@ async fn test_concurrent_do_action_bounds_connect_to_blackholed_node() -> anyhow
             "reuse = {reuse}, waited {elapsed:?} for the connect to a blackholed node"
         );
     }
-
-    Ok(())
-}
-
-// The flight server runs on the test runtime, and test globals are only set on the test
-// thread, so a server-side handler must not run on another worker thread.
-#[tokio::test(flavor = "current_thread")]
-async fn test_finished_query_rejects_late_exchange_setup() -> anyhow::Result<()> {
-    let _fixture = TestFixture::setup().await?;
-    let config = GlobalConfig::instance();
-
-    let listener = StdTcpListener::bind("127.0.0.1:0")?;
-    let address = listener.local_addr()?;
-    drop(listener);
-    let mut server = FlightService::create(config.as_ref().clone())?;
-    server.start(address).await?;
-
-    let live = node_id("live");
-    let cluster = Cluster::create(
-        vec![node(&live, &address.to_string())],
-        config.query.node_id.clone(),
-    );
-
-    // The coordinator releases a query on this node after a failed commit.
-    let packet = finish_packet();
-    let message = HashMap::from([(live.clone(), packet.clone())]);
-    let _: HashMap<String, ()> = cluster
-        .do_action(FINISH_QUERY, message, flight_params(false, false))
-        .await?;
-
-    // A do_get or do_exchange that was still in flight arrives afterwards: it must not
-    // recreate an entry for the query that nothing would ever remove.
-    let manager = DataExchangeManager::instance();
-    let late_exchange = manager.handle_do_exchange(&packet.query_id, "channel", 1);
-    assert_eq!(
-        late_exchange.err().map(|cause| cause.code()),
-        Some(ErrorCode::ABORTED_QUERY)
-    );
-    let late_fragment =
-        manager.handle_exchange_fragment(packet.query_id.clone(), "channel".to_string());
-    assert_eq!(
-        late_fragment.err().map(|cause| cause.code()),
-        Some(ErrorCode::ABORTED_QUERY)
-    );
-    let late_statistics =
-        manager.handle_statistics_exchange(packet.query_id.clone(), "target".to_string());
-    assert_eq!(
-        late_statistics.err().map(|cause| cause.code()),
-        Some(ErrorCode::ABORTED_QUERY)
-    );
-
-    // A query that was not finished still accepts setup requests before its own
-    // INIT_QUERY_ENV, as remote nodes may connect first.
-    let other_query = finish_packet().query_id;
-    assert!(
-        manager
-            .handle_do_exchange(&other_query, "channel", 1)
-            .is_ok()
-    );
-    manager.on_finished_query(&other_query, None);
 
     Ok(())
 }

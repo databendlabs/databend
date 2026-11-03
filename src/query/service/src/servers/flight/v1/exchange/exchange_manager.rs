@@ -168,21 +168,14 @@ async fn create_flight_client(
     }
 }
 
-/// How long a query released by `FINISH_QUERY` keeps rejecting setup requests that would
-/// create state for it. Much longer than a setup request can stay in flight.
-const FINISHED_QUERY_TOMBSTONE_TTL: Duration = Duration::from_secs(600);
-
 pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
-    /// Queries released by `FINISH_QUERY`, with the time they were released.
-    finished_queries: Mutex<HashMap<String, Instant>>,
 }
 
 impl DataExchangeManager {
     pub fn init() -> Result<()> {
         GlobalInstance::set(Arc::new(DataExchangeManager {
             queries_coordinator: ReentrantMutex::new(SyncUnsafeCell::new(HashMap::new())),
-            finished_queries: Mutex::new(HashMap::new()),
         }));
 
         Ok(())
@@ -507,7 +500,6 @@ impl DataExchangeManager {
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
                     }
                     Entry::Vacant(v) => {
-                        self.reject_finished_query(v.key())?;
                         let query_coordinator = v.insert(QueryCoordinator::create());
                         query_coordinator.info = query_info;
                         query_coordinator.is_request_server =
@@ -691,11 +683,9 @@ impl DataExchangeManager {
 
         match queries_coordinator.entry(id) {
             Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target),
-            Entry::Vacant(v) => {
-                self.reject_finished_query(v.key())?;
-                v.insert(QueryCoordinator::create())
-                    .add_statistics_exchange(target)
-            }
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .add_statistics_exchange(target),
         }
     }
 
@@ -710,11 +700,9 @@ impl DataExchangeManager {
 
         match queries_coordinator.entry(query) {
             Entry::Occupied(mut v) => v.get_mut().register_flight_channel_sender(channel_id),
-            Entry::Vacant(v) => {
-                self.reject_finished_query(v.key())?;
-                v.insert(QueryCoordinator::create())
-                    .register_flight_channel_sender(channel_id)
-            }
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .register_flight_channel_sender(channel_id),
         }
     }
 
@@ -735,11 +723,9 @@ impl DataExchangeManager {
 
         match queries_coordinator.entry(query_id.to_string()) {
             Entry::Occupied(mut v) => v.get_mut().create_inbound_sender(channel_id, num_threads),
-            Entry::Vacant(v) => {
-                self.reject_finished_query(v.key())?;
-                v.insert(QueryCoordinator::create())
-                    .create_inbound_sender(channel_id, num_threads)
-            }
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .create_inbound_sender(channel_id, num_threads),
         }
     }
 
@@ -822,39 +808,6 @@ impl DataExchangeManager {
 
         if let Some(query_coordinator) = queries_coordinator.get_mut(query_id) {
             query_coordinator.shutdown_query(cause);
-        }
-    }
-
-    /// Releases a query on its coordinator's request (`FINISH_QUERY`) after a failed
-    /// commit. A setup request that was already in flight when the commit failed, such as a
-    /// `do_get` or `do_exchange` from another node whose own setup failed, can still arrive
-    /// afterwards and would recreate an entry for the query that nothing ever removes. So
-    /// the query is remembered for [`FINISHED_QUERY_TOMBSTONE_TTL`] and such requests are
-    /// rejected instead.
-    pub fn finish_query_on_request(&self, query_id: &str, cause: ErrorCode) {
-        {
-            let now = Instant::now();
-            let mut finished_queries = self.finished_queries.lock();
-            finished_queries.retain(|_, finished_at| {
-                now.saturating_duration_since(*finished_at) < FINISHED_QUERY_TOMBSTONE_TTL
-            });
-            finished_queries.insert(query_id.to_string(), now);
-        }
-        self.on_finished_query(query_id, Some(cause));
-    }
-
-    /// Fails if `query_id` was released by `FINISH_QUERY` within
-    /// [`FINISHED_QUERY_TOMBSTONE_TTL`]. Called before creating an entry for a query.
-    fn reject_finished_query(&self, query_id: &str) -> Result<()> {
-        let finished_queries = self.finished_queries.lock();
-        match finished_queries.get(query_id) {
-            Some(finished_at) if finished_at.elapsed() < FINISHED_QUERY_TOMBSTONE_TTL => {
-                Err(ErrorCode::AbortedQuery(format!(
-                    "Query {} was already finished by its coordinator",
-                    query_id
-                )))
-            }
-            _ => Ok(()),
         }
     }
 

@@ -54,8 +54,10 @@ pub async fn finish_query(packet: FinishQueryPacket) -> Result<()> {
         "Finishing query {} on coordinator request, cause: {}",
         packet.query_id, packet.cause
     );
-    DataExchangeManager::instance()
-        .finish_query_on_request(&packet.query_id, ErrorCode::AbortedQuery(packet.cause));
+    DataExchangeManager::instance().on_finished_query(
+        &packet.query_id,
+        Some(ErrorCode::AbortedQuery(packet.cause)),
+    );
     Ok(())
 }
 
