@@ -27,9 +27,10 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::CpuProfiler;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::ProfileScope;
 use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -81,6 +82,7 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::MAX_FRAMES_IN_FLIGHT;
 use crate::servers::flight::v1::network::PingPongTransport;
 use crate::servers::flight::v1::network::inbound::ExchangeFrameRouter;
 use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
@@ -414,7 +416,8 @@ impl DataExchangeManager {
                                 )
                                 .await?;
 
-                                let (send_tx, send_rx) = async_channel::bounded(1);
+                                let (send_tx, send_rx) =
+                                    async_channel::bounded(MAX_FRAMES_IN_FLIGHT);
                                 let response_stream = flight_client
                                     .do_exchange(send_rx, DoExchangeParams {
                                         query_id,
@@ -1288,7 +1291,8 @@ impl QueryCoordinator {
         let perf_guard = {
             let pc = info.query_ctx.get_perf_config();
             if pc.profiler_enabled && !self.is_request_server {
-                Some(QueryPerf::start(pc.frequency)?)
+                let scope = ProfileScope::Query(info.query_ctx.get_perf_query_token());
+                Some(CpuProfiler::start(scope, pc.frequency)?)
             } else {
                 None
             }
@@ -1490,10 +1494,12 @@ impl FragmentCoordinator {
                 ExchangeParams::GlobalShuffleExchange(GlobalExchangeParams {
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
-                    schema: self.physical_plan.output_schema()?,
+                    schema: exchange_injector
+                        .global_shuffle_schema(&self.physical_plan.output_schema()?),
                     exchange_id: exchange.id.clone(),
-                    shuffle_keys: exchange.shuffle_keys.clone(),
                     destination_channels: exchange.destination_channels.clone(),
+                    shuffle_scatter: exchange_injector
+                        .flight_scatter(&info.query_ctx, data_exchange)?,
                 }),
             )),
         }

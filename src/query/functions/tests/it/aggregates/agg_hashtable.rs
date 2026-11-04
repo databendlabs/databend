@@ -361,8 +361,9 @@ fn test_agg_hashtable_combine_rows() {
     use databend_common_expression::types::ArrayColumn;
     use databend_common_expression::types::NullableColumn;
 
-    let (n, chunk) = (30_000, 10_000);
-    let key = |i: usize| i % 9_000;
+    // More keys per chunk than the partial index holds, so that it restarts.
+    let (n, chunk) = (120_000, 40_000);
+    let key = |i: usize| i % 36_000;
     let columns = |rows: std::ops::Range<usize>| -> Vec<BlockEntry> {
         let strings = rows.clone().map(|i| format!("s{}", key(i) % 300));
         let nullable = NullableColumn::new_column(
@@ -408,22 +409,28 @@ fn test_agg_hashtable_combine_rows() {
     let mut state = ProbeState::default();
     let mut flush_state = PayloadFlushState::default();
     for start in (0..n).step_by(chunk) {
-        // A small partial hash index leaves duplicate keys in the payload.
-        let mut config = HashTableConfig::partial_aggregate(0, 1, 1);
-        config.max_partial_capacity = 1024;
+        // The partial index restarts when full, which leaves duplicate keys in the payload.
         let mut partial = AggregateHashTable::new(
             group_types.clone(),
             aggrs.clone(),
-            config,
+            HashTableConfig::partial_aggregate(),
             Arc::new(Bump::new()),
         );
         let rows = start..start + chunk;
         let args = params(rows.clone());
         let args: Vec<ProjectedBlock> = args.iter().map(|v| v.into()).collect_vec();
         let groups = columns(rows);
-        partial
-            .add_groups(&mut state, (&groups).into(), &args, (&[]).into(), chunk)
+        let stats = partial
+            .add_groups_partial(
+                &mut state,
+                (&groups).into(),
+                &args,
+                chunk,
+                AggregateHashTable::capacity_for_groups(0),
+                None,
+            )
             .unwrap();
+        assert!(stats.windows > 0 && partial.partial_restarted());
         final_table.combine(partial, &mut flush_state).unwrap();
     }
 

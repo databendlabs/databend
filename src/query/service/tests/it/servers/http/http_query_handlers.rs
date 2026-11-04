@@ -2402,6 +2402,51 @@ async fn test_arrow_query_retry_rejects_unnegotiated_version_switch() -> anyhow:
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_login_with_catalog() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+
+    let login = |body: serde_json::Value| {
+        let ep = &ep;
+        async move {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                HEADER_CLIENT_CAPABILITIES,
+                HeaderValue::from_static("session_header"),
+            );
+            let response = post_uri(ep, "/v1/session/login", &body, headers).await?;
+            let status = response.status();
+            let body = response.into_body().into_string().await?;
+            anyhow::Ok((status, body))
+        }
+    };
+
+    let (status, body) = login(serde_json::json!({"catalog": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "default", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // An empty catalog falls back to the current catalog.
+    let (status, body) = login(serde_json::json!({"catalog": "", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "default", "database": "not_exists"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    let (status, body) = login(serde_json::json!({"catalog": "not_exists"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "not_exists", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_login_returns_server_max_arrow_result_version() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 

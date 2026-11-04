@@ -8305,6 +8305,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -8321,6 +8322,7 @@ impl SchemaApiTestSuite {
                 increment: 2,
                 comment: Some("seq2".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -8346,6 +8348,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -8398,6 +8401,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;

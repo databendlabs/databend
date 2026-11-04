@@ -1,3 +1,5 @@
+# run-with-settings: partial_aggregate_mode=bypass
+
 query TTT
 select list(a), list(b), list(c) from (values(null,[],{})) t(a,b,c), numbers(5);
 ----

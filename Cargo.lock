@@ -3018,6 +3018,7 @@ dependencies = [
  "enquote",
  "futures",
  "hickory-resolver",
+ "inferno",
  "libc",
  "log",
  "micromarshal",
@@ -3155,7 +3156,6 @@ dependencies = [
  "foreign_vec",
  "hex",
  "log",
- "match-template",
  "num-traits",
  "proptest",
  "serde",
@@ -3332,8 +3332,8 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "simple_hll",
  "smallvec",
- "strength_reduce",
  "terminal_size",
  "tonic",
  "typetag",
@@ -3880,7 +3880,6 @@ dependencies = [
  "prost-build 0.14.3",
  "semver",
  "tonic",
- "tonic-prost",
  "tonic-prost-build",
 ]
 

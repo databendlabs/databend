@@ -66,7 +66,7 @@ impl Processor for HashSendSink {
             .writer
             .poll_sending(matches!(cause, EventCause::Other))?
         {
-            return Ok(Event::NeedConsume);
+            return self.writer.buffer_while_sending(&self.input);
         }
 
         if self.writer.all_closed() {
@@ -77,14 +77,15 @@ impl Processor for HashSendSink {
 
         if self.input.has_data() {
             let data_block = self.input.pull_data().unwrap()?;
+            self.writer.add_block(data_block)?;
+        }
 
-            let budget_reached = self.writer.add_block(data_block)?;
-            if budget_reached {
-                // `None` sends every partition through channels, so no block is returned.
-                let (_, sends_pending) = self.writer.flush(None)?;
-                if sends_pending {
-                    return Ok(Event::NeedConsume);
-                }
+        // The budget may also have been reached while the previous round was sending.
+        if self.writer.budget_reached() {
+            // `None` sends every partition through channels, so no block is returned.
+            let (_, sends_pending) = self.writer.flush(None)?;
+            if sends_pending {
+                return self.writer.buffer_while_sending(&self.input);
             }
         }
 

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use arrow_flight::FlightData;
 use async_channel::Sender;
@@ -70,15 +72,22 @@ impl ExchangeFrameRouter {
 
     async fn enqueue_item(&self, data: FlightData) -> Result<(), ()> {
         let tid = extract_tid(&data);
-        let size = flight_data_size(&data).min(self.max_bytes_per_connection);
-        let permit = self
-            .semaphore
-            .clone()
-            .acquire_many_owned(size as u32)
-            .await
-            .expect("connection receive quota is never closed");
+        let size = flight_data_size(&data).min(self.max_bytes_per_connection) as u32;
+        let (permit, quota_wait) = match self.semaphore.clone().try_acquire_many_owned(size) {
+            Ok(permit) => (permit, Duration::ZERO),
+            Err(_) => {
+                let start = Instant::now();
+                let permit = self
+                    .semaphore
+                    .clone()
+                    .acquire_many_owned(size)
+                    .await
+                    .expect("connection receive quota is never closed");
+                (permit, start.elapsed())
+            }
+        };
 
-        let item = QueueItem::RemoteData(RemoteQueueItem::new(data, permit));
+        let item = QueueItem::RemoteData(RemoteQueueItem::new(data, permit, quota_wait));
         match self.senders[tid].try_send(item) {
             Ok(()) => Ok(()),
             Err(TrySendError::Closed(_)) if self.senders.iter().all(Sender::is_closed) => Err(()),
@@ -91,6 +100,9 @@ impl ExchangeFrameRouter {
 #[cfg(test)]
 mod tests {
     use async_channel::TryRecvError;
+    use databend_common_base::runtime::ThreadTracker;
+    use databend_common_base::runtime::profile::Profile;
+    use databend_common_base::runtime::profile::ProfileStatisticsName;
     use databend_common_expression::DataBlock;
 
     use super::*;
@@ -164,6 +176,53 @@ mod tests {
 
             queues.receivers[1].close();
             assert!(router.route_frame(frame(1)).await.is_err());
+        });
+    }
+
+    #[test]
+    fn test_receiving_processor_records_receive_quota_wait() {
+        let profile = Arc::new(Profile::create(
+            0,
+            "ExchangeSource".to_string(),
+            Some(0),
+            None,
+            None,
+            Arc::new(String::new()),
+            Arc::new(vec![]),
+            None,
+        ));
+        futures::executor::block_on(async {
+            let queues = ExchangeReceiveChannels::new(1);
+            let router = ExchangeFrameRouter::new(&queues, flight_data_size(&frame(0)));
+            router.route_frame(frame(0)).await.unwrap();
+
+            // The second frame waits until the first is taken for decoding.
+            let mut pending = std::pin::pin!(router.route_frame(frame(0)));
+            assert!(futures::poll!(pending.as_mut()).is_pending());
+            let wait = Duration::from_millis(20);
+            std::thread::sleep(wait);
+            let QueueItem::RemoteData(first) = queues.receivers[0].try_recv().unwrap() else {
+                unreachable!()
+            };
+            first.into_data();
+            assert!(futures::poll!(pending.as_mut()).is_ready());
+            assert_eq!(
+                profile.load_profile(ProfileStatisticsName::ExchangeReceiveQueueWaitTime),
+                0
+            );
+
+            // Only the receiving processor's thread records the wait.
+            let QueueItem::RemoteData(second) = queues.receivers[0].try_recv().unwrap() else {
+                unreachable!()
+            };
+            let mut payload = ThreadTracker::new_tracking_payload();
+            payload.profile = Some(profile.clone());
+            let _guard = ThreadTracker::tracking(payload);
+            second.into_data();
+            assert!(
+                profile.load_profile(ProfileStatisticsName::ExchangeReceiveQueueWaitTime)
+                    >= wait.as_nanos() as usize
+            );
         });
     }
 }
