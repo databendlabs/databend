@@ -2089,9 +2089,7 @@ impl AccessChecker for PrivilegeAccess {
                         if !checked_tables.insert((catalog_name, db_name, table_name, bound_table_id)) {
                             continue;
                         }
-                        if is_materialized_view_engine(catalog_table.engine()) {
-                            self.validate_mv_source_access(catalog_table.as_ref()).await?;
-                        } else if let Some((db_id, table_id)) = self.check_table_select_grants(catalog_name, db_name, table_name).await? {
+                        if let Some((db_id, table_id)) = self.check_table_select_grants(catalog_name, db_name, table_name).await? {
                             pending_ownerships.push(PendingSelectOwnership { catalog_name, db_name, table_name, db_id, table_id });
                         }
                     }

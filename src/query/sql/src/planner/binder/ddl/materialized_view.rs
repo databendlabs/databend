@@ -76,6 +76,7 @@ use crate::MetadataRef;
 use crate::SelectBuilder;
 use crate::TableEntry;
 use crate::binder::Binder;
+use crate::binder::ViewIdent;
 use crate::binder::bind_table_reference::MaterializedViewReadMode;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
@@ -240,12 +241,20 @@ impl Binder {
                     &mv.definition.data.original_query,
                     "invalid materialized view logical query",
                 )?;
-                let mut candidate_context = BindContext::with_parent(bind_context.clone())?;
+                // Candidate scans are optimizer implementation details, not objects
+                // explicitly accessed by the caller. Authorize the original source query
+                // without requiring grants on any candidate MV, selected or otherwise.
+                let view_ident = ViewIdent {
+                    catalog: source_entry.catalog().to_string(),
+                    database: mv_database.clone(),
+                    name: mv_name.clone(),
+                };
+                let mut candidate_context = bind_context.new_view_scope(view_ident.clone())?;
                 candidate_context.planning_materialized_view_rewrite = true;
                 let (definition, definition_context) =
                     self.bind_query(&mut candidate_context, &logical_query)?;
 
-                let mut read_context = BindContext::with_parent(bind_context.clone())?;
+                let mut read_context = bind_context.new_view_scope(view_ident)?;
                 read_context.planning_materialized_view_rewrite = true;
                 let read_result = self.bind_materialized_view_with_mode(
                     &mut read_context,
@@ -438,6 +447,15 @@ impl Binder {
     /// Resolve the single base table referenced by the defining query.
     fn materialized_view_source_table(metadata: &MetadataRef) -> Result<TableEntry> {
         let metadata = metadata.read();
+        if metadata
+            .tables()
+            .iter()
+            .any(|entry| is_materialized_view_engine(entry.table().engine()))
+        {
+            return Err(ErrorCode::TableEngineNotSupported(
+                "A materialized view cannot use another materialized view as its source",
+            ));
+        }
         if metadata.tables().len() != 1 {
             return Err(ErrorCode::SemanticError(
                 "Materialized view requires exactly one base table source".to_string(),
@@ -531,9 +549,7 @@ impl Binder {
         };
         let source_entry = Self::materialized_view_source_table(original_metadata)?;
         let source_table = source_entry.table();
-        // CREATE records source_entry, not the FROM name in SQL. Binding a stale MV falls back to
-        // its original query, so metadata contains only the underlying FUSE table. That leftover
-        // table passes the engine check; comparing it with the AST name rejects CREATE FROM mv.
+        // CREATE records the concrete source identity, not just the FROM name in SQL.
         if direct_source_catalog != source_entry.catalog()
             || direct_source_database != source_entry.database()
             || direct_source_name != source_entry.name()
