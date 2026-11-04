@@ -73,6 +73,12 @@ pub trait PartInfo: Send + Sync {
     fn is_reshuffle_header(&self) -> bool {
         false
     }
+
+    /// Bytes the part holds, itself and on the heap, for caches of parts. By default the part
+    /// itself only: parts owning heap data count it.
+    fn mem_bytes(&self) -> usize {
+        size_of_val(self)
+    }
 }
 
 impl Debug for Box<dyn PartInfo> {

@@ -40,6 +40,8 @@ use databend_common_sql::parse_to_filters;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
+use databend_common_storages_fuse::io::SnapshotReader;
 use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_query::interpreters::CreateTableInterpreter;
@@ -51,9 +53,7 @@ use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -246,16 +246,12 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
 
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-
-    let load_params = LoadParams {
-        location: snapshot_loc.clone(),
-        len_hint: None,
-        ver: TableSnapshot::VERSION,
-        put_cache: false,
-    };
-
-    let snapshot = reader.read(&load_params).await?;
+    let reader = SnapshotReader::new(fuse_table.get_operator());
+    let snapshot = FuseCaches::instance()
+        .snapshots
+        .read_only()
+        .get(&reader, snapshot_loc.clone(), TableSnapshot::VERSION)
+        .await?;
 
     // nothing is pruned
     let e1 = PushDownInfo {
