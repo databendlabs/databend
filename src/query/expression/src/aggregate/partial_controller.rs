@@ -22,11 +22,13 @@
 //!   bounded cost. At geometric row checkpoints, with `R` rows, `M` groups materialized, a
 //!   sampled estimate `D` of the distinct groups and `G` the groups the best table it can build
 //!   would emit: `D` if an index holding them fits (see `Grown`), else `M`, the window's:
-//!   - `M / R` and `G / R` both close to 1: neither absorbs much, switch to `Bypass`.
+//!   - `G / R` close to 1: no table absorbs much (`G <= M`, so neither does the window), switch
+//!     to `Bypass`.
 //!   - `M > 2 * G`: keys recur beyond a window and a grown table holds them, switch to `Grown`.
-//! * `Grown`: the index is grown at once to hold the `D` groups, if they fit in
-//!   [`MAX_GROW_CAPACITY`] slots and, with the bytes a group takes, in the memory of the table.
-//!   When it fills up it restarts in place like a window.
+//! * `Grown`: the index restarts at its initial capacity and, when it fills up, grows at once to
+//!   hold `D` groups with a `GROW_MARGIN`, which fit in [`MAX_GROW_CAPACITY`] slots and, with
+//!   the bytes a group takes, in the memory of the table. When it fills up again it restarts in
+//!   place like a window.
 //! * `Shrunk`: a grown table met memory pressure, emitted its groups and went back to the small
 //!   index for the rest of the input, without further decisions.
 //! * `Bypass`: forward every row to the final aggregate as raw input, for the rest of the input.
@@ -48,8 +50,7 @@ use crate::AggregateHashTable;
 const FIRST_CHECK_ROWS: usize = 256 * 1024;
 /// Each following checkpoint is this many times the previous one.
 const CHECK_GROWTH: usize = 4;
-/// Bypass when the window and the best table an instance can build both emit this share of the
-/// rows.
+/// Bypass when the best table an instance can build emits this share of the rows.
 const BYPASS_DISTINCT_RATIO: f64 = 0.9;
 /// Grow when materialized groups exceed the estimated distinct groups by this factor.
 const GROW_DEDUP_RATIO: f64 = 2.0;
@@ -183,8 +184,8 @@ pub struct PartialObservation {
 }
 
 /// Why [`PartialState::step`] asks the caller to emit the groups of the table to the final
-/// aggregate and restart the index at the capacity of the new state. A grown index is rebuilt
-/// from the payload, which must hold one row per key, so every change of state emits.
+/// aggregate and restart the index at its initial capacity. A grown index is rebuilt from the
+/// payload, which must hold one row per key, so every change of state emits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EmitReason {
     Grow,
@@ -199,7 +200,8 @@ pub enum EmitReason {
 pub enum PartialState {
     Learning(Learning),
     Grown {
-        /// Index capacity the table grows to at once when full.
+        /// Index capacity the table grows to at once when full: `D` groups with a
+        /// `GROW_MARGIN`.
         capacity: usize,
     },
     Shrunk,
@@ -325,8 +327,7 @@ impl Learning {
         let fits = capacity <= MAX_GROW_CAPACITY && bytes <= max_table_bytes;
         let reachable = if fits { distinct } else { materialized };
 
-        if materialized / rows >= BYPASS_DISTINCT_RATIO && reachable / rows >= BYPASS_DISTINCT_RATIO
-        {
+        if reachable / rows >= BYPASS_DISTINCT_RATIO {
             return Some(PartialState::Bypass);
         }
         if materialized > reachable * GROW_DEDUP_RATIO
