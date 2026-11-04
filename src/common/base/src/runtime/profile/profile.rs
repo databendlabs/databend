@@ -115,6 +115,17 @@ impl Profile {
         });
     }
 
+    /// Record into this profile from any thread.
+    pub fn record_usize(&self, name: ProfileStatisticsName, value: usize) {
+        self.statistics[name as usize].fetch_add(value, Ordering::SeqCst);
+    }
+
+    /// The profile of the processor running on this thread, for recording into it
+    /// from work that continues outside the processor, such as network callbacks.
+    pub fn current() -> Option<Arc<Profile>> {
+        ThreadTracker::with(|x| x.borrow().payload.profile.clone())
+    }
+
     /// Record perf counter values into the current thread's profile.
     /// Each entry carries its own per-event multiplexed flag.
     pub fn record_perf_counters(values: Vec<(PerfEvent, u64, bool)>) {

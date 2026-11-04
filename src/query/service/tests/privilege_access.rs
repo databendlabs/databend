@@ -30,6 +30,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
@@ -38,6 +39,7 @@ use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::UpsertKV;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextAuthorization;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
@@ -85,6 +87,63 @@ fn count_spans(spans: &[SpanRecord], trace: SpanContext, name: &str) -> usize {
                 && (span.name == name || span.name.split("::").any(|part| part == name))
         })
         .count()
+}
+
+/// DROP ... IF EXISTS that drops nothing keeps the name's ownership, which stands in for
+/// an object created concurrently under the name.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_drop_if_exists_keeps_ownership_when_nothing_is_dropped() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let tenant = fixture.default_tenant();
+    let api = UserApiProvider::instance();
+    let name = "drop_if_exists_absent".to_string();
+    for (object, sql) in [
+        (
+            OwnershipObject::Stage { name: name.clone() },
+            "DROP STAGE IF EXISTS drop_if_exists_absent",
+        ),
+        (
+            OwnershipObject::UDF { name: name.clone() },
+            "DROP FUNCTION IF EXISTS drop_if_exists_absent",
+        ),
+        (
+            OwnershipObject::Connection { name: name.clone() },
+            "DROP CONNECTION IF EXISTS drop_if_exists_absent",
+        ),
+        (
+            OwnershipObject::Sequence { name: name.clone() },
+            "DROP SEQUENCE IF EXISTS drop_if_exists_absent",
+        ),
+    ] {
+        api.grant_ownership_to_role(&tenant, &object, BUILTIN_ROLE_ACCOUNT_ADMIN)
+            .await?;
+        fixture.execute_command(sql).await?;
+        assert!(
+            api.get_ownership(&tenant, &object).await?.is_some(),
+            "{sql}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sequence_visibility_checker_is_cached_per_query() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let user = UserInfo::new_no_auth("sequence_checker_cache", "%");
+    // `nextval` asks for this checker for every VALUES row and every block; it lists sequence
+    // ownerships for non-admin users, so a query must build it only once.
+    let ctx = user_context(&fixture, user.clone(), None).await?;
+    let first = ctx.get_visibility_checker(false, Object::Sequence).await?;
+    let second = ctx.get_visibility_checker(false, Object::Sequence).await?;
+    assert!(Arc::ptr_eq(&first, &second));
+
+    // The cache belongs to the query: a new query sees ownership changes made since.
+    let next_query = user_context(&fixture, user, None).await?;
+    let third = next_query
+        .get_visibility_checker(false, Object::Sequence)
+        .await?;
+    assert!(!Arc::ptr_eq(&first, &third));
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
