@@ -33,14 +33,13 @@ use super::partial_controller::DistinctSampler;
 use super::partial_controller::PartialAddStats;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::GroupRows;
+use super::payload::merge_flushed_states;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
 use crate::BlockEntry;
 use crate::Column;
-use crate::ColumnBuilder;
 use crate::ProjectedBlock;
-use crate::aggregate::AggrState;
 use crate::aggregate::aggregate_function::AggregateCallRef;
 use crate::aggregate::aggregate_function::AggregateStateSet;
 use crate::types::DataType;
@@ -730,10 +729,6 @@ impl AggregateHashTable {
         }
     }
 
-    pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
-        self.combine_payloads(&other.payload, flush_state)
-    }
-
     pub fn combine_payloads(
         &mut self,
         payloads: &PartitionedPayload,
@@ -802,24 +797,7 @@ impl AggregateHashTable {
             return Ok(false);
         }
 
-        let row_count = flush_state.row_count;
-        flush_state.aggregate_results.clear();
-        if let Some(states_layout) = self.payload.row_layout.states_layout.as_ref() {
-            for (aggr, loc) in self
-                .payload
-                .aggrs
-                .iter()
-                .zip(states_layout.states_loc.iter().cloned())
-            {
-                let return_type = aggr.signature().return_type.clone();
-                let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
-
-                for place in &flush_state.state_places.as_slice()[0..row_count] {
-                    aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
-                }
-                flush_state.aggregate_results.push(builder.build().into());
-            }
-        }
+        merge_flushed_states(&self.payload.row_layout, &self.payload.aggrs, flush_state)?;
         Ok(true)
     }
 

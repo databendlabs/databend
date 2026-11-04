@@ -18,20 +18,16 @@ use bumpalo::Bump;
 use itertools::Itertools;
 
 use super::BATCH_SIZE;
-use super::PayloadFlushState;
 use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::get_states_layout;
 use super::payload::GroupRows;
 use super::payload::Payload;
-use super::payload::PayloadTransferBatch;
-use super::payload::PayloadTransferStateOffsets;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowIdCodec;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
-use crate::ProjectedBlock;
 use crate::types::DataType;
 
 /// Maps a group hash to its radix partition. Every producer of rows for the same partitioned
@@ -72,7 +68,6 @@ pub struct PartitionedPayload {
 
     pub(super) arenas: Vec<Arc<Bump>>,
 
-    partition_start_bit: u64,
     partition_mask: PartitionMask,
     /// The ids of the rows in the hash index.
     pub(super) row_ids: RowIdCodec,
@@ -87,15 +82,6 @@ impl PartitionedPayload {
         for payload in &self.payloads {
             payload.for_each_hash(&mut f);
         }
-    }
-
-    pub fn new(
-        group_types: Vec<DataType>,
-        aggrs: Vec<AggregateCallRef>,
-        partition_count: u64,
-        arenas: Vec<Arc<Bump>>,
-    ) -> Self {
-        Self::new_with_start_bit(group_types, aggrs, partition_count, 0, arenas)
     }
 
     pub(super) fn new_with_start_bit(
@@ -145,7 +131,6 @@ impl PartitionedPayload {
             row_ids,
 
             arenas,
-            partition_start_bit,
             partition_mask: PartitionMask::with_start_bit(partition_count, partition_start_bit),
         }
     }
@@ -246,105 +231,6 @@ impl PartitionedPayload {
         }
     }
 
-    pub fn repartition(self, new_partition_count: usize, state: &mut PayloadFlushState) -> Self {
-        if self.partition_count() == new_partition_count {
-            return self;
-        }
-
-        let PartitionedPayload {
-            payloads,
-            group_types,
-            aggrs,
-            arenas,
-            partition_start_bit,
-            ..
-        } = self;
-
-        // Repartition shallow-copies aggregate state addresses. Partition-local arenas would
-        // allow a source arena to be freed while a target partition still points into it.
-        assert_eq!(
-            arenas.len(),
-            1,
-            "partition-local aggregate arenas cannot be repartitioned"
-        );
-
-        let mut new_partition_payload = PartitionedPayload::new_with_start_bit(
-            group_types,
-            aggrs,
-            new_partition_count as u64,
-            partition_start_bit,
-            arenas,
-        );
-
-        state.clear();
-        for payload in payloads {
-            new_partition_payload.combine_single(payload, state)
-        }
-
-        new_partition_payload
-    }
-
-    pub(super) fn combine_single(&mut self, other: Payload, flush_state: &mut PayloadFlushState) {
-        if other.len() == 0 {
-            return;
-        }
-
-        if self.partition_count() == 1 {
-            self.payloads[0].combine(other);
-        } else {
-            flush_state.clear();
-
-            let mut state_offsets = PayloadTransferStateOffsets::default();
-            // flush for other's each page to correct partition
-            while let Some(batch) = self.scan_partition_transfer(&other, flush_state) {
-                batch.copy_all_partitions_to(&mut self.payloads, &mut state_offsets);
-            }
-
-            other.commit_transferred_state_offsets(state_offsets, &mut self.payloads);
-        }
-    }
-
-    fn scan_partition_transfer<'a>(
-        &self,
-        other: &Payload,
-        flush_state: &'a mut PayloadFlushState,
-    ) -> Option<PayloadTransferBatch<'a>> {
-        loop {
-            let page = other.pages.get(flush_state.flush_page)?;
-
-            if flush_state.flush_page_row >= page.rows {
-                flush_state.flush_page += 1;
-                flush_state.flush_page_row = 0;
-                flush_state.row_count = 0;
-                continue;
-            }
-
-            let end = (flush_state.flush_page_row + BATCH_SIZE).min(page.rows);
-            let rows = end - flush_state.flush_page_row;
-            flush_state.row_count = rows;
-
-            {
-                let state = &mut *flush_state.probe_state;
-                state.reset_partitions(self.partition_count());
-
-                for idx in 0..rows {
-                    let row_ptr = other.data_ptr(page, idx + flush_state.flush_page_row);
-                    flush_state.addresses[idx] = row_ptr;
-
-                    let hash = row_ptr.hash(&self.row_layout);
-                    let partition_idx = self.partition_mask.index(hash);
-
-                    let (count, sel) = &mut state.partition_entries[partition_idx];
-                    sel[*count as usize] = idx.into();
-                    *count += 1;
-                }
-            }
-
-            flush_state.flush_page_row = end;
-            return Some(PayloadTransferBatch::from_flush_state(flush_state));
-        }
-    }
-
     #[inline]
     pub fn len(&self) -> usize {
         self.payloads.iter().map(|x| x.len()).sum()
@@ -357,51 +243,6 @@ impl PartitionedPayload {
 
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
-    }
-
-    pub fn scatter_into_buckets(self, buckets: usize) -> Vec<PartitionedPayload> {
-        // Scatter also shallow-copies aggregate state addresses, just like repartition.
-        assert_eq!(
-            self.arenas.len(),
-            1,
-            "partition-local aggregate arenas cannot be scattered"
-        );
-        let group_types = self.group_types.clone();
-        let aggrs = self.aggrs.clone();
-        let partition_count = self.partition_count() as u64;
-        let arenas = self.arenas.clone();
-
-        let mut bucket_payloads = Vec::with_capacity(buckets);
-        for _ in 0..buckets {
-            bucket_payloads.push(PartitionedPayload::new(
-                group_types.clone(),
-                aggrs.clone(),
-                partition_count,
-                arenas.clone(),
-            ));
-        }
-
-        let mut state = PayloadFlushState::default();
-        let mut payloads = (0..buckets)
-            .map(|_| {
-                Payload::new(
-                    Arc::new(Bump::new()),
-                    group_types.clone(),
-                    aggrs.clone(),
-                    self.row_layout.states_layout.clone(),
-                )
-            })
-            .collect_vec();
-
-        for payload in self.payloads {
-            payload.transfer_hash_partitioned_rows(&mut payloads, &mut state);
-        }
-
-        for (bucket, payload) in payloads.into_iter().enumerate() {
-            bucket_payloads[bucket].combine_single(payload, &mut state);
-        }
-
-        bucket_payloads
     }
 }
 

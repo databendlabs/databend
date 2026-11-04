@@ -129,7 +129,7 @@ fn test_agg_hashtable() {
             .unwrap();
 
         let mut flush_state = PayloadFlushState::default();
-        let _ = hashtable.combine(hashtable2, &mut flush_state);
+        let _ = hashtable.combine_payloads(&hashtable2.payload, &mut flush_state);
 
         let mut merge_state = PayloadFlushState::default();
         let mut blocks = Vec::new();
@@ -434,7 +434,9 @@ fn test_agg_hashtable_combine_rows() {
             )
             .unwrap();
         assert!(stats.windows > 0 && partial.partial_restarted());
-        final_table.combine(partial, &mut flush_state).unwrap();
+        final_table
+            .combine_payloads(&partial.payload, &mut flush_state)
+            .unwrap();
     }
 
     let mut merge_state = PayloadFlushState::default();

@@ -41,6 +41,7 @@ use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
 use databend_common_expression::PartialObservation;
 use databend_common_expression::PartialState;
+use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
@@ -598,15 +599,24 @@ fn test_partitioned_payload_public_bucket_iterators() {
     fixture.assert_all_states_dropped();
 }
 
+/// Scatter every partition of `hashtable` into `buckets` payloads, as the partial aggregate
+/// routes its output to the final aggregates.
+fn scatter_into_buckets(hashtable: AggregateHashTable, buckets: usize) -> Vec<Payload> {
+    hashtable
+        .into_payloads()
+        .into_iter()
+        .flat_map(|payload| payload.scatter_into_buckets(buckets))
+        .collect()
+}
+
 #[test]
-fn test_partitioned_payload_scatter_preserves_results() {
+fn test_payload_scatter_preserves_results() {
     let fixture = TrackedHeapFixture::new();
 
     {
         let hashtable = fixture.build_from_rows(0, HashTableConfig::default());
         let rows = hashtable.len();
-        let scattered = hashtable.payload.scatter_into_buckets(3);
-        assert_eq!(scattered.len(), 3);
+        let scattered = scatter_into_buckets(hashtable, 3);
         assert_eq!(
             scattered.iter().map(|payload| payload.len()).sum::<usize>(),
             rows
@@ -615,7 +625,7 @@ fn test_partitioned_payload_scatter_preserves_results() {
         let mut merged = fixture.empty_table(HashTableConfig::default());
         let mut flush_state = PayloadFlushState::default();
         for payload in &scattered {
-            merged.combine_payloads(payload, &mut flush_state).unwrap();
+            merged.combine_payload(payload, &mut flush_state).unwrap();
         }
         fixture.assert_result(&mut merged);
     }
@@ -778,13 +788,13 @@ fn test_tracked_heap_merge_failure_drops_states() {
     {
         let hashtable = fixture.build_from_rows(FAIL_ON_MERGE, HashTableConfig::default());
         rows_before = hashtable.len();
-        let scattered = hashtable.payload.scatter_into_buckets(3);
+        let scattered = scatter_into_buckets(hashtable, 3);
 
         let mut merged = fixture.empty_table(HashTableConfig::default());
         let mut flush_state = PayloadFlushState::default();
         let result = scattered
             .iter()
-            .try_for_each(|payload| merged.combine_payloads(payload, &mut flush_state));
+            .try_for_each(|payload| merged.combine_payload(payload, &mut flush_state));
 
         assert!(result.is_err());
         assert!(fixture.live_bytes() > (ROWS * BYTES_PER_ROW) as isize);
@@ -802,12 +812,12 @@ fn test_tracked_heap_merge_result_failure_drops_states() {
     {
         let hashtable = fixture.build_from_rows(FAIL_ON_MERGE_RESULT, HashTableConfig::default());
         rows_before = hashtable.len();
-        let scattered = hashtable.payload.scatter_into_buckets(3);
+        let scattered = scatter_into_buckets(hashtable, 3);
 
         let mut merged = fixture.empty_table(HashTableConfig::default());
         let mut flush_state = PayloadFlushState::default();
         for payload in &scattered {
-            merged.combine_payloads(payload, &mut flush_state).unwrap();
+            merged.combine_payload(payload, &mut flush_state).unwrap();
         }
 
         let result = merged.merge_result(&mut PayloadFlushState::default());
@@ -840,22 +850,6 @@ fn test_tracked_heap_payload_scatter_failure_drops_states() {
                 .iter()
                 .any(|payload| payload.aggregate_flush_all().is_err())
         );
-        assert!(fixture.live_bytes() > 0);
-    }
-
-    fixture.assert_all_states_dropped();
-}
-
-#[test]
-fn test_partitioned_payload_repartition_failure_drops_states() {
-    let fixture = TrackedHeapFixture::new();
-
-    {
-        let hashtable = fixture.build_from_rows(FAIL_ON_SERIALIZE, HashTableConfig::default());
-        let repartitioned = hashtable
-            .payload
-            .repartition(16, &mut PayloadFlushState::default());
-        assert!(repartitioned.aggregate_flush_all().is_err());
         assert!(fixture.live_bytes() > 0);
     }
 

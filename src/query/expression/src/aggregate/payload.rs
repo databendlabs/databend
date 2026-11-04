@@ -343,26 +343,10 @@ impl Payload {
             return Ok(None);
         }
 
-        let row_count = flush_state.row_count;
-        flush_state.aggregate_results.clear();
-        if let Some(states_layout) = self.row_layout.states_layout.as_ref() {
-            for (aggr, loc) in self
-                .aggrs
-                .iter()
-                .zip(states_layout.states_loc.iter().cloned())
-            {
-                let return_type = aggr.signature().return_type.clone();
-                let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
-                for place in &flush_state.state_places.as_slice()[0..row_count] {
-                    aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
-                }
-                flush_state.aggregate_results.push(builder.build().into());
-            }
-        }
-
+        merge_flushed_states(&self.row_layout, &self.aggrs, flush_state)?;
         let mut entries = flush_state.take_aggregate_results();
         entries.extend(flush_state.take_group_columns());
-        Ok(Some(DataBlock::new(entries, row_count)))
+        Ok(Some(DataBlock::new(entries, flush_state.row_count)))
     }
 
     pub(super) fn commit_transferred_state_offsets(
@@ -617,16 +601,6 @@ impl Payload {
         );
     }
 
-    pub(super) fn combine(&mut self, mut other: Payload) {
-        debug_assert_eq!(
-            other.total_rows,
-            other.pages.iter().map(|x| x.rows).sum::<usize>()
-        );
-
-        self.total_rows += other.total_rows;
-        self.pages.append(other.pages.as_mut());
-    }
-
     /// Move the pages into payloads of at most `max_rows` rows and `max_bytes` bytes each,
     /// without copying rows; a page over a limit makes a payload of its own. The payloads share
     /// the arena of the states, which is freed with the last of them.
@@ -829,6 +803,27 @@ impl Payload {
             .collect();
         DataBlock::new(entries, fake_rows)
     }
+}
+
+/// Finalize the states of the rows a flush left in `flush_state` into its aggregate results.
+pub(super) fn merge_flushed_states(
+    row_layout: &RowLayout,
+    aggrs: &[AggregateCallRef],
+    flush_state: &mut PayloadFlushState,
+) -> Result<()> {
+    let row_count = flush_state.row_count;
+    flush_state.aggregate_results.clear();
+    if let Some(states_layout) = row_layout.states_layout.as_ref() {
+        for (aggr, loc) in aggrs.iter().zip(states_layout.states_loc.iter().cloned()) {
+            let return_type = aggr.signature().return_type.clone();
+            let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
+            for place in &flush_state.state_places.as_slice()[0..row_count] {
+                aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
+            }
+            flush_state.aggregate_results.push(builder.build().into());
+        }
+    }
+    Ok(())
 }
 
 impl Drop for Payload {
