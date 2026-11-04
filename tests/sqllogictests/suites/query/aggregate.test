@@ -1,3 +1,5 @@
+# run-with-settings: partial_aggregate_mode=bypass
+
 # # non-grouping column error
 statement error must appear in the GROUP BY clause or be used in an aggregate function
 select number from numbers(10) group by number+1
@@ -313,9 +315,6 @@ X1 102 2021 9 3 2021-09-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
 statement ok
 drop database sample_test
 
-statement ok
-set force_aggregate_shuffle_mode = 'bucket';
-
 query I
 select count(*) from (select number from numbers(1) group by number);
 ----
@@ -331,30 +330,42 @@ select count(*) from (select number from numbers(2000000) group by number);
 ----
 2000000
 
-
-## Aggregation without Exchange source
-query III
-SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
+## Most buckets are empty: only a few groups, or no input rows at all
+query II
+select number % 3 as k, sum(number) from numbers_mt(10000) group by k order by k;
 ----
-1 0 0
+0 16668333
+1 16661667
+2 16665000
+
+query I
+select count(*) from (select number % 7 as k, sum(number) from numbers_mt(10000) where number > 100000 group by k);
+----
+0
 
 statement ok
-set force_aggregate_shuffle_mode = 'row';
+set force_aggregate_data_spill = 1;
+
+query II
+select number % 3 as k, sum(number) from numbers_mt(10000) group by k order by k;
+----
+0 16668333
+1 16661667
+2 16665000
 
 query I
-select count(*) from (select number from numbers(1) group by number);
+select count(*) from (select number % 7 as k, sum(number) from numbers_mt(10000) where number > 100000 group by k);
 ----
-1
+0
 
-query I
-select count(*) from (select number from numbers(2) group by number);
+## Spilled final-aggregate tasks whose consumer finishes early (the other join side is empty) must not hang
+query II
+select a.k, count(*) from (select number % 4 as k from numbers_mt(1000) group by k) a join (select number % 4 as k from numbers_mt(2000) where number > 5000 group by k) b on a.k = b.k group by a.k order by a.k;
 ----
-2
 
-query I
-select count(*) from (select number from numbers(2000000) group by number);
-----
-2000000
+statement ok
+unset force_aggregate_data_spill;
+
 
 ## Aggregation without Exchange source
 query III

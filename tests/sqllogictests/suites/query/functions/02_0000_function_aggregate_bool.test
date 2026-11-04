@@ -1,3 +1,5 @@
+# run-with-settings: partial_aggregate_mode=bypass
+
 query B
 select bool_and(t) from (values (true), (true), (null)) a(t);
 ----

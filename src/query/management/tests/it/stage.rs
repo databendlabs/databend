@@ -19,7 +19,6 @@ use databend_common_management::*;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageParams;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::tenant::Tenant;
@@ -35,7 +34,7 @@ async fn test_add_stage() -> anyhow::Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::Create)
+        .add_stage_with_owner(stage_info.clone(), false, None)
         .await?;
     let value = kv_api.get_kv("__fd_stages/admin/mystage").await?;
 
@@ -54,21 +53,29 @@ async fn test_add_stage() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_already_exists_add_stage() -> anyhow::Result<()> {
+async fn test_add_existing_stage_writes_nothing() -> anyhow::Result<()> {
     let (_, stage_api) = new_stage_api().await?;
 
     let stage_info = create_test_stage_info();
-    stage_api
-        .add_stage(stage_info.clone(), &CreateOption::Create)
-        .await?;
+    assert!(
+        stage_api
+            .add_stage_with_owner(stage_info.clone(), false, None)
+            .await?
+    );
 
-    match stage_api
-        .add_stage(stage_info.clone(), &CreateOption::Create)
-        .await
-    {
-        Ok(_) => panic!("Already exists add stage must be return Err."),
-        Err(cause) => assert_eq!(cause.code(), 2502),
-    }
+    // An existing stage is reported as not written and left unchanged; the
+    // interpreter turns this into StageAlreadyExists for plain CREATE.
+    let mut replacement = stage_info.clone();
+    replacement.comment = "must not replace".into();
+    assert!(
+        !stage_api
+            .add_stage_with_owner(replacement, false, None)
+            .await?
+    );
+    assert_eq!(
+        stage_api.get_stage(&stage_info.stage_name).await?.1,
+        stage_info
+    );
 
     Ok(())
 }
@@ -82,7 +89,7 @@ async fn test_successfully_get_stages() -> anyhow::Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::Create)
+        .add_stage_with_owner(stage_info.clone(), false, None)
         .await?;
 
     let stages = stage_api.get_stages().await?;
@@ -96,7 +103,7 @@ async fn test_successfully_drop_stage() -> anyhow::Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::Create)
+        .add_stage_with_owner(stage_info.clone(), false, None)
         .await?;
 
     let stages = stage_api.get_stages().await?;
@@ -151,7 +158,7 @@ async fn test_add_stage_file() -> anyhow::Result<()> {
 
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::Create)
+        .add_stage_with_owner(stage_info.clone(), false, None)
         .await?;
     let mystage = stage_api.get_stage("mystage").await?.1;
     assert_eq!(mystage.number_of_files, 0);
@@ -187,7 +194,7 @@ async fn test_remove_files() -> anyhow::Result<()> {
     let (_kv_api, stage_api) = new_stage_api().await?;
     let stage_info = create_test_stage_info();
     stage_api
-        .add_stage(stage_info.clone(), &CreateOption::Create)
+        .add_stage_with_owner(stage_info.clone(), false, None)
         .await?;
     let mystage = stage_api.get_stage("mystage").await?.1;
     assert_eq!(mystage.number_of_files, 0);

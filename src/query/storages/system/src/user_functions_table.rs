@@ -62,17 +62,12 @@ impl AsyncSystemTable for UserFunctionsTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let enable_experimental_rbac_check =
-            ctx.get_settings().get_enable_experimental_rbac_check()?;
-        let user_functions = if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker(false, Object::UDF).await?;
-            let udfs = UserFunctionsTable::get_udfs(&ctx.get_tenant()).await?;
-            udfs.into_iter()
-                .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
-                .collect::<Vec<_>>()
-        } else {
-            UserFunctionsTable::get_udfs(&ctx.get_tenant()).await?
-        };
+        let visibility_checker = ctx.get_visibility_checker(false, Object::UDF).await?;
+        let user_functions = UserFunctionsTable::get_udfs(&ctx.get_tenant())
+            .await?
+            .into_iter()
+            .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
+            .collect::<Vec<_>>();
 
         let mut names = Vec::with_capacity(user_functions.len());
         let mut is_aggregate = Vec::with_capacity(user_functions.len());

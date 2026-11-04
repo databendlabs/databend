@@ -64,8 +64,8 @@ pub struct TransformPartialTopN<R: Rows> {
     read_settings: ReadSettings,
     spilled: Vec<SpilledCandidates>,
     ctx: Arc<QueryContext>,
-    /// The shared boundary filter and the payload offset of the (single)
-    /// source sort column, from which boundary values are published.
+    /// The shared boundary filter and the payload offset of the first source
+    /// sort column, from which boundary values are published.
     runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
 }
 
