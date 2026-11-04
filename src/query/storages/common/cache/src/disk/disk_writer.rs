@@ -355,19 +355,23 @@ impl Shared {
                 self.shared.done(&self.key, self.len);
             }
         }
-        let len = job.value.len() as u64;
-        let _queued = Queued {
+        // The key moves into the guard before anything allocates: an allocation refused
+        // under the memory limit unwinds with the entry still taken off the queue.
+        let WriteJob { pool, rel, value } = job;
+        let len = value.len() as u64;
+        let queued = Queued {
             shared: self,
-            key: (job.pool.pool().index(), job.rel.clone()),
+            key: (pool.pool().index(), rel),
             len,
         };
+        let rel = queued.key.1.as_str();
         // The file holds the value and its 4 byte crc.
         let bytes = len + 4;
         // An entry `reserve` would refuse (too large, its kind off, no room beside the writes
         // in flight, its key indexed meanwhile) is refused before it evicts entries under disk
         // pressure.
-        if !job.pool.would_reserve(&job.rel, bytes) {
-            self.drops.add(&job.rel, DropReason::Rejected);
+        if !pool.would_reserve(rel, bytes) {
+            self.drops.add(rel, DropReason::Rejected);
             return;
         }
         self.relieve_disk_pressure();
@@ -385,39 +389,39 @@ impl Shared {
                 }
             }
         }
-        let reservation = job.pool.reserve(&job.rel, bytes);
-        job.pool.delete(&reservation.victims);
+        let reservation = pool.reserve(rel, bytes);
+        pool.delete(&reservation.victims);
         if reservation.reserved {
             let mut held = Held {
-                pool: &job.pool,
-                rel: &job.rel,
+                pool: &pool,
+                rel,
                 bytes,
                 published: false,
             };
-            let path = job.pool.root().join(&job.rel);
+            let path = pool.root().join(rel);
             let tmp = tmp_path(&path, self.seq.fetch_add(1, Ordering::Relaxed));
             let published =
-                write_tmp(&tmp, &job.value, self.options.sync_data).and_then(|written| {
+                write_tmp(&tmp, &value, self.options.sync_data).and_then(|written| {
                     held.published = true;
                     let commit = || std::fs::rename(&tmp, &path);
-                    Ok(job.pool.publish(job.rel.clone(), bytes, written, commit)?)
+                    Ok(pool.publish(rel.to_string(), bytes, written, commit)?)
                 });
             match published {
                 Ok(published) => {
-                    job.pool.delete(&published.victims);
+                    pool.delete(&published.victims);
                     if !published.indexed {
-                        self.drops.add(&job.rel, DropReason::Rejected);
+                        self.drops.add(rel, DropReason::Rejected);
                     }
                 }
                 Err(e) => {
-                    self.drops.add(&job.rel, DropReason::IoError);
+                    self.drops.add(rel, DropReason::IoError);
                     warn!("[DiskCache] failed to write {path:?}: {e}");
                 }
             }
             // Left when the entry was rejected or its write failed.
             let _ = std::fs::remove_file(&tmp);
         } else {
-            self.drops.add(&job.rel, DropReason::Rejected);
+            self.drops.add(rel, DropReason::Rejected);
         }
     }
 
