@@ -314,8 +314,7 @@ impl TransformFinalAggregate {
                     self.handle_serialized(restored, need_check_spill)?;
                 }
             }
-            AggregateMeta::Partitioned { data, .. } => match data {
-                PartitionedData::Empty => {}
+            AggregateMeta::Partitioned(data) => match data {
                 PartitionedData::Serialized(payloads) => {
                     for payload in payloads {
                         check_interrupt()?;
@@ -373,7 +372,6 @@ impl TransformFinalAggregate {
                 self.merge_serialized(SerializedPayload {
                     bucket: bucket as isize,
                     data_block,
-                    max_partition_count: SPILL_BUCKET_NUM,
                 })?;
                 let (rows, resizes) = self.output_hashtable(None)?;
                 output_rows += rows;
@@ -765,14 +763,10 @@ mod tests {
         .map(|(bucket, payload)| AggregatePayload {
             bucket: bucket as isize,
             payload,
-            max_partition_count: 0,
         })
         .collect::<Vec<_>>();
         upstream.push_data(Ok(DataBlock::empty_with_meta(
-            AggregateMeta::create_partitioned(
-                None,
-                PartitionedData::AggregatePayload(empty_payloads),
-            ),
+            AggregateMeta::create_partitioned(PartitionedData::AggregatePayload(empty_payloads)),
         )));
         upstream.finish();
 

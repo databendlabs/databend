@@ -130,7 +130,6 @@ impl AggregateScatter {
                     partitions[partition].push(AggregatePayload {
                         bucket: payload.bucket,
                         payload: part,
-                        max_partition_count: payload.max_partition_count,
                     });
                 }
             }
@@ -146,10 +145,7 @@ impl AggregateScatter {
                 ErrorCode::Internal("AggregateScatter expects partial aggregate states")
             })?;
         match meta {
-            AggregateMeta::Partitioned {
-                data: PartitionedData::AggregatePayload(payloads),
-                ..
-            } => Ok(payloads),
+            AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads)) => Ok(payloads),
             other => Err(ErrorCode::Internal(format!(
                 "AggregateScatter cannot route {other:?}"
             ))),
@@ -157,11 +153,7 @@ impl AggregateScatter {
     }
 
     fn states_block(payloads: Vec<AggregatePayload>) -> DataBlock {
-        AggregateMeta::Partitioned {
-            bucket: None,
-            data: PartitionedData::AggregatePayload(payloads),
-        }
-        .into_datablock()
+        AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads)).into_datablock()
     }
 
     /// Serialize the states for a remote node, one run of rows per bucket.
@@ -316,7 +308,6 @@ mod tests {
             .map(|(bucket, payload)| AggregatePayload {
                 bucket: bucket as isize,
                 payload,
-                max_partition_count: 0,
             })
             .collect();
         Ok(AggregateScatter::states_block(payloads))
@@ -333,18 +324,12 @@ mod tests {
         };
         let mut result = vec![];
         match meta {
-            AggregateMeta::Partitioned {
-                data: PartitionedData::AggregatePayload(payloads),
-                ..
-            } => {
+            AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads)) => {
                 for payload in payloads {
                     result.extend(keys(&payload.payload.aggregate_flush_all()?, 0));
                 }
             }
-            AggregateMeta::Partitioned {
-                data: PartitionedData::Serialized(payloads),
-                ..
-            } => {
+            AggregateMeta::Partitioned(PartitionedData::Serialized(payloads)) => {
                 for payload in payloads {
                     result.extend(keys(&payload.data_block, 0));
                 }

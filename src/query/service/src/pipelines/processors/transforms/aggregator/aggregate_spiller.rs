@@ -365,8 +365,6 @@ fn restore_payload(
         Ok(SerializedPayload {
             bucket,
             data_block: block,
-            // this field is no longer used in new aggregate
-            max_partition_count: 0,
         })
     } else {
         Err(ErrorCode::Internal("read empty block from final aggregate"))

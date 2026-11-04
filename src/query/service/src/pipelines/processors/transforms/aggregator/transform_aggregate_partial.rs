@@ -266,7 +266,6 @@ impl TransformPartialAggregate {
                 payloads.push(AggregatePayload {
                     bucket: bucket as isize,
                     payload,
-                    max_partition_count: 0,
                 });
             }
         }
@@ -278,7 +277,6 @@ impl TransformPartialAggregate {
 
     fn payload_block(payloads: Vec<AggregatePayload>) -> DataBlock {
         DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
-            None,
             PartitionedData::AggregatePayload(payloads),
         ))
     }
@@ -366,10 +364,8 @@ mod tests {
             .iter()
             .map(|block| {
                 let meta = block.get_meta().and_then(AggregateMeta::downcast_ref_from);
-                let Some(AggregateMeta::Partitioned {
-                    data: PartitionedData::AggregatePayload(payloads),
-                    ..
-                }) = meta
+                let Some(AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads))) =
+                    meta
                 else {
                     unreachable!("partial aggregate only outputs aggregate payloads here")
                 };

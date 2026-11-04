@@ -20,7 +20,6 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockProfileStatistics;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Payload;
 use databend_common_expression::SerializedPayload;
 use parquet::file::metadata::RowGroupMetaData;
 
@@ -33,15 +32,11 @@ pub struct SpilledPayload {
 pub enum AggregateMeta {
     Serialized(SerializedPayload),
     AggregatePayload(AggregatePayload),
-    Partitioned {
-        bucket: Option<isize>,
-        data: PartitionedData,
-    },
+    Partitioned(PartitionedData),
     Spilled(Vec<SpilledPayload>),
 }
 
 pub enum PartitionedData {
-    Empty,
     Serialized(Vec<SerializedPayload>),
     AggregatePayload(Vec<AggregatePayload>),
 }
@@ -49,7 +44,6 @@ pub enum PartitionedData {
 impl Debug for PartitionedData {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            PartitionedData::Empty => f.debug_struct("PartitionedAggregateData::Empty").finish(),
             PartitionedData::Serialized(_) => f
                 .debug_struct("PartitionedAggregateData::Serialized")
                 .finish(),
@@ -63,7 +57,6 @@ impl Debug for PartitionedData {
 impl PartitionedData {
     fn output_stats(&self) -> Option<BlockProfileStatistics> {
         match self {
-            PartitionedData::Empty => Some(BlockProfileStatistics { rows: 0, bytes: 0 }),
             PartitionedData::Serialized(payloads) => Some(BlockProfileStatistics {
                 rows: payloads.iter().map(|p| p.data_block.num_rows()).sum(),
                 bytes: payloads.iter().map(|p| p.data_block.memory_size()).sum(),
@@ -77,36 +70,15 @@ impl PartitionedData {
 }
 
 impl AggregateMeta {
-    pub fn create_agg_payload(
-        bucket: isize,
-        payload: Payload,
-        max_partition_count: usize,
-    ) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::AggregatePayload(AggregatePayload {
-            bucket,
-            payload,
-            max_partition_count,
-        }))
-    }
-
-    pub fn create_serialized(
-        bucket: isize,
-        block: DataBlock,
-        max_partition_count: usize,
-    ) -> BlockMetaInfoPtr {
+    pub fn create_serialized(bucket: isize, block: DataBlock) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::Serialized(SerializedPayload {
             bucket,
             data_block: block,
-            max_partition_count,
         }))
     }
 
-    pub fn create_spilled(payloads: Vec<SpilledPayload>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Spilled(payloads))
-    }
-
-    pub fn create_partitioned(bucket: Option<isize>, data: PartitionedData) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Partitioned { bucket, data })
+    pub fn create_partitioned(data: PartitionedData) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::Partitioned(data))
     }
 
     pub fn into_datablock(self) -> DataBlock {
@@ -131,9 +103,7 @@ impl<'de> serde::Deserialize<'de> for AggregateMeta {
 impl Debug for AggregateMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            AggregateMeta::Partitioned { .. } => {
-                f.debug_struct("AggregateMeta::Partitioned").finish()
-            }
+            AggregateMeta::Partitioned(_) => f.debug_struct("AggregateMeta::Partitioned").finish(),
             AggregateMeta::Serialized { .. } => {
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
@@ -164,7 +134,7 @@ impl BlockMetaInfo for AggregateMeta {
                 rows: payload.payload.len(),
                 bytes: payload.payload.memory_size(),
             }),
-            AggregateMeta::Partitioned { data, .. } => data.output_stats(),
+            AggregateMeta::Partitioned(data) => data.output_stats(),
             AggregateMeta::Spilled(payloads) => Some(BlockProfileStatistics {
                 rows: payloads
                     .iter()

@@ -98,7 +98,7 @@ impl TransformDeserializer {
         }
 
         Ok(vec![DataBlock::empty_with_meta(
-            AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
+            AggregateMeta::create_serialized(meta.bucket, block),
         )])
     }
 }
