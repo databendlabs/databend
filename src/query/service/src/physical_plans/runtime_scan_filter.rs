@@ -64,7 +64,7 @@ fn create_runtime_top_n_filter(
     order_by: &[SortDesc],
     candidate_count: usize,
 ) -> Option<(usize, Arc<RuntimeTopNFilter>)> {
-    if candidate_count == 0 || order_by.len() != 1 {
+    if candidate_count == 0 || order_by.is_empty() {
         return None;
     }
 
@@ -80,10 +80,16 @@ fn create_runtime_top_n_filter(
         return None;
     }
 
+    // The boundary tracks only the first sort key. A row whose first key is
+    // strictly worse than the first key of the N-th candidate ranks after all
+    // N candidates whatever its later keys are, so pruning by the first key
+    // also holds for several keys. The pushed-down order must list the same
+    // keys, so that its first item is the first sort key.
     let push_down = source.push_downs.as_ref()?;
-    let [(expr, asc, nulls_first)] = push_down.order_by.as_slice() else {
+    if push_down.order_by.len() != order_by.len() {
         return None;
-    };
+    }
+    let (expr, asc, nulls_first) = &push_down.order_by[0];
     let desc = &order_by[0];
     if *asc != desc.asc || *nulls_first != desc.nulls_first {
         return None;
@@ -248,6 +254,45 @@ mod tests {
 
         let scan = table_scan_with(3, schema, Some(push_downs), 9);
         assert!(create_runtime_top_n_filter(&scan, &order_by(), 5).is_none());
+    }
+
+    #[test]
+    fn runtime_top_n_filter_tracks_the_first_of_several_sort_keys() {
+        let int = TableDataType::Number(NumberDataType::Int32);
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("a", int.clone()),
+            TableField::new("b", int),
+        ]));
+        let column = |name: &str| RemoteExpr::ColumnRef {
+            span: None,
+            id: name.to_string(),
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: name.to_string(),
+        };
+        let sort = |name: &str, index| SortDesc {
+            asc: true,
+            nulls_first: false,
+            order_by: databend_common_expression::Symbol::new(index),
+            display_name: name.to_string(),
+        };
+        let scan_with = |keys: &[&str]| {
+            let push_downs = PushDownInfo {
+                order_by: keys.iter().map(|k| (column(k), true, false)).collect(),
+                ..PushDownInfo::default()
+            };
+            table_scan_with(4, schema.clone(), Some(push_downs), 1000)
+        };
+        let order_by = vec![sort("b", 1), sort("a", 0)];
+
+        let (scan_id, filter) =
+            create_runtime_top_n_filter(&scan_with(&["b", "a"]), &order_by, 5).unwrap();
+        assert_eq!(scan_id, 4);
+        let column_id = schema.field_with_name("b").unwrap().leaf_column_ids()[0];
+        assert_eq!(filter.preferred_order().unwrap().column_id, column_id);
+
+        // The pushed-down order must list exactly the sort keys.
+        assert!(create_runtime_top_n_filter(&scan_with(&["b"]), &order_by, 5).is_none());
+        assert!(create_runtime_top_n_filter(&scan_with(&["a", "b"]), &order_by, 5).is_none());
     }
 
     #[test]
