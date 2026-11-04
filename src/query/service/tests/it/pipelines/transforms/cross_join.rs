@@ -106,10 +106,16 @@ async fn run_cross_join(
     spill: bool,
     limit: Option<usize>,
 ) -> anyhow::Result<Vec<DataBlock>> {
+    // QueryContext reapplies session changes on get_settings(), so override
+    // the fixture's session default rather than a query-local max_threads.
+    fixture
+        .default_session()
+        .get_settings()
+        .set_max_threads(2)?;
     let ctx = fixture.new_query_ctx().await?;
     let settings = ctx.get_settings();
     settings.set_setting("max_block_size".into(), block_size.to_string())?;
-    settings.set_setting("max_threads".into(), "2".into())?;
+    assert_eq!(ctx.get_settings().get_max_threads()?, 2);
     settings.set_setting("force_join_data_spill".into(), u8::from(spill).to_string())?;
     // Inner joins without equi keys must leave the new join executor too.
     settings.set_setting("enable_experimental_new_join".into(), "1".into())?;
@@ -439,47 +445,72 @@ async fn test_cross_join_zero_column_large_counts_and_early_limit() -> anyhow::R
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_cross_join_sql_replay_and_early_limit() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
-    for limit in [false, true] {
-        let ctx = fixture.new_query_ctx().await?;
-        let settings = ctx.get_settings();
-        settings.set_setting("max_block_size".into(), "3".into())?;
-        settings.set_setting("max_threads".into(), "2".into())?;
-        settings.set_setting("disable_join_reorder".into(), "1".into())?;
-        settings.set_setting("force_join_data_spill".into(), "1".into())?;
-        settings.set_setting(
-            "join_spilling_buffer_threshold_per_proc_mb".into(),
-            "0".into(),
-        )?;
-        let query = if limit {
-            "SELECT a.number, b.number FROM numbers(7) a CROSS JOIN numbers(257) b LIMIT 1"
-        } else {
-            "SELECT a.number, b.number FROM numbers(7) a CROSS JOIN numbers(257) b"
-        };
-        let blocks = tokio::time::timeout(Duration::from_secs(60), async {
-            TestFixture::execute_query_with_ctx(ctx.clone(), query)
-                .await?
-                .try_collect::<Vec<DataBlock>>()
-                .await
-        })
-        .await??;
-        if limit {
-            assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 1);
-        } else {
-            let expected = DataBlock::new_from_columns(vec![
-                databend_common_expression::types::UInt64Type::from_data(
-                    (0..7)
-                        .flat_map(|p| std::iter::repeat_n(p, 257))
-                        .collect::<Vec<_>>(),
-                ),
-                databend_common_expression::types::UInt64Type::from_data(
-                    (0..7).flat_map(|_| 0..257).collect::<Vec<_>>(),
-                ),
-            ]);
-            assert_eq!(rows(&blocks), rows(&[expected]));
+    for (threads, buffer_threshold) in [(1, 0), (2, 0), (1, 1)] {
+        // Keep this setting on the session: otherwise the fixture's default
+        // of eight threads overwrites it and can hide per-worker replay bugs.
+        fixture
+            .default_session()
+            .get_settings()
+            .set_max_threads(threads)?;
+        for filtered in [false, true] {
+            for limit in [false, true] {
+                let ctx = fixture.new_query_ctx().await?;
+                let settings = ctx.get_settings();
+                settings.set_setting("max_block_size".into(), "3".into())?;
+                settings.set_setting("disable_join_reorder".into(), "1".into())?;
+                settings.set_setting("enable_experimental_new_join".into(), "1".into())?;
+                settings.set_setting("force_join_data_spill".into(), "1".into())?;
+                settings.set_setting(
+                    "join_spilling_buffer_threshold_per_proc_mb".into(),
+                    buffer_threshold.to_string(),
+                )?;
+                // Unlike a ConstantTableScan, these sources emit many input
+                // blocks per worker. A zero threshold writes each to its own
+                // file; a nonzero threshold exercises buffer-only replay.
+                let join = if filtered {
+                    "JOIN numbers(37) b ON a.number <> b.number"
+                } else {
+                    "CROSS JOIN numbers(37) b"
+                };
+                let limit_clause = if limit { " LIMIT 31" } else { "" };
+                let query =
+                    format!("SELECT a.number, b.number FROM numbers(31) a {join}{limit_clause}");
+                assert_eq!(ctx.get_settings().get_max_threads()?, threads);
+                let blocks = tokio::time::timeout(Duration::from_secs(60), async {
+                    TestFixture::execute_query_with_ctx(ctx.clone(), &query)
+                        .await?
+                        .try_collect::<Vec<DataBlock>>()
+                        .await
+                })
+                .await??;
+                if limit {
+                    assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 31);
+                } else {
+                    let pairs = (0..31u64)
+                        .flat_map(|p| (0..37u64).map(move |b| (p, b)))
+                        .filter(|(p, b)| !filtered || p != b)
+                        .collect::<Vec<_>>();
+                    let expected = DataBlock::new_from_columns(vec![
+                        databend_common_expression::types::UInt64Type::from_data(
+                            pairs.iter().map(|(p, _)| *p).collect::<Vec<_>>(),
+                        ),
+                        databend_common_expression::types::UInt64Type::from_data(
+                            pairs.iter().map(|(_, b)| *b).collect::<Vec<_>>(),
+                        ),
+                    ]);
+                    assert_eq!(rows(&blocks), rows(&[expected]));
+                }
+                assert_eq!(ctx.get_settings().get_max_threads()?, threads);
+                let progress = ctx.get_total_spill_progress();
+                if buffer_threshold == 0 {
+                    assert!(progress.file_nums > 4, "expected many replay files");
+                    assert!(progress.bytes > 0);
+                } else {
+                    assert_eq!(progress.file_nums, 0, "expected buffer-only replay");
+                    assert_eq!(progress.bytes, 0);
+                }
+            }
         }
-        let progress = ctx.get_total_spill_progress();
-        assert!(progress.file_nums > 1, "expected multiple replay files");
-        assert!(progress.bytes > 0);
     }
     Ok(())
 }

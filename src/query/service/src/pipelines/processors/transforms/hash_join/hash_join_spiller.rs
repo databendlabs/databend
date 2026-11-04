@@ -56,6 +56,9 @@ pub struct HashJoinSpiller {
     hash_method: HashMethodKind,
     /// Next restore file index, only used for cross join.
     next_restore_file: usize,
+    /// The retained probe buffer must be replayed once per build round, even
+    /// when it has no columns and therefore no spill files advance the cursor.
+    replay_buffer_restored: bool,
     block_partition_stream: BlockPartitionStream,
 }
 
@@ -116,6 +119,7 @@ impl HashJoinSpiller {
             func_ctx: ctx.get_function_context()?,
             is_build_side,
             next_restore_file: 0,
+            replay_buffer_restored: false,
             block_partition_stream: BlockPartitionStream::create(0, block_bytes, num_partitions),
         })
     }
@@ -303,6 +307,7 @@ impl HashJoinSpiller {
                 if let Some(buffer_blocks) = self.restore_cross_buffer(partition_id)? {
                     data_blocks.extend(buffer_blocks);
                 }
+                self.replay_buffer_restored = true;
             } else if let Some(buffer_block) = self.restore_buffer(partition_id) {
                 data_blocks.push(buffer_block);
             }
@@ -415,15 +420,16 @@ impl HashJoinSpiller {
 
     pub fn has_next_restore_file(&self) -> bool {
         self.next_restore_file < self.spiller.private_spilled_files().len()
-            || (self.next_restore_file == 0 && !self.partition_buffer.is_partition_empty(0))
+            || (!self.replay_buffer_restored && !self.partition_buffer.is_partition_empty(0))
     }
 
     pub fn reset_next_restore_file(&mut self) {
         self.next_restore_file = 0;
+        self.replay_buffer_restored = false;
     }
 
     pub fn need_read_buffer(&self) -> bool {
-        !self.probes_all_pairs || self.next_restore_file == 0
+        !self.probes_all_pairs || !self.replay_buffer_restored
     }
 
     pub fn need_read_partition(&self) -> bool {

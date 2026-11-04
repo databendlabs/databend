@@ -257,6 +257,17 @@ impl TransformHashJoinProbe {
             return self.next_step(Step::Sync(SyncStep::Probe));
         }
 
+        // Every build round must see every probe file before its chunks can
+        // be released. A closed all-pairs output can skip the remaining replay:
+        // it does not update build-side state, but still joins the round barrier.
+        if self.hash_table_type == HashTableType::Restored
+            && self.join_probe_state.hash_join_state.probes_all_pairs()
+            && !self.output_port.is_finished()
+            && self.spiller.has_next_restore_file()
+        {
+            return self.next_step(Step::Async(AsyncStep::Restore));
+        }
+
         // If there are no data blocks to probe, go to the final scan.
         if let Some(final_scan_type) = self.final_scan_type() {
             // If spill does not happen or spill happened but it is not the first round,

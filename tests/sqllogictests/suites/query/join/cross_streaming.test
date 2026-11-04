@@ -166,6 +166,26 @@ select count(*) from (select * from cross_streaming_l where k = 100) l cross joi
 ----
 0
 
+# One worker must replay every probe file against every build round, not just
+# the first file. Keep both payload columns so neither side becomes a row count.
+statement ok
+set max_threads = 1;
+
+statement ok
+set max_block_size = 3;
+
+query III
+select count(*), sum(a.number), sum(b.number)
+from numbers(31) a cross join numbers(37) b;
+----
+1147 17205 20646
+
+query III
+select count(*), sum(a.number), sum(b.number)
+from numbers(31) a join numbers(37) b on a.number <> b.number;
+----
+1116 16740 20181
+
 statement ok
 unset (force_join_data_spill, join_spilling_buffer_threshold_per_proc_mb, max_block_size, max_threads, disable_join_reorder);
 
