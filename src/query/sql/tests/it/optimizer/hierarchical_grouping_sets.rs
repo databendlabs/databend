@@ -146,6 +146,14 @@ FROM c GROUP BY GROUPING SETS ((s, a), (s), (a), ())",
     for case in cases {
         write_optimized_case(&mut file, &case, true, "HierarchicalGroupingSetsToUnion").await?;
     }
+
+    let no_aggregates = SqlTestCase {
+        name: "rollup_without_aggregates_skips_hierarchy",
+        description: "A key-only ROLLUP has nothing to re-aggregate, so the hierarchical rule yields to the ordinary UNION rewrite instead of materializing a zero-column grand-total CTE.",
+        setup_sqls: &[ROLLUP_TABLE],
+        sql: "SELECT a, b, grouping(a, b) FROM t GROUP BY ROLLUP(a, b)",
+    };
+    write_optimized_case(&mut file, &no_aggregates, true, "").await?;
     Ok(())
 }
 
