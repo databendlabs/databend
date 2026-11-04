@@ -28,11 +28,14 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
+use databend_common_expression::with_column_view_iter;
+use databend_common_expression::with_narrow_buffer;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_hashtable::HashSet as TypedHashSet;
 use databend_common_hashtable::HashtableKeyable;
@@ -168,9 +171,31 @@ pub(super) trait UniqSet: Send + Sync + 'static {
             return self.insert(view.index(0).unwrap());
         }
         let mut changed = false;
-        try_for_each_selected(view.iter(), validity, |value| {
-            changed |= self.insert(value)?;
-            Ok(())
+        if let ColumnView::Encoded(EncodedView::Dict { keys, values }) = &view
+            && <Self::Type as AccessType>::column_len(values) < keys.len()
+        {
+            let mut seen =
+                MutableBitmap::from_len_zeroed(<Self::Type as AccessType>::column_len(values));
+            with_narrow_buffer!(keys, |keys| {
+                try_for_each_selected(keys.iter(), validity, |key| {
+                    let key = *key as usize;
+                    if !seen.get(key) {
+                        seen.set(key, true);
+                        let value = unsafe {
+                            <Self::Type as AccessType>::index_column_unchecked(values, key)
+                        };
+                        changed |= self.insert(value)?;
+                    }
+                    Ok(())
+                })
+            })?;
+            return Ok(changed);
+        }
+        with_column_view_iter!(Self::Type, &view, |values| {
+            try_for_each_selected(values, validity, |value| {
+                changed |= self.insert(value)?;
+                Ok(())
+            })
         })?;
         Ok(changed)
     }
@@ -446,11 +471,13 @@ impl<S: UniqSet> AggregateEval for UniqEval<S> {
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         let view = input.columns[0].downcast::<S::Type>().unwrap();
-        input.states.try_for_each_state_value::<S, _>(
-            view.iter(),
-            input.validity,
-            |state, value| state.insert(value).map(|_| ()),
-        )
+        with_column_view_iter!(S::Type, &view, |values| {
+            input
+                .states
+                .try_for_each_state_value::<S, _>(values, input.validity, |state, value| {
+                    state.insert(value).map(|_| ())
+                })
+        })
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {

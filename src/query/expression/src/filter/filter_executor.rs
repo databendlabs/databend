@@ -135,7 +135,8 @@ impl FilterExecutor {
         //     it is worth doing it, after testing, the results show that it is more efficient to
         //     construct `selection_range` and then use `take_range` only when the number of columns
         //     is greater than 1.
-        // (3) Otherwise, use `take` to generate a new `DataBlock`.
+        // (3) Otherwise, take the selected indices. The take copies runs of consecutive
+        //     indices in bulk when they are long on average, and gathers row by row otherwise.
         if result_count == origin_count {
             Ok(data_block)
         } else if result_count as f64 > data_block.num_rows() as f64 * SELECTIVITY_THRESHOLD
@@ -149,7 +150,7 @@ impl FilterExecutor {
             if self.keep_order && self.has_or {
                 self.true_selection[0..result_count].sort();
             }
-            data_block.take_with_optimize_size(&self.true_selection[0..result_count])
+            data_block.take_with_optimize_size_by_runs(&self.true_selection[0..result_count])
         }
     }
 

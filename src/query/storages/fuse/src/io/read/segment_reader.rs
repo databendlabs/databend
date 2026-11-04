@@ -17,8 +17,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -30,6 +28,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::deserial
 use opendal::Operator;
 
 use super::meta::bytes_reader;
+use crate::io::FuseCaches;
 use crate::io::SegmentsIO;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
@@ -152,8 +151,8 @@ pub async fn read_column_oriented_segment(
     projection: &HashSet<String>,
     put_cache: bool,
 ) -> Result<ColumnOrientedSegment> {
-    let cache = CacheManager::instance().get_column_oriented_segment_info_cache();
-    let cached_segment = cache.get(location);
+    let cache = &FuseCaches::instance().segments;
+    let cached_segment = cache.lookup_column_oriented(location);
     let need_summary = cached_segment.is_none();
     match cached_segment {
         Some(segment) => {
@@ -181,7 +180,7 @@ pub async fn read_column_oriented_segment(
             };
 
             if put_cache {
-                cache.insert(location.to_string(), merged_segment.clone());
+                cache.fill_column_oriented(location, Arc::new(merged_segment.clone()));
             }
             Ok(merged_segment)
         }
@@ -196,7 +195,7 @@ pub async fn read_column_oriented_segment(
             };
 
             if put_cache {
-                cache.insert(location.to_string(), segment.clone());
+                cache.fill_column_oriented(location, Arc::new(segment.clone()));
             }
             Ok(segment)
         }

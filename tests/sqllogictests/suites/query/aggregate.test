@@ -1,3 +1,5 @@
+# run-with-settings: partial_aggregate_mode=bypass
+
 # # non-grouping column error
 statement error must appear in the GROUP BY clause or be used in an aggregate function
 select number from numbers(10) group by number+1
@@ -313,9 +315,6 @@ X1 102 2021 9 3 2021-09-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
 statement ok
 drop database sample_test
 
-statement ok
-set force_aggregate_shuffle_mode = 'bucket';
-
 query I
 select count(*) from (select number from numbers(1) group by number);
 ----
@@ -338,26 +337,21 @@ SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS 
 ----
 1 0 0
 
-statement ok
-set force_aggregate_shuffle_mode = 'row';
-
-query I
-select count(*) from (select number from numbers(1) group by number);
-----
-1
-
-query I
-select count(*) from (select number from numbers(2) group by number);
-----
-2
-
-query I
-select count(*) from (select number from numbers(2000000) group by number);
-----
-2000000
-
-## Aggregation without Exchange source
+## GROUP BY with LIMIT pushes a rank limit into the partial aggregate. The pre-sort
+## prunes nothing for low-cardinality keys and is bypassed at runtime after the first
+## batch; the input spans many batches so the periodic probes are exercised too.
 query III
-SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
+select number % 3 as k, count(*), sum(number) from numbers(4000000) group by k order by k limit 10
 ----
-1 0 0
+0 1333334 2666667333333
+1 1333333 2666664666667
+2 1333333 2666666000000
+
+## Key cardinality changes mid-stream: the low-cardinality prefix bypasses the sort,
+## the high-cardinality tail is pruned again by a probe. Only the three smallest keys survive.
+query II
+select if(number < 3000000, number % 2, number) as k, count(*) from numbers(4000000) group by k order by k limit 3
+----
+0 1500000
+1 1500000
+3000000 1

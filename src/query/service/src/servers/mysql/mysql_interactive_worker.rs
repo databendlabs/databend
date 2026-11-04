@@ -485,6 +485,7 @@ impl InteractiveWorkerBase {
                 context.update_init_query_id(query_id);
                 let mut tracking_payload = ThreadTracker::new_tracking_payload();
                 tracking_payload.warehouse_id = context.get_cluster().get_warehouse_id().ok();
+                tracking_payload.perf_query_token = context.get_perf_query_token();
 
                 tracking_payload
                     .tracking(async {

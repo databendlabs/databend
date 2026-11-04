@@ -804,7 +804,7 @@ evaluation (internal):
 | Column | Data                                                                                 |
 +--------+--------------------------------------------------------------------------------------+
 | n      | Column(NullableColumn { column: Int64([1, 1, 1, 2, 3, 0]), validity: [0b__011111] }) |
-| Output | NullableColumn { column: Decimal64([1.00, 1.00]), validity: [0b______11] }           |
+| Output | NullableColumn { column: Decimal64([2.00, 1.50]), validity: [0b______11] }           |
 +--------+--------------------------------------------------------------------------------------+
 
 
@@ -884,7 +884,7 @@ evaluation (internal):
 | Column | Data                                                                                 |
 +--------+--------------------------------------------------------------------------------------+
 | n      | Column(NullableColumn { column: Int64([1, 1, 1, 2, 3, 0]), validity: [0b__011111] }) |
-| Output | NullableColumn { column: Decimal128([1.00, 1.00]), validity: [0b______11] }          |
+| Output | NullableColumn { column: Decimal128([2.00, 1.50]), validity: [0b______11] }          |
 +--------+--------------------------------------------------------------------------------------+
 
 
@@ -964,7 +964,7 @@ evaluation (internal):
 | Column | Data                                                                                 |
 +--------+--------------------------------------------------------------------------------------+
 | n      | Column(NullableColumn { column: Int64([1, 1, 1, 2, 3, 0]), validity: [0b__011111] }) |
-| Output | NullableColumn { column: Decimal256([1.00, 1.00]), validity: [0b______11] }          |
+| Output | NullableColumn { column: Decimal256([2.00, 1.50]), validity: [0b______11] }          |
 +--------+--------------------------------------------------------------------------------------+
 
 

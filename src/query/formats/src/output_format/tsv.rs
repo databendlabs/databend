@@ -75,7 +75,7 @@ impl OutputFormat for TEXTOutputFormat {
             .convert_to_full()
             .columns()
             .iter()
-            .map(|column| column.value().into_column().unwrap().decode_encoded())
+            .map(|column| column.value().into_column().unwrap().decode_owned())
             .collect();
 
         for row_index in 0..rows_size {
