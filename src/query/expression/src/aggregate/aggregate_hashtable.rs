@@ -508,7 +508,7 @@ impl AggregateHashTable {
     }
 
     /// Bytes held by the groups of the partial table, excluding the index.
-    pub fn partial_hot_bytes(&self) -> usize {
+    pub fn partial_payload_bytes(&self) -> usize {
         self.payload.memory_size() + self.arena_allocated_bytes()
     }
 
@@ -519,7 +519,7 @@ impl AggregateHashTable {
     }
 
     /// Move the groups out and restart with an empty index of the initial capacity.
-    pub fn take_partial_hot(&mut self) -> PartitionedPayload {
+    pub fn take_partial_payload(&mut self) -> PartitionedPayload {
         let fresh = PartitionedPayload::new_with_start_bit(
             self.payload.group_types.clone(),
             self.payload.aggrs.clone(),

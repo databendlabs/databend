@@ -35,7 +35,7 @@ use crate::sessions::TableContextSettings;
 /// Build the final aggregates. Unless `global_shuffled`, where the hash shuffle already delivered
 /// to each output of `pipeline` the input of one final aggregate, the partial aggregate output is
 /// scattered here to the final aggregates of this node.
-pub fn build_partition_bucket(
+pub fn build_final_aggregates(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     after_worker: usize,

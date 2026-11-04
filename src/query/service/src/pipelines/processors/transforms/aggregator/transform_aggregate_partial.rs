@@ -213,7 +213,7 @@ impl TransformPartialAggregate {
             held_bytes: self.memory.bytes(),
             group_bytes: Self::group_bytes(&self.memory, &self.total),
             payload_full: table.partial_restarted()
-                && table.partial_hot_bytes() >= self.params.max_block_bytes,
+                && table.partial_payload_bytes() >= self.params.max_block_bytes,
         };
         let settings = &self.settings;
         let Some(reason) = self
@@ -223,7 +223,7 @@ impl TransformPartialAggregate {
             return Ok(vec![]);
         };
         self.emits.add(reason);
-        let payload = table.take_partial_hot();
+        let payload = table.take_partial_payload();
         Ok(self.emit(payload))
     }
 

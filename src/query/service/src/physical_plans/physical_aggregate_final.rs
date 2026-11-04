@@ -55,7 +55,7 @@ use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+use crate::pipelines::processors::transforms::aggregator::build_final_aggregates;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
@@ -213,7 +213,7 @@ impl IPhysicalPlan for AggregateFinal {
         };
 
         builder.exchange_injector = old_inject;
-        build_partition_bucket(
+        build_final_aggregates(
             &mut builder.main_pipeline,
             params.clone(),
             after_group_parallel,

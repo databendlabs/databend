@@ -1256,7 +1256,7 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
             .step(observed(stats, 0), MAX_PARTIAL_TABLE_BYTES, || false)
             .is_some()
         {
-            table.take_partial_hot();
+            table.take_partial_payload();
             assert!(!table.partial_restarted());
         }
     }
