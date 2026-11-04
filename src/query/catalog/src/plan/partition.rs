@@ -28,8 +28,10 @@ use databend_common_exception::Result;
 use databend_meta_client::types::NodeInfo;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
@@ -84,8 +86,11 @@ pub trait PartInfo: Send + Sync {
 impl Debug for Box<dyn PartInfo> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match serde_json::to_string(self) {
-            Ok(str) => write!(f, "{}", str),
-            Err(_cause) => Err(std::fmt::Error {}),
+            Ok(json) => f.write_str(&json),
+            Err(cause) => f
+                .debug_struct("PartInfo")
+                .field("serialization_error", &cause)
+                .finish(),
         }
     }
 }
@@ -496,12 +501,22 @@ pub struct ReclusterTask {
     pub inverted_index_sources: Vec<Vec<BlockIndexMeta>>,
 }
 
-pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
+/// A surviving block keeps its segment-local virtual-column interpretation
+/// and per-block statistics when maintenance replaces the containing segment.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RetainedBlockMeta {
+    pub block_meta: Arc<BlockMeta>,
+    pub hll: Option<RawBlockHLL>,
+    pub top_n: Option<BlockTopN>,
+    /// Local index into the enclosing container's `virtual_schemas`.
+    pub virtual_schema_index: usize,
+}
 
 #[derive(Clone, Default)]
 pub struct ReclusterParts {
     pub tasks: Vec<ReclusterTask>,
-    pub remained_blocks: Vec<BlockMetaWithHLL>,
+    pub remained_blocks: Vec<RetainedBlockMeta>,
+    pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_segment_summary: Statistics,
 }
@@ -514,7 +529,8 @@ impl ReclusterParts {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ReclusterInfoSideCar {
-    pub merged_blocks: Vec<BlockMetaWithHLL>,
+    pub merged_blocks: Vec<RetainedBlockMeta>,
+    pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_statistics: Statistics,
     /// Acquire the table lock only around refresh, sequence validation, and CAS publish.

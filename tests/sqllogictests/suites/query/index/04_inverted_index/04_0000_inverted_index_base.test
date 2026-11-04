@@ -844,6 +844,46 @@ query I
 SELECT id FROM t_whitespace_filters WHERE match(content, 'the') ORDER BY id;
 ----
 
+# A fixed-type refresh must not dispatch according to another index's type,
+# including before the table has a snapshot. Rejected refreshes publish nothing.
+statement ok
+CREATE TABLE refresh_type_guard (s STRING, g GEOMETRY)
+
+statement ok
+CREATE ASYNC INVERTED INDEX inv ON refresh_type_guard(s)
+
+statement ok
+CREATE ASYNC SPATIAL INDEX geo ON refresh_type_guard(g)
+
+statement error 1602
+REFRESH INVERTED INDEX geo ON refresh_type_guard
+
+query I
+SELECT count(*) FROM fuse_snapshot('test_inverted_index', 'refresh_type_guard')
+----
+0
+
+statement ok
+INSERT INTO refresh_type_guard VALUES ('alpha', to_geometry('POINT(1 1)'))
+
+# The write hook publishes both indexes in one refresh snapshot.
+query I
+SELECT count(*) FROM fuse_snapshot('test_inverted_index', 'refresh_type_guard')
+----
+2
+
+# One mismatch per entry point: Inverted and the shared Ngram/Vector/Spatial path.
+statement error 1602
+REFRESH INVERTED INDEX geo ON refresh_type_guard
+
+statement error 1602
+REFRESH NGRAM INDEX inv ON refresh_type_guard
+
+query I
+SELECT count(*) FROM fuse_snapshot('test_inverted_index', 'refresh_type_guard')
+----
+2
+
 statement ok
 use default
 

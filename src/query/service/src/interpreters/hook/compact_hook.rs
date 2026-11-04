@@ -47,7 +47,6 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextProgress;
@@ -212,10 +211,10 @@ pub(crate) async fn compact_table(
         &compact_target.database,
         &compact_target.table,
     )?;
-
     ctx.clear_table_meta_timestamps_cache();
 
-    {
+    let compact_start = Instant::now();
+    let compact_result: Result<()> = async {
         // do compact.
         let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
             catalog: compact_target.catalog.clone(),
@@ -248,13 +247,27 @@ pub(crate) async fn compact_table(
             let complete_executor =
                 PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
-            // Clears previously generated segment locations to avoid duplicate data in the refresh phase
-            ctx.written_segment_locations().clear();
+            // Preserve parent-write hints for untouched segments and failed compaction.
+            // CommitSink adds published outputs; refresh filters out no-longer-live sources.
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute().await?;
             drop(complete_executor);
         }
+        Ok(())
     }
+    .await;
+    info!(
+        event = "compact_hook.stage_finished",
+        stage = "compact",
+        catalog = compact_target.catalog.as_str(),
+        database = compact_target.database.as_str(),
+        table = compact_target.table.as_str(),
+        elapsed_ms = compact_start.elapsed().as_millis() as u64,
+        success = compact_result.is_ok(),
+        error :? = compact_result.as_ref().err();
+        "Compact hook stage finished"
+    );
+    compact_result?;
 
     {
         let table = ctx
@@ -269,42 +282,59 @@ pub(crate) async fn compact_table(
         }
         // do recluster.
         if table.cluster_key_meta().is_some() {
-            // evict the table from cache
-            ctx.evict_table_from_cache(
-                &compact_target.catalog,
-                &compact_target.database,
-                &compact_target.table,
-            )?;
-            // Spill is disabled to keep this synchronous hook fast (spilling adds
-            // disk IO). Admission must then keep tasks inside the memory budget.
-            // TODO: remove once the async hook is enabled.
-            ctx.set_enable_sort_spill(false);
-            let target = if is_materialized_view_engine(table.engine()) {
-                MaintenanceTarget::MaterializedView {
-                    table_id: table.get_id(),
-                }
-            } else {
-                MaintenanceTarget::Table
-            };
-            let recluster = ReclusterPlan {
-                catalog: compact_target.catalog,
-                database: compact_target.database,
-                table: compact_target.table,
-                target,
-                limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-                selection: None,
-                is_final: false,
-            };
-            let allow_segment_claims = lock_opt != LockTableOption::NoLock;
-            let recluster_interpreter = ReclusterTableInterpreter::try_create(
-                ctx.clone(),
-                recluster,
-                allow_segment_claims,
-            )?;
-            // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
-            // we do not need to use `PipelineCompleteExecutor` to execute it.
-            let build_res = recluster_interpreter.execute2().await?;
-            debug_assert!(build_res.main_pipeline.is_empty());
+            let recluster_start = Instant::now();
+            let recluster_result: Result<()> = async {
+                // evict the table from cache
+                ctx.evict_table_from_cache(
+                    &compact_target.catalog,
+                    &compact_target.database,
+                    &compact_target.table,
+                )?;
+                // Spill is disabled to keep this synchronous hook fast (spilling adds
+                // disk IO). Admission must then keep tasks inside the memory budget.
+                // TODO: remove once the async hook is enabled.
+                ctx.set_enable_sort_spill(false);
+                let target = if is_materialized_view_engine(table.engine()) {
+                    MaintenanceTarget::MaterializedView {
+                        table_id: table.get_id(),
+                    }
+                } else {
+                    MaintenanceTarget::Table
+                };
+                let recluster = ReclusterPlan {
+                    catalog: compact_target.catalog.clone(),
+                    database: compact_target.database.clone(),
+                    table: compact_target.table.clone(),
+                    target,
+                    limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
+                    selection: None,
+                    is_final: false,
+                };
+                let allow_segment_claims = lock_opt != LockTableOption::NoLock;
+                let recluster_interpreter = ReclusterTableInterpreter::try_create(
+                    ctx.clone(),
+                    recluster,
+                    allow_segment_claims,
+                )?;
+                // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
+                // we do not need to use `PipelineCompleteExecutor` to execute it.
+                let build_res = recluster_interpreter.execute2().await?;
+                debug_assert!(build_res.main_pipeline.is_empty());
+                Ok(())
+            }
+            .await;
+            info!(
+                event = "compact_hook.stage_finished",
+                stage = "recluster",
+                catalog = compact_target.catalog.as_str(),
+                database = compact_target.database.as_str(),
+                table = compact_target.table.as_str(),
+                elapsed_ms = recluster_start.elapsed().as_millis() as u64,
+                success = recluster_result.is_ok(),
+                error :? = recluster_result.as_ref().err();
+                "Compact hook stage finished"
+            );
+            recluster_result?;
         }
     }
 

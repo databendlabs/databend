@@ -41,7 +41,7 @@ impl TableContext for QueryContext {
     }
 
     fn written_segment_locations(&self) -> &SegmentLocationsState {
-        &self.written_segment_locs
+        &self.shared.written_segment_locs
     }
 
     fn as_any(&self) -> &dyn Any {

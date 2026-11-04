@@ -64,6 +64,17 @@ impl Interpreter for AlterUserUDFScript {
             {
                 UDFValidator::verify_server(self.ctx.as_ref(), &plan.udf.name, server).await?;
             }
+            let integrations = plan.udf.definition.external_access_integrations();
+            if !integrations.is_empty()
+                && matches!(
+                    &plan.udf.definition,
+                    UDFDefinition::UDFScript(_) | UDFDefinition::UDAFScript(_)
+                )
+            {
+                UserApiProvider::instance()
+                    .validate_external_access_bindings(&tenant, integrations)
+                    .await?;
+            }
             UserApiProvider::instance()
                 .update_udf(&tenant, plan.udf)
                 .await?;

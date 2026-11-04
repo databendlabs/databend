@@ -32,6 +32,7 @@ mod purge_drop;
 mod read_plan;
 mod replace_into;
 mod scan_progress;
+mod snapshot_hint;
 mod table_analyze;
 mod truncate;
 mod virtual_column_pruner_reader;

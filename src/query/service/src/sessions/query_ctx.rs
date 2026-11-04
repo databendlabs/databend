@@ -90,7 +90,6 @@ use databend_common_component::FragmentId;
 use databend_common_component::MutationState;
 use databend_common_component::ReadBlockThresholdsState;
 use databend_common_component::ResultCacheState;
-use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -197,8 +196,6 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: FragmentId,
-    // Used by synchronized generate aggregating indexes when new data written.
-    written_segment_locs: SegmentLocationsState,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
@@ -231,7 +228,6 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Default::default(),
-            written_segment_locs: Default::default(),
             read_block_thresholds: Default::default(),
             m_cte_temp_table: Arc::new(RwLock::new(Vec::new())),
         })

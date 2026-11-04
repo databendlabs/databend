@@ -60,6 +60,7 @@ use crate::optimizer::optimizers::rule::RulePushDownRankLimitAggregate;
 use crate::optimizer::optimizers::rule::RulePushDownSortEvalScalar;
 use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
+use crate::optimizer::optimizers::rule::RulePushDownTopNUnionScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
 use crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView;
 
@@ -92,6 +93,7 @@ impl RuleFactory {
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
             RuleID::PushDownSortFilterScan => Ok(Box::new(RulePushDownSortFilterScan::new())),
+            RuleID::PushDownTopNUnionScan => Ok(Box::new(RulePushDownTopNUnionScan::new())),
             RuleID::PushDownSortEvalScalar => {
                 Ok(Box::new(RulePushDownSortEvalScalar::new(metadata)))
             }

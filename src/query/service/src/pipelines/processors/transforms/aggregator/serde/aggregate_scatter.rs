@@ -21,6 +21,7 @@ use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::group_hash_entries;
 use databend_common_expression::group_hash_route_index;
@@ -173,8 +174,12 @@ impl AggregateScatter {
         let mut buckets = Vec::with_capacity(payloads.len());
         let mut row_counts = Vec::with_capacity(payloads.len());
         let mut blocks = Vec::with_capacity(payloads.len());
+        // One flush state (over 100KB) for all payloads instead of one per payload.
+        let mut flush_state = PayloadFlushState::default();
         for payload in payloads {
-            let block = payload.payload.aggregate_flush_all()?;
+            let block = payload
+                .payload
+                .aggregate_flush_all_with_state(&mut flush_state)?;
             if block.num_rows() == 0 {
                 continue;
             }

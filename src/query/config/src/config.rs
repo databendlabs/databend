@@ -2009,7 +2009,13 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_server: bool,
 
-    /// A list of allowed udf server addresses.
+    /// Allow integration-bound HTTP(S) access from sandboxed local Python UDFs.
+    /// This does not permit workers to create native network sockets.
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub enable_python_udf_external_access: bool,
+
+    /// Operator hostname ceiling for remote UDFs and Python HTTP(S) access.
+    /// Python destinations with non-public IPs require an explicit IP literal here.
     #[clap(long, value_name = "VALUE")]
     pub udf_server_allow_list: Vec<String>,
 

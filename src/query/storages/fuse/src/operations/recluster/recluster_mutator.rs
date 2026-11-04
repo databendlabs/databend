@@ -24,6 +24,7 @@ use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::plan::ReclusterTaskKind;
+use databend_common_catalog::plan::RetainedBlockMeta;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -38,7 +39,6 @@ use databend_common_storage::ColumnNodes;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -249,7 +249,7 @@ impl ReclusterMutator {
         let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
-        if !cluster.is_empty() && ctx.get_settings().get_enable_distributed_recluster()? {
+        if !cluster.is_empty() {
             max_tasks = cluster.nodes.len();
         }
 
@@ -676,48 +676,26 @@ impl ReclusterMutator {
             );
         }
 
-        let mut hll_requests = Vec::new();
-        let mut remained_blocks = Vec::new();
-        for (&segment_idx, segment_info) in &removed_segment_infos {
-            let mut hll_block_indices = Vec::new();
-            for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
-                if selected_block_keys.contains(&(segment_idx, block_idx)) {
-                    continue;
-                }
-                // HLL is needed only when a removed segment leaves remained blocks.
-                hll_block_indices.push(block_idx);
-                remained_blocks.push((
-                    BlockIndex {
-                        segment_idx,
-                        block_idx,
-                    },
-                    block_meta.clone(),
-                ));
+        let mut virtual_schemas = Vec::new();
+        let mut retained = Vec::new();
+        for (segment_idx, segment) in removed_segment_infos {
+            let indices = (0..segment.blocks.len())
+                .filter(|block_idx| !selected_block_keys.contains(&(segment_idx, *block_idx)))
+                .collect::<Vec<_>>();
+            if indices.is_empty() {
+                continue;
             }
-            if let Some(stats_meta) = segment_info.summary.additional_stats_meta.as_ref() {
-                if !hll_block_indices.is_empty() {
-                    hll_requests.push((
-                        segment_idx,
-                        stats_meta.location.clone(),
-                        segment_info.blocks.len(),
-                        hll_block_indices,
-                    ));
-                }
-            }
+            // Carry the schema index with its segment instead of deriving it from read order.
+            let virtual_schema_index = virtual_schemas.len();
+            virtual_schemas.push(segment.summary.virtual_segment_schema.clone().map(Arc::new));
+            retained.push((virtual_schema_index, segment, indices));
         }
-
-        let mut hlls = self.gather_hlls(hll_requests).await?;
-        let remained_blocks = remained_blocks
-            .into_iter()
-            .map(|(block_index, block_meta)| {
-                let hll = hlls.remove(&block_index);
-                (block_meta, hll)
-            })
-            .collect();
+        let remained_blocks = self.gather_retained_blocks(retained).await?;
 
         Ok((selected_block_count, ReclusterParts {
             tasks,
             remained_blocks,
+            virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
         }))
@@ -973,37 +951,46 @@ impl ReclusterMutator {
     }
 
     #[async_backtrace::framed]
-    async fn gather_hlls(
+    async fn gather_retained_blocks(
         &self,
-        hlls: Vec<(usize, Location, usize, Vec<usize>)>,
-    ) -> Result<HashMap<BlockIndex, RawBlockHLL>> {
-        if hlls.is_empty() {
-            return Ok(HashMap::new());
+        retained: Vec<(usize, Arc<SegmentInfo>, Vec<usize>)>,
+    ) -> Result<Vec<RetainedBlockMeta>> {
+        if retained.is_empty() {
+            return Ok(Vec::new());
         }
 
-        let tasks = hlls
+        let tasks = retained
             .into_iter()
-            .map(|(segment_idx, (loc, ver), block_count, blocks)| {
+            .map(|(virtual_schema_index, segment, indices)| {
                 let dal = self.operator.clone();
                 let policy = self.ctx.cache_policy();
                 async move {
-                    let reader = SegmentStatsReader::new(dal);
-                    let stats = FuseCaches::instance()
-                        .segments
-                        .with_policy(policy)
-                        .get_stats(&reader, (loc, ver))
-                        .await?;
-                    let mut stats = Arc::unwrap_or_clone(stats);
-                    stats.align_to_blocks(block_count)?;
-                    Ok(blocks
+                    let stats = if let Some((loc, ver)) = segment.summary.additional_stats_loc() {
+                        let reader = SegmentStatsReader::new(dal);
+                        let stats = FuseCaches::instance()
+                            .segments
+                            .with_policy(policy)
+                            .get_stats(&reader, (loc, ver))
+                            .await?;
+                        let mut stats = Arc::unwrap_or_clone(stats);
+                        stats.align_to_blocks(segment.blocks.len())?;
+                        Some(stats)
+                    } else {
+                        None
+                    };
+                    Ok(indices
                         .into_iter()
-                        .filter_map(|block_idx| {
-                            let hll = stats.block_hlls.get(block_idx)?;
-                            let block_index = BlockIndex {
-                                segment_idx,
-                                block_idx,
-                            };
-                            Some((block_index, hll.clone()))
+                        .map(|index| RetainedBlockMeta {
+                            block_meta: segment.blocks[index].clone(),
+                            hll: stats
+                                .as_ref()
+                                .and_then(|stats| stats.block_hlls.get(index))
+                                .cloned(),
+                            top_n: stats
+                                .as_ref()
+                                .and_then(|stats| stats.block_top_ns.get(index))
+                                .cloned(),
+                            virtual_schema_index,
                         })
                         .collect::<Vec<_>>())
                 }
