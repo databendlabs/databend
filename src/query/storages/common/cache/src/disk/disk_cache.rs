@@ -382,7 +382,9 @@ impl DiskCache {
         }
         let pool = self.pool(kind).clone();
         let rel = key.rel_path(kind);
-        if pool.contains(&rel) {
+        // Checked before `value` makes the entry's bytes: one too large for its pool would be
+        // made and dropped by every read. The writer checks again, as the pool may shrink.
+        if pool.contains(&rel) || !pool.admits(&rel, len) {
             return false;
         }
         self.writer.enqueue_with(pool, rel, len, value).await

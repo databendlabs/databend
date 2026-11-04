@@ -754,3 +754,28 @@ async fn test_reads_past_capacity_evict_and_stay_correct() {
     assert_eq!(kind.hits + kind.misses, 8 * 400);
     wait_for(|| file_bytes(&dir, Pool::Data) == stats.bytes);
 }
+
+/// An entry too large for its pool is refused before its bytes are made.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_put_with_refuses_an_entry_too_large_before_making_it() {
+    let dir = TempDir::new().unwrap();
+    let disk = DiskCache::new(dir.path(), MAX_BYTES, CAPS, false).unwrap();
+    let kind = CacheKind::of::<column::Data>();
+    // Over a quarter of the data pool.
+    let len = CAPS[2] / 2;
+    let made = std::sync::atomic::AtomicBool::new(false);
+    let make = || {
+        made.store(true, std::sync::atomic::Ordering::Relaxed);
+        Bytes::from(vec![0u8; len as usize])
+    };
+    let key = DiskKey::range("a/b", 0..len);
+    assert!(!disk.put_with(kind, &key, len, make).await);
+    assert!(!made.load(std::sync::atomic::Ordering::Relaxed));
+
+    // One that fits is made and kept.
+    let len = 100;
+    let key = DiskKey::range("a/b", 0..len);
+    let value = || Bytes::from(vec![1u8; len as usize]);
+    assert!(disk.put_with(kind, &key, len, value).await);
+    wait_for(|| disk.contains(kind, &key));
+}
