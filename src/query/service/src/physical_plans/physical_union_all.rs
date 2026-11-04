@@ -46,7 +46,7 @@ use crate::pipelines::processors::transforms::TransformRecursiveCteSource;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {
-    meta: PhysicalPlanMeta,
+    pub(crate) meta: PhysicalPlanMeta,
     pub left: PhysicalPlan,
     pub right: PhysicalPlan,
     pub left_outputs: Vec<(Symbol, Option<RemoteExpr>)>,

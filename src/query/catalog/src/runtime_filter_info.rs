@@ -229,24 +229,23 @@ impl RuntimeFilterNotify {
     }
 }
 
-/// A monotonic TopN boundary shared by all local scan and PartialTopN processors
-/// for one scan. The boundary is absent until a partial candidate set is full.
+/// A monotonic TopN boundary shared by all local PartialTopN processors of one
+/// TopN and by the scans feeding it (one scan, or every branch scan of a
+/// `UNION ALL`). The boundary is absent until a partial candidate set is full.
 ///
 /// A plain `RwLock` is sufficient here: readers touch the boundary once per
 /// pruned block/partition, and publishers call [`Self::update`] only when
 /// their local boundary tightens, so contention is negligible.
-pub struct RuntimeTopNFilter {
-    column_id: u32,
+pub struct RuntimeTopNBoundary {
     asc: bool,
     nulls_first: bool,
     boundary: RwLock<Option<Scalar>>,
     recheck: RuntimeFilterNotify,
 }
 
-impl RuntimeTopNFilter {
-    pub fn new(column_id: u32, asc: bool, nulls_first: bool) -> Self {
+impl RuntimeTopNBoundary {
+    pub fn new(asc: bool, nulls_first: bool) -> Self {
         Self {
-            column_id,
             asc,
             nulls_first,
             boundary: RwLock::new(None),
@@ -324,24 +323,43 @@ impl RuntimeTopNFilter {
     }
 }
 
+/// The scan side of a [`RuntimeTopNBoundary`]: it checks the shared boundary
+/// against the statistics of the scan's own sort column. Each scan feeding a
+/// TopN gets its own filter, because the sort column has a different column id
+/// in every table.
+pub struct RuntimeTopNFilter {
+    column_id: u32,
+    boundary: Arc<RuntimeTopNBoundary>,
+}
+
+impl RuntimeTopNFilter {
+    pub fn new(column_id: u32, boundary: Arc<RuntimeTopNBoundary>) -> Self {
+        Self {
+            column_id,
+            boundary,
+        }
+    }
+}
+
 impl RuntimeScanFilter for RuntimeTopNFilter {
     fn should_prune(&self, stats: RuntimeScanStatistics) -> bool {
         let Some(stat) = stats.get(self.column_id) else {
             return false;
         };
 
-        self.boundary_excludes(stat.min(), stat.max(), stat.null_count)
+        self.boundary
+            .boundary_excludes(stat.min(), stat.max(), stat.null_count)
     }
 
     fn recheck_notified(&self) -> RuntimeScanFilterFuture {
-        self.recheck.notified()
+        self.boundary.recheck.notified()
     }
 
     fn preferred_order(&self) -> Option<RuntimeScanOrder> {
         Some(RuntimeScanOrder {
             column_id: self.column_id,
-            asc: self.asc,
-            nulls_first: self.nulls_first,
+            asc: self.boundary.asc,
+            nulls_first: self.boundary.nulls_first,
         })
     }
 }
@@ -564,9 +582,19 @@ mod tests {
         Scalar::Number(NumberScalar::Int64(value))
     }
 
+    fn top_n_filter(
+        column_id: u32,
+        asc: bool,
+        nulls_first: bool,
+    ) -> (Arc<RuntimeTopNBoundary>, Arc<RuntimeTopNFilter>) {
+        let boundary = Arc::new(RuntimeTopNBoundary::new(asc, nulls_first));
+        let filter = Arc::new(RuntimeTopNFilter::new(column_id, boundary.clone()));
+        (boundary, filter)
+    }
+
     #[test]
-    fn runtime_top_n_filter_is_monotonic_and_tie_safe() {
-        let asc = RuntimeTopNFilter::new(7, true, false);
+    fn runtime_top_n_boundary_is_monotonic_and_tie_safe() {
+        let asc = RuntimeTopNBoundary::new(true, false);
         assert!(!asc.boundary_excludes(&int64(11), &int64(20), 0));
 
         asc.update(&int64(10));
@@ -580,7 +608,7 @@ mod tests {
         asc.update(&int64(8));
         assert_eq!(asc.boundary(), Some(int64(8)));
 
-        let desc = RuntimeTopNFilter::new(7, false, false);
+        let desc = RuntimeTopNBoundary::new(false, false);
         desc.update(&int64(10));
         assert!(desc.boundary_excludes(&int64(1), &int64(9), 0));
         assert!(!desc.boundary_excludes(&int64(1), &int64(10), 0));
@@ -594,8 +622,8 @@ mod tests {
     }
 
     #[test]
-    fn runtime_top_n_filter_ranks_nulls_by_ordering() {
-        let nulls_last = RuntimeTopNFilter::new(1, true, false);
+    fn runtime_top_n_boundary_ranks_nulls_by_ordering() {
+        let nulls_last = RuntimeTopNBoundary::new(true, false);
         nulls_last.update(&int64(10));
         // Nulls sort after the boundary, so null rows are prunable too.
         assert!(nulls_last.boundary_excludes(&int64(11), &int64(20), 5));
@@ -603,7 +631,7 @@ mod tests {
         assert!(nulls_last.boundary_excludes(&Scalar::Null, &Scalar::Null, 7));
         assert!(!nulls_last.boundary_excludes(&int64(9), &int64(20), 5));
 
-        let nulls_first = RuntimeTopNFilter::new(1, true, true);
+        let nulls_first = RuntimeTopNBoundary::new(true, true);
         nulls_first.update(&int64(10));
         // Null rows are always candidates under NULLS FIRST.
         assert!(!nulls_first.boundary_excludes(&int64(11), &int64(20), 1));
@@ -612,8 +640,8 @@ mod tests {
     }
 
     #[test]
-    fn runtime_top_n_filter_concurrent_updates_keep_tightest() {
-        let filter = Arc::new(RuntimeTopNFilter::new(1, true, false));
+    fn runtime_top_n_boundary_concurrent_updates_keep_tightest() {
+        let filter = Arc::new(RuntimeTopNBoundary::new(true, false));
         let threads: Vec<_> = (0..4)
             .map(|t| {
                 let filter = filter.clone();
@@ -639,18 +667,18 @@ mod tests {
 
     #[tokio::test]
     async fn runtime_scan_filter_notifications_are_repeatable() {
-        let filter = RuntimeTopNFilter::new(1, true, false);
+        let (boundary, filter) = top_n_filter(1, true, false);
 
         let first = filter.recheck_notified();
-        filter.update(&int64(10));
+        boundary.update(&int64(10));
         timeout(Duration::from_secs(1), first).await.unwrap();
 
         let unchanged = filter.recheck_notified();
-        filter.update(&int64(12));
+        boundary.update(&int64(12));
         assert!(timeout(Duration::from_millis(10), unchanged).await.is_err());
 
         let second = filter.recheck_notified();
-        filter.update(&int64(8));
+        boundary.update(&int64(8));
         timeout(Duration::from_secs(1), second).await.unwrap();
     }
 
@@ -672,8 +700,8 @@ mod tests {
 
     #[test]
     fn runtime_scan_filters_combine_filters() {
-        let top_n = Arc::new(RuntimeTopNFilter::new(1, true, false));
-        top_n.update(&int64(10));
+        let (boundary, top_n) = top_n_filter(1, true, false);
+        boundary.update(&int64(10));
         let limit = Arc::new(RuntimeLimitFilter::new());
 
         let mut filters = RuntimeScanFilters::default();
@@ -701,8 +729,8 @@ mod tests {
 
     #[test]
     fn runtime_scan_filters_prune_by_column_stats() {
-        let asc_filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
-        asc_filter.update(&int64(10));
+        let (boundary, asc_filter) = top_n_filter(3, true, false);
+        boundary.update(&int64(10));
         let mut asc = RuntimeScanFilters::default();
         asc.push(asc_filter);
 
@@ -718,25 +746,54 @@ mod tests {
         assert!(!asc.should_prune(RuntimeScanStatistics::from_columns(None)));
 
         // Under NULLS FIRST null rows are always candidates.
-        let nulls_first_filter = Arc::new(RuntimeTopNFilter::new(3, true, true));
-        nulls_first_filter.update(&int64(10));
+        let (boundary, nulls_first_filter) = top_n_filter(3, true, true);
+        boundary.update(&int64(10));
         let mut nulls_first = RuntimeScanFilters::default();
         nulls_first.push(nulls_first_filter);
         assert!(!nulls_first.should_prune(RuntimeScanStatistics::from_columns(Some(&columns))));
 
-        let desc_filter = Arc::new(RuntimeTopNFilter::new(3, false, false));
-        desc_filter.update(&int64(10));
+        let (boundary, desc_filter) = top_n_filter(3, false, false);
+        boundary.update(&int64(10));
         let mut desc = RuntimeScanFilters::default();
         desc.push(desc_filter);
         columns.insert(3, column_stats(1, 9, 0));
         assert!(desc.should_prune(RuntimeScanStatistics::from_columns(Some(&columns))));
     }
 
+    #[tokio::test]
+    async fn runtime_top_n_filters_share_one_boundary_across_scans() {
+        // A TopN over `UNION ALL` drives one filter per branch scan; the sort
+        // column has a different column id in each table.
+        let boundary = Arc::new(RuntimeTopNBoundary::new(true, false));
+        let left = RuntimeTopNFilter::new(1, boundary.clone());
+        let right = RuntimeTopNFilter::new(5, boundary.clone());
+        assert_eq!(left.preferred_order().unwrap().column_id, 1);
+        assert_eq!(right.preferred_order().unwrap().column_id, 5);
+
+        let left_notified = left.recheck_notified();
+        let right_notified = right.recheck_notified();
+        boundary.update(&int64(10));
+        timeout(Duration::from_secs(1), left_notified)
+            .await
+            .unwrap();
+        timeout(Duration::from_secs(1), right_notified)
+            .await
+            .unwrap();
+
+        let left_stats = HashMap::from([(1, column_stats(11, 20, 0))]);
+        let right_stats = HashMap::from([(5, column_stats(11, 20, 0))]);
+        assert!(left.should_prune(RuntimeScanStatistics::from_columns(Some(&left_stats))));
+        assert!(right.should_prune(RuntimeScanStatistics::from_columns(Some(&right_stats))));
+        // Each filter only reads the statistics of its own column.
+        assert!(!left.should_prune(RuntimeScanStatistics::from_columns(Some(&right_stats))));
+        assert!(!right.should_prune(RuntimeScanStatistics::from_columns(Some(&left_stats))));
+    }
+
     #[test]
     fn runtime_topn_uses_separate_virtual_column_statistics() {
         let query_column_id = 3_000_000_000;
-        let filter = RuntimeTopNFilter::new(query_column_id, true, false);
-        filter.update(&int64(10));
+        let (boundary, filter) = top_n_filter(query_column_id, true, false);
+        boundary.update(&int64(10));
 
         let base_stats = HashMap::from([(1, column_stats(1, 100, 0))]);
         let virtual_stats = HashMap::from([(query_column_id, column_stats(11, 20, 0))]);
