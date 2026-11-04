@@ -11,6 +11,3 @@ strength_reduce = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]
-
-[lints]
-workspace = true
