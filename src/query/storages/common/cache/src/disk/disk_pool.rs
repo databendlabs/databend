@@ -50,6 +50,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use log::info;
@@ -609,13 +610,17 @@ impl DiskPool {
     /// files beyond the capacity. Returns the entries loaded and the files deleted. Runs
     /// concurrently with reads and writes: a key indexed meanwhile, being deleted or being
     /// written is skipped.
+    /// The scan is not held to the memory limit, on its thread or the workers': an allocation
+    /// failing between two updates of the index would leave an entry its object does not list.
     pub fn reload(&self) -> (u64, u64) {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         self.expect_reload();
         let loaded = AtomicU64::new(0);
         let deleted = AtomicU64::new(0);
         let complete = AtomicBool::new(true);
         let entries = scan_files(&self.root, &complete);
         entries.par_iter().for_each(|path| {
+            let _unlimited = LimitMemGuard::enter_unlimited();
             let Some(rel) = rel_key(&self.root, path) else {
                 remove(path, &deleted);
                 return;
