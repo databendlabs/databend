@@ -138,6 +138,14 @@ pub async fn load_bloom_filter_by_columns<'a>(
     }
 
     // 3. load filters
+    let whole_file = match whole_file {
+        Some(whole_file) => Some(whole_file),
+        None => {
+            let names = col_metas.values().map(|(name, _)| name.as_str());
+            let storage = DiskCachedStorage::new(dal.clone());
+            cached_whole_file(&storage, index_path, names, policy).await?
+        }
+    };
     let bloom_index_fields: Vec<_> = bloom_index_meta
         .columns
         .iter()
@@ -260,8 +268,7 @@ async fn prepare_bloom_index_read_source(
 /// Whether to read the index file whole: it is small, its footer is not in memory, and the
 /// disk cache can keep it whole, as a filter unit, or keeps no footer either. Read whole, the
 /// footer is not read through the meta pool, which would then never serve it. With the footer
-/// in memory, the file is still read whole when the disk cache holds it whole, as an earlier
-/// cold read left it: its filters are not cached by range, and would be read from storage.
+/// in memory, see `cached_whole_file`.
 fn should_read_whole_bloom_index(
     path: &str,
     settings: &ReadSettings,
@@ -272,12 +279,35 @@ fn should_read_whole_bloom_index(
     if index_length > settings.parquet_fast_read_bytes {
         return false;
     }
-    let fill = policy.disk;
     if policy.memory.reads() && FuseCaches::instance().index_metas.bloom.contains(path) {
-        return storage.holds(CacheKind::of::<bloom::Filter>(), path, None, fill);
+        return false;
     }
+    let fill = policy.disk;
     storage.admits(CacheKind::of::<bloom::Filter>(), index_length, fill)
         || !storage.uses_disk(CacheKind::of::<bloom::IndexMeta>(), fill)
+}
+
+/// With the footer in memory: the whole file, when a filter of `names` misses memory and the
+/// disk cache holds the file whole, as a cold read left it. Its filters are not on disk by range,
+/// so range reads would go to storage. Filters all in memory need no read at all.
+async fn cached_whole_file<'a>(
+    storage: &DiskCachedStorage,
+    path: &str,
+    mut names: impl Iterator<Item = &'a str>,
+    policy: CachePolicy,
+) -> Result<Option<Arc<Bytes>>> {
+    let filters = &FuseCaches::instance().bloom_filters;
+    let in_memory =
+        |name: &str| policy.memory.reads() && filters.contains(&format!("{path}-{name}"));
+    if names.all(in_memory) {
+        return Ok(None);
+    }
+    let kind = CacheKind::of::<bloom::Filter>();
+    if !storage.holds(kind, path, None, policy.disk) {
+        return Ok(None);
+    }
+    let bytes = storage.read(kind, path, None, policy.disk).await?;
+    Ok(Some(Arc::new(bytes)))
 }
 
 fn load_index_meta_from_bytes(data: &Bytes) -> Result<BloomIndexMeta> {
@@ -354,6 +384,7 @@ mod tests {
     use databend_storages_common_index::BloomIndexBuilder;
     use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
+    use databend_storages_common_index::filters::Xor8Filter;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;
 
@@ -395,8 +426,8 @@ mod tests {
         Ok((data, filter_name))
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_should_read_whole_bloom_index_by_threshold_and_cache() -> Result<()> {
+    #[test]
+    fn test_should_read_whole_bloom_index_by_threshold_and_cache() -> Result<()> {
         init_test_globals()?;
         // Its own path: the meta cache is shared by the tests running alongside.
         let path = "should_read_whole/bloom_index";
@@ -436,23 +467,6 @@ mod tests {
         assert!(!should_read_whole_bloom_index(
             path, &settings, 512, &storage, policy
         ));
-        // Footer in memory, file whole on disk from an earlier read: its filters are there.
-        let disk = Arc::new(DiskCache::new(
-            dir.path(),
-            1 << 30,
-            [1 << 20, 1 << 20, 1 << 20],
-            false,
-        )?);
-        let on_disk = DiskCachedStorage::with_disk(operator.clone(), Some(disk.clone()));
-        assert!(!should_read_whole_bloom_index(
-            path, &settings, 512, &on_disk, policy
-        ));
-        let key = databend_storages_common_cache::DiskKey::whole(path);
-        let filter = CacheKind::of::<bloom::Filter>();
-        assert!(disk.put(filter, &key, Bytes::from_static(b"x")).await);
-        assert!(should_read_whole_bloom_index(
-            path, &settings, 512, &on_disk, policy
-        ));
         // A read that bypasses the disk cache keeps no footer there: read whole.
         assert!(should_read_whole_bloom_index(
             path,
@@ -461,6 +475,52 @@ mod tests {
             &storage,
             CachePolicy::BYPASS
         ));
+        Ok(())
+    }
+
+    /// With the footer in memory, a filter missing from memory is read from the whole file the
+    /// disk cache holds, and filters all in memory read nothing.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cached_whole_file_serves_filters_missing_from_memory() -> Result<()> {
+        init_test_globals()?;
+        // Its own path: the filter cache is shared by the tests running alongside.
+        let path = "cached_whole_file/bloom_index";
+        let name = "filter";
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let dir = tempfile::TempDir::new()?;
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 1 << 20, 1 << 20],
+            false,
+        )?);
+        let storage = DiskCachedStorage::with_disk(operator, Some(disk.clone()));
+        let filters = &FuseCaches::instance().bloom_filters;
+        let filter_key = format!("{path}-{name}");
+        filters.evict(&filter_key);
+        let policy = CachePolicy::DEFAULT;
+        let whole = |storage: &DiskCachedStorage| {
+            let storage = storage.clone();
+            async move { cached_whole_file(&storage, path, [name].into_iter(), policy).await }
+        };
+
+        // Nothing on disk: the filter is read by range.
+        assert!(whole(&storage).await?.is_none());
+
+        // The whole file on disk and the filter missing from memory: read from that entry.
+        let kind = CacheKind::of::<bloom::Filter>();
+        let key = databend_storages_common_cache::DiskKey::whole(path);
+        assert!(disk.put(kind, &key, Bytes::from_static(b"whole")).await);
+        let bytes = whole(&storage).await?.expect("the whole file");
+        assert_eq!(bytes.as_ref().as_ref(), b"whole");
+
+        // The filter in memory: nothing is read.
+        let filter = FilterImpl::Xor(Xor8Filter::default());
+        filters.put(&filter_key, Arc::new(filter));
+        if filters.contains(&filter_key) {
+            assert!(whole(&storage).await?.is_none());
+        }
+        filters.evict(&filter_key);
         Ok(())
     }
 
