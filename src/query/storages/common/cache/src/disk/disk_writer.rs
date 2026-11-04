@@ -29,6 +29,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use bytes::Bytes;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::catch_unwind;
 use log::warn;
 use parking_lot::Mutex;
@@ -187,6 +188,11 @@ impl DiskWriter {
             let spawned = std::thread::Builder::new()
                 .name(format!("disk-cache-writer-{i}"))
                 .spawn(move || {
+                    // Outside any query, an allocation over the global memory limit fails and
+                    // unwinds. A writer allocates only keys, paths and victim lists, the entry
+                    // bytes being charged where they were read: it must not fail halfway
+                    // through the pool's bookkeeping for them.
+                    let _unlimited = LimitMemGuard::enter_unlimited();
                     while let Ok(job) = rx.recv() {
                         // A panic loses the entry, not the thread; `write` keeps the
                         // accounting right on unwind.
@@ -389,23 +395,33 @@ impl Shared {
                 }
             }
         }
+        // Deletes the temporary file when the write ends, also on a panic: left, it would be
+        // in no index nor capacity, and the restart scan skips this run's temporary files.
+        struct Tmp(PathBuf);
+        impl Drop for Tmp {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
         let reservation = pool.reserve(rel, bytes);
+        // Armed before the victims' files are deleted, which allocates their paths.
+        let mut held = Held {
+            pool: &pool,
+            rel,
+            bytes,
+            published: !reservation.reserved,
+        };
         pool.delete(&reservation.victims);
         if reservation.reserved {
-            let mut held = Held {
-                pool: &pool,
-                rel,
-                bytes,
-                published: false,
-            };
             let path = pool.root().join(rel);
-            let tmp = tmp_path(&path, self.seq.fetch_add(1, Ordering::Relaxed));
-            let published = write_tmp(&tmp, &value, self.options.sync_data).and_then(|written| {
+            let tmp_file = Tmp(tmp_path(&path, self.seq.fetch_add(1, Ordering::Relaxed)));
+            let tmp = &tmp_file.0;
+            let published = write_tmp(tmp, &value, self.options.sync_data).and_then(|written| {
                 // Allocated before the guard is disarmed: `publish` gives the reservation
                 // back first thing, so nothing between here and there may unwind.
                 let key = rel.to_string();
                 held.published = true;
-                let commit = || std::fs::rename(&tmp, &path);
+                let commit = || std::fs::rename(tmp, &path);
                 Ok(pool.publish(key, bytes, written, commit)?)
             });
             match published {
@@ -420,8 +436,6 @@ impl Shared {
                     warn!("[DiskCache] failed to write {path:?}: {e}");
                 }
             }
-            // Left when the entry was rejected or its write failed.
-            let _ = std::fs::remove_file(&tmp);
         } else {
             self.drops.add(rel, DropReason::Rejected);
         }

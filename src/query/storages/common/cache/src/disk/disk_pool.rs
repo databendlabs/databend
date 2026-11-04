@@ -366,6 +366,8 @@ impl DiskPool {
     /// (found by the restart scan since it was queued), its previous file is being deleted, or
     /// another write of it runs.
     pub fn reserve(&self, rel: &str, bytes: u64) -> Reservation {
+        // Allocated before anything changes: an allocation that unwinds leaves no reservation.
+        let key = rel.to_string();
         let mut state = self.state.lock();
         let mut victims = Vec::new();
         if !state.reservable(rel, bytes) {
@@ -386,8 +388,8 @@ impl DiskPool {
                 }
             }
         }
+        state.in_flight.insert(key);
         state.writing += bytes;
-        state.in_flight.insert(rel.to_string());
         Reservation {
             reserved: true,
             victims,
