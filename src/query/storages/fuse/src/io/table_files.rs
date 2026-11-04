@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -50,10 +51,15 @@ impl TableFiles {
         let locations = locations.to_vec();
         GlobalIORuntime::instance()
             .spawn(async move {
-                let removed = files.remove_file_in_batch(&locations).await;
-                // After the delete, failed or not: some files may be gone.
+                let removed =
+                    CatchUnwindFuture::create(files.remove_file_in_batch(&locations)).await;
+                // After the delete, failed or not, even on a memory limit panic: some files may
+                // be gone.
                 disk.evict_objects(&locations).await?;
-                removed
+                match removed {
+                    Ok(removed) => removed,
+                    Err(cause) => Err(cause.with_context("table file delete panicked")),
+                }
             })
             .await
             .map_err(|e| ErrorCode::Internal(format!("table file delete task failed: {e}")))?

@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
@@ -95,19 +96,25 @@ impl DiskCachedStorage {
     /// place or deleted (see `DiskCache::evict_object`). Paths of fuse tables are never reused
     /// otherwise; the memory caches of the decoded values are evicted by their own handles.
     /// Deleting the cached files is file system work, on a blocking thread, which runs to its
-    /// end when the caller is cancelled: the objects are gone from storage either way.
+    /// end when the caller is cancelled: the objects are gone from storage either way. For the
+    /// same reason it is not held to the caller's memory limit: a failed allocation would leave
+    /// cached copies of deleted objects readable.
     pub async fn evict_objects(&self, paths: &[String]) -> Result<()> {
         let Some(disk) = self.disk.clone() else {
             return Ok(());
         };
-        let objects: Vec<String> = paths.iter().map(|p| self.object_path(p)).collect();
-        databend_common_base::runtime::spawn_blocking(move || {
-            for object in &objects {
-                disk.evict_object(object);
-            }
-        })
-        .await
-        .map_err(|e| ErrorCode::Internal(format!("disk cache eviction task failed: {e}")))
+        let task = {
+            let _unlimited = LimitMemGuard::enter_unlimited();
+            let objects: Vec<String> = paths.iter().map(|p| self.object_path(p)).collect();
+            databend_common_base::runtime::spawn_blocking(move || {
+                let _unlimited = LimitMemGuard::enter_unlimited();
+                for object in &objects {
+                    disk.evict_object(object);
+                }
+            })
+        };
+        task.await
+            .map_err(|e| ErrorCode::Internal(format!("disk cache eviction task failed: {e}")))
     }
 
     /// For writes, listing and deletes, which do not go through the disk cache.
