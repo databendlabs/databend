@@ -259,7 +259,9 @@ async fn prepare_bloom_index_read_source(
 
 /// Whether to read the index file whole: it is small, its footer is not in memory, and the
 /// disk cache can keep it whole, as a filter unit, or keeps no footer either. Read whole, the
-/// footer is not read through the meta pool, which would then never serve it.
+/// footer is not read through the meta pool, which would then never serve it. With the footer
+/// in memory, the file is still read whole when the disk cache holds it whole, as an earlier
+/// cold read left it: its filters are not cached by range, and would be read from storage.
 fn should_read_whole_bloom_index(
     path: &str,
     settings: &ReadSettings,
@@ -270,10 +272,10 @@ fn should_read_whole_bloom_index(
     if index_length > settings.parquet_fast_read_bytes {
         return false;
     }
-    if policy.memory.reads() && FuseCaches::instance().index_metas.bloom.contains(path) {
-        return false;
-    }
     let fill = policy.disk;
+    if policy.memory.reads() && FuseCaches::instance().index_metas.bloom.contains(path) {
+        return storage.holds(CacheKind::of::<bloom::Filter>(), path, None, fill);
+    }
     storage.admits(CacheKind::of::<bloom::Filter>(), index_length, fill)
         || !storage.uses_disk(CacheKind::of::<bloom::IndexMeta>(), fill)
 }
@@ -393,8 +395,8 @@ mod tests {
         Ok((data, filter_name))
     }
 
-    #[test]
-    fn test_should_read_whole_bloom_index_by_threshold_and_cache() -> Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_should_read_whole_bloom_index_by_threshold_and_cache() -> Result<()> {
         init_test_globals()?;
         // Its own path: the meta cache is shared by the tests running alongside.
         let path = "should_read_whole/bloom_index";
@@ -433,6 +435,23 @@ mod tests {
         cache.put(path, Arc::new(BloomIndexMeta { columns: vec![] }));
         assert!(!should_read_whole_bloom_index(
             path, &settings, 512, &storage, policy
+        ));
+        // Footer in memory, file whole on disk from an earlier read: its filters are there.
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 1 << 20, 1 << 20],
+            false,
+        )?);
+        let on_disk = DiskCachedStorage::with_disk(operator.clone(), Some(disk.clone()));
+        assert!(!should_read_whole_bloom_index(
+            path, &settings, 512, &on_disk, policy
+        ));
+        let key = databend_storages_common_cache::DiskKey::whole(path);
+        let filter = CacheKind::of::<bloom::Filter>();
+        assert!(disk.put(filter, &key, Bytes::from_static(b"x")).await);
+        assert!(should_read_whole_bloom_index(
+            path, &settings, 512, &on_disk, policy
         ));
         // A read that bypasses the disk cache keeps no footer there: read whole.
         assert!(should_read_whole_bloom_index(

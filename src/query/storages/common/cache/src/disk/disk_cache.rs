@@ -345,6 +345,16 @@ impl DiskCache {
         self.is_enabled(kind) && self.pool(kind).contains(&key.rel_path(kind))
     }
 
+    /// Whether `get` would serve `key`: it is on disk, or queued to be written.
+    pub fn holds(&self, kind: CacheKind, key: &DiskKey) -> bool {
+        if !self.is_enabled(kind) {
+            return false;
+        }
+        let pool = self.pool(kind);
+        let rel = key.rel_path(kind);
+        pool.contains(&rel) || self.writer.pending(pool.pool().index(), &rel).is_some()
+    }
+
     /// Queues `value` to be written under `key`. Returns false when it was dropped.
     pub async fn put(&self, kind: CacheKind, key: &DiskKey, value: Bytes) -> bool {
         if !self.is_enabled(kind) {

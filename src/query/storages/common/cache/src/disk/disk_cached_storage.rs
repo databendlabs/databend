@@ -121,6 +121,19 @@ impl DiskCachedStorage {
             .is_some_and(|disk| disk.admits(kind, len))
     }
 
+    /// Whether a read of `kind` with `fill` of `path`, or `range` of it, would be served by the
+    /// disk cache: the entry is on disk or queued to be written.
+    pub fn holds(
+        &self,
+        kind: CacheKind,
+        path: &str,
+        range: Option<Range<u64>>,
+        fill: CacheFill,
+    ) -> bool {
+        self.disk_for(kind, fill)
+            .is_some_and(|disk| disk.holds(kind, &self.key(path, range)))
+    }
+
     /// Whether reads of `kind` with `fill` go through the disk cache.
     pub fn uses_disk(&self, kind: CacheKind, fill: CacheFill) -> bool {
         self.disk_for(kind, fill).is_some()
