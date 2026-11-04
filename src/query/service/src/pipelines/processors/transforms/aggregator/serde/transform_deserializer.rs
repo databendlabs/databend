@@ -30,7 +30,6 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
-use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::exchange::serde::deserialize_block;
 use crate::servers::flight::v1::packets::DataPacket;
@@ -92,27 +91,15 @@ impl TransformDeserializer {
             };
         };
 
-        match meta.typ {
-            BUCKET_TYPE => {
-                let mut block = deserialize_block(
-                    dict,
-                    fragment_data,
-                    &self.schema,
-                    self.arrow_schema.clone(),
-                )?;
-
-                if meta.is_empty {
-                    block = block.slice(0..0);
-                }
-
-                Ok(vec![DataBlock::empty_with_meta(
-                    AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
-                )])
-            }
-            other => Err(ErrorCode::Internal(format!(
-                "Unknown aggregate serde meta type {other}"
-            ))),
+        let mut block =
+            deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?;
+        if meta.is_empty {
+            block = block.slice(0..0);
         }
+
+        Ok(vec![DataBlock::empty_with_meta(
+            AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
+        )])
     }
 }
 

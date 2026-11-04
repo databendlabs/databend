@@ -38,21 +38,16 @@ use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
-pub trait LocalScatter: Sync + Send {
-    fn name(&self) -> &'static str;
-
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>>;
-}
-
+/// Scatters the output of a partial aggregate to the final aggregates of this node.
 pub struct LocalScatterTransform {
-    scatter: Arc<Box<dyn LocalScatter>>,
+    scatter: Arc<AggregateScatter>,
 }
 
 impl LocalScatterTransform {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        scatter: Arc<Box<dyn LocalScatter>>,
+        scatter: Arc<AggregateScatter>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(input, output, LocalScatterTransform {
             scatter,
@@ -64,14 +59,14 @@ impl Transform for LocalScatterTransform {
     const NAME: &'static str = "LocalScatterTransform";
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        let blocks = self.scatter.execute(data)?;
+        let blocks = self.scatter.execute_local(data)?;
         Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
             blocks,
         )))
     }
 
     fn name(&self) -> String {
-        format!("LocalScatterTransform({})", self.scatter.name())
+        "LocalScatterTransform(Aggregate)".to_string()
     }
 }
 
@@ -198,12 +193,9 @@ impl AggregateScatter {
     }
 }
 
-impl LocalScatter for AggregateScatter {
-    fn name(&self) -> &'static str {
-        "Aggregate"
-    }
-
-    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
+impl AggregateScatter {
+    /// Scatter a block of raw rows or states to the final aggregates of this node.
+    fn execute_local(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if data_block.get_meta().is_none() {
             let indices = self.raw_partitions(&data_block);
             return data_block.scatter(&indices, self.partitions);
@@ -283,7 +275,6 @@ mod tests {
             &[0],
             &[],
             &[],
-            true,
             1024,
             1024 * 1024,
         )
@@ -384,13 +375,15 @@ mod tests {
         let params = params()?;
         for partitions in [1, 3, 8, 48] {
             let local = AggregateScatter::local(partitions, params.clone());
-            let raw = LocalScatter::execute(&local, keys_block())?
+            let raw = local
+                .execute_local(keys_block())?
                 .iter()
                 .map(|block| keys(block, 0))
                 .collect();
             let raw = partition_of_keys(raw);
 
-            let states = LocalScatter::execute(&local, states_block(&params)?)?
+            let states = local
+                .execute_local(states_block(&params)?)?
                 .into_iter()
                 .map(|block| match block.get_meta() {
                     None => Ok(vec![]),

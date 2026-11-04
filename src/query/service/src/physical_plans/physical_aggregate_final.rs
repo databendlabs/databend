@@ -159,17 +159,11 @@ impl IPhysicalPlan for AggregateFinal {
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
 
-        let mut is_cluster_aggregate = false;
-        if ExchangeSource::check_physical_plan(&self.input) {
-            is_cluster_aggregate = true;
-        }
-
         let mut params = PipelineBuilder::build_aggregator_params(
             &builder.ctx,
             self.before_group_by_schema.clone(),
             &self.group_by,
             &self.agg_funcs,
-            is_cluster_aggregate,
             max_block_rows,
             max_block_bytes,
         )?;

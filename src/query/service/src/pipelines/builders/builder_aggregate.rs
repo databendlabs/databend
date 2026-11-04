@@ -36,7 +36,6 @@ impl PipelineBuilder {
         input_schema: DataSchemaRef,
         group_by: &[Symbol],
         agg_funcs: &[AggregateFunctionDesc],
-        cluster_aggregator: bool,
         max_block_rows: usize,
         max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
@@ -114,7 +113,6 @@ impl PipelineBuilder {
             &group_by,
             &aggs,
             &agg_args,
-            cluster_aggregator,
             max_block_rows,
             max_block_bytes,
         )?;

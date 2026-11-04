@@ -24,12 +24,8 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 
-pub const BUCKET_TYPE: usize = 1;
-
-// Cannot change to enum, because bincode cannot deserialize custom enum.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateSerdeMeta {
-    pub typ: usize,
     pub bucket: isize,
     pub max_partition_count: usize,
     pub is_empty: bool,
@@ -42,7 +38,6 @@ impl AggregateSerdeMeta {
         is_empty: bool,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
-            typ: BUCKET_TYPE,
             bucket,
             max_partition_count,
             is_empty,

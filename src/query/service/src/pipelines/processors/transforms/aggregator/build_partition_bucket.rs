@@ -26,7 +26,6 @@ use databend_common_pipeline::core::TransformPipeBuilder;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::LocalScatter;
 use crate::pipelines::processors::transforms::aggregator::LocalScatterTransform;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
 use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
@@ -47,10 +46,7 @@ pub fn build_partition_bucket(
         pipeline.output_len()
     } else {
         let final_parallelism = ctx.get_settings().get_max_threads()? as usize;
-        let scatter: Arc<Box<dyn LocalScatter>> = Arc::new(Box::new(AggregateScatter::local(
-            final_parallelism,
-            params.clone(),
-        )));
+        let scatter = Arc::new(AggregateScatter::local(final_parallelism, params.clone()));
         pipeline.add_transform(|input, output| {
             Ok(LocalScatterTransform::create(
                 input,

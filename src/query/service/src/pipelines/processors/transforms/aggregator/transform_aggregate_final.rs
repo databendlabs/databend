@@ -99,7 +99,7 @@ pub struct TransformFinalAggregate {
     _id: usize,
     max_partition_depth: usize,
     current_partition_depth: usize,
-    spiller: AggregateSpiller<LocalPartitionStream>,
+    spiller: AggregateSpiller,
     settings: MemorySettings,
     max_aggregate_spill_level: usize,
     next_task_id: Arc<AtomicU64>,
@@ -686,7 +686,6 @@ mod tests {
             &[0],
             &[],
             &[],
-            false,
             1024,
             1024 * 1024,
         )

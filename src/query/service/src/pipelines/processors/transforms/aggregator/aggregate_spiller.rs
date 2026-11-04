@@ -24,7 +24,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
@@ -32,7 +31,6 @@ use log::debug;
 use log::info;
 use parquet::file::metadata::RowGroupMetaData;
 
-use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::sessions::QueryContext;
@@ -231,11 +229,6 @@ impl AggregatePayloadWriters {
     }
 }
 
-pub trait PartitionStream: Send {
-    fn finish(&mut self) -> Vec<(usize, DataBlock)>;
-    fn partition(&mut self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)>;
-}
-
 pub struct LocalPartitionStream {
     partition_stream: BlockPartitionStream,
 }
@@ -245,9 +238,7 @@ impl LocalPartitionStream {
         let partition_stream = BlockPartitionStream::create(max_rows, max_bytes, partition_count);
         Self { partition_stream }
     }
-}
 
-impl PartitionStream for LocalPartitionStream {
     fn finish(&mut self) -> Vec<(usize, DataBlock)> {
         let ids = self.partition_stream.partition_ids();
         let mut pending_blocks = Vec::with_capacity(ids.len());
@@ -265,15 +256,14 @@ impl PartitionStream for LocalPartitionStream {
     }
 }
 
-pub struct AggregateSpiller<P: PartitionStream> {
-    pub memory_settings: MemorySettings,
+pub struct AggregateSpiller {
     read_setting: ReadSettings,
-    partition_stream: P,
+    partition_stream: LocalPartitionStream,
     data_schema: DataSchemaRef,
     payload_writers: AggregatePayloadWriters,
 }
 
-impl AggregateSpiller<LocalPartitionStream> {
+impl AggregateSpiller {
     /// Take buffered states only if this round has not written any blocks. Once
     /// a writer exists, the tails must stay with the spilled states for merging.
     pub(super) fn take_pending_if_unspilled(&mut self) -> Option<Vec<(usize, DataBlock)>> {
@@ -282,16 +272,13 @@ impl AggregateSpiller<LocalPartitionStream> {
         }
         Some(self.partition_stream.finish())
     }
-}
 
-impl<P: PartitionStream> AggregateSpiller<P> {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         partition_count: usize,
         data_schema: DataSchemaRef,
-        partition_stream: P,
+        partition_stream: LocalPartitionStream,
     ) -> Result<Self> {
-        let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
         let spill_prefix = ctx.query_id_spill_prefix();
@@ -304,7 +291,6 @@ impl<P: PartitionStream> AggregateSpiller<P> {
             AggregatePayloadWriters::create(&spill_prefix, partition_count, writer_pool_bytes, ctx);
 
         Ok(Self {
-            memory_settings,
             read_setting,
             data_schema,
             partition_stream,
