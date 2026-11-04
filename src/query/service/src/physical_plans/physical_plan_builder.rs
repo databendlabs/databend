@@ -20,6 +20,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -47,6 +48,7 @@ pub struct PhysicalPlanBuilder {
     // DataMutation info, used to build MergeInto physical plan
     pub mutation_build_info: Option<MutationBuildInfo>,
     pub cte_required_columns: HashMap<String, ColumnSet>,
+    pub cte_schemas: HashMap<String, DataSchemaRef>,
     pub is_cte_required_columns_collected: bool,
     pub build_depth: usize,
     /// Scan IDs that can use the post-pruning block metadata exchange if their finalized
@@ -64,6 +66,7 @@ impl PhysicalPlanBuilder {
             dry_run,
             mutation_build_info: None,
             cte_required_columns: HashMap::new(),
+            cte_schemas: HashMap::new(),
             is_cte_required_columns_collected: false,
             build_depth: 0,
             distributed_fuse_pruning_scans: HashSet::new(),
