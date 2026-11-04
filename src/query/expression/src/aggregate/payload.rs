@@ -174,8 +174,8 @@ unsafe impl Send for Payload {}
 unsafe impl Sync for Payload {}
 
 pub(super) struct Page {
-    // RowRef values into this buffer may be stored in hash indexes and flush
-    // state. A page must not reallocate after such row refs are published.
+    // Probe and flush states hold row pointers into this buffer, and hash indexes hold row
+    // ids of it. A page must not reallocate once its rows are published.
     data: PageData,
     pub(super) rows: usize,
     // state_offset = state_rows * agg_len
@@ -427,7 +427,7 @@ impl Payload {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
         let address = unsafe {
-            // SAFETY: RowRef and RowMut are repr(transparent) wrappers over raw
+            // SAFETY: RowPtr and RowMut are repr(transparent) wrappers over raw
             // u8 pointers. Raw pointer mutability does not change layout, and
             // row_ptr.rs has compile-time size/alignment assertions for these
             // two wrappers.

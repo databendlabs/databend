@@ -103,15 +103,13 @@ impl GroupKeyState {
 }
 
 pub struct AggregateHashTable {
-    // Hash index entries store RowRef values into these payload pages. Any path
-    // that replaces or repartitions payload must clear or rebuild the index
-    // before probing it again.
+    // Hash index entries store the ids of rows in these payload pages. Any path that replaces
+    // the payload must clear or rebuild the index before probing it again.
     pub payload: PartitionedPayload,
     // use for append rows directly during deserialize
     pub direct_append: bool,
     pub config: HashTableConfig,
 
-    current_radix_bits: u64,
     hash_index: HashIndex,
     hash_index_resize_count: usize,
     /// The partial index restarted in place since the payload was taken, so the payload holds
@@ -142,7 +140,6 @@ impl AggregateHashTable {
     ) -> Self {
         Self {
             direct_append: false,
-            current_radix_bits: config.initial_radix_bits,
             payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
@@ -175,7 +172,6 @@ impl AggregateHashTable {
             .collect();
         Self {
             direct_append: false,
-            current_radix_bits: config.initial_radix_bits,
             payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
@@ -215,7 +211,6 @@ impl AggregateHashTable {
         };
         Self {
             direct_append: !need_init_entry,
-            current_radix_bits: config.initial_radix_bits,
             payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
@@ -828,7 +823,7 @@ impl AggregateHashTable {
         Ok(true)
     }
 
-    // scan payload to reconstruct PointArray
+    /// Rebuild the index from the payload with at least `new_capacity` slots.
     fn resize(&mut self, new_capacity: usize) {
         self.hash_index_resize_count += 1;
 
