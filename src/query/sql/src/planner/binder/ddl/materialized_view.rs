@@ -562,7 +562,7 @@ impl Binder {
         let source_table_seq = source_table.get_table_info().ident.seq;
         // Refresh, read, and privilege checks resolve the source database from this option, so
         // reject a source without it here instead of creating an unusable materialized view.
-        source_table
+        let recorded_source_database_id = source_table
             .get_table_info()
             .meta
             .options
@@ -579,6 +579,26 @@ impl Binder {
             return Err(ErrorCode::InvalidMaterializedView(format!(
                 "materialized view and source table must belong to the same catalog: target '{}.{}', source '{}.{}'",
                 catalog_name, database_name, source_catalog_name, source_database
+            )));
+        }
+        // The recorded database id also locates the table's storage, so RENAME TABLE does not
+        // update it. Older versions allowed renaming a table into another database, which leaves
+        // the recorded id pointing at the old database. Refresh, read, and privilege checks would
+        // then resolve the wrong database, so reject such a source instead of creating an unusable
+        // materialized view.
+        let current_source_database_id = target_catalog
+            .get_database(&tenant, &source_database)
+            .await?
+            .get_db_info()
+            .database_id
+            .db_id;
+        if recorded_source_database_id != current_source_database_id {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "source table '{}.{}' records database id {} but belongs to database id {}; it was moved between databases by an older version and cannot be used as a materialized view source",
+                source_database,
+                source_table_name,
+                recorded_source_database_id,
+                current_source_database_id
             )));
         }
         let source_table_option =
