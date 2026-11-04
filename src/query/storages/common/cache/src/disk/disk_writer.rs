@@ -400,15 +400,14 @@ impl Shared {
             };
             let path = pool.root().join(rel);
             let tmp = tmp_path(&path, self.seq.fetch_add(1, Ordering::Relaxed));
-            let published =
-                write_tmp(&tmp, &value, self.options.sync_data).and_then(|written| {
-                    // Allocated before the guard is disarmed: `publish` gives the reservation
-                    // back first thing, so nothing between here and there may unwind.
-                    let key = rel.to_string();
-                    held.published = true;
-                    let commit = || std::fs::rename(&tmp, &path);
-                    Ok(pool.publish(key, bytes, written, commit)?)
-                });
+            let published = write_tmp(&tmp, &value, self.options.sync_data).and_then(|written| {
+                // Allocated before the guard is disarmed: `publish` gives the reservation
+                // back first thing, so nothing between here and there may unwind.
+                let key = rel.to_string();
+                held.published = true;
+                let commit = || std::fs::rename(&tmp, &path);
+                Ok(pool.publish(key, bytes, written, commit)?)
+            });
             match published {
                 Ok(published) => {
                     pool.delete(&published.victims);
