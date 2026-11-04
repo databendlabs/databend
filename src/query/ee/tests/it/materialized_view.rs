@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_store::LocalMetaService;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -68,5 +71,49 @@ async fn test_materialized_view_revoke_all_legacy_grants() -> anyhow::Result<()>
         .await?;
     let after = users.get_role(&tenant, "mv_legacy_reader".into()).await?;
     assert!(after.grants.entries().is_empty(), "{:?}", after.grants);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_materialized_view_rejects_source_moved_across_databases() -> anyhow::Result<()> {
+    let meta = LocalMetaService::new_testing::<DatabendRuntime>("mv-moved-source").await?;
+    let mut setup = EESetup::new();
+    setup.config_mut().meta.endpoints = meta.get_cached_endpoints().await?;
+    let fixture = TestFixture::setup_with_custom(setup).await?;
+    for sql in [
+        "CREATE DATABASE mv_moved_old",
+        "CREATE DATABASE mv_moved_new",
+        "CREATE TABLE mv_moved_old.t(id INT) CHANGE_TRACKING = true",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    // The binder has rejected cross-database RENAME TABLE since #14098; older versions moved the
+    // table without updating its recorded database id. Seed that state through the catalog.
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    ctx.get_default_catalog()?
+        .rename_table(RenameTableReq {
+            if_exists: false,
+            name_ident: TableNameIdent {
+                tenant: tenant.clone(),
+                db_name: "mv_moved_old".to_string(),
+                table_name: "t".to_string(),
+            },
+            new_db_name: "mv_moved_new".to_string(),
+            new_table_name: "t".to_string(),
+        })
+        .await?;
+
+    let error = fixture
+        .execute_command(
+            "CREATE MATERIALIZED VIEW mv_moved_new.mv AS SELECT id FROM mv_moved_new.t WHERE 1 = 1",
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        ErrorCode::INVALID_MATERIALIZED_VIEW,
+        error.code(),
+        "{error}"
+    );
     Ok(())
 }
