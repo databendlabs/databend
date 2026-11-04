@@ -56,7 +56,6 @@ use crate::pipelines::processors::transforms::aggregator::statistics::FinalAggre
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
-#[allow(clippy::enum_variant_names)]
 const SPILL_BUCKET_NUM: usize = 4;
 const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
 

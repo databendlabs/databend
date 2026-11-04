@@ -177,9 +177,6 @@ impl AggregateScatter {
         // One flush state (over 100KB) for all payloads instead of one per payload.
         let mut flush_state = PayloadFlushState::default();
         for payload in payloads {
-            if payload.payload.len() == 0 {
-                continue;
-            }
             let block = payload
                 .payload
                 .aggregate_flush_all_with_state(&mut flush_state)?;
