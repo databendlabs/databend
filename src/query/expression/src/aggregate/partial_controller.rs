@@ -51,10 +51,11 @@ const CHECK_GROWTH: usize = 4;
 const BYPASS_DISTINCT_RATIO: f64 = 0.9;
 /// Grow when materialized groups exceed the estimated distinct groups by this factor.
 const GROW_DEDUP_RATIO: f64 = 2.0;
-/// The largest grown index: 4M slots, 36 MiB of index for up to 3.1M groups per instance. Every
-/// instance holds the keys it sees, so a larger table multiplies their memory by the number of
-/// threads, while a table that cannot hold the distinct groups absorbs little of them. Keys
-/// beyond it are left to the final aggregate.
+/// The largest grown index: 4M slots, which the index rounds to 3M slots (whole chunks, a power
+/// of two of them), 16 MiB of index for up to 2.3M groups per instance. Every instance holds the
+/// keys it sees, so a larger table multiplies their memory by the number of threads, while a
+/// table that cannot hold the distinct groups absorbs little of them. Keys beyond it are left to
+/// the final aggregate.
 pub const MAX_GROW_CAPACITY: usize = 1 << 22;
 /// Bounds of the memory of a partial table, see [`partial_table_bytes`].
 pub const MIN_PARTIAL_TABLE_BYTES: usize = 64 * 1024 * 1024;
