@@ -176,6 +176,7 @@ anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.21.0", features = ["snappy", "zstandard", "xz", "bzip"] }
 approx = "0.5.1"
+argminmax = { version = "0.7.1", default-features = false, features = ["float"] }
 arrow = { version = "58.4.0" }
 arrow-array = { version = "58.4.0" }
 arrow-buffer = { version = "58.4.0" }
