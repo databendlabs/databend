@@ -559,12 +559,15 @@ impl RemoteBundleFileHandle {
 
         // A tier is used when the kind is cached in memory or on disk, either alone.
         let lookup = CacheKind::of::<inverted::Lookup>();
-        let lookup_cached = self.lookup_cache.is_enabled()
-            || self
-                .storage
-                .uses_disk(lookup, self.lookup_cache.policy().disk);
+        let lookup_disk = self.lookup_cache.policy().disk;
+        let lookup_cached =
+            self.lookup_cache.is_enabled() || self.storage.uses_disk(lookup, lookup_disk);
+        // The whole component is fetched only for a tier that can keep it: one the disk pool
+        // refuses as too large would be fetched again by every read.
+        let lookup_whole = self.lookup_cache.is_enabled()
+            || self.storage.admits(lookup, self.len() as u64, lookup_disk);
         match self.cache_policy {
-            RangeCachePolicy::LookupWhole if lookup_cached => {
+            RangeCachePolicy::LookupWhole if lookup_whole => {
                 return self.read_cached_lookup_file(range).await;
             }
             RangeCachePolicy::Pages(kind) => {
@@ -1611,6 +1614,32 @@ mod tests {
                 CACHE_PAGE_SIZE as u64..(2 * CACHE_PAGE_SIZE) as u64,
             ]);
         }
+        Ok(())
+    }
+
+    /// A lookup component the disk pool refuses as too large, with no memory cache, is read by
+    /// range: fetched whole, it would be kept nowhere and fetched again by every read.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_lookup_too_large_for_the_disk_pool_is_read_by_range() -> Result<()> {
+        // Over a quarter of the 1 MiB index pool.
+        let data = (0..512 * 1024).map(|index| index as u8).collect::<Vec<_>>();
+        let dir = tempfile::TempDir::new()?;
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 1 << 20, 1 << 20],
+            false,
+        )?);
+        let (mut file, ranges) = payload_file_handle("lookup-oversized", data.clone()).await?;
+        file.storage = DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk));
+        file.path = PathBuf::from("segment.term");
+        file.component_name = "term".to_owned();
+        file.cache_policy = RangeCachePolicy::LookupWhole;
+        file.lookup_cache = no_lookup_cache();
+
+        let range = 7..31;
+        assert_eq!(file.read_range(range.clone()).await?.as_ref(), &data[range]);
+        assert_eq!(*ranges.lock().unwrap(), vec![7..31]);
         Ok(())
     }
 
