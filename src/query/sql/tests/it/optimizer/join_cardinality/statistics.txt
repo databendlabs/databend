@@ -872,7 +872,7 @@ stat          : l.k (#0) min=1, max=1000, ndv=unknown (upper=10.000), null=0.000
 stat          : r.k (#1) min=1, max=1000, ndv=unknown (upper=10.000), null=0.000, histogram=none
 
 === inner_both_upper_only_ndv ===
-description: Two missing NDV inputs reach the conservative upper-only join fallback without test-only optimizer intervention.
+description: Two missing NDV inputs take the default equality selectivity; the uppers (100, 200) only cap the divisor.
 sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
 left ddl      : CREATE TABLE l(k INT NOT NULL)
 left rows     : 100
@@ -880,9 +880,9 @@ input stat    : left.k min=1, max=1000, ndv=None, null=0
 right ddl      : CREATE TABLE r(k INT NOT NULL)
 right rows     : 200
 input stat    : right.k min=1, max=1000, ndv=None, null=0
-join          : INNER cardinality=1.000
-stat          : l.k (#0) min=1, max=1000, ndv=unknown (upper=1.000), null=0.000, histogram=none
-stat          : r.k (#1) min=1, max=1000, ndv=unknown (upper=1.000), null=0.000, histogram=none
+join          : INNER cardinality=4000.000
+stat          : l.k (#0) min=1, max=1000, ndv=unknown (upper=100.000), null=0.000, histogram=none
+stat          : r.k (#1) min=1, max=1000, ndv=unknown (upper=100.000), null=0.000, histogram=none
 
 === inner_all_null_equality ===
 description: Regular equality with an all-NULL key produces no matches through the scan-to-join statistics path.

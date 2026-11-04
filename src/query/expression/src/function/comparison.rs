@@ -53,10 +53,10 @@ pub trait StatComparisonOp {
                 return Some(StatEstimate::exact(cardinality));
             }
             if Self::INCLUDE_EQUAL && matches!(cmp_min, Ordering::Equal) {
-                return Some(estimate_ndv_true_count(ndv, false, cardinality));
+                return estimate_ndv_true_count(ndv, false, cardinality);
             }
             if !Self::INCLUDE_EQUAL && matches!(cmp_max, Ordering::Equal) {
-                return Some(estimate_ndv_true_count(ndv, true, cardinality));
+                return estimate_ndv_true_count(ndv, true, cardinality);
             }
         } else {
             if matches!(cmp_max, Ordering::Greater)
@@ -70,10 +70,10 @@ pub trait StatComparisonOp {
                 return Some(StatEstimate::exact(cardinality));
             }
             if Self::INCLUDE_EQUAL && matches!(cmp_max, Ordering::Equal) {
-                return Some(estimate_ndv_true_count(ndv, false, cardinality));
+                return estimate_ndv_true_count(ndv, false, cardinality);
             }
             if !Self::INCLUDE_EQUAL && matches!(cmp_min, Ordering::Equal) {
-                return Some(estimate_ndv_true_count(ndv, true, cardinality));
+                return estimate_ndv_true_count(ndv, true, cardinality);
             }
         }
 
@@ -227,27 +227,29 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
         }
     }
 
+    /// `None` when the column NDV is upper-only and the bounds do not decide
+    /// the comparison; the caller falls back to its default selectivity.
     pub fn equality_true_count(
         &self,
         minmax_cmp: Option<(Ordering, Ordering)>,
         not_eq: bool,
-    ) -> StatEstimate {
+    ) -> Option<StatEstimate> {
         let Some((cmp_min, cmp_max)) = minmax_cmp else {
             return estimate_ndv_true_count(self.stat.ndv, not_eq, self.non_null_cardinality);
         };
         if cmp_min == Ordering::Less || cmp_max == Ordering::Greater {
-            return StatEstimate::exact(if not_eq {
+            return Some(StatEstimate::exact(if not_eq {
                 self.non_null_cardinality
             } else {
                 0.0
-            });
+            }));
         }
         if cmp_min == Ordering::Equal && cmp_max == Ordering::Equal {
-            return StatEstimate::exact(if not_eq {
+            return Some(StatEstimate::exact(if not_eq {
                 0.0
             } else {
                 self.non_null_cardinality
-            });
+            }));
         }
 
         estimate_ndv_true_count(self.stat.ndv, not_eq, self.non_null_cardinality)
@@ -274,18 +276,26 @@ pub fn null_comparison_stat(stat: &StatBinaryArg) -> Option<ReturnStat> {
     }
 }
 
-pub fn estimate_ndv_true_count(ndv: NdvEstimate, not_eq: bool, cardinality: f64) -> StatEstimate {
+/// Rows equal (or not equal) to one value under the uniform assumption,
+/// `cardinality / ndv`. An upper-only NDV yields `None` and the caller uses
+/// its default selectivity: the upper is a cap, not a divisor (see
+/// `NdvEstimate`).
+pub fn estimate_ndv_true_count(
+    ndv: NdvEstimate,
+    not_eq: bool,
+    cardinality: f64,
+) -> Option<StatEstimate> {
     debug_assert!(
         cardinality.is_finite() && cardinality >= 0.0,
         "invalid cardinality for ndv true count: {cardinality:?}"
     );
     if ndv.upper == 0.0 || cardinality == 0.0 {
-        return StatEstimate::exact(0.0);
+        return Some(StatEstimate::exact(0.0));
     }
+    let expected_ndv = ndv.expected?;
 
     // Fractional NDV estimates may appear after scaling, but expected equality
     // cannot divide by less than one possible non-null value.
-    let expected_ndv = ndv.expected.unwrap_or(ndv.upper);
     let effective_expected_ndv = if expected_ndv < 1.0 {
         1.0
     } else {
@@ -308,9 +318,9 @@ pub fn estimate_ndv_true_count(ndv: NdvEstimate, not_eq: bool, cardinality: f64)
             lower >= 0.0 && expected >= 0.0 && upper >= 0.0,
             "invalid not-eq count from equality estimate: cardinality={cardinality:?}, eq={eq_count:?}"
         );
-        StatEstimate::new(lower, expected, upper)
+        Some(StatEstimate::new(lower, expected, upper))
     } else {
-        eq_count
+        Some(eq_count)
     }
 }
 
@@ -422,9 +432,9 @@ mod tests {
     #[test]
     fn test_estimate_ndv_true_count_does_not_infer_ndv_lower() {
         let eq_count = estimate_ndv_true_count(NdvEstimate::new(10.0, 10.0), false, 100.0);
-        assert_eq!(eq_count, StatEstimate::new(0.0, 10.0, 100.0));
+        assert_eq!(eq_count, Some(StatEstimate::new(0.0, 10.0, 100.0)));
 
         let not_eq_count = estimate_ndv_true_count(NdvEstimate::new(10.0, 10.0), true, 100.0);
-        assert_eq!(not_eq_count, StatEstimate::new(0.0, 90.0, 100.0));
+        assert_eq!(not_eq_count, Some(StatEstimate::new(0.0, 90.0, 100.0)));
     }
 }

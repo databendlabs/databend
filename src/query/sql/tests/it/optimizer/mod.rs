@@ -48,6 +48,7 @@ mod stat_derivation;
 mod statistics_trace;
 mod type_consistency;
 mod union_all;
+mod upper_only_ndv;
 
 fn table_statistics(rows: u64) -> TableStatistics {
     TableStatistics {

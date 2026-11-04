@@ -160,7 +160,7 @@ fn derive_decimal_equality_stat<Op: EqualityOp>(
             ))
         });
     let true_count = input.equality_true_count(minmax_cmp, Op::NOT_EQ);
-    Ok(Some(input.boolean_stat(true_count)))
+    Ok(true_count.map(|true_count| input.boolean_stat(true_count)))
 }
 
 fn derive_decimal_range_stat<Op: StatComparisonOp>(

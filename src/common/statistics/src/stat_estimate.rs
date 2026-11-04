@@ -149,16 +149,27 @@ impl StatEstimate {
 
 /// Distinct non-NULL values: an optional point estimate and an upper cap.
 ///
+/// What may be a point is decided by its effect on selectivity, not by how
+/// far it can be off. Consumers divide by the point (`1 / ndv` for an
+/// equality, `L * R / ndv` for an equality join), so an overestimate turns
+/// into underestimated rows, the costly direction for plan choices. A source
+/// is a point when it stays close to the true NDV on the columns where that
+/// division matters: an HLL over the column, an exact count, or an HLL
+/// extrapolated from the rows it covered. A source that may exceed the NDV
+/// many times on low-cardinality columns, such as a sum of per-block or
+/// per-row-group counts or the row count itself, is upper-only: on those
+/// columns the planner's default selectivity is closer than `1 / ndv`.
+///
 /// `upper` is a conservative cap kept within the structural bounds, the
 /// non-NULL row count and the size of a discrete domain. Inside those bounds
-/// it may come from a statistical source, such as a selectivity estimate, so
-/// the true NDV can exceed it. Consumers use it to
-/// clamp the point, to stand in for a missing point, and to cap derived
-/// estimates; none relies on it as a guarantee that the true NDV is no larger.
+/// it may come from a statistical source, such as a sum of block sketches or
+/// a selectivity estimate, so the true NDV can exceed it. Consumers use it to
+/// clamp the point and to cap derived counts (group counts, the divisor of a
+/// default join estimate); it never replaces a missing point as a divisor.
 #[must_use]
 #[derive(Clone, Copy, PartialEq)]
 pub struct NdvEstimate {
-    /// Point estimate; `None` when only the cap is known.
+    /// Point estimate; `None` when no source is close enough to divide by.
     pub expected: Option<f64>,
     /// Conservative cap on the point, not a guaranteed bound.
     pub upper: f64,

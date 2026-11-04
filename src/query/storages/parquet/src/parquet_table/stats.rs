@@ -37,16 +37,18 @@ struct RowGroupAccumulator {
     ndv_sum: f64,
     /// Whether any added row group lacks a distinct count.
     has_uncounted: bool,
+    /// Row groups added so far that hold non-NULL values.
+    value_row_groups: usize,
 }
 
 impl RowGroupAccumulator {
-    /// A row group's distinct count describes that row group only. When every
-    /// row group reports one, their sum is the point and also the upper: the
-    /// union cannot exceed it, and like the fuse block NDV sum it overestimates
-    /// overlapping row groups. A missing or zero count over non-NULL rows
-    /// contributes the row group's own row and domain bound to the upper and
-    /// leaves no point, as one missing block count does in fuse. An all-NULL
-    /// row group holds no distinct value whether or not it reports a count.
+    /// A row group's distinct count describes that row group only. A single
+    /// counted row group is the column's point. Several row groups sum to an
+    /// upper, not a point: like the fuse block NDV sum, the sum counts a value
+    /// once per row group that holds it (see `NdvEstimate`). A missing
+    /// or zero count over non-NULL rows contributes the row group's own row and
+    /// domain bound to the upper. An all-NULL row group holds no distinct value
+    /// whether or not it reports a count.
     fn add(&mut self, stat: &ColumnStatistics, num_rows: u64) {
         let min = stat.min.clone().to_datum();
         let max = stat.max.clone().to_datum();
@@ -68,6 +70,9 @@ impl RowGroupAccumulator {
         self.null_count += stat.null_count;
         self.in_memory_size += stat.in_memory_size;
         self.rows += num_rows;
+        if num_rows > stat.null_count {
+            self.value_row_groups += 1;
+        }
     }
 
     /// Rows of files without row-group statistics were not added; each adds
@@ -78,10 +83,10 @@ impl RowGroupAccumulator {
             _ => (None, None),
         };
         let uncovered = num_rows.saturating_sub(self.rows);
-        let ndv = if self.has_uncounted || uncovered > 0 {
+        let ndv = if self.has_uncounted || uncovered > 0 || self.value_row_groups > 1 {
             NdvEstimate::upper_bound(self.ndv_sum + uncovered as f64)
         } else {
-            NdvEstimate::new(self.ndv_sum, self.ndv_sum)
+            NdvEstimate::exact(self.ndv_sum)
         };
         let upper = BasicColumnStatistics::ndv_upper_bound(
             min.as_ref(),
@@ -188,15 +193,15 @@ mod tests {
     }
 
     #[test]
-    fn test_row_group_counts_sum_to_the_point_and_upper() {
-        // Overlapping and disjoint row groups alike yield the sum: an upper,
-        // and a point that overestimates the overlapping case.
+    fn test_row_group_counts_sum_to_an_upper() {
+        // Overlapping and disjoint row groups alike yield the sum as an upper;
+        // the overlapping case has no point that the sum would not overstate.
         for second in [
             row_group(0, 1000, Some(5), 0),
             row_group(2000, 3000, Some(5), 0),
         ] {
             let stats = accumulate(&[(row_group(0, 1000, Some(12), 0), 100), (second, 100)]);
-            assert_eq!(stats.ndv(), NdvEstimate::exact(17.0));
+            assert_eq!(stats.ndv(), NdvEstimate::upper_bound(17.0));
         }
     }
 

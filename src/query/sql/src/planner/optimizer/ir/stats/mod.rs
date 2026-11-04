@@ -25,6 +25,7 @@ pub use column_stat::*;
 use databend_common_expression::FunctionContext;
 use databend_common_settings::Settings;
 pub(crate) use join::JoinStatsEstimator;
+pub(crate) use selectivity::DEFAULT_SELECTIVITY;
 pub use selectivity::FilterAndStrategy;
 pub use selectivity::MAX_SELECTIVITY;
 pub(crate) use selectivity::Selectivity;

@@ -59,10 +59,13 @@ pub(crate) fn column_distinct_values(
 /// Derive one column's provider statistics from the snapshot summary.
 ///
 /// An HLL point covers the rows its sketch was built from and is extrapolated
-/// to the rest. Without one, the summary's sum of per-block sketch points is
-/// the point and covers every current row. Either way the upper is only the
-/// structural cap: the covered rows, one more per uncovered row, and finally
-/// the non-NULL rows and the discrete domain.
+/// to the rest; its upper is the structural cap: the covered rows, one more
+/// per uncovered row, and finally the non-NULL rows and the discrete domain.
+///
+/// Without an HLL, the summary's sum of per-block sketch points is only an
+/// upper: it counts a value once per block that holds it, so it exceeds the
+/// NDV by up to the block count on a low-cardinality column. See
+/// [`NdvEstimate`] for why such a source is not a point.
 ///
 /// Statistics of an Array or Map element column describe elements, not rows:
 /// fuse counts element NULLs, which may exceed the row count, and the summary
@@ -79,23 +82,25 @@ fn column_statistics(
     let min = stat.min.clone().to_datum();
     let max = stat.max.clone().to_datum();
     let (ndv, num_rows) = if is_element {
-        let ndv = match hll.or(stat.distinct_of_values) {
-            Some(point) if point > 0 => NdvEstimate::new(point as f64, f64::MAX),
+        let ndv = match (hll, stat.distinct_of_values) {
+            (Some(point), _) if point > 0 => NdvEstimate::new(point as f64, f64::MAX),
+            (None, Some(sum)) if sum > 0 => NdvEstimate::upper_bound(sum as f64),
             _ => NdvEstimate::upper_bound(f64::MAX),
         };
         (ndv, None)
     } else {
         let covered =
             |point: u64, rows: u64| NdvEstimate::new((point as f64).min(rows as f64), rows as f64);
-        let ndv = match (hll, stat.distinct_of_values) {
-            // A zero HLL point marks unknown legacy metadata.
-            (Some(0), _) => NdvEstimate::upper_bound(row_count as f64),
-            (Some(point), _) => {
+        // A zero sum marks unknown blocks; all-NULL columns are bounded below.
+        let sum = stat.distinct_of_values.filter(|sum| *sum > 0);
+        let ndv = match (hll, sum) {
+            // A zero HLL point marks unknown legacy metadata, and a point over
+            // no covered rows cannot be extrapolated.
+            (Some(point), _) if point > 0 && stats_row_count > 0 => {
                 covered(point, stats_row_count).extrapolate(stats_row_count, row_count)
             }
-            // A zero sum marks unknown blocks; all-NULL columns are bounded below.
-            (None, Some(sum)) if sum > 0 => covered(sum, row_count),
-            (None, _) => NdvEstimate::upper_bound(row_count as f64),
+            (_, Some(sum)) => NdvEstimate::upper_bound((sum as f64).min(row_count as f64)),
+            (_, None) => NdvEstimate::upper_bound(row_count as f64),
         };
         (ndv, Some(row_count))
     };
@@ -288,8 +293,13 @@ mod tests {
 
     #[test]
     fn test_zero_hll_point_is_unknown() {
-        // A zero point over non-NULL rows marks unknown legacy metadata.
-        assert_eq!(ndv(provider(0, 3000)), NdvEstimate::upper_bound(2980.0));
+        // A zero point over non-NULL rows marks unknown legacy metadata; the
+        // block NDV sum (12) still caps.
+        assert_eq!(ndv(provider(0, 3000)), NdvEstimate::upper_bound(12.0));
+        assert_eq!(
+            ndv(provider_with(None, Some(HashMap::from([(7, 0)])), 3000)),
+            NdvEstimate::upper_bound(2980.0)
+        );
     }
 
     #[test]
@@ -299,22 +309,28 @@ mod tests {
 
     #[test]
     fn test_no_coverage_does_not_invent_a_point() {
-        assert_eq!(ndv(provider(12, 0)), NdvEstimate::upper_bound(2980.0));
+        // The block NDV sum (12) still caps.
+        assert_eq!(ndv(provider(12, 0)), NdvEstimate::upper_bound(12.0));
+        assert_eq!(
+            ndv(provider_with(None, Some(HashMap::from([(7, 12)])), 0)),
+            NdvEstimate::upper_bound(2980.0)
+        );
     }
 
     #[test]
-    fn test_block_ndv_sum_estimates_ndv_without_hll() {
-        // Summary NDV is the sum of per-block sketch points; it covers every
-        // current row, so another column's HLL coverage does not extrapolate it.
+    fn test_block_ndv_sum_is_an_upper_without_hll() {
+        // Summary NDV is the sum of per-block sketch points: a cap on the
+        // union, not a point. It covers every current row, so another
+        // column's HLL coverage does not extrapolate it.
         for hlls in [None, Some(HashMap::new()), Some(HashMap::from([(8, 12)]))] {
             assert_eq!(
                 ndv(provider_with(Some(12), hlls, 100)),
-                NdvEstimate::new(12.0, 2980.0)
+                NdvEstimate::upper_bound(12.0)
             );
         }
         assert_eq!(
             ndv(provider_with(Some(5000), None, 0)),
-            NdvEstimate::exact(2980.0)
+            NdvEstimate::upper_bound(2980.0)
         );
     }
 
@@ -404,6 +420,7 @@ mod tests {
 
         // 5000 element NULLs over 3000 rows: the row column is invalid, the
         // element column keeps its facts and only its domain bounds the NDV.
+        // Its block NDV sum (5) is an upper, as for row columns.
         let provider = provider_of(
             HashMap::from([
                 (0, stat(int(0), int(10), 5000)),
@@ -416,7 +433,7 @@ mod tests {
         assert_eq!(element.min(), Some(&Datum::Int(0)));
         assert_eq!(element.max(), Some(&Datum::Int(10)));
         assert_eq!(element.null_count(), 5000);
-        assert_eq!(element.ndv(), NdvEstimate::new(5.0, 11.0));
+        assert_eq!(element.ndv(), NdvEstimate::upper_bound(5.0));
     }
 
     #[test]

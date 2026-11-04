@@ -1347,7 +1347,7 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
         },
         SqlJoinStatisticsCase {
             name: "inner_both_upper_only_ndv",
-            description: "Two missing NDV inputs reach the conservative upper-only join fallback without test-only optimizer intervention.",
+            description: "Two missing NDV inputs take the default equality selectivity; the uppers (100, 200) only cap the divisor.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k = r.k",
             expected_join_type: JoinType::Inner,
             left: sql_join_table("CREATE TABLE l(k INT NOT NULL)", 100, [(

@@ -53,13 +53,19 @@ impl BasicColumnStatistics {
         null_count: u64,
         num_rows: Option<u64>,
     ) -> f64 {
+        let bounds = match (min, max) {
+            (Some(min), Some(max)) => StatBounds::new(min.clone(), max.clone()).ok(),
+            _ => None,
+        };
+        Self::ndv_upper(bounds.as_ref(), null_count, num_rows)
+    }
+
+    /// `min(non-NULL rows, discrete domain size)`; an unknown row count or
+    /// absent bounds impose no constraint.
+    fn ndv_upper(bounds: Option<&StatBounds>, null_count: u64, num_rows: Option<u64>) -> f64 {
         let non_null_rows =
             num_rows.map_or(f64::MAX, |rows| rows.saturating_sub(null_count) as f64);
-        match (min, max) {
-            (Some(min), Some(max)) => StatBounds::new(min.clone(), max.clone())
-                .map_or(non_null_rows, |bounds| bounds.ndv_upper(non_null_rows)),
-            _ => non_null_rows,
-        }
+        bounds.map_or(non_null_rows, |bounds| bounds.ndv_upper(non_null_rows))
     }
 
     /// Verify statistics derived by a producer. See the type-level invariants.
@@ -86,15 +92,11 @@ impl BasicColumnStatistics {
             (None, None) => None,
             _ => return Err(format!("one-sided column bounds: min={min:?}, max={max:?}")),
         };
-        let non_null_rows = num_rows.map(|rows| rows - null_count);
-        let physical_upper = non_null_rows.map_or(f64::MAX, |rows| rows as f64);
-        let upper = bounds
-            .as_ref()
-            .map_or(physical_upper, |bounds| bounds.ndv_upper(physical_upper));
+        let upper = Self::ndv_upper(bounds.as_ref(), null_count, num_rows);
         if ndv.upper > upper {
             return Err(format!("NDV {ndv:?} exceeds its upper bound {upper}"));
         }
-        if non_null_rows.is_some_and(|rows| rows > 0) && ndv.upper == 0.0 {
+        if num_rows.is_some_and(|rows| rows > null_count) && ndv.upper == 0.0 {
             return Err(format!("NDV {ndv:?} excludes the column's non-NULL rows"));
         }
         Ok(Self {
@@ -122,15 +124,17 @@ impl BasicColumnStatistics {
         self.in_memory_size
     }
 
-    /// Distinct non-NULL values. Without NDV statistics this is upper-only.
+    /// Distinct non-NULL values. Upper-only when the provider has no source
+    /// that may serve as a point; see [`NdvEstimate`].
     pub fn ndv(&self) -> NdvEstimate {
         self.ndv
     }
 
     /// Build the planner statistics of a scan over `num_rows` rows. A scan may
     /// cover fewer rows than the provider described, which only tightens the
-    /// NDV upper. Histogram construction stays on demand at the caller's
-    /// used-column boundary; any point NDV, exact or not, may synthesize one.
+    /// NDV upper; the domain cap is applied by [`ColumnStat::new`]. Histogram
+    /// construction stays on demand at the caller's used-column boundary; any
+    /// point NDV, exact or not, may synthesize one.
     pub fn to_column_stat(
         &self,
         num_rows: Option<u64>,
@@ -144,16 +148,17 @@ impl BasicColumnStatistics {
         let (Some(min), Some(max)) = (&self.min, &self.max) else {
             return Ok(None);
         };
+        // Verified by `new`; rebuilt here only because the fields hold datums.
         let bounds = StatBounds::new(min.clone(), max.clone()).map_err(|err| err.to_string())?;
         let non_null_rows = num_rows.map(|rows| rows.saturating_sub(self.null_count));
-        let ndv = self
-            .ndv
-            .reduce(bounds.ndv_upper(non_null_rows.map_or(f64::MAX, |rows| rows as f64)));
+        let ndv = match non_null_rows {
+            Some(rows) => self.ndv.reduce(rows as f64),
+            None => self.ndv,
+        };
         let histogram = histogram.or_else(|| {
-            let rows = non_null_rows.filter(|rows| *rows > 0)?;
             HistogramBuilder::from_ndv(
                 ndv.expected?.round() as u64,
-                rows,
+                non_null_rows.filter(|rows| *rows > 0)?,
                 Some((min.clone(), max.clone())),
                 DEFAULT_HISTOGRAM_BUCKETS,
                 histogram_spacing_unit,

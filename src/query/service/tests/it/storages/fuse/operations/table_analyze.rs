@@ -112,15 +112,19 @@ async fn test_exact_ndv_bounds_without_analyze() -> anyhow::Result<()> {
     assert!(snapshot.table_statistics_location.is_none());
     let provider = table.column_statistics_provider(ctx.clone()).await?;
     assert_eq!(provider.stats_num_rows(), Some(0));
-    // Without a table-level HLL, the summary's block NDV sum is the point and
-    // the row/domain bounds give the upper.
-    for (column_id, upper, exact) in [(0, 3, true), (1, 250, false), (2, 250, false), (3, 2, true)]
-    {
+    // Without a table-level HLL, the summary's block NDV sum and the
+    // row/domain bounds only give an upper; there is no point estimate. The
+    // discrete domains of `k` and `u` cap it exactly; the block sketch sum of
+    // the fractional columns is an approximate cap within the 250 rows.
+    for (column_id, domain) in [(0, Some(3.0)), (1, None), (2, None), (3, Some(2.0))] {
         let ndv = provider.column_statistics(column_id).unwrap().ndv();
-        assert_eq!(ndv.upper, upper as f64, "column {column_id}");
-        assert!(ndv.expected.is_some(), "column {column_id}");
-        if exact {
-            assert_eq!(ndv, NdvEstimate::exact(upper as f64), "column {column_id}");
+        assert!(ndv.is_upper_only(), "column {column_id}: {ndv:?}");
+        match domain {
+            Some(domain) => assert_eq!(ndv.upper, domain, "column {column_id}"),
+            None => assert!(
+                ndv.upper > 200.0 && ndv.upper <= 250.0,
+                "column {column_id}: {ndv:?}"
+            ),
         }
     }
     Ok(())
