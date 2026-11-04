@@ -625,6 +625,53 @@ async fn materialize_candidate_window(
         .await?)
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_task_selection_v2_opt_in_and_rollback() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+    assert!(
+        !ctx.get_settings()
+            .get_enable_recluster_task_selection_v2()?
+    );
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let thresholds = BlockThresholds::default();
+    // Identical ranges, original-order sizes 600,600,400,400 and budget 1000:
+    // v1's contiguous packing produces one pair, v2 skip-fill produces two.
+    let blocks = [600, 600, 400, 400]
+        .into_iter()
+        .map(|size| make_recluster_block(0, 1, 100, 0, 1000, size, size / 2))
+        .collect();
+    let location =
+        write_recluster_segment(&data_accessor, &location_generator, blocks, thresholds, 0).await?;
+    for (enabled, mode, expected_tasks) in [
+        (false, ReclusterMode::Aggressive, 1),
+        (true, ReclusterMode::Aggressive, 2),
+        (true, ReclusterMode::Conservative, 1),
+        (false, ReclusterMode::Aggressive, 1),
+    ] {
+        ctx.get_settings().set_setting(
+            "enable_recluster_task_selection_v2".to_string(),
+            u8::from(enabled).to_string(),
+        )?;
+        let (_, block_count, parts) = materialize_segment_locations_with_mode(
+            ctx.clone(),
+            data_accessor.clone(),
+            vec![location.clone()],
+            thresholds,
+            0,
+            2,
+            8,
+            mode,
+        )
+        .await?;
+        assert_eq!(task_part_counts(&parts), vec![2; expected_tasks]);
+        assert_eq!(block_count, (2 * expected_tasks) as u64);
+    }
+    Ok(())
+}
+
 fn task_part_counts(parts: &ReclusterParts) -> Vec<usize> {
     parts
         .tasks
