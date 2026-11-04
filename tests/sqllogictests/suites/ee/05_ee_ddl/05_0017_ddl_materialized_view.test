@@ -947,8 +947,10 @@ DROP DATABASE mv_src_db
 statement ok
 CREATE DATABASE mv_src_db
 
+# CHANGE_TRACKING lets the definition's change$row_id bind, so the table-id check is what rejects
+# the new table.
 statement ok
-CREATE TABLE mv_src_db.t (id INT)
+CREATE TABLE mv_src_db.t (id INT) CHANGE_TRACKING = true
 
 statement error 2328
 SELECT * FROM mv_dst_db.cross_mv
