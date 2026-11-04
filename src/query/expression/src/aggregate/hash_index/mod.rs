@@ -15,8 +15,6 @@
 
 /// Portions of this mod are derived from the excellent
 /// [hashbrown](https://github.com/rust-lang/hashbrown/tree/master) crate
-mod bitmask;
-mod group;
 mod index;
 
 pub(in crate::aggregate) use index::HashIndex;

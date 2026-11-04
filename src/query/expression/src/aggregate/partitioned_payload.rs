@@ -28,7 +28,9 @@ use super::payload::Payload;
 use super::payload::PayloadTransferBatch;
 use super::payload::PayloadTransferStateOffsets;
 use super::probe_state::ProbeState;
+use super::row_ptr::RowIdCodec;
 use super::row_ptr::RowLayout;
+use super::row_ptr::RowPtr;
 use crate::ProjectedBlock;
 use crate::types::DataType;
 
@@ -72,6 +74,8 @@ pub struct PartitionedPayload {
 
     partition_start_bit: u64,
     partition_mask: PartitionMask,
+    /// The ids of the rows in the hash index.
+    pub(super) row_ids: RowIdCodec,
 }
 
 unsafe impl Send for PartitionedPayload {}
@@ -132,16 +136,39 @@ impl PartitionedPayload {
             ..payloads[0].row_layout.clone()
         };
 
+        let row_ids = RowIdCodec::new(partition_count as usize, payloads[0].row_per_page);
         PartitionedPayload {
             payloads,
             group_types,
             aggrs,
             row_layout,
+            row_ids,
 
             arenas,
             partition_start_bit,
             partition_mask: PartitionMask::with_start_bit(partition_count, partition_start_bit),
         }
+    }
+
+    /// The row with id `id`.
+    #[inline]
+    pub(super) fn row_ptr(&self, id: u64) -> RowPtr {
+        let (partition, page, row) = self.row_ids.decode(id);
+        let payload = &self.payloads[partition];
+        payload.data_ptr(&payload.pages[page], row)
+    }
+
+    /// Whether the ids of the rows still fit 4 bytes after `new_rows` more rows, even if they
+    /// all land in the same partition.
+    pub(super) fn row_ids_fit_compact(&self, new_rows: usize) -> bool {
+        let pages = self
+            .payloads
+            .iter()
+            .map(|p| p.pages.len())
+            .max()
+            .unwrap_or(0);
+        let new_pages = new_rows.div_ceil(self.payloads[0].row_per_page);
+        pages + new_pages <= self.row_ids.max_compact_page()
     }
 
     pub fn into_bucket_payloads(self) -> impl Iterator<Item = (usize, Payload)> {
@@ -175,12 +202,14 @@ impl PartitionedPayload {
         groups: GroupRows,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
+        let codec = self.row_ids;
         if self.payloads.len() == 1 {
             self.payloads[0].reserve_append_rows(
                 &state.empty_vector[..new_group_rows],
                 &state.group_hashes,
                 &mut state.addresses,
                 &mut state.page_index,
+                (&mut state.row_ids, codec, 0),
                 groups,
                 source_states,
             );
@@ -196,10 +225,11 @@ impl PartitionedPayload {
                 *count += 1;
             }
 
-            for (payload, (count, sel)) in self
+            for (partition, (payload, (count, sel))) in self
                 .payloads
                 .iter_mut()
                 .zip(state.partition_entries.iter_mut())
+                .enumerate()
             {
                 if *count > 0 {
                     payload.reserve_append_rows(
@@ -207,6 +237,7 @@ impl PartitionedPayload {
                         &state.group_hashes,
                         &mut state.addresses,
                         &mut state.page_index,
+                        (&mut state.row_ids, codec, partition),
                         groups,
                         source_states,
                     );
