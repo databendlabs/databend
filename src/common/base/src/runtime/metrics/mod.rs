@@ -28,6 +28,7 @@ pub use histogram::BUCKET_SECONDS;
 pub use histogram::Histogram;
 pub use process_collector::dump_process_stat;
 pub use registry::FamilyCounter;
+pub use registry::FamilyCounterMember;
 pub use registry::FamilyGauge;
 pub use registry::FamilyHistogram;
 pub use registry::GLOBAL_METRICS_REGISTRY;

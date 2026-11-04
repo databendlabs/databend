@@ -78,7 +78,7 @@ impl OutputFormat for CSVOutputFormat {
             .convert_to_full()
             .columns()
             .iter()
-            .map(|val| val.as_column().unwrap().clone().decode_encoded())
+            .map(|val| val.as_column().unwrap().clone().decode_owned())
             .collect();
 
         for row_index in 0..rows_size {

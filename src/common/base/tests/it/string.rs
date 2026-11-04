@@ -130,4 +130,13 @@ fn test_short_sql() {
         short_sql(emoji_sql.clone(), max_length),
         expected_emoji_result
     );
+
+    // Test case 7: the keyword matches in any case
+    let lower_sql_insert = long_sql_insert.replacen("INSERT", "insert", 1);
+    assert!(short_sql(lower_sql_insert, max_length).ends_with("more characters]"));
+
+    // Test case 8: more bytes than `max_length`, but not more graphemes
+    let multibyte_sql = "INSERT INTO t VALUES ('".to_string() + &"😊".repeat(100) + "')";
+    assert!(multibyte_sql.len() > 128 && multibyte_sql.graphemes(true).count() <= 128);
+    assert_eq!(short_sql(multibyte_sql.clone(), max_length), multibyte_sql);
 }

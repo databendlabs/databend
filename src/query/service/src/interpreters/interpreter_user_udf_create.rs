@@ -15,8 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_management::udf::UdfError;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_sql::planner::UDFValidator;
 use databend_common_sql::plans::CreateUDFPlan;
@@ -67,26 +66,29 @@ impl Interpreter for CreateUserUDFScript {
             {
                 UDFValidator::verify_server(self.ctx.as_ref(), &udf.name, server).await?;
             }
-            let changed = UserApiProvider::instance()
-                .add_udf(&tenant, udf, &plan.create_option)
+            // An existing UDF is left with its owner unless replaced.
+            let name = udf.name.clone();
+            let owner = self.ctx.get_current_role().map(|role| role.name);
+            let written = UserApiProvider::instance()
+                .add_udf_with_owner(
+                    &tenant,
+                    udf,
+                    plan.create_option.is_overriding(),
+                    owner.as_deref(),
+                )
                 .await?;
-            if !changed {
+            if !written {
+                if plan.create_option.if_return_error() {
+                    return Err(UdfError::Exists {
+                        tenant: tenant.tenant_name().to_string(),
+                        name,
+                        reason: "".to_string(),
+                    }
+                    .into());
+                }
                 return Ok(PipelineBuildResult::create());
             }
-
-            // Grant ownership as the current role
-            if let Some(current_role) = self.ctx.get_current_role() {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                role_api
-                    .grant_ownership(
-                        &OwnershipObject::UDF {
-                            name: self.plan.udf.name.clone(),
-                        },
-                        &current_role.name,
-                    )
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
-            }
+            RoleCacheManager::instance().invalidate_cache(&tenant);
 
             Ok(PipelineBuildResult::create())
         })

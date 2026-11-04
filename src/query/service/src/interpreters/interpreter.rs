@@ -95,24 +95,28 @@ pub trait Interpreter: Sync + Send {
     /// Build and run the pipeline with the given lifecycle hooks.
     /// All logging (start/finish) is handled here based on `hooks.log_finished`.
     ///
-    /// Runs inside a tracking scope whose `io_stats` is the query's own
-    /// counter, so the pipeline nodes built here (which capture the current
-    /// payload) attribute their storage IO to the query no matter which
-    /// handler called us. Handlers that already installed it see no change.
+    /// Runs inside a tracking scope whose `io_stats` and `perf_query_token` are the
+    /// query's own, so the pipeline nodes built here (which capture the current
+    /// payload) attribute their storage IO and on-demand profiling samples to
+    /// the query no matter which handler called us. Handlers that already
+    /// installed them see no change.
     async fn execute_with_hooks(
         &self,
         ctx: Arc<QueryContext>,
         hooks: QueryFinishHooks,
     ) -> Result<SendableDataBlockStream> {
         let query_io_stats = ctx.get_local_io_stats();
-        let already_tracked =
-            ThreadTracker::io_stats().is_some_and(|current| Arc::ptr_eq(current, &query_io_stats));
+        let query_perf_token = ctx.get_perf_query_token();
+        let already_tracked = ThreadTracker::io_stats()
+            .is_some_and(|current| Arc::ptr_eq(current, &query_io_stats))
+            && ThreadTracker::perf_query_token() == query_perf_token;
         if already_tracked {
             return self.execute_with_hooks_inner(ctx, hooks).await;
         }
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.io_stats = Some(query_io_stats);
+        tracking_payload.perf_query_token = query_perf_token;
         tracking_payload
             .tracking(self.execute_with_hooks_inner(ctx, hooks))
             .await
@@ -219,7 +223,7 @@ async fn build_pipeline_before_execute(
         }
     };
 
-    CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
+    CacheManager::instance().set_disk_allowed(allow_disk_cache);
 
     let mut build_res = interpreter.execute2().await?;
 
@@ -299,10 +303,6 @@ pub async fn interpreter_plan_sql(
     params: Option<&serde_json::Value>,
 ) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
     let result = plan_sql(ctx.clone(), sql, acquire_queue, params).await;
-    let short_sql = short_sql(
-        sql.to_string(),
-        ctx.get_settings().get_short_sql_max_length()?,
-    );
     let mut stmt = if let Ok((_, extras, _)) = &result {
         Some(extras.statement.clone())
     } else {
@@ -317,7 +317,7 @@ pub async fn interpreter_plan_sql(
         None
     };
 
-    attach_query_hash(&ctx, &mut stmt, &short_sql);
+    attach_query_hash(&ctx, &mut stmt, sql)?;
 
     result
 }
@@ -375,20 +375,25 @@ async fn plan_sql(
         // If a lock is required, acquire the queue guard before
         // planning the statement, to avoid potential deadlocks.
         // See PR https://github.com/databendlabs/databend/pull/16632
-        let query_entry = QueryEntry::create_entry(&ctx, &extras, true)?;
+        let query_entry = QueryEntry::create_entry(&ctx, true)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
         let plan = planner.plan_stmt(&extras.statement, false).await?;
         Ok((plan, extras, guard))
     } else {
         // No lock is needed, plan the statement first, then acquire the queue guard.
         let plan = planner.plan_stmt(&extras.statement, false).await?;
-        let query_entry = QueryEntry::create(&ctx, &plan, &extras)?;
+        let query_entry = QueryEntry::create(&ctx, &plan)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
         Ok((plan, extras, guard))
     }
 }
 
-fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql: &str) {
+/// Without a statement, the query is hashed by its text `sql`, shortened.
+fn attach_query_hash(
+    ctx: &Arc<QueryContext>,
+    stmt: &mut Option<Statement>,
+    sql: &str,
+) -> Result<()> {
     let (query_hash, query_parameterized_hash) = if let Some(stmt) = stmt {
         let query_hash = format!("{:x}", Md5::digest(stmt.to_string()));
         // Use Literal::Null replace literal. Ignore Literal.
@@ -408,11 +413,17 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
 
         (query_hash, format!("{:x}", Md5::digest(stmt.to_string())))
     } else {
+        // Shortened only here: it counts the graphemes of long statements.
+        let sql = short_sql(
+            sql.to_string(),
+            ctx.get_settings().get_short_sql_max_length()?,
+        );
         let hash = format!("{:x}", Md5::digest(sql));
         (hash.to_string(), hash)
     };
 
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
+    Ok(())
 }
 
 /// Check if the statement need acquire a table lock.
