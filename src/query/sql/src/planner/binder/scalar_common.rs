@@ -382,12 +382,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
     impl<'a> Visitor<'a> for PruneVisitor<'a> {
         fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
             if self.columns.contains(expr) {
-                let data_type = expr.data_type().remove_nullable();
-                self.can_prune &= data_type.is_integer()
-                    || data_type.is_decimal()
-                    || data_type.is_date_or_date_time()
-                    || data_type.is_string()
-                    || data_type.is_boolean();
+                self.can_prune &= expr.data_type().groups_by_exact_value();
                 self.uses_columns = true;
                 return Ok(());
             }
