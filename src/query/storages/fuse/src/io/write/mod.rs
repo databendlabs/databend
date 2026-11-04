@@ -59,3 +59,5 @@ pub use virtual_column_layout::VirtualColumnLayoutPolicy;
 pub use virtual_segment_schema::build_virtual_segment_schema;
 pub use write_settings::MAX_BLOCK_UNCOMPRESSED_SIZE;
 pub use write_settings::WriteSettings;
+
+pub(crate) use crate::io::write::spatial_index_writer::SpatialIndexResult;

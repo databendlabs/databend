@@ -22,6 +22,7 @@ use std::time::Instant;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ClusterLevelLogStats;
+use databend_common_catalog::plan::RetainedBlockMeta;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -48,6 +49,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::meta::merge_column_top_n_mut;
@@ -82,7 +84,31 @@ use crate::statistics::sort_by_cluster_stats;
 struct PendingSegmentBlock {
     block_meta: Arc<BlockMeta>,
     hll: Option<RawBlockHLL>,
+    top_n: Option<BlockTopN>,
     virtual_input: VirtualBlockInput,
+}
+
+impl PendingSegmentBlock {
+    fn from_retained(
+        block: RetainedBlockMeta,
+        virtual_schemas: &[Option<Arc<VirtualSegmentSchema>>],
+    ) -> Result<Self> {
+        let schema = virtual_schemas
+            .get(block.virtual_schema_index)
+            .cloned()
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Retained block virtual schema index {} is outside its container",
+                    block.virtual_schema_index
+                ))
+            })?;
+        Ok(Self {
+            block_meta: block.block_meta,
+            hll: block.hll,
+            top_n: block.top_n,
+            virtual_input: VirtualBlockInput::Existing { schema },
+        })
+    }
 }
 
 pub struct TableMutationAggregator {
@@ -91,6 +117,8 @@ pub struct TableMutationAggregator {
 
     base_segments: Vec<Location>,
     merged_blocks: Vec<Arc<ExtendedBlockMeta>>,
+    retained_blocks: Vec<RetainedBlockMeta>,
+    retained_virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     output_level_stats: BTreeMap<Option<i32>, ClusterLevelLogStats>,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
@@ -251,6 +279,8 @@ impl TableMutationAggregator {
             appended_segments: vec![],
             base_segments,
             merged_blocks,
+            retained_blocks: Vec::new(),
+            retained_virtual_schemas: Vec::new(),
             output_level_stats: BTreeMap::new(),
             appended_statistics: Statistics::default(),
             removed_segment_indexes,
@@ -263,6 +293,16 @@ impl TableMutationAggregator {
             processed_log_entries: 0,
             table_id: table.get_id(),
         }
+    }
+
+    pub fn with_retained_blocks(
+        mut self,
+        blocks: Vec<RetainedBlockMeta>,
+        virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
+    ) -> Self {
+        self.retained_blocks = blocks;
+        self.retained_virtual_schemas = virtual_schemas;
+        self
     }
 
     fn accumulate_top_n(&mut self, top_n: Option<BlockTopN>) -> Result<()> {
@@ -364,30 +404,18 @@ impl TableMutationAggregator {
                     .push((segment_location, format_version));
             }
             MutationLogEntry::CompactExtras { extras } => {
-                match self.mutations.entry(extras.segment_index) {
-                    Entry::Occupied(mut v) => {
-                        for (idx, (block, hll)) in extras.unchanged_blocks {
-                            v.get_mut().replaced_blocks.push((idx, PendingSegmentBlock {
-                                block_meta: block,
-                                hll,
-                                virtual_input: VirtualBlockInput::None,
-                            }));
-                        }
-                    }
-                    Entry::Vacant(v) => {
-                        let mut replaced_blocks = Vec::with_capacity(extras.unchanged_blocks.len());
-                        for (idx, (block, hll)) in extras.unchanged_blocks {
-                            replaced_blocks.push((idx, PendingSegmentBlock {
-                                block_meta: block,
-                                hll,
-                                virtual_input: VirtualBlockInput::None,
-                            }));
-                        }
-                        v.insert(BlockMutations {
-                            replaced_blocks,
-                            deleted_blocks: vec![],
-                        });
-                    }
+                let replaced_blocks = &mut self
+                    .mutations
+                    .entry(extras.segment_index)
+                    .or_default()
+                    .replaced_blocks;
+                // Each extras entry owns its schema-index namespace. Resolve it
+                // before blocks from different entries are mixed or sorted.
+                for (idx, block) in extras.unchanged_blocks {
+                    replaced_blocks.push((
+                        idx,
+                        PendingSegmentBlock::from_retained(block, &extras.virtual_schemas)?,
+                    ));
                 }
 
                 self.removed_segment_indexes
@@ -404,7 +432,7 @@ impl TableMutationAggregator {
     }
 
     async fn generate_append_segments(&mut self) -> Result<()> {
-        if self.merged_blocks.is_empty() {
+        if self.merged_blocks.is_empty() && self.retained_blocks.is_empty() {
             return Ok(());
         }
 
@@ -450,10 +478,12 @@ impl TableMutationAggregator {
             for chunk in &partition_blocks.into_iter().chunks(chunk_size) {
                 let mut new_blocks = Vec::new();
                 let mut new_hlls = Vec::new();
+                let mut new_top_ns = Vec::new();
                 let mut virtual_inputs = Vec::new();
                 for block in chunk {
                     new_blocks.push(block.block_meta);
                     new_hlls.push(block.hll);
+                    new_top_ns.push(block.top_n.unwrap_or_default());
                     virtual_inputs.push(block.virtual_input);
                 }
                 // Only compaction/reclustering output may be force-marked perfect to keep
@@ -468,14 +498,9 @@ impl TableMutationAggregator {
                 tasks.push(async move {
                     // SegmentStatistics encoding and Zstd compression are CPU-heavy. Perform them
                     // in the bounded worker pool rather than serially before the first write.
-                    let new_hlls = generate_segment_stats(new_hlls)?;
-                    ctx.write_segment(
-                        new_blocks,
-                        new_hlls,
-                        force_all_blocks_perfect,
-                        virtual_inputs,
-                    )
-                    .await
+                    let stats = generate_segment_stats(new_hlls, new_top_ns)?;
+                    ctx.write_segment(new_blocks, stats, force_all_blocks_perfect, virtual_inputs)
+                        .await
                 });
             }
         }
@@ -606,7 +631,11 @@ impl TableMutationAggregator {
                     )
                     .await?;
                     let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
-                    let old_virtual_schema = segment_info.summary.virtual_segment_schema.clone();
+                    let old_virtual_schema = segment_info
+                        .summary
+                        .virtual_segment_schema
+                        .clone()
+                        .map(Arc::new);
                     let stats = match segment_info.summary.additional_stats_loc() {
                         Some(loc) => {
                             let stats =
@@ -627,17 +656,32 @@ impl TableMutationAggregator {
                                 .as_ref()
                                 .and_then(|v| v.block_hlls.get(block_idx))
                                 .cloned();
+                            let top_n = stats
+                                .as_ref()
+                                .and_then(|stats| stats.block_top_ns.get(block_idx))
+                                .cloned();
                             (block_idx, PendingSegmentBlock {
                                 block_meta,
                                 hll,
+                                top_n,
                                 virtual_input: VirtualBlockInput::Existing {
-                                    schema: old_virtual_schema.clone().map(Arc::new),
+                                    schema: old_virtual_schema.clone(),
                                 },
                             })
                         })
                         .collect::<BTreeMap<usize, _>>();
 
-                    for (idx, new_meta) in segment_mutation.replaced_blocks {
+                    for (idx, mut new_meta) in segment_mutation.replaced_blocks {
+                        if matches!(write_segment_ctx.kind, MutationKind::Refresh)
+                            && matches!(new_meta.virtual_input, VirtualBlockInput::None)
+                            && new_meta.block_meta.virtual_block_meta.is_some()
+                        {
+                            // Index refresh preserves persisted virtual metadata. Do not
+                            // override the draft generated by virtual-column refresh.
+                            new_meta.virtual_input = VirtualBlockInput::Existing {
+                                schema: old_virtual_schema.clone(),
+                            };
+                        }
                         block_editor.insert(idx, new_meta);
                     }
                     for idx in segment_mutation.deleted_blocks {
@@ -654,13 +698,15 @@ impl TableMutationAggregator {
 
                     let mut new_blocks = Vec::with_capacity(block_editor.len());
                     let mut new_hlls = Vec::with_capacity(block_editor.len());
+                    let mut new_top_ns = Vec::with_capacity(block_editor.len());
                     let mut virtual_inputs = Vec::with_capacity(block_editor.len());
                     for (_, block) in block_editor {
                         new_blocks.push(block.block_meta);
                         new_hlls.push(block.hll);
+                        new_top_ns.push(block.top_n.unwrap_or_default());
                         virtual_inputs.push(block.virtual_input);
                     }
-                    let stats = generate_segment_stats(new_hlls)?;
+                    let stats = generate_segment_stats(new_hlls, new_top_ns)?;
                     let new_segment_info = write_segment_ctx
                         .write_segment(new_blocks, stats, force_all_blocks_perfect, virtual_inputs)
                         .await?;
@@ -686,6 +732,7 @@ impl TableMutationAggregator {
                     force_all_blocks_perfect = segment_mutation.replaced_blocks.len() > 1;
                     let mut new_blocks = Vec::new();
                     let mut new_hlls = Vec::new();
+                    let mut new_top_ns = Vec::new();
                     let mut virtual_inputs = Vec::new();
                     for (_, block) in segment_mutation
                         .replaced_blocks
@@ -694,9 +741,10 @@ impl TableMutationAggregator {
                     {
                         new_blocks.push(block.block_meta);
                         new_hlls.push(block.hll);
+                        new_top_ns.push(block.top_n.unwrap_or_default());
                         virtual_inputs.push(block.virtual_input);
                     }
-                    let stats = generate_segment_stats(new_hlls)?;
+                    let stats = generate_segment_stats(new_hlls, new_top_ns)?;
                     let new_segment_info = write_segment_ctx
                         .write_segment(new_blocks, stats, force_all_blocks_perfect, virtual_inputs)
                         .await?;
@@ -735,7 +783,7 @@ impl TableMutationAggregator {
                     block_meta,
                     draft_virtual_block_meta,
                     column_hlls,
-                    ..
+                    column_top_n,
                 } = Arc::unwrap_or_clone(extended_block_meta);
                 let column_hlls = BlockHLLState::encode_column_hll(column_hlls)?;
                 let virtual_input = draft_virtual_block_meta
@@ -744,6 +792,7 @@ impl TableMutationAggregator {
                 let replacement = PendingSegmentBlock {
                     block_meta: Arc::new(block_meta),
                     hll: column_hlls,
+                    top_n: column_top_n,
                     virtual_input,
                 };
                 match self.mutations.entry(segment_idx) {
@@ -765,24 +814,30 @@ impl TableMutationAggregator {
     }
 
     fn accumulate_merged_blocks(&mut self) -> Result<Vec<PendingSegmentBlock>> {
-        std::mem::take(&mut self.merged_blocks)
+        let mut blocks = std::mem::take(&mut self.merged_blocks)
             .into_iter()
             .map(|extended_block_meta| {
                 let ExtendedBlockMeta {
                     block_meta,
                     draft_virtual_block_meta,
                     column_hlls,
-                    ..
+                    column_top_n,
                 } = Arc::unwrap_or_clone(extended_block_meta);
                 Ok(PendingSegmentBlock {
                     block_meta: Arc::new(block_meta),
                     hll: BlockHLLState::encode_column_hll(column_hlls)?,
+                    top_n: column_top_n,
                     virtual_input: draft_virtual_block_meta
                         .map(VirtualBlockInput::Draft)
                         .unwrap_or(VirtualBlockInput::None),
                 })
             })
-            .collect()
+            .collect::<Result<Vec<_>>>()?;
+        let virtual_schemas = std::mem::take(&mut self.retained_virtual_schemas);
+        for block in std::mem::take(&mut self.retained_blocks) {
+            blocks.push(PendingSegmentBlock::from_retained(block, &virtual_schemas)?);
+        }
+        Ok(blocks)
     }
 }
 
@@ -930,12 +985,15 @@ impl WriteSegmentCtx {
     }
 }
 
-fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u8>>> {
-    if hlls.iter().all(|v| v.is_none()) {
+fn generate_segment_stats(
+    hlls: Vec<Option<RawBlockHLL>>,
+    top_ns: Vec<BlockTopN>,
+) -> Result<Option<Vec<u8>>> {
+    if hlls.iter().all(Option::is_none) && top_ns.iter().all(HashMap::is_empty) {
         Ok(None)
     } else {
         let blocks = hlls.into_iter().map(|x| x.unwrap_or_default()).collect();
-        let data = SegmentStatistics::new(blocks, Vec::new()).to_bytes()?;
+        let data = SegmentStatistics::new(blocks, top_ns).to_bytes()?;
         Ok(Some(data))
     }
 }

@@ -961,8 +961,6 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
         .await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(1)?;
-    ctx.get_settings()
-        .set_setting("enable_distributed_recluster".to_owned(), "0".to_owned())?;
     execute_command(ctx, &format!("alter table {name} recluster")).await?;
 
     let table = fixture.latest_default_table().await?;
@@ -2549,7 +2547,7 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
                 remained_blocks.len()
             );
             for remain in remained_blocks {
-                blocks.push(remain.0.location.0.clone());
+                blocks.push(remain.block_meta.location.0.clone());
             }
 
             let block_ids_after_recluster = HashSet::from_iter(blocks.into_iter());
