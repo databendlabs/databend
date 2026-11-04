@@ -66,6 +66,17 @@ impl Interpreter for CreateUserUDFScript {
             {
                 UDFValidator::verify_server(self.ctx.as_ref(), &udf.name, server).await?;
             }
+            let integrations = udf.definition.external_access_integrations();
+            if !integrations.is_empty()
+                && matches!(
+                    &udf.definition,
+                    UDFDefinition::UDFScript(_) | UDFDefinition::UDAFScript(_)
+                )
+            {
+                UserApiProvider::instance()
+                    .validate_external_access_bindings(&tenant, integrations)
+                    .await?;
+            }
             // An existing UDF is left with its owner unless replaced.
             let name = udf.name.clone();
             let owner = self.ctx.get_current_role().map(|role| role.name);
