@@ -985,22 +985,7 @@ fn test_partial_grows_with_margin_over_estimate() {
     // Just under what an index of 65536 slots holds, so an estimate a little low would size it
     // that small.
     const KEYS: u64 = 48_000;
-    let mut partial = PartialState::new(PartialAggregateMode::Auto);
-    let sampler = partial.sampler().unwrap();
-    sampler.start(0);
-    sampler.observe(&group_hashes(
-        UInt64Type::from_data((0..KEYS).collect::<Vec<_>>()).into(),
-    ));
-    let stats = PartialAddStats {
-        rows: 256 * 1024,
-        new_groups: 256 * 1024,
-        windows: 10,
-    };
-    let reason = partial.step(
-        observed(stats, 0),
-        MAX_PARTIAL_TABLE_BYTES,
-        unexpected_pressure,
-    );
+    let (partial, reason) = learn_keys(KEYS, 256 * 1024, 256 * 1024, 0, MAX_PARTIAL_TABLE_BYTES);
     assert_eq!(reason, Some(EmitReason::Grow), "{partial:?}");
     let keys = KEYS as usize;
     assert!(partial.capacity() >= AggregateHashTable::capacity_for_groups(keys + keys / 20));

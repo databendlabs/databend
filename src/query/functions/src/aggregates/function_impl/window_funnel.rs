@@ -43,6 +43,7 @@ use num_traits::AsPrimitive;
 use super::super::common::extract_number_param;
 use super::AggregateRegistration;
 use super::adaptors::*;
+use super::serialized_scalar_at;
 
 struct WindowFunnelBuilder;
 

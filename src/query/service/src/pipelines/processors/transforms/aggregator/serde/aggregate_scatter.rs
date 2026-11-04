@@ -152,10 +152,6 @@ impl AggregateScatter {
         }
     }
 
-    fn states_block(payloads: Vec<AggregatePayload>) -> DataBlock {
-        AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads)).into_datablock()
-    }
-
     /// Serialize the states for a remote node, one run of rows per bucket.
     fn serialize_states(&self, payloads: Vec<AggregatePayload>) -> Result<DataBlock> {
         let mut buckets = Vec::with_capacity(payloads.len());
@@ -197,7 +193,7 @@ impl AggregateScatter {
             .into_iter()
             .map(|payloads| match payloads.is_empty() {
                 true => DataBlock::empty(),
-                false => Self::states_block(payloads),
+                false => AggregateMeta::payloads_block(payloads),
             })
             .collect())
     }
@@ -227,7 +223,7 @@ impl FlightScatter for AggregateScatter {
             .map(|(partition, payloads)| match payloads.is_empty() {
                 true => Ok(DataBlock::empty()),
                 false if self.local_partitions.contains(&partition) => {
-                    Ok(Self::states_block(payloads))
+                    Ok(AggregateMeta::payloads_block(payloads))
                 }
                 false => self.serialize_states(payloads),
             })
@@ -310,7 +306,7 @@ mod tests {
                 payload,
             })
             .collect();
-        Ok(AggregateScatter::states_block(payloads))
+        Ok(AggregateMeta::payloads_block(payloads))
     }
 
     /// Keys of the states in `block`, in memory or serialized for a remote node.

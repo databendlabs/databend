@@ -765,9 +765,7 @@ mod tests {
             payload,
         })
         .collect::<Vec<_>>();
-        upstream.push_data(Ok(DataBlock::empty_with_meta(
-            AggregateMeta::create_partitioned(PartitionedData::AggregatePayload(empty_payloads)),
-        )));
+        upstream.push_data(Ok(AggregateMeta::payloads_block(empty_payloads)));
         upstream.finish();
 
         let mut processor = TransformFinalAggregate::try_create(

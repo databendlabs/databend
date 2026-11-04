@@ -77,8 +77,9 @@ impl AggregateMeta {
         }))
     }
 
-    pub fn create_partitioned(data: PartitionedData) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Partitioned(data))
+    /// A block carrying the partial aggregate states of several buckets.
+    pub fn payloads_block(payloads: Vec<AggregatePayload>) -> DataBlock {
+        AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads)).into_datablock()
     }
 
     pub fn into_datablock(self) -> DataBlock {
