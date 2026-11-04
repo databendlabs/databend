@@ -100,6 +100,9 @@ impl GroupKeyState {
     }
 }
 
+/// Index capacity of a new table, and of a partial table restarted after it emits.
+const INITIAL_CAPACITY: usize = 8192 * 4;
+
 pub struct AggregateHashTable {
     // Hash index entries store the ids of rows in these payload pages. Any path that replaces
     // the payload must clear or rebuild the index before probing it again.
@@ -113,25 +116,11 @@ pub struct AggregateHashTable {
     partial_restarted: bool,
 }
 
-unsafe impl Send for AggregateHashTable {}
-unsafe impl Sync for AggregateHashTable {}
-
 impl AggregateHashTable {
     pub fn new(
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
-        arena: Arc<Bump>,
-    ) -> Self {
-        let capacity = Self::initial_capacity();
-        Self::new_with_capacity(group_types, aggrs, config, capacity, arena)
-    }
-
-    pub fn new_with_capacity(
-        group_types: Vec<DataType>,
-        aggrs: Vec<AggregateCallRef>,
-        config: HashTableConfig,
-        capacity: usize,
         arena: Arc<Bump>,
     ) -> Self {
         Self {
@@ -142,7 +131,7 @@ impl AggregateHashTable {
                 config.partition_start_bit,
                 vec![arena],
             ),
-            hash_index: HashIndex::with_capacity(capacity),
+            hash_index: HashIndex::with_capacity(INITIAL_CAPACITY),
             config,
             hash_index_resize_count: 0,
             partial_restarted: false,
@@ -154,13 +143,10 @@ impl AggregateHashTable {
         aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
     ) -> Self {
-        // Repartition transfers raw aggregate state addresses between payloads. Separate arenas
-        // are only safe for a final hash table whose partitions will never be repartitioned.
         assert!(
             !config.partial_agg,
             "partition-local aggregate arenas cannot be used by a repartitioning hash table"
         );
-        let capacity = Self::initial_capacity();
         let partition_count = 1 << config.initial_radix_bits;
         let arenas = (0..partition_count)
             .map(|_| Arc::new(Bump::new()))
@@ -173,7 +159,7 @@ impl AggregateHashTable {
                 config.partition_start_bit,
                 arenas,
             ),
-            hash_index: HashIndex::with_capacity(capacity),
+            hash_index: HashIndex::with_capacity(INITIAL_CAPACITY),
             config,
             hash_index_resize_count: 0,
             partial_restarted: false,
@@ -499,7 +485,7 @@ impl AggregateHashTable {
     pub fn capacity_for_groups(groups: usize) -> usize {
         // The index rounds up to whole chunks, a power of two of them: round the slots only once.
         HashIndex::slots_for(
-            ((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1).max(Self::initial_capacity()),
+            ((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1).max(INITIAL_CAPACITY),
         )
     }
 
@@ -524,7 +510,7 @@ impl AggregateHashTable {
             vec![Arc::new(Bump::new())],
         );
         let payload = std::mem::replace(&mut self.payload, fresh);
-        self.hash_index = HashIndex::with_capacity(Self::initial_capacity());
+        self.hash_index = HashIndex::with_capacity(INITIAL_CAPACITY);
         self.partial_restarted = false;
         payload
     }
@@ -775,21 +761,6 @@ impl AggregateHashTable {
         }
 
         self.hash_index = hash_index
-    }
-
-    fn initial_capacity() -> usize {
-        8192 * 4
-    }
-
-    pub fn allocated_bytes(&self) -> usize {
-        self.payload.memory_size()
-            + self
-                .payload
-                .arenas
-                .iter()
-                .map(|arena| arena.allocated_bytes())
-                .sum::<usize>()
-            + self.hash_index.allocated_bytes()
     }
 
     pub fn hash_index_resize_count(&self) -> usize {
