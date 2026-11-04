@@ -3731,7 +3731,7 @@ pub struct DiskCacheConfig {
     /// Setting this to true improves stability in memory-constrained / containerized environments at the cost
     /// of potentially reduced write performance.
     ///
-    /// Also set at runtime by `system$set_cache_capacity('disk.sync_data', <0|1>)`.
+    /// Read at start only.
     #[clap(
         long = "cache-disk-sync-data",
         value_name = "VALUE",
@@ -3770,7 +3770,7 @@ pub struct DiskCacheConfig {
 
     /// Bytes waiting to be written to the disk cache, at most. A read whose entry finds the
     /// queue full waits up to `queue_wait_ms` for room, then is served without filling the
-    /// cache. Also set at runtime by `system$set_cache_capacity('disk.queue_bytes', <bytes>)`.
+    /// cache. Read at start only.
     #[clap(
         long = "cache-disk-queue-bytes",
         id = "cache_disk_queue_bytes",
@@ -3780,8 +3780,7 @@ pub struct DiskCacheConfig {
     pub queue_bytes: u64,
 
     /// Milliseconds a read waits for room in a full write queue before giving up the fill;
-    /// 0 never waits. Also set at runtime by
-    /// `system$set_cache_capacity('disk.queue_wait_ms', <milliseconds>)`.
+    /// 0 never waits. Read at start only.
     #[clap(
         long = "cache-disk-queue-wait-ms",
         id = "cache_disk_queue_wait_ms",
@@ -3792,7 +3791,7 @@ pub struct DiskCacheConfig {
 
     /// Percent of the file system in use above which the disk cache evicts before it writes:
     /// other files share the disk, spill files among them. 1 to 100; 100 never evicts for it.
-    /// Also set at runtime by `system$set_cache_capacity('disk.watermark_ratio', <percent>)`.
+    /// Read at start only.
     #[clap(
         long = "cache-disk-watermark-ratio",
         id = "cache_disk_watermark_ratio",
