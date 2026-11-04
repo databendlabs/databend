@@ -64,6 +64,9 @@ fn test_external_access_sql() {
         "CREATE EXTERNAL ACCESS INTEGRATION \"QuotedAccess\" ALLOWED_NETWORK_RULES = (\"QuotedRule\") ENABLED = TRUE",
         "CREATE FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access, other_access)",
         "ALTER FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i, \"MixedCase\")",
+        "ALTER FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+        "CREATE FUNCTION a(INT) STATE {s INT} RETURNS INT LANGUAGE python AS $$class A: pass$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
     ] {
         let tokens = tokenize_sql(sql).unwrap();
         let (stmt, _) =
@@ -86,7 +89,8 @@ fn test_external_access_sql() {
         "CREATE EXTERNAL ACCESS INTEGRATION i ENABLED = TRUE ENABLED = FALSE ALLOWED_NETWORK_RULES = (r)",
         "ALTER EXTERNAL ACCESS INTEGRATION i SET ALLOWED_NETWORK_RULES = (r) ALLOWED_NETWORK_RULES = (r2)",
         "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = ()",
-        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = ()",
+        "CREATE FUNCTION a(INT) STATE {s INT} RETURNS INT LANGUAGE python ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = (i)",
     ] {
         let tokens = tokenize_sql(sql).unwrap();
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");

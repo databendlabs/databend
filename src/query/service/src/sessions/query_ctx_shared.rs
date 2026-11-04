@@ -52,6 +52,7 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
+use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -146,6 +147,8 @@ pub struct QueryContextShared {
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
     pub(super) mutation_state: MutationState,
+    // Commit sinks in local fragments and the outer refresh hook must see the same hints.
+    pub(super) written_segment_locs: SegmentLocationsState,
     pub(super) result_cache_state: ResultCacheState,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
@@ -266,6 +269,7 @@ impl QueryContextShared {
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),
+            written_segment_locs: Default::default(),
             result_cache_state: Default::default(),
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),

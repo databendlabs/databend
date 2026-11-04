@@ -160,6 +160,7 @@ impl PythonWorkerManager {
             parallelism = parallelism.min(self.config.max_workers_per_query);
         }
         Arc::new(PythonQueryWorkers {
+            tenant: tenant.to_owned(),
             manager: self.clone(),
             parallelism,
             execution_slots: Arc::new(Semaphore::new(parallelism)),
@@ -204,6 +205,7 @@ impl PythonWorkerManager {
 /// single admission, then grow pools opportunistically without waiting for extra
 /// quota. max_threads bounds execution, not the number of UDF operators.
 pub struct PythonQueryWorkers {
+    tenant: String,
     manager: Arc<PythonWorkerManager>,
     parallelism: usize,
     execution_slots: Arc<Semaphore>,
@@ -284,6 +286,7 @@ impl PythonQueryWorkers {
     pub(crate) fn aggregate_runtime(
         self: &Arc<Self>,
         function: PythonFunction,
+        integrations: Vec<String>,
     ) -> Result<Arc<PythonRuntime>> {
         let _guard = self.aggregate_registration.lock();
         let existing = self
@@ -291,10 +294,12 @@ impl PythonQueryWorkers {
             .lock()
             .iter()
             .filter_map(Weak::upgrade)
-            .find(|runtime| runtime.function == function);
+            .find(|runtime| {
+                runtime.function == function && runtime.external_access_integrations == integrations
+            });
         match existing {
             Some(runtime) => Ok(runtime),
-            None => PythonRuntime::new(function, self.clone(), None),
+            None => PythonRuntime::new(function, self.clone(), None, integrations),
         }
     }
 
@@ -487,6 +492,7 @@ impl Worker {
         reservation: Arc<Reservation>,
         directory: Option<TempDir>,
         function: &PythonFunction,
+        network_proxy: Option<Arc<dyn arrow_udf_python_worker::NetworkProxy>>,
         runtime: tokio::runtime::Handle,
     ) -> Result<Self> {
         let directory = match directory {
@@ -504,8 +510,11 @@ impl Worker {
             }
             None => TempDir::new().map_err(udf_error)?,
         };
-        let command = arrow_udf_python_worker::WorkerCommand::current_exe([PYTHON_WORKER_ARG])
+        let mut command = arrow_udf_python_worker::WorkerCommand::current_exe([PYTHON_WORKER_ARG])
             .map_err(udf_error)?;
+        // Native Internet sockets stay denied, with or without a proxy binding.
+        command.allow_network = false;
+        command.network_proxy = network_proxy;
         let working_dir = directory.path().to_path_buf();
         let process = arrow_udf_python_worker::WorkerProcess::spawn(
             &command,
