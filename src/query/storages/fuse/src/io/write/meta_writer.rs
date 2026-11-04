@@ -78,11 +78,15 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
         GlobalIORuntime::instance()
             .spawn(async move {
                 dal.write(&location, bytes).await?;
-                if let Some(decoded) = decoded {
+                {
                     let _unlimited = LimitMemGuard::enter_unlimited();
-                    FuseCaches::instance()
-                        .segments
-                        .put(&location, Arc::new(decoded));
+                    let segments = &FuseCaches::instance().segments;
+                    match decoded {
+                        Some(decoded) => segments.put(&location, Arc::new(decoded)),
+                        // The cache may have been turned on since, and filled by a reader with
+                        // the segment as it was.
+                        None => segments.evict(&location),
+                    }
                 }
                 DiskCachedStorage::new(dal).evict_objects(&[location]).await
             })
@@ -229,6 +233,63 @@ mod tests {
             assert!(
                 std::time::Instant::now() < deadline,
                 "the cancelled rewrite was not written"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        Ok(())
+    }
+
+    /// A rewrite that prepared no replacement, the cache being off, still drops the old
+    /// segment a reader cached once the cache was turned back on.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_segment_rewrite_evicts_what_it_did_not_replace() -> Result<()> {
+        use databend_common_config::CacheConfig;
+        use databend_storages_common_cache::CacheKind;
+        use databend_storages_common_cache::CacheManager;
+        use databend_storages_common_cache::kinds::segment;
+
+        use crate::io::SegmentInfoReader;
+
+        crate::test_utils::init_test_globals()?;
+        let manager = CacheManager::instance();
+        let name = CacheKind::of::<segment::Info>().name();
+        let segments = &FuseCaches::instance().segments;
+        let release = Arc::new(tokio::sync::Semaphore::new(0));
+        let op = Operator::new(opendal::services::Memory::default())?
+            .layer(StallWrites(release.clone()))
+            .finish();
+        let location = "segment_rewrite_not_replaced/segment";
+
+        // Off when the rewrite starts: it prepares no replacement.
+        manager.set_cache_capacity(name, 0)?;
+        assert!(!segments.is_enabled());
+        let rewritten = SegmentInfo::new(vec![], Statistics::default());
+        let rewrite = rewritten.write_meta_through_cache(&op, location);
+        let wait = std::time::Duration::from_millis(100);
+        assert!(tokio::time::timeout(wait, rewrite).await.is_err());
+
+        // Back on, a reader caches the old segment before the write commits.
+        let capacity = CacheConfig::default().table_meta_segment_bytes;
+        manager.set_cache_capacity(name, capacity)?;
+        let old = SegmentInfo::new(vec![], Statistics {
+            row_count: 7,
+            ..Default::default()
+        });
+        segments.put(location, Arc::new((&old).try_into()?));
+        release.add_permits(1);
+
+        let reader = SegmentInfoReader::new(op.clone(), Arc::new(TableSchema::empty()));
+        let key = (location.to_string(), SegmentInfo::VERSION);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if let Ok(segment) = segments.get(&reader, key.clone()).await
+                && segment.summary.row_count == 0
+            {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the old segment stayed cached"
             );
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }

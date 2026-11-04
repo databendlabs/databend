@@ -51,6 +51,11 @@ impl SegmentCache {
         self.segments.put(location, segment);
     }
 
+    /// Drops the segment at `location`, rewritten in place without a value to replace it.
+    pub fn evict(&self, location: &str) {
+        self.segments.evict(location);
+    }
+
     /// Whether segments can be cached; writers skip building a `CompactSegmentInfo` otherwise.
     pub fn is_enabled(&self) -> bool {
         self.segments.is_enabled()
