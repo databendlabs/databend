@@ -849,6 +849,12 @@ ALTER MATERIALIZED VIEW test_mv2 CLUSTER BY (val)
 
 # Cross-database MV creation resolves source references in the session database.
 statement ok
+DROP DATABASE IF EXISTS mv_src_db
+
+statement ok
+DROP DATABASE IF EXISTS mv_dst_db
+
+statement ok
 CREATE DATABASE mv_src_db
 
 statement ok
