@@ -560,8 +560,6 @@ impl RemoteBundleFileHandle {
         // A tier is used when the kind is cached in memory or on disk, either alone.
         let lookup = CacheKind::of::<inverted::Lookup>();
         let lookup_disk = self.lookup_cache.policy().disk;
-        let lookup_cached =
-            self.lookup_cache.is_enabled() || self.storage.uses_disk(lookup, lookup_disk);
         // The whole component is fetched only for a tier that can keep it: one the disk pool
         // refuses as too large would be fetched again by every read. One the disk cache already
         // holds, kept before its pool shrank, is read from there.
@@ -591,17 +589,7 @@ impl RemoteBundleFileHandle {
                         return self.read_full_postings_file().await;
                     }
                 }
-                let pages_enabled = match kind {
-                    PageCacheKind::Lookup => lookup_cached,
-                    PageCacheKind::Payload => {
-                        self.payload_cache.is_enabled()
-                            || self.storage.uses_disk(
-                                CacheKind::of::<inverted::Payload>(),
-                                self.payload_cache.policy().disk,
-                            )
-                    }
-                };
-                if pages_enabled {
+                if self.pages_kept(kind, &range) {
                     return self.read_pages(kind, range).await;
                 }
             }
@@ -611,6 +599,37 @@ impl RemoteBundleFileHandle {
         self.fetch_range(range)
             .await
             .map(|data| OwnedBytes::new(data.to_vec()))
+    }
+
+    /// Whether the pages of `range` are worth reading whole: a tier can keep a page, or the disk
+    /// cache holds them all, kept before its pool shrank. Pages no tier keeps would be fetched
+    /// again by every read; the range alone is read then.
+    fn pages_kept(&self, kind: PageCacheKind, range: &Range<usize>) -> bool {
+        let (memory, disk_kind, fill) = match kind {
+            PageCacheKind::Lookup => (
+                self.lookup_cache.is_enabled(),
+                CacheKind::of::<inverted::Lookup>(),
+                self.lookup_cache.policy().disk,
+            ),
+            PageCacheKind::Payload => (
+                self.payload_cache.is_enabled(),
+                CacheKind::of::<inverted::Payload>(),
+                self.payload_cache.policy().disk,
+            ),
+        };
+        if memory || self.storage.admits(disk_kind, CACHE_PAGE_SIZE as u64, fill) {
+            return true;
+        }
+        let first_page = range.start / CACHE_PAGE_SIZE;
+        let last_page = (range.end - 1) / CACHE_PAGE_SIZE;
+        (first_page..=last_page).all(|page_no| {
+            self.page_range(page_no)
+                .and_then(|page| self.absolute_range(&page))
+                .is_ok_and(|page| {
+                    self.storage
+                        .holds(disk_kind, self.object.as_ref(), Some(page), fill)
+                })
+        })
     }
 
     async fn read_pages(&self, kind: PageCacheKind, range: Range<usize>) -> io::Result<OwnedBytes> {
@@ -1645,6 +1664,37 @@ mod tests {
         let range = 7..31;
         assert_eq!(file.read_range(range.clone()).await?.as_ref(), &data[range]);
         assert_eq!(*ranges.lock().unwrap(), vec![7..31]);
+        Ok(())
+    }
+
+    /// Pages no tier can keep are not fetched whole: the range alone is read.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_lookup_pages_too_large_for_the_disk_pool_are_read_by_range() -> Result<()> {
+        let data = (0..4 * CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let dir = tempfile::TempDir::new()?;
+        // A page is over a quarter of the 128 KiB index pool.
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 128 << 10, 1 << 20],
+            false,
+        )?);
+        let (mut file, ranges) =
+            payload_file_handle("lookup-pages-oversized", data.clone()).await?;
+        file.storage = DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk));
+        file.path = PathBuf::from("segment.term");
+        file.component_name = "term".to_owned();
+        file.cache_policy = RangeCachePolicy::Pages(PageCacheKind::Lookup);
+        file.lookup_cache = no_lookup_cache();
+
+        let range = 7..39;
+        for _ in 0..2 {
+            let read = file.read_range(range.clone()).await?;
+            assert_eq!(read.as_ref(), &data[range.clone()]);
+        }
+        assert_eq!(*ranges.lock().unwrap(), vec![7..39, 7..39]);
         Ok(())
     }
 

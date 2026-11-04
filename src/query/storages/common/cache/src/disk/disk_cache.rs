@@ -28,6 +28,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use bytes::Bytes;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeConfig;
@@ -412,8 +413,11 @@ impl DiskCache {
     }
 
     /// Runtime capacity of a pool, in bytes; 0 empties it and stops reads and writes. Files are
-    /// deleted in the background. Pools together may not exceed `max_bytes`.
+    /// deleted in the background. Pools together may not exceed `max_bytes`. Not held to the
+    /// caller's memory limit: an allocation failing while entries are taken out would leave
+    /// their files unindexed and never deleted.
     pub fn set_pool_cap(&self, pool: Pool, cap: u64) -> Result<()> {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let _updates = self.updates.lock();
         let others: u64 = Pool::ALL
             .iter()
