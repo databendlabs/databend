@@ -396,6 +396,7 @@ impl DiskCache {
     /// read of the object in flight meanwhile may still cache what it read before, and a file
     /// that cannot be deleted stays unindexed. Returns the entries dropped.
     pub fn evict_object(&self, path: &str) -> usize {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let object = DiskKey::object_id(path);
         self.pools
             .iter()
@@ -409,6 +410,7 @@ impl DiskCache {
 
     /// Drops `key` from the disk cache.
     pub fn evict(&self, kind: CacheKind, key: &DiskKey) -> bool {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         self.pool(kind).remove(&key.rel_path(kind))
     }
 
@@ -454,6 +456,7 @@ impl DiskCache {
     /// Turns the disk cache of `kind` on or off. Turning it off drops the kind's entries, and
     /// its pool refuses entries of it queued or scanned before.
     pub fn set_kind_enabled(&self, kind: CacheKind, enabled: bool) {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let _updates = self.updates.lock();
         self.kinds_enabled[kind.index()].store(enabled, Ordering::Relaxed);
         let pool = self.pool(kind);
@@ -564,6 +567,7 @@ pub fn split_caps(max_bytes: u64, ratios: [u64; 3]) -> Result<[u64; 3]> {
 }
 
 fn delete_in_background(pool: Arc<DiskPool>, victims: Vec<String>) {
+    let _unlimited = LimitMemGuard::enter_unlimited();
     if victims.is_empty() {
         return;
     }

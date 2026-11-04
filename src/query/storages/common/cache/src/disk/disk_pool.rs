@@ -306,6 +306,9 @@ fn kind_of(rel: &str) -> Option<CacheKind> {
     rel.split('/').next().and_then(CacheKind::from_name)
 }
 
+/// The index of one pool. Its methods that change the index, and the deletions they hand off,
+/// are not held to the caller's memory limit: an allocation failing between two updates would
+/// leave files unindexed and never deleted, or keys marked forever.
 pub struct DiskPool {
     pool: Pool,
     root: PathBuf,
@@ -387,6 +390,7 @@ impl DiskPool {
     /// (found by the restart scan since it was queued), its previous file is being deleted, or
     /// another write of it runs.
     pub fn reserve(&self, rel: &str, bytes: u64) -> Reservation {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         // Allocated before anything changes: an allocation that unwinds leaves no reservation.
         let key = rel.to_string();
         let mut state = self.state.lock();
@@ -435,6 +439,7 @@ impl DiskPool {
         written: u64,
         commit: impl FnOnce() -> std::io::Result<()>,
     ) -> std::io::Result<Published> {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let mut state = self.state.lock();
         state.writing -= reserved;
         state.in_flight.remove(&rel);
@@ -469,6 +474,7 @@ impl DiskPool {
 
     /// Gives back the reservation of `rel`, whose write failed or was abandoned.
     pub fn release(&self, rel: &str, reserved: u64) {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let mut state = self.state.lock();
         state.writing -= reserved;
         state.in_flight.remove(rel);
@@ -478,12 +484,14 @@ impl DiskPool {
     /// Takes every entry of the object `object` (see `DiskKey::object_id`) out of the index, in
     /// any kind; returns them, for `delete`.
     pub fn remove_object(&self, object: &str) -> Vec<String> {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         self.state.lock().take_object(object)
     }
 
     /// Announces a restart scan, before queries run: an object removed from now on until the
     /// scan ends keeps its previous run's files out of the index (see `reload`).
     pub fn expect_reload(&self) {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let mut state = self.state.lock();
         if state.removed_before_scan.is_none() {
             state.removed_before_scan = Some(HashSet::new());
@@ -492,6 +500,7 @@ impl DiskPool {
 
     /// Takes the entry out of the index and deletes its file. Returns whether it was indexed.
     pub fn remove(&self, rel: &str) -> bool {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let removed = self.state.lock().pop(rel).is_some();
         if removed {
             self.delete(&[rel.to_string()]);
@@ -503,6 +512,7 @@ impl DiskPool {
     /// again. A file that could not be deleted stays marked as being deleted, its key not
     /// written again before a restart (see the module docs).
     pub fn delete(&self, victims: &[String]) {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let failed = match remove_files(&self.root, victims) {
             Ok(()) => HashSet::new(),
             Err((e, failed)) => {
@@ -523,6 +533,7 @@ impl DiskPool {
 
     /// Changes the capacity; returns the entries taken out to fit it, for `delete`.
     pub fn set_cap(&self, cap: u64) -> Vec<String> {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let mut state = self.state.lock();
         state.cap = cap;
         let mut victims = Vec::new();
@@ -538,6 +549,7 @@ impl DiskPool {
     /// Takes at least `bytes` of the least recently used entries out, or all of them; returns
     /// them, for `delete`.
     pub fn evict_bytes(&self, bytes: u64) -> Vec<String> {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let mut state = self.state.lock();
         let mut freed = 0;
         let mut victims = Vec::new();
@@ -572,6 +584,7 @@ impl DiskPool {
     /// Turns `kind` on or off. Turning it off takes its entries out, returned for `delete`,
     /// and refuses its writes and files from then on.
     pub fn set_kind_enabled(&self, kind: CacheKind, enabled: bool) -> Vec<String> {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         self.state.lock().kinds_off[kind.index()] = !enabled;
         if enabled {
             Vec::new()
@@ -582,6 +595,7 @@ impl DiskPool {
 
     /// Takes every entry of `kind` out; returns them, for `delete`.
     pub fn remove_kind(&self, kind: CacheKind) -> Vec<String> {
+        let _unlimited = LimitMemGuard::enter_unlimited();
         let prefix = format!("{}/", kind.name());
         let mut state = self.state.lock();
         let rels: Vec<String> = state
