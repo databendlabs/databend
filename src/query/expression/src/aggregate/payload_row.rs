@@ -30,12 +30,14 @@ use crate::ProjectedBlock;
 use crate::Scalar;
 use crate::types::AccessType;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalScalar;
+use crate::types::DecimalSize;
 use crate::types::DecimalType;
 use crate::types::DecimalView;
 use crate::types::EncodedColumn;
@@ -733,6 +735,198 @@ impl<'s> CompareState<'s> {
         } else {
             self.match_with(counts, compare_fn)
         }
+    }
+
+    /// Like `row_match_entries`, with the group values of `rows`, rows of a payload with the same
+    /// group types.
+    pub(super) fn row_match_rows(
+        mut self,
+        rows: &[RowPtr; BATCH_SIZE],
+        group_types: &[DataType],
+        row_layout: &RowLayout,
+        mut counts: (usize, usize),
+    ) -> usize {
+        for ((data_type, offset), validity_offset) in group_types
+            .iter()
+            .zip(row_layout.group_offsets.iter())
+            .zip(row_layout.validity_offsets.iter())
+        {
+            let validity = data_type.is_nullable().then_some(*validity_offset);
+            counts = self.match_rows(
+                rows,
+                &data_type.remove_nullable(),
+                *offset,
+                validity,
+                counts,
+            );
+            if counts.0 == 0 {
+                break;
+            }
+        }
+        counts.1
+    }
+
+    fn match_rows(
+        &mut self,
+        rows: &[RowPtr; BATCH_SIZE],
+        data_type: &DataType,
+        offset: usize,
+        validity: Option<usize>,
+        counts: (usize, usize),
+    ) -> (usize, usize) {
+        visit_row_type(data_type, MatchRows {
+            compare: self,
+            rows,
+            offset,
+            validity,
+            counts,
+        })
+    }
+
+    fn match_rows_with<F>(
+        &mut self,
+        rows: &[RowPtr; BATCH_SIZE],
+        validity: Option<usize>,
+        counts: (usize, usize),
+        eq: F,
+    ) -> (usize, usize)
+    where
+        F: Fn(&RowPtr, &RowPtr) -> bool,
+    {
+        match validity {
+            None => self.match_with(counts, |row, row_ptr| eq(row_ptr, &rows[*row])),
+            Some(validity) => self.match_with(counts, |row, row_ptr| {
+                let other = &rows[*row];
+                let valid = unsafe { row_ptr.read_bool(validity) };
+                valid == unsafe { other.read_bool(validity) } && (!valid || eq(row_ptr, other))
+            }),
+        }
+    }
+}
+
+/// How `serialize_column_to_rowformat` stores the group values of a type, not nullable, in a
+/// row. Dispatched by `visit_row_type`.
+pub(super) trait RowTypeVisitor {
+    type Output;
+
+    /// Nothing, for `Null`, `EmptyArray` and `EmptyMap`.
+    fn visit_empty(self, data_type: &DataType) -> Self::Output;
+
+    /// The `T::Scalar` value.
+    fn visit_fixed<T: ArgType>(self) -> Self::Output;
+
+    /// The `Num` value.
+    fn visit_decimal<Num: Decimal>(self, size: DecimalSize) -> Self::Output;
+
+    /// Length and address of the bytes in the payload arena.
+    fn visit_bytes(self, data_type: &DataType) -> Self::Output;
+
+    /// Length and address of the bincode-serialized scalar in the payload arena.
+    fn visit_serialized(self, data_type: &DataType) -> Self::Output;
+}
+
+pub(super) fn visit_row_type<V: RowTypeVisitor>(data_type: &DataType, visitor: V) -> V::Output {
+    match data_type {
+        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {
+            visitor.visit_empty(data_type)
+        }
+        DataType::Boolean => visitor.visit_fixed::<BooleanType>(),
+        DataType::Number(number) => with_number_mapped_type!(|NUM_TYPE| match number {
+            NumberDataType::NUM_TYPE => visitor.visit_fixed::<NumberType<NUM_TYPE>>(),
+        }),
+        DataType::Decimal(size) => match size.data_kind() {
+            DecimalDataKind::Decimal64 => visitor.visit_decimal::<i64>(*size),
+            DecimalDataKind::Decimal128 => visitor.visit_decimal::<i128>(*size),
+            DecimalDataKind::Decimal256 => visitor.visit_decimal::<i256>(*size),
+        },
+        DataType::Timestamp => visitor.visit_fixed::<TimestampType>(),
+        DataType::Date => visitor.visit_fixed::<DateType>(),
+        DataType::Interval => visitor.visit_fixed::<IntervalType>(),
+        DataType::Binary
+        | DataType::String
+        | DataType::Bitmap
+        | DataType::Variant
+        | DataType::Geometry => visitor.visit_bytes(data_type),
+        DataType::Nullable(_) => unreachable!(),
+        _ => visitor.visit_serialized(data_type),
+    }
+}
+
+pub(super) struct IsInArena;
+
+impl RowTypeVisitor for IsInArena {
+    type Output = bool;
+
+    fn visit_empty(self, _: &DataType) -> bool {
+        false
+    }
+
+    fn visit_fixed<T: ArgType>(self) -> bool {
+        false
+    }
+
+    fn visit_decimal<Num: Decimal>(self, _: DecimalSize) -> bool {
+        false
+    }
+
+    fn visit_bytes(self, _: &DataType) -> bool {
+        true
+    }
+
+    fn visit_serialized(self, _: &DataType) -> bool {
+        true
+    }
+}
+
+struct MatchRows<'a, 's> {
+    compare: &'a mut CompareState<'s>,
+    rows: &'a [RowPtr; BATCH_SIZE],
+    offset: usize,
+    validity: Option<usize>,
+    counts: (usize, usize),
+}
+
+impl MatchRows<'_, '_> {
+    fn match_with(self, eq: impl Fn(&RowPtr, &RowPtr) -> bool) -> (usize, usize) {
+        self.compare
+            .match_rows_with(self.rows, self.validity, self.counts, eq)
+    }
+}
+
+impl RowTypeVisitor for MatchRows<'_, '_> {
+    type Output = (usize, usize);
+
+    fn visit_empty(self, _: &DataType) -> (usize, usize) {
+        self.match_with(|_, _| true)
+    }
+
+    fn visit_fixed<T: ArgType>(self) -> (usize, usize) {
+        let offset = self.offset;
+        self.match_with(|a, b| unsafe {
+            a.read::<T::Scalar>(offset) == b.read::<T::Scalar>(offset)
+        })
+    }
+
+    fn visit_decimal<Num: Decimal>(self, _: DecimalSize) -> (usize, usize) {
+        let offset = self.offset;
+        self.match_with(|a, b| unsafe { a.read::<Num>(offset) == b.read::<Num>(offset) })
+    }
+
+    fn visit_bytes(self, _: &DataType) -> (usize, usize) {
+        let offset = self.offset;
+        self.match_with(|a, b| unsafe { a.is_bytes_eq(offset, b.read_bytes(offset)) })
+    }
+
+    fn visit_serialized(self, _: &DataType) -> (usize, usize) {
+        let offset = self.offset;
+        self.match_with(|a, b| unsafe {
+            let (a, b) = (a.read_bytes(offset), b.read_bytes(offset));
+            a == b || {
+                let a: Scalar = bincode_deserialize_from_slice(a).unwrap();
+                let b: Scalar = bincode_deserialize_from_slice(b).unwrap();
+                a.as_ref() == b.as_ref()
+            }
+        })
     }
 }
 

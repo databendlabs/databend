@@ -69,24 +69,6 @@ impl AsRef<str> for TableDataCacheKey {
     }
 }
 
-#[cfg(test)]
-mod cache_key_tests {
-    use super::*;
-
-    #[test]
-    fn array_cache_key_includes_data_type() {
-        let raw = TableDataCacheKey::new_no_type("block", 1, 2, 3);
-        let old = TableDataCacheKey::new("block", 1, 2, 3, "Decimal(10, 2)");
-        let new = TableDataCacheKey::new("block", 1, 2, 3, "Decimal(15, 2)");
-        assert_ne!(raw.as_ref(), old.as_ref());
-        assert_ne!(old.as_ref(), new.as_ref());
-        assert_eq!(
-            new.as_ref(),
-            TableDataCacheKey::new("block", 1, 2, 3, "Decimal(15, 2)").as_ref()
-        );
-    }
-}
-
 #[derive(Clone)]
 pub struct DiskCacheAccessor<T = LruDiskCacheHolder> {
     name: String,
@@ -298,5 +280,23 @@ impl DiskCachePopulator {
         });
         let _join_handler = worker.start();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn array_cache_key_includes_data_type() {
+        let raw = TableDataCacheKey::new_no_type("block", 1, 2, 3);
+        let old = TableDataCacheKey::new("block", 1, 2, 3, "Decimal(10, 2)");
+        let new = TableDataCacheKey::new("block", 1, 2, 3, "Decimal(15, 2)");
+        assert_ne!(raw.as_ref(), old.as_ref());
+        assert_ne!(old.as_ref(), new.as_ref());
+        assert_eq!(
+            new.as_ref(),
+            TableDataCacheKey::new("block", 1, 2, 3, "Decimal(15, 2)").as_ref()
+        );
     }
 }

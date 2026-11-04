@@ -153,14 +153,18 @@ impl HNSWIndex {
     }
 
     pub fn search(&self, limit: usize, query_values: &[f32]) -> Result<Vec<ScoredPointOffset>> {
-        self.search_with_ef(limit, None, query_values)
+        self.search_with_ef(limit, None, query_values, false)
     }
 
+    /// The `limit` nearest rows found, plus, with `keep_ties`, the other rows
+    /// found at the distance of the farthest of them: another sort key, such as
+    /// `id` in `ORDER BY d, id`, may choose any tied row.
     pub fn search_with_ef(
         &self,
         limit: usize,
         search_ef: Option<usize>,
         query_values: &[f32],
+        keep_ties: bool,
     ) -> Result<Vec<ScoredPointOffset>> {
         let query_encode = self.encoded_vectors.encode_query(query_values);
 
@@ -178,12 +182,15 @@ impl HNSWIndex {
         let query_filter_scorer = FilteredScorer::new(&raw_scorer);
 
         let is_stopped = AtomicBool::new(false);
+        // To find the ties, return all `ef` rows: the search is the same as for
+        // `limit` rows, which are the first of them.
+        let top = if keep_ties { ef } else { limit };
         let values = self
             .graph_layers
-            .search(limit, ef, query_filter_scorer, None, &is_stopped)?;
+            .search(top, ef, query_filter_scorer, None, &is_stopped)?;
 
         let values = Self::postprocess_score(self.distance_type, values);
-        Ok(values)
+        Ok(truncate_with_ties(values, limit))
     }
 
     pub fn generate_scores(
@@ -414,6 +421,19 @@ impl HNSWIndex {
     }
 }
 
+/// The first `limit` of `values`, plus the later ones whose score equals the
+/// largest of those `limit` scores. `values` are in search order, which the
+/// postprocessed scores may not follow exactly (`(1 - s).abs()` for Dot).
+fn truncate_with_ties(mut values: Vec<ScoredPointOffset>, limit: usize) -> Vec<ScoredPointOffset> {
+    let rest = values.split_off(limit.min(values.len()));
+    let last = values
+        .iter()
+        .map(|value| value.score)
+        .fold(f32::NEG_INFINITY, f32::max);
+    values.extend(rest.into_iter().filter(|value| value.score == last));
+    values
+}
+
 fn preprocess(distance_type: DistanceType, column: VectorColumn) -> VectorColumn {
     match distance_type {
         DistanceType::Dot => {
@@ -446,4 +466,74 @@ fn cosine_preprocess(vector: Vec<f32>) -> Vec<f32> {
     }
     length = length.sqrt();
     vector.iter().map(|x| x / length).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_with_ties() {
+        let scores = [0.1, 0.3, 0.2, 0.3, 0.4, 0.3];
+        let ids = |limit| {
+            let values = scores
+                .iter()
+                .enumerate()
+                .map(|(idx, &score)| ScoredPointOffset {
+                    idx: idx as u32,
+                    score,
+                })
+                .collect();
+            truncate_with_ties(values, limit)
+                .iter()
+                .map(|value| value.idx)
+                .collect::<Vec<_>>()
+        };
+        // The largest of the first scores is 0.3, also the score of rows 3 and 5.
+        assert_eq!(ids(2), [0, 1, 3, 5]);
+        assert_eq!(ids(3), [0, 1, 2, 3, 5]);
+        assert_eq!(ids(1), [0]);
+        assert_eq!(ids(6), [0, 1, 2, 3, 4, 5]);
+        assert!(ids(0).is_empty());
+    }
+
+    /// Two rows of one index at the same nearest distance are both returned for
+    /// limit 1.
+    #[test]
+    fn test_search_keeps_ties() -> Result<()> {
+        // Rows 3 and 9 are the same vector, the nearest to the query; the others
+        // are at least 2 away.
+        let vectors: Vec<[f32; 4]> = (0..16)
+            .map(|i| match i {
+                3 | 9 => [1.0; 4],
+                _ => [i as f32, -(i as f32), 2.0, 0.5 * i as f32],
+            })
+            .collect();
+        let values: Vec<F32> = vectors.iter().flatten().map(|&v| F32::from(v)).collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), 4)));
+        let (_, entries) = HNSWIndex::build(4, 8, 0, column, DistanceType::L2)?;
+        // Each component is a single-row binary column.
+        let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
+        let components: Vec<_> = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect();
+        let index = HNSWIndex::open(DistanceType::L2, 4, vectors.len(), &components, None)?;
+
+        // An ef of every row visits the whole graph, so the result is exact.
+        let search = |limit, keep_ties| -> Result<Vec<u32>> {
+            let rows = index.search_with_ef(limit, Some(vectors.len()), &[1.0; 4], keep_ties)?;
+            assert!(rows.iter().all(|row| row.score == rows[0].score));
+            let mut ids: Vec<_> = rows.iter().map(|row| row.idx).collect();
+            ids.sort_unstable();
+            Ok(ids)
+        };
+        assert_eq!(search(1, true)?, [3, 9]);
+        assert_eq!(search(2, true)?, [3, 9]);
+        // Without `keep_ties`, one of them.
+        let one = search(1, false)?;
+        assert!(one == [3] || one == [9], "{one:?}");
+        assert_eq!(search(2, false)?, [3, 9]);
+        Ok(())
+    }
 }

@@ -27,14 +27,14 @@ use std::ops::Not;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::binary;
 use databend_common_column::bitmap::ternary;
-use databend_common_column::bitmap::utils::BitChunkIterExact;
-use databend_common_column::bitmap::utils::BitChunksExact;
 use databend_common_column::buffer::Buffer;
 
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Scalar;
 use crate::Value;
+use crate::kernels::mask_segments::Segment;
+use crate::kernels::mask_segments::for_each_segment;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::BinaryType;
@@ -371,7 +371,7 @@ fn select_fixed_impl<N: Copy>(
     let mut out = Vec::with_capacity(mask.len());
     for_each_segment(mask, |segment| match segment {
         Segment::Run {
-            take_then,
+            set: take_then,
             start,
             len,
         } => {
@@ -425,7 +425,7 @@ fn select_values<T: ValueType>(
         let mut out = T::downcast_builder(&mut builder);
         for_each_segment(mask, |segment| match segment {
             Segment::Run {
-                take_then,
+                set: take_then,
                 start,
                 len,
             } => extend_run::<T>(
@@ -474,93 +474,5 @@ unsafe fn value_item<T: AccessType>(value: &Value<T>, row: usize) -> T::ScalarRe
         Value::Scalar(scalar) => T::to_scalar_ref(scalar),
         // SAFETY: guaranteed by the caller.
         Value::Column(column) => unsafe { T::index_column_unchecked(column, row) },
-    }
-}
-
-/// A part of the mask: a run of whole 64-row words that are all set
-/// (`take_then`) or all unset, or a single word with both set and unset bits.
-enum Segment {
-    Run {
-        take_then: bool,
-        start: usize,
-        len: usize,
-    },
-    Mixed {
-        word: u64,
-        start: usize,
-        len: usize,
-    },
-}
-
-/// Calls `f` for the segments of `mask` in row order. Bit `i` of a mixed word
-/// is the row `start + i`.
-fn for_each_segment(mask: &Bitmap, f: impl FnMut(Segment)) {
-    let mut segments = SegmentBuilder {
-        f,
-        start: 0,
-        run: None,
-    };
-    let (bytes, offset, len) = mask.as_slice();
-    if offset == 0 {
-        segments.push_chunks(BitChunksExact::<u64>::new(bytes, len));
-    } else {
-        segments.push_chunks(mask.chunks::<u64>());
-    }
-    segments.flush_run();
-}
-
-struct SegmentBuilder<F: FnMut(Segment)> {
-    f: F,
-    /// The first row of the next word.
-    start: usize,
-    /// The pending run: `(take_then, start, len)`.
-    run: Option<(bool, usize, usize)>,
-}
-
-impl<F: FnMut(Segment)> SegmentBuilder<F> {
-    fn push_chunks(&mut self, mut chunks: impl BitChunkIterExact<u64>) {
-        for word in chunks.by_ref() {
-            self.push_word(word, 64);
-        }
-        let remainder_len = chunks.remainder_len();
-        if remainder_len > 0 {
-            self.push_word(chunks.remainder(), remainder_len);
-        }
-    }
-
-    #[inline]
-    fn push_word(&mut self, word: u64, len: usize) {
-        let full = if len == 64 { u64::MAX } else { (1 << len) - 1 };
-        let word = word & full;
-        let start = self.start;
-        self.start += len;
-
-        let take_then = if word == 0 {
-            false
-        } else if word == full {
-            true
-        } else {
-            self.flush_run();
-            (self.f)(Segment::Mixed { word, start, len });
-            return;
-        };
-        match &mut self.run {
-            Some((run_then, _, run_len)) if *run_then == take_then => *run_len += len,
-            _ => {
-                self.flush_run();
-                self.run = Some((take_then, start, len));
-            }
-        }
-    }
-
-    #[inline]
-    fn flush_run(&mut self) {
-        if let Some((take_then, start, len)) = self.run.take() {
-            (self.f)(Segment::Run {
-                take_then,
-                start,
-                len,
-            });
-        }
     }
 }

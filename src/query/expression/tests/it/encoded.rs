@@ -492,7 +492,11 @@ fn test_dict_column_like() {
                         .iter()
                         .map(|value| pattern.compare(value.as_bytes()) ^ not)
                         .collect::<Bitmap>();
-                    assert_eq!(dict.like(&pattern, not), Some(expected), "{text} {not}");
+                    assert_eq!(
+                        dict.like(&pattern, not, None),
+                        Some(expected),
+                        "{text} {not}"
+                    );
                 }
             }
         }
@@ -503,9 +507,9 @@ fn test_dict_column_like() {
         NarrowBuffer::U8(Vec::<u8>::new().into()),
         StringType::from_data(Vec::<String>::new()),
     );
-    assert_eq!(empty.like(&pattern, false), Some(Bitmap::new()));
+    assert_eq!(empty.like(&pattern, false, None), Some(Bitmap::new()));
     let numbers = DictColumn::try_encode(&Int32Type::from_data(vec![1, 2, 1]), 2).unwrap();
-    assert_eq!(numbers.like(&pattern, false), None);
+    assert_eq!(numbers.like(&pattern, false, None), None);
 }
 
 /// `value <op> constant` on a dictionary column, evaluated once per dictionary value, gives the

@@ -839,6 +839,7 @@ impl RowLocations {
         self.data.len()
     }
 
+    #[inline]
     fn get(&self, index: u32) -> (usize, usize) {
         let (block, row) = self.data[index as usize];
         (block as _, row as _)

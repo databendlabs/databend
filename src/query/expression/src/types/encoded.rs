@@ -18,6 +18,7 @@ use std::iter::TrustedLen;
 use std::ops::Range;
 
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 
@@ -311,17 +312,35 @@ impl DictColumn {
 
     /// Matches a string pattern once per dictionary value, then maps the results to rows.
     /// `None` for dictionaries whose values are not strings.
-    pub fn like(&self, pattern: &LikePattern, not: bool) -> Option<Bitmap> {
+    ///
+    /// With `rows`, e.g. the rows a previous predicate of a conjunction kept, the result is
+    /// only correct at `rows`, and only the values they reference are matched.
+    pub fn like(&self, pattern: &LikePattern, not: bool, rows: Option<&[u32]>) -> Option<Bitmap> {
         let Column::String(values) = &self.values else {
             return None;
         };
-        // Cache by dictionary index: repeated keys must not evaluate LIKE again.
-        let dict_matches: Vec<bool> = values
-            .iter()
-            .map(|value| pattern.compare(value.as_bytes()) ^ not)
-            .collect();
-        Some(with_narrow_buffer!(&self.keys, |keys| {
-            keys.iter().map(|key| dict_matches[*key as usize]).collect()
+        // Cache by dictionary index, so repeated keys do not match again: 0 not matched yet,
+        // 1 false, 2 true. Values no row references are never matched.
+        let mut dict_matches = vec![0u8; values.len()];
+        let mut matches = |key: usize| {
+            if dict_matches[key] == 0 {
+                // SAFETY: keys index the dictionary values.
+                let value = unsafe { values.index_unchecked(key) };
+                dict_matches[key] = 1 + (pattern.compare(value.as_bytes()) ^ not) as u8;
+            }
+            dict_matches[key] == 2
+        };
+        Some(with_narrow_buffer!(&self.keys, |keys| match rows {
+            Some(rows) => {
+                let mut bitmap = MutableBitmap::from_len_zeroed(self.len());
+                for &row in rows {
+                    if matches(keys[row as usize] as usize) {
+                        bitmap.set(row as usize, true);
+                    }
+                }
+                bitmap.into()
+            }
+            None => keys.iter().map(|key| matches(*key as usize)).collect(),
         }))
     }
 
