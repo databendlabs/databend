@@ -57,6 +57,9 @@ use crate::sessions::TableContextSettings;
 
 const SPILL_BUCKET_NUM: usize = 4;
 const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
+/// The bits of the group hash that partition a hash table; each spill depth takes the next
+/// `SPILL_BUCKET_BITS` of them.
+const PARTITION_HASH_BITS: u64 = 48;
 
 enum Stage {
     Input,
@@ -117,7 +120,7 @@ impl TransformFinalAggregate {
         next_task_id: Arc<AtomicU64>,
     ) -> Result<Box<dyn Processor>> {
         let settings = ctx.get_settings();
-        let available_partition_depths = (48 / SPILL_BUCKET_BITS) as usize;
+        let available_partition_depths = (PARTITION_HASH_BITS / SPILL_BUCKET_BITS) as usize;
         let max_partition_depth = available_partition_depths.saturating_sub(1);
         let max_aggregate_spill_level =
             (settings.get_max_aggregate_spill_level()? as usize).min(max_partition_depth);
@@ -178,11 +181,11 @@ impl TransformFinalAggregate {
         )
     }
 
-    /// Drop the current hash table and switch to `spilled_depth`. The next hash
+    /// Drop the current hash table and switch to `partition_depth`. The next hash
     /// table is created by `hashtable_mut` when data arrives.
-    fn reset_hashtable(&mut self, spilled_depth: usize) {
+    fn reset_hashtable(&mut self, partition_depth: usize) {
         self.hashtable = None;
-        self.current_partition_depth = spilled_depth.min(self.max_partition_depth);
+        self.current_partition_depth = partition_depth;
     }
 
     // Takes the fields separately so callers can still borrow `flush_state`.
@@ -202,7 +205,7 @@ impl TransformFinalAggregate {
     fn ensure_spill_depth(&mut self, spilled_depth: usize) {
         let partition_depth = spilled_depth.min(self.max_partition_depth);
         if self.current_partition_depth != partition_depth {
-            self.reset_hashtable(spilled_depth);
+            self.reset_hashtable(partition_depth);
         }
     }
 
@@ -383,16 +386,9 @@ impl TransformFinalAggregate {
                 FinalAggregateFinishMode::Buffered,
             )
         } else if self.spilled_occurred {
-            let (output_rows, hash_index_resizes) = match &self.hashtable {
-                Some(ht) => (ht.payload.len(), ht.hash_index_resize_count()),
-                None => (0, 0),
-            };
+            // `spill_out` above took the hash table.
             self.spill_finish(spilled_depth, tx)?;
-            (
-                output_rows,
-                hash_index_resizes,
-                FinalAggregateFinishMode::Spilled,
-            )
+            (0, 0, FinalAggregateFinishMode::Spilled)
         } else {
             let output_stream = BlockPartitionStream::create(
                 self.params.max_block_rows,
@@ -416,7 +412,6 @@ impl TransformFinalAggregate {
             finish_mode,
         );
         self.spilled_occurred = false;
-        self.hashtable = None;
         Ok(())
     }
 
@@ -603,11 +598,8 @@ impl Processor for TransformFinalAggregate {
             self.ensure_spill_depth(task.spilled_depth);
             self.statistics.reset();
             let meta = AggregateMeta::Spilled(mem::take(&mut task.spilled_payload));
-            if task.spilled_depth >= self.max_aggregate_spill_level {
-                self.handle_meta(meta, false)?;
-            } else {
-                self.handle_meta(meta, true)?;
-            }
+            let need_check_spill = task.spilled_depth < self.max_aggregate_spill_level;
+            self.handle_meta(meta, need_check_spill)?;
             self.finish(Some(task.task_id), task.spilled_depth, task.tx)?;
 
             return Ok(());
