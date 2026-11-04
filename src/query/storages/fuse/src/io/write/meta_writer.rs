@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::DiskCachedStorage;
@@ -70,13 +71,15 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
         // Segments are rewritten in place by ANALYZE: after the write, the memory cache takes
         // the new value and the disk cache drops the old bytes. The write and both updates run
         // to their end on the IO runtime when the caller is cancelled, even with the write in
-        // flight: a rewrite that went through leaves no stale entry.
+        // flight: a rewrite that went through leaves no stale entry. Nor are the updates held to
+        // the query's memory limit, which the task keeps.
         let dal = data_accessor.clone();
         let location = location.to_string();
         GlobalIORuntime::instance()
             .spawn(async move {
                 dal.write(&location, bytes).await?;
                 if let Some(decoded) = decoded {
+                    let _unlimited = LimitMemGuard::enter_unlimited();
                     FuseCaches::instance()
                         .segments
                         .put(&location, Arc::new(decoded));

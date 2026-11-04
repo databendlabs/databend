@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use chrono::Utc;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -475,6 +476,8 @@ impl BlockWriter {
             .spawn(async move {
                 let location = index_state.location.0.clone();
                 Self::write_down_bloom_index_state(&dal, Some(index_state)).await?;
+                // Not held to the query's memory limit, which the task keeps.
+                let _unlimited = LimitMemGuard::enter_unlimited();
                 let caches = FuseCaches::instance();
                 caches.index_metas.bloom.evict(&location);
                 for key in &old_filter_keys {
