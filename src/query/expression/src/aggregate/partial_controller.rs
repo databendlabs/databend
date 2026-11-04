@@ -19,10 +19,11 @@
 //!
 //! * `Learning` (start): a small, cache-resident index that restarts in place when full (a
 //!   "window") while the payload keeps the groups. This absorbs locality and hot keys at a low,
-//!   bounded cost. At geometric row checkpoints, with `R` rows, `M` groups materialized and a
-//!   sampled estimate `D` of the distinct groups:
-//!   - `M / R` and `D / R` both close to 1: nothing to absorb, switch to `Bypass`.
-//!   - `M > 2 * D`: keys recur beyond a window, so switch to `Grown`.
+//!   bounded cost. At geometric row checkpoints, with `R` rows, `M` groups materialized, a
+//!   sampled estimate `D` of the distinct groups and `G` the groups the best table it can build
+//!   would emit: `D` if an index holding them fits (see `Grown`), else `M`, the window's:
+//!   - `M / R` and `G / R` both close to 1: neither absorbs much, switch to `Bypass`.
+//!   - `M > 2 * G`: keys recur beyond a window and a grown table holds them, switch to `Grown`.
 //! * `Grown`: the index is grown at once to hold the `D` groups, if they fit in
 //!   [`MAX_GROW_CAPACITY`] slots and, with the bytes a group takes, in the memory of the table.
 //!   When it fills up it restarts in place like a window.
@@ -47,7 +48,8 @@ use crate::AggregateHashTable;
 const FIRST_CHECK_ROWS: usize = 256 * 1024;
 /// Each following checkpoint is this many times the previous one.
 const CHECK_GROWTH: usize = 4;
-/// Bypass when both the materialized and the estimated distinct ratio reach this.
+/// Bypass when the window and the best table an instance can build both emit this share of the
+/// rows.
 const BYPASS_DISTINCT_RATIO: f64 = 0.9;
 /// Grow when materialized groups exceed the estimated distinct groups by this factor.
 const GROW_DEDUP_RATIO: f64 = 2.0;
@@ -313,21 +315,24 @@ impl Learning {
             Some(distinct) => (distinct as f64).min(materialized),
         };
 
-        if materialized / rows >= BYPASS_DISTINCT_RATIO && distinct / rows >= BYPASS_DISTINCT_RATIO
+        // A table that holds the distinct groups emits them once each. When it does not fit, the
+        // window is the best this instance can do, and as the distinct groups only grow, the
+        // table will not fit later either.
+        let groups = (distinct * GROW_MARGIN) as usize;
+        let capacity = AggregateHashTable::capacity_for_groups(groups);
+        let bytes = AggregateHashTable::index_bytes_for(capacity)
+            .saturating_add(groups.saturating_mul(group_bytes));
+        let fits = capacity <= MAX_GROW_CAPACITY && bytes <= max_table_bytes;
+        let reachable = if fits { distinct } else { materialized };
+
+        if materialized / rows >= BYPASS_DISTINCT_RATIO && reachable / rows >= BYPASS_DISTINCT_RATIO
         {
             return Some(PartialState::Bypass);
         }
-        if materialized > distinct * GROW_DEDUP_RATIO {
-            let groups = (distinct * GROW_MARGIN) as usize;
-            let capacity = AggregateHashTable::capacity_for_groups(groups);
-            let bytes = AggregateHashTable::index_bytes_for(capacity)
-                .saturating_add(groups.saturating_mul(group_bytes));
-            if capacity > AggregateHashTable::capacity_for_groups(0)
-                && capacity <= MAX_GROW_CAPACITY
-                && bytes <= max_table_bytes
-            {
-                return Some(PartialState::Grown { capacity });
-            }
+        if materialized > reachable * GROW_DEDUP_RATIO
+            && capacity > AggregateHashTable::capacity_for_groups(0)
+        {
+            return Some(PartialState::Grown { capacity });
         }
         None
     }

@@ -1107,16 +1107,27 @@ fn learn_recurring_keys_within(
     group_bytes: usize,
     max_table_bytes: usize,
 ) -> (PartialState, Option<EmitReason>) {
+    let rows = 16 * keys as usize;
+    learn_keys(keys, rows, rows, group_bytes, max_table_bytes)
+}
+
+/// Learn `keys` distinct groups in `rows` rows, of which `new_groups` were materialized.
+fn learn_keys(
+    keys: u64,
+    rows: usize,
+    new_groups: usize,
+    group_bytes: usize,
+    max_table_bytes: usize,
+) -> (PartialState, Option<EmitReason>) {
     let mut partial = PartialState::new(PartialAggregateMode::Auto);
     let sampler = partial.sampler().unwrap();
     sampler.start(0);
     sampler.observe(&group_hashes(
         UInt64Type::from_data((0..keys).collect::<Vec<_>>()).into(),
     ));
-    let rows = 16 * keys as usize;
     let stats = PartialAddStats {
         rows,
-        new_groups: rows,
+        new_groups,
         windows: rows / 24_000,
     };
     let reason = partial.step(
@@ -1136,7 +1147,8 @@ fn largest_grown_capacity() -> usize {
 }
 
 /// The partial aggregate grows up to `MAX_GROW_CAPACITY`, and does not grow at all when the
-/// distinct groups would not fit: a smaller table would absorb little of them.
+/// distinct groups would not fit: a smaller table would absorb little of them. With a window
+/// that absorbs nothing either, it bypasses.
 #[test]
 fn test_partial_grows_up_to_max_capacity() {
     let (partial, reason) = learn_recurring_keys(2_000_000, 0);
@@ -1144,8 +1156,8 @@ fn test_partial_grows_up_to_max_capacity() {
     assert_eq!(partial.capacity(), largest_grown_capacity());
 
     let (partial, reason) = learn_recurring_keys(3_000_000, 0);
-    assert_eq!(reason, None);
-    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+    assert_eq!(reason, Some(EmitReason::Bypass));
+    assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
 }
 
 /// The grown table must also fit in `MAX_PARTIAL_TABLE_BYTES` with the bytes a group takes:
@@ -1159,12 +1171,12 @@ fn test_partial_grows_within_table_bytes() {
 
     // 2M groups of 150 bytes: 16 MiB of index and 315 MiB of groups.
     let (partial, reason) = learn_recurring_keys(2_000_000, 150);
-    assert_eq!(reason, None);
-    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+    assert_eq!(reason, Some(EmitReason::Bypass));
+    assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
 
     // Few groups that take much memory each, such as large `array_agg` states.
     let (_, reason) = learn_recurring_keys(100_000, 4096);
-    assert_eq!(reason, None);
+    assert_eq!(reason, Some(EmitReason::Bypass));
     let (_, reason) = learn_recurring_keys(100_000, 1024);
     assert_eq!(reason, Some(EmitReason::Grow));
 
@@ -1174,6 +1186,28 @@ fn test_partial_grows_within_table_bytes() {
     // The same 2M groups of 50 bytes do not fit in a table that leaves them 100 MiB.
     let table_bytes = AggregateHashTable::index_bytes_for(largest_grown_capacity()) + (100 << 20);
     let (partial, reason) = learn_recurring_keys_within(2_000_000, 50, table_bytes);
+    assert_eq!(reason, Some(EmitReason::Bypass));
+    assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
+}
+
+/// Only a table that can be built counts: when no grown table holds the distinct groups, the
+/// window decides, so the partial aggregate bypasses only if the window absorbs nothing.
+#[test]
+fn test_partial_bypasses_only_what_no_table_absorbs() {
+    // Keys repeat far apart (D / R = 0.5), but 3M of them do not fit a grown table and the
+    // window absorbs nothing: bypass.
+    let (partial, reason) = learn_keys(3_000_000, 6_000_000, 5_900_000, 0, MAX_PARTIAL_TABLE_BYTES);
+    assert_eq!(reason, Some(EmitReason::Bypass));
+    assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
+
+    // The same keys with a window that absorbs half the rows: keep learning.
+    let (partial, reason) = learn_keys(3_000_000, 6_000_000, 3_000_000, 0, MAX_PARTIAL_TABLE_BYTES);
+    assert_eq!(reason, None);
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+
+    // 1M keys fit a grown table, which would absorb 1 / 6 of 1.2M rows: neither bypass nor grow
+    // pays yet, keep learning.
+    let (partial, reason) = learn_keys(1_000_000, 1_200_000, 1_200_000, 0, MAX_PARTIAL_TABLE_BYTES);
     assert_eq!(reason, None);
     assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 }
