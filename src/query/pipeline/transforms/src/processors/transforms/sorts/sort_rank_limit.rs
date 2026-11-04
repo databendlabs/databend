@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataBlockVec;
@@ -61,7 +61,7 @@ pub struct TransformRankLimitSort {
     sort_desc: Arc<[SortColumnDescription]>,
     blocks: DataBlockVec,
     rows: usize,
-    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
+    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
     mode: Mode,
     probe_interval_batches: usize,
 }
@@ -71,7 +71,7 @@ impl TransformRankLimitSort {
         limit: usize,
         sort_desc: Arc<[SortColumnDescription]>,
         batch_rows: usize,
-        runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
+        runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
     ) -> Self {
         Self {
             limit,
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn runtime_top_n_boundary_is_published_by_sorted_batches_only() {
-        let filter = Arc::new(RuntimeTopNFilter::new(0, true, false));
+        let filter = Arc::new(RuntimeTopNBoundary::new(true, false));
         let mut t =
             TransformRankLimitSort::new(LIMIT, sort_desc(), BATCH_ROWS, Some((0, filter.clone())));
 

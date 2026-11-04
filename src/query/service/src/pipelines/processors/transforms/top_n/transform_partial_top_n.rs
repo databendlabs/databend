@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_base::uniq_id::GlobalUniq;
-use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -64,9 +64,10 @@ pub struct TransformPartialTopN<R: Rows> {
     read_settings: ReadSettings,
     spilled: Vec<SpilledCandidates>,
     ctx: Arc<QueryContext>,
-    /// The shared boundary filter and the payload offset of the first source
-    /// sort column, from which boundary values are published.
-    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
+    /// The runtime TopN boundary shared with the input scans, and the payload
+    /// offset of the first source sort column, from which boundary values are
+    /// published.
+    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
 }
 
 impl<R: Rows> TransformPartialTopN<R> {
@@ -81,7 +82,7 @@ impl<R: Rows> TransformPartialTopN<R> {
         spill_schema: DataSchemaRef,
         writer_pool_bytes: usize,
         read_settings: ReadSettings,
-        runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
+        runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
     ) -> Self {
         Self {
             candidates: TopNCandidates::new(capacity, sort_row_offset),
