@@ -45,10 +45,8 @@ use crate::aggregate::hash_index::HashIndex;
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
 
-const LOAD_FACTOR: f64 = 1.5;
-
 // A hash index holds up to 1 / 1.35 (74%) of its slots: a probe matches the tags of a whole
-// chunk at once, so it can be denser than the payload capacity estimate.
+// chunk at once, so the index can be dense.
 const HASH_INDEX_LOAD_FACTOR: f64 = 1.35;
 
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;

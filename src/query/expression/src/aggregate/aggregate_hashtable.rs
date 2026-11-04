@@ -24,7 +24,6 @@ use super::BATCH_SIZE;
 use super::HASH_INDEX_LOAD_FACTOR;
 use super::HashIndex;
 use super::HashTableConfig;
-use super::LOAD_FACTOR;
 use super::Payload;
 use super::StateAddr;
 use super::group_hash_entries;
@@ -105,8 +104,6 @@ pub struct AggregateHashTable {
     // Hash index entries store the ids of rows in these payload pages. Any path that replaces
     // the payload must clear or rebuild the index before probing it again.
     pub payload: PartitionedPayload,
-    // use for append rows directly during deserialize
-    pub direct_append: bool,
     pub config: HashTableConfig,
 
     hash_index: HashIndex,
@@ -138,7 +135,6 @@ impl AggregateHashTable {
         arena: Arc<Bump>,
     ) -> Self {
         Self {
-            direct_append: false,
             payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
@@ -170,7 +166,6 @@ impl AggregateHashTable {
             .map(|_| Arc::new(Bump::new()))
             .collect();
         Self {
-            direct_append: false,
             payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
@@ -192,38 +187,6 @@ impl AggregateHashTable {
             .collect()
     }
 
-    pub fn new_directly(
-        group_types: Vec<DataType>,
-        aggrs: Vec<AggregateCallRef>,
-        config: HashTableConfig,
-        capacity: usize,
-        arena: Arc<Bump>,
-        need_init_entry: bool,
-    ) -> Self {
-        debug_assert!(capacity.is_power_of_two());
-        // if need_init_entry is false, we will directly append rows without probing hash index
-        // so we can use a dummy hash index, which is not allowed to insert any entry
-        let hash_index = if need_init_entry {
-            HashIndex::with_capacity(capacity)
-        } else {
-            HashIndex::dummy()
-        };
-        Self {
-            direct_append: !need_init_entry,
-            payload: PartitionedPayload::new_with_start_bit(
-                group_types,
-                aggrs,
-                1 << config.initial_radix_bits,
-                config.partition_start_bit,
-                vec![arena],
-            ),
-            hash_index,
-            config,
-            hash_index_resize_count: 0,
-            partial_restarted: false,
-        }
-    }
-
     pub fn len(&self) -> usize {
         self.payload.len()
     }
@@ -237,9 +200,7 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> Result<usize> {
         let mut group_state = GroupKeyState::default();
-        if !self.direct_append {
-            group_state.init_codes(group_columns, row_count);
-        }
+        group_state.init_codes(group_columns, row_count);
         if row_count > BATCH_SIZE {
             // Probing by codes hashes only one representative row per code combination, so
             // hashing every row of the block up front is only worth it without codes.
@@ -424,21 +385,7 @@ impl AggregateHashTable {
             }
         }
 
-        let new_group_count = if self.direct_append {
-            state.row_count = row_count;
-            Self::fill_group_hashes(
-                group_columns,
-                &mut state.group_hashes[..row_count],
-                group_state.dict_hashes(row_count),
-                0..row_count,
-            );
-            for (i, entry) in state.empty_vector[..row_count].iter_mut().enumerate() {
-                *entry = i.into();
-            }
-            self.payload
-                .append_rows(state, row_count, GroupRows::Columns(group_columns), None);
-            row_count
-        } else if let Some(new_group_count) =
+        let new_group_count = if let Some(new_group_count) =
             self.probe_and_create_by_codes(state, group_columns, row_count, group_state)
         {
             new_group_count
@@ -836,10 +783,6 @@ impl AggregateHashTable {
 
     fn initial_capacity() -> usize {
         8192 * 4
-    }
-
-    pub fn get_capacity_for_count(count: usize) -> usize {
-        ((count.max(Self::initial_capacity()) as f64 * LOAD_FACTOR) as usize).next_power_of_two()
     }
 
     pub fn allocated_bytes(&self) -> usize {

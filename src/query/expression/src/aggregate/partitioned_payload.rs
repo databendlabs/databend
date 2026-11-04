@@ -165,21 +165,6 @@ impl PartitionedPayload {
             .filter(|(_, payload)| payload.len() != 0)
     }
 
-    pub(super) fn into_single_payload(mut self) -> Payload {
-        assert_eq!(
-            self.partition_count(),
-            1,
-            "partitioned payload must contain exactly one payload"
-        );
-        self.payloads.pop().unwrap()
-    }
-
-    pub(super) fn mark_min_cardinality(&mut self) {
-        for payload in self.payloads.iter_mut() {
-            payload.mark_min_cardinality();
-        }
-    }
-
     pub(super) fn append_rows(
         &mut self,
         state: &mut ProbeState,

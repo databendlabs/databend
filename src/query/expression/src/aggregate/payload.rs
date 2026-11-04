@@ -76,9 +76,7 @@ pub struct Payload {
 
     // Starts from 1, zero means no page allocated
     current_write_page: usize,
-
     // if set, the payload contains at least duplicate rows
-    min_cardinality: Option<usize>,
 }
 
 #[derive(Clone, Copy)]
@@ -315,7 +313,6 @@ impl Payload {
             tuple_size,
             row_per_page,
             page_bytes,
-            min_cardinality: None,
             total_rows: 0,
             row_layout: RowLayout {
                 hash_offset,
@@ -639,12 +636,6 @@ impl Payload {
             self.aggrs.clone(),
             self.row_layout.states_layout.clone(),
         )
-    }
-
-    pub(super) fn mark_min_cardinality(&mut self) {
-        if self.min_cardinality.is_none() {
-            self.min_cardinality = Some(self.total_rows);
-        }
     }
 
     fn copy_state_addr_rows_for_transfer(
