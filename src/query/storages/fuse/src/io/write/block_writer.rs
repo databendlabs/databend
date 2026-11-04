@@ -447,11 +447,13 @@ impl BlockWriter {
             let start = Instant::now();
 
             let location = &index_state.location.0;
+            // Owned before the write: an allocation failing after it would skip the eviction.
+            let evicted = [location.clone()];
             write_data(index_state.data, dal, location).await?;
             // The path may have been read before, missing: the disk cache keeps no such entry,
             // but a unit read of it may be queued.
             DiskCachedStorage::new(dal.clone())
-                .evict_objects(&[location.to_string()])
+                .evict_objects(&evicted)
                 .await?;
 
             metrics_inc_block_index_write_nums(1);

@@ -563,9 +563,14 @@ impl RemoteBundleFileHandle {
         let lookup_cached =
             self.lookup_cache.is_enabled() || self.storage.uses_disk(lookup, lookup_disk);
         // The whole component is fetched only for a tier that can keep it: one the disk pool
-        // refuses as too large would be fetched again by every read.
+        // refuses as too large would be fetched again by every read. One the disk cache already
+        // holds, kept before its pool shrank, is read from there.
         let lookup_whole = self.lookup_cache.is_enabled()
-            || self.storage.admits(lookup, self.len() as u64, lookup_disk);
+            || self.storage.admits(lookup, self.len() as u64, lookup_disk)
+            || self.absolute_range(&(0..self.len())).is_ok_and(|whole| {
+                self.storage
+                    .holds(lookup, self.object.as_ref(), Some(whole), lookup_disk)
+            });
         match self.cache_policy {
             RangeCachePolicy::LookupWhole if lookup_whole => {
                 return self.read_cached_lookup_file(range).await;
@@ -1640,6 +1645,47 @@ mod tests {
         let range = 7..31;
         assert_eq!(file.read_range(range.clone()).await?.as_ref(), &data[range]);
         assert_eq!(*ranges.lock().unwrap(), vec![7..31]);
+        Ok(())
+    }
+
+    /// A whole component kept on disk before its pool shrank under the admission limit is
+    /// still read from disk.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_lookup_kept_on_disk_is_read_after_the_pool_shrinks() -> Result<()> {
+        // Under a quarter of the 4 MiB index pool, over a quarter of 1 MiB.
+        let data = (0..512 * 1024).map(|index| index as u8).collect::<Vec<_>>();
+        let dir = tempfile::TempDir::new()?;
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 4 << 20, 1 << 20],
+            false,
+        )?);
+        let (mut file, ranges) = payload_file_handle("lookup-kept", data.clone()).await?;
+        file.storage =
+            DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk.clone()));
+        file.path = PathBuf::from("segment.term");
+        file.component_name = "term".to_owned();
+        file.cache_policy = RangeCachePolicy::LookupWhole;
+        file.lookup_cache = no_lookup_cache();
+
+        let range = 7..31;
+        let read = file.read_range(range.clone()).await?;
+        assert_eq!(read.as_ref(), &data[range.clone()]);
+        let whole = 0..data.len() as u64;
+        assert_eq!(*ranges.lock().unwrap(), vec![whole.clone()]);
+        let key = DiskKey::range("lookup-kept", whole);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !disk.contains(CacheKind::of::<inverted::Lookup>(), &key) {
+            assert!(Instant::now() < deadline, "the component was not written");
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        disk.set_pool_cap(databend_storages_common_cache::Pool::Index, 1 << 20)?;
+        assert!(disk.contains(CacheKind::of::<inverted::Lookup>(), &key));
+        ranges.lock().unwrap().clear();
+        assert_eq!(file.read_range(range.clone()).await?.as_ref(), &data[range]);
+        assert!(ranges.lock().unwrap().is_empty());
         Ok(())
     }
 
