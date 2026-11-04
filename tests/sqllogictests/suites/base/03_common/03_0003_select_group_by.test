@@ -461,5 +461,11 @@ SELECT count(*) FROM (SELECT count(*) FROM t_signed_zero GROUP BY z, atan2(z, -1
 ----
 2
 
+# Without a constant too: atan2(+0.0, +0.0) = +0.0 and atan2(-0.0, -0.0) = -pi
+query I
+SELECT count(*) FROM (SELECT count(*) FROM t_signed_zero GROUP BY z, atan2(z, z))
+----
+2
+
 statement ok
 DROP TABLE t_signed_zero
