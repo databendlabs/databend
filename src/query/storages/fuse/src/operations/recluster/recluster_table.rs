@@ -571,6 +571,7 @@ impl FuseTable {
         // Keep segment metadata pruning bounded for large snapshot ranges. Results are accumulated
         // in input order so strategy tie-breaking remains deterministic across pruning waves.
         let wave_size = max_concurrency.saturating_mul(4).max(1);
+        let pruning_runtime = pruning_ctx.pruning_runtime()?;
         let mut metas = Vec::new();
         let mut segment_locs = segment_locs.into_iter();
         loop {
@@ -582,7 +583,7 @@ impl FuseTable {
             let worker_count = max_concurrency.min(wave.len()).max(1);
             let batch_size = wave.len().div_ceil(worker_count);
             let works = wave.chunks(batch_size).map(|batch| {
-                pruning_ctx.pruning_runtime.spawn({
+                pruning_runtime.spawn({
                     let segment_pruner = segment_pruner.clone();
                     let batch = batch.to_vec();
                     async move {

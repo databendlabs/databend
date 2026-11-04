@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 run_root_sql() {
-  cat <<SQL | bendsql_connect_root
+	cat <<SQL | bendsql_connect_root
 $1
 SQL
 }
@@ -14,31 +14,30 @@ export USER_B_CONNECT="bendsql_connect_user b 123 -A"
 export USER_C_CONNECT="bendsql_connect_user c 123 -A"
 
 run_user_a() {
-  cat <<SQL | $USER_A_CONNECT
+	cat <<SQL | $USER_A_CONNECT
 $1
 SQL
 }
 
 run_user_b() {
-  cat <<SQL | $USER_B_CONNECT
+	cat <<SQL | $USER_B_CONNECT
 $1
 SQL
 }
 
 run_user_c() {
-  cat <<SQL | $USER_C_CONNECT
+	cat <<SQL | $USER_C_CONNECT
 $1
 SQL
 }
 
 for seq in $(echo "select name from show_sequences();" | bendsql_connect_root); do
-  echo "drop sequence if exists \`$seq\`;" | bendsql_connect_root
+	echo "drop sequence if exists \`$seq\`;" | bendsql_connect_root
 done
 
-echo "=== OLD LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=0 ==="
-echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
+echo "=== Sequence authorization is always enabled ==="
+echo "=== TEST USER A WITH SUPER AND EXPLICIT CREATE SEQUENCE PRIVILEGES ==="
 run_root_sql "
-set global enable_experimental_sequence_privilege_check=0;
 drop sequence if exists seq1;
 drop sequence if exists seq2;
 drop sequence if exists seq3;
@@ -59,7 +58,7 @@ create user c identified by '123' with default_role='role_c';
 grant role role_a to a;
 grant role role_b to b;
 grant role role_c to c;
-grant super on *.* to role role_a;
+grant super, create sequence on *.* to role role_a;
 grant select, insert, create on *.* to role role_b;
 grant select, insert, create on *.* to role role_c;
 drop table if exists tmp_b;
@@ -68,24 +67,6 @@ drop table if exists tmp_b2;
 drop table if exists tmp_b3;
 "
 
-run_user_a "
-CREATE sequence seq1;
-create sequence seq2;
-create sequence seq3;
-"
-run_user_a "DESC sequence seq1;" | grep seq1 | wc -l
-run_user_a "DESC sequence seq2;" | grep seq2 | wc -l
-run_user_a "DESC sequence seq3;" | grep seq3 | wc -l
-run_user_a "show sequences;" | wc -l
-run_user_a "
-drop sequence if exists seq1;
-drop sequence if exists seq2;
-drop sequence if exists seq3;
-"
-
-echo "=== NEW LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=1 ==="
-echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
-run_user_a "set global enable_experimental_sequence_privilege_check=1;"
 echo "--- CREATE 3 sequences WILL SUCCESS ---"
 run_user_a "
 CREATE sequence seq1;
@@ -111,15 +92,14 @@ drop role if exists role3;
 create role role1;
 create role role2;
 create role role3;
-grant create sequence, create on *.* to role role1;
 grant role role1 to b;
 "
 
-echo "--- USER b failed to create conn seq1 because current role is public, can not create ---"
+echo "--- USER b cannot create without CREATE SEQUENCE ---"
 run_root_sql "alter user b with default_role='public';"
 echo "CREATE sequence seq1" | $USER_B_CONNECT
 
-run_root_sql "alter user b with default_role='role1';"
+run_root_sql "grant create sequence, create on *.* to role role1; alter user b with default_role='role1';"
 
 echo "--- success, seq1,2,3 owner role is role1 ---"
 run_user_b "
@@ -230,5 +210,4 @@ drop role if exists role1;
 drop role if exists role2;
 drop role if exists role3;
 drop table if exists tmp_b;
-unset global enable_experimental_sequence_privilege_check;
 "

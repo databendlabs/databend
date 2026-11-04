@@ -40,7 +40,6 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -56,8 +55,9 @@ use opendal::Operator;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockReader;
+use crate::io::FuseCaches;
 use crate::io::InvertedIndexWriter;
-use crate::io::MetaReaders;
+use crate::io::SegmentInfoReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::read::read_segment_stats;
 use crate::io::resolve_inverted_index_user_dictionary;
@@ -112,7 +112,8 @@ impl FuseTable {
 
         let block_reader = self.create_block_reader(ctx.clone(), projection, false)?;
 
-        let segment_reader = MetaReaders::segment_info_reader(self.get_operator(), table_schema);
+        let segment_reader = SegmentInfoReader::new(self.get_operator(), table_schema);
+        let segment_cache = FuseCaches::instance().segments.read_only();
 
         let target_segments = segment_locs.map(|locations| {
             locations
@@ -135,13 +136,8 @@ impl FuseTable {
             {
                 continue;
             }
-            let segment_info = segment_reader
-                .read(&LoadParams {
-                    location: segment_loc.to_string(),
-                    len_hint: None,
-                    ver: *ver,
-                    put_cache: false,
-                })
+            let segment_info = segment_cache
+                .get(&segment_reader, (segment_loc.to_string(), *ver))
                 .await?;
             let blocks = segment_info.block_metas()?;
             let stats = match segment_info.summary.additional_stats_loc() {

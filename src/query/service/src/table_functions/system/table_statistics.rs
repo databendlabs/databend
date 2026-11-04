@@ -28,9 +28,9 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::StringType;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_common_storages_fuse::io::read::SnapshotHistoryReader;
+use databend_common_storages_fuse::io::read::snapshot_history;
 use databend_common_storages_fuse::table_functions::SimpleTableFunc;
 use databend_common_storages_fuse::table_functions::check_shared_table_select;
 use databend_common_storages_fuse::table_functions::string_literal;
@@ -231,12 +231,13 @@ pub async fn get_fuse_table_snapshot(
         let snapshot_location = fuse_table.snapshot_loc();
 
         if let Some(snapshot_location) = snapshot_location {
-            let table_snapshot_reader =
-                MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+            let caches = FuseCaches::instance();
             let format_version =
                 TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
 
-            let lite_snapshot_stream = table_snapshot_reader.snapshot_history(
+            let lite_snapshot_stream = snapshot_history(
+                &caches.snapshots,
+                fuse_table.get_operator(),
                 snapshot_location,
                 format_version,
                 meta_location_generator.clone(),

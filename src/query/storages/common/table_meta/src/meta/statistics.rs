@@ -614,6 +614,10 @@ impl ColumnCountMinSketch {
         }
     }
 
+    pub fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.counters.capacity() * std::mem::size_of::<u64>()
+    }
+
     pub fn with_error_rate(error_rate: f64) -> Result<Self> {
         Ok(Self::new(
             Self::width_for_error_rate(error_rate)?,
@@ -745,6 +749,86 @@ pub fn merge_column_count_min_sketch_mut(lhs: &mut BlockCountMinSketch, rhs: Blo
                 entry.insert(column_sketch);
             }
         }
+    }
+}
+
+// Assigned to executors, describes that which blocks of given segment, an executor should take care of
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct BlockSlotDescription {
+    // number of slots
+    pub num_slots: usize,
+    // index of slot that current executor should take care of:
+    // let `block_index` be the index of block in segment,
+    // `block_index` mod `num_slots` == `slot_index` indicates that the block should be taken care of by current executor
+    // otherwise, the block should be taken care of by other executors
+    pub slot: u32,
+}
+
+pub fn supported_stat_type(data_type: &DataType) -> bool {
+    let inner_type = data_type.remove_nullable();
+    matches!(
+        inner_type,
+        DataType::Number(_)
+            | DataType::Date
+            | DataType::Timestamp
+            | DataType::TimestampTz
+            | DataType::String
+            | DataType::Decimal(_)
+    )
+}
+
+pub fn encode_column_hll(hll: &BlockHLL) -> Result<RawBlockHLL> {
+    let encoding = SegmentStatistics::encoding();
+    let compression = SegmentStatistics::compression();
+
+    let data = encode(&encoding, hll)?;
+    let data_compress = compress(&compression, data)?;
+    Ok(data_compress)
+}
+
+pub fn decode_column_hll(data: &RawBlockHLL) -> Result<Option<BlockHLL>> {
+    if data.is_empty() {
+        return Ok(None);
+    }
+    let encoding = SegmentStatistics::encoding();
+    let compression = SegmentStatistics::compression();
+    let mut reader = Cursor::new(&data);
+    let res = read_and_deserialize(&mut reader, data.len() as u64, &encoding, &compression)?;
+    Ok(Some(res))
+}
+
+pub fn merge_column_hll(mut lhs: BlockHLL, rhs: BlockHLL) -> BlockHLL {
+    merge_column_hll_mut(&mut lhs, &rhs);
+    lhs
+}
+
+pub fn merge_column_hll_mut(lhs: &mut BlockHLL, rhs: &BlockHLL) {
+    for (column_id, column_hll) in rhs.iter() {
+        lhs.entry(*column_id)
+            .and_modify(|hll| hll.merge(column_hll))
+            .or_insert_with(|| column_hll.clone());
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub enum BlockHLLState {
+    Serialized(RawBlockHLL),
+    Deserialized(BlockHLL),
+}
+
+impl BlockHLLState {
+    pub fn merge_column_hll(lhs: &mut BlockHLL, rhs: &Option<BlockHLLState>) {
+        if let Some(BlockHLLState::Deserialized(v)) = rhs {
+            merge_column_hll_mut(lhs, v);
+        }
+    }
+
+    pub fn encode_column_hll(hll: Option<BlockHLLState>) -> Result<Option<RawBlockHLL>> {
+        hll.map(|h| match h {
+            BlockHLLState::Deserialized(v) => encode_column_hll(&v),
+            BlockHLLState::Serialized(v) => Ok(v),
+        })
+        .transpose()
     }
 }
 
@@ -1321,85 +1405,5 @@ mod tests {
         sketch.add_with_count(scalar_ref, 10);
 
         assert_eq!(sketch.estimate(&scalar), Some(110));
-    }
-}
-
-// Assigned to executors, describes that which blocks of given segment, an executor should take care of
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct BlockSlotDescription {
-    // number of slots
-    pub num_slots: usize,
-    // index of slot that current executor should take care of:
-    // let `block_index` be the index of block in segment,
-    // `block_index` mod `num_slots` == `slot_index` indicates that the block should be taken care of by current executor
-    // otherwise, the block should be taken care of by other executors
-    pub slot: u32,
-}
-
-pub fn supported_stat_type(data_type: &DataType) -> bool {
-    let inner_type = data_type.remove_nullable();
-    matches!(
-        inner_type,
-        DataType::Number(_)
-            | DataType::Date
-            | DataType::Timestamp
-            | DataType::TimestampTz
-            | DataType::String
-            | DataType::Decimal(_)
-    )
-}
-
-pub fn encode_column_hll(hll: &BlockHLL) -> Result<RawBlockHLL> {
-    let encoding = SegmentStatistics::encoding();
-    let compression = SegmentStatistics::compression();
-
-    let data = encode(&encoding, hll)?;
-    let data_compress = compress(&compression, data)?;
-    Ok(data_compress)
-}
-
-pub fn decode_column_hll(data: &RawBlockHLL) -> Result<Option<BlockHLL>> {
-    if data.is_empty() {
-        return Ok(None);
-    }
-    let encoding = SegmentStatistics::encoding();
-    let compression = SegmentStatistics::compression();
-    let mut reader = Cursor::new(&data);
-    let res = read_and_deserialize(&mut reader, data.len() as u64, &encoding, &compression)?;
-    Ok(Some(res))
-}
-
-pub fn merge_column_hll(mut lhs: BlockHLL, rhs: BlockHLL) -> BlockHLL {
-    merge_column_hll_mut(&mut lhs, &rhs);
-    lhs
-}
-
-pub fn merge_column_hll_mut(lhs: &mut BlockHLL, rhs: &BlockHLL) {
-    for (column_id, column_hll) in rhs.iter() {
-        lhs.entry(*column_id)
-            .and_modify(|hll| hll.merge(column_hll))
-            .or_insert_with(|| column_hll.clone());
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
-pub enum BlockHLLState {
-    Serialized(RawBlockHLL),
-    Deserialized(BlockHLL),
-}
-
-impl BlockHLLState {
-    pub fn merge_column_hll(lhs: &mut BlockHLL, rhs: &Option<BlockHLLState>) {
-        if let Some(BlockHLLState::Deserialized(v)) = rhs {
-            merge_column_hll_mut(lhs, v);
-        }
-    }
-
-    pub fn encode_column_hll(hll: Option<BlockHLLState>) -> Result<Option<RawBlockHLL>> {
-        hll.map(|h| match h {
-            BlockHLLState::Deserialized(v) => encode_column_hll(&v),
-            BlockHLLState::Serialized(v) => Ok(v),
-        })
-        .transpose()
     }
 }

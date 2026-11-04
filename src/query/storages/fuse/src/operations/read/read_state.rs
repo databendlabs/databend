@@ -38,6 +38,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_pruner::VectorScores;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -291,6 +292,10 @@ impl ReadState {
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
         };
+        let bitmap_selection = match (bitmap_selection, vector_topn_rows(part)) {
+            (Some(selection), Some(rows)) => Some(&selection & &rows),
+            (selection, rows) => selection.or(rows),
+        };
 
         if let Some(ref bitmap) = bitmap_selection {
             preread_block = preread_block.filter_with_bitmap(bitmap)?;
@@ -373,6 +378,25 @@ fn runtime_filter_column_is_projectable(
     name: &str,
 ) -> bool {
     Projection::from_column_names(schema, &[name]).is_ok()
+}
+
+/// The rows of a vector TopN in a block (see `VectorScores::TopN`): the scan
+/// outputs only them. `None` when every row is output.
+fn vector_topn_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
+    let Some(VectorScores::TopN(scores)) = part.block_meta_index()?.vector_scores.as_ref() else {
+        return None;
+    };
+    if scores.len() >= part.nums_rows {
+        return None;
+    }
+    let mut rows = MutableBitmap::from_len_zeroed(part.nums_rows);
+    for &(row, _) in scores {
+        let row = row as usize;
+        if row < part.nums_rows {
+            rows.set(row, true);
+        }
+    }
+    Some(rows.into())
 }
 
 fn expand_runtime_filter_bitmap(

@@ -275,6 +275,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "argminmax"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "088a9c28ca36500c581f9f54b63460492d2b4f71e1e61d176e8fb79565109b01"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "ariadne"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3018,6 +3027,7 @@ dependencies = [
  "enquote",
  "futures",
  "hickory-resolver",
+ "inferno",
  "libc",
  "log",
  "micromarshal",
@@ -3067,6 +3077,7 @@ version = "0.1.0"
 dependencies = [
  "hashbrown 0.15.3",
  "hashlink",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -3154,7 +3165,6 @@ dependencies = [
  "foreign_vec",
  "hex",
  "log",
- "match-template",
  "num-traits",
  "proptest",
  "serde",
@@ -3331,8 +3341,8 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "simple_hll",
  "smallvec",
- "strength_reduce",
  "terminal_size",
  "tonic",
  "typetag",
@@ -3398,6 +3408,7 @@ name = "databend-common-functions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "argminmax",
  "base64 0.22.1",
  "blake3",
  "borsh",
@@ -3879,7 +3890,6 @@ dependencies = [
  "prost-build 0.14.3",
  "semver",
  "tonic",
- "tonic-prost",
  "tonic-prost-build",
 ]
 
@@ -5927,6 +5937,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "bytes",
+ "chrono",
  "crc32fast",
  "crossbeam-channel",
  "databend-base",
@@ -5936,20 +5947,26 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-meta-app",
  "databend-common-metrics",
+ "databend-common-storage",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "divan",
+ "futures",
  "hex",
  "libc",
  "log",
  "mockall",
  "parking_lot 0.12.3",
  "parquet",
+ "prometheus-client 0.22.3",
+ "rand 0.8.5",
  "rayon",
  "rustix 0.38.44",
  "siphasher 0.3.11",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

@@ -29,8 +29,8 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -48,8 +48,10 @@ use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
 use crate::io::BlockReader;
-use crate::io::CompactSegmentInfoReader;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentCache;
+use crate::io::SegmentInfoReader;
+use crate::io::cache::BlockMetas;
 
 struct AbortOnDropTasks<T> {
     inner: FuturesUnordered<JoinHandle<T>>,
@@ -120,11 +122,12 @@ pub(super) struct ParquetRowsFetcher {
     // query-wide count of concurrently-held chunks never exceeds the permit count.
     io_semaphore: Arc<Semaphore>,
 
-    segment_reader: CompactSegmentInfoReader,
+    segment_cache: SegmentCache,
+    segment_reader: SegmentInfoReader,
     // Decoded block metas of the segments this fetcher has read rows of. The
     // per-block metadata is built from them on each call: it is cheap next to
     // reading the block, and a block is looked up once per batch.
-    segment_cache: RowFetchSegmentCache,
+    fetched_segments: RowFetchSegmentCache,
 }
 
 #[async_trait::async_trait]
@@ -139,18 +142,20 @@ impl RowsFetcher for ParquetRowsFetcher {
     async fn fetch_metadata(&mut self, block_id: u64) -> Result<Self::Metadata> {
         let (segment, block) = split_prefix(block_id);
         let blocks = self
-            .segment_cache
+            .fetched_segments
             .get_or_load(segment, || async {
                 let snapshot = self.snapshot.as_ref().unwrap();
                 let (location, ver) = snapshot.segments[segment as usize].clone();
-                let segment_load_params = LoadParams {
-                    ver,
-                    location,
-                    len_hint: None,
-                    put_cache: true,
-                };
-                let compact_segment_info = self.segment_reader.read(&segment_load_params).await?;
-                compact_segment_info.block_metas()
+                // The process-wide `segment_block_metas` cache, when enabled, saves the decode.
+                if let Some(blocks) = self.segment_cache.lookup_block_metas(&location) {
+                    return Ok(blocks);
+                }
+                let compact_segment_info = self
+                    .segment_cache
+                    .get(&self.segment_reader, (location.clone(), ver))
+                    .await?;
+                self.segment_cache
+                    .block_metas(&location, || compact_segment_info.block_metas())
             })
             .await?;
         let block_idx = block_idx_in_segment(blocks.len(), block as usize);
@@ -268,7 +273,7 @@ impl ParquetRowsFetcher {
     ) -> Self {
         let schema = table.schema();
         let operator = table.operator.clone();
-        let segment_reader = MetaReaders::segment_info_reader(operator, schema.clone());
+        let segment_reader = SegmentInfoReader::new(operator, schema.clone());
         let column_nodes = ColumnNodes::new_from_schema(&schema.as_ref().into(), Some(&schema));
         ParquetRowsFetcher {
             table,
@@ -280,7 +285,8 @@ impl ParquetRowsFetcher {
             settings,
             max_threads: max_threads.max(1),
             io_semaphore,
-            segment_cache: RowFetchSegmentCache::new(SEGMENT_CACHE_CAPACITY),
+            segment_cache: FuseCaches::instance().segments.clone(),
+            fetched_segments: RowFetchSegmentCache::new(SEGMENT_CACHE_CAPACITY),
         }
     }
 
@@ -379,7 +385,15 @@ const SEGMENT_CACHE_CAPACITY: usize = 16;
 /// decompresses and deserializes the metas of every block of the segment, so rows
 /// of many blocks of one segment decode it once rather than once per block.
 struct RowFetchSegmentCache {
-    cache: InMemoryLruCache<Vec<Arc<BlockMeta>>>,
+    cache: InMemoryLruCache<FetchedSegment>,
+}
+
+struct FetchedSegment(BlockMetas);
+
+impl From<FetchedSegment> for CacheValue<FetchedSegment> {
+    fn from(value: FetchedSegment) -> Self {
+        CacheValue::new(value, 0)
+    }
 }
 
 impl RowFetchSegmentCache {
@@ -393,16 +407,18 @@ impl RowFetchSegmentCache {
     }
 
     /// The block metas of `segment`, decoded by `load` if not cached.
-    async fn get_or_load<F, Fut>(&self, segment: u64, load: F) -> Result<Arc<Vec<Arc<BlockMeta>>>>
+    async fn get_or_load<F, Fut>(&self, segment: u64, load: F) -> Result<BlockMetas>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = Result<Vec<Arc<BlockMeta>>>>,
+        Fut: Future<Output = Result<BlockMetas>>,
     {
         let key = segment.to_string();
         if let Some(blocks) = self.cache.get(&key) {
-            return Ok(blocks);
+            return Ok(blocks.0.clone());
         }
-        Ok(self.cache.insert(key, load().await?))
+        let blocks = load().await?;
+        self.cache.insert(key, FetchedSegment(blocks.clone()));
+        Ok(blocks)
     }
 }
 
@@ -436,7 +452,7 @@ mod tests {
         let get = |segment| {
             cache.get_or_load(segment, || async {
                 loads.fetch_add(1, Ordering::Relaxed);
-                Ok(Vec::new())
+                Ok(Arc::new(Vec::new()))
             })
         };
         // Rows of any number of blocks of one segment load it once.
