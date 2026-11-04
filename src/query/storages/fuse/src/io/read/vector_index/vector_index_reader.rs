@@ -78,9 +78,12 @@ impl VectorIndexReader {
         }
     }
 
+    /// The `limit` nearest rows found by HNSW search, and the rows found at the
+    /// same distance as the farthest of them with `keep_ties`.
     pub async fn prune(
         &self,
         limit: usize,
+        keep_ties: bool,
         row_count: usize,
         location: &IndexFileLocation,
     ) -> Result<Vec<ScoredPointOffset>> {
@@ -92,6 +95,7 @@ impl VectorIndexReader {
             limit.min(row_count),
             self.options.search_ef.map(|ef| ef.min(row_count)),
             &self.query_values,
+            keep_ties,
         )
     }
 
@@ -276,7 +280,7 @@ mod tests {
         let is_null = |idx: u32| idx.is_multiple_of(10);
 
         // NULL rows are neither searched nor scored.
-        let found = index.prune(10, ROWS, &location).await?;
+        let found = index.prune(10, false, ROWS, &location).await?;
         assert_eq!(found.len(), 10);
         assert!(found.iter().all(|score| !is_null(score.idx)));
         let scores = index.generate_scores(ROWS, &location).await?;

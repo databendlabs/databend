@@ -1,0 +1,22 @@
+# The experimental authorization switches are removed: they are unknown settings.
+query I
+SELECT count(*) FROM system.settings WHERE name IN ('enable_experimental_rbac_check', 'enable_experimental_connection_privilege_check', 'enable_experimental_sequence_privilege_check')
+----
+0
+
+statement error 2801
+SET enable_experimental_rbac_check = 0
+
+statement error 2801
+SET GLOBAL enable_experimental_connection_privilege_check = 0
+
+# Statement-level settings ignore unknown names instead of applying them.
+query I
+SETTINGS (enable_experimental_rbac_check = 0, enable_experimental_sequence_privilege_check = 0) SELECT count(*) FROM system.settings WHERE name = 'enable_experimental_rbac_check'
+----
+0
+
+query I
+SELECT /*+ SET_VAR(enable_experimental_connection_privilege_check = 0) */ count(*) FROM system.settings WHERE name = 'enable_experimental_connection_privilege_check'
+----
+0

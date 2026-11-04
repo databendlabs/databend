@@ -236,6 +236,12 @@ pub(crate) fn encode_block_for_thread(
     app_metadata.write_scalar_own(block.num_rows() as u32)?;
     bincode_serialize_into_buf(&mut app_metadata, &block.get_meta())?;
 
+    // A block whose meta overrides the schema is decoded with it, see `deserialize_flight_data`.
+    let block_schema = block
+        .get_meta()
+        .and_then(|meta| meta.override_block_schema())
+        .map(|schema| Arc::new(ArrowSchema::from(schema.as_ref())));
+    let arrow_schema = block_schema.as_ref().unwrap_or(arrow_schema);
     let batch = block.to_record_batch_with_arrow_schema(arrow_schema)?;
     let (dictionaries, mut data) = encode_batch(&batch, ipc_options)?;
     if !dictionaries.is_empty() {

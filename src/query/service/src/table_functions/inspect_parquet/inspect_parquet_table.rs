@@ -217,26 +217,20 @@ impl AsyncSource for InspectParquetSource {
         )?
         .resolve_stage_location(&uri, StagePathAccess::Read)
         .await?;
-        let enable_experimental_rbac_check = self
+        let visibility_checker = self
             .ctx
-            .get_settings()
-            .get_enable_experimental_rbac_check()?;
-        if enable_experimental_rbac_check {
-            let visibility_checker = self
-                .ctx
-                .get_visibility_checker(false, Object::Stage)
-                .await?;
-            if !(stage_info.is_temporary
-                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-                || stage_info.stage_type == StageType::User
-                    && stage_info.stage_name == self.ctx.get_current_user()?.name)
-            {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege READ is required on stage {} for user {}",
-                    stage_info.stage_name.clone(),
-                    self.ctx.get_current_user()?.identity().display(),
-                )));
-            }
+            .get_visibility_checker(false, Object::Stage)
+            .await?;
+        if !(stage_info.is_temporary
+            || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+            || stage_info.stage_type == StageType::User
+                && stage_info.stage_name == self.ctx.get_current_user()?.name)
+        {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied: privilege READ is required on stage {} for user {}",
+                stage_info.stage_name.clone(),
+                self.ctx.get_current_user()?.identity().display(),
+            )));
         }
 
         let operator = init_stage_operator(&stage_info)?;

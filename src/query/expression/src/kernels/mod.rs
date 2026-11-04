@@ -17,6 +17,7 @@ mod filter;
 mod group_by;
 mod group_by_hash;
 mod if_then_else;
+mod mask_segments;
 mod range_partition;
 mod scatter;
 mod sort;
@@ -27,6 +28,7 @@ mod take_chunks;
 mod take_compact;
 mod take_index;
 mod take_ranges;
+mod take_runs;
 mod topk;
 
 pub use filter::FilterVisitor;

@@ -24,7 +24,6 @@ mod real_s3 {
     use databend_common_catalog::table::Table;
     use databend_common_catalog::table_context::TableContextTableAccess;
     use databend_common_meta_app::principal::UserDefinedConnection;
-    use databend_common_meta_app::schema::CreateOption;
     use databend_common_meta_app::storage::S3StorageClass;
     use databend_common_meta_app::storage::StorageParams;
     use databend_common_meta_app::storage::StorageS3Config;
@@ -267,7 +266,8 @@ mod real_s3 {
                 .add_connection(
                     &fixture.default_tenant(),
                     UserDefinedConnection::new("storage_class_s3", "s3".to_owned(), params),
-                    &CreateOption::Create,
+                    false,
+                    None,
                 )
                 .await?;
             let case = AwsCase {

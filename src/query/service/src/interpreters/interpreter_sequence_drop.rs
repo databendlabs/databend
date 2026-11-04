@@ -27,7 +27,6 @@ use databend_common_users::UserApiProvider;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 pub struct DropSequenceInterpreter {
@@ -59,21 +58,6 @@ impl Interpreter for DropSequenceInterpreter {
                 if_exists: self.plan.if_exists,
             };
             let catalog = self.ctx.get_default_catalog()?;
-            // we should do `drop ownership` after actually drop object, and object maybe not exists.
-            // drop the ownership
-            if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_sequence_privilege_check()?
-            {
-                let tenant = self.plan.ident.tenant();
-                let name = self.plan.ident.name().to_string();
-                let role_api = UserApiProvider::instance().role_api(tenant);
-                let owner_object = OwnershipObject::Sequence { name };
-                role_api.revoke_ownership(&owner_object).await?;
-                RoleCacheManager::instance().invalidate_cache(tenant);
-            }
-
             let reply = catalog.drop_sequence(req).await?;
 
             if !reply.success && !self.plan.if_exists {
@@ -81,6 +65,17 @@ impl Interpreter for DropSequenceInterpreter {
                     "unknown sequence {:?}",
                     self.plan.ident.name()
                 )));
+            }
+
+            // Revoke only if this statement dropped it, so a concurrent CREATE keeps its owner.
+            if reply.success {
+                let tenant = self.plan.ident.tenant();
+                let name = self.plan.ident.name().to_string();
+                let role_api = UserApiProvider::instance().role_api(tenant);
+                role_api
+                    .revoke_ownership(&OwnershipObject::Sequence { name })
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(tenant);
             }
 
             Ok(PipelineBuildResult::create())

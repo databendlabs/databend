@@ -1,0 +1,16 @@
+=== SUPER alone grants neither creation nor access ===
+denied
+denied
+denied
+denied
+denied
+visible=0
+visible=0
+=== CREATE privileges must be granted to the current role ===
+denied
+denied
+=== SET ROLE grants creation and selects the owner ===
+OWNERSHIP	super_creator_role
+OWNERSHIP	super_creator_role
+allowed
+allowed
