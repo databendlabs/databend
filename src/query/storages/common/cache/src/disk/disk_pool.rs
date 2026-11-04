@@ -33,6 +33,9 @@
 //!
 //! The pool also keeps the entries of each object, by object id, so `remove_object` can drop
 //! all of them when the object is rewritten in place or deleted.
+//! A `fuzzy` restart scans the directory in the background while queries run; an object
+//! removed before the scan reached its files is remembered until the scan ends, which then
+//! deletes those files instead of indexing what the removal dropped.
 //!
 //! `publish` checks the capacity again: it may have shrunk while the entry was written. A kind
 //! turned off is refused by `reserve`, `publish` and the restart scan alike, so no entry of it
@@ -166,11 +169,24 @@ struct State {
     kinds_off: Vec<bool>,
     /// By kind index.
     events: Vec<DiskKindEvents>,
+    /// While the restart scan is pending or running, the objects removed meanwhile: their
+    /// files of the previous run, not indexed yet, are deleted by the scan rather than indexed.
+    /// `None` otherwise.
+    removed_before_scan: Option<HashSet<String>>,
 }
 
 impl State {
     fn kind_off(&self, rel: &str) -> bool {
         kind_of(rel).is_some_and(|kind| self.kinds_off[kind.index()])
+    }
+
+    /// Whether `rel` is of an object removed since the restart scan was announced: its file,
+    /// of the previous run, holds what the removal dropped.
+    fn removed_before_scan(&self, rel: &str) -> bool {
+        self.removed_before_scan
+            .as_ref()
+            .zip(object_of(rel))
+            .is_some_and(|(removed, object)| removed.contains(object))
     }
 
     /// Whether `reserve` takes `rel` of `bytes`: see `DiskPool::reserve`. Room held by writes
@@ -187,6 +203,9 @@ impl State {
 
     /// Takes every entry of `object` out of the index.
     fn take_object(&mut self, object: &str) -> Vec<String> {
+        if let Some(removed) = &mut self.removed_before_scan {
+            removed.insert(object.to_string());
+        }
         // Detached first: taking each entry out then finds no set to update.
         let rels = self.objects.remove(object).unwrap_or_default();
         rels.into_iter()
@@ -313,6 +332,7 @@ impl DiskPool {
                 events: CacheKind::all()
                     .map(|_| DiskKindEvents::default())
                     .collect(),
+                removed_before_scan: None,
             }),
             hit: AtomicU64::new(0),
             miss: AtomicU64::new(0),
@@ -460,6 +480,15 @@ impl DiskPool {
         self.state.lock().take_object(object)
     }
 
+    /// Announces a restart scan, before queries run: an object removed from now on until the
+    /// scan ends keeps its previous run's files out of the index (see `reload`).
+    pub fn expect_reload(&self) {
+        let mut state = self.state.lock();
+        if state.removed_before_scan.is_none() {
+            state.removed_before_scan = Some(HashSet::new());
+        }
+    }
+
     /// Takes the entry out of the index and deletes its file. Returns whether it was indexed.
     pub fn remove(&self, rel: &str) -> bool {
         let removed = self.state.lock().pop(rel).is_some();
@@ -581,6 +610,7 @@ impl DiskPool {
     /// concurrently with reads and writes: a key indexed meanwhile, being deleted or being
     /// written is skipped.
     pub fn reload(&self) -> (u64, u64) {
+        self.expect_reload();
         let loaded = AtomicU64::new(0);
         let deleted = AtomicU64::new(0);
         let complete = AtomicBool::new(true);
@@ -624,6 +654,7 @@ impl DiskPool {
                 } else if state.used() + size <= state.cap
                     && size <= state.cap / OVERSIZED_DIVISOR
                     && !state.kind_off(&rel)
+                    && !state.removed_before_scan(&rel)
                 {
                     state.insert(rel.clone(), size);
                     loaded.fetch_add(1, Ordering::Relaxed);
@@ -639,6 +670,7 @@ impl DiskPool {
                 self.state.lock().unmark_deleting(&rel);
             }
         });
+        self.state.lock().removed_before_scan = None;
         if !complete.into_inner() {
             warn!(
                 "[DiskCache] pool {}: the restart scan is incomplete; files it could not see stay \

@@ -449,6 +449,41 @@ fn test_remove_object_takes_all_its_units() {
     assert_consistent(&fresh);
 }
 
+/// An object removed while the restart scan is pending, as a vacuum or a rewrite on a
+/// restarted node, finds none of its previous-run files indexed yet: the scan deletes them
+/// rather than index the bytes the removal dropped. Other objects load as before, and an
+/// object removed after the scan is not remembered.
+#[test]
+fn test_reload_drops_objects_removed_before_the_scan() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_path_buf();
+    let removed = [
+        DiskKey::whole("t/a").rel_path(data()),
+        DiskKey::range("t/a", 0..10).rel_path(meta()),
+    ];
+    let kept = DiskKey::whole("t/b").rel_path(data());
+    for rel in removed.iter().chain([&kept]) {
+        write_file(&root, rel, 100);
+    }
+
+    let pool = DiskPool::new(Pool::Data, root.clone(), 10_000);
+    pool.expect_reload();
+    assert!(pool.remove_object(&DiskKey::object_id("t/a")).is_empty());
+    assert_eq!(pool.reload(), (1, 2));
+    assert!(
+        removed
+            .iter()
+            .all(|rel| !pool.contains(rel) && !root.join(rel).exists())
+    );
+    assert!(pool.contains(&kept) && root.join(&kept).exists());
+
+    // After the scan, a removal is not kept: the next write of the object is indexed.
+    assert!(pool.remove_object(&DiskKey::object_id("t/a")).is_empty());
+    put(&pool, &removed[0], 10);
+    assert!(pool.contains(&removed[0]));
+    assert_consistent(&pool);
+}
+
 /// A key being written cannot be reserved again, and the restart scan leaves its file alone:
 /// the writer renames its own file into place and publishes it.
 #[test]

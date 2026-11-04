@@ -228,6 +228,10 @@ impl DiskCache {
     /// Rebuilds the pools' indexes from their directories and removes older layouts, in a
     /// background thread: queries start at once, missing the entries not indexed yet.
     pub fn start_reload(self: Arc<Self>, tenant_root: PathBuf) {
+        // Before queries run: removals from now on are kept for the scan.
+        for pool in &self.pools {
+            pool.expect_reload();
+        }
         let spawned = std::thread::Builder::new()
             .name("disk-cache-reload".to_string())
             .spawn(move || {
