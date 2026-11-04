@@ -906,9 +906,6 @@ fn test_payload_split_pages_keeps_rows_and_states() -> Result<()> {
     Ok(())
 }
 
-/// `accepts_arity` is a pruning aid, so it must never reject an argument list
-/// that `matches_types` would accept. Both are derived from the same pattern,
-/// and this pins the two together for the shapes used by real functions.
 fn group_hashes(entry: BlockEntry) -> Vec<u64> {
     let entries = vec![entry];
     let mut hashes = vec![0; entries[0].len()];
@@ -1258,6 +1255,9 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
     Ok(())
 }
 
+/// `accepts_arity` is a pruning aid, so it must never reject an argument list
+/// that `matches_types` would accept. Both are derived from the same pattern,
+/// and this pins the two together for the shapes used by real functions.
 #[test]
 fn test_argument_pattern_accepts_arity_agrees_with_matches_types() {
     let any = ArgumentPattern::any;
