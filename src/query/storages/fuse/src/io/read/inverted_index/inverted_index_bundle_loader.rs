@@ -601,9 +601,9 @@ impl RemoteBundleFileHandle {
             .map(|data| OwnedBytes::new(data.to_vec()))
     }
 
-    /// Whether the pages of `range` are worth reading whole: a tier can keep a page, or the disk
-    /// cache holds them all, kept before its pool shrank. Pages no tier keeps would be fetched
-    /// again by every read; the range alone is read then.
+    /// Whether the pages of `range` are worth reading whole: a tier can keep each of them, at
+    /// its own length, or the disk cache holds it, kept before its pool shrank. Pages no tier
+    /// keeps would be fetched again by every read; the range alone is read then.
     fn pages_kept(&self, kind: PageCacheKind, range: &Range<usize>) -> bool {
         let (memory, disk_kind, fill) = match kind {
             PageCacheKind::Lookup => (
@@ -617,15 +617,17 @@ impl RemoteBundleFileHandle {
                 self.payload_cache.policy().disk,
             ),
         };
-        if memory || self.storage.admits(disk_kind, CACHE_PAGE_SIZE as u64, fill) {
+        if memory {
             return true;
         }
         let first_page = range.start / CACHE_PAGE_SIZE;
         let last_page = (range.end - 1) / CACHE_PAGE_SIZE;
         (first_page..=last_page).all(|page_no| {
-            self.page_range(page_no)
-                .and_then(|page| self.absolute_range(&page))
-                .is_ok_and(|page| {
+            let Ok(page) = self.page_range(page_no) else {
+                return false;
+            };
+            self.storage.admits(disk_kind, page.len() as u64, fill)
+                || self.absolute_range(&page).is_ok_and(|page| {
                     self.storage
                         .holds(disk_kind, self.object.as_ref(), Some(page), fill)
                 })
@@ -1667,10 +1669,11 @@ mod tests {
         Ok(())
     }
 
-    /// Pages no tier can keep are not fetched whole: the range alone is read.
+    /// Pages no tier can keep are not fetched whole: the range alone is read. A short final page
+    /// the pool can keep is.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_lookup_pages_too_large_for_the_disk_pool_are_read_by_range() -> Result<()> {
-        let data = (0..4 * CACHE_PAGE_SIZE)
+        let data = (0..4 * CACHE_PAGE_SIZE + 1024)
             .map(|index| index as u8)
             .collect::<Vec<_>>();
         let dir = tempfile::TempDir::new()?;
@@ -1695,6 +1698,14 @@ mod tests {
             assert_eq!(read.as_ref(), &data[range.clone()]);
         }
         assert_eq!(*ranges.lock().unwrap(), vec![7..39, 7..39]);
+
+        let last = 4 * CACHE_PAGE_SIZE;
+        let range = last + 7..last + 39;
+        ranges.lock().unwrap().clear();
+        let read = file.read_range(range.clone()).await?;
+        assert_eq!(read.as_ref(), &data[range]);
+        let last = last as u64;
+        assert_eq!(*ranges.lock().unwrap(), vec![last..last + 1024]);
         Ok(())
     }
 
