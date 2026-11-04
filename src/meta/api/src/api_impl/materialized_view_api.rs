@@ -761,17 +761,20 @@ where
             .get(&target.source_table_id)
             .cloned()
             .unwrap_or((None, None, false));
-        let (database_id, database_name, table_name, is_active) = match table_name {
+        let (database_id, database_name, table_name, is_active, database_dropped) = match table_name
+        {
             Some(table_name) => {
                 let database_id = table_name.data.db_id;
+                let database_dropped = !active_source_database_ids.contains(&database_id);
                 (
                     Some(database_id),
                     source_database_names.get(&database_id).cloned(),
                     Some(table_name.data.table_name),
-                    is_active && active_source_database_ids.contains(&database_id),
+                    is_active && !database_dropped,
+                    database_dropped,
                 )
             }
-            None => (None, None, None, is_active),
+            None => (None, None, None, is_active, false),
         };
         listed.push(ListedMaterializedView {
             mv: target.mv,
@@ -784,6 +787,7 @@ where
                 database_name,
                 table_name,
                 is_active,
+                database_dropped,
                 bound_source_generation: binding
                     .map(|binding| binding.data.bound_source_generation),
                 current_source_generation: generation

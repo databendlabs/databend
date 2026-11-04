@@ -180,6 +180,9 @@ pub struct ListedMVSource {
     pub table_name: Option<String>,
     /// Whether source `TableMeta` exists and is not soft-dropped, and its database is not dropped.
     pub is_active: bool,
+    /// Whether the source's current database is dropped. `is_active` is false in that case too;
+    /// this flag only tells management paths which of the two was dropped.
+    pub database_dropped: bool,
     pub bound_source_generation: Option<u64>,
     pub current_source_generation: Option<u64>,
 }

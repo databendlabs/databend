@@ -906,7 +906,15 @@ SELECT source_database, invalid, invalid_reason
 FROM system.materialized_views
 WHERE database = 'mv_dst_db' AND name = 'cross_mv'
 ----
-mv_src_db 1 source table was dropped, renamed, or replaced
+mv_src_db 1 source database was dropped
+
+# The persisted definition still names the dropped database; reads and refreshes both report it
+# as an invalid materialized view.
+statement error 2328
+SELECT * FROM mv_dst_db.cross_mv
+
+statement error 2328
+REFRESH MATERIALIZED VIEW mv_dst_db.cross_mv
 
 statement ok
 UNDROP DATABASE mv_src_db
@@ -926,6 +934,30 @@ query I
 SELECT count(*) FROM mv_src_db.t
 ----
 2
+
+# A source database recreated under the same name binds the definition to a new table, which the
+# table-id check rejects instead of reading it. UNDROP restores the latest database id of a name,
+# so this runs after the UNDROP case above.
+statement ok
+UNDROP DATABASE mv_dst_db
+
+statement ok
+DROP DATABASE mv_src_db
+
+statement ok
+CREATE DATABASE mv_src_db
+
+statement ok
+CREATE TABLE mv_src_db.t (id INT)
+
+statement error 2328
+SELECT * FROM mv_dst_db.cross_mv
+
+statement error 2328
+REFRESH MATERIALIZED VIEW mv_dst_db.cross_mv
+
+statement ok
+DROP DATABASE mv_dst_db
 
 # CTE definitions remain outside the query shapes supported by feat-mv-insert.
 statement error 1065
@@ -1017,7 +1049,7 @@ where database = 'test_mv_ddl' and name = 'replaced_mv'
 ----
 renamed_replaced_source 1 source table was dropped, renamed, or replaced
 
-statement error 1025
+statement error 2328
 select * from replaced_mv
 
 statement error 2328
@@ -1107,7 +1139,7 @@ where database = 'test_mv_ddl' and name = 'dropped_mv'
 ----
 dropped_source 1 source table was dropped, renamed, or replaced
 
-statement error 1025
+statement error 2328
 select * from dropped_mv
 
 statement error 2328
@@ -1209,7 +1241,7 @@ where database = 'mv_database_renamed' and name = 'mv'
 ----
 mv_database_renamed source 1 source database was renamed 0 0
 
-statement error 1003
+statement error 2328
 select * from mv_database_renamed.mv
 
 statement error 2328
