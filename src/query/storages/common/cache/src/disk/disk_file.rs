@@ -60,10 +60,28 @@ pub fn is_own_tmp(name: &str) -> bool {
 /// Reads an entry of `size` bytes, crc included, and returns the value without the crc.
 pub fn read_entry(path: PathBuf, size: usize) -> Result<Bytes> {
     let mut bytes = Vec::with_capacity(size);
-    std::io::Read::read_to_end(&mut File::open(path)?, &mut bytes)?;
+    std::io::Read::read_to_end(&mut open_entry(&path)?, &mut bytes)?;
     validate_checksum(&bytes)?;
     bytes.truncate(bytes.len() - 4);
     Ok(bytes.into())
+}
+
+/// Opens an entry file to read it. On Linux without updating its access time: a cache hit then
+/// writes no metadata, whatever the mount's atime option.
+fn open_entry(path: &Path) -> std::io::Result<File> {
+    #[cfg(target_os = "linux")]
+    {
+        use rustix::fs::Mode;
+        use rustix::fs::OFlags;
+        let flags = OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOATIME;
+        match rustix::fs::open(path, flags, Mode::empty()) {
+            Ok(fd) => return Ok(File::from(fd)),
+            // Only the owner of a file may leave its access time: open it as usual otherwise.
+            Err(rustix::io::Errno::PERM) => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    File::open(path)
 }
 
 /// Writes `value` and its crc to `tmp`, the temporary name of an entry file; the pool renames
@@ -108,5 +126,31 @@ pub fn validate_checksum(bytes: &[u8]) -> Result<()> {
                 "crc checksum validation failure: provided {crc_provided}, calculated {crc_calculated}"
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_read_entry_round_trip() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("entry");
+        let written = write_tmp(&path, b"value", false).unwrap();
+        let read = read_entry(path, written as usize).unwrap();
+        assert_eq!(read.as_ref(), b"value");
+    }
+
+    /// Entries are read without updating their access time.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_entries_are_opened_without_access_time() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("entry");
+        write_tmp(&path, b"value", false).unwrap();
+        let file = open_entry(&path).unwrap();
+        let flags = rustix::fs::fcntl_getfl(&file).unwrap();
+        assert!(flags.contains(rustix::fs::OFlags::NOATIME));
     }
 }
