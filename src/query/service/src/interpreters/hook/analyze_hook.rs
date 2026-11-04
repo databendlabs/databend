@@ -117,7 +117,23 @@ pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Res
 
 /// Run ANALYZE over the table's current snapshot to completion. A table without a
 /// snapshot has nothing to analyze.
+///
+/// Maintenance however it is started: ANALYZE, the after-write hook, or `ALTER TABLE ... SET
+/// OPTIONS(enable_auto_analyze = 1)`. Its reads run under `CachePolicy::MAINTENANCE`; the
+/// statement's own policy is restored after, for the rest of an ALTER TABLE.
 pub(crate) async fn execute_analyze(
+    ctx: Arc<QueryContext>,
+    table: &FuseTable,
+    options: AnalyzeOptions,
+) -> Result<()> {
+    let policy = ctx.cache_policy();
+    ctx.set_cache_policy(policy.at_most(CachePolicy::MAINTENANCE));
+    let result = run_analyze(ctx.clone(), table, options).await;
+    ctx.set_cache_policy(policy);
+    result
+}
+
+async fn run_analyze(
     ctx: Arc<QueryContext>,
     table: &FuseTable,
     options: AnalyzeOptions,

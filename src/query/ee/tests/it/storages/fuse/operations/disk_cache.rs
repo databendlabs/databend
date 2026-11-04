@@ -184,6 +184,10 @@ async fn test_maintenance_does_not_fill_the_disk_cache() -> anyhow::Result<()> {
     let options = "cluster by (a) enable_virtual_column = true";
     let operations: &[(&str, &[&str], &[&str])] = &[
         ("analyze", &[], &["analyze table {t}"]),
+        // ANALYZE run by the option change, outside the ANALYZE interpreter and the hooks.
+        ("analyze by alter table", &[], &[
+            "alter table {t} set options(enable_auto_analyze = 1)",
+        ]),
         ("compact segment", &[], &[
             "optimize table {t} compact segment",
         ]),
