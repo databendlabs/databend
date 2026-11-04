@@ -104,7 +104,7 @@ pub struct AggregateHashTable {
     // Hash index entries store the ids of rows in these payload pages. Any path that replaces
     // the payload must clear or rebuild the index before probing it again.
     pub payload: PartitionedPayload,
-    pub config: HashTableConfig,
+    config: HashTableConfig,
 
     hash_index: HashIndex,
     hash_index_resize_count: usize,
@@ -185,10 +185,6 @@ impl AggregateHashTable {
             .into_bucket_payloads()
             .map(|(_, payload)| payload)
             .collect()
-    }
-
-    pub fn len(&self) -> usize {
-        self.payload.len()
     }
 
     pub fn add_groups(
@@ -851,11 +847,11 @@ mod tests {
             ht.payload.row_ids = ht.payload.row_ids.with_max_compact_page(max_compact_page);
 
             assert_eq!(add_blocks(&mut ht, &blocks), groups as usize);
-            assert_eq!(ht.len(), groups as usize);
+            assert_eq!(ht.payload.len(), groups as usize);
             assert_eq!(ht.hash_index.is_wide(), max_compact_page != usize::MAX);
             // Every key finds its group again, so no two groups share an id.
             assert_eq!(add_blocks(&mut ht, &blocks), 0);
-            assert_eq!(ht.len(), groups as usize);
+            assert_eq!(ht.payload.len(), groups as usize);
         }
     }
 }

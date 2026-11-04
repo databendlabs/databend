@@ -41,7 +41,7 @@ pub struct ProbeState {
     // The rows that created a group, set when probing with source states.
     pub(super) new_groups: [bool; BATCH_SIZE],
 
-    pub partition_entries: Vec<(u16, SelectVector)>,
+    pub(super) partition_entries: Vec<(u16, SelectVector)>,
 }
 
 impl Default for ProbeState {

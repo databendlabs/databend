@@ -292,7 +292,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
         // No table means no rows were aggregated: they were bypassed, or there were none.
         let table = self.table.take();
         let (table_rows, hash_index_resizes) = table.as_ref().map_or((0, 0), |table| {
-            (table.len(), table.hash_index_resize_count())
+            (table.payload.len(), table.hash_index_resize_count())
         });
         self.statistics
             .log_partial_finish_statistics(self.output_rows + table_rows, hash_index_resizes);

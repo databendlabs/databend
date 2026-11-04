@@ -30,20 +30,17 @@ use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
 use crate::types::DataType;
 
-/// Maps a group hash to its radix partition. Every producer of rows for the same partitioned
-/// aggregate (payloads and raw rows) must use the same mask so that a key lands in one bucket.
+/// Maps a group hash to a partition of a table: `partition_count` partitions by the bits below
+/// bit 48 that start `start_bit` bits down. The final aggregate takes the next bits at each spill
+/// depth, so that a spilled partition splits further.
 #[derive(Debug, Clone, Copy)]
-pub struct PartitionMask {
+struct PartitionMask {
     mask: u64,
     shift: u64,
 }
 
 impl PartitionMask {
-    fn new(partition_count: u64) -> Self {
-        Self::with_start_bit(partition_count, 0)
-    }
-
-    pub fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
+    fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
         debug_assert!(start_bit + radix_bits <= 48);
@@ -54,7 +51,7 @@ impl PartitionMask {
         Self { mask, shift }
     }
 
-    pub fn index(&self, hash: u64) -> usize {
+    fn index(&self, hash: u64) -> usize {
         ((hash & self.mask) >> self.shift) as _
     }
 }
@@ -237,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_partition_mask_with_start_bit() {
-        let top_bit_mask = PartitionMask::new(2);
+        let top_bit_mask = PartitionMask::with_start_bit(2, 0);
         assert_eq!(top_bit_mask.index(1_u64 << 47), 1);
         assert_eq!(top_bit_mask.index(1_u64 << 44), 0);
 

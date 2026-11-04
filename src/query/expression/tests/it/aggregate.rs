@@ -554,7 +554,7 @@ fn test_singleton_group_keys_merge_across_blocks() -> Result<()> {
                     (&[]).into(),
                     1,
                 )?;
-                assert_eq!(hashtable.len(), 1, "group key: {data_type:?}");
+                assert_eq!(hashtable.payload.len(), 1, "group key: {data_type:?}");
             }
         }
     }
@@ -567,7 +567,7 @@ fn test_partitioned_payload_public_bucket_iterators() {
 
     {
         let hashtable = fixture.build_from_rows(0, HashTableConfig::default());
-        let rows = hashtable.len();
+        let rows = hashtable.payload.len();
         let buckets = hashtable.payload.into_bucket_payloads().collect::<Vec<_>>();
         assert_eq!(buckets.len(), 8);
         assert_eq!(
@@ -579,7 +579,7 @@ fn test_partitioned_payload_public_bucket_iterators() {
         );
 
         let hashtable = fixture.build_from_rows(0, HashTableConfig::default());
-        let rows = hashtable.len();
+        let rows = hashtable.payload.len();
         let non_empty = hashtable
             .payload
             .into_non_empty_bucket_payloads()
@@ -614,7 +614,7 @@ fn test_payload_scatter_preserves_results() {
 
     {
         let hashtable = fixture.build_from_rows(0, HashTableConfig::default());
-        let rows = hashtable.len();
+        let rows = hashtable.payload.len();
         let scattered = scatter_into_buckets(hashtable, 3);
         assert_eq!(
             scattered.iter().map(|payload| payload.len()).sum::<usize>(),
@@ -704,7 +704,7 @@ fn test_tracked_heap_merge_failure_drops_states() {
 
     {
         let hashtable = fixture.build_from_rows(FAIL_ON_MERGE, HashTableConfig::default());
-        rows_before = hashtable.len();
+        rows_before = hashtable.payload.len();
         let scattered = scatter_into_buckets(hashtable, 3);
 
         let mut merged = fixture.empty_table(HashTableConfig::default());
@@ -728,7 +728,7 @@ fn test_tracked_heap_merge_result_failure_drops_states() {
 
     {
         let hashtable = fixture.build_from_rows(FAIL_ON_MERGE_RESULT, HashTableConfig::default());
-        rows_before = hashtable.len();
+        rows_before = hashtable.payload.len();
         let scattered = scatter_into_buckets(hashtable, 3);
 
         let mut merged = fixture.empty_table(HashTableConfig::default());
@@ -893,7 +893,10 @@ fn test_payload_split_pages_keeps_rows_and_states() -> Result<()> {
         for piece in &pieces {
             merged.combine_payload(piece, &mut flush_state)?;
         }
-        assert_eq!(merged.len(), pieces.iter().map(|p| p.len()).sum::<usize>());
+        assert_eq!(
+            merged.payload.len(),
+            pieces.iter().map(|p| p.len()).sum::<usize>()
+        );
         drop(unmerged);
         drop(pieces);
         assert!(fixture.live_bytes() > 0);

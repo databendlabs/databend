@@ -233,7 +233,7 @@ impl IPhysicalPlan for AggregatePartial {
             )?))
         })?;
 
-        builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
+        builder.exchange_injector = AggregateInjector::create(params.clone());
         Ok(())
     }
 }

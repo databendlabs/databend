@@ -199,8 +199,7 @@ impl IPhysicalPlan for AggregateFinal {
         let old_inject = builder.exchange_injector.clone();
 
         if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector =
-                AggregateInjector::create(builder.ctx.clone(), params.clone());
+            builder.exchange_injector = AggregateInjector::create(params.clone());
         }
 
         self.input.build_pipeline(builder)?;
