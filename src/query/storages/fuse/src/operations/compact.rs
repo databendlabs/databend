@@ -108,6 +108,7 @@ impl FuseTable {
             removed_segment_indexes: compaction.removed_segment_indexes,
             merged_statistics: compaction.removed_statistics.clone(),
             removed_statistics: compaction.removed_statistics,
+            segment_block_counts: compaction.segment_block_counts,
         };
 
         let conflict_resolve_ctx =

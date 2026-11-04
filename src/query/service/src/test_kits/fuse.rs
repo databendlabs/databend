@@ -80,6 +80,7 @@ pub async fn generate_snapshot_with_segments(
         TestFixture::default_table_meta_timestamps(),
     )?;
     new_snapshot.segments = segment_locations;
+    new_snapshot.segment_block_counts.clear();
     let new_snapshot_location =
         location_gen.gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
     if let Some(ts) = time_stamp {
@@ -309,6 +310,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_2.segments = locations;
+    snapshot_2.segment_block_counts.clear();
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary =
         merge_statistics(snapshot_1.summary.clone(), &segments_v3[1].1.summary, None);

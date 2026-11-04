@@ -128,7 +128,7 @@ impl SnapshotGenerator for MutationGenerator {
                         }
                     }
                     new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
-                    let new_snapshot = TableSnapshot::try_new(
+                    let mut new_snapshot = TableSnapshot::try_new(
                         Some(table_info.ident.seq),
                         previous.clone(),
                         table_info.schema().as_ref().clone(),
@@ -138,6 +138,7 @@ impl SnapshotGenerator for MutationGenerator {
                         table_statistics_location,
                         table_meta_timestamps,
                     )?;
+                    new_snapshot.set_segment_block_counts(&ctx.segment_block_counts)?;
 
                     if matches!(
                         self.mutation_kind,

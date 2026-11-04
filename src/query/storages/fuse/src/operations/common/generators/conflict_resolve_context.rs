@@ -133,6 +133,10 @@ pub struct SnapshotChanges {
 
     pub merged_statistics: Statistics,
     pub removed_statistics: Statistics,
+
+    /// Counts for newly written segments, keyed by immutable segment path.
+    #[serde(default)]
+    pub segment_block_counts: HashMap<String, u64>,
 }
 
 impl SnapshotChanges {
@@ -167,4 +171,6 @@ impl SnapshotChanges {
 pub struct SnapshotMerged {
     pub merged_segments: Vec<Location>,
     pub merged_statistics: Statistics,
+    #[serde(default)]
+    pub segment_block_counts: HashMap<String, u64>,
 }
