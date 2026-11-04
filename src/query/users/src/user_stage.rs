@@ -16,23 +16,24 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
 use crate::UserApiProvider;
 
 /// user stage operations.
 impl UserApiProvider {
-    // Add a new stage.
+    /// Writes the stage and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     pub async fn add_stage(
         &self,
         tenant: &Tenant,
         info: StageInfo,
-        create_option: &CreateOption,
-    ) -> Result<()> {
-        let stage_api_provider = self.stage_api(tenant);
-        stage_api_provider.add_stage(info, create_option).await
+        replace: bool,
+        owner: Option<&str>,
+    ) -> Result<bool> {
+        self.stage_api(tenant)
+            .add_stage_with_owner(info, replace, owner)
+            .await
     }
 
     // Get one stage from by tenant.
@@ -79,16 +80,16 @@ impl UserApiProvider {
         }
     }
 
-    // Drop a stage by name.
+    /// Drop a stage by name, returning whether a stage was dropped.
     #[async_backtrace::framed]
-    pub async fn drop_stage(&self, tenant: &Tenant, name: &str, if_exists: bool) -> Result<()> {
+    pub async fn drop_stage(&self, tenant: &Tenant, name: &str, if_exists: bool) -> Result<bool> {
         let stage_api_provider = self.stage_api(tenant);
         let drop_stage = stage_api_provider.drop_stage(name);
         match drop_stage.await {
-            Ok(res) => Ok(res),
+            Ok(()) => Ok(true),
             Err(e) => {
                 if if_exists && e.code() == ErrorCode::UNKNOWN_STAGE {
-                    Ok(())
+                    Ok(false)
                 } else {
                     Err(e.add_message_back(" (while drop stage)"))
                 }

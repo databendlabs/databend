@@ -270,8 +270,7 @@ impl PhysicalPlanBuilder {
             meta: PhysicalPlanMeta::new("ConstantTableScan"),
         });
 
-        let is_distributed = (!self.ctx.get_cluster().is_empty())
-            && self.ctx.get_settings().get_enable_distributed_compact()?;
+        let is_distributed = !self.ctx.get_cluster().is_empty();
         if is_distributed {
             root = PhysicalPlan::new(Exchange {
                 input: root,

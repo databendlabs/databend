@@ -285,6 +285,52 @@ settings (enable_top_n = 0) select a from t_top_n_interleaved order by a limit 3
 2
 3
 
+# With several sort keys the boundary tracks the first key. Blocks whose first
+# key ties the boundary must be kept: [2, -1] ties the boundary 2 set by
+# [2, 0] and wins on the second key. Only the filler blocks are pruned.
+statement ok
+create or replace table t_top_n_multi_key (a int not null, b int not null) row_per_block = 5;
+
+statement ok
+insert into t_top_n_multi_key values (1, 9), (1000, 0), (1001, 0), (1002, 0);
+
+statement ok
+insert into t_top_n_multi_key values (1, 1);
+
+statement ok
+insert into t_top_n_multi_key values (2, 0);
+
+statement ok
+insert into t_top_n_multi_key values (2, -1);
+
+statement ok
+insert into t_top_n_multi_key select number + 2000, 0 from numbers(50);
+
+query T
+explain analyze partial select a, b from t_top_n_multi_key order by a, b limit 3
+----
+TableScan
+├── table: default.default.t_top_n_multi_key
+├── estimated rows: 57.00
+└── output rows: 7
+
+query II
+select a, b from t_top_n_multi_key order by a, b limit 3
+----
+1 1
+1 9
+2 -1
+
+query II
+settings (enable_top_n = 0) select a, b from t_top_n_multi_key order by a, b limit 3
+----
+1 1
+1 9
+2 -1
+
+statement ok
+drop table t_top_n_multi_key;
+
 # Mirrored DESC layout: [-3, 10], [9], [8], then filler blocks below.
 statement ok
 create or replace table t_top_n_interleaved_desc (a int not null) row_per_block = 5;

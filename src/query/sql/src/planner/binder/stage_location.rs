@@ -248,20 +248,15 @@ where
     A::Target: TableContextAuthorization,
 {
     pub async fn resolve_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        if self
-            .settings
-            .get_enable_experimental_connection_privilege_check()?
-        {
-            let visibility_checker = self
-                .authorization
-                .get_visibility_checker(false, Object::Connection)
-                .await?;
-            if !visibility_checker.check_connection_visibility(name) {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
-                    self.current_user.display(),
-                )));
-            }
+        let visibility_checker = self
+            .authorization
+            .get_visibility_checker(false, Object::Connection)
+            .await?;
+        if !visibility_checker.check_connection_visibility(name) {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
+                self.current_user.display(),
+            )));
         }
 
         self.user_api_provider
