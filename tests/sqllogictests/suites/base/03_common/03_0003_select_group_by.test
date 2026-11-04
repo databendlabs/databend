@@ -448,3 +448,18 @@ query I
 SELECT count() FROM (SELECT number % 3 FROM numbers(100) GROUP BY number % 3, number % 3 + rand() + 1)
 ----
 100
+
+# Grouping equates +0.0 and -0.0, which atan2 tells apart: a float key does not determine it
+statement ok
+CREATE OR REPLACE TABLE t_signed_zero(z DOUBLE NOT NULL)
+
+statement ok
+INSERT INTO t_signed_zero VALUES (0.0), (-0.0)
+
+query I
+SELECT count(*) FROM (SELECT count(*) FROM t_signed_zero GROUP BY z, atan2(z, -1.0))
+----
+2
+
+statement ok
+DROP TABLE t_signed_zero

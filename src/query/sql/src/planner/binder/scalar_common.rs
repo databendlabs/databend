@@ -360,7 +360,8 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
 
 /// check if the scalar could be constructed by the columns and constants, using at least one
 /// of the columns (a constant alone is not pruned), and is deterministic (`a + rand()` is not
-/// determined by `a`)
+/// determined by `a`). The columns it uses must group by their values: grouping equates values
+/// that functions can tell apart for some types, e.g. `+0.0` and `-0.0` of a float for `atan2`.
 pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> bool {
     struct PruneVisitor<'a> {
         columns: &'a HashSet<ScalarExpr>,
@@ -381,6 +382,12 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
     impl<'a> Visitor<'a> for PruneVisitor<'a> {
         fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
             if self.columns.contains(expr) {
+                let data_type = expr.data_type().remove_nullable();
+                self.can_prune &= data_type.is_integer()
+                    || data_type.is_decimal()
+                    || data_type.is_date_or_date_time()
+                    || data_type.is_string()
+                    || data_type.is_boolean();
                 self.uses_columns = true;
                 return Ok(());
             }
