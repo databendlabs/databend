@@ -297,6 +297,17 @@ out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~3.2968049022188115[..4.000000000000001], null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(99), max: UInt(99), ndv: 1.0, null_count: 0, histogram: None }
 
+expr          : and_filters(a > 25, a = b, b > 99)
+cardinality   : 1000000
+estimated     : 0.16
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~0.15872681207036[..0.16], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: ~0.15987208104566442[..0.16], null_count: 0, histogram: None }
+
 expr          : or_filters(and_filters(a > 25, b = 5), and_filters(a > 25, b = 6))
 cardinality   : 1000000
 estimated     : 7.999984000000001

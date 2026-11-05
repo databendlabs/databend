@@ -2222,6 +2222,7 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         &["and_filters(a > 25, c > 1)"],
         &["and_filters(a > 25, a > 18)"],
         &["and_filters(a > 25, a = b, b > 98)"],
+        &["and_filters(a > 25, a = b, b > 99)"],
         &["or_filters(and_filters(a > 25, b = 5), and_filters(a > 25, b = 6))"],
     ] {
         run_case_with_predicates(

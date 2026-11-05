@@ -1812,25 +1812,38 @@ impl SelectivityVisitor<'_> {
                 // `t > 1000 AND t > 999` with `t` recorded in [1, 1000], so it
                 // does not lower the bound. A predicate that links that column
                 // to others, such as `t = v`, carries the contradiction to
-                // them, so every column connected to the range through the
-                // predicates of this conjunction counts the same way.
-                let mut linked_columns = statistics_zero_range_columns;
-                let mut unlinked_children = child_columns;
-                loop {
-                    let (linked, unlinked): (Vec<ColumnSet>, Vec<ColumnSet>) = unlinked_children
-                        .into_iter()
-                        .partition(|columns| !columns.is_disjoint(&linked_columns));
-                    unlinked_children = unlinked;
-                    if linked.is_empty() {
-                        break;
+                // them, and makes ranges on linked columns correlated, as in
+                // `t > 1000 AND t = v AND v > 1000`. So the bound groups the
+                // children by the columns they connect through any predicate
+                // of this conjunction: a group takes the minimum of its
+                // estimates, and a group with such a range counts its other
+                // predicates as 1.
+                let mut components: Vec<ColumnSet> = Vec::new();
+                for columns in child_columns {
+                    if columns.is_empty() {
+                        continue;
                     }
-                    for columns in linked {
-                        linked_columns.extend(columns);
+                    let mut component = columns;
+                    components.retain_mut(|existing| {
+                        if existing.is_disjoint(&component) {
+                            return true;
+                        }
+                        component.append(existing);
+                        false
+                    });
+                    components.push(component);
+                }
+                for (_, columns) in bound_estimates.iter_mut() {
+                    if let Some(component) = components
+                        .iter()
+                        .find(|component| !component.is_disjoint(columns))
+                    {
+                        *columns = component.clone();
                     }
                 }
                 for estimate in other_bound_estimates {
                     let (value, columns) = &mut bound_estimates[estimate];
-                    if !columns.is_disjoint(&linked_columns) {
+                    if !columns.is_disjoint(&statistics_zero_range_columns) {
                         *value = MAX_SELECTIVITY;
                     }
                 }
