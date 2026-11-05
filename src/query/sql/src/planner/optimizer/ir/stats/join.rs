@@ -1530,7 +1530,14 @@ impl UniqueKeyEvidence {
 /// rejects an NDV that reaches the size of the key's discrete value domain.
 /// Statistics providers and `ColumnStat` clamp NDV to that size, so such an
 /// NDV may be a repaired overestimate rather than an observed count.
+///
+/// NULL-safe equality matches NULL keys with each other, so it also requires
+/// an exact NULL count of at most one. Filters and outer joins scale or add to
+/// the NULL count, so its upper value is then an estimate, not a bound.
 fn is_confident_unique_join_key(stat: &ColumnStat, cardinality: f64, is_null_equal: bool) -> bool {
+    if is_null_equal && !matches!(stat.null_count(), StatCount::Exact(0 | 1)) {
+        return false;
+    }
     let ndv_reaches_domain = stat
         .bounds()
         .and_then(|bounds| bounds.finite_ndv_upper())
@@ -1633,6 +1640,21 @@ mod tests {
         let key = int_key(NdvEstimate::exact(500.0), 10);
         assert!(is_confident_unique_join_key(&key, 510.0, false));
         assert!(!is_confident_unique_join_key(&key, 510.0, true));
+    }
+
+    #[test]
+    fn test_confident_unique_join_key_requires_exact_null_count_for_null_safe_equality() {
+        let mut key = int_key(NdvEstimate::exact(500.0), 1);
+        assert!(is_confident_unique_join_key(&key, 501.0, true));
+
+        // A filter keeping 10% of rows scales ten NULLs to an estimate of one.
+        // The filtered rows may still hold several NULLs.
+        let null_count = StatCount::exact(10).reduce_by_selectivity(0.1);
+        assert_eq!(null_count.upper(), 1.0);
+        key.set_null_count(null_count);
+        assert!(is_unique_join_key(&key, 501.0, true));
+        assert!(!is_confident_unique_join_key(&key, 501.0, true));
+        assert!(is_confident_unique_join_key(&key, 501.0, false));
     }
 
     #[test]
