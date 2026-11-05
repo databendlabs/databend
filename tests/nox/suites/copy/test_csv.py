@@ -227,7 +227,8 @@ def _assert_csv_roundtrip(conn, path, file_format):
     ],
     ids=["not-null", "non-numeric", "minimal"],
 )
-def test_quote_styles(copy_env, quote_style, expected):
+@pytest.mark.parametrize("format_source", ["inline", "named"])
+def test_quote_styles(copy_env, quote_style, expected, format_source):
     conn = copy_env.conn
     conn.exec(
         "create table source (n int, d decimal(10,2), f double, b boolean, "
@@ -239,12 +240,20 @@ def test_quote_styles(copy_env, quote_style, expected):
         "(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)"
     )
     fmt = f"file_format=(type=csv quote_style='{quote_style}')"
-    path = f"@{copy_env.uniq_name}/styles.csv"
-    content = unload_and_read_stage_text(
-        copy_env, path, "(select * from source order by n nulls last)", fmt
-    )
-    assert content == expected + "\\N,\\N,\\N,\\N,\\N,\\N,\\N,\\N,\\N\n"
-    _assert_csv_roundtrip(conn, path, fmt)
+    format_name = f"csv_style_{copy_env.uniq_name}"
+    if format_source == "named":
+        conn.exec(f"create file format {format_name} type=csv quote_style={quote_style}")
+        fmt = f"file_format=(format_name='{format_name}')"
+    try:
+        path = f"@{copy_env.uniq_name}/styles.csv"
+        content = unload_and_read_stage_text(
+            copy_env, path, "(select * from source order by n nulls last)", fmt
+        )
+        assert content == expected + "\\N,\\N,\\N,\\N,\\N,\\N,\\N,\\N,\\N\n"
+        _assert_csv_roundtrip(conn, path, fmt)
+    finally:
+        if format_source == "named":
+            conn.exec(f"drop file format {format_name}")
 
 
 @pytest.mark.parametrize(
