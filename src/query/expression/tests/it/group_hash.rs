@@ -173,6 +173,71 @@ fn bitmap_hashes_logical_members() -> databend_common_exception::Result<()> {
     assert_hash_class(&[Scalar::Bitmap(vec![7]), Scalar::Bitmap(vec![7])])
 }
 
+// Standard Roaring treemap with one run container, built from its wire layout
+// rather than a stored byte fixture. The run is [0, cardinality).
+fn run_bitmap(cardinality: u32) -> Vec<u8> {
+    assert!((1..=65_536).contains(&cardinality));
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&1_u64.to_le_bytes()); // one high-word bitmap
+    bytes.extend_from_slice(&0_u32.to_le_bytes()); // high word
+    bytes.extend_from_slice(&12_347_u32.to_le_bytes()); // run cookie, one container
+    bytes.push(1); // this container is run encoded
+    bytes.extend_from_slice(&0_u16.to_le_bytes()); // container key
+    bytes.extend_from_slice(&((cardinality - 1) as u16).to_le_bytes());
+    bytes.extend_from_slice(&1_u16.to_le_bytes()); // one run; no offsets for one container
+    bytes.extend_from_slice(&0_u16.to_le_bytes()); // run start
+    bytes.extend_from_slice(&((cardinality - 1) as u16).to_le_bytes());
+    bytes
+}
+
+#[test]
+fn bitmap_hashes_canonicalize_run_containers() -> databend_common_exception::Result<()> {
+    for cardinality in [4_096_u32, 4_097, 65_536] {
+        let mut tree = RoaringTreemap::new();
+        tree.insert_range(0..u64::from(cardinality));
+        let mut legacy = Vec::new();
+        tree.serialize_into(&mut legacy).unwrap();
+        let mut hybrid = Vec::new();
+        HybridBitmap::Large(tree)
+            .serialize_into(&mut hybrid)
+            .unwrap();
+        assert_hash_class(&[
+            Scalar::Bitmap(run_bitmap(cardinality)),
+            Scalar::Bitmap(legacy),
+            Scalar::Bitmap(hybrid),
+        ])?;
+    }
+    assert_hash_class(&[Scalar::Bitmap(Vec::new()), {
+        let mut bytes = Vec::new();
+        HybridBitmap::new().serialize_into(&mut bytes).unwrap();
+        Scalar::Bitmap(bytes)
+    }])
+}
+
+#[test]
+fn bitmap_hashing_does_not_write_every_dense_member() {
+    #[derive(Default)]
+    struct CountingHasher {
+        bytes: usize,
+    }
+    impl Hasher for CountingHasher {
+        fn finish(&self) -> u64 {
+            0
+        }
+
+        fn write(&mut self, bytes: &[u8]) {
+            self.bytes += bytes.len();
+        }
+    }
+
+    let scalar = Scalar::Bitmap(run_bitmap(65_536));
+    let mut hasher = CountingHasher::default();
+    scalar.hash(&mut hasher);
+    // A canonical bitset container fits well below this bound, whereas writing
+    // all members as u64 values would require more than half a megabyte.
+    assert!(hasher.bytes < 16 * 1024, "hashed {} bytes", hasher.bytes);
+}
+
 #[test]
 fn geometry_hashes_ignore_wkb_byte_order() -> databend_common_exception::Result<()> {
     // Independently construct WKB POINT(3 6), not a stored fixture.

@@ -57,6 +57,7 @@ use string::StringColumnBuilder;
 
 use crate::BlockEntry;
 use crate::ColumnView;
+use crate::bitmap::hash_bitmap;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
 use crate::types::EncodedColumn;
@@ -1148,15 +1149,7 @@ impl Hash for ScalarRef<'_> {
             // `Scalar::eq` compares bitmaps by their decoded members, so the
             // hash must not depend on the encoding. Undecodable payloads only
             // compare equal bytewise and fall back to hashing the bytes.
-            ScalarRef::Bitmap(v) => match deserialize_bitmap(v) {
-                Ok(bitmap) => {
-                    bitmap.len().hash(state);
-                    for member in bitmap.iter() {
-                        member.hash(state);
-                    }
-                }
-                Err(_) => v.hash(state),
-            },
+            ScalarRef::Bitmap(v) => hash_bitmap(v, state),
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
