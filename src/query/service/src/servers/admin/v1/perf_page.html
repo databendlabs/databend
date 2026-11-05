@@ -48,7 +48,7 @@
 <body>
 <div class="panel">
     <h2>{{TITLE}}</h2>
-    <label>Frequency (Hz) <input id="frequency" type="number" value="{{FREQUENCY}}" min="1" max="{{MAX_FREQUENCY}}"></label>
+    <label style="{{FREQUENCY_STYLE}}">Frequency (Hz) <input id="frequency" type="number" value="{{FREQUENCY}}" min="1" max="{{MAX_FREQUENCY}}"></label>
     <label>Max duration (s) <input id="seconds" type="number" value="{{SECONDS}}" min="1" max="{{MAX_SECONDS}}"></label>
     <button id="start">Start</button>
     <button id="stop">Stop</button>
@@ -67,7 +67,7 @@
     <iframe id="flamegraph"></iframe>
 </div>
 <script>
-    // Resolve the API against this page, `/v1/perf` or `/v1/queries/<id>/perf`, so it keeps
+    // Resolve the API against this page, e.g. `/v1/perf` or `/v1/queries/<id>/memory_perf`, so it keeps
     // working behind a proxy that mounts the admin API under a prefix.
     const base = location.pathname.replace(/\/+$/, '') + '/';
     const statusBox = document.getElementById('status');

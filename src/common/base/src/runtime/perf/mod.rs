@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod memory_profiler;
 mod perf_counters;
 mod query_perf;
 
+pub use memory_profiler::MemoryProfiler;
+pub use memory_profiler::SAMPLE_INTERVAL as MEMORY_SAMPLE_INTERVAL;
 pub use perf_counters::PerfConfig;
 pub use perf_counters::PerfCounters;
 pub use perf_counters::PerfEvent;

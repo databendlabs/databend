@@ -21,6 +21,7 @@ use std::ptr::null_mut;
 
 use crate::mem_allocator::DefaultAllocator;
 use crate::mem_allocator::tracker::MetaTrackerAllocator;
+use crate::runtime::MemoryProfiler;
 
 pub type DefaultGlobalAllocator = GlobalAllocator<DefaultAllocator>;
 pub type TrackingGlobalAllocator = GlobalAllocator<MetaTrackerAllocator<DefaultAllocator>>;
@@ -67,11 +68,13 @@ impl GlobalAllocator<DefaultAllocator> {
 unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        MemoryProfiler::on_alloc(layout.size());
         self.inner.allocate(layout)
     }
 
     #[inline(always)]
     fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        MemoryProfiler::on_alloc(layout.size());
         self.inner.allocate_zeroed(layout)
     }
 
@@ -87,6 +90,7 @@ unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        MemoryProfiler::on_alloc(new_layout.size() - old_layout.size());
         unsafe { self.inner.grow(ptr, old_layout, new_layout) }
     }
 
@@ -97,6 +101,7 @@ unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        MemoryProfiler::on_alloc(new_layout.size() - old_layout.size());
         unsafe { self.inner.grow_zeroed(ptr, old_layout, new_layout) }
     }
 

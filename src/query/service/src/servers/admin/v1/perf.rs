@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! On-demand CPU profiling of a running query or of whole nodes.
+//! On-demand CPU and memory profiling of a running query or of whole nodes.
 //!
-//! Under `/v1/queries/:query_id/perf` for the threads running a query, and
-//! under `/v1/perf` for every thread of every node:
+//! CPU: under `/v1/queries/:query_id/perf` for the threads running a query,
+//! and under `/v1/perf` for every thread of every node.
 //!
-//! - `POST .../start?frequency=&seconds=`
+//! Memory: under `/v1/queries/:query_id/memory_perf` for the allocations of
+//! the threads running a query, and under `/v1/memory_perf` for those of
+//! every query of every node. A call stack is sampled about every
+//! `MEMORY_SAMPLE_INTERVAL` bytes a thread allocates, the flamegraph shows the
+//! bytes allocated per stack, rooted at the plan node (and the query id for
+//! `/v1/memory_perf`), including memory freed soon after.
+//!
+//! The CPU and memory profilers are independent, both can run at once. Both
+//! offer:
+//!
+//! - `POST .../start?frequency=&seconds=`, `frequency` only for CPU
 //! - `POST .../stop`
 //! - `GET  .../status`
 //! - `GET  .../flamegraph?format=html|folded`: the samples of every node,
@@ -39,6 +49,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use databend_common_base::runtime::CpuProfiler;
+use databend_common_base::runtime::MEMORY_SAMPLE_INTERVAL;
+use databend_common_base::runtime::MemoryProfiler;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -57,6 +69,7 @@ use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::PERF;
+use crate::servers::flight::v1::actions::PerfKind;
 use crate::servers::flight::v1::actions::PerfNodeStatus;
 use crate::servers::flight::v1::actions::PerfRequest;
 use crate::servers::flight::v1::actions::PerfState;
@@ -122,21 +135,19 @@ pub async fn start_query_perf(
     Path(query_id): Path<String>,
     params: Option<Query<StartPerfParams>>,
 ) -> poem::Result<impl IntoResponse> {
-    start(PerfTarget::Query(query_id), params).await
+    start(PerfKind::Cpu, PerfTarget::Query(query_id), params).await
 }
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn stop_query_perf(Path(query_id): Path<String>) -> poem::Result<impl IntoResponse> {
-    let target = PerfTarget::Query(query_id);
-    status_response(target.clone(), PerfRequest::Stop { target }).await
+    stop(PerfKind::Cpu, PerfTarget::Query(query_id)).await
 }
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn query_perf_status(Path(query_id): Path<String>) -> poem::Result<impl IntoResponse> {
-    let target = PerfTarget::Query(query_id);
-    status_response(target.clone(), PerfRequest::Status { target }).await
+    status(PerfKind::Cpu, PerfTarget::Query(query_id)).await
 }
 
 #[poem::handler]
@@ -145,13 +156,13 @@ pub async fn query_perf_flamegraph(
     Path(query_id): Path<String>,
     Query(params): Query<FlamegraphParams>,
 ) -> poem::Result<impl IntoResponse> {
-    flamegraph(PerfTarget::Query(query_id), params.format).await
+    flamegraph(PerfKind::Cpu, PerfTarget::Query(query_id), params.format).await
 }
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn query_perf_page(Path(query_id): Path<String>) -> poem::Result<impl IntoResponse> {
-    Ok(page(&PerfTarget::Query(query_id)))
+    Ok(page(PerfKind::Cpu, &PerfTarget::Query(query_id)))
 }
 
 #[poem::handler]
@@ -159,21 +170,19 @@ pub async fn query_perf_page(Path(query_id): Path<String>) -> poem::Result<impl 
 pub async fn start_process_perf(
     params: Option<Query<StartPerfParams>>,
 ) -> poem::Result<impl IntoResponse> {
-    start(PerfTarget::Process, params).await
+    start(PerfKind::Cpu, PerfTarget::Process, params).await
 }
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn stop_process_perf() -> poem::Result<impl IntoResponse> {
-    let target = PerfTarget::Process;
-    status_response(target.clone(), PerfRequest::Stop { target }).await
+    stop(PerfKind::Cpu, PerfTarget::Process).await
 }
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn process_perf_status() -> poem::Result<impl IntoResponse> {
-    let target = PerfTarget::Process;
-    status_response(target.clone(), PerfRequest::Status { target }).await
+    status(PerfKind::Cpu, PerfTarget::Process).await
 }
 
 #[poem::handler]
@@ -181,22 +190,100 @@ pub async fn process_perf_status() -> poem::Result<impl IntoResponse> {
 pub async fn process_perf_flamegraph(
     Query(params): Query<FlamegraphParams>,
 ) -> poem::Result<impl IntoResponse> {
-    flamegraph(PerfTarget::Process, params.format).await
+    flamegraph(PerfKind::Cpu, PerfTarget::Process, params.format).await
 }
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn process_perf_page() -> poem::Result<impl IntoResponse> {
-    Ok(page(&PerfTarget::Process))
+    Ok(page(PerfKind::Cpu, &PerfTarget::Process))
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn start_query_memory_perf(
+    Path(query_id): Path<String>,
+    params: Option<Query<StartPerfParams>>,
+) -> poem::Result<impl IntoResponse> {
+    start(PerfKind::Memory, PerfTarget::Query(query_id), params).await
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn stop_query_memory_perf(
+    Path(query_id): Path<String>,
+) -> poem::Result<impl IntoResponse> {
+    stop(PerfKind::Memory, PerfTarget::Query(query_id)).await
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn query_memory_perf_status(
+    Path(query_id): Path<String>,
+) -> poem::Result<impl IntoResponse> {
+    status(PerfKind::Memory, PerfTarget::Query(query_id)).await
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn query_memory_perf_flamegraph(
+    Path(query_id): Path<String>,
+    Query(params): Query<FlamegraphParams>,
+) -> poem::Result<impl IntoResponse> {
+    flamegraph(PerfKind::Memory, PerfTarget::Query(query_id), params.format).await
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn query_memory_perf_page(
+    Path(query_id): Path<String>,
+) -> poem::Result<impl IntoResponse> {
+    Ok(page(PerfKind::Memory, &PerfTarget::Query(query_id)))
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn start_process_memory_perf(
+    params: Option<Query<StartPerfParams>>,
+) -> poem::Result<impl IntoResponse> {
+    start(PerfKind::Memory, PerfTarget::Process, params).await
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn stop_process_memory_perf() -> poem::Result<impl IntoResponse> {
+    stop(PerfKind::Memory, PerfTarget::Process).await
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn process_memory_perf_status() -> poem::Result<impl IntoResponse> {
+    status(PerfKind::Memory, PerfTarget::Process).await
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn process_memory_perf_flamegraph(
+    Query(params): Query<FlamegraphParams>,
+) -> poem::Result<impl IntoResponse> {
+    flamegraph(PerfKind::Memory, PerfTarget::Process, params.format).await
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn process_memory_perf_page() -> poem::Result<impl IntoResponse> {
+    Ok(page(PerfKind::Memory, &PerfTarget::Process))
 }
 
 async fn start(
+    kind: PerfKind,
     target: PerfTarget,
     params: Option<Query<StartPerfParams>>,
 ) -> poem::Result<poem::Response> {
     let params = params.map(|p| p.0).unwrap_or_default();
     let limits = PerfLimits::of(&target);
     let request = PerfRequest::Start {
+        kind,
         target: target.clone(),
         frequency: params
             .frequency
@@ -206,6 +293,22 @@ async fn start(
             .seconds
             .unwrap_or(limits.seconds)
             .clamp(1, limits.max_seconds),
+    };
+    status_response(target, request).await
+}
+
+async fn stop(kind: PerfKind, target: PerfTarget) -> poem::Result<poem::Response> {
+    let request = PerfRequest::Stop {
+        kind,
+        target: target.clone(),
+    };
+    status_response(target, request).await
+}
+
+async fn status(kind: PerfKind, target: PerfTarget) -> poem::Result<poem::Response> {
+    let request = PerfRequest::Status {
+        kind,
+        target: target.clone(),
     };
     status_response(target, request).await
 }
@@ -223,8 +326,13 @@ async fn status_response(target: PerfTarget, request: PerfRequest) -> poem::Resu
     Ok(Json(PerfResponse { target, nodes }).into_response())
 }
 
-async fn flamegraph(target: PerfTarget, format: FlamegraphFormat) -> poem::Result<poem::Response> {
+async fn flamegraph(
+    kind: PerfKind,
+    target: PerfTarget,
+    format: FlamegraphFormat,
+) -> poem::Result<poem::Response> {
     let request = PerfRequest::Dump {
+        kind,
         target: target.clone(),
     };
     let nodes = do_perf(request).await.map_err(internal_error)?;
@@ -238,7 +346,7 @@ async fn flamegraph(target: PerfTarget, format: FlamegraphFormat) -> poem::Resul
     // workers.
     let local_node_id = GlobalConfig::instance().query.node_id.clone();
     let rendered = databend_common_base::runtime::spawn_blocking(move || {
-        render_flamegraphs(&local_node_id, nodes)
+        render_flamegraphs(kind, &local_node_id, nodes)
     })
     .await
     .map_err(|cause| {
@@ -249,22 +357,36 @@ async fn flamegraph(target: PerfTarget, format: FlamegraphFormat) -> poem::Resul
     match rendered {
         Ok(html) => Ok(Html(html).into_response()),
         Err(failures) => Err(poem::Error::from_string(
-            format!("No profile of {target} on any node. {failures}"),
+            format!("No {kind} profile of {target} on any node. {failures}"),
             StatusCode::NOT_FOUND,
         )),
     }
 }
 
-fn page(target: &PerfTarget) -> Html<String> {
+fn page(kind: PerfKind, target: &PerfTarget) -> Html<String> {
     const PAGE_TEMPLATE: &str = include_str!("perf_page.html");
     let limits = PerfLimits::of(target);
-    let title = match target {
-        PerfTarget::Query(query_id) => format!("CPU profile of query {query_id}"),
-        PerfTarget::Process => "CPU profile of every thread on every node".to_string(),
+    let title = match (kind, target) {
+        (PerfKind::Cpu, PerfTarget::Query(query_id)) => format!("CPU profile of query {query_id}"),
+        (PerfKind::Cpu, PerfTarget::Process) => {
+            "CPU profile of every thread on every node".to_string()
+        }
+        (PerfKind::Memory, PerfTarget::Query(query_id)) => {
+            format!("Memory allocation profile of query {query_id}")
+        }
+        (PerfKind::Memory, PerfTarget::Process) => {
+            "Memory allocation profile of every query on every node".to_string()
+        }
+    };
+    // The frequency is CPU only.
+    let frequency_style = match kind {
+        PerfKind::Cpu => "",
+        PerfKind::Memory => "display: none;",
     };
     Html(
         PAGE_TEMPLATE
             .replace("{{TITLE}}", &escape_html(&title))
+            .replace("{{FREQUENCY_STYLE}}", frequency_style)
             .replace("{{FREQUENCY}}", &limits.frequency.to_string())
             .replace("{{MAX_FREQUENCY}}", &MAX_FREQUENCY.to_string())
             .replace("{{SECONDS}}", &limits.seconds.to_string())
@@ -337,9 +459,20 @@ fn merge_folded(nodes: HashMap<String, PerfNodeStatus>) -> String {
     merged
 }
 
+/// How to read a memory flamegraph.
+fn memory_note() -> String {
+    format!(
+        "A call stack is sampled about every {} KiB a thread allocates. The flamegraph shows the \
+         bytes allocated per call stack, including memory freed soon after, not the memory alive \
+         at a moment. Threads pick up start and stop the next time they switch to another task.",
+        MEMORY_SAMPLE_INTERVAL / 1024
+    )
+}
+
 /// Render the flamegraph of every node, the local node first, with the nodes
 /// that failed listed above. Without any flamegraph, return the failures.
 fn render_flamegraphs(
+    kind: PerfKind,
     local_node_id: &str,
     nodes: HashMap<String, PerfNodeStatus>,
 ) -> std::result::Result<String, String> {
@@ -356,7 +489,11 @@ fn render_flamegraphs(
             }
             PerfState::NotRunning | PerfState::Idle => continue,
         };
-        let flamegraph = match status.folded.as_deref().map(CpuProfiler::render_flamegraph) {
+        let render = match kind {
+            PerfKind::Cpu => CpuProfiler::render_flamegraph,
+            PerfKind::Memory => MemoryProfiler::render_flamegraph,
+        };
+        let flamegraph = match status.folded.as_deref().map(render) {
             // No samples on this node yet.
             Some(Ok(svg)) if svg.is_empty() => continue,
             Some(Ok(svg)) => svg,
@@ -385,17 +522,23 @@ fn render_flamegraphs(
     let Some((first_title, first_svg)) = flamegraphs.next() else {
         return Err(failures.join("; "));
     };
-    let notice = match failures.is_empty() {
-        true => String::new(),
-        false => format!(
+    let mut notice = match kind {
+        PerfKind::Cpu => String::new(),
+        PerfKind::Memory => format!(
+            r#"<div style="max-width:1200px;margin:0 auto 20px auto;font-family:monospace;">{}</div>"#,
+            escape_html(&memory_note())
+        ),
+    };
+    if !failures.is_empty() {
+        notice.push_str(&format!(
             r#"<div style="max-width:1200px;margin:0 auto 20px auto;color:#cc3300;font-family:monospace;">Failed nodes:<br>{}</div>"#,
             failures
                 .iter()
                 .map(|failure| escape_html(failure))
                 .collect::<Vec<_>>()
                 .join("<br>")
-        ),
-    };
+        ));
+    }
     let html = QueryPerf::pretty_display(first_title, first_svg, flamegraphs);
     Ok(html.replace("{{PERF_COUNTERS_TABLE}}", &notice))
 }
@@ -421,6 +564,7 @@ mod tests {
 
     use super::merge_folded;
     use super::render_flamegraphs;
+    use crate::servers::flight::v1::actions::PerfKind;
     use crate::servers::flight::v1::actions::PerfNodeStatus;
     use crate::servers::flight::v1::actions::PerfState;
 
@@ -451,7 +595,7 @@ mod tests {
                 status(PerfState::Profiling, Some("")),
             ),
         ]);
-        let html = render_flamegraphs("z-local", nodes).unwrap();
+        let html = render_flamegraphs(PerfKind::Cpu, "z-local", nodes).unwrap();
 
         let local = html.find("Current Node: z-local (profiling, 7s)").unwrap();
         let remote = html.find("Node: a-remote (stopped, 7s)").unwrap();
@@ -477,7 +621,7 @@ mod tests {
                 PerfNodeStatus::failed("request failed: <unreachable>".to_string()),
             ),
         ]);
-        let html = render_flamegraphs("n1", nodes).unwrap();
+        let html = render_flamegraphs(PerfKind::Cpu, "n1", nodes).unwrap();
         assert!(html.contains("Failed nodes:<br>n2: request failed: &lt;unreachable&gt;"));
     }
 
@@ -487,13 +631,32 @@ mod tests {
             ("n1".to_string(), status(PerfState::NotRunning, None)),
             ("n2".to_string(), PerfNodeStatus::failed("busy".to_string())),
         ]);
-        assert_eq!(render_flamegraphs("n1", nodes), Err("n2: busy".to_string()));
+        assert_eq!(
+            render_flamegraphs(PerfKind::Cpu, "n1", nodes),
+            Err("n2: busy".to_string())
+        );
 
         let nodes = HashMap::from([
             ("n1".to_string(), status(PerfState::Profiling, Some(""))),
             ("n2".to_string(), status(PerfState::Stopped, Some(""))),
         ]);
-        assert_eq!(render_flamegraphs("n1", nodes), Err(String::new()));
+        assert_eq!(
+            render_flamegraphs(PerfKind::Cpu, "n1", nodes),
+            Err(String::new())
+        );
+    }
+
+    #[test]
+    fn test_render_memory_flamegraphs() {
+        let nodes = HashMap::from([(
+            "n1".to_string(),
+            status(PerfState::Stopped, Some("HashJoin [#3];build 3072\n")),
+        )]);
+        let html = render_flamegraphs(PerfKind::Memory, "n1", nodes).unwrap();
+        assert!(html.contains("Current Node: n1 (stopped, 7s)"));
+        assert!(html.contains("build (3,072 bytes, 100.00%)"));
+        assert!(html.contains("A call stack is sampled about every 512 KiB"));
+        assert!(!html.contains("Failed nodes"));
     }
 
     #[test]
