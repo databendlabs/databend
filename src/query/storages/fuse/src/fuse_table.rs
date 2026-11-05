@@ -1377,6 +1377,7 @@ impl Table for FuseTable {
                 column_distinct_values,
                 stats_row_count,
                 snapshot.summary.row_count,
+                snapshot.summary.block_count,
                 &self.schema(),
             )
         } else {

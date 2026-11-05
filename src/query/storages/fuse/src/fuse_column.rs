@@ -65,7 +65,9 @@ pub(crate) fn column_distinct_values(
 /// Without an HLL, the summary's sum of per-block sketch points is only an
 /// upper: it counts a value once per block that holds it, so it exceeds the
 /// NDV by up to the block count on a low-cardinality column. See
-/// [`NdvEstimate`] for why such a source is not a point.
+/// [`NdvEstimate`] for why such a source is not a point. Over a single block
+/// the sum is that block's sketch, an HLL over the whole column, and serves
+/// as both the point and the upper.
 ///
 /// Statistics of an Array or Map element column describe elements, not rows:
 /// fuse counts element NULLs, which may exceed the row count, and the summary
@@ -77,13 +79,16 @@ fn column_statistics(
     hll: Option<u64>,
     stats_row_count: u64,
     row_count: u64,
+    block_count: u64,
     is_element: bool,
 ) -> std::result::Result<BasicColumnStatistics, String> {
     let min = stat.min.clone().to_datum();
     let max = stat.max.clone().to_datum();
+    let single_block = block_count == 1;
     let (ndv, num_rows) = if is_element {
         let ndv = match (hll, stat.distinct_of_values) {
             (Some(point), _) if point > 0 => NdvEstimate::new(point as f64, f64::MAX),
+            (None, Some(sum)) if sum > 0 && single_block => NdvEstimate::exact(sum as f64),
             (None, Some(sum)) if sum > 0 => NdvEstimate::upper_bound(sum as f64),
             _ => NdvEstimate::upper_bound(f64::MAX),
         };
@@ -98,6 +103,9 @@ fn column_statistics(
             // no covered rows cannot be extrapolated.
             (Some(point), _) if point > 0 && stats_row_count > 0 => {
                 covered(point, stats_row_count).extrapolate(stats_row_count, row_count)
+            }
+            (_, Some(sum)) if single_block => {
+                NdvEstimate::exact((sum as f64).min(row_count as f64))
             }
             (_, Some(sum)) => NdvEstimate::upper_bound((sum as f64).min(row_count as f64)),
             (_, None) => NdvEstimate::upper_bound(row_count as f64),
@@ -178,6 +186,7 @@ impl FuseTableColumnStatisticsProvider {
         column_distinct_values: Option<HashMap<ColumnId, u64>>,
         stats_row_count: u64,
         row_count: u64,
+        block_count: u64,
         schema: &TableSchema,
     ) -> Self {
         let distinct_map = column_distinct_values.as_ref();
@@ -187,11 +196,18 @@ impl FuseTableColumnStatisticsProvider {
             .map(|(column_id, stat)| {
                 let hll = distinct_map.and_then(|map| map.get(&column_id)).copied();
                 let is_element = element_columns.contains(&column_id);
-                let stat = column_statistics(&stat, hll, stats_row_count, row_count, is_element)
-                    .inspect_err(|err| {
-                        warn!("drop invalid fuse statistics of column {column_id}: {err}");
-                    })
-                    .ok();
+                let stat = column_statistics(
+                    &stat,
+                    hll,
+                    stats_row_count,
+                    row_count,
+                    block_count,
+                    is_element,
+                )
+                .inspect_err(|err| {
+                    warn!("drop invalid fuse statistics of column {column_id}: {err}");
+                })
+                .ok();
                 (column_id, stat)
             })
             .collect();
@@ -250,6 +266,9 @@ mod tests {
 
     use super::*;
 
+    /// Several blocks, so the summary's block NDV sum is only an upper.
+    const BLOCKS: u64 = 3;
+
     /// 3000 rows, 20 NULL in [0, 10000]: the structural cap is 2980.
     fn provider(hll_point: u64, stats_rows: u64) -> FuseTableColumnStatisticsProvider {
         provider_with(Some(12), Some(HashMap::from([(7, hll_point)])), stats_rows)
@@ -274,6 +293,7 @@ mod tests {
             hlls,
             stats_rows,
             3000,
+            BLOCKS,
             &TableSchema::empty(),
         )
     }
@@ -370,6 +390,7 @@ mod tests {
             None,
             0,
             3000,
+            BLOCKS,
             schema,
         )
     }

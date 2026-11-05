@@ -98,18 +98,23 @@ async fn test_exact_ndv_bounds_without_analyze() -> anyhow::Result<()> {
              approx_distinct_columns = ''",
         )
         .await?;
-    fixture
-        .execute_command(
-            "insert into ndv_exact_fixture \
-             select number % 3, number / 100.0, (number / 100.0)::decimal(10, 2), \
-             9007199254740992 + number % 2 from numbers(250)",
-        )
-        .await?;
+    // Two inserts give two blocks, so the summary's block NDV sum is only an
+    // upper.
+    for range in ["number < 125", "number >= 125"] {
+        fixture
+            .execute_command(&format!(
+                "insert into ndv_exact_fixture \
+                 select number % 3, number / 100.0, (number / 100.0)::decimal(10, 2), \
+                 9007199254740992 + number % 2 from numbers(250) where {range}"
+            ))
+            .await?;
+    }
 
     let ctx = fixture.new_query_ctx().await?;
     let table = latest_fuse_table(&ctx, "ndv_exact_fixture").await?;
     let snapshot = table.read_table_snapshot().await?.unwrap();
     assert!(snapshot.table_statistics_location.is_none());
+    assert_eq!(snapshot.summary.block_count, 2);
     let provider = table.column_statistics_provider(ctx.clone()).await?;
     assert_eq!(provider.stats_num_rows(), Some(0));
     // Without a table-level HLL, the summary's block NDV sum and the
@@ -188,6 +193,8 @@ async fn test_unknown_legacy_sample_ndv_after_sql_append() -> anyhow::Result<()>
     let table = latest_fuse_table(&ctx, "ndv_legacy_fixture").await?;
     let snapshot = table.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.table_statistics_location.as_ref(), Some(&location));
+    // Two blocks: the block NDV sum (3 + 97) is only an upper.
+    assert_eq!(snapshot.summary.block_count, 2);
     let provider = table.column_statistics_provider(ctx.clone()).await?;
     assert_eq!(provider.stats_num_rows(), Some(0));
     assert_eq!(provider.num_rows(), Some(100));
