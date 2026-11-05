@@ -281,3 +281,31 @@ TopN(Final)
 
 statement ok
 drop table t_lazy
+
+# Selecting `_row_id` must reuse it as the row fetcher's row id instead of adding a second one,
+# otherwise the lazy columns are pruned from the scan but never fetched.
+statement ok
+create or replace table t_lazy_row_id (a int, b int, c string)
+
+statement ok
+insert into t_lazy_row_id select number, number, to_string(number) from numbers(10)
+
+query I
+select count(*) from (select _row_id, a from t_lazy_row_id where b > 0 limit 10)
+----
+9
+
+query IT
+select a, c from (select _row_id, a, c from t_lazy_row_id where b > 5 order by a limit 2)
+----
+6 6
+7 7
+
+# `_row_id` bound in a subquery is shared through the metadata, so the outer query must reuse it too.
+query I
+select count(*) from (select _row_id, a from (select _row_id, a, b from t_lazy_row_id) where b > 0 limit 10)
+----
+9
+
+statement ok
+drop table t_lazy_row_id
