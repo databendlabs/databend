@@ -452,7 +452,6 @@ mod tests {
     use super::*;
     use crate::MetadataRef;
     use crate::optimizer::OptimizerContext;
-    use crate::optimizer::ir::PhysicalProperty;
     use crate::optimizer::ir::SExpr;
     use crate::plans::DummyTableScan;
     use crate::plans::Exchange;
@@ -482,6 +481,7 @@ mod tests {
         }
 
         let ctx = LiteTableContext::create().await?;
+        ctx.set_cluster_node_num(2);
         let opt_ctx = OptimizerContext::new(
             ctx.clone(),
             MetadataRef::default(),
@@ -493,16 +493,22 @@ mod tests {
             .memo
             .init(SExpr::create_leaf(DummyTableScan::new()))?;
         let group = optimizer.memo.root().unwrap().group_index;
-        optimizer.memo.implement_group(group)?;
         let required = RequiredProperty {
             distribution: Distribution::NonBroadcast,
         };
-        let mut task = OptimizeExprTask::new(ctx, &optimizer, group, 1, required.clone(), vec![])?;
-        assert!(matches!(
-            task.add_enforcers(&mut optimizer)?,
-            OptimizeExprEvent::OptimizingSelf
-        ));
-        task.optimize_self(&mut optimizer, &mut TaskManager::new())?;
+        // Let the scheduler explore the group before generating implementations
+        // and costing them. Do not mark it explored or seed a best choice by hand.
+        let mut scheduler = TaskManager::new();
+        scheduler.add_task(Task::OptimizeGroup(OptimizeGroupTask::new(
+            ctx.clone(),
+            None,
+            group,
+            required.clone(),
+        )));
+        scheduler.run(&mut optimizer)?;
+        assert!(optimizer.memo.group(group)?.state.explored());
+        assert!(scheduler.stat.explore_task_count > 0);
+        assert!(scheduler.stat.optimize_group_expr_count > 0);
         let selected = optimizer
             .memo
             .group(group)?
@@ -510,23 +516,44 @@ mod tests {
             .unwrap()
             .clone();
         assert_eq!(selected.physical_prop.distribution, Distribution::Serial);
+        assert!(required.satisfied_by(&selected.physical_prop));
 
+        // Obtain the Broadcast candidate's child choice through real scheduling
+        // too, so a missing child cost cannot short-circuit the rejection check.
         let any = RequiredProperty::default();
-        optimizer
+        scheduler.add_task(Task::OptimizeGroup(OptimizeGroupTask::new(
+            ctx.clone(),
+            None,
+            group,
+            any.clone(),
+        )));
+        scheduler.run(&mut optimizer)?;
+        let child_prop = optimizer
             .memo
-            .group_mut(group)?
-            .update_best_cost(&any, CostContext {
-                physical_prop: PhysicalProperty {
-                    distribution: Distribution::Serial,
-                },
-                ..selected.clone()
-            });
+            .group(group)?
+            .best_prop(&any)
+            .unwrap()
+            .physical_prop
+            .clone();
+        assert_eq!(child_prop.distribution, Distribution::Serial);
         optimizer
             .memo
             .insert_physical(group, Exchange::Broadcast, vec![group])?;
         let broadcast_index = optimizer.memo.group(group)?.num_exprs() - 1;
-        task.m_expr_index = broadcast_index;
-        task.children_required_props = vec![any];
+        let broadcast = optimizer.memo.group(group)?.m_expr(broadcast_index)?;
+        let delivered = RelExpr::with_opt_context(broadcast, &optimizer.memo, &[child_prop])
+            .derive_physical_prop()?;
+        assert_eq!(delivered.distribution, Distribution::Broadcast);
+        assert!(!required.satisfied_by(&delivered));
+
+        let mut task = OptimizeExprTask::new(
+            ctx,
+            &optimizer,
+            group,
+            broadcast_index,
+            required.clone(),
+            vec![any],
+        )?;
         let before = optimizer.memo.group(group)?.num_exprs();
         assert!(matches!(
             task.add_enforcers(&mut optimizer)?,
@@ -535,6 +562,8 @@ mod tests {
         assert_eq!(optimizer.memo.group(group)?.num_exprs(), before);
         let best = optimizer.memo.group(group)?.best_prop(&required).unwrap();
         assert_eq!(best.expr_index, selected.expr_index);
+        assert_eq!(best.cost, selected.cost);
+        assert_eq!(best.physical_prop.distribution, Distribution::Serial);
         assert!(!matches!(
             optimizer
                 .memo
