@@ -385,14 +385,25 @@ impl SelectivityEstimator {
         if matches!(selectivity, Selectivity::StatisticsZero(_)) {
             // A range outside the column statistics empties the constrained
             // column. The estimate is not zero, so keep the input statistics of
-            // such a column; the comparison still rejects NULLs.
+            // such a column; the comparison still rejects NULLs. An all-NULL
+            // input has no values to keep, and its NULL-only domain contradicts
+            // the non-NULL rows, so its statistics are dropped instead.
+            let mut unknown_columns = ColumnSet::new();
             for (index, column_stat) in self.overrides.iter_mut() {
                 if column_stat.ndv().upper == 0.0
                     && let Some(input_stat) = self.column_stats.get(index)
                 {
+                    if let ColumnStat::AllNull { .. } = input_stat {
+                        unknown_columns.insert(*index);
+                        continue;
+                    }
                     *column_stat = input_stat.clone();
                     column_stat.set_null_count(StatCount::exact(0));
                 }
+            }
+            for index in &unknown_columns {
+                self.overrides.remove(index);
+                self.column_stats.remove(index);
             }
         }
         Ok(self.apply_selectivity_to_column_stats(selectivity, &not_null_columns))

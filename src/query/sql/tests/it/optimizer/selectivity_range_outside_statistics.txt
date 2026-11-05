@@ -307,3 +307,14 @@ in stats      :
 out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: ~10035.999999999998, histogram: None }
 
+=== range_outside_statistics_all_null ===
+description: A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL.
+expr          : c > 5
+cardinality   : 1000000
+estimated     : 400
+max           : 200000
+in stats      :
+0 AllNull { null_count: ~1000000.0 }
+out stats     :
+
+
