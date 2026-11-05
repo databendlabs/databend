@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
+use databend_common_column::binview::View;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
@@ -304,10 +305,28 @@ where I: TakeIndex + ?Sized
 }
 
 impl Column {
-    /// Rebuild string backing buffers, recursively, without changing values or validity.
+    /// Compact excess string backing buffers recursively, without changing values or validity.
     pub fn compact_string_buffers(self) -> Self {
         match self {
-            Column::String(column) => Column::String(column.gc()),
+            Column::String(column) => {
+                if column.data_buffers().is_empty() {
+                    return Column::String(column);
+                }
+                // Inline bytes live in the views, not the backing buffers. Only buffered values
+                // count toward the payload a copying partition would have produced. Do not use
+                // a minimum savings cutoff: fanout can multiply even a small retained buffer.
+                let buffered_bytes: usize = column
+                    .views()
+                    .iter()
+                    .filter(|view| view.length > View::MAX_INLINE_SIZE)
+                    .map(|view| view.length as usize)
+                    .sum();
+                if column.total_buffer_len() > buffered_bytes {
+                    Column::String(column.gc())
+                } else {
+                    Column::String(column)
+                }
+            }
             Column::Nullable(column) => {
                 let (column, validity) = column.destructure();
                 NullableColumn::new_column(column.compact_string_buffers(), validity)

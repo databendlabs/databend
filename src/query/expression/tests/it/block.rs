@@ -170,6 +170,32 @@ fn test_compact_string_buffers_preserves_nested_slices_and_meta() {
 }
 
 #[test]
+fn test_compact_small_buffers_counts_only_noninline_payload() {
+    let column = StringType::from_data(vec![
+        "z".repeat(13),
+        "r".repeat(14),
+        "a".repeat(12),
+        "b".repeat(12),
+    ])
+    .slice(1..4);
+    // Inline values can make logical string bytes exceed retained bytes, even though an
+    // unselected buffered value still needs removing before IPC serialization.
+    assert!(column.memory_size(true) > column.memory_size(false));
+    let compact = column.clone().compact_string_buffers();
+    assert_eq!(compact, column);
+    let Column::String(strings) = compact else {
+        unreachable!()
+    };
+    assert_eq!(strings.total_buffer_len(), 14);
+
+    let inline = column.slice(1..3).compact_string_buffers();
+    let Column::String(strings) = inline else {
+        unreachable!()
+    };
+    assert!(strings.data_buffers().is_empty());
+}
+
+#[test]
 fn test_compact_string_dictionary_keeps_encoding_and_keys() {
     let values = StringType::from_data(vec![
         "x".repeat(32768),
