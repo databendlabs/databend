@@ -404,31 +404,53 @@ mod tests {
         )])
         .unwrap();
         let options = FlightIpcOptions::new(Some(FlightCompression::Lz4)).unwrap();
+        let mut dictionary_tracker = DictionaryTracker::new(false);
+        // Arrow assigns dictionary IDs while writing the schema. Use the same
+        // tracker for the following batches, just as an IPC stream writer does.
+        let schema = IpcDataGenerator::default().schema_to_bytes_with_dictionary_tracker(
+            batch.schema().as_ref(),
+            &mut dictionary_tracker,
+            options.arrow_options(),
+        );
         let (dictionaries, encoded) = options
             .encode(
                 &batch,
-                &mut DictionaryTracker::new(false),
+                &mut dictionary_tracker,
                 &mut CompressionContext::default(),
             )
             .unwrap();
         assert_eq!(dictionaries.len(), 1);
-        let mut by_id = HashMap::new();
+        let message = root_as_message(&encoded.ipc_message).unwrap();
+        assert_eq!(
+            message
+                .header_as_record_batch()
+                .unwrap()
+                .compression()
+                .unwrap()
+                .codec(),
+            CompressionType::LZ4_FRAME
+        );
+        let mut stream = Vec::new();
+        arrow_ipc::writer::write_message(&mut stream, schema, options.arrow_options()).unwrap();
         for dictionary in dictionaries {
             let message = root_as_message(&dictionary.ipc_message).unwrap();
-            arrow_ipc::reader::read_dictionary(
-                &arrow_buffer::Buffer::from_vec(dictionary.arrow_data),
-                message.header_as_dictionary_batch().unwrap(),
-                batch.schema().as_ref(),
-                &mut by_id,
-                &message.version(),
-            )
-            .unwrap();
+            assert!(
+                message
+                    .header_as_dictionary_batch()
+                    .unwrap()
+                    .data()
+                    .unwrap()
+                    .compression()
+                    .is_none()
+            );
+            arrow_ipc::writer::write_message(&mut stream, dictionary, options.arrow_options())
+                .unwrap();
         }
-        let data: FlightData = encoded.into();
-        assert_eq!(
-            flight_data_to_arrow_batch(&data, batch.schema(), &by_id).unwrap(),
-            batch
-        );
+        arrow_ipc::writer::write_message(&mut stream, encoded, options.arrow_options()).unwrap();
+        let mut reader =
+            arrow_ipc::reader::StreamReader::try_new(std::io::Cursor::new(stream), None).unwrap();
+        assert_eq!(reader.next().unwrap().unwrap(), batch);
+        assert!(reader.next().is_none());
     }
 
     #[test]
