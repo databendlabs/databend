@@ -973,17 +973,13 @@ impl ValueConstraintState {
     }
 
     /// Columns that `after`, derived from this state by visiting one more
-    /// predicate, constrains by a value (not only by `NotNull`).
-    fn value_constrained_columns_added(&self, after: &Self) -> ColumnSet {
+    /// predicate, adds a constraint to. Every constraint rejects NULL.
+    fn constrained_columns_added(&self, after: &Self) -> ColumnSet {
         after
             .pending
             .iter()
             .filter(|(index, constraints)| {
-                let before = self.pending.get(index).map_or(0, Vec::len);
-                constraints
-                    .iter()
-                    .skip(before)
-                    .any(|constraint| !matches!(constraint, ValueConstraint::NotNull))
+                constraints.len() > self.pending.get(index).map_or(0, Vec::len)
             })
             .map(|(index, _)| *index)
             .collect()
@@ -1257,6 +1253,26 @@ impl SelectivityVisitor<'_> {
         Selectivity::checked_estimate(materialized.cardinality / self.cardinality.value())
     }
 
+    /// An OR arm that function statistics cannot estimate, such as a range
+    /// over all-NULL statistics or over statistics that the constraints of
+    /// earlier conjuncts empty. Estimate the range alone against the input
+    /// rows, as in an AND, and keep only a zero, which
+    /// `statistics_zero_range_selectivity` turns into the fallback.
+    fn or_arm_range_selectivity(&self, op: ComparisonOp, func: &ExprCall) -> Result<Selectivity> {
+        if !matches!(
+            op,
+            ComparisonOp::GT | ComparisonOp::GTE | ComparisonOp::LT | ComparisonOp::LTE
+        ) {
+            return Ok(Selectivity::Unknown);
+        }
+        let mut visitor = self.spawn_child(ConstraintContext::And);
+        visitor.constraints = ValueConstraintState::default();
+        Ok(match visitor.compute_comparison(op, func)? {
+            Selectivity::N(0.0) => Selectivity::N(0.0),
+            _ => Selectivity::Unknown,
+        })
+    }
+
     /// Replaces a zero estimate of a range comparison between a column with
     /// statistics and a constant by `StatisticsZero(SMALL_SELECTIVITY)`.
     fn statistics_zero_range_selectivity(
@@ -1371,7 +1387,14 @@ impl SelectivityVisitor<'_> {
                 {
                     Ok(selectivity)
                 } else {
-                    self.derive_function_selectivity(func)
+                    match self.derive_function_selectivity(func)? {
+                        Selectivity::Unknown
+                            if matches!(self.constraint_context, ConstraintContext::Or) =>
+                        {
+                            self.or_arm_range_selectivity(op, func)
+                        }
+                        selectivity => Ok(selectivity),
+                    }
                 };
             }
             _ => (),
@@ -1683,7 +1706,7 @@ impl SelectivityVisitor<'_> {
                 // comes from a predicate that rejects NULL, so `IS NULL` and a
                 // constraint on the same column cannot both match.
                 let mut is_null_columns = ColumnSet::new();
-                // Columns that a `StatisticsZero` child constrains by a value,
+                // Columns that a `StatisticsZero` child adds a constraint to,
                 // and the estimates of `IS NOT NULL` children by column. Such a
                 // child rejects the column's NULLs already, so the `IS NOT NULL`
                 // is redundant: its estimate, which is zero over estimated
@@ -1701,10 +1724,8 @@ impl SelectivityVisitor<'_> {
                     } = sub_visitor;
                     is_null_columns.extend(is_null_column(arg));
                     if let Selectivity::StatisticsZero(_) = selectivity {
-                        statistics_zero_columns.extend(
-                            self.constraints
-                                .value_constrained_columns_added(&constraints),
-                        );
+                        statistics_zero_columns
+                            .extend(self.constraints.constrained_columns_added(&constraints));
                     }
                     if let (Selectivity::N(_), Some(column)) =
                         (selectivity, is_not_null_column(arg))
@@ -1825,7 +1846,9 @@ impl SelectivityVisitor<'_> {
                 };
                 // The arms are visited without recording constraints. A column
                 // whose NULLs every arm rejects is still not NULL in the
-                // result, so record that for the fallback estimate.
+                // result, so record that for the fallback estimate. A column
+                // known to hold no NULLs gains nothing, and a `NotNull`
+                // constraint would still cap its NDV by the output rows.
                 if matches!(self.constraint_context, ConstraintContext::And)
                     && matches!(self.selectivity, Selectivity::StatisticsZero(_))
                 {
@@ -1836,6 +1859,13 @@ impl SelectivityVisitor<'_> {
                         })
                     });
                     for column in common.unwrap_or_default() {
+                        if self
+                            .column_stats
+                            .get(&column)
+                            .is_some_and(|stat| stat.null_count() == StatCount::exact(0))
+                        {
+                            continue;
+                        }
                         self.constraints.add(
                             self.column_stats,
                             column,
