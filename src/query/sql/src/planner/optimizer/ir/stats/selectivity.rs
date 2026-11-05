@@ -1750,10 +1750,12 @@ impl SelectivityVisitor<'_> {
                 // The same estimates with each range that column statistics
                 // estimate to match no rows counted as an unknown filter.
                 let mut bound_estimates: Vec<(f64, ColumnSet)> = Vec::new();
-                // Columns of those ranges, and which bound estimates come
-                // from the other children.
+                // Columns of those ranges, which bound estimates come from the
+                // other children, and the columns of every child, including
+                // children without an estimate such as `t = v`.
                 let mut statistics_zero_range_columns = ColumnSet::new();
                 let mut other_bound_estimates: Vec<usize> = Vec::new();
+                let mut child_columns: Vec<ColumnSet> = Vec::new();
                 for arg in &func.args {
                     let mut sub_visitor = self.spawn_child(ConstraintContext::And);
                     sub_visitor.visit_expr(arg)?;
@@ -1763,6 +1765,7 @@ impl SelectivityVisitor<'_> {
                         ..
                     } = sub_visitor;
                     is_null_columns.extend(is_null_column(arg));
+                    child_columns.push(predicate_columns(arg));
                     if let Selectivity::StatisticsZero { .. } = selectivity {
                         statistics_zero_columns
                             .extend(self.constraints.constrained_columns_added(&constraints));
@@ -1807,10 +1810,27 @@ impl SelectivityVisitor<'_> {
                 // A predicate on the same column as such a range is estimated
                 // from the statistics that the range contradicts, as in
                 // `t > 1000 AND t > 999` with `t` recorded in [1, 1000], so it
-                // does not lower the bound.
+                // does not lower the bound. A predicate that links that column
+                // to others, such as `t = v`, carries the contradiction to
+                // them, so every column connected to the range through the
+                // predicates of this conjunction counts the same way.
+                let mut linked_columns = statistics_zero_range_columns;
+                let mut unlinked_children = child_columns;
+                loop {
+                    let (linked, unlinked): (Vec<ColumnSet>, Vec<ColumnSet>) = unlinked_children
+                        .into_iter()
+                        .partition(|columns| !columns.is_disjoint(&linked_columns));
+                    unlinked_children = unlinked;
+                    if linked.is_empty() {
+                        break;
+                    }
+                    for columns in linked {
+                        linked_columns.extend(columns);
+                    }
+                }
                 for estimate in other_bound_estimates {
                     let (value, columns) = &mut bound_estimates[estimate];
-                    if !columns.is_disjoint(&statistics_zero_range_columns) {
+                    if !columns.is_disjoint(&linked_columns) {
                         *value = MAX_SELECTIVITY;
                     }
                 }

@@ -466,6 +466,12 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             operator: RelOp::Filter,
         },
         StatsCase {
+            name: "filter_range_outside_statistics_linked_column",
+            description: "A predicate on a column that another predicate links to a range outside the recorded min/max does not lower the bound of the conjunction.",
+            sql: "SELECT * FROM e WHERE t > 1000 AND t = v AND v > 999",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
             name: "filter_over_window_over_range_outside_statistics",
             description: "A window function keeps the rows of its input, so a filter on its result keeps the bound of the range below.",
             sql: "SELECT * FROM (SELECT k, row_number() OVER (PARTITION BY k ORDER BY t) AS n FROM r WHERE t > 1000) AS x WHERE n <> 5",
