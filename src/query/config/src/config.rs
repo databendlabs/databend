@@ -2009,7 +2009,13 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_server: bool,
 
-    /// A list of allowed udf server addresses.
+    /// Allow integration-bound HTTP(S) access from sandboxed local Python UDFs.
+    /// This does not permit workers to create native network sockets.
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub enable_python_udf_external_access: bool,
+
+    /// Operator hostname ceiling for remote UDFs and Python HTTP(S) access.
+    /// Python destinations with non-public IPs require an explicit IP literal here.
     #[clap(long, value_name = "VALUE")]
     pub udf_server_allow_list: Vec<String>,
 
@@ -3525,12 +3531,69 @@ pub struct CacheConfig {
     )]
     pub table_data_deserialized_memory_ratio: u64,
 
+    /// Max percentage of distinct values to rows for which a block of an in-memory encoded column
+    /// (setting `enable_encoded_columns`) is dictionary encoded. By default it is 100: any block
+    /// may be, but a dictionary built from the column is only kept if it is smaller than the
+    /// regular column.
+    #[clap(
+        long = "cache-table-data-encoded-dictionary-ndv-ratio",
+        value_name = "VALUE",
+        default_value = "100"
+    )]
+    pub table_data_encoded_dictionary_ndv_ratio: u64,
+
     #[clap(
         long = "cache-iceberg-table-meta-count",
         value_name = "VALUE",
         default_value = "1024"
     )]
     pub iceberg_table_meta_count: u64,
+
+    /// Use the shared cache backend: three memory pools (meta, index and data), each sized as a
+    /// percentage of the server memory limit, evicted with S3-FIFO and shrunk under memory
+    /// pressure before queries are killed. Requires a server memory limit
+    /// (`max_memory_limit_enabled` and `max_server_memory_usage`). The per-cache capacity options
+    /// above and `enable_table_meta_cache` are then ignored; disk cache options still apply.
+    #[clap(
+        long = "cache-shared-memory-enabled",
+        value_name = "VALUE",
+        default_value = "false"
+    )]
+    #[serde(default = "bool_false")]
+    pub shared_memory_enabled: bool,
+
+    /// Shared backend: percentage of the server memory limit for table, segment and index
+    /// metadata. The three ratios may sum to at most 80.
+    #[clap(
+        long = "cache-meta-max-ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub meta_max_ratio: u64,
+
+    /// Shared backend: percentage of the server memory limit for bloom, vector, inverted and
+    /// spatial index data.
+    #[clap(
+        long = "cache-index-max-ratio",
+        value_name = "VALUE",
+        default_value = "40"
+    )]
+    pub index_max_ratio: u64,
+
+    /// Shared backend: percentage of the server memory limit for column data.
+    #[clap(
+        long = "cache-data-max-ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub data_max_ratio: u64,
+
+    /// Shared backend: byte limits of single caches within their pool, keyed by their name in
+    /// `system.caches` (e.g. `memory_cache_table_data`); 0 turns a cache off. A cache without an
+    /// entry is on, bounded only by its pool, except `memory_cache_column_data`, off. Config
+    /// file only: `[cache.kind_max_bytes]`.
+    #[clap(skip)]
+    pub kind_max_bytes: BTreeMap<String, u64>,
 
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
@@ -3582,7 +3645,13 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Reset,
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
+            table_data_encoded_dictionary_ndv_ratio: 100,
             iceberg_table_meta_count: 1024,
+            shared_memory_enabled: false,
+            meta_max_ratio: 10,
+            index_max_ratio: 40,
+            data_max_ratio: 10,
+            kind_max_bytes: BTreeMap::new(),
 
             // ----- the following options/args are all deprecated               ----
             table_meta_segment_count: None,

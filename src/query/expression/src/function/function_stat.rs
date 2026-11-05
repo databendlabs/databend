@@ -325,22 +325,28 @@ impl Domain {
                 Domain::Decimal(DecimalDomain::Decimal64(domain, size)),
                 StatBounds::Float { min, max },
             ) => {
-                domain.min = f64_to_decimal::<i64>(min.into_inner(), *size)?;
-                domain.max = f64_to_decimal::<i64>(max.into_inner(), *size)?;
+                domain.min =
+                    f64_bound_to_decimal::<i64>(min.into_inner(), *size, BoundSide::Lower)?;
+                domain.max =
+                    f64_bound_to_decimal::<i64>(max.into_inner(), *size, BoundSide::Upper)?;
             }
             (
                 Domain::Decimal(DecimalDomain::Decimal128(domain, size)),
                 StatBounds::Float { min, max },
             ) => {
-                domain.min = f64_to_decimal::<i128>(min.into_inner(), *size)?;
-                domain.max = f64_to_decimal::<i128>(max.into_inner(), *size)?;
+                domain.min =
+                    f64_bound_to_decimal::<i128>(min.into_inner(), *size, BoundSide::Lower)?;
+                domain.max =
+                    f64_bound_to_decimal::<i128>(max.into_inner(), *size, BoundSide::Upper)?;
             }
             (
                 Domain::Decimal(DecimalDomain::Decimal256(domain, size)),
                 StatBounds::Float { min, max },
             ) => {
-                domain.min = f64_to_decimal::<i256>(min.into_inner(), *size)?;
-                domain.max = f64_to_decimal::<i256>(max.into_inner(), *size)?;
+                domain.min =
+                    f64_bound_to_decimal::<i256>(min.into_inner(), *size, BoundSide::Lower)?;
+                domain.max =
+                    f64_bound_to_decimal::<i256>(max.into_inner(), *size, BoundSide::Upper)?;
             }
             (Domain::Boolean(domain), StatBounds::Bool { min, max }) => {
                 domain.has_false = !min;
@@ -390,21 +396,54 @@ impl Domain {
     }
 }
 
-fn f64_to_decimal<T: Decimal>(numeric: f64, size: DecimalSize) -> Result<T, String> {
-    let scaled = numeric * 10_f64.powi(size.scale() as i32);
-    if !scaled.is_finite() {
-        return Err(format!("Decimal scaling overflow for value {numeric}"));
+#[derive(Clone, Copy)]
+enum BoundSide {
+    Lower,
+    Upper,
+}
+
+/// Converts a float statistics bound back to a decimal bound of `size` that
+/// still contains the decimal `d` the float came from.
+///
+/// Decimal statistics and constants reach `StatBounds::Float` through
+/// `to_float64`, which rounds to nearest, so `value` may lie on either side of
+/// `d`. Truncating it can therefore exclude `d` (`0.3` becomes `0.2999…` and
+/// then `0.2` at scale 1), which lets pruning drop matching data.
+fn f64_bound_to_decimal<T: Decimal>(
+    value: f64,
+    size: DecimalSize,
+    side: BoundSide,
+) -> Result<T, String> {
+    if value.is_nan() {
+        return Err(format!("Decimal bound {value} is not a number"));
     }
-    let decimal = T::from_float(scaled);
-    let min_allowed = T::min_for_precision(size.precision());
-    let max_allowed = T::max_for_precision(size.precision());
-    if decimal < min_allowed || decimal > max_allowed {
-        return Err(format!(
-            "Decimal value {} is out of range for size {:?}",
-            numeric, size
-        ));
+    let min = T::min_for_precision(size.precision());
+    let max = T::max_for_precision(size.precision());
+    if value.is_infinite() {
+        return Ok(if value > 0.0 { max } else { min });
     }
-    Ok(decimal)
+    let ulp = (value.next_up() - value).max(value - value.next_down());
+    let spacing = 10_f64.powi(-(size.scale() as i32));
+    let coefficient = if 2.0 * ulp < spacing {
+        // Even allowing one ulp of conversion error, `d` is the only grid point
+        // within half the grid spacing of `value`, so nearest recovers it.
+        T::from_float(value, size, true)
+    } else {
+        // The float is coarser than the grid: `d` is only known to lie within
+        // the neighbouring floats. Truncation moves less than one grid step
+        // toward zero, so one extra step outward keeps the bound conservative.
+        let (edge, step) = match side {
+            BoundSide::Lower => (value.next_down(), T::minus_one()),
+            BoundSide::Upper => (value.next_up(), T::one()),
+        };
+        T::from_float(edge, size, false).and_then(|coefficient| coefficient.checked_add(step))
+    };
+    // Beyond the precision, the type's own range is the tightest valid bound.
+    Ok(match coefficient {
+        Some(coefficient) => coefficient.clamp(min, max),
+        None if value > 0.0 => max,
+        None => min,
+    })
 }
 
 impl DataType {

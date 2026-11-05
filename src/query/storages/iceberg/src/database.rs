@@ -43,7 +43,6 @@ use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::SeqV;
-use databend_storages_common_cache::LoadParams;
 use educe::Educe;
 use iceberg::TableCreation;
 use iceberg::TableIdent;
@@ -98,19 +97,11 @@ impl Database for IcebergDatabase {
 
     #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let params = LoadParams {
-            location: cache::table_cache_key(
-                self.ctl.info().catalog_name(),
-                self.name(),
-                table_name,
-            ),
-            len_hint: None,
-            ver: 0,
-            put_cache: true,
-        };
+        let cache_key =
+            cache::table_cache_key(self.ctl.info().catalog_name(), self.name(), table_name);
         let reader =
             super::cache::iceberg_table_cache_reader(self.ctl.iceberg_catalog(), self.ctl.info());
-        reader.read(&params).await.map(|v| v.table())
+        reader.read(&cache_key).await.map(|v| v.table())
     }
 
     // trigger use will refresh the table meta cache in current databases
@@ -122,19 +113,11 @@ impl Database for IcebergDatabase {
 
     #[async_backtrace::framed]
     async fn refresh_table(&self, table_name: &str) -> Result<()> {
-        let params = LoadParams {
-            location: cache::table_cache_key(
-                self.ctl.info().catalog_name(),
-                self.name(),
-                table_name,
-            ),
-            len_hint: None,
-            ver: 0,
-            put_cache: true,
-        };
+        let cache_key =
+            cache::table_cache_key(self.ctl.info().catalog_name(), self.name(), table_name);
         let reader =
             super::cache::iceberg_table_cache_reader(self.ctl.iceberg_catalog(), self.ctl.info());
-        let _ = reader.refresh(&params).await?;
+        reader.refresh(&cache_key).await?;
         Ok(())
     }
 
@@ -296,22 +279,17 @@ impl Database for IcebergDatabase {
                 Err(err)
             }
         } else {
-            let params = LoadParams {
-                location: cache::table_cache_key(
-                    self.ctl.info().catalog_name(),
-                    self.name(),
-                    &req.table_name,
-                ),
-                len_hint: None,
-                ver: 0,
-                put_cache: true,
-            };
+            let cache_key = cache::table_cache_key(
+                self.ctl.info().catalog_name(),
+                self.name(),
+                &req.table_name,
+            );
             let reader = super::cache::iceberg_table_cache_reader(
                 self.ctl.iceberg_catalog(),
                 self.ctl.info(),
             );
 
-            reader.remove(&params);
+            reader.remove(&cache_key);
             Ok(DropTableReply {})
         }
     }

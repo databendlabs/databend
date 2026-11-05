@@ -22,6 +22,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::PartialEvalPolicy;
@@ -475,6 +476,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         )))
     }));
     registry.register_function_factory("regexp_replace", regexp_replace);
+    registry.properties.insert(
+        "regexp_replace".to_string(),
+        FunctionProperty::default().dictionary_eval(),
+    );
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
     let regexp_substr = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -20,8 +19,6 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::type_check::common_super_type;
@@ -654,11 +651,8 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut constant_scalar = None;
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
                     let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
-                    let expr = scalar_expr.as_expr()?;
-                    let (folded, _) =
-                        ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS);
-                    if let EExpr::Constant(constant) = folded.into_owned() {
-                        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                    if let Some((value, data_type)) = scalar_expr.constant_value(&func_ctx) {
+                        if !scalar_expr.is_deterministic() {
                             // The value of e.g. `(SELECT now())` is valid only for this query.
                             self.ctx
                                 .get_metadata()
@@ -668,9 +662,9 @@ impl SubqueryDecorrelatorOptimizer {
                         constant_scalar = Some(ScalarExpr::TypedConstantExpr(
                             ConstantExpr {
                                 span: scalar_expr.span(),
-                                value: constant.scalar,
+                                value,
                             },
-                            constant.data_type.wrap_nullable(),
+                            data_type.wrap_nullable(),
                         ));
                     }
                 }
@@ -770,7 +764,10 @@ impl SubqueryDecorrelatorOptimizer {
                 if srf.arguments.len() != 1 {
                     return Ok(None);
                 }
-                let Ok(const_scalar) = ConstantExpr::try_from(srf.arguments[0].clone()) else {
+                // Only the array value matters: its elements become constants.
+                let (ScalarExpr::ConstantExpr(const_scalar)
+                | ScalarExpr::TypedConstantExpr(const_scalar, _)) = &srf.arguments[0]
+                else {
                     return Ok(None);
                 };
                 let Some(child_expr) = &subquery.child_expr else {

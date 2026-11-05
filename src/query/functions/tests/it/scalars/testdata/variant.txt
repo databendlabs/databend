@@ -2052,7 +2052,7 @@ output         : 'abc'
 
 ast            : to_decimal(3, 2)(to_variant(1.23))
 raw expr       : to_decimal(3, 2)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(3, 2)(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant))
+checked expr   : CAST<Variant>(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant) AS Decimal(3, 2) NULL)
 optimized expr : 1.23_d64(3,2)
 output type    : Decimal(3, 2) NULL
 output domain  : {1.23..=1.23}
@@ -2061,7 +2061,7 @@ output         : 1.23
 
 ast            : to_decimal(2, 1)(to_variant(1.23))
 raw expr       : to_decimal(2, 1)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(2, 1)(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant))
+checked expr   : CAST<Variant>(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant) AS Decimal(2, 1) NULL)
 optimized expr : 1.2_d64(2,1)
 output type    : Decimal(2, 1) NULL
 output domain  : {1.2..=1.2}
@@ -2072,13 +2072,13 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(1, 1)(to_variant(1.23))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)('1.23')` in expr `to_decimal(1, 1)(CAST(1.23 AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)('1.23')` in expr `CAST(CAST(1.23 AS Variant) AS Decimal(1, 1) NULL)`
 
 
 
 ast            : to_decimal(76, 1)(to_variant(1.23))
 raw expr       : to_decimal(76, 1)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(76, 1)(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant))
+checked expr   : CAST<Variant>(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant) AS Decimal(76, 1) NULL)
 optimized expr : 1.2_d256(76,1)
 output type    : Decimal(76, 1) NULL
 output domain  : {1.2..=1.2}
@@ -2087,7 +2087,7 @@ output         : 1.2
 
 ast            : to_decimal(4, 3)(to_variant(1.23))
 raw expr       : to_decimal(4, 3)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(4, 3)(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant))
+checked expr   : CAST<Variant>(CAST<Decimal(3, 2)>(1.23_d64(3,2) AS Variant) AS Decimal(4, 3) NULL)
 optimized expr : 1.230_d64(4,3)
 output type    : Decimal(4, 3) NULL
 output domain  : {1.230..=1.230}
@@ -2098,13 +2098,13 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(3, 3)(to_variant(1.23))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(3, 3)('1.23')` in expr `to_decimal(3, 3)(CAST(1.23 AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(3, 3)('1.23')` in expr `CAST(CAST(1.23 AS Variant) AS Decimal(3, 3) NULL)`
 
 
 
 ast            : to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))
 raw expr       : to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))
-checked expr   : to_decimal<Variant>(38, 2)(CAST<Decimal(38, 2)>(100000000000000000000000000000000000.01_d128(38,2) AS Variant))
+checked expr   : CAST<Variant>(CAST<Decimal(38, 2)>(100000000000000000000000000000000000.01_d128(38,2) AS Variant) AS Decimal(38, 2) NULL)
 optimized expr : 100000000000000000000000000000000000.01_d128(38,2)
 output type    : Decimal(38, 2) NULL
 output domain  : {100000000000000000000000000000000000.01..=100000000000000000000000000000000000.01}
@@ -2113,7 +2113,7 @@ output         : 100000000000000000000000000000000000.01
 
 ast            : to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))
 raw expr       : to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))
-checked expr   : to_decimal<Variant>(39, 2)(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant))
+checked expr   : CAST<Variant>(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant) AS Decimal(39, 2) NULL)
 optimized expr : 1000000000000000000000000000000000000.01_d256(39,2)
 output type    : Decimal(39, 2) NULL
 output domain  : {1000000000000000000000000000000000000.01..=1000000000000000000000000000000000000.01}
@@ -2122,7 +2122,7 @@ output         : 1000000000000000000000000000000000000.01
 
 ast            : to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))
 raw expr       : to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))
-checked expr   : to_decimal<Variant>(38, 1)(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant))
+checked expr   : CAST<Variant>(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant) AS Decimal(38, 1) NULL)
 optimized expr : 1000000000000000000000000000000000000.0_d128(38,1)
 output type    : Decimal(38, 1) NULL
 output domain  : {1000000000000000000000000000000000000.0..=1000000000000000000000000000000000000.0}
@@ -2133,13 +2133,13 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(38, 3)('1000000000000000000000000000000000000.01')` in expr `to_decimal(38, 3)(CAST(1000000000000000000000000000000000000.01 AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(38, 3)('1000000000000000000000000000000000000.01')` in expr `CAST(CAST(1000000000000000000000000000000000000.01 AS Variant) AS Decimal(38, 3) NULL)`
 
 
 
 ast            : to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))
 raw expr       : to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))
-checked expr   : to_decimal<Variant>(39, 1)(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant))
+checked expr   : CAST<Variant>(CAST<Decimal(39, 2)>(1000000000000000000000000000000000000.01_d256(39,2) AS Variant) AS Decimal(39, 1) NULL)
 optimized expr : 1000000000000000000000000000000000000.0_d256(39,1)
 output type    : Decimal(39, 1) NULL
 output domain  : {1000000000000000000000000000000000000.0..=1000000000000000000000000000000000000.0}
@@ -2150,13 +2150,13 @@ error:
   --> SQL:1:1
   |
 1 | to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(39, 3)('1000000000000000000000000000000000000.01')` in expr `to_decimal(39, 3)(CAST(1000000000000000000000000000000000000.01 AS Variant))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(39, 3)('1000000000000000000000000000000000000.01')` in expr `CAST(CAST(1000000000000000000000000000000000000.01 AS Variant) AS Decimal(39, 3) NULL)`
 
 
 
 ast            : to_decimal(3, 2)(parse_json('null'))
 raw expr       : to_decimal(3, 2)(parse_json('null'))
-checked expr   : to_decimal<Variant>(3, 2)(CAST<String>("null" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS Decimal(3, 2) NULL)
 optimized expr : NULL
 output type    : Decimal(3, 2) NULL
 output domain  : {NULL}
@@ -2165,7 +2165,7 @@ output         : NULL
 
 ast            : to_decimal(3, 2)(parse_json('"3.14"'))
 raw expr       : to_decimal(3, 2)(parse_json('"3.14"'))
-checked expr   : to_decimal<Variant>(3, 2)(CAST<String>("\"3.14\"" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("\"3.14\"" AS Variant) AS Decimal(3, 2) NULL)
 optimized expr : 3.14_d64(3,2)
 output type    : Decimal(3, 2) NULL
 output domain  : {3.14..=3.14}
@@ -2174,7 +2174,7 @@ output         : 3.14
 
 ast            : to_decimal(2, 1)(parse_json('true'))
 raw expr       : to_decimal(2, 1)(parse_json('true'))
-checked expr   : to_decimal<Variant>(2, 1)(CAST<String>("true" AS Variant))
+checked expr   : CAST<Variant>(CAST<String>("true" AS Variant) AS Decimal(2, 1) NULL)
 optimized expr : 1.0_d64(2,1)
 output type    : Decimal(2, 1) NULL
 output domain  : {1.0..=1.0}

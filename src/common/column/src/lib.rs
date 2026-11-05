@@ -19,7 +19,6 @@
 #![allow(dead_code)]
 #![feature(trusted_len)]
 #![feature(try_blocks)]
-#![feature(debug_closure_helpers)]
 
 pub mod binary;
 pub mod binview;

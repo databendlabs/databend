@@ -28,4 +28,6 @@ pub use optimize_group::OptimizeGroupTask;
 pub use task::SharedCounter;
 pub use task::Task;
 pub use task_manager::DEFAULT_TASK_LIMIT;
+pub use task_manager::OptimizeGroupWaiters;
+pub use task_manager::SchedulerStat;
 pub use task_manager::TaskManager;

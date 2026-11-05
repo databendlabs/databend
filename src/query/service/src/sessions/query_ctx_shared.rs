@@ -36,6 +36,7 @@ use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
+use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
@@ -51,6 +52,7 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
+use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -145,6 +147,8 @@ pub struct QueryContextShared {
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
     pub(super) mutation_state: MutationState,
+    // Commit sinks in local fragments and the outer refresh hook must see the same hints.
+    pub(super) written_segment_locs: SegmentLocationsState,
     pub(super) result_cache_state: ResultCacheState,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
@@ -184,6 +188,9 @@ pub struct QueryContextShared {
     /// IO reported by remote nodes for this query. Remote nodes send deltas
     /// (see `StatisticsSender::send_io_stats`), so they are accumulated here.
     pub(super) remote_io_stats: Arc<IoStats>,
+    /// Identifies this query on this node for on-demand profiling. Carried in
+    /// the `TrackingPayload.perf_query_token` of the threads executing it.
+    pub(super) perf_query_token: u64,
 
     pub(super) broadcast_registry: BroadcastRegistry,
 
@@ -204,6 +211,11 @@ pub struct QueryContextShared {
     /// Cached full visibility checker (ignore_ownership=false, Object::All).
     /// Shared across all QueryContext instances within this query.
     pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
+
+    /// Sequence visibility checker shared by the query: `nextval` asks for it per VALUES row
+    /// and per block, and building it lists all sequence ownerships.
+    pub(super) sequence_visibility_checker_cache:
+        tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
 
     /// Limits concurrent RowFetch reads and decodes across all pipelines and
     /// QueryContext instances belonging to this query on the local node.
@@ -257,6 +269,7 @@ impl QueryContextShared {
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),
+            written_segment_locs: Default::default(),
             result_cache_state: Default::default(),
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
@@ -282,6 +295,10 @@ impl QueryContextShared {
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             local_io_stats: ThreadTracker::io_stats().cloned().unwrap_or_default(),
             remote_io_stats: Default::default(),
+            perf_query_token: match ThreadTracker::perf_query_token() {
+                0 => QueryPerf::next_query_token(),
+                inherited => inherited,
+            },
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
@@ -290,6 +307,7 @@ impl QueryContextShared {
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
+            sequence_visibility_checker_cache: Default::default(),
             row_fetch_io_semaphore: Default::default(),
             #[cfg(feature = "python-udf")]
             python_udf_workers: Default::default(),
@@ -447,6 +465,13 @@ impl QueryContextShared {
     /// must carry it in their `TrackingPayload.io_stats`.
     pub fn get_local_io_stats(&self) -> Arc<IoStats> {
         self.local_io_stats.clone()
+    }
+
+    /// The on-demand profiling token of this query on this node. Threads
+    /// executing the query must carry it in their
+    /// `TrackingPayload.perf_query_token`.
+    pub fn get_perf_query_token(&self) -> u64 {
+        self.perf_query_token
     }
 
     /// Add an IO delta reported by a remote node.

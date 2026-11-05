@@ -2224,7 +2224,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let revoke = map(
         rule! {
-            REVOKE ~ #grant_source ~ FROM ~ #grant_option
+            REVOKE ~ #revoke_source ~ FROM ~ #grant_option
         },
         |(_, source, _, grant_option)| {
             Statement::Revoke(RevokeStmt {
@@ -4226,6 +4226,13 @@ pub fn role_name(i: Input) -> IResult<String> {
 }
 
 pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
+    let materialized_view_select = map(
+        rule! { SELECT ~ ON ~ MATERIALIZED ~ VIEW ~ #materialized_view_grant_level },
+        |(_, _, _, _, level)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Select],
+            level,
+        },
+    );
     let role = map(
         rule! {
             ROLE ~ #role_name
@@ -4418,6 +4425,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
+        | #materialized_view_select : "SELECT ON MATERIALIZED VIEW [<database>.]<view>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
         | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
@@ -4439,6 +4447,25 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )
     .parse(i)
+}
+
+fn materialized_view_grant_level(i: Input) -> IResult<AccountMgrLevel> {
+    map_res(grant_level, |level| match level {
+        AccountMgrLevel::Table(database, table) => {
+            Ok(AccountMgrLevel::MaterializedView(database, table))
+        }
+        _ => Err(nom::Err::Error(ErrorKind::other(
+            "expected a materialized view name, not a wildcard or another object type",
+        ))),
+    })(i)
+}
+
+fn revoke_source(i: Input) -> IResult<AccountMgrSource> {
+    let materialized_view_all = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ MATERIALIZED ~ VIEW ~ #materialized_view_grant_level },
+        |(_, _, _, _, _, level)| AccountMgrSource::ALL { level },
+    );
+    rule!(#materialized_view_all | #grant_source).parse(i)
 }
 
 pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
@@ -6555,12 +6582,10 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             external_access_integrations,
         )| {
             if address_or_code.1 {
-                if external_access_integrations.is_some() {
-                    return Err(nom::Err::Failure(ErrorKind::other(
-                        "EXTERNAL_ACCESS_INTEGRATIONS requires a remote UDF ADDRESS",
-                    )));
-                }
                 Ok(UDFDefinition::UDFScript {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     return_type,
                     code: address_or_code.0,
@@ -6652,6 +6677,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
+            ~ (EXTERNAL_ACCESS_INTEGRATIONS ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
         },
         |(
             arg_types,
@@ -6667,9 +6693,13 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             packages,
             headers,
             address_or_code,
+            external_access_integrations,
         )| {
             if address_or_code.1 {
                 Ok(UDFDefinition::UDAFScript {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     state_fields: state_types,
                     return_type,
@@ -6686,6 +6716,11 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     runtime_version: "".to_string(),
                 })
             } else {
+                if external_access_integrations.is_some() {
+                    return Err(nom::Err::Failure(ErrorKind::other(
+                        "Remote aggregate UDF integrations are not supported",
+                    )));
+                }
                 Ok(UDFDefinition::UDAFServer {
                     arg_types,
                     state_fields: state_types,

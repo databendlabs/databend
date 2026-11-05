@@ -1,0 +1,249 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Coalesces the small blocks a hash shuffle receiver gets from many senders.
+
+use std::collections::VecDeque;
+
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+
+/// Target size of the blocks a receiver outputs.
+#[derive(Clone, Copy, Debug)]
+pub struct CoalesceThreshold {
+    pub rows: usize,
+    pub bytes: usize,
+}
+
+impl CoalesceThreshold {
+    pub fn create(rows: usize, bytes: usize) -> CoalesceThreshold {
+        CoalesceThreshold {
+            rows: if rows == 0 { usize::MAX } else { rows },
+            bytes: if bytes == 0 { usize::MAX } else { bytes },
+        }
+    }
+}
+
+/// Concatenates small blocks up to a threshold. Blocks of at least half the
+/// threshold, and blocks carrying meta, are passed through without copying.
+pub(super) struct BlockCoalescer {
+    threshold: Option<CoalesceThreshold>,
+    blocks: Vec<DataBlock>,
+    rows: usize,
+    bytes: usize,
+    ready: VecDeque<DataBlock>,
+}
+
+impl BlockCoalescer {
+    pub(super) fn create(threshold: Option<CoalesceThreshold>) -> BlockCoalescer {
+        BlockCoalescer {
+            threshold,
+            blocks: vec![],
+            rows: 0,
+            bytes: 0,
+            ready: VecDeque::new(),
+        }
+    }
+
+    /// Rows and bytes buffered and not yet moved to the output queue.
+    pub(super) fn buffered(&self) -> (usize, usize) {
+        (self.rows, self.bytes)
+    }
+
+    pub(super) fn push(&mut self, block: DataBlock) -> Result<()> {
+        let Some(threshold) = self.threshold else {
+            self.ready.push_back(block);
+            return Ok(());
+        };
+
+        if block.get_meta().is_some() || block.num_columns() == 0 {
+            self.flush()?;
+            self.ready.push_back(block);
+            return Ok(());
+        }
+
+        if block.is_empty() {
+            return Ok(());
+        }
+
+        let rows = block.num_rows();
+        let bytes = block.memory_size();
+
+        if rows.saturating_mul(2) >= threshold.rows || bytes.saturating_mul(2) >= threshold.bytes {
+            self.flush()?;
+            self.ready.push_back(block);
+            return Ok(());
+        }
+
+        self.rows += rows;
+        self.bytes += bytes;
+        self.blocks.push(block);
+
+        if self.rows >= threshold.rows || self.bytes >= threshold.bytes {
+            self.flush()?;
+        }
+
+        Ok(())
+    }
+
+    /// Move the buffered blocks to the output queue. Returns whether any were moved.
+    pub(super) fn flush(&mut self) -> Result<bool> {
+        if self.blocks.is_empty() {
+            return Ok(false);
+        }
+
+        let blocks = std::mem::take(&mut self.blocks);
+        self.rows = 0;
+        self.bytes = 0;
+
+        self.ready.push_back(match blocks.len() {
+            1 => blocks.into_iter().next().unwrap(),
+            _ => concat_keep_const(&blocks)?,
+        });
+        Ok(true)
+    }
+
+    pub(super) fn pop(&mut self) -> Option<DataBlock> {
+        self.ready.pop_front()
+    }
+}
+
+/// Concatenate `blocks`, keeping a column constant when it is the same constant
+/// in every block. `DataBlock::concat` keeps it only when the blocks also have
+/// the same number of rows, which blocks from many senders rarely do.
+fn concat_keep_const(blocks: &[DataBlock]) -> Result<DataBlock> {
+    let num_rows = blocks.iter().map(DataBlock::num_rows).sum();
+    let columns = (0..blocks[0].num_columns())
+        .map(|i| {
+            if let BlockEntry::Const(scalar, data_type, _) = blocks[0].get_by_offset(i)
+                && blocks.iter().all(|block| {
+                    matches!(block.get_by_offset(i), BlockEntry::Const(s, t, _) if s == scalar && t == data_type)
+                })
+            {
+                return Ok(BlockEntry::new_const_column(
+                    data_type.clone(),
+                    scalar.clone(),
+                    num_rows,
+                ));
+            }
+
+            let columns = blocks
+                .iter()
+                .map(|block| block.get_by_offset(i).to_column())
+                .collect();
+            Ok(Column::concat_columns(columns)?.into())
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(DataBlock::new(columns, num_rows))
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::*;
+
+    fn block(rows: usize) -> DataBlock {
+        DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32; rows])])
+    }
+
+    fn drain(coalescer: &mut BlockCoalescer) -> Vec<usize> {
+        std::iter::from_fn(|| coalescer.pop())
+            .map(|x| x.num_rows())
+            .collect()
+    }
+
+    #[test]
+    fn test_coalescer_merges_small_blocks() -> Result<()> {
+        let mut coalescer =
+            BlockCoalescer::create(Some(CoalesceThreshold::create(100, usize::MAX)));
+
+        for _ in 0..7 {
+            coalescer.push(block(30))?;
+        }
+        assert_eq!(drain(&mut coalescer), vec![120]);
+
+        assert!(coalescer.flush()?);
+        assert_eq!(drain(&mut coalescer), vec![90]);
+        assert!(!coalescer.flush()?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_coalescer_keeps_constants() -> Result<()> {
+        let constant = |scalar: Scalar, rows: usize| {
+            DataBlock::new(
+                vec![
+                    Int32Type::from_data(vec![1i32; rows]).into(),
+                    BlockEntry::new_const_column(
+                        DataType::Number(NumberDataType::Int64).wrap_nullable(),
+                        scalar,
+                        rows,
+                    ),
+                ],
+                rows,
+            )
+        };
+
+        let mut coalescer =
+            BlockCoalescer::create(Some(CoalesceThreshold::create(100, usize::MAX)));
+        coalescer.push(constant(Scalar::Null, 10))?;
+        coalescer.push(constant(Scalar::Null, 20))?;
+        coalescer.flush()?;
+        let block = coalescer.pop().unwrap();
+        assert_eq!(block.num_rows(), 30);
+        assert_eq!(
+            block.get_by_offset(1),
+            &BlockEntry::new_const_column(
+                DataType::Number(NumberDataType::Int64).wrap_nullable(),
+                Scalar::Null,
+                30
+            )
+        );
+
+        // Different constants are expanded.
+        let one = Scalar::Number(NumberScalar::Int64(1));
+        coalescer.push(constant(Scalar::Null, 10))?;
+        coalescer.push(constant(one.clone(), 20))?;
+        coalescer.flush()?;
+        let block = coalescer.pop().unwrap();
+        let column = block.get_by_offset(1).as_column().unwrap();
+        assert_eq!(column.len(), 30);
+        assert_eq!(column.index(0), Some(ScalarRef::Null));
+        assert_eq!(column.index(29), Some(one.as_ref()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_coalescer_passes_large_blocks_through() -> Result<()> {
+        let mut coalescer =
+            BlockCoalescer::create(Some(CoalesceThreshold::create(100, usize::MAX)));
+
+        coalescer.push(block(10))?;
+        coalescer.push(block(50))?;
+        coalescer.push(block(0))?;
+        coalescer.push(block(10))?;
+        coalescer.flush()?;
+        assert_eq!(drain(&mut coalescer), vec![10, 50, 10]);
+        Ok(())
+    }
+}

@@ -1,0 +1,87 @@
+# Spill writers reject blocks without columns, since parquet would drop their
+# row counts. Every operator that spills must keep such blocks in memory, so
+# force each spill path with queries whose inputs carry as few columns as possible.
+# Window partitions always carry their partition keys, see window_partition_spill.test.
+
+statement ok
+create or replace table t_spill_no_cols_l as select number % 10 as k from numbers(100);
+
+statement ok
+create or replace table t_spill_no_cols_r as select number % 10 as k from numbers(100);
+
+# Hash join without keys, where neither side outputs any column.
+statement ok
+set force_join_data_spill = 1;
+
+query I
+select count(*) from t_spill_no_cols_l left join t_spill_no_cols_r on t_spill_no_cols_l.k > 5;
+----
+4060
+
+query I
+select count(*) from t_spill_no_cols_r right join t_spill_no_cols_l on t_spill_no_cols_l.k > 5;
+----
+4060
+
+query I
+select count(*) from t_spill_no_cols_l where exists (select 1 from t_spill_no_cols_r where t_spill_no_cols_l.k > 5);
+----
+40
+
+query I
+select count(*) from t_spill_no_cols_l where not exists (select 1 from t_spill_no_cols_r where t_spill_no_cols_l.k > 5);
+----
+60
+
+query I
+select count(*) from t_spill_no_cols_l inner join t_spill_no_cols_r on t_spill_no_cols_l.k = t_spill_no_cols_r.k;
+----
+1000
+
+statement ok
+unset force_join_data_spill;
+
+# Aggregate with only group keys or only aggregate states.
+statement ok
+set force_aggregate_data_spill = 1;
+
+query I
+select count(*) from (select k from t_spill_no_cols_l group by k);
+----
+10
+
+query I
+select count(*) from (select count(*) from t_spill_no_cols_l group by k);
+----
+10
+
+query I
+select count(*) from t_spill_no_cols_l group by 'a';
+----
+100
+
+statement ok
+unset force_aggregate_data_spill;
+
+# Materialized CTE, with and without referenced columns.
+statement ok
+set force_materialized_cte_spill = 1;
+
+query I
+with c as materialized (select k from t_spill_no_cols_l) select count(*) from c;
+----
+100
+
+query I
+with c as materialized (select k from t_spill_no_cols_l) select count(*) from c x, c y where x.k = y.k;
+----
+1000
+
+statement ok
+unset force_materialized_cte_spill;
+
+statement ok
+drop table t_spill_no_cols_l;
+
+statement ok
+drop table t_spill_no_cols_r;

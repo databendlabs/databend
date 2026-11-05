@@ -396,6 +396,43 @@ fn resolve_type_check_sql_with_aliases(
     type_checker.resolve(&expr).map(|resolved| *resolved)
 }
 
+/// The outcome of binding `case`. The type returned with a bound expression,
+/// the type it records, and the type it has once lowered must agree, so that
+/// planning and execution see the same type.
+fn type_check_outcome(
+    case: &SqlTestCase,
+    result: Result<(ScalarExpr, DataType)>,
+) -> SqlTestOutcome {
+    let (scalar, data_type) = match result {
+        Ok(bound) => bound,
+        Err(err) => {
+            return SqlTestOutcome::Error {
+                code: err.code(),
+                message: err.message(),
+            };
+        }
+    };
+    assert_eq!(
+        scalar.data_type().as_ref(),
+        &data_type,
+        "{}: recorded type differs from the returned type",
+        case.name
+    );
+    if let Ok(expr) = scalar.as_expr() {
+        assert_eq!(
+            expr.data_type(),
+            &data_type,
+            "{}: lowered type differs from the returned type",
+            case.name
+        );
+    }
+    SqlTestOutcome::Plan(format!(
+        "scalar: {}\ntype: {}",
+        format_scalar(&scalar),
+        data_type
+    ))
+}
+
 async fn type_check_case_in_context(
     case: &SqlTestCase,
     expr_context: ExprContext,
@@ -409,18 +446,8 @@ async fn type_check_case_in_context(
     let adapter = TestTypeCheckAdapter::new(settings);
     let mut bind_context = test_bind_context(expr_context);
 
-    let outcome = match resolve_type_check_sql(case.sql, adapter, &mut bind_context) {
-        Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
-            "scalar: {}\ntype: {}",
-            format_scalar(&scalar),
-            data_type
-        )),
-        Err(err) => SqlTestOutcome::Error {
-            code: err.code(),
-            message: err.message(),
-        },
-    };
-    Ok(outcome)
+    let result = resolve_type_check_sql(case.sql, adapter, &mut bind_context);
+    Ok(type_check_outcome(case, result))
 }
 
 async fn type_check_case_with_settings(
@@ -435,18 +462,8 @@ async fn type_check_case_with_settings(
     let adapter = TestTypeCheckAdapter::new(settings);
     let mut bind_context = test_bind_context(expr_context);
 
-    let outcome = match resolve_type_check_sql(case.sql, adapter, &mut bind_context) {
-        Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
-            "scalar: {}\ntype: {}",
-            format_scalar(&scalar),
-            data_type
-        )),
-        Err(err) => SqlTestOutcome::Error {
-            code: err.code(),
-            message: err.message(),
-        },
-    };
-    Ok(outcome)
+    let result = resolve_type_check_sql(case.sql, adapter, &mut bind_context);
+    Ok(type_check_outcome(case, result))
 }
 
 async fn run_type_check_cases_in_context(
@@ -501,12 +518,15 @@ mod in_list;
 mod lambda;
 mod literal;
 mod rewrite_function;
+mod scalar_constant;
+mod scalar_fold;
 mod scalar_function;
 mod scalar_rewrite;
 mod search;
 mod set_returning;
 mod special_function;
 mod string;
+mod traversal;
 mod udf;
 mod variant;
 mod variant_paths;

@@ -25,6 +25,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 
 use super::grouping_sets_common::ensure_group_items_are_projected;
+use super::grouping_sets_common::grouping_id;
 use super::grouping_sets_common::union_output_indexes;
 use crate::ColumnBindingBuilder;
 use crate::Symbol;
@@ -786,8 +787,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
     ) -> Result<()> {
         ensure_group_items_are_projected(eval_scalar, agg, grouping_id_index)?;
 
-        let grouping_id =
-            self.calculate_grouping_id(group_columns, &agg.group_items, grouping_id_index);
+        let grouping_id = grouping_id(&agg.group_items, grouping_id_index, group_columns);
 
         let null_group_ids: Vec<Symbol> = agg
             .group_items
@@ -859,27 +859,6 @@ impl RuleHierarchicalGroupingSetsToUnion {
         }
 
         Ok(result)
-    }
-
-    fn calculate_grouping_id(
-        &self,
-        group_columns: &[Symbol],
-        all_groups: &[ScalarItem],
-        grouping_id_index: Symbol,
-    ) -> u32 {
-        let all_groups: Vec<&ScalarItem> = all_groups
-            .iter()
-            .filter(|item| !is_grouping_id_item(item, grouping_id_index))
-            .collect();
-        let mask = (1 << all_groups.len()) - 1;
-        let mut id = 0;
-
-        for (i, group_item) in all_groups.iter().enumerate() {
-            if group_columns.contains(&group_item.index) {
-                id |= 1 << i;
-            }
-        }
-        !id & mask
     }
 }
 

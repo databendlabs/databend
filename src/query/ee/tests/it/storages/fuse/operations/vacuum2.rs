@@ -40,11 +40,12 @@ use databend_common_storage::FaultKind;
 use databend_common_storage::FaultOp;
 use databend_common_storage::FaultRule;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::SegmentsIO;
-use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::io::snapshot_history;
 use databend_enterprise_query::storages::fuse::operations::vacuum_table_v2::do_vacuum2;
 use databend_enterprise_query::table_ref::RealTableRefHandler;
 use databend_enterprise_query::test_kits::context::EESetup;
@@ -57,9 +58,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
 use databend_query::test_kits::query_count;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
@@ -588,8 +587,9 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let latest_location = fuse_table.snapshot_loc().unwrap();
     let snapshot_version = TableMetaLocationGenerator::snapshot_version(&latest_location);
-    let snapshots: Vec<_> = SnapshotHistoryReader::snapshot_history(
-        MetaReaders::table_snapshot_reader(fuse_table.get_operator()),
+    let snapshots: Vec<_> = snapshot_history(
+        &FuseCaches::instance().snapshots,
+        fuse_table.get_operator(),
         latest_location,
         snapshot_version,
         fuse_table.meta_location_generator().clone(),
@@ -661,17 +661,10 @@ async fn inverted_index_locations(table: &FuseTable) -> Result<HashSet<String>> 
     let Some(snapshot) = table.read_table_snapshot().await? else {
         return Ok(HashSet::new());
     };
-    let reader = MetaReaders::segment_info_reader(table.get_operator(), table.schema());
+    let reader = SegmentInfoReader::new(table.get_operator(), table.schema());
     let mut locations = HashSet::new();
     for (location, ver) in &snapshot.segments {
-        let segment = reader
-            .read(&LoadParams {
-                location: location.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
-            .await?;
+        let segment = reader.read(&(location.clone(), *ver)).await?;
         for block in segment.block_metas()? {
             locations.extend(
                 block
@@ -948,16 +941,9 @@ async fn test_staged_clone_pins_only_selected_root_during_vacuum() -> anyhow::Re
         })
         .await?;
     let mut pinned_files = vec![pinned_location.clone()];
-    let reader = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema());
+    let reader = SegmentInfoReader::new(fuse.get_operator(), fuse.schema());
     for (location, ver) in &pinned.segments {
-        let segment = reader
-            .read(&LoadParams {
-                location: location.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
-            .await?;
+        let segment = reader.read(&(location.clone(), *ver)).await?;
         pinned_files.push(location.clone());
         pinned_files.extend(
             segment
@@ -1448,9 +1434,7 @@ async fn test_vacuum_incomplete_descendant_mark_does_not_sweep() -> anyhow::Resu
         fixture.execute_command(&sql).await?;
     }
     child.get_operator().delete(&anchor_location).await?;
-    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
-        cache.evict(&anchor_location);
-    }
+    FuseCaches::instance().snapshots.evict(&anchor_location);
     // Keep the lower bound below the missing anchor during the clone-aware mark.
     fixture
         .default_session()

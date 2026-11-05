@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 
@@ -21,7 +20,6 @@ use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::DataType;
 
-use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
@@ -40,16 +38,11 @@ pub struct BasicHashJoinState {
 
     pub scan_map: CStyleCell<Vec<Vec<u8>>>,
     pub scan_queue: CStyleCell<VecDeque<usize>>,
-
-    level: usize,
-    factory: Arc<HashJoinFactory>,
 }
 
 impl BasicHashJoinState {
-    pub fn create(level: usize, factory: Arc<HashJoinFactory>) -> Self {
+    pub fn create() -> Self {
         BasicHashJoinState {
-            level,
-            factory,
             mutex: Mutex::new(()),
             build_rows: CStyleCell::new(0),
             chunks: CStyleCell::new(Vec::new()),
@@ -86,11 +79,5 @@ impl BasicHashJoinState {
         let locked = self.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
         self.build_queue.as_mut().pop_front()
-    }
-}
-
-impl Drop for BasicHashJoinState {
-    fn drop(&mut self) {
-        self.factory.remove_basic_state(self.level)
     }
 }
