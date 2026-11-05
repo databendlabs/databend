@@ -4479,7 +4479,6 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-sql",
  "databend-common-storage",
@@ -5945,7 +5944,6 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "async-backtrace",
- "async-trait",
  "bytes",
  "chrono",
  "crc32fast",
