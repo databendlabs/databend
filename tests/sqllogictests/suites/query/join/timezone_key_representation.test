@@ -1,0 +1,91 @@
+# Equality uses the UTC instant; result expressions still observe each stored offset.
+# run-with-settings: enable_experimental_new_join=0
+# run-with-settings: enable_fixed_rows_sort=0
+
+statement ok
+CREATE OR REPLACE TABLE tz_left (k TIMESTAMP_TZ, label INT);
+
+statement ok
+CREATE OR REPLACE TABLE tz_right (k TIMESTAMP_TZ, label INT);
+
+statement ok
+INSERT INTO tz_left VALUES
+('2001-02-03 05:00:00 +0030', 10),
+('2001-02-03 05:01:00 +0030', 20),
+(NULL, 30);
+
+statement ok
+INSERT INTO tz_right VALUES
+('2001-02-03 04:30:00 +0000', 11),
+('2001-02-03 04:32:00 +0000', 21),
+(NULL, 31);
+
+query TT
+SELECT right(to_string(l.k), 5), right(to_string(r.k), 5)
+FROM tz_left l JOIN tz_right r ON l.k = r.k;
+----
++0030 +0000
+
+# The left-side display predicate must not be inferred on the right-side key.
+query I
+SELECT count(*) FROM tz_left l JOIN tz_right r ON l.k = r.k
+WHERE to_string(l.k) LIKE '%+0030';
+----
+1
+
+# Nested keys also compare by instant, without replacing projected values.
+query TT
+SELECT right(to_string(l.k), 5), right(to_string(r.k), 5)
+FROM tz_left l JOIN tz_right r ON [l.k] = [r.k]
+WHERE to_string(l.k) LIKE '%+0030';
+----
++0030 +0000
+
+# Materialized container keys must not substitute one side's projected array.
+query TT
+SELECT right(to_string(l.a[1]), 5), right(to_string(r.a[1]), 5)
+FROM (SELECT [k] AS a FROM tz_left WHERE k IS NOT NULL) l
+JOIN (SELECT [k] AS a FROM tz_right WHERE k IS NOT NULL) r ON l.a = r.a;
+----
++0030 +0000
+
+query I
+SELECT count(*) FROM tz_left l JOIN tz_right r
+ON l.k IS NOT DISTINCT FROM r.k;
+----
+2
+
+query I rowsort
+SELECT count(*) FROM (
+    SELECT k FROM tz_left UNION ALL SELECT k FROM tz_right
+) v GROUP BY k;
+----
+1
+1
+2
+2
+
+# Ties use the integer label, not the presentation offset.
+query IT
+SELECT label, right(to_string(k), 5) FROM (
+    SELECT k, label FROM tz_left UNION ALL SELECT k, label FROM tz_right
+) v ORDER BY k ASC NULLS LAST, label;
+----
+10 +0030
+11 +0000
+20 +0030
+21 +0000
+30 NULL
+31 NULL
+
+query T rowsort
+SELECT right(to_string(k), 5) FROM tz_left WHERE k IS NOT NULL GROUP BY k;
+----
++0030
++0030
+
+statement ok
+DROP TABLE tz_left;
+
+statement ok
+DROP TABLE tz_right;
