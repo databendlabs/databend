@@ -147,10 +147,19 @@ async fn write_stats_case(file: &mut impl Write, case: &StatsCase) -> Result<()>
 async fn write_plan_case(file: &mut impl Write, case: &PlanCase) -> Result<()> {
     let ctx = create_context().await?;
     let raw_plan = ctx.bind_sql(case.sql).await?;
-    let optimized_plan = ctx.optimize_plan(raw_plan).await?;
+    let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "sql: {}", case.sql)?;
+    // The raw plan shows the join order before any rule runs, so the golden
+    // records which side each rewrite starts from.
+    writeln!(file, "raw_plan:")?;
+    writeln!(
+        file,
+        "{}",
+        raw_plan.format_indent(Default::default(), &ctx.stat_context()?)?
+    )?;
+    writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
