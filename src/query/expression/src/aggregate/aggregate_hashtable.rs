@@ -52,6 +52,8 @@ struct GroupKeyState {
     code_columns: SmallVec<[(usize, usize); 4]>,
     rank_of_code: Vec<u32>,
     code_addresses: Vec<RowPtr>,
+    /// The states of the groups of `code_addresses`.
+    code_places: Vec<StateAddr>,
     row_offset: usize,
 }
 
@@ -91,6 +93,7 @@ impl GroupKeyState {
         }
         self.rank_of_code.resize(code_space, u32::MAX);
         self.code_addresses.resize(code_space, RowPtr::null());
+        self.code_places.resize(code_space, StateAddr::null());
     }
 
     fn dict_hashes(&self, row_count: usize) -> Option<&[u64]> {
@@ -445,10 +448,6 @@ impl AggregateHashTable {
         row_count: usize,
     ) -> Result<()> {
         if !self.payload.aggrs.is_empty() {
-            for i in 0..row_count {
-                state.state_places[i] = state.addresses[i].state_addr(&self.payload.row_layout);
-            }
-
             let state_places = &state.state_places.as_slice()[0..row_count];
             let states_layout = self.payload.row_layout.states_layout.as_ref().unwrap();
             if agg_states.is_empty() {
@@ -604,13 +603,15 @@ impl AggregateHashTable {
             for (rank, row) in representatives.iter().enumerate() {
                 let code = row_codes[*row as usize] as usize;
                 group_state.code_addresses[code] = state.addresses[rank];
+                group_state.code_places[code] = state.state_places[rank];
                 group_state.rank_of_code[code] = u32::MAX;
             }
             count
         };
 
-        for (address, code) in state.addresses[..row_count].iter_mut().zip(&row_codes) {
-            *address = group_state.code_addresses[*code as usize];
+        for (row, code) in row_codes.iter().enumerate() {
+            state.addresses[row] = group_state.code_addresses[*code as usize];
+            state.state_places[row] = group_state.code_places[*code as usize];
         }
         state.row_count = row_count;
         Some(new_group_count)
@@ -693,9 +694,6 @@ impl AggregateHashTable {
                 continue;
             };
             let places = &mut state.state_places[..row_count];
-            for (place, ptr) in places.iter_mut().zip(&state.addresses[..row_count]) {
-                *place = ptr.state_addr(&self.payload.row_layout)
-            }
             let rhses = &mut flush_state.state_places[..row_count];
             let aggrs = self.payload.aggrs.iter().zip(layout.states_loc.iter());
 
@@ -747,15 +745,16 @@ impl AggregateHashTable {
         } else {
             HashIndex::wide_with_capacity(new_capacity)
         };
-        // iterate over payloads and copy to new entries
-        let codec = self.payload.row_ids;
+        self.payload.renumber_pages();
+        let row_ids = &self.payload.row_ids;
         for (partition, payload) in self.payload.payloads.iter().enumerate() {
             for (page_index, page) in payload.pages.iter().enumerate() {
+                let first_row_id = row_ids.first_row_id(partition, page_index);
                 for idx in 0..page.rows {
                     let row_ptr = payload.data_ptr(page, idx);
                     let hash = row_ptr.hash(&payload.row_layout);
 
-                    hash_index.probe_slot_and_set(hash, codec.encode(partition, page_index, idx));
+                    hash_index.probe_slot_and_set(hash, first_row_id | idx as u64);
                 }
             }
         }
@@ -808,21 +807,55 @@ mod tests {
     fn test_hash_index_turns_wide_when_row_ids_outgrow_four_bytes() {
         let groups = 200_000;
         let blocks = key_blocks(groups, 3);
-        for max_compact_page in [usize::MAX, 2] {
+        for max_compact_pages in [usize::MAX, 2] {
             let mut ht = AggregateHashTable::new(
                 vec![DataType::Number(NumberDataType::UInt64)],
                 vec![],
                 HashTableConfig::default().with_initial_radix_bits(2),
                 Arc::new(Bump::new()),
             );
-            ht.payload.row_ids = ht.payload.row_ids.with_max_compact_page(max_compact_page);
+            ht.payload.row_ids.set_max_compact_pages(max_compact_pages);
 
             assert_eq!(add_blocks(&mut ht, &blocks), groups as usize);
             assert_eq!(ht.payload.len(), groups as usize);
-            assert_eq!(ht.hash_index.is_wide(), max_compact_page != usize::MAX);
+            assert_eq!(ht.hash_index.is_wide(), max_compact_pages != usize::MAX);
             // Every key finds its group again, so no two groups share an id.
             assert_eq!(add_blocks(&mut ht, &blocks), 0);
             assert_eq!(ht.payload.len(), groups as usize);
+        }
+    }
+
+    #[test]
+    fn test_row_ids_name_their_rows() {
+        let groups = 200_000;
+        let mut ht = AggregateHashTable::new(
+            vec![DataType::Number(NumberDataType::UInt64)],
+            vec![],
+            HashTableConfig::default().with_initial_radix_bits(2),
+            Arc::new(Bump::new()),
+        );
+        assert_eq!(add_blocks(&mut ht, &key_blocks(groups, 1)), groups as usize);
+        assert!(ht.payload.payloads.iter().all(|p| p.pages.len() > 1));
+
+        // Each id names its own row, numbered as the rows were appended or as the index was
+        // rebuilt.
+        for renumber in [false, true] {
+            if renumber {
+                ht.payload.renumber_pages();
+            }
+            let payload = &ht.payload;
+            let mut rows = std::collections::HashSet::new();
+            for (partition, p) in payload.payloads.iter().enumerate() {
+                for (page_index, page) in p.pages.iter().enumerate() {
+                    let first_row_id = payload.row_ids.first_row_id(partition, page_index);
+                    for row in 0..page.rows {
+                        let id = first_row_id | row as u64;
+                        assert_eq!(payload.row_ptr(id), p.data_ptr(page, row));
+                        assert!(rows.insert(id));
+                    }
+                }
+            }
+            assert_eq!(rows.len(), groups as usize);
         }
     }
 }

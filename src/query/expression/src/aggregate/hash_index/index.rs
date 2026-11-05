@@ -15,17 +15,25 @@
 
 use std::intrinsics::prefetch_read_data;
 use std::mem::size_of;
+use std::simd::ToBytes;
 use std::simd::cmp::SimdPartialEq;
+use std::simd::num::SimdInt;
+use std::simd::num::SimdUint;
 use std::simd::u8x16;
+use std::simd::u16x8;
 
 use crate::aggregate::HASH_INDEX_LOAD_FACTOR;
 use crate::aggregate::ProbeState;
 use crate::aggregate::hash_index_adapter::TableAdapter;
+use crate::aggregate::row_ptr::RowDecoder;
 
 /// The id of a row as a hash index slot keeps it: 4 bytes while the ids of the table fit, 8 bytes
-/// otherwise, see `RowIdCodec`.
-pub(in crate::aggregate) trait RowId: Copy {
+/// otherwise, see `RowIds`.
+pub(in crate::aggregate) trait RowId: Copy + PartialEq {
     const ZERO: Self;
+    /// The id of a slot that a probe claimed for a new group, until the probe appends its row.
+    /// Never the id of a row.
+    const CLAIMED: Self;
 
     fn from_id(id: u64) -> Self;
 
@@ -34,13 +42,15 @@ pub(in crate::aggregate) trait RowId: Copy {
 
 impl RowId for u32 {
     const ZERO: Self = 0;
+    const CLAIMED: Self = u32::MAX;
 
     #[inline]
     fn from_id(id: u64) -> Self {
-        // A truncated id would name another row and mix two groups. The table switches to wide
-        // ids before this can happen, so this is a check that is never taken.
+        // A truncated id would name another row and mix two groups, and the largest id would read
+        // as `CLAIMED`. The table switches to wide ids before either can happen, so this is a
+        // check that is never taken.
         assert!(
-            id <= u32::MAX as u64,
+            id < u32::MAX as u64,
             "row id {id} does not fit a compact index"
         );
         id as u32
@@ -54,6 +64,7 @@ impl RowId for u32 {
 
 impl RowId for u64 {
     const ZERO: Self = 0;
+    const CLAIMED: Self = u64::MAX;
 
     #[inline]
     fn from_id(id: u64) -> Self {
@@ -206,11 +217,16 @@ impl<I: RowId> Chunk<I> {
         }
     };
 
-    /// Lanes from `from` whose tag is `tag`, one bit per lane.
+    /// Slots from `from` whose tag is `tag`, four bits per slot: the slot of a match is
+    /// `trailing_zeros / 4`. Narrowing the compared lanes by a shift moves them to a scalar
+    /// register in one step, where a one-bit-per-lane mask takes a reduction on NEON.
     #[inline]
     fn match_tag(&self, tag: Tag, from: usize) -> u64 {
+        const SLOTS: u64 = (1 << (CHUNK_SLOTS * 4)) - 1;
         let tags = u8x16::from_array(self.tags.map(|t| t.0));
-        tags.simd_eq(u8x16::splat(tag.0)).to_bitmask() & (!0 << from)
+        let eq = tags.simd_eq(u8x16::splat(tag.0)).to_simd().cast::<u8>();
+        let nibbles = (u16x8::from_ne_bytes(eq) >> 4).cast::<u8>();
+        u64::from_ne_bytes(nibbles.to_array()) & SLOTS & (!0 << (from * 4))
     }
 }
 
@@ -269,30 +285,81 @@ impl<I: RowId> RowIdIndex<I> {
         self.chunks[slot >> 4].ids[slot & 15] = id;
     }
 
-    /// The first slot from `slot` that holds the tag of `hash`, or else an empty one, which
-    /// takes the tag.
+    /// The first slot from `slot` that holds the tag of `hash`, with its id, or else an empty
+    /// one, which takes the tag and the id `CLAIMED`. `from` is the lane of `slot`, given apart
+    /// so that a probe that starts at lane 0 can make it a constant.
     #[inline]
-    fn find_or_insert(&mut self, slot: usize, hash: u64) -> (usize, bool) {
+    fn find_or_insert(&mut self, slot: usize, hash: u64, from: usize) -> (usize, bool, I) {
+        debug_assert_eq!(from, slot & 15);
         let tag = Tag::full(hash);
         let mut chunk = slot >> 4;
-        let mut from = slot & 15;
+        let mut from = from;
         loop {
             let c = &mut self.chunks[chunk];
             let matched = c.match_tag(tag, from);
             if matched != 0 {
-                return ((chunk << 4) + matched.trailing_zeros() as usize, false);
+                let lane = (matched.trailing_zeros() / 4) as usize;
+                return ((chunk << 4) + lane, false, c.ids[lane]);
             }
             let empty = c.match_tag(Tag::EMPTY, from);
             if empty != 0 {
-                let lane = empty.trailing_zeros() as usize;
+                let lane = (empty.trailing_zeros() / 4) as usize;
                 c.tags[lane] = tag;
-                return ((chunk << 4) + lane, true);
+                c.ids[lane] = I::CLAIMED;
+                return ((chunk << 4) + lane, true, I::CLAIMED);
             }
             chunk = (chunk + 1) & self.chunk_mask;
             from = 0;
         }
     }
 
+    /// Probe the first `remaining` rows of `state.no_match_vector` from their slots: a row that
+    /// meets its tag goes to `group_compare_vector` with its row and states already decoded,
+    /// unless the slot was claimed in this round; a row that meets an empty slot claims it and
+    /// goes to `empty_vector`. Returns the counts of both, and whether a row met a claimed slot.
+    ///
+    /// The first round starts every row at lane 0 (`FIRST`), and only the first round prefetches
+    /// (`PREFETCH`): each case has a loop of its own, without per-row checks for the others.
+    #[inline(always)]
+    fn probe_round<const FIRST: bool, const PREFETCH: bool>(
+        &mut self,
+        state: &mut ProbeState,
+        remaining: usize,
+        rows: RowDecoder,
+    ) -> (usize, usize, bool) {
+        let mut new_entry_count = 0;
+        let mut need_compare_count = 0;
+        let mut claimed = false;
+        for (i, &row) in state.no_match_vector[..remaining].iter().enumerate() {
+            if PREFETCH && let Some(ahead) = state.no_match_vector.get(i + PREFETCH_DISTANCE) {
+                let chunk = state.slots[*ahead] >> 4;
+                prefetch_read_data::<_, 3>(self.chunks[..].as_ptr().wrapping_add(chunk));
+            }
+            let start = state.slots[row];
+            let from = if FIRST { 0 } else { start & 15 };
+            let (slot, is_new, id) = self.find_or_insert(start, state.group_hashes[row], from);
+            state.slots[row] = slot;
+
+            if is_new {
+                state.empty_vector[new_entry_count] = row;
+                new_entry_count += 1;
+            } else {
+                // The chunk of the slot was just read: decode the id now, not in a pass of its
+                // own. A slot claimed in this round has no row yet.
+                if id == I::CLAIMED {
+                    claimed = true;
+                } else {
+                    (state.addresses[row], state.state_places[row]) = rows.row_and_states(id.id());
+                }
+                state.group_compare_vector[need_compare_count] = row;
+                need_compare_count += 1;
+            }
+        }
+        (new_entry_count, need_compare_count, claimed)
+    }
+
+    /// Find or create the groups of the first `row_count` rows of `state`, and set their
+    /// `addresses` and `state_places`.
     pub(in crate::aggregate) fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
@@ -306,52 +373,47 @@ impl<I: RowId> RowIdIndex<I> {
         }
         // Each row starts at a random chunk: once the index is out of the caches, fetch the chunks
         // of the rows ahead while probing the current one.
-        let mut prefetch = self.allocated_bytes() >= PREFETCH_MIN_BYTES;
+        let prefetch = self.allocated_bytes() >= PREFETCH_MIN_BYTES;
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
+        let mut first_round = true;
 
         while remaining_entries > 0 {
-            let mut new_entry_count = 0;
-            let mut need_compare_count = 0;
-            let mut no_match_count = 0;
-
-            for i in 0..remaining_entries {
-                if prefetch && let Some(ahead) = state.no_match_vector.get(i + PREFETCH_DISTANCE) {
-                    let chunk = state.slots[*ahead] >> 4;
-                    prefetch_read_data::<_, 3>(self.chunks[..].as_ptr().wrapping_add(chunk));
-                }
-                let row = state.no_match_vector[i];
-                let (slot, is_new) = self.find_or_insert(state.slots[row], state.group_hashes[row]);
-                state.slots[row] = slot;
-
-                if is_new {
-                    state.empty_vector[new_entry_count] = row;
-                    new_entry_count += 1;
-                } else {
-                    state.group_compare_vector[need_compare_count] = row;
-                    need_compare_count += 1;
-                }
-            }
-            // Mismatched rows go on in the chunk they reached.
-            prefetch = false;
+            let rows = adapter.row_decoder();
+            let (new_entry_count, need_compare_count, claimed) = match (first_round, prefetch) {
+                (true, true) => self.probe_round::<true, true>(state, remaining_entries, rows),
+                (true, false) => self.probe_round::<true, false>(state, remaining_entries, rows),
+                // Mismatched rows go on in the chunk they reached.
+                (false, _) => self.probe_round::<false, false>(state, remaining_entries, rows),
+            };
+            first_round = false;
 
             if new_entry_count != 0 {
                 new_group_count += new_entry_count;
 
                 adapter.append_rows(state, new_entry_count);
 
+                let rows = adapter.row_decoder();
                 for row in state.empty_vector[..new_entry_count].iter().copied() {
-                    self.set_id(state.slots[row], I::from_id(state.row_ids[row]));
+                    let id = state.row_ids[row];
+                    self.set_id(state.slots[row], I::from_id(id));
+                    state.state_places[row] = rows.row_and_states(id).1;
                 }
             }
 
+            let mut no_match_count = 0;
             if need_compare_count > 0 {
-                for row in state.group_compare_vector[..need_compare_count]
-                    .iter()
-                    .copied()
-                {
-                    state.addresses[row] = adapter.row_ptr(self.id(state.slots[row]).id());
+                if claimed {
+                    // The claimed slots have their ids now.
+                    let rows = adapter.row_decoder();
+                    for row in state.group_compare_vector[..need_compare_count]
+                        .iter()
+                        .copied()
+                    {
+                        (state.addresses[row], state.state_places[row]) =
+                            rows.row_and_states(self.id(state.slots[row]).id());
+                    }
                 }
 
                 no_match_count = adapter.compare(state, need_compare_count, no_match_count);
@@ -384,7 +446,7 @@ impl<I: RowId> RowIdIndex<I> {
             let c = &mut self.chunks[chunk];
             let empty = c.match_tag(Tag::EMPTY, 0);
             if empty != 0 {
-                let lane = empty.trailing_zeros() as usize;
+                let lane = (empty.trailing_zeros() / 4) as usize;
                 c.tags[lane] = Tag::full(hash);
                 c.ids[lane] = I::from_id(row_id);
                 self.count += 1;
@@ -406,14 +468,18 @@ mod tests {
         incoming: Vec<(u64, u64)>,     // (key, hash)
         payload: Vec<(u64, u64, u64)>, // (key, hash, value)
         pin_data: Box<[u8]>,
+        pages: Vec<*const u8>,
     }
 
     impl TestTableAdapter {
         fn new(incoming: Vec<(u64, u64)>, payload: Vec<(u64, u64, u64)>) -> Self {
+            let pin_data: Box<[u8]> = vec![0; 1000].into();
+            let pages = vec![pin_data.as_ptr()];
             Self {
                 incoming,
                 payload,
-                pin_data: vec![0; 1000].into(),
+                pin_data,
+                pages,
             }
         }
 
@@ -460,8 +526,8 @@ mod tests {
             }
         }
 
-        fn row_ptr(&self, row_id: u64) -> RowPtr {
-            self.get_row_ptr(row_id as usize)
+        fn row_decoder(&self) -> RowDecoder<'_> {
+            RowDecoder::new(&self.pages, 32, 1)
         }
 
         fn compare(
@@ -552,6 +618,30 @@ mod tests {
             payload: vec![(4, 44 << 48, 77)],
             want_count: 3,
             want: HashMap::from_iter([(1, 21), (2, 22), (3, 23), (4, 77)]),
+        }
+        .run_hash_index();
+    }
+
+    #[test]
+    fn test_hash_index_rows_meet_slots_claimed_in_the_batch() {
+        // Key 7 comes three times and key 8 once, all with the same hash: the later rows meet the
+        // slot that the first row of key 7 claimed before its row was appended.
+        TestCase {
+            capacity: 16,
+            incoming: vec![(7, 99), (7, 99), (8, 99), (7, 99)],
+            payload: vec![],
+            want_count: 2,
+            want: HashMap::from_iter([(7, 27), (8, 28)]),
+        }
+        .run_hash_index();
+
+        // The same with a group already in the slot before them.
+        TestCase {
+            capacity: 16,
+            incoming: vec![(5, 99), (7, 99), (7, 99), (5, 99)],
+            payload: vec![(5, 99, 77)],
+            want_count: 1,
+            want: HashMap::from_iter([(5, 77), (7, 27)]),
         }
         .run_hash_index();
     }

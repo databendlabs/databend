@@ -15,6 +15,7 @@
 use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
+use super::payload::Page;
 use crate::types::StringColumn;
 
 /// A read-only row pointer into aggregate payload storage.
@@ -191,60 +192,149 @@ impl StatesRegion {
     }
 }
 
-/// The id of a row of a partitioned payload, kept by the hash index in place of a row address:
-/// from the low bits up, the partition, the row in the page, and the page. Ids grow with the page,
-/// so a table whose pages stay within `max_compact_page` has ids that fit 4 bytes.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct RowIdCodec {
-    partition_bits: u32,
-    partition_mask: u64,
+/// The ids of the rows of a partitioned payload, kept by the hash index in place of row
+/// addresses: from the low bits up, the row in its page and the page. The pages of all the
+/// partitions are numbered in one table in the order they are first met, so that an id decodes
+/// with one load of the page address. Ids grow with the pages, so a table of at most
+/// `max_compact_pages` pages has ids that fit 4 bytes.
+#[derive(Debug)]
+pub(super) struct RowIds {
+    /// The address of each numbered page.
+    pages: Vec<*const u8>,
+    /// The page numbers of the pages of each partition, in their order in the partition.
+    partition_pages: Vec<Vec<u32>>,
+    row_size: usize,
     row_bits: u32,
     row_mask: u64,
-    max_compact_page: usize,
+    max_compact_pages: usize,
+    /// Where the states of the rows of a page are, see `StatesRegion`.
+    states: StatesRegion,
 }
 
-impl RowIdCodec {
-    pub(super) fn new(partition_count: usize, row_per_page: usize) -> Self {
-        debug_assert!(partition_count.is_power_of_two());
-        let partition_bits = partition_count.trailing_zeros();
+impl RowIds {
+    pub(super) fn new(
+        partition_count: usize,
+        row_per_page: usize,
+        row_size: usize,
+        states: StatesRegion,
+    ) -> Self {
         let row_bits = usize::BITS - (row_per_page.max(2) - 1).leading_zeros();
-        assert!(partition_bits + row_bits < u32::BITS);
-        RowIdCodec {
-            partition_bits,
-            partition_mask: (1 << partition_bits) - 1,
+        assert!(row_bits < u32::BITS);
+        RowIds {
+            pages: vec![],
+            partition_pages: vec![vec![]; partition_count],
+            row_size,
             row_bits,
             row_mask: (1 << row_bits) - 1,
-            max_compact_page: (1 << (u32::BITS - partition_bits - row_bits)) - 1,
+            // The largest id stays free: an index slot claimed by a probe holds it until its row
+            // is appended, see `RowId::CLAIMED`.
+            max_compact_pages: (1 << (u32::BITS - row_bits)) - 1,
+            states,
         }
     }
 
-    /// The largest page index whose ids fit 4 bytes.
-    pub(super) fn max_compact_page(&self) -> usize {
-        self.max_compact_page
+    /// The most pages whose ids fit 4 bytes.
+    pub(super) fn max_compact_pages(&self) -> usize {
+        self.max_compact_pages
     }
 
     /// Lower the pages whose ids count as compact, to reach wide ids with small tables in tests.
     #[cfg(test)]
-    pub(super) fn with_max_compact_page(mut self, max_compact_page: usize) -> Self {
-        self.max_compact_page = max_compact_page;
-        self
+    pub(super) fn set_max_compact_pages(&mut self, max_compact_pages: usize) {
+        self.max_compact_pages = max_compact_pages;
     }
 
-    #[inline]
-    pub(super) fn encode(&self, partition: usize, page: usize, row: usize) -> u64 {
-        debug_assert!((page as u64) < 1 << (u64::BITS - self.partition_bits - self.row_bits));
-        ((((page as u64) << self.row_bits) | row as u64) << self.partition_bits) | partition as u64
+    /// Number the pages again from 0, partition by partition.
+    pub(super) fn renumber<'a>(&mut self, partitions: impl Iterator<Item = &'a [Page]>) {
+        self.pages.clear();
+        self.partition_pages.iter_mut().for_each(Vec::clear);
+        for (partition, pages) in partitions.enumerate() {
+            if let Some(last) = pages.len().checked_sub(1) {
+                self.number_pages(partition, pages, last);
+            }
+        }
     }
 
-    /// (partition, page, row) of `id`.
+    /// The id of the first row of page `page` of `partition`, whose pages are `pages`. Numbers the
+    /// pages of the partition up to it that have no number yet.
     #[inline]
-    pub(super) fn decode(&self, id: u64) -> (usize, usize, usize) {
-        let partition = (id & self.partition_mask) as usize;
-        let id = id >> self.partition_bits;
+    pub(super) fn number_pages(&mut self, partition: usize, pages: &[Page], page: usize) -> u64 {
+        let numbers = &mut self.partition_pages[partition];
+        while numbers.len() <= page {
+            numbers.push(self.pages.len() as u32);
+            self.pages.push(pages[numbers.len() - 1].base());
+        }
+        debug_assert_eq!(self.pages[numbers[page] as usize], pages[page].base());
+        self.first_row_id(partition, page)
+    }
+
+    /// The id of the first row of page `page` of `partition`, which has a number.
+    #[inline]
+    pub(super) fn first_row_id(&self, partition: usize, page: usize) -> u64 {
+        (self.partition_pages[partition][page] as u64) << self.row_bits
+    }
+
+    /// The row with id `id`.
+    #[inline]
+    pub(super) fn row_ptr(&self, id: u64) -> RowPtr {
+        self.decoder().row_and_states(id).0
+    }
+
+    /// Decodes the ids, see `RowDecoder`.
+    #[inline]
+    pub(super) fn decoder(&self) -> RowDecoder<'_> {
+        RowDecoder {
+            pages: &self.pages,
+            row_bits: self.row_bits,
+            row_mask: self.row_mask,
+            row_size: self.row_size,
+            states_offset: self.states.offset,
+            state_size: self.states.size,
+        }
+    }
+}
+
+/// Decodes row ids into the addresses of their rows and states. It copies what it needs out of
+/// `RowIds`, so that a probe loop keeps it in registers across its stores: the compiler cannot
+/// tell that those stores leave the table alone.
+#[derive(Clone, Copy)]
+pub(in crate::aggregate) struct RowDecoder<'a> {
+    pages: &'a [*const u8],
+    row_bits: u32,
+    row_mask: u64,
+    row_size: usize,
+    states_offset: usize,
+    state_size: usize,
+}
+
+impl<'a> RowDecoder<'a> {
+    /// A decoder of ids `(page << row_bits) | row`, for rows of `row_size` bytes without states.
+    #[cfg(test)]
+    pub(in crate::aggregate) fn new(
+        pages: &'a [*const u8],
+        row_bits: u32,
+        row_size: usize,
+    ) -> Self {
+        RowDecoder {
+            pages,
+            row_bits,
+            row_mask: (1 << row_bits) - 1,
+            row_size,
+            states_offset: 0,
+            state_size: 0,
+        }
+    }
+
+    /// The row with id `id` and its states, found from the page and the row in it: the states of
+    /// the rows of a page are in the same order as the rows.
+    #[inline]
+    pub(in crate::aggregate) fn row_and_states(self, id: u64) -> (RowPtr, StateAddr) {
+        let page = self.pages[(id >> self.row_bits) as usize];
+        let row = (id & self.row_mask) as usize;
+        let states = page.wrapping_add(self.states_offset + row * self.state_size);
         (
-            partition,
-            (id >> self.row_bits) as usize,
-            (id & self.row_mask) as usize,
+            RowPtr::new(page.wrapping_add(row * self.row_size)),
+            StateAddr::from(states.cast_mut()),
         )
     }
 }
@@ -257,27 +347,4 @@ pub struct RowLayout {
     pub(super) group_offsets: Vec<usize>,
     pub(super) group_sizes: Vec<usize>,
     pub(super) states_layout: Option<StatesLayout>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_row_id_codec_round_trip() {
-        for (partition_count, row_per_page) in [(1, 1), (4, 8192), (4, 10922), (128, 65535)] {
-            let codec = RowIdCodec::new(partition_count, row_per_page);
-            let max_compact_page = codec.max_compact_page();
-            for partition in [0, partition_count - 1] {
-                for page in [0, 1, max_compact_page, max_compact_page + 1, 1 << 40] {
-                    for row in [0, row_per_page - 1] {
-                        let id = codec.encode(partition, page, row);
-                        assert_eq!(codec.decode(id), (partition, page, row));
-                        // Ids fit 4 bytes exactly while the page stays compact.
-                        assert_eq!(id <= u32::MAX as u64, page <= max_compact_page);
-                    }
-                }
-            }
-        }
-    }
 }

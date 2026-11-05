@@ -30,6 +30,7 @@ pub struct ProbeState {
     /// The ids of the rows appended for new groups, for the hash index.
     pub(super) row_ids: [u64; BATCH_SIZE],
     pub(super) page_index: [usize; BATCH_SIZE],
+    /// The states of the groups of the rows: a probe sets them with `addresses`.
     pub(super) state_places: [StateAddr; BATCH_SIZE],
 
     pub(super) empty_vector: SelectVector,

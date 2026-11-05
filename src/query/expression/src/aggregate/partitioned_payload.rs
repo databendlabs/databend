@@ -25,7 +25,7 @@ use super::aggregate_function::get_states_layout;
 use super::payload::GroupRows;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
-use super::row_ptr::RowIdCodec;
+use super::row_ptr::RowIds;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
 use crate::types::DataType;
@@ -67,7 +67,7 @@ pub struct PartitionedPayload {
 
     partition_mask: PartitionMask,
     /// The ids of the rows in the hash index.
-    pub(super) row_ids: RowIdCodec,
+    pub(super) row_ids: RowIds,
 }
 
 unsafe impl Send for PartitionedPayload {}
@@ -119,7 +119,12 @@ impl PartitionedPayload {
             ..payloads[0].row_layout.clone()
         };
 
-        let row_ids = RowIdCodec::new(partition_count as usize, payloads[0].row_per_page);
+        let row_ids = RowIds::new(
+            partition_count as usize,
+            payloads[0].row_per_page,
+            payloads[0].tuple_size,
+            payloads[0].row_layout.states,
+        );
         PartitionedPayload {
             payloads,
             group_types,
@@ -135,22 +140,21 @@ impl PartitionedPayload {
     /// The row with id `id`.
     #[inline]
     pub(super) fn row_ptr(&self, id: u64) -> RowPtr {
-        let (partition, page, row) = self.row_ids.decode(id);
-        let payload = &self.payloads[partition];
-        payload.data_ptr(&payload.pages[page], row)
+        self.row_ids.row_ptr(id)
     }
 
-    /// Whether the ids of the rows still fit 4 bytes after `new_rows` more rows, even if they
-    /// all land in the same partition.
+    /// Whether the ids of the rows still fit 4 bytes after `new_rows` more rows, however they
+    /// spread over the partitions: each partition may open one more page than its rows fill.
     pub(super) fn row_ids_fit_compact(&self, new_rows: usize) -> bool {
-        let pages = self
-            .payloads
-            .iter()
-            .map(|p| p.pages.len())
-            .max()
-            .unwrap_or(0);
-        let new_pages = new_rows.div_ceil(self.payloads[0].row_per_page);
-        pages + new_pages <= self.row_ids.max_compact_page()
+        let pages = self.payloads.iter().map(|p| p.pages.len()).sum::<usize>();
+        let new_pages = new_rows.div_ceil(self.payloads[0].row_per_page) + self.payloads.len();
+        pages + new_pages <= self.row_ids.max_compact_pages()
+    }
+
+    /// Number the pages again from 0, for an index rebuilt from the rows.
+    pub(super) fn renumber_pages(&mut self) {
+        self.row_ids
+            .renumber(self.payloads.iter().map(|p| p.pages.as_slice()));
     }
 
     pub fn into_bucket_payloads(self) -> impl Iterator<Item = (usize, Payload)> {
@@ -169,14 +173,13 @@ impl PartitionedPayload {
         groups: GroupRows,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
-        let codec = self.row_ids;
         if self.payloads.len() == 1 {
             self.payloads[0].reserve_append_rows(
                 &state.empty_vector[..new_group_rows],
                 &state.group_hashes,
                 &mut state.addresses,
                 &mut state.page_index,
-                (&mut state.row_ids, codec, 0),
+                (&mut state.row_ids, &mut self.row_ids, 0),
                 groups,
                 source_states,
             );
@@ -204,7 +207,7 @@ impl PartitionedPayload {
                         &state.group_hashes,
                         &mut state.addresses,
                         &mut state.page_index,
-                        (&mut state.row_ids, codec, partition),
+                        (&mut state.row_ids, &mut self.row_ids, partition),
                         groups,
                         source_states,
                     );

@@ -18,13 +18,13 @@ use super::ProbeState;
 use super::StateAddr;
 use super::payload::GroupRows;
 use super::payload_row::CompareState;
-use super::row_ptr::RowPtr;
+use super::row_ptr::RowDecoder;
 
 pub(super) trait TableAdapter {
     fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize);
 
-    /// The row with id `row_id`.
-    fn row_ptr(&self, row_id: u64) -> RowPtr;
+    /// Decodes the row ids of the index.
+    fn row_decoder(&self) -> RowDecoder<'_>;
 
     fn compare(
         &mut self,
@@ -53,8 +53,8 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
     }
 
     #[inline]
-    fn row_ptr(&self, row_id: u64) -> RowPtr {
-        self.payload.row_ptr(row_id)
+    fn row_decoder(&self) -> RowDecoder<'_> {
+        self.payload.row_ids.decoder()
     }
 
     fn compare(

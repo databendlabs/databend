@@ -39,7 +39,7 @@ use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
 use super::payload_row::visit_row_type;
 use super::probe_state::SelectVector;
-use super::row_ptr::RowIdCodec;
+use super::row_ptr::RowIds;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowMut;
 use super::row_ptr::RowPtr;
@@ -236,6 +236,11 @@ impl Page {
         self.rows * agg_len != self.state_offsets
     }
 
+    /// The address of the first row.
+    pub(super) fn base(&self) -> *const u8 {
+        self.data.as_ptr()
+    }
+
     pub(super) fn row_ptr(&self, row: usize, row_size: usize) -> RowPtr {
         debug_assert!(row < self.rows);
         debug_assert_eq!(self.data.len(), self.rows * row_size);
@@ -400,13 +405,15 @@ impl Payload {
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
-        row_ids: (&mut [u64; BATCH_SIZE], RowIdCodec, usize),
+        row_ids: (&mut [u64; BATCH_SIZE], &mut RowIds, usize),
         groups: GroupRows,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
-        let (row_ids, codec, partition) = row_ids;
+        let (row_ids, ids, partition) = row_ids;
         let tuple_size = self.tuple_size;
-        let (mut page, mut page_index_value) = self.writable_page();
+        let (_, mut page_index_value) = self.writable_page();
+        let mut page_id = ids.number_pages(partition, &self.pages, page_index_value);
+        let mut page = &mut self.pages[page_index_value];
         let address = unsafe {
             // SAFETY: RowPtr and RowMut are repr(transparent) wrappers over raw
             // u8 pointers. Raw pointer mutability does not change layout, and
@@ -418,10 +425,12 @@ impl Payload {
             let row_mut = page.reserve_row(tuple_size);
             address[*row] = row_mut;
             page_index[*row] = page_index_value;
-            row_ids[*row] = codec.encode(partition, page_index_value, page.rows - 1);
+            row_ids[*row] = page_id | (page.rows - 1) as u64;
 
             if page.rows == page.capacity {
-                (page, page_index_value) = self.writable_page();
+                (_, page_index_value) = self.writable_page();
+                page_id = ids.number_pages(partition, &self.pages, page_index_value);
+                page = &mut self.pages[page_index_value];
             }
         }
 
