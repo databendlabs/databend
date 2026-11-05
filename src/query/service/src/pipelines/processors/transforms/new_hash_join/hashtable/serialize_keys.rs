@@ -13,12 +13,16 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodSerializer;
+use databend_common_expression::KeyAccessor;
 use databend_common_expression::KeysState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::types::BinaryColumn;
+use databend_common_expression::types::NarrowBuffer;
 
 use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
@@ -104,11 +108,8 @@ impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
         let num_rows = data.num_rows();
         let hash_method = &self.hash_method;
         let mut hashes = Vec::with_capacity(num_rows);
-
-        let keys = ProjectedBlock::from(data.columns());
-        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
-        hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let entries = BinaryKeyEntries::new(hash_method.build_keys_accessor(keys_state)?);
+        let keys = Self::probe_keys(hash_method, data.columns(), num_rows, &mut hashes)?;
+        let entries = BinaryKeyEntries::new(keys);
 
         let probed_rows = data.non_null_rows();
         let (_, valids, ctx) = data.into_raw();
@@ -153,11 +154,8 @@ impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
         let num_rows = data.num_rows();
         let hash_method = &self.hash_method;
         let mut hashes = Vec::with_capacity(num_rows);
-
-        let keys = ProjectedBlock::from(data.columns());
-        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
-        hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let entries = BinaryKeyEntries::new(hash_method.build_keys_accessor(keys_state)?);
+        let keys = Self::probe_keys(hash_method, data.columns(), num_rows, &mut hashes)?;
+        let entries = BinaryKeyEntries::new(keys);
 
         let probed_rows = data.non_null_rows();
         let (_, valids, ctx) = data.into_raw();
@@ -200,5 +198,58 @@ impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
                 )),
             },
         }
+    }
+}
+
+impl<const UNIQUE: bool> SerializerHashJoinHashTable<UNIQUE> {
+    /// The keys of the probe rows and their hashes. A single dictionary encoded key is
+    /// serialized and hashed once per dictionary value; its rows look them up by key.
+    fn probe_keys(
+        hash_method: &HashMethodSerializer,
+        columns: &[BlockEntry],
+        num_rows: usize,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = [u8]>>> {
+        if let [BlockEntry::Column(Column::Encoded(encoded))] = columns
+            && let Some(dict) = encoded.as_dict()
+            && dict.values.len() < num_rows
+        {
+            let values = [BlockEntry::from(dict.values.clone())];
+            let state = hash_method.build_keys_state((&values).into(), dict.values.len())?;
+            let mut value_hashes = Vec::with_capacity(dict.values.len());
+            hash_method.build_keys_hashes(&state, &mut value_hashes);
+            hashes.extend(dict.keys.iter().map(|key| value_hashes[key as usize]));
+            let KeysState::Column(Column::Binary(values)) = state else {
+                unreachable!("HashMethodSerializer serializes keys into a binary column")
+            };
+            return Ok(Box::new(DictKeys {
+                keys: dict.keys.clone(),
+                values,
+            }));
+        }
+        let state = hash_method.build_keys_state(ProjectedBlock::from(columns), num_rows)?;
+        hash_method.build_keys_hashes(&state, hashes);
+        hash_method.build_keys_accessor(state)
+    }
+}
+
+/// The serialized key of each row of a dictionary encoded key: `values[keys[row]]`.
+struct DictKeys {
+    keys: NarrowBuffer,
+    values: BinaryColumn,
+}
+
+impl KeyAccessor for DictKeys {
+    type Key = [u8];
+
+    unsafe fn key_unchecked(&self, index: usize) -> &[u8] {
+        unsafe {
+            let key = self.keys.get_unchecked(index);
+            self.values.index_unchecked(key as usize)
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.keys.len()
     }
 }
