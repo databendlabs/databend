@@ -758,8 +758,7 @@ fn test_take_column_vec_merges_dictionaries() {
         Bitmap::from_iter([true, false, true]),
         Bitmap::from_iter([true, true]),
     ];
-    let nullable =
-        |i: usize, column: Column| NullableColumn::new_column(column, validity[i].clone());
+    let nullable = |i: usize, column: Column| column.wrap_nullable(Some(validity[i].clone()));
     let (_, result) = take(&[
         nullable(0, build_dict(&plain[0])),
         nullable(1, build_dict(&plain[1])),
@@ -772,7 +771,7 @@ fn test_take_column_vec_merges_dictionaries() {
         result.data_type(),
         &indices,
     );
-    assert!(matches!(&result, Column::Nullable(c) if c.column.is_encoded()));
+    assert!(matches!(&result, Column::Nullable(c) if c.column().is_encoded()));
     for i in 0..indices.len() {
         assert_eq!(result.index(i), decoded.index(i));
     }
