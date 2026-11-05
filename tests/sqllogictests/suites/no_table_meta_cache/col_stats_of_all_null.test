@@ -12,6 +12,7 @@ statement ok
 insert into t values(NULL);
 
 # segments should be pruned
+# c holds only NULLs, so the comparison is estimated at 0 rows.
 query T
 explain select * from t where c > 6;
 ----
@@ -25,4 +26,4 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
-└── estimated rows: 0.50
+└── estimated rows: 0.00
