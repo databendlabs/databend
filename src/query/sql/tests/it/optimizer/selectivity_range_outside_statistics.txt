@@ -289,6 +289,15 @@ in stats      :
 out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
+expr          : and_filters(not(is_not_null(c)), not(or_filters(c <= 19, c = 15)))
+cardinality   : 1000000
+estimated     : 0
+max           : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
 expr          : or_filters(not(c <= 19), not(is_not_null(c)))
 cardinality   : 1000000
 estimated     : 100359.99999999997

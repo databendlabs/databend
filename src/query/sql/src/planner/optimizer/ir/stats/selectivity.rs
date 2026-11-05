@@ -1611,9 +1611,9 @@ impl SelectivityVisitor<'_> {
                 let mut has_lower_bound = false;
                 let mut has_zero = false;
                 let mut has_statistics_zero = false;
-                // Columns whose NULLs a `StatisticsZero` range rejects, and
-                // columns tested by `IS NULL`. Both on one column cannot match.
-                let mut statistics_zero_columns = ColumnSet::new();
+                // Columns tested by `IS NULL`. Every recorded value constraint
+                // comes from a predicate that rejects NULL, so `IS NULL` and a
+                // constraint on the same column cannot both match.
                 let mut is_null_columns = ColumnSet::new();
                 let mut estimates: Vec<(f64, ColumnSet)> = Vec::new();
                 for arg in &func.args {
@@ -1624,9 +1624,6 @@ impl SelectivityVisitor<'_> {
                         constraints,
                         ..
                     } = sub_visitor;
-                    if let Selectivity::StatisticsZero(_) = selectivity {
-                        statistics_zero_columns.extend(range_null_rejected_column(arg));
-                    }
                     is_null_columns.extend(is_null_column(arg));
                     match selectivity {
                         Selectivity::Unknown => has_unknown = true,
@@ -1661,7 +1658,11 @@ impl SelectivityVisitor<'_> {
 
                 self.selectivity = if has_zero {
                     Selectivity::Zero
-                } else if !statistics_zero_columns.is_disjoint(&is_null_columns) {
+                } else if has_statistics_zero
+                    && is_null_columns
+                        .iter()
+                        .any(|column| self.constraints.pending.contains_key(column))
+                {
                     Selectivity::N(0.0)
                 } else if has_statistics_zero && acc > 0.0 {
                     // The combined estimate is at most the range's small
@@ -1813,23 +1814,6 @@ fn is_null_column(expr: &Expr<ColumnBinding>) -> Option<Symbol> {
         [Expr::ColumnRef(column_ref)] if is_not_null.function.signature.name == "is_not_null" => {
             Some(column_ref.id.index)
         }
-        _ => None,
-    }
-}
-
-/// The column of a range comparison with a constant, or of its negation. Both
-/// reject every NULL of the column.
-fn range_null_rejected_column(expr: &Expr<ColumnBinding>) -> Option<Symbol> {
-    let Expr::FunctionCall(call) = expr else {
-        return None;
-    };
-    match call.function.signature.name.as_str() {
-        "not" => range_null_rejected_column(&call.args[0]),
-        "lt" | "lte" | "gt" | "gte" => match (&call.args[0], &call.args[1]) {
-            (Expr::ColumnRef(column_ref), Expr::Constant(_))
-            | (Expr::Constant(_), Expr::ColumnRef(column_ref)) => Some(column_ref.id.index),
-            _ => None,
-        },
         _ => None,
     }
 }

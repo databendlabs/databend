@@ -2249,6 +2249,7 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         &["and_filters(not(is_not_null(c)), c > 25)"],
         &["and_filters(c > 25, not(is_not_null(c)))"],
         &["and_filters(not(is_not_null(c)), not(c <= 19))"],
+        &["and_filters(not(is_not_null(c)), not(or_filters(c <= 19, c = 15)))"],
         &["or_filters(not(c <= 19), not(is_not_null(c)))"],
     ] {
         run_case_with_predicates(
