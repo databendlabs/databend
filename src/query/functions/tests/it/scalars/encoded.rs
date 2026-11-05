@@ -346,6 +346,14 @@ fn test_dictionary_function_evaluation() {
     assert_eq!(result.keys.iter().collect::<Vec<_>>(), keys.map(u64::from));
 
     let (encoded, plain) = dict(&["é", "hello"], &[0, 1, 0, 1]);
+    // A cast that only changes the nullability keeps the dictionary, e.g. a join key.
+    eval_dictionary(
+        "CAST(s AS String NULL)",
+        encoded.clone(),
+        plain.clone(),
+        None,
+        true,
+    );
     eval_dictionary("length(s)", encoded.clone(), plain.clone(), None, true);
     eval_dictionary("octet_length(s)", encoded, plain, None, true);
 }

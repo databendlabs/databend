@@ -50,6 +50,8 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_enterprise_materialized_view::get_materialized_view_handler;
@@ -76,6 +78,7 @@ use crate::MetadataRef;
 use crate::SelectBuilder;
 use crate::TableEntry;
 use crate::binder::Binder;
+use crate::binder::ViewIdent;
 use crate::binder::bind_table_reference::MaterializedViewReadMode;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
@@ -221,31 +224,47 @@ impl Binder {
                     .get(OPT_KEY_DATABASE_ID)
                     .ok_or_else(|| ErrorCode::Internal("materialized view database id is missing"))?
                     .parse::<u64>()?;
-                let mv_database = catalog.get_db_name_by_id(database_id).await?;
+                // A materialized view may live in a different database than its source. A dropped
+                // database keeps its id-to-name mapping and the MV source bindings until GC, and
+                // `get_db_name_by_id` still returns that name. `mget_database_names_by_ids` also
+                // checks `drop_on`; MVs in a dropped database are skipped like dropped MVs, so
+                // queries on the source table are not affected.
+                let Some(mv_database) = catalog
+                    .mget_database_names_by_ids(&tenant, &[database_id])
+                    .await?
+                    .pop()
+                    .flatten()
+                else {
+                    continue;
+                };
                 let Some(mv_name) = catalog.get_table_name_by_id(mv.mv_id).await? else {
                     continue;
                 };
                 let current_mv = catalog.get_table(&tenant, &mv_database, &mv_name).await?;
-                let mv_table =
-                    catalog.get_table_by_info(&databend_common_meta_app::schema::TableInfo {
-                        ident: databend_common_meta_app::schema::TableIdent::new(
-                            mv.mv_id,
-                            mv.table_meta.seq,
-                        ),
-                        meta: mv.table_meta.data.clone(),
-                        ..current_mv.get_table_info().clone()
-                    })?;
+                let mv_table = catalog.get_table_by_info(&TableInfo {
+                    ident: TableIdent::new(mv.mv_id, mv.table_meta.seq),
+                    meta: mv.table_meta.data.clone(),
+                    ..current_mv.get_table_info().clone()
+                })?;
 
                 let logical_query = parse_materialized_view_query(
                     &mv.definition.data.original_query,
                     "invalid materialized view logical query",
                 )?;
-                let mut candidate_context = BindContext::with_parent(bind_context.clone())?;
+                // Candidate scans are optimizer implementation details, not objects
+                // explicitly accessed by the caller. Authorize the original source query
+                // without requiring grants on any candidate MV, selected or otherwise.
+                let view_ident = ViewIdent {
+                    catalog: source_entry.catalog().to_string(),
+                    database: mv_database.clone(),
+                    name: mv_name.clone(),
+                };
+                let mut candidate_context = bind_context.new_view_scope(view_ident.clone())?;
                 candidate_context.planning_materialized_view_rewrite = true;
                 let (definition, definition_context) =
                     self.bind_query(&mut candidate_context, &logical_query)?;
 
-                let mut read_context = BindContext::with_parent(bind_context.clone())?;
+                let mut read_context = bind_context.new_view_scope(view_ident)?;
                 read_context.planning_materialized_view_rewrite = true;
                 let read_result = self.bind_materialized_view_with_mode(
                     &mut read_context,
@@ -438,6 +457,15 @@ impl Binder {
     /// Resolve the single base table referenced by the defining query.
     fn materialized_view_source_table(metadata: &MetadataRef) -> Result<TableEntry> {
         let metadata = metadata.read();
+        if metadata
+            .tables()
+            .iter()
+            .any(|entry| is_materialized_view_engine(entry.table().engine()))
+        {
+            return Err(ErrorCode::TableEngineNotSupported(
+                "A materialized view cannot use another materialized view as its source",
+            ));
+        }
         if metadata.tables().len() != 1 {
             return Err(ErrorCode::SemanticError(
                 "Materialized view requires exactly one base table source".to_string(),
@@ -531,9 +559,7 @@ impl Binder {
         };
         let source_entry = Self::materialized_view_source_table(original_metadata)?;
         let source_table = source_entry.table();
-        // CREATE records source_entry, not the FROM name in SQL. Binding a stale MV falls back to
-        // its original query, so metadata contains only the underlying FUSE table. That leftover
-        // table passes the engine check; comparing it with the AST name rejects CREATE FROM mv.
+        // CREATE records the concrete source identity, not just the FROM name in SQL.
         if direct_source_catalog != source_entry.catalog()
             || direct_source_database != source_entry.database()
             || direct_source_name != source_entry.name()
@@ -550,7 +576,9 @@ impl Binder {
         let source_table_name = source_entry.name().to_string();
         let source_table_id = source_table.get_id();
         let source_table_seq = source_table.get_table_info().ident.seq;
-        let source_database_id = source_table
+        // Refresh, read, and privilege checks resolve the source database from this option, so
+        // reject a source without it here instead of creating an unusable materialized view.
+        let recorded_source_database_id = source_table
             .get_table_info()
             .meta
             .options
@@ -561,10 +589,32 @@ impl Binder {
                 ))
             })?
             .parse::<u64>()?;
-        if source_catalog_name != catalog_name || source_database_id != target_database_id {
+        // Refresh, read, and privilege checks resolve the source through its table id in the
+        // default catalog, so the source may live in any database of the target catalog.
+        if source_catalog_name != catalog_name {
             return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view and source table must belong to the same catalog and database: target '{}.{}', source '{}.{}'",
+                "materialized view and source table must belong to the same catalog: target '{}.{}', source '{}.{}'",
                 catalog_name, database_name, source_catalog_name, source_database
+            )));
+        }
+        // The recorded database id also locates the table's storage, so RENAME TABLE does not
+        // update it. Older versions allowed renaming a table into another database, which leaves
+        // the recorded id pointing at the old database. Refresh, read, and privilege checks would
+        // then resolve the wrong database, so reject such a source instead of creating an unusable
+        // materialized view.
+        let current_source_database_id = target_catalog
+            .get_database(&tenant, &source_database)
+            .await?
+            .get_db_info()
+            .database_id
+            .db_id;
+        if recorded_source_database_id != current_source_database_id {
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "source table '{}.{}' records database id {} but belongs to database id {}; it was moved between databases by an older version and cannot be used as a materialized view source",
+                source_database,
+                source_table_name,
+                recorded_source_database_id,
+                current_source_database_id
             )));
         }
         let source_table_option =

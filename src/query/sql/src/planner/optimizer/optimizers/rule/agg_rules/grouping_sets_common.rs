@@ -21,6 +21,22 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
 
+/// Bit `i` identifies an absent grouping key in group-item order, not an input
+/// column position. Set only absent bits so all 32 bits of `_grouping_id` fit
+/// without constructing an overflowing `(1 << 32) - 1` mask.
+pub(super) fn grouping_id(
+    group_items: &[ScalarItem],
+    grouping_id_index: Symbol,
+    set: &[Symbol],
+) -> u32 {
+    group_items
+        .iter()
+        .filter(|item| !is_grouping_id_item(item, grouping_id_index))
+        .enumerate()
+        .filter(|(_, item)| !set.contains(&item.index))
+        .fold(0, |id, (i, _)| id | (1 << i))
+}
+
 pub(super) fn ensure_group_items_are_projected(
     eval_scalar: &mut EvalScalar,
     agg: &Aggregate,

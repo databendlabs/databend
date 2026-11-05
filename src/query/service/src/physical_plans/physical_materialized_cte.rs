@@ -151,6 +151,10 @@ impl PhysicalPlanBuilder {
             .clone();
         let cte_output_columns = Some(required.iter().copied().collect());
         let input = self.build_physical_plan(s_expr.child(0)?, required).await?;
+        // Sequence builds the producer before its consumers. Preserve its actual
+        // types: rewrites can change nullability without allocating new symbols.
+        self.cte_schemas
+            .insert(materialized_cte.cte_name.clone(), input.output_schema()?);
         Ok(PhysicalPlan::new(MaterializedCTE {
             plan_id: 0,
             stat_info: Some(stat_info),

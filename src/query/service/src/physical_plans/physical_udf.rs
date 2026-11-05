@@ -133,7 +133,7 @@ impl IPhysicalPlan for Udf {
             if udf_funcs.iter().any(|func| {
                 matches!(
                     &func.udf_type,
-                    UDFType::Script(code)
+                    UDFType::Script(code) | UDFType::ScriptWithExternalAccess(code)
                         if code.language == databend_common_sql::plans::UDFLanguage::Python
                 )
             }) {
