@@ -122,6 +122,18 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, count(*) FROM (SELECT category, value FROM events ORDER BY value) ordered_events GROUP BY category ORDER BY category LIMIT 3",
         },
+        SqlTestCase {
+            name: "union_all_input_pushes_order_to_branch_scans",
+            description: "An aggregate over UNION ALL should push the group-key ordering to every branch scan, translated into the branch columns.",
+            setup_sqls: &[EVENTS_TABLE, CATEGORIES_TABLE],
+            sql: "SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM categories) u GROUP BY k ORDER BY k LIMIT 3",
+        },
+        SqlTestCase {
+            name: "union_all_widened_branch_keeps_no_order",
+            description: "A UNION ALL branch cast to a wider type must not receive the ordering, while the uncast branch still does.",
+            setup_sqls: &[EVENTS_TABLE, WIDE_EVENTS_TABLE],
+            sql: "SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM wide_events) u GROUP BY k ORDER BY k DESC LIMIT 3",
+        },
     ];
 
     for case in &cases {
@@ -133,3 +145,4 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
 
 const EVENTS_TABLE: &str = "CREATE TABLE events(category INT, value INT)";
 const CATEGORIES_TABLE: &str = "CREATE TABLE categories(category INT, name STRING)";
+const WIDE_EVENTS_TABLE: &str = "CREATE TABLE wide_events(category BIGINT)";

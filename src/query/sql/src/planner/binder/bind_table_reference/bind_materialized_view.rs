@@ -674,7 +674,22 @@ impl Binder {
         .with_subquery_executor(self.subquery_executor.clone());
         let mut definition_context = BindContext::new();
         definition_context.binding_depth = bind_context.next_depth()?;
-        let (definition_expr, _) = definition_binder.bind_query(&mut definition_context, &query)?;
+        // The persisted definition names the source captured by CREATE. A missing database or
+        // table means the source was dropped, renamed, or replaced, which REFRESH also reports as
+        // InvalidMaterializedView. Other errors keep their original code.
+        let (definition_expr, _) = definition_binder
+            .bind_query(&mut definition_context, &query)
+            .map_err(|error| match error.code() {
+                ErrorCode::UNKNOWN_DATABASE | ErrorCode::UNKNOWN_TABLE => {
+                    ErrorCode::InvalidMaterializedView(format!(
+                        "materialized view {} source table changed: expected table id {}: {}",
+                        table_meta.name(),
+                        source_table_id,
+                        error
+                    ))
+                }
+                _ => error,
+            })?;
         validate_materialized_view_source(
             &definition_metadata,
             source_table_id,

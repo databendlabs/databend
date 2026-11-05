@@ -1406,6 +1406,8 @@ impl Display for UDFLanguage {
 #[derive(Clone, Debug, Educe, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[educe(Hash(bound = false))]
 pub struct UDFScriptCode {
+    #[serde(default)]
+    pub external_access_integrations: Vec<String>,
     pub language: UDFLanguage,
     pub runtime_version: String,
     #[educe(Hash(ignore))]
@@ -1415,17 +1417,61 @@ pub struct UDFScriptCode {
     pub code: Arc<Box<[u8]>>,
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
     Server(String), // server_addr
     Script(Box<UDFScriptCode>),
+    // An old executing node must fail deserialization rather than ignore a
+    // mandatory policy field and run under the legacy network exception.
+    ScriptWithExternalAccess(Box<UDFScriptCode>),
+}
+
+impl serde::Serialize for UDFType {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        #[derive(serde::Serialize)]
+        #[serde(rename = "UDFType")]
+        enum Wire<'a> {
+            Server(&'a str),
+            Script(&'a UDFScriptCode),
+            ScriptWithExternalAccess(&'a UDFScriptCode),
+        }
+        // Enforce fail-closed serialization even if a caller bypasses script().
+        let wire = match self {
+            Self::Server(address) => Wire::Server(address),
+            Self::Script(code) if code.external_access_integrations.is_empty() => {
+                Wire::Script(code)
+            }
+            Self::Script(code) | Self::ScriptWithExternalAccess(code) => {
+                Wire::ScriptWithExternalAccess(code)
+            }
+        };
+        serde::Serialize::serialize(&wire, serializer)
+    }
 }
 
 impl UDFType {
+    pub fn script_code(&self) -> Option<&UDFScriptCode> {
+        match self {
+            Self::Script(code) | Self::ScriptWithExternalAccess(code) => Some(code),
+            Self::Server(_) => None,
+        }
+    }
+
+    pub fn script(code: UDFScriptCode) -> Self {
+        if code.external_access_integrations.is_empty() {
+            Self::Script(Box::new(code))
+        } else {
+            Self::ScriptWithExternalAccess(Box::new(code))
+        }
+    }
+
     pub fn match_type(&self, is_script: bool) -> bool {
         match self {
             UDFType::Server(_) => !is_script,
-            UDFType::Script(_) => is_script,
+            UDFType::Script(_) | UDFType::ScriptWithExternalAccess(_) => is_script,
         }
     }
 }
@@ -1868,6 +1914,50 @@ mod tests {
     use super::*;
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
+
+    #[test]
+    fn script_network_policy_survives_distributed_plan_serialization() {
+        #[derive(serde::Deserialize)]
+        enum LegacyType {
+            Server,
+            Script,
+        }
+        let code = UDFScriptCode {
+            external_access_integrations: vec!["access".into()],
+            language: UDFLanguage::Python,
+            runtime_version: String::new(),
+            imports_stage_info: vec![],
+            imports: vec![],
+            packages: vec![],
+            code: Arc::new(Box::new([])),
+        };
+        // Direct construction must serialize with the fail-closed variant too.
+        let direct = UDFType::Script(Box::new(code.clone()));
+        let plan = UDFType::script(code);
+        let bytes = serde_json::to_vec(&plan).unwrap();
+        assert_eq!(serde_json::to_vec(&direct).unwrap(), bytes);
+        let round_trip: UDFType = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(plan, round_trip);
+        assert!(matches!(round_trip, UDFType::ScriptWithExternalAccess(_)));
+        let error = serde_json::from_slice::<LegacyType>(&bytes).err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("unknown variant `ScriptWithExternalAccess`"),
+            "{error}"
+        );
+        // Keep the existing wire shapes for unbound scripts and remote UDFs.
+        let mut unbound_code = plan.script_code().unwrap().clone();
+        unbound_code.external_access_integrations.clear();
+        let unbound = UDFType::script(unbound_code);
+        let value = serde_json::to_value(&unbound).unwrap();
+        assert!(value.get("Script").is_some());
+        assert_eq!(serde_json::from_value::<UDFType>(value).unwrap(), unbound);
+        assert_eq!(
+            serde_json::to_value(UDFType::Server("address".into())).unwrap(),
+            serde_json::json!({"Server": "address"})
+        );
+    }
 
     fn column_expr(index: usize) -> ScalarExpr {
         ScalarExpr::BoundColumnRef(BoundColumnRef {

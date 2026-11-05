@@ -728,10 +728,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
     }
 
-    pub fn get_enable_distributed_compact(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_compact")? != 0)
-    }
-
     pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
     }
@@ -836,10 +832,6 @@ impl Settings {
 
     pub fn get_compact_max_block_selection(&self) -> Result<u64> {
         self.try_get_u64("compact_max_block_selection")
-    }
-
-    pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
