@@ -388,7 +388,7 @@ mod tests {
     use crate::pipelines::processors::transforms::aggregator::PartitionedData;
     use crate::servers::flight::v1::exchange::block_coalescer::BlockCoalescer;
     use crate::servers::flight::v1::exchange::block_coalescer::CoalesceThreshold;
-    use crate::servers::flight::v1::exchange::serde;
+    use crate::servers::flight::v1::exchange::serde as exchange_serde;
     use crate::servers::flight::v1::network::PingPongTransport;
     use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
     use crate::servers::flight::v1::network::inbound::exchange_queue::QueueItem;
@@ -517,14 +517,16 @@ mod tests {
         let ordinary = ordinary.pop().unwrap();
         let ordinary_bytes = ordinary.data_body.len();
         let ordinary = deserialize_flight_data(strip_tid(ordinary), &schema, &arrow_schema)?;
-        let mut legacy = serde::serialize_block(0, block.clone(), options)?;
+        let mut legacy = exchange_serde::serialize_block(0, block.clone(), options)?;
         let mut legacy =
-            serde::ExchangeSerializeMeta::downcast_from(legacy.take_meta().unwrap()).unwrap();
+            exchange_serde::ExchangeSerializeMeta::downcast_from(legacy.take_meta().unwrap())
+                .unwrap();
         let Some(DataPacket::FragmentData(fragment)) = legacy.packet.pop() else {
             unreachable!()
         };
         let legacy_bytes = fragment.data.data_body.len();
-        let legacy = serde::deserialize_block(legacy.packet, fragment, &schema, arrow_schema)?;
+        let legacy =
+            exchange_serde::deserialize_block(legacy.packet, fragment, &schema, arrow_schema)?;
         Ok([(ordinary_bytes, ordinary), (legacy_bytes, legacy)])
     }
 
