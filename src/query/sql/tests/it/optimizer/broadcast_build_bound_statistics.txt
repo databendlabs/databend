@@ -238,6 +238,22 @@ cardinality: 1.213
 max_cardinality: 606.550
 statistics_zero_bound: true
 
+=== filter_range_over_range_outside_statistics_same_column ===
+description: A second range outside the recorded min/max on the same column above the first one keeps the bound of the first, like both ranges in one filter.
+sql: SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE t > 2000
+operator: Filter
+cardinality: 160.000
+max_cardinality: 200000000.000
+statistics_zero_bound: true
+
+=== filter_two_ranges_outside_statistics_same_column ===
+description: Two ranges outside the recorded min/max on the same column in one filter count as one unknown filter in the bound.
+sql: SELECT * FROM r WHERE t > 1000 AND t > 2000
+operator: Filter
+cardinality: 400000.000
+max_cardinality: 200000000.000
+statistics_zero_bound: true
+
 === filter_over_window_over_range_outside_statistics ===
 description: A window function keeps the rows of its input, so a filter on its result keeps the bound of the range below, reduced by its own selectivity.
 sql: SELECT * FROM (SELECT k, row_number() OVER (PARTITION BY k ORDER BY t) AS n FROM r WHERE t > 1000) AS x WHERE n <> 5

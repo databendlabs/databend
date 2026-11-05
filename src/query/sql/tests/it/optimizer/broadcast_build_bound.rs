@@ -424,6 +424,18 @@ async fn test_broadcast_build_bound_statistics_golden() -> Result<()> {
             operator: RelOp::Filter,
         },
         StatsCase {
+            name: "filter_range_over_range_outside_statistics_same_column",
+            description: "A second range outside the recorded min/max on the same column above the first one keeps the bound of the first, like both ranges in one filter.",
+            sql: "SELECT * FROM (SELECT * FROM r WHERE t > 1000) AS x WHERE t > 2000",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "filter_two_ranges_outside_statistics_same_column",
+            description: "Two ranges outside the recorded min/max on the same column in one filter count as one unknown filter in the bound.",
+            sql: "SELECT * FROM r WHERE t > 1000 AND t > 2000",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
             name: "filter_over_window_over_range_outside_statistics",
             description: "A window function keeps the rows of its input, so a filter on its result keeps the bound of the range below, reduced by its own selectivity.",
             sql: "SELECT * FROM (SELECT k, row_number() OVER (PARTITION BY k ORDER BY t) AS n FROM r WHERE t > 1000) AS x WHERE n <> 5",
