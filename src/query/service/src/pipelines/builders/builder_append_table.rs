@@ -112,14 +112,27 @@ impl PipelineBuilder {
                 ));
             }
         };
-        // Vector clustering appends its sort key later in the append pipeline, so only
-        // the evaluated partition/cluster key columns exist at this point.
-        let num_sort_columns = num_input_columns + key_exprs.len();
+        // `get_cluster_stats_gen` evaluates partition expressions first, then cluster
+        // expressions. Only the partition columns are needed before the exchange; the
+        // linear cluster columns are evaluated per lane for the sort. Hilbert and vector
+        // keys are not lane sort keys and are not evaluated here.
+        let num_partition_exprs = layout
+            .partition_key_index
+            .iter()
+            .filter(|&&offset| offset >= num_input_columns)
+            .count();
+        let (partition_exprs, cluster_exprs) = key_exprs.split_at(num_partition_exprs);
+        let cluster_exprs = if layout.is_linear() {
+            cluster_exprs.to_vec()
+        } else {
+            Vec::new()
+        };
+        let num_partition_columns = num_input_columns + partition_exprs.len();
+        let num_sort_columns = num_partition_columns + cluster_exprs.len();
         let fields = layout.out_fields[..num_sort_columns].to_vec();
 
         // Sort each lane by the partition key, then by the linear cluster key, so a
         // partition's blocks within a lane do not overlap on the cluster key.
-        // Hilbert keys have no lexicographic order and vector keys are assigned later.
         let mut sort_desc: Vec<SortColumnDescription> = Vec::new();
         let mut push_key = |offset: usize| {
             if sort_desc.iter().all(|desc| desc.offset != offset) {
@@ -136,9 +149,9 @@ impl PipelineBuilder {
         }
 
         let func_ctx = ctx.get_function_context()?;
-        if !key_exprs.is_empty() {
+        if !partition_exprs.is_empty() {
             let op = BlockOperator::Map {
-                exprs: key_exprs,
+                exprs: partition_exprs.to_vec(),
                 projections: None,
             };
             pipeline.add_transformer(|| {
@@ -149,6 +162,20 @@ impl PipelineBuilder {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let key_offsets = layout.partition_key_index.clone();
         pipeline.exchange(max_threads, Arc::new(PartitionKeyExchange { key_offsets }))?;
+
+        if !cluster_exprs.is_empty() {
+            let op = BlockOperator::Map {
+                exprs: cluster_exprs,
+                projections: None,
+            };
+            pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(
+                    vec![op.clone()],
+                    func_ctx.clone(),
+                    num_partition_columns,
+                )
+            });
+        }
 
         let sort_schema = DataSchemaRefExt::create(fields);
         let enable_fixed_rows = ctx.get_settings().get_enable_fixed_rows_sort()?;
