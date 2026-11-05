@@ -122,6 +122,25 @@ impl PipelineBuilder {
             .filter(|&&offset| offset >= num_input_columns)
             .count();
         let (partition_exprs, cluster_exprs) = key_exprs.split_at(num_partition_exprs);
+        debug_assert_eq!(
+            layout.out_fields.len(),
+            num_input_columns + key_exprs.len() + usize::from(layout.vector_operator().is_some()),
+            "out_fields must be the input schema, the evaluated keys, then the vector sort key"
+        );
+        debug_assert!(
+            layout
+                .partition_key_index
+                .iter()
+                .all(|&offset| offset < num_input_columns + num_partition_exprs),
+            "partition expressions must be evaluated before cluster expressions"
+        );
+        debug_assert!(
+            key_exprs
+                .iter()
+                .zip(&layout.out_fields[num_input_columns..])
+                .all(|(expr, field)| expr.data_type() == field.data_type()),
+            "evaluated key fields must follow the expression order"
+        );
         let cluster_exprs = if layout.is_linear() {
             cluster_exprs.to_vec()
         } else {

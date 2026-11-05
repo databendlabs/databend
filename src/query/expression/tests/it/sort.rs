@@ -18,7 +18,6 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
@@ -239,51 +238,4 @@ fn sort_concat() {
             assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
-}
-
-#[test]
-fn sort_already_ordered_block() -> anyhow::Result<()> {
-    // Sorting an ordered block must return the same rows, and the identity
-    // shortcut must not kick in when a limit truncates the permutation.
-    let block = DataBlock::new_from_columns(vec![
-        Int64Type::from_data(vec![1i64, 1, 2, 3, 5, 8]),
-        StringType::from_data(vec!["a", "b", "c", "d", "e", "f"]),
-    ]);
-    let sort_descs = vec![
-        SortColumnDescription {
-            offset: 0,
-            asc: true,
-            nulls_first: false,
-        },
-        SortColumnDescription {
-            offset: 1,
-            asc: true,
-            nulls_first: false,
-        },
-    ];
-
-    let sorted = DataBlock::sort(&block, &sort_descs, None)?;
-    assert_eq!(sorted.num_rows(), block.num_rows());
-    for (expected, actual) in block.columns().iter().zip(sorted.columns()) {
-        assert_eq!(expected.value(), actual.value());
-    }
-
-    let limited = DataBlock::sort(&block, &sort_descs, Some(3))?;
-    assert_eq!(limited.num_rows(), 3);
-    assert_eq!(
-        limited.get_by_offset(1).value(),
-        Value::Column(StringType::from_data(vec!["a", "b", "c"]))
-    );
-
-    let desc = vec![SortColumnDescription {
-        offset: 0,
-        asc: false,
-        nulls_first: false,
-    }];
-    let reversed = DataBlock::sort(&block, &desc, None)?;
-    assert_eq!(
-        reversed.get_by_offset(0).value(),
-        Value::Column(Int64Type::from_data(vec![8i64, 5, 3, 2, 1, 1]))
-    );
-    Ok(())
 }

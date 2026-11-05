@@ -786,6 +786,32 @@ AND x.c_min <= y.c_max AND y.c_min <= x.c_max
 ----
 0
 
+# Bare-column keys are hashed and sorted in place without evaluated copies.
+# The partition key is also the first cluster key, so the lane sort dedups it.
+statement ok
+CREATE TABLE hash_cluster_bare(p INT, c INT, v STRING) PARTITION BY (p) CLUSTER BY (p, c) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO hash_cluster_bare SELECT number % 2, (number * 7919) % 8000, 'v' || number FROM numbers(8000)
+
+query III
+SELECT count(*), count(DISTINCT c), sum(c) FROM hash_cluster_bare
+----
+8000 8000 31996000
+
+query I
+WITH b AS (
+    SELECT _block_name, p AS part, min(c) AS c_min, max(c) AS c_max
+    FROM hash_cluster_bare
+    GROUP BY _block_name, p
+)
+SELECT count(*)
+FROM b x JOIN b y
+ON x.part = y.part AND x._block_name < y._block_name
+AND x.c_min <= y.c_max AND y.c_min <= x.c_max
+----
+0
+
 # Hilbert keys are not lane sort keys: the layout evaluates only the partition
 # expressions and the write still splits blocks on partition boundaries.
 statement ok

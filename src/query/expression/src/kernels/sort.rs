@@ -106,7 +106,12 @@ impl DataBlock {
         }
 
         let permutations = sort_compare.take_permutation();
-        // An already ordered block yields the identity permutation; skip the gather.
+        // Skip the gather when the input is already in order. `take` copies every column
+        // of the block even for an identity permutation, which dominates the cost of
+        // sorting ordered input (the comparison sort itself is near linear on sorted
+        // runs). Checking the permutation is a sequential scan of `num_rows` integers that
+        // stops at the first mismatch, so it costs almost nothing on unordered input.
+        // A truncated permutation (limit) never qualifies: the row count differs.
         if permutations.len() == num_rows
             && permutations
                 .iter()
