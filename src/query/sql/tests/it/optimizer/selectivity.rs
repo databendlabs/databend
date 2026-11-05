@@ -2233,7 +2233,7 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
     write_case_title(
         &mut file,
         "range_outside_statistics_nullable",
-        "A range outside the min/max of a nullable column rejects its NULLs, also when written as a negated range, and contradicts IS NULL on the same column in either order. Under OR the negated range records no constraint, so NULLs are kept.",
+        "A range outside the min/max of a nullable column rejects its NULLs, also when written as a negated range, and contradicts IS NULL on the same column in either order. Under OR the negated range records no constraint, so NULLs are kept, unless every OR arm rejects them.",
     )?;
     let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
         min: 10,
@@ -2251,6 +2251,8 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         &["and_filters(not(is_not_null(c)), not(c <= 19))"],
         &["and_filters(not(is_not_null(c)), not(or_filters(c <= 19, c = 15)))"],
         &["or_filters(not(c <= 19), not(is_not_null(c)))"],
+        &["or_filters(c > 25, c < 5)"],
+        &["and_filters(not(is_not_null(c)), or_filters(c > 25, c < 5))"],
     ] {
         run_case_with_predicates(
             &mut file,

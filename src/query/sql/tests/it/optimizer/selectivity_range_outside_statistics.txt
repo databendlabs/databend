@@ -243,7 +243,7 @@ out stats     :
 1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 0.0, null_count: 0, histogram: None }
 
 === range_outside_statistics_nullable ===
-description: A range outside the min/max of a nullable column rejects its NULLs, also when written as a negated range, and contradicts IS NULL on the same column in either order. Under OR the negated range records no constraint, so NULLs are kept.
+description: A range outside the min/max of a nullable column rejects its NULLs, also when written as a negated range, and contradicts IS NULL on the same column in either order. Under OR the negated range records no constraint, so NULLs are kept, unless every OR arm rejects them.
 expr          : c > 25
 cardinality   : 1000000
 estimated     : 400
@@ -306,6 +306,24 @@ in stats      :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
 out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: ~10035.999999999998, histogram: None }
+
+expr          : or_filters(c > 25, c < 5)
+cardinality   : 1000000
+estimated     : 799.84
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(not(is_not_null(c)), or_filters(c > 25, c < 5))
+cardinality   : 1000000
+estimated     : 0
+max           : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
 === range_outside_statistics_all_null ===
 description: A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL. A redundant IS NOT NULL on the same column does not change that, unless the counts are exact.

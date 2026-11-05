@@ -314,8 +314,13 @@ impl SelectivityEstimator {
         // again without those domains and keep the result if it is
         // `StatisticsZero`.
         if contains_or_filters(&expr) {
-            let (type_folded, type_domain) =
-                fold_with_constraint_domains(&expr, self.cardinality, &self.column_stats, func_ctx);
+            let (type_folded, type_domain) = fold_with_constraint_domains(
+                &expr,
+                self.cardinality,
+                &self.column_stats,
+                None,
+                func_ctx,
+            );
             if deterministic_folded_selectivity(&type_folded, type_domain.as_ref()).is_none() {
                 let (selectivity, constraints) =
                     self.visit_predicates(type_folded.as_ref(), func_ctx)?;
@@ -339,8 +344,13 @@ impl SelectivityEstimator {
         expr: &Expr<ColumnBinding>,
         func_ctx: &FunctionContext,
     ) -> Result<f64> {
-        let (folded, output_domain) =
-            fold_with_constraint_domains(expr, self.cardinality, &self.column_stats, func_ctx);
+        let (folded, output_domain) = fold_with_constraint_domains(
+            expr,
+            self.cardinality,
+            &self.column_stats,
+            None,
+            func_ctx,
+        );
         if !matches!(
             deterministic_folded_selectivity(folded.as_ref(), output_domain.as_ref()),
             Some(Selectivity::Zero)
@@ -622,7 +632,7 @@ fn predicates_are_unsatisfiable(
     }
     let expr = conjunction(predicates).as_expr()?;
     let (expr, output_domain) =
-        fold_with_constraint_domains(&expr, cardinality, column_stats, func_ctx);
+        fold_with_constraint_domains(&expr, cardinality, column_stats, None, func_ctx);
     Ok(matches!(
         deterministic_folded_selectivity(&expr, output_domain.as_ref()),
         Some(Selectivity::Zero)
@@ -634,10 +644,15 @@ fn predicates_are_unsatisfiable(
 /// that a nullable column whose exact null count equals the exact input row
 /// count gets the NULL-only domain. Exact row and null counts are the same
 /// facts `RuleFoldCountAggregate` relies on to fold `COUNT(col)`.
+///
+/// For join residuals, `cardinality` counts row pairs while column statistics
+/// describe one side; `column_row_scales` gives the peer cardinality of each
+/// column, as for the residual visitor.
 fn fold_with_constraint_domains<'e>(
     expr: &'e Expr<ColumnBinding>,
     cardinality: StatCardinality,
     column_stats: &ColumnStatSet,
+    column_row_scales: Option<&HashMap<Symbol, StatCardinality>>,
     func_ctx: &FunctionContext,
 ) -> (Cow<'e, Expr<ColumnBinding>>, Option<Domain>) {
     let input_domains = expr
@@ -645,8 +660,15 @@ fn fold_with_constraint_domains<'e>(
         .into_iter()
         .map(|(binding, data_type)| {
             let domain = if matches!(data_type, DataType::Nullable(_))
-                && column_is_all_null(binding.index, cardinality, column_stats)
-            {
+                && column_is_all_null(
+                    binding.index,
+                    cardinality,
+                    column_row_scales
+                        .and_then(|scales| scales.get(&binding.index))
+                        .copied()
+                        .unwrap_or_else(|| StatCardinality::exact(1)),
+                    column_stats,
+                ) {
                 Domain::Nullable(NullableDomain {
                     has_null: true,
                     value: None,
@@ -676,18 +698,26 @@ fn contains_or_filters(expr: &Expr<ColumnBinding>) -> bool {
     }
 }
 
+/// Whether every input row holds NULL in the column: the exact NULL count,
+/// scaled by an exact `row_scale`, equals the exact input row count.
 fn column_is_all_null(
     index: Symbol,
     cardinality: StatCardinality,
+    row_scale: StatCardinality,
     column_stats: &ColumnStatSet,
 ) -> bool {
-    let StatCardinality::Exact(rows) = cardinality else {
+    let (StatCardinality::Exact(rows), StatCardinality::Exact(row_scale)) =
+        (cardinality, row_scale)
+    else {
         return false;
     };
     rows > 0
-        && column_stats
-            .get(&index)
-            .is_some_and(|stat| stat.null_count() == StatCount::Exact(rows))
+        && column_stats.get(&index).is_some_and(|stat| {
+            let StatCount::Exact(null_count) = stat.null_count() else {
+                return false;
+            };
+            null_count.checked_mul(row_scale) == Some(rows)
+        })
 }
 
 fn build_input_domains(
@@ -1071,8 +1101,13 @@ impl SelectivityVisitor<'_> {
             // a zero from statistics-derived domains keeps a small estimate when
             // a range comparison outside the column statistics caused it.
             Some(Selectivity::Zero) => {
-                let (folded, output_domain) =
-                    fold_with_constraint_domains(&expr, cardinality, column_stats, func_ctx);
+                let (folded, output_domain) = fold_with_constraint_domains(
+                    &expr,
+                    cardinality,
+                    column_stats,
+                    Some(column_row_scales),
+                    func_ctx,
+                );
                 if deterministic_folded_selectivity(&folded, output_domain.as_ref()).is_none() {
                     let mut visitor = visitor;
                     visitor.visit_expr(folded.as_ref())?;
@@ -1085,8 +1120,13 @@ impl SelectivityVisitor<'_> {
             Some(selectivity) => Ok(selectivity),
             None => {
                 if contains_or_filters(&expr) {
-                    let (type_folded, type_domain) =
-                        fold_with_constraint_domains(&expr, cardinality, column_stats, func_ctx);
+                    let (type_folded, type_domain) = fold_with_constraint_domains(
+                        &expr,
+                        cardinality,
+                        column_stats,
+                        Some(column_row_scales),
+                        func_ctx,
+                    );
                     if deterministic_folded_selectivity(&type_folded, type_domain.as_ref())
                         .is_none()
                     {
@@ -1782,6 +1822,26 @@ impl SelectivityVisitor<'_> {
                     Selectivity::LowerBound
                 } else {
                     Selectivity::Unknown
+                };
+                // The arms are visited without recording constraints. A column
+                // whose NULLs every arm rejects is still not NULL in the
+                // result, so record that for the fallback estimate.
+                if matches!(self.constraint_context, ConstraintContext::And)
+                    && matches!(self.selectivity, Selectivity::StatisticsZero(_))
+                {
+                    let mut arms = func.args.iter().map(null_rejected_columns);
+                    let common = arms.next().map(|first| {
+                        arms.fold(first, |common, columns| {
+                            common.intersection(&columns).copied().collect()
+                        })
+                    });
+                    for column in common.unwrap_or_default() {
+                        self.constraints.add(
+                            self.column_stats,
+                            column,
+                            ValueConstraint::NotNull,
+                        )?;
+                    }
                 }
             }
 
@@ -1847,6 +1907,42 @@ impl SelectivityVisitor<'_> {
         }
 
         Ok(())
+    }
+}
+
+/// Columns whose NULLs make `expr` not true: columns compared with a constant
+/// or tested by `IS NOT NULL`, through AND (any arm), OR (every arm) and NOT
+/// pushed down as in `negated_predicate`.
+fn null_rejected_columns(expr: &Expr<ColumnBinding>) -> ColumnSet {
+    let Expr::FunctionCall(call) = expr else {
+        return ColumnSet::new();
+    };
+    match call.function.signature.name.as_str() {
+        "and_filters" => call.args.iter().flat_map(null_rejected_columns).collect(),
+        "or_filters" => {
+            let mut arms = call.args.iter().map(null_rejected_columns);
+            arms.next()
+                .map(|first| {
+                    arms.fold(first, |common, columns| {
+                        common.intersection(&columns).copied().collect()
+                    })
+                })
+                .unwrap_or_default()
+        }
+        "not" => negated_predicate(&call.args[0])
+            .map(|negated| null_rejected_columns(&negated))
+            .unwrap_or_default(),
+        "is_not_null" => is_not_null_column(expr).into_iter().collect(),
+        name if ComparisonOp::try_from_func_name(name).is_some() => {
+            match (&call.args[0], &call.args[1]) {
+                (Expr::ColumnRef(column_ref), Expr::Constant(_))
+                | (Expr::Constant(_), Expr::ColumnRef(column_ref)) => {
+                    [column_ref.id.index].into_iter().collect()
+                }
+                _ => ColumnSet::new(),
+            }
+        }
+        _ => ColumnSet::new(),
     }
 }
 
