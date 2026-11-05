@@ -308,7 +308,7 @@ out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: ~10035.999999999998, histogram: None }
 
 === range_outside_statistics_all_null ===
-description: A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL.
+description: A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL. A redundant IS NOT NULL on the same column does not change that, unless the counts are exact.
 expr          : c > 5
 cardinality   : 1000000
 estimated     : 400
@@ -317,4 +317,31 @@ in stats      :
 0 AllNull { null_count: ~1000000.0 }
 out stats     :
 
+
+expr          : and_filters(c > 5, is_not_null(c))
+cardinality   : 1000000
+estimated     : 400
+max           : 200000
+in stats      :
+0 AllNull { null_count: ~1000000.0 }
+out stats     :
+
+
+expr          : and_filters(is_not_null(c), c > 5)
+cardinality   : 1000000
+estimated     : 400
+max           : 200000
+in stats      :
+0 AllNull { null_count: ~1000000.0 }
+out stats     :
+
+
+expr          : and_filters(c > 5, is_not_null(c))
+cardinality   : exact 1000000
+estimated     : 0
+max           : 0
+in stats      :
+0 AllNull { null_count: 1000000 }
+out stats     :
+0 AllNull { null_count: 0 }
 

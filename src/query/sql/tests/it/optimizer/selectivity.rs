@@ -2268,22 +2268,48 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
     write_case_title(
         &mut file,
         "range_outside_statistics_all_null",
-        "A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL.",
+        "A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL. A redundant IS NOT NULL on the same column does not change that, unless the counts are exact.",
     )?;
     let all_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::AllNull {
         null_count: StatCount::estimate(1_000_000.0, 1_000_000.0),
     })]);
-    run_case_with_predicates(
-        &mut file,
-        &["c > 5"],
-        nullable_columns,
-        all_null_stats,
-        StatCardinality::estimate(1_000_000.0),
-        CaseOptions {
-            show_max_cardinality: true,
-            ..Default::default()
-        },
-    )?;
+    // `IS NOT NULL` is implied by the range, so it does not remove the
+    // fallback in either order. With exact counts the column is proven to hold
+    // only NULLs, and the conjunction stays empty.
+    for (predicates, cardinality, null_count) in [
+        (&["c > 5"][..], StatCardinality::estimate(1_000_000.0), None),
+        (
+            &["and_filters(c > 5, is_not_null(c))"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["and_filters(is_not_null(c), c > 5)"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["and_filters(c > 5, is_not_null(c))"],
+            StatCardinality::exact(1_000_000),
+            Some(StatCount::exact(1_000_000)),
+        ),
+    ] {
+        let mut stats = all_null_stats.clone();
+        if let Some(null_count) = null_count {
+            stats.insert(Symbol::new(0), ColumnStat::AllNull { null_count });
+        }
+        run_case_with_predicates(
+            &mut file,
+            predicates,
+            nullable_columns,
+            stats,
+            cardinality,
+            CaseOptions {
+                show_max_cardinality: true,
+                ..Default::default()
+            },
+        )?;
+    }
 
     Ok(())
 }

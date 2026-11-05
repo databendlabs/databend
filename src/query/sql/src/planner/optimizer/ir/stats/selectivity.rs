@@ -942,6 +942,23 @@ impl ValueConstraintState {
         Ok(())
     }
 
+    /// Columns that `after`, derived from this state by visiting one more
+    /// predicate, constrains by a value (not only by `NotNull`).
+    fn value_constrained_columns_added(&self, after: &Self) -> ColumnSet {
+        after
+            .pending
+            .iter()
+            .filter(|(index, constraints)| {
+                let before = self.pending.get(index).map_or(0, Vec::len);
+                constraints
+                    .iter()
+                    .skip(before)
+                    .any(|constraint| !matches!(constraint, ValueConstraint::NotNull))
+            })
+            .map(|(index, _)| *index)
+            .collect()
+    }
+
     fn apply_to_column_stats(&self, column_stats: &ColumnStatSet) -> Result<ColumnStatSet> {
         let mut constrained_stats = ColumnStatSet::new();
         for index in self.pending.keys() {
@@ -1626,6 +1643,13 @@ impl SelectivityVisitor<'_> {
                 // comes from a predicate that rejects NULL, so `IS NULL` and a
                 // constraint on the same column cannot both match.
                 let mut is_null_columns = ColumnSet::new();
+                // Columns that a `StatisticsZero` child constrains by a value,
+                // and the estimates of `IS NOT NULL` children by column. Such a
+                // child rejects the column's NULLs already, so the `IS NOT NULL`
+                // is redundant: its estimate, which is zero over estimated
+                // all-NULL statistics, must not remove the fallback.
+                let mut statistics_zero_columns = ColumnSet::new();
+                let mut is_not_null_estimates: Vec<(usize, Symbol)> = Vec::new();
                 let mut estimates: Vec<(f64, ColumnSet)> = Vec::new();
                 for arg in &func.args {
                     let mut sub_visitor = self.spawn_child(ConstraintContext::And);
@@ -1636,6 +1660,17 @@ impl SelectivityVisitor<'_> {
                         ..
                     } = sub_visitor;
                     is_null_columns.extend(is_null_column(arg));
+                    if let Selectivity::StatisticsZero(_) = selectivity {
+                        statistics_zero_columns.extend(
+                            self.constraints
+                                .value_constrained_columns_added(&constraints),
+                        );
+                    }
+                    if let (Selectivity::N(_), Some(column)) =
+                        (selectivity, is_not_null_column(arg))
+                    {
+                        is_not_null_estimates.push((estimates.len(), column));
+                    }
                     match selectivity {
                         Selectivity::Unknown => has_unknown = true,
                         Selectivity::LowerBound => has_lower_bound = true,
@@ -1659,6 +1694,11 @@ impl SelectivityVisitor<'_> {
                         }
                     }
                     self.constraints = constraints;
+                }
+                for (estimate, column) in is_not_null_estimates {
+                    if statistics_zero_columns.contains(&column) {
+                        estimates[estimate].0 = MAX_SELECTIVITY;
+                    }
                 }
                 let has_n = !estimates.is_empty();
                 let acc = if has_zero {
@@ -1807,6 +1847,19 @@ impl SelectivityVisitor<'_> {
         }
 
         Ok(())
+    }
+}
+
+/// The column of `col IS NOT NULL`.
+fn is_not_null_column(expr: &Expr<ColumnBinding>) -> Option<Symbol> {
+    let Expr::FunctionCall(call) = expr else {
+        return None;
+    };
+    match call.args.as_slice() {
+        [Expr::ColumnRef(column_ref)] if call.function.signature.name == "is_not_null" => {
+            Some(column_ref.id.index)
+        }
+        _ => None,
     }
 }
 
