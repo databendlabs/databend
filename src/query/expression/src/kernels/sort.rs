@@ -106,6 +106,15 @@ impl DataBlock {
         }
 
         let permutations = sort_compare.take_permutation();
+        // An already ordered block yields the identity permutation; skip the gather.
+        if permutations.len() == num_rows
+            && permutations
+                .iter()
+                .enumerate()
+                .all(|(i, &p)| p as usize == i)
+        {
+            return Ok(block);
+        }
         DataBlock::take(&block, permutations.as_slice())
     }
 }

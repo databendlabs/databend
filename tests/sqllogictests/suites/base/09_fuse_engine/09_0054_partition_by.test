@@ -746,6 +746,52 @@ CREATE TABLE invalid_write_distribution(p INT) PARTITION BY (p) WRITE_DISTRIBUTI
 statement error write_distribution_mode='hash' requires PARTITION BY
 CREATE TABLE missing_write_partition(p INT) WRITE_DISTRIBUTION_MODE='hash'
 
+# The hash write layout sorts each lane by the partition key and then by the
+# linear cluster key, so one write leaves non-overlapping cluster ranges inside
+# every partition. The input permutes c so each 1000-row input block spans the
+# whole range; without the cluster key in the lane sort, blocks of the same
+# partition overlap each other. Expression keys exercise the evaluated columns.
+statement ok
+SET max_threads=4
+
+statement ok
+SET max_block_size=1000
+
+statement ok
+CREATE TABLE hash_cluster_sorted(p INT, c INT, v STRING) PARTITION BY (p % 2) CLUSTER BY (c + 0) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO hash_cluster_sorted SELECT number, (number * 7919) % 8000, 'v' || number FROM numbers(8000)
+
+query III
+SELECT count(*), count(DISTINCT c), sum(c) FROM hash_cluster_sorted
+----
+8000 8000 31996000
+
+query I
+SELECT to_int64(block_count >= 8) FROM fuse_snapshot('db_09_0054', 'hash_cluster_sorted') LIMIT 1
+----
+1
+
+query I
+WITH b AS (
+    SELECT _block_name, p % 2 AS part, min(c) AS c_min, max(c) AS c_max
+    FROM hash_cluster_sorted
+    GROUP BY _block_name, p % 2
+)
+SELECT count(*)
+FROM b x JOIN b y
+ON x.part = y.part AND x._block_name < y._block_name
+AND x.c_min <= y.c_max AND y.c_min <= x.c_max
+----
+0
+
+statement ok
+UNSET max_threads
+
+statement ok
+UNSET max_block_size
+
 # bucket remains a valid cluster expression without physical partitioning.
 statement ok
 CREATE TABLE bucket_cluster_only(id INT) CLUSTER BY (bucket(16, id))

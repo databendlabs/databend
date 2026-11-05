@@ -15,16 +15,15 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::group_hash_entries;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::basic::Exchange;
@@ -91,48 +90,66 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let Some(partition_info) = fuse_table.partition_pruning_info(ctx.clone()) else {
-            return Ok(());
-        };
         let num_input_columns = input_schema.num_fields();
-        let partition_exprs = partition_info
-            .partition_keys
-            .into_iter()
-            .map(|key| {
-                key.as_expr(&BUILTIN_FUNCTIONS)
-                    .project_column_ref(|name| input_schema.index_of(name))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        // Share the key evaluation and sort order with the serialize stage so the
+        // lane layout and the persisted cluster statistics describe the same columns.
+        let layout = fuse_table.get_cluster_stats_gen(
+            ctx.clone(),
+            0,
+            fuse_table.get_block_thresholds(),
+            Arc::new(input_schema),
+        )?;
+        if layout.partition_key_index.is_empty() {
+            return Ok(());
+        }
 
-        let mut fields = input_schema.fields().clone();
-        let mut sort_desc = Vec::with_capacity(partition_exprs.len());
-        for (index, expr) in partition_exprs.iter().enumerate() {
-            fields.push(DataField::new(
-                &format!("partition_key_{index}"),
-                expr.data_type().clone(),
-            ));
-            sort_desc.push(SortColumnDescription {
-                offset: num_input_columns + index,
-                asc: true,
-                nulls_first: false,
+        let key_exprs = match layout.eval_operators.as_slice() {
+            [] => Vec::new(),
+            [BlockOperator::Map { exprs, .. }] => exprs.clone(),
+            _ => {
+                return Err(ErrorCode::Internal(
+                    "unexpected key evaluation operators for table write layout",
+                ));
+            }
+        };
+        // Vector clustering appends its sort key later in the append pipeline, so only
+        // the evaluated partition/cluster key columns exist at this point.
+        let num_sort_columns = num_input_columns + key_exprs.len();
+        let fields = layout.out_fields[..num_sort_columns].to_vec();
+
+        // Sort each lane by the partition key, then by the linear cluster key, so a
+        // partition's blocks within a lane do not overlap on the cluster key.
+        // Hilbert keys have no lexicographic order and vector keys are assigned later.
+        let mut sort_desc: Vec<SortColumnDescription> = Vec::new();
+        let mut push_key = |offset: usize| {
+            if sort_desc.iter().all(|desc| desc.offset != offset) {
+                sort_desc.push(SortColumnDescription {
+                    offset,
+                    asc: true,
+                    nulls_first: false,
+                });
+            }
+        };
+        layout.partition_key_index.iter().for_each(|&i| push_key(i));
+        if layout.is_linear() {
+            layout.sort_descs().iter().for_each(|d| push_key(d.offset));
+        }
+
+        let func_ctx = ctx.get_function_context()?;
+        if !key_exprs.is_empty() {
+            let op = BlockOperator::Map {
+                exprs: key_exprs,
+                projections: None,
+            };
+            pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns)
             });
         }
 
-        let projections = (0..fields.len()).collect();
-        let op = BlockOperator::Map {
-            exprs: partition_exprs,
-            projections: Some(projections),
-        };
-        let func_ctx = ctx.get_function_context()?;
-        pipeline.add_transformer(|| {
-            CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns)
-        });
-
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let key_offsets = (num_input_columns..fields.len()).collect();
+        let key_offsets = layout.partition_key_index.clone();
         pipeline.exchange(max_threads, Arc::new(PartitionKeyExchange { key_offsets }))?;
 
-        let num_sort_columns = fields.len();
         let sort_schema = DataSchemaRefExt::create(fields);
         let enable_fixed_rows = ctx.get_settings().get_enable_fixed_rows_sort()?;
         let sort_builder = SortPipelineBuilder::create(
@@ -145,16 +162,18 @@ impl PipelineBuilder {
         .with_block_size_hit(table.get_block_thresholds().max_rows_per_block);
         sort_builder.build_local_full_sort_pipeline(pipeline, false)?;
 
-        let projection = (0..num_input_columns).collect::<Vec<_>>();
-        pipeline.add_transformer(|| {
-            CompoundBlockOperator::new(
-                vec![BlockOperator::Project {
-                    projection: projection.clone(),
-                }],
-                func_ctx.clone(),
-                num_sort_columns,
-            )
-        });
+        if num_sort_columns > num_input_columns {
+            let projection = (0..num_input_columns).collect::<Vec<_>>();
+            pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(
+                    vec![BlockOperator::Project {
+                        projection: projection.clone(),
+                    }],
+                    func_ctx.clone(),
+                    num_sort_columns,
+                )
+            });
+        }
         Ok(())
     }
 
