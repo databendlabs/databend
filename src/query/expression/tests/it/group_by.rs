@@ -213,12 +213,23 @@ fn test_serialized_dictionary_keys_outgrow_size_estimate() {
     let column = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
         indices, values,
     ))));
-    // Every row selects the long value, not the dictionary's average length.
-    assert!(column.serialize_size() < 520);
-    let keys = serialize_keys(&[column.into()], 5);
-    let expected = [96_u64.to_ne_bytes().to_vec(), text.into_bytes()].concat();
-    assert_eq!(keys.offsets().as_slice(), &[0, 104, 208, 312, 416, 520]);
-    assert_eq!(keys.data().len(), 520);
+    // Dictionary estimates may be exact or based on average value length.
+    // A constant is excluded from the caller's capacity hint either way, so
+    // the combined keys must outgrow that hint even with exact dictionary sizing.
+    let estimated_size = column.serialize_size();
+    assert!(
+        estimated_size < 525,
+        "unexpected size hint: {estimated_size}"
+    );
+    let entries = [
+        column.into(),
+        BlockEntry::new_const_column_arg::<UInt8Type>(3, 5),
+    ];
+    let keys = serialize_keys(&entries, 5);
+    let expected = [96_u64.to_ne_bytes().to_vec(), text.into_bytes(), vec![3]].concat();
+    assert_eq!(keys.offsets().as_slice(), &[0, 105, 210, 315, 420, 525]);
+    assert_eq!(keys.data().len(), 525);
+    assert!(keys.data().len() > estimated_size);
     assert!(keys.iter().all(|key| key == expected));
 }
 
