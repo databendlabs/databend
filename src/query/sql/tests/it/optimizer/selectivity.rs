@@ -2205,6 +2205,7 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         &["or_filters(a > 25, a < 5)"],
         &["or_filters(a > 25, b = 5)"],
         &["or_filters(a > 25, b < 50)"],
+        &["or_filters(and_filters(a > 25, b = 5), and_filters(a > 25, b = 6))"],
         &["not(a > 25)"],
         &["not(a <= 19)"],
         &["not(a >= 10)"],
@@ -2270,7 +2271,7 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
     write_case_title(
         &mut file,
         "range_outside_statistics_all_null",
-        "A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL. A redundant IS NOT NULL on the same column does not change that, unless the counts are exact.",
+        "A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL. An OR of such ranges does the same, and a redundant IS NOT NULL on the same column does not change either, unless the counts are exact.",
     )?;
     let all_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::AllNull {
         null_count: StatCount::estimate(1_000_000.0, 1_000_000.0),
@@ -2287,6 +2288,21 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         ),
         (
             &["and_filters(is_not_null(c), c > 5)"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["or_filters(c > 5, c < 1)"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["and_filters(is_not_null(c), or_filters(c > 5, c < 1))"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["and_filters(or_filters(c > 5, c < 1), is_not_null(c))"],
             StatCardinality::estimate(1_000_000.0),
             None,
         ),
@@ -2313,5 +2329,31 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         )?;
     }
 
+    // Estimated statistics can also put every row at NULL while keeping a
+    // value range. `IS NOT NULL` is then estimated as 0, but an OR whose arms
+    // all reject the NULLs makes it redundant, in either order.
+    let estimated_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 10,
+        max: 19,
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::estimate(1_000_000.0, 1_000_000.0),
+        histogram: None,
+    })]);
+    for predicates in [
+        &["and_filters(is_not_null(c), or_filters(c > 25, c < 5))"][..],
+        &["and_filters(or_filters(c > 25, c < 5), is_not_null(c))"],
+    ] {
+        run_case_with_predicates(
+            &mut file,
+            predicates,
+            nullable_columns,
+            estimated_null_stats.clone(),
+            StatCardinality::estimate(1_000_000.0),
+            CaseOptions {
+                show_max_cardinality: true,
+                ..Default::default()
+            },
+        )?;
+    }
     Ok(())
 }

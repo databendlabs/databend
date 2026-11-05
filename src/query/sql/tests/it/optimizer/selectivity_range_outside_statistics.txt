@@ -121,6 +121,17 @@ out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
 
+expr          : or_filters(and_filters(a > 25, b = 5), and_filters(a > 25, b = 6))
+cardinality   : 1000000
+estimated     : 7.999984000000001
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~5.506717548117608[..7.999984000000001], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: ~7.688380131262829[..7.999984000000001], null_count: 0, histogram: None }
+
 expr          : not(a > 25)
 cardinality   : 1000000
 estimated     : 1000000
@@ -326,7 +337,7 @@ out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
 === range_outside_statistics_all_null ===
-description: A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL. A redundant IS NOT NULL on the same column does not change that, unless the counts are exact.
+description: A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL. An OR of such ranges does the same, and a redundant IS NOT NULL on the same column does not change either, unless the counts are exact.
 expr          : c > 5
 cardinality   : 1000000
 estimated     : 400
@@ -354,6 +365,33 @@ in stats      :
 out stats     :
 
 
+expr          : or_filters(c > 5, c < 1)
+cardinality   : 1000000
+estimated     : 799.84
+max           : 200000
+in stats      :
+0 AllNull { null_count: ~1000000.0 }
+out stats     :
+
+
+expr          : and_filters(is_not_null(c), or_filters(c > 5, c < 1))
+cardinality   : 1000000
+estimated     : 799.84
+max           : 200000
+in stats      :
+0 AllNull { null_count: ~1000000.0 }
+out stats     :
+
+
+expr          : and_filters(or_filters(c > 5, c < 1), is_not_null(c))
+cardinality   : 1000000
+estimated     : 799.84
+max           : 200000
+in stats      :
+0 AllNull { null_count: ~1000000.0 }
+out stats     :
+
+
 expr          : and_filters(c > 5, is_not_null(c))
 cardinality   : exact 1000000
 estimated     : 0
@@ -362,4 +400,22 @@ in stats      :
 0 AllNull { null_count: 1000000 }
 out stats     :
 0 AllNull { null_count: 0 }
+
+expr          : and_filters(is_not_null(c), or_filters(c > 25, c < 5))
+cardinality   : 1000000
+estimated     : 799.84
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: ~1000000.0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(c > 25, c < 5), is_not_null(c))
+cardinality   : 1000000
+estimated     : 799.84
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: ~1000000.0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 
