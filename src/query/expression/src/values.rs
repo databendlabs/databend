@@ -1017,7 +1017,11 @@ impl PartialOrd for Scalar {
                 let Ok(map_2) = deserialize_bitmap(b2) else {
                     return None;
                 };
-                map_1.eq(&map_2).then_some(Ordering::Equal)
+                // Roaring's equality distinguishes array and bitset stores.
+                // Decoding a run can leave an oversized array at the threshold,
+                // so compare members through compressed intersection instead.
+                (map_1.len() == map_2.len() && map_1.intersection_len(&map_2) == map_1.len())
+                    .then_some(Ordering::Equal)
             }
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {

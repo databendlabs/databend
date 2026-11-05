@@ -45,17 +45,17 @@ fn assert_hash_class(scalars: &[Scalar]) -> databend_common_exception::Result<()
     let first = &scalars[0];
     let data_type = first.as_ref().infer_data_type();
     let mut map = HashMap::new();
-    for scalar in scalars {
-        map.insert(scalar.clone(), ());
-    }
-    assert_eq!(map.len(), 1);
     let mut builder = ColumnBuilder::with_capacity(&data_type, scalars.len() + 2);
     builder.push(first.as_ref());
     for scalar in scalars {
+        // Check equality in both directions before diagnosing HashMap hashing.
         assert_eq!(scalar, first);
+        assert_eq!(first, scalar);
         assert_eq!(scalar_hash(scalar), scalar_hash(first));
+        map.insert(scalar.clone(), ());
         builder.push(scalar.as_ref());
     }
+    assert_eq!(map.len(), 1);
     builder.push(first.as_ref());
     // Slice off padding so binary/array buffers and validity can have offsets.
     let column = builder.build().slice(1..scalars.len() + 1);
@@ -224,11 +224,20 @@ fn bitmap_hashes_canonicalize_run_containers() -> databend_common_exception::Res
         HybridBitmap::Large(tree)
             .serialize_into(&mut hybrid)
             .unwrap();
-        assert_hash_class(&[
-            Scalar::Bitmap(run_bitmap(cardinality)),
-            Scalar::Bitmap(legacy),
-            Scalar::Bitmap(hybrid),
-        ])?;
+        let run = Scalar::Bitmap(run_bitmap(cardinality));
+        assert_hash_class(&[run.clone(), Scalar::Bitmap(legacy), Scalar::Bitmap(hybrid)])?;
+
+        // Equal cardinalities alone are insufficient, and subset containment
+        // alone must not equate sets with different cardinalities.
+        for range in [1..u64::from(cardinality) + 1, 0..u64::from(cardinality) + 1] {
+            let mut different = RoaringTreemap::new();
+            different.insert_range(range);
+            let mut bytes = Vec::new();
+            different.serialize_into(&mut bytes).unwrap();
+            let different = Scalar::Bitmap(bytes);
+            assert_ne!(run, different);
+            assert_ne!(different, run);
+        }
     }
     assert_hash_class(&[Scalar::Bitmap(Vec::new()), {
         let mut bytes = Vec::new();
