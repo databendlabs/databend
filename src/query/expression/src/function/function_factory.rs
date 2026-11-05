@@ -171,8 +171,13 @@ impl Function {
         });
         let new_eval = Box::new(move |val: &[Value<AnyType>], ctx: &mut EvalContext| {
             let output = eval.eval(val, ctx);
-            let validity = ctx.errors.take().map(|(validity, _)| validity.into());
-            output.wrap_nullable(validity)
+            match (output, ctx.errors.take()) {
+                // Scalar errors apply to the whole result, not just bitmap row zero.
+                (Value::Scalar(_), Some(_)) => Value::Scalar(Scalar::Null),
+                (output, errors) => {
+                    output.wrap_nullable(errors.map(|(validity, _)| validity.into()))
+                }
+            }
         });
 
         Function {

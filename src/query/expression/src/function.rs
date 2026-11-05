@@ -680,11 +680,18 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
     debug_assert!(!O::data_type().is_nullable_or_null());
     move |val, ctx| {
         let output = func(val, ctx);
-        let validity = match ctx.errors.take() {
-            Some((validity, _)) => validity.into(),
-            None => Bitmap::new_constant(true, ctx.num_rows),
-        };
-        NullableType::<O>::wrap_value(output, validity, ctx.generics)
+        match (output, ctx.errors.take()) {
+            // Scalar evaluation runs once; its error bitmap has not been broadcast yet.
+            (Value::Scalar(_), Some(_)) => Value::Scalar(None),
+            (Value::Scalar(scalar), None) => Value::Scalar(Some(scalar)),
+            (Value::Column(column), errors) => {
+                let validity = match errors {
+                    Some((validity, _)) => validity.into(),
+                    None => Bitmap::new_constant(true, ctx.num_rows),
+                };
+                NullableType::<O>::wrap_value(Value::Column(column), validity, ctx.generics)
+            }
+        }
     }
 }
 

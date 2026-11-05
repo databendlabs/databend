@@ -289,24 +289,50 @@ fn test_dynamic_nullable_suppresses_errors_only_on_inactive_rows() {
 }
 
 #[test]
-fn test_error_to_null_preserves_scalar_error_mask() {
+fn test_error_to_null_broadcasts_scalar_errors() {
     let func_ctx = FunctionContext::default();
+    for rows in [0, 1, 2, 5] {
+        for has_error in [false, true] {
+            let mut ctx = context(&func_ctx, rows, None);
+            let result = error_to_null::<Int64Type, Int64Type>(|_, ctx| {
+                if has_error {
+                    // Scalar evaluation runs once, regardless of the block's row count.
+                    ctx.set_error(0, "scalar conversion failed");
+                }
+                Value::Scalar(7)
+            })(Value::Scalar(1), &mut ctx);
+            assert_eq!(
+                result,
+                Value::Scalar((!has_error).then_some(7)),
+                "rows={rows}"
+            );
+            assert!(ctx.errors.is_none());
+        }
+    }
+}
+
+#[test]
+fn test_error_to_null_preserves_column_error_mask() {
+    let func_ctx = FunctionContext::default();
+    let mut ctx = context(&func_ctx, 3, None);
+    let result = error_to_null::<Int64Type, Int64Type>(|_, ctx| {
+        ctx.set_error(1, "column conversion failed");
+        Value::Column(vec![7, 8, 9].into())
+    })(Value::Column(vec![1, 2, 3].into()), &mut ctx);
+    let Value::Column(column) = result else {
+        panic!("expected column")
+    };
+    assert_eq!(column.iter().collect::<Vec<_>>(), vec![
+        Some(7),
+        None,
+        Some(9)
+    ]);
+    assert!(ctx.errors.is_none());
+}
+
+#[test]
+fn test_wrap_nullable_preserves_scalar_row_mask() {
     for error_row in [0, 1] {
-        let mut ctx = context(&func_ctx, 2, None);
-        let result = error_to_null::<Int64Type, Int64Type>(|_, ctx| {
-            ctx.set_error(error_row, "bad row");
-            Value::Scalar(7)
-        })(Value::Scalar(1), &mut ctx);
-        let Value::Column(column) = result else {
-            panic!("expected column")
-        };
-        assert_eq!(
-            column.iter().collect::<Vec<_>>(),
-            (0..2)
-                .map(|row| (row != error_row).then_some(7))
-                .collect::<Vec<_>>()
-        );
-        assert!(ctx.errors.is_none());
         let result = Value::Scalar(Scalar::Number(7_i64.into()))
             .wrap_nullable(Some(Bitmap::from_iter((0..2).map(|row| row != error_row))));
         let expected = Int64Type::from_opt_data(
@@ -319,7 +345,7 @@ fn test_error_to_null_preserves_scalar_error_mask() {
 }
 
 #[test]
-fn test_dynamic_try_wrapper_preserves_scalar_error_mask() {
+fn test_dynamic_try_wrapper_broadcasts_scalar_errors() {
     let func_ctx = FunctionContext::default();
     let ty = Int64Type::data_type();
     let func = Function {
@@ -331,21 +357,20 @@ fn test_dynamic_try_wrapper_preserves_scalar_error_mask() {
         eval: FunctionEval::Scalar {
             calc_domain: domain_evaluator(|_, _| FunctionDomain::MayThrow),
             eval: scalar_evaluator(|_, ctx| {
-                ctx.set_error(1, "bad row");
+                ctx.set_error(0, "scalar conversion failed");
                 Value::Scalar(Scalar::Number(7_i64.into()))
             }),
             derive_stat: None,
         },
     }
     .error_to_null();
-    let mut ctx = context(&func_ctx, 2, None);
     let (_, _, eval) = func.eval.into_scalar().unwrap();
-    let result = eval.eval(&[Value::Scalar(Scalar::Number(1_i64.into()))], &mut ctx);
-    assert_eq!(
-        result.into_column().unwrap(),
-        Int64Type::from_opt_data(vec![Some(7), None])
-    );
-    assert!(ctx.errors.is_none());
+    for rows in [0, 1, 2, 5] {
+        let mut ctx = context(&func_ctx, rows, None);
+        let result = eval.eval(&[Value::Scalar(Scalar::Number(1_i64.into()))], &mut ctx);
+        assert_eq!(result, Value::Scalar(Scalar::Null), "rows={rows}");
+        assert!(ctx.errors.is_none());
+    }
 }
 
 #[test]
