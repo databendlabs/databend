@@ -1,0 +1,42 @@
+name: review-budget
+
+# Warns (never blocks) when a PR keeps re-running an automated reviewer.
+# See AI_POLICY.md -> "AI review discipline": two rounds per PR, only on the
+# incremental diff, then human triage instead of another bot pass.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/scripts/check_review_budget.py
+      - .github/scripts/test_check_review_budget.py
+      - .github/workflows/review-budget.yml
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test review budget checker
+        run: python3 .github/scripts/test_check_review_budget.py
+
+  budget:
+    if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      # issue_comment workflows run from the default branch, never PR code.
+      - uses: actions/checkout@v6
+      - name: Check automated review rounds
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Repo variable MAX_REVIEW_ROUNDS overrides the default of 2.
+          MAX_REVIEW_ROUNDS: ${{ vars.MAX_REVIEW_ROUNDS || '2' }}
+        run: python3 .github/scripts/check_review_budget.py
