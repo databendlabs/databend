@@ -70,9 +70,12 @@ impl Enforcer for DistributionEnforcer {
         match &self.0 {
             Distribution::Serial => Ok(Exchange::Merge.into()),
             Distribution::Broadcast => Ok(Exchange::Broadcast.into()),
-            Distribution::NonBroadcast(hash_keys) | Distribution::NodeToNodeHash(hash_keys) => {
+            Distribution::NodeToNodeHash(hash_keys) => {
                 Ok(Exchange::NodeToNodeHash(hash_keys.clone()).into())
             }
+            Distribution::NonBroadcast => Err(ErrorCode::Internal(
+                "Cannot enforce non-broadcast distribution on a replicated or unknown input",
+            )),
             Distribution::GlobalHash(hash_keys) => {
                 Ok(Exchange::GlobalHash(hash_keys.clone()).into())
             }

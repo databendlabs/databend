@@ -98,10 +98,10 @@ pub enum Distribution {
     Random,
     Serial,
     Broadcast,
-    /// Required-only: retain any concrete distribution except Broadcast. The keys are
-    /// a node-to-node hash fallback when the input would otherwise be replicated.
-    /// Never derive this as a delivered physical property.
-    NonBroadcast(Vec<ScalarExpr>),
+    /// Required-only: retain any concrete distribution except Broadcast.
+    /// Replicated alternatives must be rejected, not shuffled: exchanges do not
+    /// undo replication. Never derive this as a delivered physical property.
+    NonBroadcast,
     NodeToNodeHash(Vec<ScalarExpr>),
     GlobalHash(Vec<ScalarExpr>),
 }
@@ -124,7 +124,7 @@ impl Distribution {
             | (Distribution::Broadcast, Distribution::Broadcast) => true,
 
             (
-                Distribution::NonBroadcast(_),
+                Distribution::NonBroadcast,
                 Distribution::Random
                 | Distribution::Serial
                 | Distribution::NodeToNodeHash(_)
@@ -150,14 +150,7 @@ impl Display for Distribution {
             Distribution::Random => write!(f, "Random"),
             Distribution::Serial => write!(f, "Serial"),
             Distribution::Broadcast => write!(f, "Broadcast"),
-            Distribution::NonBroadcast(keys) => write!(
-                f,
-                "NonBroadcast({})",
-                keys.iter()
-                    .map(|s| s.as_raw_expr().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            Distribution::NonBroadcast => write!(f, "NonBroadcast"),
             Distribution::NodeToNodeHash(keys) => write!(
                 f,
                 "Hash({})",

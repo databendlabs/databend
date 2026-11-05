@@ -392,18 +392,11 @@ impl Join {
             return None;
         }
 
-        let condition = &self.equi_conditions[0];
         // LeftMark emits build rows; RightMark emits probe rows. Replicate only
         // the subquery, so each output row is marked once with global NULL knowledge.
         Some(match self.join_type {
-            JoinType::LeftMark => (
-                Distribution::Broadcast,
-                Distribution::NonBroadcast(vec![condition.right.clone()]),
-            ),
-            JoinType::RightMark => (
-                Distribution::NonBroadcast(vec![condition.left.clone()]),
-                Distribution::Broadcast,
-            ),
+            JoinType::LeftMark => (Distribution::Broadcast, Distribution::NonBroadcast),
+            JoinType::RightMark => (Distribution::NonBroadcast, Distribution::Broadcast),
             _ => unreachable!(),
         })
     }
