@@ -28,6 +28,7 @@ use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -1731,6 +1732,19 @@ impl SelectivityVisitor<'_> {
                     Selectivity::N(n) | Selectivity::StatisticsZero(n) => Selectivity::N(1.0 - n),
                     selectivity => selectivity,
                 };
+                // `NOT (t <= max)` is the range `t > max` outside the column
+                // statistics, although the inner comparison is estimated to
+                // match every row. Estimate the predicate with NOT pushed down
+                // and keep that estimate when it is `StatisticsZero`.
+                if let Selectivity::N(_) = self.selectivity
+                    && let Some(negated) = negated_predicate(&func.args[0])
+                {
+                    let mut negated_visitor = self.spawn_child(ConstraintContext::Not);
+                    negated_visitor.visit_expr(&negated)?;
+                    if let Selectivity::StatisticsZero(_) = negated_visitor.selectivity {
+                        self.selectivity = negated_visitor.selectivity;
+                    }
+                }
             }
 
             "like" => {
@@ -1763,6 +1777,53 @@ impl SelectivityVisitor<'_> {
 
         Ok(())
     }
+}
+
+/// Returns an expression with the same value as `NOT expr`, with the NOT
+/// pushed through NOT, AND and OR and into range comparisons between a column
+/// and a constant: `NOT (t <= c)` becomes `t > c`, and
+/// `NOT (x AND y)` becomes `NOT x OR NOT y`. Other operands keep an explicit
+/// NOT. Returns None when `expr` is not one of these forms.
+fn negated_predicate(expr: &Expr<ColumnBinding>) -> Option<Expr<ColumnBinding>> {
+    let Expr::FunctionCall(call) = expr else {
+        return None;
+    };
+    let name = call.function.signature.name.as_str();
+    let negated_name = match name {
+        "not" => return Some(call.args[0].clone()),
+        "and_filters" => "or_filters",
+        "or_filters" => "and_filters",
+        "lt" => "gte",
+        "lte" => "gt",
+        "gt" => "lte",
+        "gte" => "lt",
+        _ => return None,
+    };
+    let args = if matches!(name, "and_filters" | "or_filters") {
+        call.args
+            .iter()
+            .map(|arg| match negated_predicate(arg) {
+                Some(negated) => Ok(negated),
+                None => check_function(
+                    None,
+                    "not",
+                    &[],
+                    std::slice::from_ref(arg),
+                    &BUILTIN_FUNCTIONS,
+                ),
+            })
+            .collect::<Result<Vec<_>>>()
+            .ok()?
+    } else {
+        match (&call.args[0], &call.args[1]) {
+            (Expr::ColumnRef(_), Expr::Constant(_)) | (Expr::Constant(_), Expr::ColumnRef(_)) => {
+                call.args.clone()
+            }
+            _ => return None,
+        }
+    };
+    // A type check failure only skips this refinement of the estimate.
+    check_function(call.span, negated_name, &[], &args, &BUILTIN_FUNCTIONS).ok()
 }
 
 fn boolean_comparison_selectivity(op: ComparisonOp, constant: bool) -> Selectivity {
