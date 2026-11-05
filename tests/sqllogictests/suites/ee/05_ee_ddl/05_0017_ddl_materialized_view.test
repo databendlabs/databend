@@ -848,7 +848,13 @@ ALTER MATERIALIZED VIEW test_mv2 CLUSTER BY (cnt)
 statement ok
 ALTER MATERIALIZED VIEW test_mv2 CLUSTER BY (val)
 
-# Materialized views and their sources must belong to the same database.
+# Cross-database MV creation resolves source references in the session database.
+statement ok
+DROP DATABASE IF EXISTS mv_src_db
+
+statement ok
+DROP DATABASE IF EXISTS mv_dst_db
+
 statement ok
 CREATE DATABASE mv_src_db
 
@@ -873,11 +879,94 @@ INSERT INTO mv_dst_db.t VALUES (100)
 statement ok
 USE mv_src_db
 
-statement error 2328
+statement ok
 CREATE MATERIALIZED VIEW mv_dst_db.cross_mv AS SELECT id FROM t WHERE 1 = 1
+
+query I
+SELECT count(*) FROM mv_dst_db.cross_mv
+----
+2
+
+query TT
+SHOW CREATE MATERIALIZED VIEW mv_dst_db.cross_mv
+----
+cross_mv CREATE MATERIALIZED VIEW `mv_dst_db`.`cross_mv` (`id`) AS SELECT id FROM mv_src_db.t WHERE 1 = 1
+
+statement ok
+REFRESH MATERIALIZED VIEW mv_dst_db.cross_mv
+
+query I
+SELECT id FROM mv_dst_db.cross_mv ORDER BY id
+----
+1
+2
 
 statement ok
 USE test_mv_ddl
+
+# A dropped source database invalidates the MV even though the source TableMeta is retained.
+statement ok
+DROP DATABASE mv_src_db
+
+query TBT
+SELECT source_database, invalid, invalid_reason
+FROM system.materialized_views
+WHERE database = 'mv_dst_db' AND name = 'cross_mv'
+----
+mv_src_db 1 source database was dropped
+
+# The persisted definition still names the dropped database; reads and refreshes both report it
+# as an invalid materialized view.
+statement error 2328
+SELECT * FROM mv_dst_db.cross_mv
+
+statement error 2328
+REFRESH MATERIALIZED VIEW mv_dst_db.cross_mv
+
+statement ok
+UNDROP DATABASE mv_src_db
+
+query BB
+SELECT invalid, invalid_reason IS NULL
+FROM system.materialized_views
+WHERE database = 'mv_dst_db' AND name = 'cross_mv'
+----
+0 1
+
+# MVs in a dropped database are skipped, so queries on the source table are not affected.
+statement ok
+DROP DATABASE mv_dst_db
+
+query I
+SELECT count(*) FROM mv_src_db.t
+----
+2
+
+# A source database recreated under the same name binds the definition to a new table, which the
+# table-id check rejects instead of reading it. UNDROP restores the latest database id of a name,
+# so this runs after the UNDROP case above.
+statement ok
+UNDROP DATABASE mv_dst_db
+
+statement ok
+DROP DATABASE mv_src_db
+
+statement ok
+CREATE DATABASE mv_src_db
+
+# CHANGE_TRACKING lets the definition's change$row_id bind, so the table-id check is what rejects
+# the new table.
+statement ok
+CREATE TABLE mv_src_db.t (id INT) CHANGE_TRACKING = true
+
+statement error 2328
+SELECT * FROM mv_dst_db.cross_mv
+
+statement error 2328
+REFRESH MATERIALIZED VIEW mv_dst_db.cross_mv
+
+statement ok
+DROP DATABASE mv_dst_db
 
 # CTE definitions remain outside the query shapes supported by feat-mv-insert.
 statement error 1065
@@ -969,7 +1058,7 @@ where database = 'test_mv_ddl' and name = 'replaced_mv'
 ----
 renamed_replaced_source 1 source table was dropped, renamed, or replaced
 
-statement error 1025
+statement error 2328
 select * from replaced_mv
 
 statement error 2328
@@ -1059,7 +1148,7 @@ where database = 'test_mv_ddl' and name = 'dropped_mv'
 ----
 dropped_source 1 source table was dropped, renamed, or replaced
 
-statement error 1025
+statement error 2328
 select * from dropped_mv
 
 statement error 2328
@@ -1161,7 +1250,7 @@ where database = 'mv_database_renamed' and name = 'mv'
 ----
 mv_database_renamed source 1 source database was renamed 0 0
 
-statement error 1003
+statement error 2328
 select * from mv_database_renamed.mv
 
 statement error 2328
@@ -1261,9 +1350,6 @@ DROP TABLE mv_guard_source
 # Cleanup
 statement ok
 DROP MATERIALIZED VIEW IF EXISTS test_mv2
-
-statement ok
-DROP MATERIALIZED VIEW IF EXISTS mv_dst_db.cross_mv
 
 statement ok
 DROP DATABASE IF EXISTS mv_src_db

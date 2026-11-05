@@ -51,6 +51,8 @@ pub const MATERIALIZED_VIEW_INVALID_SOURCE_REASON: &str =
     "source table was dropped, renamed, or replaced";
 /// Reason reported when the database name persisted in the MV definition no longer resolves.
 pub const MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON: &str = "source database was renamed";
+/// Reason reported when the source table's current database is dropped.
+pub const MATERIALIZED_VIEW_DROPPED_SOURCE_DATABASE_REASON: &str = "source database was dropped";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 /// External-table S3 storage class for new objects; overrides the experimental session setting.
