@@ -110,8 +110,17 @@ impl Operator for Filter {
             // estimate to match no rows. Reduce it by this filter's bound
             // selectivity, as the expected rows are reduced by its expected
             // selectivity, so a selective filter also lowers the bound.
-            max_cardinality =
-                max_cardinality.max(sb.bound_cardinality(cardinality, stat_info.max_cardinality));
+            // When this filter also has such a range, it may restrict the same
+            // column as the range below, as in `t > 2000` above `t > 1000`,
+            // and the same predicates in one filter count as one unknown
+            // filter. Keep the input bound then instead of counting a second
+            // unknown filter.
+            let input_bound = if sb.uses_statistics_zero_bound() {
+                stat_info.max_cardinality
+            } else {
+                sb.bound_cardinality(cardinality, stat_info.max_cardinality)
+            };
+            max_cardinality = max_cardinality.max(input_bound);
         }
         // Only a proven-empty result is precise; an estimated zero stays imprecise.
         let precise_cardinality = proven_empty.then_some(0);
