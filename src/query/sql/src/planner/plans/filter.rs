@@ -107,20 +107,14 @@ impl Operator for Filter {
                     && stat_info.max_cardinality <= stat_info.cardinality));
         if stat_info.statistics_zero_bound && !proven_empty {
             // The input bound comes from a range below that column statistics
-            // estimate to match no rows. Reduce it by this filter's bound
-            // selectivity, as the expected rows are reduced by its expected
-            // selectivity, so a selective filter also lowers the bound.
-            // When this filter also has such a range, it may restrict the same
-            // column as the range below, as in `t > 2000` above `t > 1000`,
-            // and the same predicates in one filter count as one unknown
-            // filter. Keep the input bound then instead of counting a second
-            // unknown filter.
-            let input_bound = if sb.uses_statistics_zero_bound() {
-                stat_info.max_cardinality
-            } else {
-                sb.bound_cardinality(cardinality, stat_info.max_cardinality)
-            };
-            max_cardinality = max_cardinality.max(input_bound);
+            // estimate to match no rows. Reduce it by this filter's other
+            // predicates, as the expected rows are reduced by its expected
+            // selectivity, so a selective filter also lowers the bound. Such a
+            // range in this filter may restrict the same column as the one
+            // below, as in `t > 2000` above `t > 1000`, so it does not count
+            // as a second unknown filter (see `bound_cardinality`).
+            max_cardinality =
+                max_cardinality.max(sb.bound_cardinality(cardinality, stat_info.max_cardinality));
         }
         // Only a proven-empty result is precise; an estimated zero stays imprecise.
         let precise_cardinality = proven_empty.then_some(0);
