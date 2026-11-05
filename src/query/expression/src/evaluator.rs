@@ -278,8 +278,11 @@ impl<'a> Evaluator<'a> {
                 expr: inner,
                 dest_type,
             }) => {
-                let value = self.partial_run(inner, validity.clone(), options, false)?;
                 let src_type = inner.data_type();
+                // A cast that only changes the nullability keeps the values, and their encoding.
+                let keep_encoded =
+                    keep_encoded && src_type.remove_nullable() == dest_type.remove_nullable();
+                let value = self.partial_run(inner, validity.clone(), options, keep_encoded)?;
                 if *is_try {
                     self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
                 } else {
