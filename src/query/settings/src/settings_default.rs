@@ -1065,6 +1065,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_recluster_ordered_merge", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Trust source block order for recluster MergeBlocks tasks and skip re-sorting rows inside each block. When disabled, every recluster task is fully sorted.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_recluster_multiway_merge", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable streaming multiway merge for horizontal recluster MergeBlocks tasks.",

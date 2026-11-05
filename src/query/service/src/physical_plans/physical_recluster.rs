@@ -146,11 +146,15 @@ impl IPhysicalPlan for Recluster {
                     ));
                 }
                 let settings = builder.ctx.get_settings();
+                // Both ordered-merge paths trust that each source block is already
+                // sorted by the current cluster key. When disabled, re-sort every task.
+                let ordered_merge = task.kind == ReclusterTaskKind::MergeBlocks
+                    && settings.get_enable_recluster_ordered_merge()?;
                 // Execution-time guard: planning-time admission runs on the
                 // coordinator and cannot see this node's live memory pressure.
                 // Oversized tasks are only tolerable when sort spill can absorb
                 // the pressure; otherwise fail fast instead of risking an OOM kill.
-                let multiway_merge = task.kind == ReclusterTaskKind::MergeBlocks
+                let multiway_merge = ordered_merge
                     && settings.get_enable_recluster_multiway_merge()?
                     && matches!(table.get_storage_format(), FuseStorageFormat::Parquet)
                     && !table.schema().fields().iter().any(|field| {
@@ -319,6 +323,7 @@ impl IPhysicalPlan for Recluster {
                     Self::build_regular_layout_pipeline(
                         builder,
                         task,
+                        ordered_merge,
                         &cluster_stats_gen,
                         rows_per_block,
                         compact_thresholds,
@@ -489,10 +494,15 @@ impl Recluster {
 
     fn build_recluster_sort_pipeline(
         kind: ReclusterTaskKind,
+        ordered_merge: bool,
         sort: SortPipelineBuilder,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         match kind {
+            ReclusterTaskKind::MergeBlocks if !ordered_merge => {
+                // Do not trust source block order; re-sort rows inside each block.
+                sort.build_full_sort_pipeline(pipeline, false)
+            }
             ReclusterTaskKind::SortBlocks => {
                 // Establish order in the input fragments, then merge them using the
                 // existing full-sort builder, including its spill support.
@@ -510,6 +520,7 @@ impl Recluster {
     fn build_regular_layout_pipeline(
         builder: &mut PipelineBuilder,
         task: &ReclusterTask,
+        ordered_merge: bool,
         cluster_stats_gen: &ClusterStatsGenerator,
         rows_per_block: usize,
         compact_thresholds: BlockThresholds,
@@ -544,6 +555,7 @@ impl Recluster {
         .with_block_size_hit(rows_per_block);
         Self::build_recluster_sort_pipeline(
             task.kind,
+            ordered_merge,
             sort_pipeline_builder,
             &mut builder.main_pipeline,
         )?;
@@ -580,34 +592,35 @@ mod tests {
                     "k",
                     DataType::Number(NumberDataType::Int32),
                 )]);
-                let sort = SortPipelineBuilder::create(
-                    ctx.clone(),
-                    schema,
-                    vec![SortColumnDescription {
-                        offset: 0,
-                        asc: true,
-                        nulls_first: false,
-                    }]
-                    .into(),
-                    None,
-                    false,
-                )?;
-                let mut pipeline = Pipeline::create();
-                pipeline.add_source(EmptySource::create, width)?;
-                Recluster::build_recluster_sort_pipeline(kind, sort, &mut pipeline)?;
-                let partial_sorts = pipeline
-                    .graph
-                    .node_weights()
-                    .filter(|node| unsafe { node.proc.name() }.contains("SortPartialTransform"))
-                    .count();
-                assert_eq!(
-                    partial_sorts,
-                    if kind == ReclusterTaskKind::SortBlocks {
-                        width
-                    } else {
-                        0
-                    }
-                );
+                for ordered_merge in [false, true] {
+                    let sort = SortPipelineBuilder::create(
+                        ctx.clone(),
+                        schema.clone(),
+                        vec![SortColumnDescription {
+                            offset: 0,
+                            asc: true,
+                            nulls_first: false,
+                        }]
+                        .into(),
+                        None,
+                        false,
+                    )?;
+                    let mut pipeline = Pipeline::create();
+                    pipeline.add_source(EmptySource::create, width)?;
+                    Recluster::build_recluster_sort_pipeline(
+                        kind,
+                        ordered_merge,
+                        sort,
+                        &mut pipeline,
+                    )?;
+                    let partial_sorts = pipeline
+                        .graph
+                        .node_weights()
+                        .filter(|node| unsafe { node.proc.name() }.contains("SortPartialTransform"))
+                        .count();
+                    let skip_partial_sort = kind == ReclusterTaskKind::MergeBlocks && ordered_merge;
+                    assert_eq!(partial_sorts, if skip_partial_sort { 0 } else { width });
+                }
             }
         }
         Ok(())

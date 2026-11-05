@@ -1279,6 +1279,7 @@ mod tests {
         ] {
             let ctx = fixture.new_query_ctx().await?;
             let settings = ctx.get_settings();
+            settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
             settings.set_setting(
                 "enable_recluster_multiway_merge".into(),
                 u8::from(enabled).to_string(),
@@ -1317,6 +1318,7 @@ mod tests {
         ] {
             let ctx = fixture.new_query_ctx().await?;
             let settings = ctx.get_settings();
+            settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
             settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
             settings.set_setting("max_block_size".into(), "1".into())?;
             execute_command(ctx, sql).await?;
@@ -1346,6 +1348,7 @@ mod tests {
         ] {
             let ctx = fixture.new_query_ctx().await?;
             let settings = ctx.get_settings();
+            settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
             settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
             settings.set_setting("max_block_size".into(), "1".into())?;
             execute_command(ctx, sql).await?;
@@ -1412,6 +1415,7 @@ mod tests {
             .write(location, "corrupted recluster test input")
             .await?;
         let settings = ctx.get_settings();
+        settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         let result = execute_command(
             ctx.clone(),
@@ -1578,6 +1582,7 @@ mod tests {
         let expected = pretty_format_blocks(&before)?.to_string();
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
+        settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
         execute_command(ctx, "alter table default.index_merge recluster final").await?;
@@ -1619,6 +1624,7 @@ mod tests {
             .write(&location, "corrupt source inverted index")
             .await?;
         let settings = ctx.get_settings();
+        settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
         let result =
@@ -1646,6 +1652,7 @@ mod tests {
         }
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
+        settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
         settings.set_setting("force_sort_data_spill".into(), "1".into())?;
@@ -1699,6 +1706,7 @@ mod tests {
         }
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
+        settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
         execute_command(ctx, "alter table default.index_partial recluster final").await?;
@@ -1757,6 +1765,7 @@ mod tests {
             }
             let ctx = fixture.new_query_ctx().await?;
             let settings = ctx.get_settings();
+            settings.set_setting("enable_recluster_ordered_merge".into(), "1".into())?;
             settings.set_setting(
                 "enable_recluster_multiway_merge".into(),
                 u8::from(enabled).to_string(),

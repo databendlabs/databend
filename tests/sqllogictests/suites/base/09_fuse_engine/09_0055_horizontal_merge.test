@@ -6,6 +6,9 @@ statement ok
 use db_horizontal_multiway_merge
 
 statement ok
+set enable_recluster_ordered_merge = 1
+
+statement ok
 set enable_recluster_multiway_merge = 1
 
 statement ok
@@ -104,6 +107,9 @@ unset max_threads
 
 statement ok
 unset enable_recluster_multiway_merge
+
+statement ok
+unset enable_recluster_ordered_merge
 
 statement ok
 drop database db_horizontal_multiway_merge

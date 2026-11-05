@@ -814,6 +814,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_recluster_inverted_index_merge")? != 0)
     }
 
+    pub fn get_enable_recluster_ordered_merge(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_recluster_ordered_merge")? != 0)
+    }
+
     pub fn get_enable_recluster_multiway_merge(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_recluster_multiway_merge")? != 0)
     }
