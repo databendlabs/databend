@@ -39,6 +39,7 @@ mod fill_field_default_value;
 mod filter_executor;
 mod function_factory;
 mod group_by;
+mod group_hash;
 mod hilbert;
 mod kernel;
 mod meta_scalar;

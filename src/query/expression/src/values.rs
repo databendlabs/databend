@@ -1138,7 +1138,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Timestamp(v) => v.hash(state),
             ScalarRef::TimestampTz(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
-            ScalarRef::Interval(v) => v.0.hash(state),
+            ScalarRef::Interval(v) => v.hash(state),
             ScalarRef::Array(v) | ScalarRef::Map(v) => {
                 v.len().hash(state);
                 for value in v.iter() {
