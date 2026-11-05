@@ -34,6 +34,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ClusteringInformationQuery {
     pub cluster_key: Option<String>,
 }
