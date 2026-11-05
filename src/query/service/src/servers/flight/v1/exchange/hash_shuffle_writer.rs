@@ -15,11 +15,13 @@
 //! Sender side of the thread-level hash shuffle (GlobalShuffle).
 //!
 //! Rows are addressed to one of `P = sum(threads of every node)` partitions and
-//! copied into per-partition builders as they arrive, so input blocks are released
-//! right away. Partitions are not sent one by one when they fill up: the sender
-//! holds at most `budget` bytes in total and then sends every partition at once.
-//! Memory is bounded by the budget whatever the cluster size, while each send
-//! still carries `budget / P` bytes per thread. Every remote node receives the
+//! appended to per-partition builders as they arrive. String views retain shared
+//! input buffers until consumed locally or compacted for remote serialization.
+//! Partitions are not sent one by one when they fill up: the sender
+//! buffers until it reaches `budget` bytes and then sends every partition at once.
+//! Shared buffers count in every retaining partition, conservatively reaching the
+//! budget sooner than their unique allocation size. An input block may overshoot
+//! the budget. Every remote node receives the
 //! blocks of all its threads in one call, which the send buffer packs into shared
 //! frames.
 //!
@@ -104,7 +106,7 @@ impl HashShuffleWriter {
             handle: None,
             scatter,
             // No per-partition thresholds: partitions are only sent together.
-            stream: BlockPartitionStream::create(0, 0, num_partitions),
+            stream: BlockPartitionStream::create_with_string_views(0, 0, num_partitions),
             num_partitions,
             buffered_rows: 0,
             buffered_bytes: 0,
@@ -160,7 +162,7 @@ impl HashShuffleWriter {
         Ok(Event::NeedData)
     }
 
-    /// Copy the rows of `block` into their partitions. Returns true when the
+    /// Append the rows of `block` to their partitions, sharing string buffers. Returns true when the
     /// buffered rows reached the budget and should be flushed.
     ///
     /// Blocks may be added while the previous round is still sending.
@@ -488,6 +490,28 @@ mod tests {
         let scatter: Arc<Box<dyn FlightScatter>> =
             Arc::new(Box::new(ModuloScatter { num_partitions }));
         HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, budget)
+    }
+
+    #[test]
+    fn test_writer_shares_buffers_for_direct_and_local_delivery() -> Result<()> {
+        let source = make_block(0..6);
+        let column = source.get_by_offset(1).to_column();
+        let strings = StringType::try_downcast_column(&column).unwrap();
+        let buffer = strings.data_buffers()[0].as_ptr();
+        let (nodes, receivers) = local_nodes(1, 2);
+        let mut writer = writer(nodes, usize::MAX);
+        writer.add_block(source)?;
+        let (own, pending) = writer.flush(Some(0))?;
+        assert!(!pending);
+        drop(writer);
+        let local = drain_blocks(&receivers[1]).next().unwrap();
+        for block in [own.unwrap(), local] {
+            let column = block.get_by_offset(1).to_column();
+            let strings = StringType::try_downcast_column(&column).unwrap();
+            assert_eq!(strings.data_buffers()[0].as_ptr(), buffer);
+            assert_eq!(block.num_rows(), 3);
+        }
+        Ok(())
     }
 
     /// Blocks without columns (e.g. under `count(*)`) or with only NULL columns

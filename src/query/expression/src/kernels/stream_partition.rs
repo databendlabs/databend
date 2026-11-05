@@ -128,8 +128,18 @@ impl PendingColumn {
         }
     }
 
-    fn push_column<I: Index>(&mut self, indices: &[I], column: &Column) {
-        copy_column(indices, column, self.builder(indices.len()));
+    fn push_column<I: Index>(
+        &mut self,
+        indices: &[I],
+        column: &Column,
+        preserve_string_views: bool,
+    ) {
+        copy_column_impl(
+            indices,
+            column,
+            self.builder(indices.len()),
+            preserve_string_views,
+        );
     }
 
     /// Turn the pending rows into a builder with room for `additional` more.
@@ -165,6 +175,13 @@ impl PendingColumn {
             PendingColumn::Empty { .. } => 0,
             PendingColumn::Const { rows, size, .. } => size.of(*rows),
             PendingColumn::Builder(builder) => builder.memory_size(),
+        }
+    }
+
+    fn logical_size(&self) -> usize {
+        match self {
+            PendingColumn::Builder(builder) => partition_builder_size(builder),
+            _ => self.memory_size(),
         }
     }
 
@@ -235,6 +252,7 @@ impl PartitionBlockBuilder {
 pub struct BlockPartitionStream {
     initialize: bool,
     scatter_size: usize,
+    preserve_string_views: bool,
     rows_threshold: usize,
     bytes_threshold: usize,
     partitions: Vec<PartitionBlockBuilder>,
@@ -245,9 +263,28 @@ pub struct BlockPartitionStream {
 
 impl BlockPartitionStream {
     pub fn create(
+        rows_threshold: usize,
+        bytes_threshold: usize,
+        scatter_size: usize,
+    ) -> BlockPartitionStream {
+        Self::create_inner(rows_threshold, bytes_threshold, scatter_size, false)
+    }
+
+    /// Share string backing buffers instead of copying selected values. Remote consumers must
+    /// compact retained buffers before serialization; local consumers can keep the shared views.
+    pub fn create_with_string_views(
+        rows_threshold: usize,
+        bytes_threshold: usize,
+        scatter_size: usize,
+    ) -> BlockPartitionStream {
+        Self::create_inner(rows_threshold, bytes_threshold, scatter_size, true)
+    }
+
+    fn create_inner(
         mut rows_threshold: usize,
         mut bytes_threshold: usize,
         scatter_size: usize,
+        preserve_string_views: bool,
     ) -> BlockPartitionStream {
         if rows_threshold == 0 {
             rows_threshold = usize::MAX;
@@ -259,6 +296,7 @@ impl BlockPartitionStream {
 
         BlockPartitionStream {
             scatter_size,
+            preserve_string_views,
             rows_threshold,
             bytes_threshold,
             initialize: false,
@@ -333,7 +371,7 @@ impl BlockPartitionStream {
                                 ColumnBuilder::repeat(&scalar.as_ref(), num_rows, &data_type)
                                     .build()
                             });
-                            column.push_column(indices, expanded);
+                            column.push_column(indices, expanded, self.preserve_string_views);
                         }
                     }
                 }
@@ -342,8 +380,11 @@ impl BlockPartitionStream {
                         if indices.is_empty() {
                             continue;
                         }
-                        self.partitions[partition_id].columns[column_idx]
-                            .push_column(indices, &column);
+                        self.partitions[partition_id].columns[column_idx].push_column(
+                            indices,
+                            &column,
+                            self.preserve_string_views,
+                        );
                     }
                 }
             }
@@ -355,9 +396,16 @@ impl BlockPartitionStream {
 
         let mut ready_blocks = Vec::with_capacity(self.partitions.len());
         for (id, partition) in self.partitions.iter_mut().enumerate() {
-            if partition.memory_size() >= self.bytes_threshold
-                || partition.num_rows >= self.rows_threshold
-            {
+            let bytes = if self.preserve_string_views {
+                partition
+                    .columns
+                    .iter()
+                    .map(PendingColumn::logical_size)
+                    .sum()
+            } else {
+                partition.memory_size()
+            };
+            if bytes >= self.bytes_threshold || partition.num_rows >= self.rows_threshold {
                 ready_blocks.push((id, partition.take_block(true)));
             }
         }
@@ -366,7 +414,8 @@ impl BlockPartitionStream {
     }
 
     /// Bytes buffered in all partitions, with pending constants counted as if
-    /// they had been expanded.
+    /// they had been expanded. Shared string buffers are conservatively counted in every
+    /// partition that retains them, so callers can still use this for backpressure.
     pub fn memory_size(&self) -> usize {
         self.partitions
             .iter()
@@ -431,9 +480,29 @@ impl BlockPartitionStream {
     }
 }
 
+fn partition_builder_size(builder: &ColumnBuilder) -> usize {
+    match builder {
+        ColumnBuilder::String(builder) => builder.len() * 16 + builder.data.total_bytes_len,
+        ColumnBuilder::Nullable(builder) => {
+            partition_builder_size(&builder.builder) + builder.validity.as_slice().len()
+        }
+        ColumnBuilder::Tuple(fields) => fields.iter().map(partition_builder_size).sum(),
+        _ => builder.memory_size(),
+    }
+}
+
 pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilder) {
+    copy_column_impl(indices, from, to, false)
+}
+
+fn copy_column_impl<I: Index>(
+    indices: &[I],
+    from: &Column,
+    to: &mut ColumnBuilder,
+    preserve_string_views: bool,
+) {
     if let Column::Encoded(encoded) = from {
-        return copy_column(indices, &encoded.decode(), to);
+        return copy_column_impl(indices, &encoded.decode(), to, preserve_string_views);
     }
     match to {
         ColumnBuilder::EmptyArray { len } => match from {
@@ -481,7 +550,7 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
                 match ColumnBuilder::with_capacity(&from.data_type(), capacity) {
                     ColumnBuilder::Nullable(mut builder) => {
                         builder.push_repeat_null(*len);
-                        copy_nullable(&mut builder, column, indices);
+                        copy_nullable(&mut builder, column, indices, preserve_string_views);
                         *to = ColumnBuilder::Nullable(builder);
                     }
                     _ => unreachable!(
@@ -502,7 +571,7 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
                 builder.push_repeat_null(indices.len());
             }
             Column::Nullable(column) => {
-                copy_nullable(builder, column, indices);
+                copy_nullable(builder, column, indices, preserve_string_views);
             }
             _ => unreachable!(
                 "Nullable builder can only copy from Null or Nullable, but got from type: {}",
@@ -594,7 +663,21 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
                 copy_binary(builder, &column.0, indices);
             }
             (ColumnBuilder::String(builder), Column::String(column)) => {
-                copy_string(builder, column, indices);
+                if preserve_string_views {
+                    // SAFETY: scatter indices address rows of this column, and the views and
+                    // buffers come from the same column. Appending rebases buffer indices and
+                    // clones the buffer owners, including when earlier rows were constants.
+                    unsafe {
+                        builder.data.append_views_unchecked(
+                            indices
+                                .iter()
+                                .map(|index| column.views().get_unchecked(index.to_usize())),
+                            column.data_buffers(),
+                        );
+                    }
+                } else {
+                    copy_string(builder, column, indices);
+                }
             }
             (ColumnBuilder::Vector(builder), Column::Vector(column)) => {
                 copy_vector(indices, builder, column);
@@ -604,7 +687,7 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
             }
             (ColumnBuilder::Tuple(builders), Column::Tuple(columns)) => {
                 for (builder, column) in builders.iter_mut().zip(columns.iter()) {
-                    copy_column(indices, column, builder)
+                    copy_column_impl(indices, column, builder, preserve_string_views)
                 }
             }
             (to, from) => unreachable!(
@@ -671,9 +754,15 @@ fn copy_nullable<I: Index>(
     to: &mut NullableColumnBuilder<AnyType>,
     from: &NullableColumn<AnyType>,
     indices: &[I],
+    preserve_string_views: bool,
 ) {
     copy_boolean(&mut to.validity, &from.validity, indices);
-    copy_column(indices, &from.column, &mut to.builder)
+    copy_column_impl(
+        indices,
+        &from.column,
+        &mut to.builder,
+        preserve_string_views,
+    )
 }
 
 fn copy_opaque<I: Index>(indices: &[I], builder: &mut OpaqueColumnBuilder, column: &OpaqueColumn) {

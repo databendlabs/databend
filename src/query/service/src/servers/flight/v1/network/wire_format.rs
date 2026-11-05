@@ -130,6 +130,22 @@ fn encode_batch(
     Ok((dictionaries, batch_data))
 }
 
+/// Only remote serialization should compact shared buffers. Compare entries without expanding
+/// constants: a large constant must not hide oversized buffers in another column.
+pub(crate) fn compact_block_for_network(block: DataBlock) -> DataBlock {
+    const MINIMUM_SAVINGS: usize = 16 * 1024;
+    let logical_size: usize = block
+        .columns()
+        .iter()
+        .map(|entry| entry.memory_size_with_options(true))
+        .sum();
+    if block.memory_size().saturating_sub(logical_size) >= MINIMUM_SAVINGS {
+        block.compact_string_buffers()
+    } else {
+        block
+    }
+}
+
 fn serialize_to_batches(
     block: DataBlock,
     ipc_options: &IpcWriteOptions,
@@ -143,6 +159,7 @@ fn serialize_to_batches(
         let (dicts, batch) = encode_batch(&empty_batch, ipc_options)?;
         Ok((dicts, vec![batch]))
     } else {
+        let block = compact_block_for_network(block);
         let schema = block.infer_schema();
         let arrow_schema = ArrowSchema::from(&schema);
         let batch = block.to_record_batch_with_dataschema(&schema)?;
@@ -242,6 +259,7 @@ pub(crate) fn encode_block_for_thread(
         .and_then(|meta| meta.override_block_schema())
         .map(|schema| Arc::new(ArrowSchema::from(schema.as_ref())));
     let arrow_schema = block_schema.as_ref().unwrap_or(arrow_schema);
+    let block = compact_block_for_network(block);
     let batch = block.to_record_batch_with_arrow_schema(arrow_schema)?;
     let (dictionaries, mut data) = encode_batch(&batch, ipc_options)?;
     if !dictionaries.is_empty() {
@@ -514,7 +532,104 @@ fn decode_compressed_body(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::BlockMetaInfoDowncast;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::ArrayColumn;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::StringType;
+
     use super::*;
+    use crate::servers::flight::v1::exchange::serde;
+    use crate::servers::flight::v1::packets::DataPacket;
+
+    #[test]
+    fn test_network_compaction_does_not_expand_constants_for_savings() {
+        let values = std::iter::once("x".repeat(32768))
+            .chain(std::iter::repeat_n("r".repeat(32), 8))
+            .collect::<Vec<_>>();
+        let source = StringType::from_data(values).slice(1..9);
+        let block = DataBlock::new(
+            vec![
+                source.into(),
+                BlockEntry::new_const_column(
+                    DataType::String,
+                    Scalar::String("c".repeat(32768)),
+                    8,
+                ),
+            ],
+            8,
+        );
+        let compact = compact_block_for_network(block.clone());
+        assert!(compact.memory_size() < block.memory_size());
+        assert!(compact.get_by_offset(1).as_scalar().is_some());
+
+        let source = StringType::from_data(vec!["s".repeat(32), "t".repeat(32)]).slice(1..2);
+        let Column::String(strings) = &source else {
+            unreachable!()
+        };
+        let buffer = strings.data_buffers()[0].as_ptr();
+        let small = compact_block_for_network(DataBlock::new_from_columns(vec![source]));
+        let Column::String(strings) = small.get_by_offset(0).to_column() else {
+            unreachable!()
+        };
+        assert_eq!(strings.data_buffers()[0].as_ptr(), buffer);
+    }
+
+    #[test]
+    fn test_remote_encoders_compact_nested_string_buffers() -> Result<()> {
+        let strings = StringType::from_data(vec![
+            "x".repeat(65536),
+            "wire wire wire wire".to_string(),
+            "tiny".to_string(),
+        ])
+        .slice(1..3);
+        let array = ArrayColumn::new(strings, vec![0, 1, 2].into());
+        let block = DataBlock::new_from_columns(vec![Column::Array(Box::new(array))]);
+        let schema = Arc::new(block.infer_schema());
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        for compression in [
+            None,
+            Some(FlightCompression::Lz4),
+            Some(FlightCompression::Zstd),
+        ] {
+            let options = make_ipc_options(compression)?;
+            let ordinary = serialize_block_for_thread(block.clone(), 1, &options)?;
+            assert_eq!(ordinary.len(), 1);
+            let hash = encode_block_for_thread(
+                1,
+                block.clone(),
+                &arrow_schema,
+                &make_ipc_options(None)?,
+                compression,
+            )?;
+            let mut legacy = serde::serialize_block(0, block.clone(), &options)?;
+            let mut legacy =
+                serde::ExchangeSerializeMeta::downcast_from(legacy.take_meta().unwrap()).unwrap();
+            let Some(DataPacket::FragmentData(fragment)) = legacy.packet.pop() else {
+                unreachable!()
+            };
+            assert!(fragment.data.data_body.len() < 4096);
+            let decoded =
+                serde::deserialize_block(legacy.packet, fragment, &schema, arrow_schema.clone())?;
+            assert_eq!(
+                decoded.get_by_offset(0).to_column(),
+                block.get_by_offset(0).to_column()
+            );
+            for data in ordinary.into_iter().chain(std::iter::once(hash)) {
+                assert!(data.data_body.len() < 4096);
+                let decoded = deserialize_flight_data(strip_tid(data), &schema, &arrow_schema)?;
+                assert_eq!(decoded.num_rows(), 2);
+                assert_eq!(
+                    decoded.get_by_offset(0).to_column(),
+                    block.get_by_offset(0).to_column()
+                );
+            }
+        }
+        Ok(())
+    }
 
     /// Build a FlightData with tid prefix in app_metadata.
     fn make_item(tid: u16, inner_meta: &[u8], header: &[u8], body: &[u8]) -> FlightData {

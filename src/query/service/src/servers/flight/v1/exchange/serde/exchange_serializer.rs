@@ -51,6 +51,7 @@ use databend_common_settings::FlightCompression;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::MergeExchangeParams;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::network::wire_format::compact_block_for_network;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
@@ -203,6 +204,7 @@ pub fn serialize_block(
             options,
         )?,
         false => {
+            let data_block = compact_block_for_network(data_block);
             let schema = data_block.infer_schema();
             let arrow_schema = ArrowSchema::from(&schema);
             let batch = data_block.to_record_batch_with_dataschema(&schema)?;

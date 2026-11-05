@@ -29,6 +29,8 @@ use crate::SELECTIVITY_THRESHOLD;
 use crate::Value;
 use crate::types::binary::BinaryColumn;
 use crate::types::date::CoreDate;
+use crate::types::encoded::DictColumn;
+use crate::types::encoded::EncodedColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::simple_type::SimpleType;
 use crate::types::string::StringColumn;
@@ -302,6 +304,39 @@ where I: TakeIndex + ?Sized
 }
 
 impl Column {
+    /// Rebuild string backing buffers, recursively, without changing values or validity.
+    pub fn compact_string_buffers(self) -> Self {
+        match self {
+            Column::String(column) => Column::String(column.gc()),
+            Column::Nullable(column) => {
+                let (column, validity) = column.destructure();
+                NullableColumn::new_column(column.compact_string_buffers(), validity)
+            }
+            Column::Tuple(fields) => Column::Tuple(
+                fields
+                    .into_iter()
+                    .map(Column::compact_string_buffers)
+                    .collect(),
+            ),
+            Column::Array(column) => Column::Array(Box::new(ArrayColumn::new(
+                column.underlying_column().compact_string_buffers(),
+                column.underlying_offsets(),
+            ))),
+            Column::Map(column) => Column::Map(Box::new(ArrayColumn::new(
+                column.underlying_column().compact_string_buffers(),
+                column.underlying_offsets(),
+            ))),
+            Column::Encoded(column) => Column::Encoded(Box::new(match *column {
+                EncodedColumn::Dict(dict) => EncodedColumn::Dict(DictColumn::new(
+                    dict.keys,
+                    dict.values.compact_string_buffers(),
+                )),
+                encoded => encoded,
+            })),
+            other => other,
+        }
+    }
+
     pub fn maybe_gc(self) -> Self {
         match self {
             Column::String(c) => Column::String(c.maybe_gc()),
