@@ -155,7 +155,6 @@ async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        branch: None,
         column: "t".to_string(),
     };
     let ctx = fixture.new_query_ctx().await?;
@@ -177,7 +176,6 @@ async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        branch: None,
         if_not_exists: false,
         field,
         comment: "".to_string(),

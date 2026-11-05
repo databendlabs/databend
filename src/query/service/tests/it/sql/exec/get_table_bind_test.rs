@@ -897,12 +897,11 @@ impl TableContextTableAccess for CtxDelegation {
         self.ctx.get_application_level_data_operator()
     }
 
-    async fn get_table_with_branch(
+    async fn get_table(
         &self,
         _catalog: &str,
         database: &str,
         table: &str,
-        _branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.ctx.get_tenant();
         let db = database.to_string();
@@ -937,7 +936,6 @@ impl TableContextTableAccess for CtxDelegation {
         catalog: &str,
         database: &str,
         table: &str,
-        _branch: Option<&str>,
         _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         self.get_table(catalog, database, table).await

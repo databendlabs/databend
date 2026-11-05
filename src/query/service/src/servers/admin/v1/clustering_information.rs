@@ -36,7 +36,6 @@ use crate::sessions::TableContext;
 #[derive(Debug, Deserialize)]
 pub struct ClusteringInformationQuery {
     pub cluster_key: Option<String>,
-    pub branch: Option<String>,
 }
 
 #[poem::handler]
@@ -81,9 +80,7 @@ async fn load_clustering_information(
     let ctx: Arc<dyn TableContext> = session
         .create_query_context(&databend_common_version::BUILD_INFO)
         .await?;
-    let tbl = ctx
-        .get_table_with_branch("default", database, table, params.branch.as_deref())
-        .await?;
+    let tbl = ctx.get_table("default", database, table).await?;
     let tbl = FuseTable::try_from_table(tbl.as_ref())?;
     get_clustering_information(ctx, tbl, &params.cluster_key).await
 }

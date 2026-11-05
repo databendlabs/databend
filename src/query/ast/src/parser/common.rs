@@ -326,36 +326,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
                 catalog,
                 database,
                 table,
-                branch: None,
             },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-    )
-    .parse(i)
-}
-
-/// Parse a table reference for DDL that supports an optional `/branch` suffix.
-///
-/// Examples:
-/// - `table`
-/// - `db.table`
-/// - `catalog.db.table`
-/// - `table/branch`
-/// - `db.table/branch`
-/// - `catalog.db.table/branch`
-pub fn table_reference_only_with_branch(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #table_ref
-        }),
-        |(span, table)| TableReference::Table {
-            span: transform_span(span.tokens),
-            table,
             alias: None,
             temporal: None,
             with_options: None,
@@ -380,7 +351,6 @@ pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> 
                         catalog,
                         database,
                         table,
-                        branch: None,
                     },
                     alias: None,
                     temporal: None,
@@ -455,48 +425,15 @@ pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Ide
     .parse(i)
 }
 
-/// Parse one to three idents separated by dots, with optional "/ref" at the end.
-///
-/// Compatible with `dot_separated_idents_1_to_3`.
-///
-/// Examples:
-/// - `table`
-/// - `db.table`
-/// - `catalog.db.table`
-/// - `table/branch`
-/// - `db.table/branch`
-/// - `catalog.db.table/tag_v1`
+/// Parse one to three dot-separated identifiers as a table reference.
 pub fn table_ref(i: Input) -> IResult<TableRef> {
-    map(
-        rule! {
-            // 1~3 dot-separated identifiers
-            #ident ~ ( "." ~ #ident ~ ( "." ~ #ident )? )? ~ ( "/" ~ #ident )?
-        },
-        |res| match res {
-            (ident2, None, opt_ref) => TableRef {
-                catalog: None,
-                database: None,
-                table: ident2,
-                branch: opt_ref.map(|(_, r)| r),
-            },
-
-            // db.table / db.table@ref
-            (ident1, Some((_, ident2, None)), opt_ref) => TableRef {
-                catalog: None,
-                database: Some(ident1),
-                table: ident2,
-                branch: opt_ref.map(|(_, r)| r),
-            },
-
-            // catalog.db.table / catalog.db.table@ref
-            (ident0, Some((_, ident1, Some((_, ident2)))), opt_ref) => TableRef {
-                catalog: Some(ident0),
-                database: Some(ident1),
-                table: ident2,
-                branch: opt_ref.map(|(_, r)| r),
-            },
-        },
-    )
+    map(dot_separated_idents_1_to_3, |(catalog, database, table)| {
+        TableRef {
+            catalog,
+            database,
+            table,
+        }
+    })
     .parse(i)
 }
 

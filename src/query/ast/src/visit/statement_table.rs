@@ -258,9 +258,6 @@ impl Walk for AlterTableAction {
             }
             | AlterTableAction::DropRowAccessPolicy { policy: new_table }
             | AlterTableAction::DropColumn { column: new_table }
-            | AlterTableAction::DropTableBranch {
-                branch_name: new_table,
-            }
             | AlterTableAction::DropTableTag {
                 tag_name: new_table,
             } => {
@@ -345,8 +342,7 @@ impl Walk for AlterTableAction {
                     try_walk!(target.walk(visitor));
                 }
             }
-            AlterTableAction::CreateTableBranch { spec }
-            | AlterTableAction::CreateTableTag { spec } => {
+            AlterTableAction::CreateTableTag { spec } => {
                 try_walk!(spec.name.walk(visitor));
                 if let Some(travel_point) = &spec.travel_point {
                     try_walk!(travel_point.walk(visitor));
@@ -372,9 +368,6 @@ impl WalkMut for AlterTableAction {
             }
             | AlterTableAction::DropRowAccessPolicy { policy: new_table }
             | AlterTableAction::DropColumn { column: new_table }
-            | AlterTableAction::DropTableBranch {
-                branch_name: new_table,
-            }
             | AlterTableAction::DropTableTag {
                 tag_name: new_table,
             } => {
@@ -459,8 +452,7 @@ impl WalkMut for AlterTableAction {
                     try_walk!(target.walk_mut(visitor));
                 }
             }
-            AlterTableAction::CreateTableBranch { spec }
-            | AlterTableAction::CreateTableTag { spec } => {
+            AlterTableAction::CreateTableTag { spec } => {
                 try_walk!(spec.name.walk_mut(visitor));
                 if let Some(travel_point) = &mut spec.travel_point {
                     try_walk!(travel_point.walk_mut(visitor));

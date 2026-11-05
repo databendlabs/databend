@@ -156,7 +156,6 @@ impl Binder {
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
             table.clone(),
-            None,
             table_alias_name,
             false,
             true,
@@ -660,7 +659,6 @@ impl Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        branch: Option<&str>,
         navigation: Option<&TimeNavigation>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
@@ -671,13 +669,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .resolve_data_source(
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    branch,
-                    max_batch_size,
-                )
+                .resolve_data_source(catalog_name, database_name, table_name, max_batch_size)
                 .await?;
 
             if let Some(desc) = navigation {
