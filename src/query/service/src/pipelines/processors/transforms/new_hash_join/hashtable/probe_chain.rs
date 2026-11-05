@@ -33,6 +33,10 @@ const MATCHED_FLAG: u32 = 1 << 31;
 
 /// Reads the hash table entries of one key type and compares them with the probe keys.
 pub(super) trait ChainEntries {
+    /// The size of one entry. Entries are packed in the arena, so an entry whose size does
+    /// not divide the cache line size (e.g. 24 bytes) may straddle two cache lines.
+    const ENTRY_SIZE: usize;
+
     /// Whether the key of `entry` equals the key of probe row `row`.
     ///
     /// # Safety
@@ -63,6 +67,8 @@ impl<K> FixedKeyEntries<K> {
 }
 
 impl<K: PartialEq> ChainEntries for FixedKeyEntries<K> {
+    const ENTRY_SIZE: usize = std::mem::size_of::<RawEntry<K>>();
+
     #[inline(always)]
     unsafe fn matches(&self, row: usize, entry: u64) -> bool {
         unsafe { *self.keys.get_unchecked(row) == (*(entry as *const RawEntry<K>)).key }
@@ -90,6 +96,8 @@ impl BinaryKeyEntries {
 }
 
 impl ChainEntries for BinaryKeyEntries {
+    const ENTRY_SIZE: usize = std::mem::size_of::<StringRawEntry>();
+
     #[inline(always)]
     unsafe fn matches(&self, row: usize, entry: u64) -> bool {
         unsafe {
@@ -266,7 +274,11 @@ impl<'a, E: ChainEntries, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStr
                 assume(self.kept <= pos);
 
                 if pos + CHAIN_PREFETCH_DISTANCE < self.active {
-                    prefetch_read(self.chains[pos + CHAIN_PREFETCH_DISTANCE] as *const u8);
+                    // Prefetch the first and the last byte of the entry: both are the same
+                    // cache line unless the entry straddles two.
+                    let ahead = self.chains[pos + CHAIN_PREFETCH_DISTANCE] as *const u8;
+                    prefetch_read(ahead);
+                    prefetch_read(ahead.wrapping_add(E::ENTRY_SIZE - 1));
                 }
 
                 let mut row = self.rows[pos];
