@@ -2230,5 +2230,39 @@ fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
         )?;
     }
 
+    write_case_title(
+        &mut file,
+        "range_outside_statistics_nullable",
+        "A range outside the min/max of a nullable column rejects its NULLs, also when written as a negated range, and contradicts IS NULL on the same column in either order. Under OR the negated range records no constraint, so NULLs are kept.",
+    )?;
+    let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 10,
+        max: 19,
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(100_000),
+        histogram: None,
+    })]);
+    let nullable_columns = &[("c", UInt64Type::data_type().wrap_nullable())];
+    for predicates in [
+        &["c > 25"][..],
+        &["not(c <= 19)"],
+        &["and_filters(not(is_not_null(c)), c > 25)"],
+        &["and_filters(c > 25, not(is_not_null(c)))"],
+        &["and_filters(not(is_not_null(c)), not(c <= 19))"],
+        &["or_filters(not(c <= 19), not(is_not_null(c)))"],
+    ] {
+        run_case_with_predicates(
+            &mut file,
+            predicates,
+            nullable_columns,
+            nullable_stats.clone(),
+            StatCardinality::estimate(1_000_000.0),
+            CaseOptions {
+                show_max_cardinality: true,
+                ..Default::default()
+            },
+        )?;
+    }
+
     Ok(())
 }

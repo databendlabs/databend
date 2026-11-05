@@ -242,3 +242,59 @@ out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 0.0, null_count: 0, histogram: None }
 
+=== range_outside_statistics_nullable ===
+description: A range outside the min/max of a nullable column rejects its NULLs, also when written as a negated range, and contradicts IS NULL on the same column in either order. Under OR the negated range records no constraint, so NULLs are kept.
+expr          : c > 25
+cardinality   : 1000000
+estimated     : 400
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~9.999999999999998[..10.0], null_count: 0, histogram: None }
+
+expr          : not(c <= 19)
+cardinality   : 1000000
+estimated     : 400
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~9.999999999999998[..10.0], null_count: 0, histogram: None }
+
+expr          : and_filters(not(is_not_null(c)), c > 25)
+cardinality   : 1000000
+estimated     : 0
+max           : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : and_filters(c > 25, not(is_not_null(c)))
+cardinality   : 1000000
+estimated     : 0
+max           : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : and_filters(not(is_not_null(c)), not(c <= 19))
+cardinality   : 1000000
+estimated     : 0
+max           : 0
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : or_filters(not(c <= 19), not(is_not_null(c)))
+cardinality   : 1000000
+estimated     : 100359.99999999997
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 100000, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: ~10035.999999999998, histogram: None }
+
