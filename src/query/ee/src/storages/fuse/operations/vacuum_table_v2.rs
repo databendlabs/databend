@@ -408,14 +408,6 @@ pub async fn do_vacuum2(
     }
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
 
-    // Legacy branch/tag refs were removed without compatibility guarantees.
-    // Vacuum2 cleans up the old ref snapshot prefix opportunistically, and the
-    // operation is idempotent even if the prefix is already absent.
-    let legacy_ref_dir = fuse_table
-        .meta_location_generator()
-        .ref_snapshot_location_prefix();
-    let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
-
     let removed_files = removed_inverted_index_v2
         + removed_vector_index
         + block_gc_stats.removed_files
