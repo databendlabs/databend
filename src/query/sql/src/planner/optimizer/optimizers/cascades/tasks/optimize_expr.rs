@@ -380,7 +380,7 @@ impl OptimizeExprTask {
                 && physical_prop.distribution == Distribution::Serial
                 && !matches!(
                     self.required_prop.distribution,
-                    Distribution::Serial | Distribution::Any
+                    Distribution::Serial | Distribution::Any | Distribution::NonBroadcast(_)
                 )
             {
                 should_enforce = false;

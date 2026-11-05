@@ -384,6 +384,30 @@ impl Join {
             .any(|condition| condition.is_null_equal)
     }
 
+    fn nullable_mark_join_distributions(&self) -> Option<(Distribution, Distribution)> {
+        if !self.join_type.is_mark_join()
+            || self.equi_conditions.len() != 1
+            || !self.has_null_equi_condition()
+        {
+            return None;
+        }
+
+        let condition = &self.equi_conditions[0];
+        // LeftMark emits build rows; RightMark emits probe rows. Replicate only
+        // the subquery, so each output row is marked once with global NULL knowledge.
+        Some(match self.join_type {
+            JoinType::LeftMark => (
+                Distribution::Broadcast,
+                Distribution::NonBroadcast(vec![condition.right.clone()]),
+            ),
+            JoinType::RightMark => (
+                Distribution::NonBroadcast(vec![condition.left.clone()]),
+                Distribution::Broadcast,
+            ),
+            _ => unreachable!(),
+        })
+    }
+
     pub fn derive_join_stats(
         &self,
         left_stat_info: Arc<StatInfo>,
@@ -680,6 +704,8 @@ impl PhysicalOperator for Join {
         {
             required.distribution = if child_index == 1 {
                 Distribution::Broadcast
+            } else if let Some((probe_distribution, _)) = self.nullable_mark_join_distributions() {
+                probe_distribution
             } else {
                 Distribution::Any
             };
@@ -693,6 +719,14 @@ impl PhysicalOperator for Join {
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
+            return Ok(required);
+        }
+
+        // Every worker must observe the complete nullable subquery, including NULL
+        // and empty input. The output side needs no particular partitioning, but
+        // must not be replicated. Keep the Serial fallback above unchanged.
+        if let Some((left, right)) = self.nullable_mark_join_distributions() {
+            required.distribution = if child_index == 0 { left } else { right };
             return Ok(required);
         }
 
@@ -781,45 +815,13 @@ impl PhysicalOperator for Join {
             ]);
         }
 
-        // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
-        if self.join_type.is_mark_join()
-            && self.equi_conditions.len() == 1
-            && self.has_null_equi_condition()
-        {
-            // subquery as left probe side
-            if matches!(self.join_type, JoinType::LeftMark) {
-                let conditions = self
-                    .equi_conditions
-                    .iter()
-                    .map(|condition| condition.right.clone())
-                    .collect();
-
-                children_required.push(vec![
-                    RequiredProperty {
-                        distribution: Distribution::Broadcast,
-                    },
-                    RequiredProperty {
-                        distribution: Distribution::GlobalHash(conditions),
-                    },
-                ]);
-            } else {
-                // subquery as right build side
-                let conditions = self
-                    .equi_conditions
-                    .iter()
-                    .map(|condition| condition.left.clone())
-                    .collect();
-
-                children_required.push(vec![
-                    RequiredProperty {
-                        distribution: Distribution::GlobalHash(conditions),
-                    },
-                    RequiredProperty {
-                        distribution: Distribution::Broadcast,
-                    },
-                ]);
-            }
-            return Ok(children_required);
+        if let Some((left, right)) = self.nullable_mark_join_distributions() {
+            return Ok(vec![vec![
+                RequiredProperty { distribution: left },
+                RequiredProperty {
+                    distribution: right,
+                },
+            ]]);
         }
 
         let settings = ctx.get_settings();
