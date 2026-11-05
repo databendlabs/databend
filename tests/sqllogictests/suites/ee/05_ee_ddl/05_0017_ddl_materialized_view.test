@@ -386,7 +386,8 @@ ALTER TABLE test_mv ADD CONSTRAINT positive_id CHECK (id > 0)
 statement error 3905
 ALTER TABLE test_mv DROP CONSTRAINT positive_id
 
-statement error 3905
+# The deprecated RECLUSTER alias resolves the MV, but it has no cluster key yet.
+statement error 1118
 ALTER TABLE test_mv RECLUSTER
 
 statement error 3905
@@ -474,13 +475,13 @@ ALTER MATERIALIZED VIEW test_mv CLUSTER BY (_mv_source_row_id)
 
 # RECLUSTER WHERE is intentionally not part of the first MV maintenance version.
 statement error 1002
-ALTER MATERIALIZED VIEW test_mv RECLUSTER WHERE id = 1
+OPTIMIZE TABLE test_mv RECLUSTER WHERE id = 1
 
 statement ok
-ALTER MATERIALIZED VIEW test_mv RECLUSTER LIMIT 1
+OPTIMIZE TABLE test_mv RECLUSTER LIMIT 1
 
 statement ok
-ALTER MATERIALIZED VIEW test_mv RECLUSTER FINAL LIMIT 1
+OPTIMIZE TABLE test_mv RECLUSTER FINAL LIMIT 1
 
 statement ok
 ALTER MATERIALIZED VIEW test_mv DROP CLUSTER KEY
