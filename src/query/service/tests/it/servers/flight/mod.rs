@@ -14,3 +14,4 @@
 
 mod control_channel;
 mod flight_service;
+mod ipc_compression;
