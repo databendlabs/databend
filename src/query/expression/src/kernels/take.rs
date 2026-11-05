@@ -312,16 +312,17 @@ impl Column {
                 if column.data_buffers().is_empty() {
                     return Column::String(column);
                 }
-                // Inline bytes live in the views, not the backing buffers. Only buffered values
-                // count toward the payload a copying partition would have produced. Do not use
-                // a minimum savings cutoff: fanout can multiply even a small retained buffer.
+                // Inline bytes live in the views, not the backing buffers. Count only buffered
+                // values when deciding whether a selection is sparse. A ratio guard avoids
+                // copying nearly dense buffers to save a few bytes. No absolute savings cutoff:
+                // even tiny unused buffers can multiply across remote destinations.
                 let buffered_bytes: usize = column
                     .views()
                     .iter()
                     .filter(|view| view.length > View::MAX_INLINE_SIZE)
                     .map(|view| view.length as usize)
                     .sum();
-                if column.total_buffer_len() > buffered_bytes {
+                if column.total_buffer_len() >= buffered_bytes.saturating_mul(4) {
                     Column::String(column.gc())
                 } else {
                     Column::String(column)

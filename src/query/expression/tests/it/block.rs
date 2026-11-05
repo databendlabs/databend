@@ -172,12 +172,15 @@ fn test_compact_string_buffers_preserves_nested_slices_and_meta() {
 #[test]
 fn test_compact_small_buffers_counts_only_noninline_payload() {
     let column = StringType::from_data(vec![
-        "z".repeat(13),
+        "z".repeat(56),
         "r".repeat(14),
         "a".repeat(12),
         "b".repeat(12),
+        "c".repeat(12),
+        "d".repeat(12),
+        "e".repeat(12),
     ])
-    .slice(1..4);
+    .slice(1..7);
     // Inline values can make logical string bytes exceed retained bytes, even though an
     // unselected buffered value still needs removing before IPC serialization.
     assert!(column.memory_size(true) > column.memory_size(false));
@@ -188,11 +191,28 @@ fn test_compact_small_buffers_counts_only_noninline_payload() {
     };
     assert_eq!(strings.total_buffer_len(), 14);
 
-    let inline = column.slice(1..3).compact_string_buffers();
+    let inline = column.slice(1..6).compact_string_buffers();
     let Column::String(strings) = inline else {
         unreachable!()
     };
     assert!(strings.data_buffers().is_empty());
+}
+
+#[test]
+fn test_compact_string_buffers_keeps_nearly_dense_slice() {
+    let column =
+        StringType::from_data(vec!["x".repeat(13), "r".repeat(128), "b".repeat(128)]).slice(1..3);
+    let Column::String(strings) = &column else {
+        unreachable!()
+    };
+    let buffer = strings.data_buffers()[0].as_ptr();
+    let compact = column.clone().compact_string_buffers();
+    assert_eq!(compact, column);
+    let Column::String(strings) = compact else {
+        unreachable!()
+    };
+    assert_eq!(strings.data_buffers()[0].as_ptr(), buffer);
+    assert_eq!(strings.total_buffer_len(), 269);
 }
 
 #[test]
