@@ -99,7 +99,6 @@ impl HashIndex {
         HashIndex::Compact(RowIdIndex::dummy())
     }
 
-    #[cfg(test)]
     pub fn is_wide(&self) -> bool {
         matches!(self, HashIndex::Wide(_))
     }
@@ -189,7 +188,7 @@ impl Tag {
 }
 
 /// Slots of a chunk.
-const CHUNK_SLOTS: usize = 12;
+pub(in crate::aggregate) const CHUNK_SLOTS: usize = 12;
 /// Prefetch the chunks of the rows this far ahead, once the index outgrows the caches.
 const PREFETCH_DISTANCE: usize = 16;
 const PREFETCH_MIN_BYTES: usize = 1 << 20;
@@ -331,8 +330,10 @@ impl<I: RowId> RowIdIndex<I> {
         let mut need_compare_count = 0;
         let mut claimed = false;
         for (i, &row) in state.no_match_vector[..remaining].iter().enumerate() {
-            if PREFETCH && let Some(ahead) = state.no_match_vector.get(i + PREFETCH_DISTANCE) {
-                let chunk = state.slots[*ahead] >> 4;
+            // Only the rows of this round: the rest of the vector holds rows of earlier calls,
+            // possibly of another table.
+            if PREFETCH && i + PREFETCH_DISTANCE < remaining {
+                let chunk = state.slots[state.no_match_vector[i + PREFETCH_DISTANCE]] >> 4;
                 prefetch_read_data::<_, 3>(self.chunks[..].as_ptr().wrapping_add(chunk));
             }
             let start = state.slots[row];

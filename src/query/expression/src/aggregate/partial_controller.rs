@@ -45,6 +45,7 @@ use std::ops::AddAssign;
 use simple_hll::HyperLogLog;
 
 use crate::AggregateHashTable;
+use crate::aggregate::hash_index::CHUNK_SLOTS;
 
 /// First learning checkpoint, in rows since learning started.
 const FIRST_CHECK_ROWS: usize = 256 * 1024;
@@ -54,12 +55,13 @@ const CHECK_GROWTH: usize = 4;
 const BYPASS_DISTINCT_RATIO: f64 = 0.9;
 /// Grow when materialized groups exceed the estimated distinct groups by this factor.
 const GROW_DEDUP_RATIO: f64 = 2.0;
-/// The largest grown index: 4M slots, which the index rounds to 3M slots (whole chunks, a power
-/// of two of them), 16 MiB of index for up to 2.3M groups per instance. Every instance holds the
-/// keys it sees, so a larger table multiplies their memory by the number of threads, while a
-/// table that cannot hold the distinct groups absorbs little of them. Keys beyond it are left to
-/// the final aggregate.
-pub const MAX_GROW_CAPACITY: usize = 1 << 22;
+/// The largest grown index: 2^19 chunks, 6M slots and 32 MiB of index for up to 4.6M groups per
+/// instance, `D` up to 4.2M with the `GROW_MARGIN`. An index is a power of two of chunks, so the
+/// limit is one of its sizes. Every instance holds the keys it sees, so a larger table
+/// multiplies their memory by the number of threads, while a table that cannot hold the
+/// distinct groups absorbs little of them. Keys beyond it are left to the final aggregate. The
+/// memory of the table bounds the groups that grow too, see [`partial_table_bytes`].
+pub const MAX_GROW_CAPACITY: usize = (1 << 19) * CHUNK_SLOTS;
 /// Bounds of the memory of a partial table, see [`partial_table_bytes`].
 pub const MIN_PARTIAL_TABLE_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_PARTIAL_TABLE_BYTES: usize = 256 * 1024 * 1024;
@@ -161,8 +163,8 @@ const PARTIAL_TABLE_MEMORY_PERCENT: usize = 2;
 /// grown table must fit in it, and the table is emitted once it holds that much, which mostly
 /// bounds the memory aggregate states own outside the arena (the values of `array_agg`, a
 /// distinct set), as the index and the payload are bounded otherwise. The bounds keep a table
-/// that can grow on small machines, and one that is not larger than the 4M-slot index needs
-/// when there are few threads.
+/// that can grow on small machines, and one that is not larger than the largest grown index
+/// needs when there are few threads.
 pub fn partial_table_bytes(max_memory_usage: usize, threads: usize) -> usize {
     let share = max_memory_usage / 100 * PARTIAL_TABLE_MEMORY_PERCENT / threads.max(1);
     share.clamp(MIN_PARTIAL_TABLE_BYTES, MAX_PARTIAL_TABLE_BYTES)

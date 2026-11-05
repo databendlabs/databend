@@ -420,7 +420,7 @@ impl AggregateHashTable {
                         .for_each_hash(|hash| sampler.observe_hash(hash));
                 }
                 // Restart the index in place and keep appending to the payload.
-                self.hash_index.reset();
+                self.restart_index();
                 self.partial_restarted = true;
                 stats.windows += 1;
             }
@@ -762,6 +762,21 @@ impl AggregateHashTable {
         self.hash_index = hash_index
     }
 
+    /// Empty the index for the next window of a partial table, whose payload keeps its rows and
+    /// grows by at most what the index holds: the ids of the window must fit the width of the
+    /// index, as they do after a resize.
+    fn restart_index(&mut self) {
+        let capacity = self.hash_index.capacity();
+        let window_rows = self.hash_index.resize_threshold();
+        if self.hash_index.is_wide() || self.payload.row_ids_fit_compact(window_rows) {
+            self.hash_index.reset();
+        } else {
+            // Free the old index before allocating the new one, as `resize` does.
+            self.hash_index = HashIndex::dummy();
+            self.hash_index = HashIndex::wide_with_capacity(capacity);
+        }
+    }
+
     pub fn hash_index_resize_count(&self) -> usize {
         self.hash_index_resize_count
     }
@@ -856,6 +871,38 @@ mod tests {
                 }
             }
             assert_eq!(rows.len(), groups as usize);
+        }
+    }
+
+    #[test]
+    fn test_partial_restart_turns_wide_when_row_ids_outgrow_four_bytes() {
+        // Distinct keys over several windows of the initial index, whose payload keeps growing.
+        let keys = 200_000;
+        let blocks = key_blocks(keys, 1);
+        for max_compact_pages in [usize::MAX, 8] {
+            let mut ht = AggregateHashTable::new(
+                vec![DataType::Number(NumberDataType::UInt64)],
+                vec![],
+                HashTableConfig::partial_aggregate(),
+                Arc::new(Bump::new()),
+            );
+            ht.payload.row_ids.set_max_compact_pages(max_compact_pages);
+            let capacity = ht.hash_index.capacity();
+            let mut state = ProbeState::default();
+            let mut new_groups = 0;
+            for block in &blocks {
+                let groups = ProjectedBlock::project(&[0], block);
+                let stats = ht
+                    .add_groups_partial(&mut state, groups, &[], block.num_rows(), capacity, None)
+                    .unwrap();
+                new_groups += stats.new_groups;
+            }
+            assert!(ht.partial_restarted());
+            assert_eq!(ht.hash_index.capacity(), capacity);
+            assert_eq!(ht.hash_index.is_wide(), max_compact_pages != usize::MAX);
+            // Each key comes once, so it is a new group in its window.
+            assert_eq!(new_groups, keys as usize);
+            assert_eq!(ht.payload.len(), keys as usize);
         }
     }
 }

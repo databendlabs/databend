@@ -1034,24 +1034,21 @@ fn learn_keys(
     (partial, reason)
 }
 
-/// The largest index a partial table grows to: the index rounds its slots to whole chunks, a
-/// power of two of them, which makes 3M slots of the 4M of `MAX_GROW_CAPACITY`.
-fn largest_grown_capacity() -> usize {
-    let capacity = AggregateHashTable::capacity_for_groups(2_200_000);
-    assert!(capacity <= MAX_GROW_CAPACITY && capacity * 2 > MAX_GROW_CAPACITY);
-    capacity
-}
-
-/// The partial aggregate grows up to `MAX_GROW_CAPACITY`, and does not grow at all when the
-/// distinct groups would not fit: a smaller table would absorb little of them. With a window
-/// that absorbs nothing either, it bypasses.
+/// The partial aggregate grows up to `MAX_GROW_CAPACITY`, one of the sizes of an index, and does
+/// not grow at all when the distinct groups would not fit: a smaller table would absorb little of
+/// them. With a window that absorbs nothing either, it bypasses.
 #[test]
 fn test_partial_grows_up_to_max_capacity() {
-    let (partial, reason) = learn_recurring_keys(2_000_000, 0);
-    assert_eq!(reason, Some(EmitReason::Grow));
-    assert_eq!(partial.capacity(), largest_grown_capacity());
+    assert_eq!(
+        AggregateHashTable::capacity_for_groups(4_400_000),
+        MAX_GROW_CAPACITY
+    );
 
-    let (partial, reason) = learn_recurring_keys(3_000_000, 0);
+    let (partial, reason) = learn_recurring_keys(4_000_000, 0);
+    assert_eq!(reason, Some(EmitReason::Grow));
+    assert_eq!(partial.capacity(), MAX_GROW_CAPACITY);
+
+    let (partial, reason) = learn_recurring_keys(5_000_000, 0);
     assert_eq!(reason, Some(EmitReason::Bypass));
     assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
 }
@@ -1061,9 +1058,10 @@ fn test_partial_grows_up_to_max_capacity() {
 #[test]
 fn test_partial_grows_within_table_bytes() {
     // 2M groups of 50 bytes: 16 MiB of index and 105 MiB of groups.
+    let grown_capacity = AggregateHashTable::capacity_for_groups(2_200_000);
     let (partial, reason) = learn_recurring_keys(2_000_000, 50);
     assert_eq!(reason, Some(EmitReason::Grow));
-    assert_eq!(partial.capacity(), largest_grown_capacity());
+    assert_eq!(partial.capacity(), grown_capacity);
 
     // 2M groups of 150 bytes: 16 MiB of index and 315 MiB of groups.
     let (partial, reason) = learn_recurring_keys(2_000_000, 150);
@@ -1080,7 +1078,7 @@ fn test_partial_grows_within_table_bytes() {
     assert!(index < MAX_PARTIAL_TABLE_BYTES / 4);
 
     // The same 2M groups of 50 bytes do not fit in a table that leaves them 100 MiB.
-    let table_bytes = AggregateHashTable::index_bytes_for(largest_grown_capacity()) + (100 << 20);
+    let table_bytes = AggregateHashTable::index_bytes_for(grown_capacity) + (100 << 20);
     let (partial, reason) = learn_recurring_keys_within(2_000_000, 50, table_bytes);
     assert_eq!(reason, Some(EmitReason::Bypass));
     assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
@@ -1090,14 +1088,16 @@ fn test_partial_grows_within_table_bytes() {
 /// window decides, so the partial aggregate bypasses only if the window absorbs nothing.
 #[test]
 fn test_partial_bypasses_only_what_no_table_absorbs() {
-    // Keys repeat far apart (D / R = 0.5), but 3M of them do not fit a grown table and the
+    // Keys repeat far apart (D / R = 0.5), but 5M of them do not fit a grown table and the
     // window absorbs nothing: bypass.
-    let (partial, reason) = learn_keys(3_000_000, 6_000_000, 5_900_000, 0, MAX_PARTIAL_TABLE_BYTES);
+    let (partial, reason) =
+        learn_keys(5_000_000, 10_000_000, 9_800_000, 0, MAX_PARTIAL_TABLE_BYTES);
     assert_eq!(reason, Some(EmitReason::Bypass));
     assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
 
     // The same keys with a window that absorbs half the rows: keep learning.
-    let (partial, reason) = learn_keys(3_000_000, 6_000_000, 3_000_000, 0, MAX_PARTIAL_TABLE_BYTES);
+    let (partial, reason) =
+        learn_keys(5_000_000, 10_000_000, 5_000_000, 0, MAX_PARTIAL_TABLE_BYTES);
     assert_eq!(reason, None);
     assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 

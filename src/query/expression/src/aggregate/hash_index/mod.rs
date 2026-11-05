@@ -17,4 +17,5 @@
 /// [hashbrown](https://github.com/rust-lang/hashbrown/tree/master) crate
 mod index;
 
+pub(in crate::aggregate) use index::CHUNK_SLOTS;
 pub(in crate::aggregate) use index::HashIndex;
