@@ -163,9 +163,6 @@ pub struct SelectivityEstimator {
     /// statistics estimate to match no rows counted as an unknown filter. The
     /// other predicates keep their estimated selectivity.
     bound_selectivity: f64,
-    /// Selectivity of the last `apply` with each such range counted as
-    /// matching every row, so that only the other predicates reduce it.
-    other_selectivity: f64,
 }
 
 impl SelectivityEstimator {
@@ -180,7 +177,6 @@ impl SelectivityEstimator {
             proven_empty: false,
             statistics_zero_fallback: false,
             bound_selectivity: MAX_SELECTIVITY,
-            other_selectivity: MAX_SELECTIVITY,
         }
     }
 
@@ -229,9 +225,11 @@ impl SelectivityEstimator {
     /// decided the result, the expected cardinality uses
     /// `SMALL_SELECTIVITY`; the bound counts that range as an unknown filter
     /// over `input_max_cardinality` instead, so imprecise statistics cannot
-    /// make a large input look small. The other predicates keep their
-    /// estimated selectivity in the bound, so a selective equality next to
-    /// such a range still lowers it. Otherwise the bound is the estimate
+    /// make a large input look small. Predicates on other columns keep
+    /// their estimated selectivity in the bound, so a selective equality next
+    /// to such a range still lowers it. Predicates on the same column as such
+    /// a range are estimated from the statistics that the range contradicts,
+    /// so they do not lower the bound. Otherwise the bound is the estimate
     /// itself.
     pub fn max_cardinality(&self, estimated_cardinality: f64, input_max_cardinality: f64) -> f64 {
         if self.statistics_zero_fallback {
@@ -239,16 +237,6 @@ impl SelectivityEstimator {
         } else {
             estimated_cardinality
         }
-    }
-
-    /// Applies the last `apply` to an input bound that already counts a range
-    /// below as an unknown filter because column statistics estimate it to
-    /// match no rows. A selective predicate then also lowers the bound. A
-    /// range of this kind in these predicates may restrict the same column as
-    /// the one below, so it counts as matching every row instead of as a
-    /// second unknown filter, as both ranges would in one filter.
-    pub fn bound_cardinality(&self, estimated_cardinality: f64, input_max_cardinality: f64) -> f64 {
-        (input_max_cardinality * self.other_selectivity).max(estimated_cardinality)
     }
 
     /// Whether the last `apply` was decided by a range comparison whose column
@@ -270,7 +258,6 @@ impl SelectivityEstimator {
     pub fn apply(&mut self, predicates: &[ScalarExpr], func_ctx: &FunctionContext) -> Result<f64> {
         self.statistics_zero_fallback = false;
         self.bound_selectivity = MAX_SELECTIVITY;
-        self.other_selectivity = MAX_SELECTIVITY;
         let cardinality = self.apply_predicates(predicates, func_ctx)?;
         self.proven_empty = self.cardinality == StatCardinality::Exact(0)
             || (cardinality == 0.0
@@ -300,7 +287,6 @@ impl SelectivityEstimator {
     ) -> Result<f64> {
         if self.cardinality == StatCardinality::Exact(0) {
             self.bound_selectivity = 0.0;
-            self.other_selectivity = 0.0;
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
         }
@@ -394,7 +380,6 @@ impl SelectivityEstimator {
             }
         }
         self.bound_selectivity = 0.0;
-        self.other_selectivity = 0.0;
         self.clear_column_stats_for_empty_result();
         Ok(0.0)
     }
@@ -476,36 +461,25 @@ impl SelectivityEstimator {
         not_null_columns: &ColumnSet,
     ) -> f64 {
         let input_cardinality = self.cardinality.value();
-        let (selectivity, bound_selectivity, other_selectivity) = match selectivity {
-            Selectivity::Unknown => (
-                DEFAULT_SELECTIVITY,
-                DEFAULT_SELECTIVITY,
-                DEFAULT_SELECTIVITY,
-            ),
+        let (selectivity, bound_selectivity) = match selectivity {
+            Selectivity::Unknown => (DEFAULT_SELECTIVITY, DEFAULT_SELECTIVITY),
             Selectivity::LowerBound => (
                 UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND,
                 UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND,
-                UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND,
             ),
-            Selectivity::StatisticsZero {
-                expected,
-                bound,
-                others,
-            } => {
+            Selectivity::StatisticsZero { expected, bound } => {
                 self.statistics_zero_fallback = true;
-                (expected, bound, others)
+                (expected, bound)
             }
             Selectivity::Zero => {
                 self.bound_selectivity = 0.0;
-                self.other_selectivity = 0.0;
                 self.clear_column_stats_for_empty_result();
                 return 0.0;
             }
             Selectivity::All => return input_cardinality,
-            Selectivity::N(n) => (n, n, n),
+            Selectivity::N(n) => (n, n),
         };
         self.bound_selectivity = bound_selectivity;
-        self.other_selectivity = other_selectivity;
 
         if selectivity == MAX_SELECTIVITY {
             return input_cardinality;
@@ -1058,13 +1032,10 @@ pub enum Selectivity {
     // Imprecise statistics do not prove that, so `expected` is a small
     // non-zero selectivity for the expected cardinality, and `bound` is the
     // selectivity with each such range counted as an unknown filter (see
-    // `SelectivityEstimator::max_cardinality`). `others` counts each such
-    // range as matching every row, so only the other predicates reduce it
-    // (see `SelectivityEstimator::bound_cardinality`).
+    // `SelectivityEstimator::max_cardinality`).
     StatisticsZero {
         expected: f64,
         bound: f64,
-        others: f64,
     },
     // A deterministic false predicate produced by constants, boolean logic, or
     // exact local rules. This is stronger than an estimated `N(0.0)`.
@@ -1358,7 +1329,6 @@ impl SelectivityVisitor<'_> {
                 Selectivity::StatisticsZero {
                     expected: SMALL_SELECTIVITY,
                     bound: DEFAULT_SELECTIVITY,
-                    others: MAX_SELECTIVITY,
                 }
             }
             selectivity => selectivity,
@@ -1780,8 +1750,10 @@ impl SelectivityVisitor<'_> {
                 // The same estimates with each range that column statistics
                 // estimate to match no rows counted as an unknown filter.
                 let mut bound_estimates: Vec<(f64, ColumnSet)> = Vec::new();
-                // The same estimates with each such range matching every row.
-                let mut other_estimates: Vec<(f64, ColumnSet)> = Vec::new();
+                // Columns of those ranges, and which bound estimates come
+                // from the other children.
+                let mut statistics_zero_range_columns = ColumnSet::new();
+                let mut other_bound_estimates: Vec<usize> = Vec::new();
                 for arg in &func.args {
                     let mut sub_visitor = self.spawn_child(ConstraintContext::And);
                     sub_visitor.visit_expr(arg)?;
@@ -1812,20 +1784,16 @@ impl SelectivityVisitor<'_> {
                         Selectivity::All => {}
                         Selectivity::N(n) => {
                             let columns = predicate_columns(arg);
+                            other_bound_estimates.push(bound_estimates.len());
                             estimates.push((n, columns.clone()));
-                            bound_estimates.push((n, columns.clone()));
-                            other_estimates.push((n, columns));
+                            bound_estimates.push((n, columns));
                         }
-                        Selectivity::StatisticsZero {
-                            expected,
-                            bound,
-                            others,
-                        } => {
+                        Selectivity::StatisticsZero { expected, bound } => {
                             has_statistics_zero = true;
                             let columns = predicate_columns(arg);
+                            statistics_zero_range_columns.extend(columns.iter().copied());
                             estimates.push((expected, columns.clone()));
-                            bound_estimates.push((bound, columns.clone()));
-                            other_estimates.push((others, columns));
+                            bound_estimates.push((bound, columns));
                         }
                     }
                     self.constraints = constraints;
@@ -1834,6 +1802,16 @@ impl SelectivityVisitor<'_> {
                     if statistics_zero_columns.contains(&column) {
                         estimates[estimate].0 = MAX_SELECTIVITY;
                         bound_estimates[estimate].0 = MAX_SELECTIVITY;
+                    }
+                }
+                // A predicate on the same column as such a range is estimated
+                // from the statistics that the range contradicts, as in
+                // `t > 1000 AND t > 999` with `t` recorded in [1, 1000], so it
+                // does not lower the bound.
+                for estimate in other_bound_estimates {
+                    let (value, columns) = &mut bound_estimates[estimate];
+                    if !columns.is_disjoint(&statistics_zero_range_columns) {
+                        *value = MAX_SELECTIVITY;
                     }
                 }
                 let has_n = !estimates.is_empty();
@@ -1852,14 +1830,13 @@ impl SelectivityVisitor<'_> {
                 {
                     Selectivity::N(0.0)
                 } else if has_statistics_zero && acc > 0.0 {
-                    // The bound combines the other conjuncts as usual, so a
-                    // selective predicate next to such a range lowers the bound
-                    // as well. Each bound is at least its expected value, so the
-                    // combined bound is at least `acc`.
+                    // The bound combines the conjuncts on other columns as usual,
+                    // so a selective predicate next to such a range lowers the
+                    // bound as well. Each bound is at least its expected value,
+                    // so the combined bound is at least `acc`.
                     Selectivity::StatisticsZero {
                         expected: acc,
                         bound: self.and_strategy.combine(&bound_estimates),
-                        others: self.and_strategy.combine(&other_estimates),
                     }
                 } else if has_n && acc < UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND {
                     Selectivity::N(acc)
@@ -1884,7 +1861,6 @@ impl SelectivityVisitor<'_> {
                 let mut has_statistics_zero = false;
                 let mut acc = 0.0_f64;
                 let mut bound_acc = 0.0_f64;
-                let mut other_acc = 0.0_f64;
                 let mut has_numeric_selectivity = false;
                 for arg in &func.args {
                     let mut sub_visitor = self.spawn_child(ConstraintContext::Or);
@@ -1898,18 +1874,12 @@ impl SelectivityVisitor<'_> {
                             has_numeric_selectivity = true;
                             acc += (1.0 - acc) * n;
                             bound_acc += (1.0 - bound_acc) * n;
-                            other_acc += (1.0 - other_acc) * n;
                         }
-                        Selectivity::StatisticsZero {
-                            expected,
-                            bound,
-                            others,
-                        } => {
+                        Selectivity::StatisticsZero { expected, bound } => {
                             has_statistics_zero = true;
                             has_numeric_selectivity = true;
                             acc += (1.0 - acc) * expected;
                             bound_acc += (1.0 - bound_acc) * bound;
-                            other_acc += (1.0 - other_acc) * others;
                         }
                     }
                 }
@@ -1930,7 +1900,6 @@ impl SelectivityVisitor<'_> {
                     Selectivity::StatisticsZero {
                         expected: acc,
                         bound: bound_acc.min(DEFAULT_SELECTIVITY),
-                        others: other_acc,
                     }
                 } else if (!has_unknown || acc > DEFAULT_SELECTIVITY) && !has_lower_bound
                     || acc > UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND

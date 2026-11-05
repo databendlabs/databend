@@ -1,5 +1,5 @@
 === range_outside_statistics ===
-description: A range comparison outside the column min/max expects 1/2500 of the input rows and counts as a 1/5 unknown filter in max, where the other predicates keep their estimates; ranges that contradict each other and other predicates estimated as no rows keep a zero bound. Column c has no statistics.
+description: A range comparison outside the column min/max expects 1/2500 of the input rows and counts as a 1/5 unknown filter in max, where predicates on other columns keep their estimates and predicates on the same column count as 1; ranges that contradict each other and other predicates estimated as no rows keep a zero bound. Column c has no statistics.
 expr          : a > 25
 cardinality   : 1000000
 estimated     : 400
@@ -265,6 +265,17 @@ out stats     :
 1 ColumnStat { min: UInt(0), max: UInt(49), ndv: 50.0, null_count: 0, histogram: None }
 
 expr          : and_filters(a > 25, c > 1)
+cardinality   : 1000000
+estimated     : 400
+max           : 200000
+in stats      :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: ~98.16990116683098[..100.0], null_count: 0, histogram: None }
+
+expr          : and_filters(a > 25, a > 18)
 cardinality   : 1000000
 estimated     : 400
 max           : 200000
