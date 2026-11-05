@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -43,6 +44,11 @@ fn scalar_hash(scalar: &Scalar) -> u64 {
 fn assert_hash_class(scalars: &[Scalar]) -> databend_common_exception::Result<()> {
     let first = &scalars[0];
     let data_type = first.as_ref().infer_data_type();
+    let mut map = HashMap::new();
+    for scalar in scalars {
+        map.insert(scalar.clone(), ());
+    }
+    assert_eq!(map.len(), 1);
     let mut builder = ColumnBuilder::with_capacity(&data_type, scalars.len() + 2);
     builder.push(first.as_ref());
     for scalar in scalars {
@@ -173,26 +179,43 @@ fn bitmap_hashes_logical_members() -> databend_common_exception::Result<()> {
     assert_hash_class(&[Scalar::Bitmap(vec![7]), Scalar::Bitmap(vec![7])])
 }
 
-// Standard Roaring treemap with one run container, built from its wire layout
-// rather than a stored byte fixture. The run is [0, cardinality).
+// Standard Roaring treemap for [0, cardinality), assembled from the wire
+// layout. Every container has one run; four or more containers need offsets.
 fn run_bitmap(cardinality: u32) -> Vec<u8> {
-    assert!((1..=65_536).contains(&cardinality));
+    assert!((1..=(1 << 20)).contains(&cardinality));
+    let containers = cardinality.div_ceil(1 << 16);
     let mut bytes = Vec::new();
     bytes.extend_from_slice(&1_u64.to_le_bytes()); // one high-word bitmap
     bytes.extend_from_slice(&0_u32.to_le_bytes()); // high word
-    bytes.extend_from_slice(&12_347_u32.to_le_bytes()); // run cookie, one container
-    bytes.push(1); // this container is run encoded
-    bytes.extend_from_slice(&0_u16.to_le_bytes()); // container key
-    bytes.extend_from_slice(&((cardinality - 1) as u16).to_le_bytes());
-    bytes.extend_from_slice(&1_u16.to_le_bytes()); // one run; no offsets for one container
-    bytes.extend_from_slice(&0_u16.to_le_bytes()); // run start
-    bytes.extend_from_slice(&((cardinality - 1) as u16).to_le_bytes());
+    bytes.extend_from_slice(&(12_347 | ((containers - 1) << 16)).to_le_bytes());
+    let mut run_flags = vec![0_u8; containers.div_ceil(8) as usize];
+    for key in 0..containers {
+        run_flags[key as usize / 8] |= 1 << (key % 8);
+    }
+    bytes.extend_from_slice(&run_flags);
+    for key in 0..containers {
+        let len = (cardinality - (key << 16)).min(1 << 16);
+        bytes.extend_from_slice(&(key as u16).to_le_bytes());
+        bytes.extend_from_slice(&((len - 1) as u16).to_le_bytes());
+    }
+    if containers >= 4 {
+        let header_len = 4 + containers.div_ceil(8) + containers * 8;
+        for key in 0..containers {
+            bytes.extend_from_slice(&(header_len + key * 6).to_le_bytes());
+        }
+    }
+    for key in 0..containers {
+        let len = (cardinality - (key << 16)).min(1 << 16);
+        bytes.extend_from_slice(&1_u16.to_le_bytes()); // one run
+        bytes.extend_from_slice(&0_u16.to_le_bytes()); // run start
+        bytes.extend_from_slice(&((len - 1) as u16).to_le_bytes());
+    }
     bytes
 }
 
 #[test]
 fn bitmap_hashes_canonicalize_run_containers() -> databend_common_exception::Result<()> {
-    for cardinality in [4_096_u32, 4_097, 65_536] {
+    for cardinality in [4_096_u32, 4_097, 65_536, 1 << 20] {
         let mut tree = RoaringTreemap::new();
         tree.insert_range(0..u64::from(cardinality));
         let mut legacy = Vec::new();
@@ -230,12 +253,22 @@ fn bitmap_hashing_does_not_write_every_dense_member() {
         }
     }
 
-    let scalar = Scalar::Bitmap(run_bitmap(65_536));
-    let mut hasher = CountingHasher::default();
-    scalar.hash(&mut hasher);
-    // A canonical bitset container fits well below this bound, whereas writing
-    // all members as u64 values would require more than half a megabyte.
-    assert!(hasher.bytes < 16 * 1024, "hashed {} bytes", hasher.bytes);
+    for cardinality in [65_536_u32, 1 << 20] {
+        let mut tree = RoaringTreemap::new();
+        tree.insert_range(0..u64::from(cardinality));
+        let canonical_size = tree.serialized_size();
+        let scalar = Scalar::Bitmap(run_bitmap(cardinality));
+        let mut hasher = CountingHasher::default();
+        scalar.hash(&mut hasher);
+        // This is a deterministic work bound, not a wall-clock benchmark:
+        // visit at most the canonical compressed bytes, not each u64 member.
+        assert!(
+            hasher.bytes <= canonical_size,
+            "hashed {} bytes",
+            hasher.bytes
+        );
+        assert!(hasher.bytes < cardinality as usize * 8 / 32);
+    }
 }
 
 #[test]

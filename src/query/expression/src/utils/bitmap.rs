@@ -25,14 +25,13 @@ use databend_common_io::HYBRID_MAGIC;
 use databend_common_io::HYBRID_VERSION;
 use databend_common_io::HybridBitmap;
 use databend_common_io::deserialize_bitmap;
-use roaring::RoaringTreemap;
 
 /// Hash a canonical compressed representation, not every decoded member.
 /// Small hybrid sets are bounded by their one-byte serialized length; large
 /// bitmaps stay in Roaring's array/bitset containers throughout hashing.
 pub fn hash_bitmap<H: Hasher>(bytes: &[u8], state: &mut H) {
     let mut tree = match deserialize_bitmap(bytes) {
-        Ok(HybridBitmap::Small(values)) => values.into_iter().collect::<RoaringTreemap>(),
+        Ok(HybridBitmap::Small(values)) => values.into_iter().collect(),
         Ok(HybridBitmap::Large(tree)) => tree,
         Err(_) => {
             bytes.hash(state);
