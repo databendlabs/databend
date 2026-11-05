@@ -616,27 +616,37 @@ fn test_hash_senders_buffer_next_round_while_sending() -> Result<()> {
         assert!(matches!(event(EventCause::Input(0))?, Event::NeedConsume));
         assert!(item.inputs_port[0].has_data());
 
-        let key = |item: QueueItem| {
+        let rows = |item: QueueItem| {
             let QueueItem::LocalData(data) = item else {
                 panic!("expected local data");
             };
-            let column = data.into_data().get_by_offset(0).to_column();
-            UInt64Type::try_downcast_column(&column)
-                .unwrap()
-                .iter()
+            let block = data.into_data();
+            assert_eq!(block.num_columns(), 2);
+            let ids = UInt64Type::try_downcast_column(&block.get_by_offset(0).to_column()).unwrap();
+            let strings =
+                StringType::try_downcast_column(&block.get_by_offset(1).to_column()).unwrap();
+            assert_eq!(ids.len(), block.num_rows());
+            assert_eq!(strings.len(), block.num_rows());
+            ids.iter()
                 .copied()
+                .zip(strings.iter().map(str::to_string))
                 .collect::<Vec<_>>()
         };
         // Consuming the first round releases the quota for the waiting round.
-        let mut keys = key(receivers[0].try_recv().unwrap());
+        let mut received = rows(receivers[0].try_recv().unwrap());
         assert!(matches!(event(EventCause::Other)?, Event::NeedData));
         upstream.finish();
         assert!(matches!(event(EventCause::Input(0))?, Event::Finished));
 
         while let Ok(item) = receivers[0].try_recv() {
-            keys.extend(key(item));
+            received.extend(rows(item));
         }
-        assert_eq!(keys, vec![0, 2, 4, 6]);
+        assert_eq!(received, vec![
+            (0, "x".repeat(LOCAL_CHANNEL_MAX_BYTES)),
+            (2, "x".repeat(8)),
+            (4, "x".repeat(8)),
+            (6, "x".repeat(8)),
+        ]);
         assert!(receivers[1].is_empty());
     }
     Ok(())

@@ -143,7 +143,6 @@ fn serialize_to_batches(
         let (dicts, batch) = encode_batch(&empty_batch, ipc_options)?;
         Ok((dicts, vec![batch]))
     } else {
-        let block = block.compact_string_buffers();
         let schema = block.infer_schema();
         let arrow_schema = ArrowSchema::from(&schema);
         let batch = block.to_record_batch_with_dataschema(&schema)?;
@@ -243,6 +242,8 @@ pub(crate) fn encode_block_for_thread(
         .and_then(|meta| meta.override_block_schema())
         .map(|schema| Arc::new(ArrowSchema::from(schema.as_ref())));
     let arrow_schema = block_schema.as_ref().unwrap_or(arrow_schema);
+    // This encoder is specific to hash remote delivery. Generic Merge serialization must not
+    // change the retained-buffer representation of ordinary input blocks.
     let block = block.compact_string_buffers();
     let batch = block.to_record_batch_with_arrow_schema(arrow_schema)?;
     let (dictionaries, mut data) = encode_batch(&batch, ipc_options)?;
@@ -525,6 +526,7 @@ mod tests {
     use databend_common_expression::types::ArrayColumn;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::StringType;
+    use databend_common_expression::types::UInt64Type;
 
     use super::*;
     use crate::servers::flight::v1::exchange::serde;
@@ -563,62 +565,142 @@ mod tests {
         assert_eq!(strings.data_buffers()[0].as_ptr(), buffer);
     }
 
+    fn assert_block_values(actual: &DataBlock, expected: &DataBlock) {
+        assert_eq!(actual.num_rows(), expected.num_rows());
+        assert_eq!(actual.num_columns(), expected.num_columns());
+        assert_eq!(actual.infer_schema(), expected.infer_schema());
+        for (actual, expected) in actual.columns().iter().zip(expected.columns()) {
+            assert_eq!(actual.to_column(), expected.to_column());
+        }
+    }
+
+    fn decode_legacy(block: DataBlock, options: &IpcWriteOptions) -> Result<(usize, DataBlock)> {
+        let schema = Arc::new(block.infer_schema());
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        let mut serialized = serde::serialize_block(0, block, options)?;
+        let mut serialized =
+            serde::ExchangeSerializeMeta::downcast_from(serialized.take_meta().unwrap()).unwrap();
+        let Some(DataPacket::FragmentData(fragment)) = serialized.packet.pop() else {
+            unreachable!()
+        };
+        let body_bytes = fragment.data.data_body.len();
+        let decoded = serde::deserialize_block(serialized.packet, fragment, &schema, arrow_schema)?;
+        Ok((body_bytes, decoded))
+    }
+
     #[test]
-    fn test_remote_fanout_drops_small_unused_buffers() -> Result<()> {
-        let strings = StringType::from_data(vec![
-            "z".repeat(1024),
-            "a".to_string(),
-            "b".to_string(),
-            "c".to_string(),
-            "d".to_string(),
-        ]);
-        let mut stream = BlockPartitionStream::create_with_string_views(0, 0, 5);
-        stream.partition(
-            vec![0, 1, 2, 3, 4],
-            DataBlock::new_from_columns(vec![strings]),
-            false,
-        );
-        let options = make_ipc_options(None)?;
-        for partition in 1..5 {
-            let block = stream.finalize_partition(partition).unwrap();
-            // Every destination retains less than the former cutoff, even though none of its
-            // values needs a backing buffer. Ordinary and hash encoders must both drop it.
-            assert!(block.memory_size() < 16 * 1024);
-            let schema = Arc::new(block.infer_schema());
-            let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
-            let ordinary = serialize_block_for_thread(block.clone(), 0, &options)?;
-            let hash = encode_block_for_thread(0, block.clone(), &arrow_schema, &options, None)?;
-            let mut legacy = serde::serialize_block(0, block.clone(), &options)?;
-            let mut legacy =
-                serde::ExchangeSerializeMeta::downcast_from(legacy.take_meta().unwrap()).unwrap();
-            let Some(DataPacket::FragmentData(fragment)) = legacy.packet.pop() else {
-                unreachable!()
-            };
-            assert!(fragment.data.data_body.len() < 512);
-            let decoded =
-                serde::deserialize_block(legacy.packet, fragment, &schema, arrow_schema.clone())?;
-            assert_eq!(
-                decoded.get_by_offset(0).to_column(),
-                block.get_by_offset(0).to_column()
+    fn test_hash_remote_fanout_compacts_small_shared_buffers() -> Result<()> {
+        for tails in [["c".to_string(), "d".to_string()], [
+            "r".repeat(32),
+            "s".repeat(32),
+        ]] {
+            let strings = StringType::from_data(vec![
+                "z".repeat(1024),
+                "a".to_string(),
+                tails[0].clone(),
+                "b".to_string(),
+                tails[1].clone(),
+            ]);
+            let mut stream = BlockPartitionStream::create_with_string_views(0, 0, 3);
+            stream.partition(
+                vec![0, 1, 1, 2, 2],
+                DataBlock::new_from_columns(vec![
+                    UInt64Type::from_data(vec![0, 1, 2, 3, 4]),
+                    strings,
+                ]),
+                false,
             );
-            for data in ordinary.into_iter().chain(std::iter::once(hash)) {
-                assert!(data.data_body.len() < 512);
-                let decoded = deserialize_flight_data(strip_tid(data), &schema, &arrow_schema)?;
-                assert_eq!(
-                    decoded.get_by_offset(0).to_column(),
-                    block.get_by_offset(0).to_column()
-                );
+            let options = make_ipc_options(None)?;
+            for partition in 1..3 {
+                let block = stream.finalize_partition(partition).unwrap();
+                let expected = DataBlock::new_from_columns(vec![
+                    UInt64Type::from_data(vec![2 * partition as u64 - 1, 2 * partition as u64]),
+                    StringType::from_data(vec![
+                        if partition == 1 { "a" } else { "b" }.to_string(),
+                        tails[partition - 1].clone(),
+                    ]),
+                ]);
+                assert_block_values(&block, &expected);
+                // No absolute cutoff: small buffers must also be dropped when inline-only,
+                // or compacted to the one required 32-byte noninline value.
+                assert!(block.memory_size() < 16 * 1024);
+                assert!(block.memory_size() > 1024);
+                let schema = Arc::new(block.infer_schema());
+                let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+                for compression in [
+                    None,
+                    Some(FlightCompression::Lz4),
+                    Some(FlightCompression::Zstd),
+                ] {
+                    let hash = encode_block_for_thread(
+                        partition,
+                        block.clone(),
+                        &arrow_schema,
+                        &options,
+                        compression,
+                    )?;
+                    assert!(hash.data_body.len() < 512);
+                    let decoded = deserialize_flight_data(strip_tid(hash), &schema, &arrow_schema)?;
+                    assert_block_values(&decoded, &expected);
+                    assert_eq!(decoded.memory_size(), expected.memory_size());
+                }
+                // Encoding a clone must not compact the local owner in place.
+                assert!(block.memory_size() > 1024);
             }
-            let Column::String(local) = block.get_by_offset(0).to_column() else {
-                unreachable!()
-            };
-            assert!(!local.data_buffers().is_empty());
         }
         Ok(())
     }
 
     #[test]
-    fn test_remote_encoders_compact_nested_string_buffers() -> Result<()> {
+    fn test_generic_encoders_preserve_backing_and_memory() -> Result<()> {
+        // Both inline-only and mixed views retain an unused backing buffer. Ordinary Merge
+        // serialization preserves it even though the dedicated hash encoder would compact it.
+        for tail in ["b".to_string(), "r".repeat(32)] {
+            let strings = StringType::from_data(vec!["z".repeat(1024), "a".to_string(), tail]);
+            let block = DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(vec![11, 12]),
+                strings.slice(1..3),
+            ]);
+            let retained = block.memory_size();
+            assert!(retained > 1024);
+            let schema = Arc::new(block.infer_schema());
+            let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+            for compression in [
+                None,
+                Some(FlightCompression::Lz4),
+                Some(FlightCompression::Zstd),
+            ] {
+                let options = make_ipc_options(compression)?;
+                let ordinary = serialize_block_for_thread(block.clone(), 1, &options)?;
+                assert_eq!(ordinary.len(), 1);
+                let (legacy_body_bytes, legacy) = decode_legacy(block.clone(), &options)?;
+                if compression.is_none() {
+                    assert!(ordinary[0].data_body.len() >= 1024);
+                    assert!(legacy_body_bytes >= 1024);
+                }
+                let decoded = deserialize_flight_data(
+                    strip_tid(ordinary.into_iter().next().unwrap()),
+                    &schema,
+                    &arrow_schema,
+                )?;
+                for decoded in [decoded, legacy] {
+                    assert_block_values(&decoded, &block);
+                    assert_eq!(decoded.memory_size(), retained);
+                    let Column::String(original) = block.get_by_offset(1).to_column() else {
+                        unreachable!()
+                    };
+                    let Column::String(received) = decoded.get_by_offset(1).to_column() else {
+                        unreachable!()
+                    };
+                    assert_eq!(received.data_buffers(), original.data_buffers());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_remote_encoders_preserve_nested_values_with_scoped_compaction() -> Result<()> {
         let strings = StringType::from_data(vec![
             "x".repeat(65536),
             "wire wire wire wire".to_string(),
@@ -650,22 +732,16 @@ mod tests {
             let Some(DataPacket::FragmentData(fragment)) = legacy.packet.pop() else {
                 unreachable!()
             };
-            assert!(fragment.data.data_body.len() < 4096);
             let decoded =
                 serde::deserialize_block(legacy.packet, fragment, &schema, arrow_schema.clone())?;
-            assert_eq!(
-                decoded.get_by_offset(0).to_column(),
-                block.get_by_offset(0).to_column()
-            );
-            for data in ordinary.into_iter().chain(std::iter::once(hash)) {
-                assert!(data.data_body.len() < 4096);
+            assert_block_values(&decoded, &block);
+            for data in ordinary {
                 let decoded = deserialize_flight_data(strip_tid(data), &schema, &arrow_schema)?;
-                assert_eq!(decoded.num_rows(), 2);
-                assert_eq!(
-                    decoded.get_by_offset(0).to_column(),
-                    block.get_by_offset(0).to_column()
-                );
+                assert_block_values(&decoded, &block);
             }
+            assert!(hash.data_body.len() < 4096);
+            let decoded = deserialize_flight_data(strip_tid(hash), &schema, &arrow_schema)?;
+            assert_block_values(&decoded, &block);
         }
         Ok(())
     }

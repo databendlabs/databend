@@ -185,17 +185,118 @@ mod tests {
     use arrow_flight::FlightData;
     use arrow_schema::Schema as ArrowSchema;
     use databend_common_base::runtime::Runtime;
+    use databend_common_expression::BlockMetaInfoDowncast;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::StringType;
     use tonic::Status;
 
     use super::*;
+    use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+    use crate::servers::flight::v1::network::outbound::HashShuffleDispatcher;
     use crate::servers::flight::v1::network::outbound::exchange_send_buffer::ExchangeSendBuffer;
     use crate::servers::flight::v1::network::outbound::exchange_send_buffer::ExchangeSendBufferConfig;
     use crate::servers::flight::v1::network::ping_pong_transport::PingPongTransport;
     use crate::servers::flight::v1::network::wire_format::deserialize_flight_data;
     use crate::servers::flight::v1::network::wire_format::strip_tid;
+
+    #[tokio::test]
+    async fn test_hash_local_queue_charges_compacted_bytes_only_at_hash_boundary() {
+        let channels = ExchangeReceiveChannels::new(1);
+        let senders = create_local_block_senders(&channels);
+        let sender = senders[0].clone();
+        let input = DataBlock::new_from_columns(vec![
+            StringType::from_data(vec!["z".repeat(1024), "a".to_string()]).slice(1..2),
+        ]);
+        assert_eq!(input.memory_size(), 1040);
+        // The generic local sender must still preserve and charge an ordinary input as-is.
+        sender.send_block(input.clone()).await.unwrap();
+        assert_eq!(
+            sender.semaphore.available_permits(),
+            LOCAL_CHANNEL_MAX_BYTES - 1040
+        );
+        let dispatcher = HashShuffleDispatcher::local(senders);
+        let mut blocks = [vec![input.clone()]];
+        let mut futures = vec![];
+        dispatcher
+            .prepare_send(0, &mut blocks, &mut futures)
+            .unwrap();
+        assert_eq!(futures.len(), 1);
+        let (address, result) = futures.pop().unwrap().await;
+        result.unwrap();
+        assert_eq!(address.thread, Some(0));
+        assert_eq!(
+            sender.semaphore.available_permits(),
+            LOCAL_CHANNEL_MAX_BYTES - 1040 - 16
+        );
+        for expected_bytes in [1040, 16] {
+            let QueueItem::LocalData(item) = channels.receivers[0].try_recv().unwrap() else {
+                unreachable!()
+            };
+            let received = item.into_data();
+            assert_eq!(received.num_rows(), 1);
+            assert_eq!(received.num_columns(), 1);
+            assert_eq!(
+                received.get_by_offset(0).to_column(),
+                StringType::from_data(vec!["a"])
+            );
+            assert_eq!(received.memory_size(), expected_bytes);
+        }
+        assert_eq!(
+            sender.semaphore.available_permits(),
+            LOCAL_CHANNEL_MAX_BYTES
+        );
+        assert_eq!(input.memory_size(), 1040);
+    }
+
+    #[tokio::test]
+    async fn test_hash_local_queue_preserves_opaque_meta_accounting() {
+        let channels = ExchangeReceiveChannels::new(1);
+        let senders = create_local_block_senders(&channels);
+        let sender = senders[0].clone();
+        let payload = DataBlock::new_from_columns(vec![
+            StringType::from_data(vec!["z".repeat(1024), "a".to_string()]).slice(1..2),
+        ]);
+        let block = DataBlock::empty_with_meta(AggregateMeta::create_serialized(0, payload, 1));
+        assert_eq!(block.memory_size(), 0);
+        assert_eq!(block_owned_bytes(&block), 1040);
+        let dispatcher = HashShuffleDispatcher::local(senders);
+        let mut blocks = [vec![block]];
+        let mut futures = vec![];
+        dispatcher
+            .prepare_send(0, &mut blocks, &mut futures)
+            .unwrap();
+        assert_eq!(futures.len(), 1);
+        futures.pop().unwrap().await.1.unwrap();
+        assert_eq!(
+            sender.semaphore.available_permits(),
+            LOCAL_CHANNEL_MAX_BYTES - 1040
+        );
+        let QueueItem::LocalData(item) = channels.receivers[0].try_recv().unwrap() else {
+            unreachable!()
+        };
+        let mut block = item.into_data();
+        assert_eq!(block_owned_bytes(&block), 1040);
+        let AggregateMeta::Serialized(payload) =
+            AggregateMeta::downcast_from(block.take_meta().unwrap()).unwrap()
+        else {
+            unreachable!()
+        };
+        assert_eq!(payload.bucket, 0);
+        assert_eq!(payload.max_partition_count, 1);
+        assert_eq!(payload.data_block.num_rows(), 1);
+        assert_eq!(payload.data_block.num_columns(), 1);
+        assert_eq!(
+            payload.data_block.get_by_offset(0).to_column(),
+            StringType::from_data(vec!["a"])
+        );
+        assert_eq!(payload.data_block.memory_size(), 1040);
+        assert_eq!(
+            sender.semaphore.available_permits(),
+            LOCAL_CHANNEL_MAX_BYTES
+        );
+    }
 
     fn create_mock_exchange(
         num_threads: usize,

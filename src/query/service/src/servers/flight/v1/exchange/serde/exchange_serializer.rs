@@ -203,7 +203,6 @@ pub fn serialize_block(
             options,
         )?,
         false => {
-            let data_block = data_block.compact_string_buffers();
             let schema = data_block.infer_schema();
             let arrow_schema = ArrowSchema::from(&schema);
             let batch = data_block.to_record_batch_with_dataschema(&schema)?;

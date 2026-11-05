@@ -16,7 +16,10 @@
 //!
 //! Rows are addressed to one of `P = sum(threads of every node)` partitions and
 //! appended to per-partition builders as they arrive. String views retain shared
-//! input buffers until consumed locally or compacted for remote serialization.
+//! input buffers while buffering. Before publication, direct, local and remote
+//! outputs compact sparse string backing buffers; near-dense outputs may keep sharing.
+//! This bounds the physical String leaves visited by compaction at publication,
+//! not arbitrary later slices, opaque metadata, constants or peak memory usage.
 //! Partitions are not sent one by one when they fill up: the sender
 //! buffers until it reaches `budget` bytes and then sends every partition at once.
 //! Shared buffers count in every retaining partition, conservatively reaching the
@@ -240,7 +243,9 @@ impl HashShuffleWriter {
         }
 
         // Keep the rows of the direct-output partition out of both local and remote delivery.
-        let own_block = own.and_then(|partition| rows[partition].take());
+        let own_block = own
+            .and_then(|partition| rows[partition].take())
+            .map(DataBlock::compact_string_buffers);
         let mut partitions = rows
             .into_iter()
             .zip(self.routed.iter_mut())
@@ -339,22 +344,51 @@ impl HashShuffleWriter {
 #[cfg(test)]
 mod tests {
     use arrow_flight::FlightData;
+    use arrow_ipc::writer::IpcWriteOptions;
     use arrow_schema::Schema as ArrowSchema;
+    use bumpalo::Bump;
     use databend_common_base::runtime::Runtime;
+    use databend_common_expression::AggregateHashTable;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::BlockMetaInfo;
     use databend_common_expression::BlockMetaInfoDowncast;
     use databend_common_expression::BlockProfileStatistics;
+    use databend_common_expression::Column;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
     use databend_common_expression::FromData;
+    use databend_common_expression::HashTableConfig;
+    use databend_common_expression::PayloadFlushState;
+    use databend_common_expression::ProbeState;
+    use databend_common_expression::ProjectedBlock;
     use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::aggregate_function::RawAggregateCall;
     use databend_common_expression::types::AccessType;
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::ArrayColumn;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
+    use databend_common_expression::types::encoded::DictColumn;
+    use databend_common_expression::types::encoded::EncodedColumn;
+    use databend_common_expression::types::encoded::NarrowBuffer;
+    use databend_common_expression::types::nullable::NullableColumn;
+    use databend_common_expression::types::string::StringColumn;
+    use databend_common_functions::aggregates::AGGR_REGISTRY;
     use databend_common_settings::FlightCompression;
     use tonic::Status;
 
     use super::*;
+    use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+    use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
+    use crate::pipelines::processors::transforms::aggregator::AggregateScatter;
+    use crate::pipelines::processors::transforms::aggregator::AggregateStatesMeta;
+    use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+    use crate::pipelines::processors::transforms::aggregator::PartitionedData;
+    use crate::servers::flight::v1::exchange::block_coalescer::BlockCoalescer;
+    use crate::servers::flight::v1::exchange::block_coalescer::CoalesceThreshold;
+    use crate::servers::flight::v1::exchange::serde;
     use crate::servers::flight::v1::network::PingPongTransport;
     use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
     use crate::servers::flight::v1::network::inbound::exchange_queue::QueueItem;
@@ -362,9 +396,13 @@ mod tests {
     use crate::servers::flight::v1::network::outbound::ExchangeSendBufferConfig;
     use crate::servers::flight::v1::network::outbound::create_local_block_senders;
     use crate::servers::flight::v1::network::wire_format::deserialize_flight_data;
+    use crate::servers::flight::v1::network::wire_format::encode_block_for_thread;
     use crate::servers::flight::v1::network::wire_format::extract_tid;
+    use crate::servers::flight::v1::network::wire_format::make_ipc_options;
+    use crate::servers::flight::v1::network::wire_format::serialize_block_for_thread;
     use crate::servers::flight::v1::network::wire_format::split_batch_flight_data;
     use crate::servers::flight::v1::network::wire_format::strip_tid;
+    use crate::servers::flight::v1::packets::DataPacket;
 
     /// Routes each row to partition `value % num_partitions` of its first column.
     struct ModuloScatter {
@@ -445,17 +483,49 @@ mod tests {
     }
 
     fn check_rows(block: &DataBlock, partition: u64, num_partitions: u64) {
-        assert!(
-            values(block)
-                .iter()
-                .all(|x| x % num_partitions == partition)
+        let ids = values(block);
+        assert!(ids.iter().all(|x| x % num_partitions == partition));
+        assert_eq!(
+            strings(block),
+            ids.iter()
+                .map(|id| format!("a fairly long string payload {id:08}"))
+                .collect::<Vec<_>>()
         );
-        assert!(
-            strings(block)
-                .iter()
-                .zip(values(block))
-                .all(|(s, v)| s.ends_with(&format!("{v:08}")))
-        );
+    }
+
+    fn assert_block_values(actual: &DataBlock, expected: &DataBlock) {
+        assert_eq!(actual.num_rows(), expected.num_rows());
+        assert_eq!(actual.num_columns(), expected.num_columns());
+        assert_eq!(actual.infer_schema(), expected.infer_schema());
+        for (actual, expected) in actual.columns().iter().zip(expected.columns()) {
+            assert_eq!(actual.to_column(), expected.to_column());
+        }
+    }
+
+    fn string_column(block: &DataBlock, offset: usize) -> StringColumn {
+        StringType::try_downcast_column(&block.get_by_offset(offset).to_column()).unwrap()
+    }
+
+    fn generic_roundtrips(
+        block: &DataBlock,
+        options: &IpcWriteOptions,
+    ) -> Result<[(usize, DataBlock); 2]> {
+        let schema = Arc::new(block.infer_schema());
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        let mut ordinary = serialize_block_for_thread(block.clone(), 0, options)?;
+        assert_eq!(ordinary.len(), 1);
+        let ordinary = ordinary.pop().unwrap();
+        let ordinary_bytes = ordinary.data_body.len();
+        let ordinary = deserialize_flight_data(strip_tid(ordinary), &schema, &arrow_schema)?;
+        let mut legacy = serde::serialize_block(0, block.clone(), options)?;
+        let mut legacy =
+            serde::ExchangeSerializeMeta::downcast_from(legacy.take_meta().unwrap()).unwrap();
+        let Some(DataPacket::FragmentData(fragment)) = legacy.packet.pop() else {
+            unreachable!()
+        };
+        let legacy_bytes = fragment.data.data_body.len();
+        let legacy = serde::deserialize_block(legacy.packet, fragment, &schema, arrow_schema)?;
+        Ok([(ordinary_bytes, ordinary), (legacy_bytes, legacy)])
     }
 
     fn local_nodes(
@@ -493,7 +563,7 @@ mod tests {
     }
 
     #[test]
-    fn test_writer_shares_buffers_for_direct_and_local_delivery() -> Result<()> {
+    fn test_writer_shares_near_dense_buffers_for_direct_and_local_delivery() -> Result<()> {
         let source = make_block(0..6);
         let column = source.get_by_offset(1).to_column();
         let strings = StringType::try_downcast_column(&column).unwrap();
@@ -505,11 +575,335 @@ mod tests {
         assert!(!pending);
         drop(writer);
         let local = drain_blocks(&receivers[1]).next().unwrap();
-        for block in [own.unwrap(), local] {
-            let column = block.get_by_offset(1).to_column();
-            let strings = StringType::try_downcast_column(&column).unwrap();
-            assert_eq!(strings.data_buffers()[0].as_ptr(), buffer);
-            assert_eq!(block.num_rows(), 3);
+        for (block, ids) in [(own.unwrap(), vec![0, 2, 4]), (local, vec![1, 3, 5])] {
+            let expected = DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(ids.clone()),
+                StringType::from_data(
+                    ids.iter()
+                        .map(|id| format!("a fairly long string payload {id:08}"))
+                        .collect::<Vec<_>>(),
+                ),
+            ]);
+            assert_block_values(&block, &expected);
+            assert_eq!(string_column(&block, 1).data_buffers()[0].as_ptr(), buffer);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_hash_then_generic_remote_compacts_at_producer() -> Result<()> {
+        // Without producer-boundary compaction, three small local partitions retain the unused
+        // 64 KiB source and copy it at each generic edge. Compacting hash outputs cuts that chain.
+        // This is a producer-snapshot guarantee, not a bound after arbitrary later selections.
+        let backing_bytes = 65536;
+        let source = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![1, 0, 2, 3, 5, 4, 6, 7]),
+            StringType::from_data(vec![
+                "z".repeat(backing_bytes),
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string(),
+                "e".to_string(),
+                "f".to_string(),
+                "g".to_string(),
+            ]),
+        ]);
+        let column = source.get_by_offset(1).to_column();
+        let source_strings = StringType::try_downcast_column(&column).unwrap();
+        assert_eq!(source_strings.data_buffers().len(), 1);
+        assert_eq!(source_strings.data_buffers()[0].len(), backing_bytes);
+        // The same input bypassing hash still preserves its representation at generic edges.
+        let plain = source.slice(1..2);
+        for (body_bytes, decoded) in generic_roundtrips(&plain, &make_ipc_options(None)?)? {
+            assert_block_values(&decoded, &plain);
+            assert!(body_bytes >= backing_bytes);
+            assert_eq!(decoded.memory_size(), backing_bytes + 24);
+        }
+        let (nodes, receivers) = local_nodes(1, 4);
+        let mut writer = writer(nodes, usize::MAX);
+        writer.add_block(source)?;
+        let (own, pending) = writer.flush(Some(0))?;
+        assert!(!pending);
+        drop(writer);
+        assert!(drain_blocks(&receivers[0]).next().is_none());
+        let forwarded = [
+            (own.unwrap(), vec![0, 4], vec!["a", "e"]),
+            (
+                drain_blocks(&receivers[2]).next().unwrap(),
+                vec![2, 6],
+                vec!["b", "f"],
+            ),
+            (
+                drain_blocks(&receivers[3]).next().unwrap(),
+                vec![3, 7],
+                vec!["c", "g"],
+            ),
+        ];
+        for (block, ids, names) in forwarded {
+            let expected = DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(ids),
+                StringType::from_data(names),
+            ]);
+            // Independently constructed inline-only rows: 2 * (8-byte id + 16-byte view).
+            assert_eq!(expected.memory_size(), 48);
+            assert_block_values(&block, &expected);
+            assert_eq!(block.memory_size(), 48);
+            assert!(string_column(&block, 1).data_buffers().is_empty());
+            let mut coalescer =
+                BlockCoalescer::create(Some(CoalesceThreshold::create(8192, 4 * 1024 * 1024)));
+            coalescer.push(block)?;
+            assert!(coalescer.pop().is_none());
+            assert!(coalescer.flush()?);
+            let block = coalescer.pop().unwrap();
+            assert_eq!(block.memory_size(), 48);
+            for compression in [
+                None,
+                Some(FlightCompression::Lz4),
+                Some(FlightCompression::Zstd),
+            ] {
+                for (body_bytes, decoded) in
+                    generic_roundtrips(&block, &make_ipc_options(compression)?)?
+                {
+                    assert_block_values(&decoded, &expected);
+                    assert!(body_bytes < 512);
+                    assert_eq!(decoded.memory_size(), 48);
+                    assert!(string_column(&decoded, 1).data_buffers().is_empty());
+                }
+            }
+            let schema = Arc::new(block.infer_schema());
+            let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+            let hash =
+                encode_block_for_thread(0, block, &arrow_schema, &make_ipc_options(None)?, None)?;
+            assert!(hash.data_body.len() < 512);
+            let compact = deserialize_flight_data(strip_tid(hash), &schema, &arrow_schema)?;
+            assert_block_values(&compact, &expected);
+            assert_eq!(compact.memory_size(), 48);
+        }
+        assert_eq!(source_strings.total_buffer_len(), backing_bytes);
+        Ok(())
+    }
+
+    #[test]
+    fn test_writer_compacts_own_without_other_sends() -> Result<()> {
+        let source = StringType::from_data(vec!["z".repeat(1024), "a".to_string()]);
+        let input =
+            DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![0]), source.slice(1..2)]);
+        let expected = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![0]),
+            StringType::from_data(vec!["a"]),
+        ]);
+        let (nodes, receivers) = local_nodes(1, 1);
+        let mut writer = writer(nodes, 1);
+        assert!(writer.add_block(input.clone())?);
+        assert!(writer.buffered_bytes >= 1024);
+        let (own, pending) = writer.flush(Some(0))?;
+        assert!(!pending);
+        let own = own.unwrap();
+        assert_block_values(&own, &expected);
+        assert_eq!(own.memory_size(), 24);
+        assert!(receivers[0].is_empty());
+        assert_eq!(writer.buffered_bytes, 0);
+        assert_eq!(string_column(&input, 1).total_buffer_len(), 1024);
+        Ok(())
+    }
+
+    #[test]
+    fn test_writer_local_density_boundary_and_tail() -> Result<()> {
+        for junk_bytes in [95, 96, 97] {
+            for own in [None, Some(0)] {
+                let source = DataBlock::new_from_columns(vec![
+                    UInt64Type::from_data(vec![1, 0]),
+                    StringType::from_data(vec!["z".repeat(junk_bytes), "r".repeat(32)]),
+                ]);
+                let original = string_column(&source, 1);
+                let (nodes, receivers) = local_nodes(1, 2);
+                let mut writer = writer(nodes, 1);
+                assert!(writer.add_block(source.clone())?);
+                // The source is charged in both retaining partitions before any publication GC.
+                assert!(writer.buffered_bytes >= 2 * (junk_bytes + 32));
+                let (direct, pending) = writer.flush(own)?;
+                assert!(!pending);
+                let selected =
+                    direct.unwrap_or_else(|| drain_blocks(&receivers[0]).next().unwrap());
+                let expected = DataBlock::new_from_columns(vec![
+                    UInt64Type::from_data(vec![0]),
+                    StringType::from_data(vec!["r".repeat(32)]),
+                ]);
+                assert_block_values(&selected, &expected);
+                let selected = string_column(&selected, 1);
+                if junk_bytes < 96 {
+                    assert_eq!(selected.total_buffer_len(), 127);
+                    assert_eq!(
+                        selected.data_buffers()[0].as_ptr(),
+                        original.data_buffers()[0].as_ptr()
+                    );
+                } else {
+                    assert_eq!(selected.total_buffer_len(), 32);
+                    assert_ne!(
+                        selected.data_buffers()[0].as_ptr(),
+                        original.data_buffers()[0].as_ptr()
+                    );
+                }
+                let other = drain_blocks(&receivers[1]).next().unwrap();
+                assert_block_values(
+                    &other,
+                    &DataBlock::new_from_columns(vec![
+                        UInt64Type::from_data(vec![1]),
+                        StringType::from_data(vec!["z".repeat(junk_bytes)]),
+                    ]),
+                );
+                assert_eq!(original.total_buffer_len(), junk_bytes + 32);
+                assert_eq!(writer.buffered_bytes, 0);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_writer_compacts_repeated_buffer_lists() -> Result<()> {
+        let source = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![1, 0, 0]),
+            StringType::from_data(vec!["z".repeat(1024), "r".repeat(32), "a".to_string()]),
+        ]);
+        let original = string_column(&source, 1);
+        let other = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![1, 0, 0]),
+            StringType::from_data(vec!["y".repeat(2048), "r".repeat(32), "a".to_string()]),
+        ]);
+        let retained = 2 * 1056 + 2080;
+        let mut probe = BlockPartitionStream::create_with_string_views(0, 0, 2);
+        for input in [source.clone(), source.clone(), other.clone()] {
+            assert!(probe.partition(vec![1, 0, 0], input, false).is_empty());
+        }
+        let repeated = probe.finalize_partition(0).unwrap();
+        let repeated = string_column(&repeated, 1);
+        assert_eq!(repeated.data_buffers().len(), 3);
+        assert_eq!(repeated.total_buffer_len(), retained);
+        assert_eq!(
+            repeated.data_buffers()[0].as_ptr(),
+            repeated.data_buffers()[1].as_ptr()
+        );
+        assert_ne!(
+            repeated.data_buffers()[0].as_ptr(),
+            repeated.data_buffers()[2].as_ptr()
+        );
+        for own in [None, Some(0)] {
+            let (nodes, receivers) = local_nodes(1, 2);
+            let mut writer = writer(nodes, usize::MAX);
+            writer.add_block(source.clone())?;
+            writer.add_block(source.clone())?;
+            writer.add_block(other.clone())?;
+            assert!(writer.buffered_bytes >= 2 * retained);
+            let (direct, pending) = writer.flush(own)?;
+            assert!(!pending);
+            let selected = direct.unwrap_or_else(|| drain_blocks(&receivers[0]).next().unwrap());
+            let expected = DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(vec![0, 0, 0, 0, 0, 0]),
+                StringType::from_data(vec![
+                    "r".repeat(32),
+                    "a".to_string(),
+                    "r".repeat(32),
+                    "a".to_string(),
+                    "r".repeat(32),
+                    "a".to_string(),
+                ]),
+            ]);
+            assert_block_values(&selected, &expected);
+            assert_eq!(string_column(&selected, 1).total_buffer_len(), 96);
+            let dense = drain_blocks(&receivers[1]).next().unwrap();
+            assert_block_values(
+                &dense,
+                &DataBlock::new_from_columns(vec![
+                    UInt64Type::from_data(vec![1, 1, 1]),
+                    StringType::from_data(vec![
+                        "z".repeat(1024),
+                        "z".repeat(1024),
+                        "y".repeat(2048),
+                    ]),
+                ]),
+            );
+            assert_eq!(string_column(&dense, 1).total_buffer_len(), retained);
+            assert_eq!(original.total_buffer_len(), 1056);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_writer_pending_own_compaction_keeps_next_round_charged() -> Result<()> {
+        use crate::servers::flight::v1::network::outbound::LOCAL_CHANNEL_MAX_BYTES;
+
+        let (nodes, receivers) = local_nodes(1, 2);
+        let mut writer = writer(nodes, 2048);
+        let fill = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![1]),
+            StringType::from_data(vec!["q".repeat(LOCAL_CHANNEL_MAX_BYTES)]),
+        ]);
+        assert!(writer.add_block(fill.clone())?);
+        assert!(!writer.flush(None)?.1);
+        let input = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![1, 0]),
+            StringType::from_data(vec!["z".repeat(1024), "a".to_string()]),
+        ]);
+        assert!(writer.add_block(input.clone())?);
+        let (own, pending) = writer.flush(Some(0))?;
+        assert!(pending);
+        let expected_own = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![0]),
+            StringType::from_data(vec!["a"]),
+        ]);
+        let own = own.unwrap();
+        assert_block_values(&own, &expected_own);
+        assert_eq!(own.memory_size(), 24);
+        assert!(string_column(&own, 1).data_buffers().is_empty());
+        assert!(writer.poll_sending(true)?);
+        // Another round is still charged for both source-buffer references, not its future GC size.
+        assert!(writer.add_block(input)?);
+        assert!(writer.buffered_bytes >= 2 * 1024);
+        assert!(writer.budget_reached());
+        let first = drain_blocks(&receivers[1]).next().unwrap();
+        assert_block_values(&first, &fill);
+        assert!(!writer.poll_sending(true)?);
+        let second = drain_blocks(&receivers[1]).next().unwrap();
+        let expected_other = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![1]),
+            StringType::from_data(vec!["z".repeat(1024)]),
+        ]);
+        assert_block_values(&second, &expected_other);
+        assert!(!writer.flush(None)?.1);
+        let tail = drain_blocks(&receivers[0]).next().unwrap();
+        assert_block_values(&tail, &expected_own);
+        assert_eq!(tail.memory_size(), 24);
+        assert_block_values(
+            &drain_blocks(&receivers[1]).next().unwrap(),
+            &expected_other,
+        );
+        assert_eq!(writer.buffered_bytes, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_later_slice_is_outside_producer_density_guarantee() -> Result<()> {
+        let source = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![0, 0]),
+            StringType::from_data(vec!["a".to_string(), "z".repeat(65536)]),
+        ]);
+        let (nodes, _) = local_nodes(1, 1);
+        let mut writer = writer(nodes, usize::MAX);
+        writer.add_block(source.clone())?;
+        let published = writer.flush(Some(0))?.0.unwrap();
+        assert_block_values(&published, &source);
+        assert_eq!(string_column(&published, 1).total_buffer_len(), 65536);
+        // Generic forwarding deliberately does not re-enforce density after a later selection.
+        let sliced = published.slice(0..1);
+        let expected = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![0]),
+            StringType::from_data(vec!["a"]),
+        ]);
+        for (body_bytes, decoded) in generic_roundtrips(&sliced, &make_ipc_options(None)?)? {
+            assert_block_values(&decoded, &expected);
+            assert!(body_bytes >= 65536);
+            assert_eq!(string_column(&decoded, 1).total_buffer_len(), 65536);
         }
         Ok(())
     }
@@ -637,6 +1031,461 @@ mod tests {
             blocks[partition] = data_block;
             Ok(Some(blocks))
         }
+    }
+
+    /// A test route that materializes ordinary columns from a meta-only input, like remote
+    /// aggregate state routing. No production metadata/protocol type is added.
+    struct MaterializedScatter {
+        blocks: Vec<DataBlock>,
+    }
+
+    impl FlightScatter for MaterializedScatter {
+        fn name(&self) -> &'static str {
+            "Materialized"
+        }
+
+        fn execute(&self, _: DataBlock) -> Result<Vec<DataBlock>> {
+            unreachable!()
+        }
+
+        fn scatter_indices(&self, block: &DataBlock) -> Result<Option<Vec<u64>>> {
+            ModuloScatter {
+                num_partitions: self.blocks.len() as u64,
+            }
+            .scatter_indices(block)
+        }
+
+        fn route_meta_block(&self, _: DataBlock) -> Result<Option<Vec<DataBlock>>> {
+            Ok(Some(self.blocks.clone()))
+        }
+    }
+
+    #[test]
+    fn test_local_routed_columns_and_own_routed_are_compacted() -> Result<()> {
+        let source =
+            StringType::from_data(vec!["z".repeat(1024), "a".to_string(), "b".to_string()]);
+        let routed = DataBlock::new_with_meta(
+            vec![source.slice(1..3).into()],
+            2,
+            Some(AggregateStatesMeta::create(
+                Arc::new(DataSchema::new(vec![DataField::new(
+                    "state",
+                    DataType::String,
+                )])),
+                vec![7],
+                vec![2],
+            )),
+        );
+        let retained = routed.memory_size();
+        let scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(MaterializedScatter {
+            blocks: vec![routed.clone(), routed.clone()],
+        }));
+        for own in [None, Some(0)] {
+            let (nodes, receivers) = local_nodes(1, 2);
+            let mut writer =
+                HashShuffleWriter::create(0, ExecutorWaker::create(), scatter.clone(), nodes, 1);
+            assert!(writer.add_block(states_block(0, retained))?);
+            assert_eq!(writer.routed_bytes, 2 * retained);
+            assert_eq!(writer.buffered_bytes, 2 * retained);
+            let raw = DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(vec![0, 1]),
+                StringType::from_data(vec!["c", "d"]),
+            ]);
+            writer.add_block(raw.clone())?;
+            assert_eq!(writer.buffered_bytes, 2 * retained + raw.memory_size());
+            let (direct, pending) = writer.flush(own)?;
+            if let Some(direct) = direct {
+                assert_block_values(&direct, &raw.slice(0..1));
+            } else {
+                assert!(own.is_none());
+            }
+            assert!(!pending);
+            for (partition, receiver) in receivers.iter().enumerate() {
+                let mut outputs = drain_blocks(receiver);
+                if own != Some(partition) {
+                    assert_block_values(
+                        &outputs.next().unwrap(),
+                        &raw.slice(partition..partition + 1),
+                    );
+                }
+                let output = outputs.next().unwrap();
+                assert_block_values(&output, &routed);
+                assert_eq!(output.get_meta(), routed.get_meta());
+                assert_eq!(string_column(&output, 0).total_buffer_len(), 0);
+                assert!(outputs.next().is_none());
+            }
+            assert_eq!(writer.buffered_bytes, 0);
+            assert_eq!(writer.routed_bytes, 0);
+        }
+        assert_eq!(routed.memory_size(), retained);
+        Ok(())
+    }
+
+    #[test]
+    fn test_routed_nested_scope_and_closed_destination() -> Result<()> {
+        let values = StringType::from_data(vec!["z".repeat(1024), "r".repeat(32), "a".to_string()])
+            .slice(1..3);
+        let keys = NarrowBuffer::U8(vec![1, 1].into());
+        let nested = Column::Tuple(vec![
+            NullableColumn::new_column(values.clone(), [false, true].into_iter().collect()),
+            Column::Array(Box::new(ArrayColumn::new(
+                values.clone(),
+                vec![0, 1, 2].into(),
+            ))),
+            Column::Map(Box::new(ArrayColumn::new(
+                Column::Tuple(vec![values.clone(), UInt64Type::from_data(vec![7, 8])]),
+                vec![0, 1, 2].into(),
+            ))),
+            Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+                keys.clone(),
+                values.clone(),
+            )))),
+        ]);
+        let block = DataBlock::new_with_meta(
+            vec![
+                nested.into(),
+                BlockEntry::new_const_column(
+                    DataType::Array(Box::new(DataType::String)),
+                    Scalar::Array(values.clone()),
+                    2,
+                ),
+            ],
+            2,
+            Some(Box::new(())),
+        );
+        let scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(MaterializedScatter {
+            blocks: vec![block.clone(), block.clone()],
+        }));
+        let (nodes, receivers) = local_nodes(1, 2);
+        receivers[1].close();
+        let mut writer = HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, 1);
+        assert!(writer.add_block(states_block(0, block.memory_size()))?);
+        let (own, pending) = writer.flush(Some(0))?;
+        assert!(own.is_none()); // own routed blocks must use the local dispatcher, not direct output.
+        assert!(!pending);
+        let output = drain_blocks(&receivers[0]).next().unwrap();
+        assert_block_values(&output, &block);
+        assert_eq!(output.get_meta(), block.get_meta());
+        assert!(receivers[1].is_empty());
+        let Column::Tuple(fields) = output.get_by_offset(0).to_column() else {
+            unreachable!()
+        };
+        let Column::Nullable(nullable) = &fields[0] else {
+            unreachable!()
+        };
+        assert_eq!(nullable.validity.iter().collect::<Vec<_>>(), vec![
+            false, true
+        ]);
+        // The invalid position's physical noninline value is included in the producer bound.
+        let child = StringType::try_downcast_column(&nullable.column).unwrap();
+        assert_eq!(child.iter().collect::<Vec<_>>(), vec![
+            "r".repeat(32),
+            "a".to_string()
+        ]);
+        assert_eq!(child.total_buffer_len(), 32);
+        let Column::Array(array) = &fields[1] else {
+            unreachable!()
+        };
+        assert_eq!(
+            StringType::try_downcast_column(&array.underlying_column())
+                .unwrap()
+                .total_buffer_len(),
+            32
+        );
+        let Column::Map(map) = &fields[2] else {
+            unreachable!()
+        };
+        let Column::Tuple(entries) = map.underlying_column() else {
+            unreachable!()
+        };
+        assert_eq!(
+            StringType::try_downcast_column(&entries[0])
+                .unwrap()
+                .total_buffer_len(),
+            32
+        );
+        let Column::Encoded(encoded) = &fields[3] else {
+            unreachable!()
+        };
+        let EncodedColumn::Dict(dict) = encoded.as_ref() else {
+            unreachable!()
+        };
+        assert!(dict.keys.shares_storage(&keys));
+        // Keys use only "a", but compaction deliberately keeps the physical dictionary values.
+        assert_eq!(
+            StringType::try_downcast_column(&dict.values)
+                .unwrap()
+                .total_buffer_len(),
+            32
+        );
+        let Some(Scalar::Array(constant)) = output.get_by_offset(1).as_scalar() else {
+            unreachable!()
+        };
+        assert_eq!(
+            StringType::try_downcast_column(constant)
+                .unwrap()
+                .total_buffer_len(),
+            1056
+        );
+        assert_eq!(
+            StringType::try_downcast_column(&values)
+                .unwrap()
+                .total_buffer_len(),
+            1056
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_publication_preserves_real_aggregate_states() -> Result<()> {
+        let group_type = UInt64Type::data_type();
+        let params = AggregatorParams::try_create(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "key",
+                group_type.clone(),
+            )])),
+            vec![group_type.clone()],
+            &[0],
+            &[],
+            &[],
+            true,
+            1024,
+            1024 * 1024,
+        )?;
+        let keys = DataBlock::new_from_columns(vec![UInt64Type::from_data(
+            (0..256).collect::<Vec<u64>>(),
+        )]);
+        let mut table = AggregateHashTable::new(
+            vec![group_type],
+            vec![],
+            HashTableConfig::partial_aggregate(),
+            Arc::new(Bump::new()),
+        );
+        table.add_groups(
+            &mut ProbeState::default(),
+            ProjectedBlock::project(&[0], &keys),
+            &[],
+            (&[]).into(),
+            keys.num_rows(),
+        )?;
+        let payloads = table
+            .payload
+            .into_non_empty_bucket_payloads()
+            .map(|(bucket, payload)| AggregatePayload {
+                bucket: bucket as isize,
+                payload,
+                max_partition_count: 0,
+            })
+            .collect();
+        let block = DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+            None,
+            PartitionedData::AggregatePayload(payloads),
+        ));
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(AggregateScatter::create(4, 0..4, params)));
+        let (nodes, receivers) = local_nodes(1, 4);
+        let mut writer = HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, 1);
+        assert!(writer.add_block(block)?);
+        let (own, pending) = writer.flush(Some(0))?;
+        assert!(own.is_none());
+        assert!(!pending);
+        let mut delivered = vec![];
+        for receiver in &receivers {
+            for mut block in drain_blocks(receiver) {
+                assert_eq!(block.num_columns(), 0);
+                assert_eq!(
+                    block_owned_bytes(&block),
+                    block.get_meta().unwrap().output_stats().unwrap().bytes
+                );
+                let AggregateMeta::Partitioned {
+                    data: PartitionedData::AggregatePayload(payloads),
+                    ..
+                } = AggregateMeta::downcast_from(block.take_meta().unwrap()).unwrap()
+                else {
+                    unreachable!()
+                };
+                for payload in payloads {
+                    let flushed = payload.payload.aggregate_flush_all()?;
+                    delivered.extend(
+                        UInt64Type::try_downcast_column(&flushed.get_by_offset(0).to_column())
+                            .unwrap()
+                            .iter()
+                            .copied(),
+                    );
+                }
+            }
+        }
+        delivered.sort_unstable();
+        assert_eq!(delivered, (0..256).collect::<Vec<u64>>());
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_aggregate_string_states_outlive_producers() -> Result<()> {
+        const GROUPS: usize = 16;
+        const ITEMS: usize = 3;
+        let key = |group| format!("{}-{group:02}", "group".repeat(8));
+        let value = |group, item| format!("{}-{group:02}-{item}", "value".repeat(8));
+        let (receivers, own_partition) = {
+            let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+                name: "array_agg",
+                params: &[],
+                args_type: &[DataType::String],
+                distinct: false,
+                order_by: &[],
+            })?;
+            assert!(function.state().need_manual_drop());
+            assert_eq!(
+                function.signature().return_type,
+                DataType::Array(Box::new(DataType::String))
+            );
+            let params = AggregatorParams::try_create(
+                Arc::new(DataSchema::new(vec![
+                    DataField::new("key", DataType::String),
+                    DataField::new("value", DataType::String),
+                ])),
+                vec![DataType::String],
+                &[0],
+                std::slice::from_ref(&function),
+                &[vec![1]],
+                true,
+                1024,
+                1024 * 1024,
+            )?;
+            let input = DataBlock::new_from_columns(vec![
+                StringType::from_data(
+                    (0..GROUPS * ITEMS)
+                        .map(|row| key(row % GROUPS))
+                        .collect::<Vec<_>>(),
+                ),
+                StringType::from_data(
+                    (0..GROUPS * ITEMS)
+                        .map(|row| value(row % GROUPS, row / GROUPS))
+                        .collect::<Vec<_>>(),
+                ),
+            ]);
+            let arena = Arc::new(Bump::new());
+            let mut table = AggregateHashTable::new(
+                vec![DataType::String],
+                params.aggregate_functions.clone(),
+                HashTableConfig::partial_aggregate(),
+                arena.clone(),
+            );
+            table.add_groups(
+                &mut ProbeState::default(),
+                ProjectedBlock::project(&[0], &input),
+                &[ProjectedBlock::project(&[1], &input)],
+                (&[]).into(),
+                input.num_rows(),
+            )?;
+            assert_eq!(table.len(), GROUPS);
+            let payloads = table
+                .take_partial_hot()
+                .into_non_empty_bucket_payloads()
+                .map(|(bucket, payload)| AggregatePayload {
+                    bucket: bucket as isize,
+                    payload,
+                    max_partition_count: 0,
+                })
+                .collect();
+            // The moved payload, not the original table or input, must keep keys and states alive.
+            drop(table);
+            drop(input);
+            drop(arena);
+            let block = DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+                None,
+                PartitionedData::AggregatePayload(payloads),
+            ));
+            let scatter: Arc<Box<dyn FlightScatter>> =
+                Arc::new(Box::new(AggregateScatter::create(4, 0..4, params.clone())));
+            let own_partition = scatter
+                .scatter_indices(&DataBlock::new_from_columns(vec![StringType::from_data(
+                    vec![key(0)],
+                )]))?
+                .unwrap()[0] as usize;
+            let (nodes, receivers) = local_nodes(1, 4);
+            let mut writer =
+                HashShuffleWriter::create(0, ExecutorWaker::create(), scatter.clone(), nodes, 1);
+            assert!(writer.add_block(block)?);
+            let (own, pending) = writer.flush(Some(own_partition))?;
+            assert!(own.is_none());
+            assert!(!pending);
+            // Queued payloads must survive all producer owners, including the own routed path.
+            drop(writer);
+            drop(scatter);
+            drop(params);
+            drop(function);
+            (receivers, own_partition)
+        };
+        let mut delivered = vec![];
+        for (partition, receiver) in receivers.iter().enumerate() {
+            assert!(receiver.is_closed());
+            let mut received_groups = 0;
+            for mut block in drain_blocks(receiver) {
+                assert_eq!(block.num_columns(), 0);
+                assert_eq!(
+                    block_owned_bytes(&block),
+                    block.get_meta().unwrap().output_stats().unwrap().bytes
+                );
+                let AggregateMeta::Partitioned {
+                    data: PartitionedData::AggregatePayload(payloads),
+                    ..
+                } = AggregateMeta::downcast_from(block.take_meta().unwrap()).unwrap()
+                else {
+                    unreachable!()
+                };
+                for payload in payloads {
+                    let mut state = PayloadFlushState::default();
+                    while let Some(result) = payload.payload.merge_result(&mut state)? {
+                        received_groups += result.num_rows();
+                        assert_eq!(result.num_columns(), 2);
+                        assert_eq!(
+                            result.get_by_offset(0).data_type(),
+                            DataType::Array(Box::new(DataType::String))
+                        );
+                        assert_eq!(result.get_by_offset(1).data_type(), DataType::String);
+                        for row in 0..result.num_rows() {
+                            let Some(ScalarRef::String(group)) = result.value_at(1, row) else {
+                                unreachable!()
+                            };
+                            let Some(ScalarRef::Array(items)) = result.value_at(0, row) else {
+                                unreachable!()
+                            };
+                            let mut values = items
+                                .iter()
+                                .map(|item| {
+                                    let ScalarRef::String(value) = item else {
+                                        unreachable!()
+                                    };
+                                    value.to_string()
+                                })
+                                .collect::<Vec<_>>();
+                            assert_eq!(values.len(), ITEMS);
+                            // No ORDER BY was requested; compare the full multiset, not state order.
+                            values.sort_unstable();
+                            delivered.push((group.to_string(), values));
+                        }
+                    }
+                }
+            }
+            assert!(receiver.is_empty());
+            if partition == own_partition {
+                assert!(received_groups > 0);
+            }
+        }
+        delivered.sort_unstable();
+        let mut expected = (0..GROUPS)
+            .map(|group| {
+                let mut values = (0..ITEMS)
+                    .map(|item| value(group, item))
+                    .collect::<Vec<_>>();
+                values.sort_unstable();
+                (key(group), values)
+            })
+            .collect::<Vec<_>>();
+        expected.sort_unstable();
+        assert_eq!(delivered, expected);
+        Ok(())
     }
 
     /// Rows buffered after routed blocks still count the bytes of the routed blocks, as when a
