@@ -39,7 +39,7 @@ use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
 use super::payload_row::visit_row_type;
 use super::probe_state::SelectVector;
-use super::row_ptr::RowIds;
+use super::row_ptr::PageNumbering;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowMut;
 use super::row_ptr::RowPtr;
@@ -79,18 +79,17 @@ pub struct Payload {
     // if set, the payload contains at least duplicate rows
 }
 
-/// The next rows of a page, reserved one by one by a probe: see `RowReserver`.
+/// The ids of the next rows of a page, reserved one by one by a probe: see `RowReserver`.
 #[derive(Clone, Copy)]
 pub(in crate::aggregate) struct RowCursor {
-    pub(super) next: *const u8,
     pub(super) id: u64,
     pub(super) end: u64,
+    /// The index of the page in its payload.
     pub(super) page: usize,
 }
 
 impl RowCursor {
     pub(super) const EMPTY: RowCursor = RowCursor {
-        next: std::ptr::null(),
         id: 0,
         end: 0,
         page: usize::MAX,
@@ -418,7 +417,11 @@ impl Payload {
     }
 
     /// The rows still free in the writable page, without opening a page.
-    pub(super) fn current_cursor(&mut self, ids: &mut RowIds, partition: usize) -> RowCursor {
+    pub(super) fn current_cursor(
+        &mut self,
+        ids: &mut PageNumbering,
+        partition: usize,
+    ) -> RowCursor {
         match self.current_write_page.checked_sub(1) {
             Some(page) if self.pages[page].rows < self.pages[page].capacity => {
                 self.cursor_at(ids, partition, page)
@@ -428,16 +431,20 @@ impl Payload {
     }
 
     /// The rows of the writable page, opening one if the current one is full.
-    pub(super) fn open_cursor(&mut self, ids: &mut RowIds, partition: usize) -> RowCursor {
+    pub(super) fn open_cursor(&mut self, ids: &mut PageNumbering, partition: usize) -> RowCursor {
         let (_, page) = self.writable_page();
         self.cursor_at(ids, partition, page)
     }
 
-    fn cursor_at(&mut self, ids: &mut RowIds, partition: usize, page_index: usize) -> RowCursor {
+    fn cursor_at(
+        &mut self,
+        ids: &mut PageNumbering,
+        partition: usize,
+        page_index: usize,
+    ) -> RowCursor {
         let page_id = ids.number_pages(partition, &self.pages, page_index);
         let page = &self.pages[page_index];
         RowCursor {
-            next: page.base().wrapping_add(page.rows * self.tuple_size),
             id: page_id | page.rows as u64,
             end: page_id | page.capacity as u64,
             page: page_index,

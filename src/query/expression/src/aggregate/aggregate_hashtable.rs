@@ -127,19 +127,14 @@ impl AggregateHashTable {
         config: HashTableConfig,
         arena: Arc<Bump>,
     ) -> Self {
-        Self {
-            payload: PartitionedPayload::new_with_start_bit(
-                group_types,
-                aggrs,
-                1 << config.initial_radix_bits,
-                config.partition_start_bit,
-                vec![arena],
-            ),
-            hash_index: HashIndex::with_capacity(INITIAL_CAPACITY),
-            config,
-            hash_index_resize_count: 0,
-            partial_restarted: false,
-        }
+        let payload = PartitionedPayload::new_with_start_bit(
+            group_types,
+            aggrs,
+            1 << config.initial_radix_bits,
+            config.partition_start_bit,
+            vec![arena],
+        );
+        Self::with_payload(config, payload)
     }
 
     pub fn new_with_partitioned_arenas(
@@ -155,19 +150,31 @@ impl AggregateHashTable {
         let arenas = (0..partition_count)
             .map(|_| Arc::new(Bump::new()))
             .collect();
+        let payload = PartitionedPayload::new_with_start_bit(
+            group_types,
+            aggrs,
+            partition_count,
+            config.partition_start_bit,
+            arenas,
+        );
+        Self::with_payload(config, payload)
+    }
+
+    fn with_payload(config: HashTableConfig, payload: PartitionedPayload) -> Self {
+        let hash_index = Self::initial_index(&payload);
         Self {
-            payload: PartitionedPayload::new_with_start_bit(
-                group_types,
-                aggrs,
-                partition_count,
-                config.partition_start_bit,
-                arenas,
-            ),
-            hash_index: HashIndex::with_capacity(INITIAL_CAPACITY),
+            payload,
             config,
+            hash_index,
             hash_index_resize_count: 0,
             partial_restarted: false,
         }
+    }
+
+    /// An index of the initial capacity, for the rows `payload` may add until it grows.
+    fn initial_index(payload: &PartitionedPayload) -> HashIndex {
+        let new_rows = HashIndex::threshold_for_capacity(HashIndex::slots_for(INITIAL_CAPACITY));
+        HashIndex::with_capacity(INITIAL_CAPACITY, payload.max_row_id(new_rows))
     }
 
     pub fn into_payloads(self) -> Vec<Payload> {
@@ -510,7 +517,8 @@ impl AggregateHashTable {
             vec![Arc::new(Bump::new())],
         );
         let payload = std::mem::replace(&mut self.payload, fresh);
-        self.hash_index = HashIndex::with_capacity(INITIAL_CAPACITY);
+        self.hash_index = HashIndex::dummy();
+        self.hash_index = Self::initial_index(&self.payload);
         self.partial_restarted = false;
         payload
     }
@@ -741,11 +749,8 @@ impl AggregateHashTable {
         let new_capacity = HashIndex::slots_for(new_capacity);
         let new_rows =
             HashIndex::threshold_for_capacity(new_capacity).saturating_sub(self.payload.len());
-        let mut hash_index = if self.payload.row_ids_fit_compact(new_rows) {
-            HashIndex::with_capacity(new_capacity)
-        } else {
-            HashIndex::wide_with_capacity(new_capacity)
-        };
+        let mut hash_index =
+            HashIndex::with_capacity(new_capacity, self.payload.max_row_id(new_rows));
         self.payload.renumber_pages();
         let row_ids = &self.payload.row_ids;
         for (partition, payload) in self.payload.payloads.iter().enumerate() {
@@ -774,13 +779,13 @@ impl AggregateHashTable {
     /// index, as they do after a resize.
     fn restart_index(&mut self) {
         let capacity = self.hash_index.capacity();
-        let window_rows = self.hash_index.resize_threshold();
-        if self.hash_index.is_wide() || self.payload.row_ids_fit_compact(window_rows) {
+        let max_id = self.payload.max_row_id(self.hash_index.resize_threshold());
+        if self.hash_index.holds_id(max_id) {
             self.hash_index.reset();
         } else {
             // Free the old index before allocating the new one, as `resize` does.
             self.hash_index = HashIndex::dummy();
-            self.hash_index = HashIndex::wide_with_capacity(capacity);
+            self.hash_index = HashIndex::with_capacity(capacity, max_id);
         }
     }
 
@@ -826,21 +831,25 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_index_turns_wide_when_row_ids_outgrow_four_bytes() {
+    fn test_hash_index_widens_ids_with_the_rows() {
         let groups = 200_000;
         let blocks = key_blocks(groups, 3);
-        for max_compact_pages in [usize::MAX, 2] {
+        // The ids of the table fit 4 bytes, unless the table counts pages that take them past.
+        for (id_bits, id_bytes) in [(0, 4), (32, 8)] {
             let mut ht = AggregateHashTable::new(
                 vec![DataType::Number(NumberDataType::UInt64)],
                 vec![],
                 HashTableConfig::default().with_initial_radix_bits(2),
                 Arc::new(Bump::new()),
             );
-            ht.payload.row_ids.set_max_compact_pages(max_compact_pages);
+            if id_bits != 0 {
+                let pages = ht.payload.row_ids.pages_for_id_bits(id_bits);
+                ht.payload.row_ids.set_extra_pages(pages);
+            }
 
             assert_eq!(add_blocks(&mut ht, &blocks), groups as usize);
             assert_eq!(ht.payload.len(), groups as usize);
-            assert_eq!(ht.hash_index.is_wide(), max_compact_pages != usize::MAX);
+            assert_eq!(ht.hash_index.id_bytes(), id_bytes);
             // Every key finds its group again, so no two groups share an id.
             assert_eq!(add_blocks(&mut ht, &blocks), 0);
             assert_eq!(ht.payload.len(), groups as usize);
@@ -882,22 +891,27 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_restart_turns_wide_when_row_ids_outgrow_four_bytes() {
+    fn test_partial_restart_widens_ids_with_the_rows() {
         // Distinct keys over several windows of the initial index, whose payload keeps growing.
         let keys = 200_000;
         let blocks = key_blocks(keys, 1);
-        for max_compact_pages in [usize::MAX, 8] {
+        for widen in [false, true] {
             let mut ht = AggregateHashTable::new(
                 vec![DataType::Number(NumberDataType::UInt64)],
                 vec![],
                 HashTableConfig::partial_aggregate(),
                 Arc::new(Bump::new()),
             );
-            ht.payload.row_ids.set_max_compact_pages(max_compact_pages);
             let capacity = ht.hash_index.capacity();
             let mut state = ProbeState::default();
             let mut new_groups = 0;
-            for block in &blocks {
+            for (i, block) in blocks.iter().enumerate() {
+                // After the first window, the ids of the next windows outgrow 4 bytes.
+                if widen && i == 1 {
+                    assert_eq!(ht.hash_index.id_bytes(), 4);
+                    let pages = ht.payload.row_ids.pages_for_id_bits(32);
+                    ht.payload.row_ids.set_extra_pages(pages);
+                }
                 let groups = ProjectedBlock::project(&[0], block);
                 let stats = ht
                     .add_groups_partial(&mut state, groups, &[], block.num_rows(), capacity, None)
@@ -906,7 +920,7 @@ mod tests {
             }
             assert!(ht.partial_restarted());
             assert_eq!(ht.hash_index.capacity(), capacity);
-            assert_eq!(ht.hash_index.is_wide(), max_compact_pages != usize::MAX);
+            assert_eq!(ht.hash_index.id_bytes(), if widen { 8 } else { 4 });
             // Each key comes once, so it is a new group in its window.
             assert_eq!(new_groups, keys as usize);
             assert_eq!(ht.payload.len(), keys as usize);

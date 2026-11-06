@@ -26,6 +26,7 @@ use super::payload::GroupRows;
 use super::payload::Payload;
 use super::payload::RowCursor;
 use super::probe_state::ProbeState;
+use super::row_ptr::PageNumbering;
 use super::row_ptr::RowDecoder;
 use super::row_ptr::RowIds;
 use super::row_ptr::RowLayout;
@@ -59,40 +60,51 @@ impl PartitionMask {
 }
 
 /// Reserves the rows of new groups while a probe claims their slots, so that a slot takes the
-/// id of its row at once.
+/// id of its row at once. A partition whose page is full opens the next one, and numbers it
+/// in the entries `PartitionedPayload::begin_rows` reserved.
 pub(in crate::aggregate) struct RowReserver<'a> {
+    payloads: &'a mut [Payload],
     cursors: &'a mut [RowCursor],
+    numbering: PageNumbering<'a>,
     partition_mask: PartitionMask,
-    row_size: usize,
 }
 
 impl<'a> RowReserver<'a> {
-    /// A reserver of rows of `row_size` bytes from `cursor`, for a table of one partition.
+    /// A reserver for a table of one partition.
     #[cfg(test)]
-    pub(in crate::aggregate) fn single(cursor: &'a mut RowCursor, row_size: usize) -> Self {
+    pub(in crate::aggregate) fn single(
+        payloads: &'a mut [Payload],
+        cursors: &'a mut [RowCursor],
+        numbering: PageNumbering<'a>,
+    ) -> Self {
         RowReserver {
-            cursors: std::slice::from_mut(cursor),
+            payloads,
+            cursors,
+            numbering,
             partition_mask: PartitionMask::with_start_bit(1, 0),
-            row_size,
         }
     }
 
-    /// The id and the address of a new row for a group of hash `hash`, and the index of its page
-    /// in its partition; or else the partition, whose writable page is full.
+    /// The id of a new row for a group of hash `hash`, and the index of its page in its
+    /// partition.
     #[inline]
-    pub(in crate::aggregate) fn reserve(
-        &mut self,
-        hash: u64,
-    ) -> Result<(u64, RowPtr, usize), usize> {
+    pub(in crate::aggregate) fn reserve(&mut self, hash: u64) -> (u64, usize) {
         let partition = self.partition_mask.index(hash);
-        let cursor = &mut self.cursors[partition];
-        if cursor.id == cursor.end {
-            return Err(partition);
+        if self.cursors[partition].id == self.cursors[partition].end {
+            self.open_page(partition);
         }
-        let row = (cursor.id, RowPtr::new(cursor.next), cursor.page);
+        let cursor = &mut self.cursors[partition];
+        let id = cursor.id;
         cursor.id += 1;
-        cursor.next = cursor.next.wrapping_add(self.row_size);
-        Ok(row)
+        (id, cursor.page)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn open_page(&mut self, partition: usize) {
+        let payload = &mut self.payloads[partition];
+        payload.commit_cursor(&self.cursors[partition]);
+        self.cursors[partition] = payload.open_cursor(&mut self.numbering, partition);
     }
 }
 
@@ -166,7 +178,6 @@ impl PartitionedPayload {
             payloads[0].row_per_page,
             payloads[0].tuple_size,
             payloads[0].row_layout.states,
-            row_layout.states_layout.is_some(),
         );
         PartitionedPayload {
             payloads,
@@ -187,12 +198,16 @@ impl PartitionedPayload {
         self.row_ids.row_ptr(id)
     }
 
-    /// Whether the ids of the rows still fit 4 bytes after `new_rows` more rows, however they
-    /// spread over the partitions: each partition may open one more page than its rows fill.
-    pub(super) fn row_ids_fit_compact(&self, new_rows: usize) -> bool {
+    /// The pages after `new_rows` more rows, however they spread over the partitions: each
+    /// partition may open one more page than its rows fill.
+    fn pages_after(&self, new_rows: usize) -> usize {
         let pages = self.payloads.iter().map(|p| p.pages.len()).sum::<usize>();
-        let new_pages = new_rows.div_ceil(self.payloads[0].row_per_page) + self.payloads.len();
-        pages + new_pages <= self.row_ids.max_compact_pages()
+        pages + new_rows.div_ceil(self.payloads[0].row_per_page) + self.payloads.len()
+    }
+
+    /// The largest id a row may take after `new_rows` more rows.
+    pub(super) fn max_row_id(&self, new_rows: usize) -> u64 {
+        self.row_ids.max_row_id(self.pages_after(new_rows))
     }
 
     /// Number the pages again from 0, for an index rebuilt from the rows.
@@ -210,33 +225,30 @@ impl PartitionedPayload {
             .filter(|(_, payload)| payload.len() != 0)
     }
 
-    /// Start reserving rows for a probe: from the free rows of the writable page of each
-    /// partition, opening no page.
-    pub(super) fn begin_rows(&mut self) {
+    /// Start reserving rows for a probe of `row_count` rows: from the free rows of the writable
+    /// page of each partition, and room to number the pages the probe may open.
+    pub(super) fn begin_rows(&mut self, row_count: usize) {
+        self.row_ids.reserve_pages(self.pages_after(row_count));
+        let mut numbering = self.row_ids.numbering();
         for (partition, (payload, cursor)) in self
             .payloads
             .iter_mut()
             .zip(self.cursors.iter_mut())
             .enumerate()
         {
-            *cursor = payload.current_cursor(&mut self.row_ids, partition);
+            *cursor = payload.current_cursor(&mut numbering, partition);
         }
-    }
-
-    /// Reserve rows of `partition` in a page of its own, its writable page being full.
-    pub(super) fn open_rows(&mut self, partition: usize) {
-        let payload = &mut self.payloads[partition];
-        payload.commit_cursor(&self.cursors[partition]);
-        self.cursors[partition] = payload.open_cursor(&mut self.row_ids, partition);
     }
 
     /// Decodes the ids of the rows, and reserves new rows.
     #[inline]
     pub(super) fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>) {
-        (self.row_ids.decoder(), RowReserver {
+        let (rows, numbering) = self.row_ids.split();
+        (rows, RowReserver {
+            payloads: &mut self.payloads,
             cursors: &mut self.cursors,
+            numbering,
             partition_mask: self.partition_mask,
-            row_size: self.payloads[0].tuple_size,
         })
     }
 
