@@ -141,11 +141,10 @@ impl TransformRankLimitSort {
         self.input_rows = 0;
 
         // The last row has the `limit`-th distinct key when the rank limit cut the batch,
-        // which then held more than `limit` keys, or when it kept a batch with `limit`
-        // distinct first keys, which holds at least `limit` and so exactly `limit` keys.
-        // Counting first keys is exact for one key and conservative for several.
+        // which then held more than `limit` keys, or when it kept a batch with at least,
+        // and so exactly, `limit` keys.
         let first_key = sorted.get_by_offset(self.sort_desc[0].offset);
-        if (sorted.num_rows() < rows || has_distinct_values(first_key, self.limit))
+        if (sorted.num_rows() < rows || has_distinct_keys(&sorted, &self.sort_desc, self.limit))
             && let Some(last_row) = sorted.num_rows().checked_sub(1)
             && let Some(value) = first_key.index(last_row)
         {
@@ -357,47 +356,53 @@ fn compare_with_boundary<T: AccessType>(
     Some(keep)
 }
 
-/// Whether the sorted `entry` holds at least `n` distinct values, compared with the
-/// `compare` the sort uses for the column type; nulls count as one value. Other column
-/// types answer `false`.
-fn has_distinct_values(entry: &BlockEntry, n: usize) -> bool {
-    let column = entry.to_column();
-    let (column, validity) = split_validity(&column);
-    with_boundary_type!(column.data_type(), |T| {
-        count_sorted_runs::<T>(column, validity, n)
-    })
-    .is_some_and(|runs| runs >= n)
+/// Whether the sorted `block` holds at least `n` distinct keys under `sort_desc`. A row
+/// starts a new key when one of its key columns differs from the row before, compared with
+/// the `compare` the sort uses for the column type; nulls equal each other. A key column of
+/// another type is taken as equal on every row, which can only undercount the keys.
+fn has_distinct_keys(block: &DataBlock, sort_desc: &[SortColumnDescription], n: usize) -> bool {
+    let rows = block.num_rows();
+    if rows == 0 {
+        return false;
+    }
+    let mut changes = MutableBitmap::from_len_zeroed(rows);
+    for desc in sort_desc {
+        let column = block.get_by_offset(desc.offset).to_column();
+        let (column, validity) = split_validity(&column);
+        // `None` for a column type the boundary does not support, which marks nothing.
+        let _ = with_boundary_type!(column.data_type(), |T| {
+            mark_changes::<T>(column, validity, &mut changes)
+        });
+    }
+    let changes = Bitmap::from(changes);
+    1 + changes.len() - changes.null_count() >= n
 }
 
-/// The number of runs of equal values in a sorted column, counted up to `limit`.
-fn count_sorted_runs<T: AccessType>(
+/// Marks the rows of a sorted column whose value differs from the row before.
+fn mark_changes<T: AccessType>(
     column: &Column,
     validity: Option<&Bitmap>,
-    limit: usize,
-) -> Option<usize> {
+    changes: &mut MutableBitmap,
+) -> Option<()> {
     let column = T::try_downcast_column(column).ok()?;
-    let mut runs = 0;
     let mut previous: Option<Option<T::ScalarRef<'_>>> = None;
     for (row, value) in T::iter_column(&column).enumerate() {
         let value = validity
             .is_none_or(|validity| validity.get_bit(row))
             .then_some(value);
-        let new_run = match (&previous, &value) {
+        let changed = match (&previous, &value) {
+            (None, _) | (Some(None), None) => false,
             (Some(Some(previous)), Some(value)) => {
                 T::compare(previous.clone(), value.clone()) != Ordering::Equal
             }
-            (Some(None), None) => false,
             _ => true,
         };
-        if new_run {
-            runs += 1;
-            if runs >= limit {
-                break;
-            }
+        if changed {
+            changes.set(row, true);
         }
         previous = Some(value);
     }
-    Some(runs)
+    Some(())
 }
 
 /// The values of a key column and, when it is nullable, its validity.
@@ -740,17 +745,16 @@ mod tests {
     }
 
     #[test]
-    fn limit_keys_with_fewer_first_keys_publish_no_boundary() {
-        // (5, 0) and (5, 1) are `LIMIT` keys, but the transform counts first keys only, so
-        // it does not know the batch holds `LIMIT` keys and publishes nothing.
+    fn limit_keys_sharing_a_first_key_publish_it() {
+        // (5, 0) and (5, 1) are `LIMIT` keys with the same first key 5.
         let mut t = new_transform(vec![desc(0, true, false), desc(1, true, false)].into());
         let a = Int32Type::from_data(vec![5; BATCH_ROWS]);
         let b = Int32Type::from_data(vec![0, 1, 0, 1, 0, 1, 0, 1]);
         let out = feed(&mut t, DataBlock::new_from_columns(vec![a, b]));
         assert_eq!(out[0].num_rows(), BATCH_ROWS);
-        assert_eq!(t.boundary.boundary(), None);
+        assert_eq!(t.boundary.boundary(), Some(int(5)));
 
-        // NULL counts as a distinct first key: NULL and 3 are `LIMIT` first keys.
+        // NULL counts as one key value: NULL and 3 are `LIMIT` keys.
         let mut t = new_transform(vec![desc(0, true, true)].into());
         let keys = vec![None, Some(3), None, Some(3), None, Some(3), None, Some(3)];
         let out = feed(
@@ -766,7 +770,7 @@ mod tests {
     /// dropped exactly when a rank-1 sort of the row and the boundary keeps only the
     /// boundary, that is when the sort ranks the row strictly after the boundary.
     fn assert_boundary_matches_sort(column: Column) {
-        assert_distinct_values_match_sort(column.clone());
+        assert_distinct_keys_match_sort(vec![column.clone()]);
         let data_type = column.data_type();
         let entry = BlockEntry::from(column.clone());
         for boundary in (0..column.len()).filter_map(|row| column.index(row)) {
@@ -808,19 +812,21 @@ mod tests {
         }
     }
 
-    /// Checks `has_distinct_values` against the sort itself: a sorted column holds at least
-    /// `n` distinct values exactly when the rank limit `n - 1` cuts it. The columns are not
-    /// empty, so they hold at least one value.
-    fn assert_distinct_values_match_sort(column: Column) {
-        let rows = column.len();
+    /// Checks `has_distinct_keys` against the sort itself: sorted rows hold at least `n`
+    /// distinct keys exactly when the rank limit `n - 1` cuts them. The columns are not
+    /// empty, so they hold at least one key.
+    fn assert_distinct_keys_match_sort(columns: Vec<Column>) {
+        let rows = columns[0].len();
         for (asc, nulls_first) in [(true, false), (true, true), (false, false), (false, true)] {
-            let desc: Arc<[SortColumnDescription]> = vec![desc(0, asc, nulls_first)].into();
+            let desc: Arc<[SortColumnDescription]> = (0..columns.len())
+                .map(|offset| desc(offset, asc, nulls_first))
+                .collect();
             let mut blocks = DataBlockVec::default();
             blocks
-                .push(DataBlock::new(vec![column.clone().into()], rows))
+                .push(DataBlock::new_from_columns(columns.clone()))
                 .unwrap();
             let sorted = blocks.sort_limit(desc.clone(), LimitType::None).unwrap();
-            assert!(has_distinct_values(sorted.get_by_offset(0), 1));
+            assert!(has_distinct_keys(&sorted, &desc, 1));
             for n in 2..=rows + 1 {
                 let cut = blocks
                     .sort_limit(desc.clone(), LimitType::LimitRank(n - 1))
@@ -828,9 +834,9 @@ mod tests {
                     .num_rows()
                     < rows;
                 assert_eq!(
-                    has_distinct_values(sorted.get_by_offset(0), n),
+                    has_distinct_keys(&sorted, &desc, n),
                     cut,
-                    "n {n}, {column:?}, {desc:?}"
+                    "n {n}, {columns:?}, {desc:?}"
                 );
             }
         }
@@ -838,6 +844,29 @@ mod tests {
 
     #[test]
     fn boundary_comparison_matches_the_sort() {
+        // Two key columns with repeated first keys and nulls in both.
+        assert_distinct_keys_match_sort(vec![
+            Int32Type::from_opt_data(vec![
+                Some(1),
+                Some(1),
+                None,
+                None,
+                Some(1),
+                Some(2),
+                None,
+                Some(2),
+            ]),
+            StringType::from_opt_data(vec![
+                Some("x"),
+                Some("y"),
+                None,
+                Some("x"),
+                Some("x"),
+                None,
+                None,
+                Some("y"),
+            ]),
+        ]);
         assert_boundary_matches_sort(Int32Type::from_opt_data(vec![
             Some(i32::MIN),
             Some(-1),
