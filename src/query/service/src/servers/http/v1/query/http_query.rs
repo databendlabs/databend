@@ -105,13 +105,27 @@ pub struct HttpQueryRequest {
 impl HttpQueryRequest {
     pub(crate) fn fail_to_start_sql(&self, err: ErrorCode) -> impl IntoResponse {
         metrics_incr_http_response_errors_count(err.name(), err.code());
+        // The server has just verified that the temporary tables this session
+        // claims to own no longer exist (expired, or lost with the node that
+        // held them). Tell the client so it stops pinning requests to a node
+        // that has nothing for it; otherwise the connection fails forever.
+        let temp_tables_gone = matches!(
+            err.code(),
+            ErrorCode::SESSION_TIMEOUT | ErrorCode::SESSION_LOST
+        );
         let session = self.session.as_ref().map(|s| {
             let txn_state = if matches!(s.txn_state, Some(TxnState::Active)) {
                 Some(TxnState::Fail)
             } else {
                 s.txn_state.clone()
             };
-            let need_sticky = match &s.internal {
+            let internal = s.internal.clone().map(|mut internal| {
+                if temp_tables_gone {
+                    internal.has_temp_table = false;
+                }
+                internal
+            });
+            let need_sticky = match &internal {
                 Some(internal) => internal.has_temp_table,
                 None => false,
             };
@@ -119,6 +133,7 @@ impl HttpQueryRequest {
                 txn_state,
                 need_sticky,
                 need_keep_alive: need_sticky,
+                internal,
                 ..s.clone()
             }
         });
@@ -491,7 +506,7 @@ impl HttpSessionConf {
                     session.restore_query_ids_results(id.to_owned(), key);
                 }
             }
-            let has_temp_table = !session.temp_tbl_mgr().lock().is_empty();
+            let has_temp_table = session.temp_tbl_mgr().lock().has_session_scoped_tables();
             if state.has_temp_table {
                 if let Some(id) = &state.last_node_id {
                     if http_query_manager.server_info.id != *id {
@@ -836,7 +851,7 @@ impl HttpQuery {
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
-        let has_temp_table = !self.temp_tbl_mgr.lock().is_empty();
+        let has_temp_table = self.temp_tbl_mgr.lock().has_session_scoped_tables();
 
         let internal = HttpSessionStateInternal::new(
             &session_state.variables,

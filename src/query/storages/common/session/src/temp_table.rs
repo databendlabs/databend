@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
@@ -65,6 +66,11 @@ pub struct TempTblMgr {
 
     // Atomic CTAS tables that have not been published yet.
     staged_tables: HashMap<u64, TempTable>,
+
+    // Temporary tables (by `'db'.'table'` desc) that belong to a single running
+    // query, e.g. materialized CTE or recursive CTE scratch tables. They are
+    // dropped when the query finishes, so they must not make the session sticky.
+    query_scoped: HashSet<String>,
 }
 
 impl Default for TempTblMgr {
@@ -73,6 +79,7 @@ impl Default for TempTblMgr {
             name_to_id: HashMap::new(),
             id_to_table: HashMap::new(),
             staged_tables: HashMap::new(),
+            query_scoped: HashSet::new(),
             next_id: TEMP_TBL_ID_BEGIN,
         }
     }
@@ -104,6 +111,34 @@ impl TempTblMgr {
 
     pub fn is_empty(&self) -> bool {
         self.id_to_table.is_empty() && self.staged_tables.is_empty()
+    }
+
+    /// Mark a temporary table as owned by a single query (materialized CTE,
+    /// recursive CTE). The mark is keyed by name so it can be set before the
+    /// table is created; it is cleared when the table is dropped.
+    pub fn mark_query_scoped(&mut self, database_name: &str, table_name: &str) {
+        self.query_scoped
+            .insert(Self::temp_table_desc(database_name, table_name));
+    }
+
+    pub fn unmark_query_scoped(&mut self, database_name: &str, table_name: &str) {
+        self.query_scoped
+            .remove(&Self::temp_table_desc(database_name, table_name));
+    }
+
+    /// Whether the session holds temporary state that outlives the current
+    /// query and therefore requires follow-up requests to reach this node:
+    /// user-created temporary tables or unpublished atomic CTAS tables.
+    /// Query-scoped scratch tables are excluded.
+    pub fn has_session_scoped_tables(&self) -> bool {
+        self.id_to_table
+            .values()
+            .chain(self.staged_tables.values())
+            .any(|table| {
+                !self
+                    .query_scoped
+                    .contains(&Self::temp_table_desc(&table.db_name, &table.table_name))
+            })
     }
 
     pub fn create_table(
@@ -476,6 +511,7 @@ pub async fn drop_table_by_id(
                         let table = e.remove();
                         let table_meta = table.meta.clone();
                         let desc = TempTblMgr::temp_table_desc(&table.db_name, &table.table_name);
+                        guard.query_scoped.remove(&desc);
                         guard.name_to_id.remove(&desc).ok_or_else(|| {
                             ErrorCode::Internal(format!(
                                 "Table not found in temp table manager {:?}, drop table request: {:?}",
@@ -499,6 +535,7 @@ pub async fn drop_table_by_id(
                 Entry::Occupied(e) => {
                     let table = e.remove();
                     let desc = TempTblMgr::temp_table_desc(&table.db_name, &table.table_name);
+                    guard.query_scoped.remove(&desc);
                     guard.name_to_id.remove(&desc).ok_or_else(|| {
                         ErrorCode::Internal(format!(
                             "Table not found in temp table manager {:?}, drop table request: {:?}",
@@ -849,5 +886,98 @@ mod tests {
                 .get(&TempTblMgr::temp_table_desc("db", "renamed")),
             Some(&created.table_id)
         );
+    }
+
+    fn drop_memory_table_req(table_name: &str, table_id: u64) -> DropTableByIdReq {
+        DropTableByIdReq {
+            if_exists: true,
+            tenant: Tenant::new_literal("tenant"),
+            tb_id: table_id,
+            table_name: table_name.to_string(),
+            db_id: 1,
+            db_name: "db".to_string(),
+            engine: "MEMORY".to_string(),
+            temp_prefix: "session".to_string(),
+        }
+    }
+
+    fn create_memory_table(mgr: &TempTblMgrRef, table_name: &str) -> u64 {
+        let reply = mgr
+            .lock()
+            .create_table(
+                create_table_req(table_name, "MEMORY", CreateOption::Create, false),
+                "session".to_string(),
+            )
+            .unwrap();
+        IN_MEMORY_DATA.write().insert(
+            InMemoryDataKey {
+                temp_prefix: Some("session".to_string()),
+                table_id: reply.table_id,
+            },
+            Default::default(),
+        );
+        reply.table_id
+    }
+
+    #[tokio::test]
+    async fn test_query_scoped_tables_do_not_count_as_session_scoped() {
+        let mgr = TempTblMgr::init();
+        assert!(!mgr.lock().has_session_scoped_tables());
+
+        // Marked before creation, like a materialized CTE scratch table.
+        mgr.lock().mark_query_scoped("db", "cte$query");
+        assert!(!mgr.lock().has_session_scoped_tables());
+        let cte_id = create_memory_table(&mgr, "cte$query");
+        assert!(!mgr.lock().is_empty());
+        assert!(!mgr.lock().has_session_scoped_tables());
+
+        // A user temporary table alongside it makes the session sticky.
+        let user_id = create_memory_table(&mgr, "t");
+        assert!(mgr.lock().has_session_scoped_tables());
+
+        // Dropping the scratch table clears its mark; the user table still counts.
+        drop_table_by_id(mgr.clone(), drop_memory_table_req("cte$query", cte_id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(mgr.lock().query_scoped.is_empty());
+        assert!(mgr.lock().has_session_scoped_tables());
+
+        drop_table_by_id(mgr.clone(), drop_memory_table_req("t", user_id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!mgr.lock().has_session_scoped_tables());
+        assert!(mgr.lock().is_empty());
+
+        // A mark without a table (failed CREATE) can be withdrawn.
+        mgr.lock().mark_query_scoped("db", "never_created");
+        mgr.lock().unmark_query_scoped("db", "never_created");
+        assert!(mgr.lock().query_scoped.is_empty());
+
+        // Atomic CTAS stages the table by id while the pipeline runs; a
+        // query-scoped staged table must not count either, a user one must.
+        mgr.lock().mark_query_scoped("db", "cte_ctas$query");
+        let staged_cte = mgr
+            .lock()
+            .create_table(
+                create_table_req("cte_ctas$query", "MEMORY", CreateOption::Create, true),
+                "session".to_string(),
+            )
+            .unwrap();
+        assert!(!mgr.lock().is_empty());
+        assert!(!mgr.lock().has_session_scoped_tables());
+        let staged_user = mgr
+            .lock()
+            .create_table(
+                create_table_req("t_ctas", "MEMORY", CreateOption::Create, true),
+                "session".to_string(),
+            )
+            .unwrap();
+        assert!(mgr.lock().has_session_scoped_tables());
+        mgr.lock().abort_staged_table(staged_user.table_id);
+        assert!(!mgr.lock().has_session_scoped_tables());
+        mgr.lock().abort_staged_table(staged_cte.table_id);
+        assert!(mgr.lock().is_empty());
     }
 }

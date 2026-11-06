@@ -253,6 +253,11 @@ def test_session(client):
             assert error["code"] == 5110, response.text
             assert "temporary tables in session" in error["message"], error
             assert "expired" in error["message"], error
+            # The server has confirmed the tables are gone, so the state it hands
+            # back must no longer pin the client to a node.
+            failed_state = response.json()["session"]
+            assert not failed_state["need_sticky"], response.text
+            assert not failed_state["need_keep_alive"], response.text
         body = client.do_query("SELECT * FROM session_header_temp", state)
         state = body["session"]
         assert body["data"] == [["42"]], body
@@ -260,6 +265,45 @@ def test_session(client):
         body = client.do_query("DROP TABLE session_header_temp", state)
     assert not body["session"]["need_sticky"], body
     assert not body["session"]["need_keep_alive"], body
+    client.do_logout()
+
+
+def test_materialized_cte_is_not_sticky(client):
+    # A materialized CTE is backed by a temporary table that lives only for the
+    # duration of the query. Responses sent while it exists (the first page is
+    # returned after wait_time_secs even though the CTE is still being
+    # materialized) must not report it as session state, otherwise the client
+    # pins every later request to this node.
+    client.login()
+    body = client.do_query(
+        "WITH slow AS MATERIALIZED (SELECT sleep(3) AS a) SELECT a FROM slow",
+        pagination={"wait_time_secs": 1},
+    )
+    states = [body["session"]] if body["session"] else []
+    data = list(body["data"])
+    next_uri = body["next_uri"]
+    final_uri = body["final_uri"]
+    for _ in range(30):
+        if not next_uri or next_uri == final_uri:
+            break
+        body = client.request("GET", f"http://localhost:8000{next_uri}")
+        assert body["error"] is None, body
+        if body.get("session"):
+            states.append(body["session"])
+        data.extend(body.get("data") or [])
+        next_uri = body.get("next_uri")
+    else:
+        pytest.fail("materialized CTE query did not finish")
+    assert data == [["0"]], data
+    assert states, "expected at least one response carrying session state"
+    for state in states:
+        assert not state["need_sticky"], state
+        assert not state["need_keep_alive"], state
+    # The scratch table is gone with the query, so a follow-up statement that
+    # echoes the final state runs without any temp-table check tripping.
+    body = client.do_query("select 1", states[-1])
+    assert body["data"] == [["1"]], body
+    assert not body["session"]["need_sticky"], body
     client.do_logout()
 
 
