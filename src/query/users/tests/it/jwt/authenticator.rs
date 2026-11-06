@@ -80,6 +80,49 @@ async fn test_parse_non_custom_claim() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_jwks_jwt_time_tolerance() -> anyhow::Result<()> {
+    let (pair1, pbkey1) = get_jwks_file_rs256("test_kid");
+    let template1 = ResponseTemplate::new(200).set_body_raw(pbkey1, "application/json");
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template1)
+        .expect(1..)
+        .mount(&server)
+        .await;
+    let first_url = format!("http://{}{}", server.address(), json_path);
+    let mut cfg = QueryConfig {
+        tenant_id: Tenant::new_literal("test-tenant"),
+        ..Default::default()
+    };
+    cfg.common.cluster_id = "test-cluster".to_string();
+    cfg.common.jwt_key_file = first_url;
+    cfg.common.jwks_refresh_interval = 86400;
+    cfg.common.jwks_refresh_timeout = 10;
+    let auth = JwtAuthenticator::create(&cfg, &BUILD_INFO).unwrap();
+
+    let now = Clock::now_since_epoch();
+    let user_name = "test-user";
+
+    let mut tolerated_claims =
+        Claims::with_custom_claims(CustomClaims::new(), Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+    tolerated_claims.issued_at = Some(now + Duration::from_secs(4));
+    let tolerated_token = pair1.sign(tolerated_claims)?;
+    auth.parse_jwt_claims(&tolerated_token).await?;
+
+    let mut rejected_claims =
+        Claims::with_custom_claims(CustomClaims::new(), Duration::from_hours(2))
+            .with_subject(user_name.to_string());
+    rejected_claims.issued_at = Some(now + Duration::from_secs(30));
+    let rejected_token = pair1.sign(rejected_claims)?;
+    assert!(auth.parse_jwt_claims(&rejected_token).await.is_err());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_jwt_claims_with_ensure_user_scenarios() -> anyhow::Result<()> {
     let (pair1, pbkey1) = get_jwks_file_rs256("test_kid");
     let template1 = ResponseTemplate::new(200).set_body_raw(pbkey1, "application/json");
