@@ -391,3 +391,137 @@ select if(number < 3000000, number % 2, number) as k, count(*) from numbers(4000
 0 1500000
 1 1500000
 3000000 1
+
+## A rank limit over several group keys prunes rows, and the scan blocks, by a boundary on the
+## first key only. Rows tied with the boundary on the first key must be kept, so each query
+## must return the same rows as the query planned without the rank limit. The small block size
+## splits the input into many sorted batches, and the inserts make blocks with overlapping keys.
+statement ok
+USE default
+
+statement ok
+CREATE OR REPLACE TABLE rank_limit_multi_key (k1 INT NULL, k2 VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_limit_multi_key SELECT number % 37, (number % 5)::STRING, number FROM numbers(3000)
+
+statement ok
+INSERT INTO rank_limit_multi_key SELECT 36 - number % 37, (number % 3)::STRING, number FROM numbers(3000)
+
+statement ok
+INSERT INTO rank_limit_multi_key SELECT if(number % 11 = 0, NULL, number % 41), 'x', number FROM numbers(3000)
+
+## Multiple group keys ordered by all of them.
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1, k2 LIMIT 6
+----
+0 0 44 65093
+0 1 43 64908
+0 2 44 67720
+0 3 16 24568
+0 4 16 23384
+0 x 67 101270
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1, k2 LIMIT 6
+----
+0 0 44 65093
+0 1 43 64908
+0 2 44 67720
+0 3 16 24568
+0 4 16 23384
+0 x 67 101270
+
+## Descending first key.
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1 DESC, k2 DESC LIMIT 5
+----
+40 x 66 99195
+39 x 66 100277
+38 x 67 101315
+37 x 66 99284
+36 x 66 100366
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1 DESC, k2 DESC LIMIT 5
+----
+40 x 66 99195
+39 x 66 100277
+38 x 67 101315
+37 x 66 99284
+36 x 66 100366
+
+## NULL first keys rank before every boundary with NULLS FIRST.
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1 NULLS FIRST, k2 LIMIT 4
+----
+NULL x 273 408408
+0 0 44 65093
+0 1 43 64908
+0 2 44 67720
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1 NULLS FIRST, k2 LIMIT 4
+----
+NULL x 273 408408
+0 0 44 65093
+0 1 43 64908
+0 2 44 67720
+
+## NULL first keys rank after every boundary with NULLS LAST.
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1 DESC NULLS LAST, k2 LIMIT 4
+----
+40 x 66 99195
+39 x 66 100277
+38 x 67 101315
+37 x 66 99284
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1 DESC NULLS LAST, k2 LIMIT 4
+----
+40 x 66 99195
+39 x 66 100277
+38 x 67 101315
+37 x 66 99284
+
+## String first key.
+query TIII
+settings (max_block_size = 128) SELECT k2, k1, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k2, k1 ORDER BY k2 DESC, k1 LIMIT 5
+----
+x 0 67 101270
+x 1 67 100189
+x 2 68 102144
+x 3 67 101184
+x 4 67 100103
+
+query TIII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k2, k1, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k2, k1 ORDER BY k2 DESC, k1 LIMIT 5
+----
+x 0 67 101270
+x 1 67 100189
+x 2 68 102144
+x 3 67 101184
+x 4 67 100103
+
+## GROUP BY ... LIMIT without ORDER BY ranks by the group keys in order.
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 LIMIT 5
+----
+0 0 44 65093
+0 1 43 64908
+0 2 44 67720
+0 3 16 24568
+0 4 16 23384
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM rank_limit_multi_key GROUP BY k1, k2 ORDER BY k1, k2 LIMIT 5
+----
+0 0 44 65093
+0 1 43 64908
+0 2 44 67720
+0 3 16 24568
+0 4 16 23384
+
+statement ok
+DROP TABLE rank_limit_multi_key
