@@ -230,7 +230,7 @@ pub(super) fn collect_function_names(
     probe.names
 }
 
-fn is_window_expr(expr: &Expr) -> bool {
+pub(super) fn is_window_expr(expr: &Expr) -> bool {
     match expr {
         Expr::CountAll {
             window: Some(_), ..

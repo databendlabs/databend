@@ -26,11 +26,14 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::LiteralStringOrVariable;
+use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::Walk;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
@@ -67,6 +70,7 @@ use crate::NameResolutionContext;
 use crate::binder::Binder;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
+use crate::binder::aggregate_prepass::is_window_expr;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::parse_file_format;
 use crate::binder::validate_stage_files_path_traversal;
@@ -74,6 +78,18 @@ use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
 use crate::plans::ValidationMode;
+
+const COPY_UNSUPPORTED_EXPR: &str =
+    "copy into <table> can't contain aggregate|flatten|window functions";
+
+struct ContainsWindow(bool);
+
+impl Visitor for ContainsWindow {
+    fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
+        self.0 |= is_window_expr(expr);
+        Ok(VisitControl::Continue)
+    }
+}
 
 impl Binder {
     #[async_backtrace::framed]
@@ -97,6 +113,7 @@ impl Binder {
                 select_list,
                 from,
                 alias_name,
+                order_by,
             } => {
                 let mut max_column_position =
                     MaxColumnPosition::new(self.name_resolution_ctx.clone());
@@ -104,6 +121,10 @@ impl Binder {
                     if let SelectTarget::AliasedExpr { expr, .. } = target {
                         expr.walk(&mut max_column_position)?;
                     }
+                }
+                // The stage must also read the columns only ORDER BY refers to.
+                for item in order_by.iter() {
+                    item.expr.walk(&mut max_column_position)?;
                 }
                 self.metadata.write().set_stage_column_references(
                     max_column_position.max_pos,
@@ -116,8 +137,14 @@ impl Binder {
                     columns: vec![],
                     keep_database_name: false,
                 });
-                self.bind_copy_from_query_into_table(bind_context, plan, select_list, &alias)
-                    .await
+                self.bind_copy_from_query_into_table(
+                    bind_context,
+                    plan,
+                    select_list,
+                    order_by,
+                    &alias,
+                )
+                .await
             }
         }
     }
@@ -254,6 +281,7 @@ impl Binder {
             write_mode: CopyIntoTableMode::Copy,
             query: None,
             enable_distributed: false,
+            ordered: false,
             files_collected: false,
         })
     }
@@ -316,7 +344,7 @@ impl Binder {
                 });
             }
 
-            self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
+            self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &[], &None)
                 .await
         } else {
             Ok(Plan::CopyIntoTable(Box::new(plan)))
@@ -485,6 +513,7 @@ impl Binder {
             validation_mode: ValidationMode::None,
 
             enable_distributed: false,
+            ordered: false,
             is_transform: false,
             files_collected: true,
             enable_schema_evolution: false,
@@ -501,6 +530,7 @@ impl Binder {
         bind_context: &mut BindContext,
         mut plan: CopyIntoTablePlan,
         select_list: &[SelectTarget],
+        order_by: &[OrderByExpr],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
         plan.collect_files(self.ctx.as_ref()).await?;
@@ -532,13 +562,10 @@ impl Binder {
         for item in select_list.items.iter() {
             if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
-                return Err(ErrorCode::SemanticError(
-                    "copy into <table> can't contain aggregate|flatten|window functions"
-                        .to_string(),
-                ));
+                return Err(ErrorCode::SemanticError(COPY_UNSUPPORTED_EXPR.to_string()));
             };
         }
-        let select_info = self.analyze_projection(&from_context, &select_list)?;
+        let mut select_info = self.analyze_projection(&from_context, &select_list)?;
 
         if select_info.column_count() != plan.required_source_schema.num_fields() {
             return Err(ErrorCode::BadArguments(format!(
@@ -548,7 +575,45 @@ impl Binder {
             )));
         }
 
+        // ORDER BY refers to the select list's aliases and positions, or to the
+        // stage's columns, as in a SELECT.
+        let order_items = if order_by.is_empty() {
+            None
+        } else {
+            // analyze_order_items cannot prepare a window function here: COPY
+            // does not collect them.
+            let mut window = ContainsWindow(false);
+            for item in order_by {
+                item.expr.walk(&mut window)?;
+            }
+            if window.0 {
+                return Err(ErrorCode::SemanticError(COPY_UNSUPPORTED_EXPR.to_string()));
+            }
+
+            let aliases = select_list.alias_catalog();
+            let order_items = self.analyze_order_items(
+                &mut from_context,
+                &mut select_info,
+                aliases.all_aliases(),
+                None,
+                order_by,
+                false,
+            )?;
+            // ORDER BY may add expressions of its own to the projection.
+            for item in select_info.source_scalars.values() {
+                if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
+                    return Err(ErrorCode::SemanticError(COPY_UNSUPPORTED_EXPR.to_string()));
+                }
+            }
+            Some(order_items)
+        };
+
         let mut s_expr = self.bind_projection(&mut from_context, select_info, s_expr)?;
+
+        if let Some(order_items) = order_items.filter(|items| !items.items.is_empty()) {
+            s_expr = self.bind_order_by(order_items, s_expr)?;
+            plan.ordered = true;
+        }
 
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;

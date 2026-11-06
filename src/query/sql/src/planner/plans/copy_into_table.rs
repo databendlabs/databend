@@ -143,6 +143,11 @@ pub struct CopyIntoTablePlan {
     // control by setting `enable_distributed_copy`
     // set in optimizer
     pub enable_distributed: bool,
+    // The COPY writes its rows in an order the statement asked for (`ORDER BY`
+    // in the transform). The optimizer keeps it on one node: a distributed COPY
+    // runs the query on every node over its share of the files, which cannot
+    // give one order.
+    pub ordered: bool,
 
     pub files_collected: bool,
 

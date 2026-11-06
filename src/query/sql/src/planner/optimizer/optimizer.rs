@@ -164,7 +164,8 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             Ok(Plan::CopyIntoLocation(plan))
         }
         Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
-            plan.enable_distributed = opt_ctx.get_enable_distributed_optimization()
+            plan.enable_distributed = !plan.ordered
+                && opt_ctx.get_enable_distributed_optimization()
                 && opt_ctx
                     .get_table_ctx()
                     .get_settings()

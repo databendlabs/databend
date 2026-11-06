@@ -36,6 +36,7 @@ impl Walk for CopyIntoTableStmt {
             CopyIntoTableSource::Query {
                 select_list,
                 alias_name,
+                order_by,
                 ..
             } => {
                 for target in select_list {
@@ -72,6 +73,9 @@ impl Walk for CopyIntoTableStmt {
                 if let Some(alias_name) = alias_name {
                     try_walk!(alias_name.walk(visitor));
                 }
+                for item in order_by {
+                    try_walk!(item.walk(visitor));
+                }
             }
         }
         try_walk!((&self.catalog, &self.database, &self.table).walk(visitor));
@@ -100,6 +104,7 @@ impl WalkMut for CopyIntoTableStmt {
             CopyIntoTableSource::Query {
                 select_list,
                 alias_name,
+                order_by,
                 ..
             } => {
                 for target in select_list {
@@ -135,6 +140,9 @@ impl WalkMut for CopyIntoTableStmt {
                 }
                 if let Some(alias_name) = alias_name {
                     try_walk!(alias_name.walk_mut(visitor));
+                }
+                for item in order_by {
+                    try_walk!(item.walk_mut(visitor));
                 }
             }
         }
