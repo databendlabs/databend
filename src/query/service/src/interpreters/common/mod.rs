@@ -43,6 +43,7 @@ pub(crate) use lineage_log::serialize_upsert_edge;
 pub use log::*;
 pub use materialized_view::check_maintenance_target;
 pub use materialized_view::check_materialized_view_license;
+pub use materialized_view::check_policy_target_without_materialized_view;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;
 pub use stream::build_update_stream_reqs;

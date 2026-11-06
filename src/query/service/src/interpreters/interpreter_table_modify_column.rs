@@ -86,6 +86,7 @@ use parquet::arrow::ArrowSchemaConverter;
 use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::build_insert_select_physical_plan;
+use crate::interpreters::common::check_policy_target_without_materialized_view;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::common::stored_computed_column_references;
@@ -247,6 +248,7 @@ impl ModifyTableColumnInterpreter {
         }
 
         let table_id = table_info.ident.table_id;
+        check_policy_target_without_materialized_view(&self.ctx, table.as_ref()).await?;
 
         let req = SetTableColumnMaskPolicyReq {
             tenant: self.ctx.get_tenant(),
