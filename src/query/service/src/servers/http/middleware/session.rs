@@ -586,16 +586,34 @@ async fn sticky_node_lost_response(
     }
 }
 
+/// Upper bound on a `POST /v1/query` body read before authentication, only to
+/// recover the session state for a `SessionNodeLost` response. Larger bodies
+/// are not read; the response then carries no session.
+const STICKY_LOST_MAX_BODY_BYTES: usize = 1024 * 1024;
+
 /// Best effort: the session state in the body of a `POST /v1/query`.
 async fn request_body_session_conf(req: &mut Request) -> Option<HttpSessionConf> {
     if req.method() != Method::POST {
+        return None;
+    }
+    // This runs before authentication: never buffer an unbounded body here.
+    if req
+        .headers()
+        .get(http::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok()?.parse::<usize>().ok())
+        .is_some_and(|len| len > STICKY_LOST_MAX_BODY_BYTES)
+    {
         return None;
     }
     #[derive(Deserialize)]
     struct SessionOnly {
         session: Option<HttpSessionConf>,
     }
-    let body = req.take_body().into_bytes().await.ok()?;
+    let body = req
+        .take_body()
+        .into_bytes_limit(STICKY_LOST_MAX_BODY_BYTES)
+        .await
+        .ok()?;
     serde_json::from_slice::<SessionOnly>(&body)
         .ok()
         .and_then(|r| r.session)

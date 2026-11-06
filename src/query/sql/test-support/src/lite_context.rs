@@ -1760,6 +1760,8 @@ impl TableContextQueryState for LiteTableContext {
 impl TableContextCte for LiteTableContext {
     fn mark_query_scoped_temp_table(&self, _database_name: &str, _table_name: &str) {}
 
+    fn unmark_query_scoped_temp_table(&self, _database_name: &str, _table_name: &str) {}
+
     fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {}
 
     async fn drop_m_cte_temp_table(&self) -> Result<()> {

@@ -25,6 +25,10 @@ pub trait TableContextCte: Send + Sync {
     /// is never reported to clients as a session temporary table.
     fn mark_query_scoped_temp_table(&self, database_name: &str, table_name: &str);
 
+    /// Withdraw the mark after the CREATE failed, so failing queries on a
+    /// long-lived session do not accumulate marks.
+    fn unmark_query_scoped_temp_table(&self, database_name: &str, table_name: &str);
+
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
 
     async fn drop_m_cte_temp_table(&self) -> Result<()>;

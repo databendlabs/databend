@@ -618,6 +618,10 @@ impl TableContextCte for CtxDelegation {
         todo!()
     }
 
+    fn unmark_query_scoped_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
+
     fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
         todo!()
     }

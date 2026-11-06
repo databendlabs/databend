@@ -122,6 +122,22 @@ impl TempTblMgr {
             .insert(Self::temp_table_desc(database_name, table_name));
     }
 
+    /// Withdraw a mark whose table was never created. The mark is kept while a
+    /// table of that name exists (visible or staged): it is then cleared
+    /// together with the table, and a staged table that outlived a failed
+    /// query must not start counting as session state.
+    pub fn unmark_query_scoped(&mut self, database_name: &str, table_name: &str) {
+        let desc = Self::temp_table_desc(database_name, table_name);
+        let exists = self.name_to_id.contains_key(&desc)
+            || self
+                .staged_tables
+                .values()
+                .any(|t| t.db_name == database_name && t.table_name == table_name);
+        if !exists {
+            self.query_scoped.remove(&desc);
+        }
+    }
+
     /// Whether the session holds temporary state that outlives the current
     /// query and therefore requires follow-up requests to reach this node:
     /// user-created temporary tables or unpublished atomic CTAS tables.
@@ -950,9 +966,11 @@ mod tests {
         assert!(!mgr.lock().has_session_scoped_tables());
         assert!(mgr.lock().is_empty());
 
-        // A mark without a table (failed CREATE) stays but is inert.
+        // A mark without a table (failed CREATE) is inert and can be withdrawn.
         mgr.lock().mark_query_scoped("db", "never_created");
         assert!(!mgr.lock().has_session_scoped_tables());
+        mgr.lock().unmark_query_scoped("db", "never_created");
+        assert!(mgr.lock().query_scoped.is_empty());
 
         // Atomic CTAS stages the table by id while the pipeline runs; a
         // query-scoped staged table must not count either, a user one must.
@@ -965,6 +983,9 @@ mod tests {
             )
             .unwrap();
         assert!(!mgr.lock().is_empty());
+        assert!(!mgr.lock().has_session_scoped_tables());
+        // Withdrawing the mark while the staged table still exists is a no-op.
+        mgr.lock().unmark_query_scoped("db", "cte_ctas$query");
         assert!(!mgr.lock().has_session_scoped_tables());
         let staged_user = mgr
             .lock()

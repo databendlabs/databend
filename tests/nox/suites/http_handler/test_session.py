@@ -313,6 +313,28 @@ def test_materialized_cte_is_not_sticky(client):
     client.do_logout()
 
 
+def test_failed_materialized_cte_is_not_sticky(client):
+    # The CTE's CREATE TEMP TABLE ... AS SELECT fails at execution; the mark
+    # set before it is withdrawn and the session stays non-sticky.
+    client.login()
+    body = client.request(
+        "POST",
+        query_url,
+        json={
+            "sql": "WITH broken AS MATERIALIZED "
+            "(SELECT 1 / (number - number) AS x FROM numbers(1)) SELECT x FROM broken",
+            "pagination": {"wait_time_secs": 10},
+        },
+    )
+    assert body["error"] is not None, body
+    assert "divided by zero" in body["error"]["message"], body
+    assert not body["session"]["need_sticky"], body
+    body = client.do_query("select 1", body["session"])
+    assert body["data"] == [["1"]], body
+    assert not body["session"]["need_sticky"], body
+    client.do_logout()
+
+
 def test_recursive_cte_does_not_hide_user_temp_table(client):
     # A recursive CTE materializes into a regular memory table
     # (`__rcte_<query_id>_<node_id>_<n>_<cte>`), not a session temporary table.
