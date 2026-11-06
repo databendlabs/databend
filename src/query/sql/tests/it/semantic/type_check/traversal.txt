@@ -1,0 +1,75 @@
+=== array_children_keep_input_order_and_types ===
+description: Collection node typing consumes bound children without changing their order or common type.
+sql: [1, number, delta + 1]
+status: ok
+scalar: array(1, number (#0), plus(delta (#3), 1))
+type: Array(Int64 NULL)
+
+=== map_children_keep_key_value_association ===
+description: The traversal driver binds each map key/value pair before constructing the map.
+sql: {'left': number, 'right': delta + 1}
+status: ok
+scalar: map(['left', 'right'], array(number (#0), plus(delta (#3), 1)))
+type: Map(String, Int64 NULL)
+
+=== tuple_scalar_cast_and_array_children ===
+description: Ordinary node kernels receive bound scalar, cast and collection children.
+sql: (number + 1, CAST(delta AS BIGINT), [number])
+status: ok
+scalar: tuple(plus(number (#0), 1), CAST(delta (#3) AS Int64 NULL), array(number (#0)))
+type: Tuple(Int64 NULL, Int64 NULL, Array(Int64 NULL))
+
+=== special_function_keeps_its_argument_semantics ===
+description: Special-function traversal still performs its original scalar rewrite.
+sql: coalesce(NULL, number + 1)
+status: ok
+scalar: if(is_not_null(plus(number (#0), 1)), assume_not_null(plus(number (#0), 1)), NULL)
+type: Int64 NULL
+
+=== window_partition_order_and_range_contexts ===
+description: Window arguments, partition/order expressions and frame offsets retain their traversal phases.
+sql: sum(number) OVER (PARTITION BY flag ORDER BY delta RANGE BETWEEN 1 PRECEDING AND CURRENT ROW)
+status: ok
+scalar: sum(number) OVER (PARTITION BY flag ORDER BY delta RANGE BETWEEN 1 PRECEDING AND CURRENT ROW)
+type: Int64 NULL
+
+=== lambda_body_keeps_its_parameter_scope ===
+description: A lambda body is resolved by a new checker with its own parameter bindings.
+sql: array_transform([number], x -> x + delta)
+status: ok
+scalar: array_transform(delta (#3), array(number (#0)), ["x"] -> x (#7) + delta (#3))
+type: Array(Int64 NULL)
+
+=== parameter_error_precedes_argument_binding ===
+description: Function parameters are validated before visiting an effectful argument.
+sql: round(number)(never_loaded(number))
+status: error
+code: 1065
+message: invalid parameter number for scalar function, expected constant
+
+=== in_comparison_error_precedes_next_item ===
+description: IN comparisons stay interleaved with item traversal rather than eagerly binding every item.
+sql: number IN ((1, 2), never_loaded(number))
+status: error
+code: 1065
+message: no function matches signature `eq(Int64 NULL, Tuple(UInt8, UInt8))`, you might need to add explicit type casts.
+
+candidate functions:
+  eq(Variant, Variant) :: Boolean                               : unable to unify `Int64 NULL` with `Variant`
+  eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Int64` with `Variant`
+  eq(String, String) :: Boolean                                 : unable to unify `Int64 NULL` with `String`
+... and 77 more
+
+=== dictionary_lookup_precedes_key_binding ===
+description: The async traversal resolves the dictionary before visiting its key expression.
+sql: dict_get(missing_dict, 'field', never_loaded(number))
+status: error
+code: 1065
+message: unknown mock dictionary missing_dict
+
+=== nested_srf_keeps_argument_context ===
+description: Set-returning argument traversal still rejects nested SRFs before node construction.
+sql: unnest(unnest([number]))
+status: error
+code: 1065
+message: set-returning functions cannot be nested

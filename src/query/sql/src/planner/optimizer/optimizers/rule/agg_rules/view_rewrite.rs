@@ -266,7 +266,7 @@ impl QueryInfo {
                 }
                 return Err(ErrorCode::Internal("Can't found column from index"));
             }
-            ScalarExpr::ConstantExpr(_) => scalar.clone(),
+            ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => scalar.clone(),
             ScalarExpr::LambdaFunction(lambda) => {
                 let mut new_args = Vec::with_capacity(lambda.args.len());
                 for arg in &lambda.args {
@@ -420,23 +420,25 @@ impl PredicatesSplitter {
                     let col1 = BoundColumnRef::try_from(arg1.clone()).unwrap();
                     self.equi_columns_preds.push((col0, col1));
                 }
+                // Ranges compare values, so a typed constant counts by its value.
                 "eq" | "lt" | "lte" | "gt" | "gte"
                     if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
-                        && matches!(func.arguments[1], ScalarExpr::ConstantExpr(_)) =>
+                        && let ScalarExpr::ConstantExpr(val)
+                        | ScalarExpr::TypedConstantExpr(val, _) = &func.arguments[1] =>
                 {
                     let func_name = func.func_name.clone();
                     let arg0 = actual_column_ref(&func.arguments[0], column_map);
                     let col = BoundColumnRef::try_from(arg0.clone()).unwrap();
-                    let val = ConstantExpr::try_from(func.arguments[1].clone()).unwrap();
-                    self.range_preds.push((func_name, col, val));
+                    self.range_preds.push((func_name, col, val.clone()));
                 }
                 "eq" | "lt" | "lte" | "gt" | "gte"
-                    if matches!(func.arguments[0], ScalarExpr::ConstantExpr(_))
+                    if let ScalarExpr::ConstantExpr(val)
+                    | ScalarExpr::TypedConstantExpr(val, _) = &func.arguments[0]
                         && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
                 {
                     let func_name = reverse_op(func.func_name.as_str());
 
-                    let val = ConstantExpr::try_from(func.arguments[0].clone()).unwrap();
+                    let val = val.clone();
                     let arg1 = actual_column_ref(&func.arguments[1], column_map);
                     let col = BoundColumnRef::try_from(arg1.clone()).unwrap();
                     self.range_preds.push((func_name, col, val));
@@ -1280,6 +1282,10 @@ pub(crate) fn format_scalar(
             s => format_scalar(s, column_map),
         },
         ScalarExpr::ConstantExpr(val) => format!("{}", val.value),
+        // The name matches expressions, so it keeps the declared type.
+        ScalarExpr::TypedConstantExpr(val, data_type) => {
+            format!("cast({} as {})", val.value, data_type)
+        }
         ScalarExpr::FunctionCall(func) => {
             let params = func.params.iter().map(|param| param.to_string()).join(", ");
             let args = func
