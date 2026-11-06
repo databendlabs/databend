@@ -103,6 +103,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Test AI assistance validator
         run: python3 .github/scripts/test_check_pr_ai_assistance.py
+      - name: Test PR CI lifecycle
+        run: node --test .github/scripts/test_pr_ci_lifecycle.js
 
   ready:
     if: always()
