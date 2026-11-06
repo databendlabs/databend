@@ -20,6 +20,7 @@ use databend_common_ast::Span;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Domain;
 use databend_common_expression::ExprVisitor;
+use databend_common_expression::FoldRules;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
@@ -280,23 +281,18 @@ pub(super) fn cast_const(
     dest_type: DataType,
     constant: Constant,
 ) -> Option<Scalar> {
-    let (_, Some(domain)) = ConstantFolder::<String>::fold(
-        Cow::Owned(
-            Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(constant.into()),
-                dest_type,
-            }
-            .into(),
-        ),
-        func_ctx,
-        &BUILTIN_FUNCTIONS,
-    ) else {
-        return None;
-    };
-
-    domain.as_singleton()
+    let cast: Expr<String> = Cast {
+        span: None,
+        is_try: false,
+        expr: Box::new(constant.into()),
+        dest_type: dest_type.clone(),
+    }
+    .into();
+    // Keep only values that a domain represents as a single value, e.g. not NaN.
+    FoldRules::eval_constant(func_ctx, &BUILTIN_FUNCTIONS, &cast)?
+        .as_ref()
+        .domain(&dest_type)
+        .as_singleton()
 }
 
 fn constant_from_expr(func_ctx: &FunctionContext, expr: &Expr<String>) -> Option<Constant> {

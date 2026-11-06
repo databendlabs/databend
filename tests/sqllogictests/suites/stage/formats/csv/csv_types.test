@@ -96,7 +96,7 @@ create file format csv_raw type = 'csv' field_delimiter='#' quote= '`'
 query T
 select $1 from @csv_types (file_format => 'csv_raw');
 ----
-"[[""c\td"",{""a"":1}],{1:[""a"",0]},[[{""x"":2},3]]]",1
+"[[""c\td"",{""a"":1}],{1:[""a"",0]},[[{""x"":2},3]]]","1"
 
 statement ok
 remove @csv_types
@@ -120,7 +120,7 @@ select $1 from @csv_types(file_format => 'csv_special');
 query T
 select $1 from @csv_types(file_format => 'csv_raw');
 ----
-'[["c\td",{"a":1}],{1:["a",0]},[[{"x":2},3]]]'|1
+'[["c\td",{"a":1}],{1:["a",0]},[[{"x":2},3]]]'|'1'
 
 statement ok
 CREATE OR REPLACE TABLE cast_ts_csv (t timestamp, tt tuple(a timestamp))

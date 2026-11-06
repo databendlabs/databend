@@ -48,6 +48,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::TableContext;
 use databend_common_users::TablePrivilegeTarget;
 use databend_common_users::filter_tables_by_privilege;
+use databend_storages_common_table_meta::table::MATERIALIZED_VIEW_DROPPED_SOURCE_DATABASE_REASON;
 use databend_storages_common_table_meta::table::MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON;
 use databend_storages_common_table_meta::table::MATERIALIZED_VIEW_INVALID_SOURCE_REASON;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME;
@@ -254,10 +255,15 @@ fn source_lifecycle_invalid_reason(
     current_source_database: Option<&str>,
     current_source_name: Option<&str>,
     source_is_active: bool,
+    source_database_dropped: bool,
 ) -> Option<&'static str> {
     let expected_source_name = table_meta
         .options
         .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME)?;
+    // A dropped database also makes the source inactive; report the more specific cause.
+    if source_database_dropped {
+        return Some(MATERIALIZED_VIEW_DROPPED_SOURCE_DATABASE_REASON);
+    }
     if !source_is_active || current_source_name != Some(expected_source_name.as_str()) {
         return Some(MATERIALIZED_VIEW_INVALID_SOURCE_REASON);
     }
@@ -275,6 +281,7 @@ fn listed_materialized_view_status(item: &ListedMaterializedView) -> (bool, Opti
         item.source.database_name.as_deref(),
         item.source.table_name.as_deref(),
         item.source.is_active,
+        item.source.database_dropped,
     );
     let binding_invalid = item.source.bound_source_generation.is_none()
         || item.source.current_source_generation.is_none()
@@ -380,7 +387,13 @@ mod tests {
 
         // Legacy MVs without the source-name option do not get lifecycle validation.
         assert_eq!(
-            source_lifecycle_invalid_reason(&table_meta, Some("database"), Some("renamed"), false,),
+            source_lifecycle_invalid_reason(
+                &table_meta,
+                Some("database"),
+                Some("renamed"),
+                false,
+                false
+            ),
             None
         );
 
@@ -389,19 +402,37 @@ mod tests {
             "source".to_string(),
         );
         assert_eq!(
-            source_lifecycle_invalid_reason(&table_meta, Some("database"), Some("source"), true,),
+            source_lifecycle_invalid_reason(
+                &table_meta,
+                Some("database"),
+                Some("source"),
+                true,
+                false
+            ),
             None
         );
         assert_eq!(
-            source_lifecycle_invalid_reason(&table_meta, Some("database"), Some("renamed"), true,),
+            source_lifecycle_invalid_reason(
+                &table_meta,
+                Some("database"),
+                Some("renamed"),
+                true,
+                false
+            ),
             Some(MATERIALIZED_VIEW_INVALID_SOURCE_REASON)
         );
         assert_eq!(
-            source_lifecycle_invalid_reason(&table_meta, Some("database"), Some("source"), false,),
+            source_lifecycle_invalid_reason(
+                &table_meta,
+                Some("database"),
+                Some("source"),
+                false,
+                false
+            ),
             Some(MATERIALIZED_VIEW_INVALID_SOURCE_REASON)
         );
         assert_eq!(
-            source_lifecycle_invalid_reason(&table_meta, Some("database"), None, false),
+            source_lifecycle_invalid_reason(&table_meta, Some("database"), None, false, false),
             Some(MATERIALIZED_VIEW_INVALID_SOURCE_REASON)
         );
 
@@ -410,7 +441,13 @@ mod tests {
             "database".to_string(),
         );
         assert_eq!(
-            source_lifecycle_invalid_reason(&table_meta, Some("database"), Some("source"), true,),
+            source_lifecycle_invalid_reason(
+                &table_meta,
+                Some("database"),
+                Some("source"),
+                true,
+                false
+            ),
             None
         );
         assert_eq!(
@@ -419,12 +456,23 @@ mod tests {
                 Some("renamed_database"),
                 Some("source"),
                 true,
+                false,
             ),
             Some(MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON)
         );
         assert_eq!(
-            source_lifecycle_invalid_reason(&table_meta, None, Some("source"), true),
+            source_lifecycle_invalid_reason(&table_meta, None, Some("source"), true, false),
             Some(MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON)
+        );
+        assert_eq!(
+            source_lifecycle_invalid_reason(
+                &table_meta,
+                Some("database"),
+                Some("source"),
+                false,
+                true
+            ),
+            Some(MATERIALIZED_VIEW_DROPPED_SOURCE_DATABASE_REASON)
         );
     }
 }
