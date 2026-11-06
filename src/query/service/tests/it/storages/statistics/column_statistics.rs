@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
+use databend_common_config::GlobalConfig;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -28,8 +30,10 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
 use databend_query::sessions::TableContextTableAccess;
+use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 
 fn gen_sample_block() -> (DataBlock, Vec<Column>, TableSchemaRef) {
     //   sample message
@@ -216,5 +220,45 @@ async fn test_accurate_columns_rages() -> anyhow::Result<()> {
         assert!(res.get(&1).unwrap().max.may_be_truncated);
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_attached_string_ranges_without_source_truncation_option() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE TABLE source_stats(id INT, s STRING STATS_TRUNCATE_LEN 4)")
+        .await?;
+    fixture
+        .execute_command("INSERT INTO source_stats VALUES (1, repeat('👍', 17))")
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let table = ctx.get_table("default", "default", "source_stats").await?;
+
+    // Reuse the source snapshot with the metadata produced by ATTACH: external
+    // storage and the attach marker, but no source STATS_TRUNCATE_LEN option.
+    let mut info = table.get_table_info().clone();
+    info.meta.storage_params = Some(GlobalConfig::instance().storage.params.clone());
+    info.meta.options.insert(
+        OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
+        "attached".to_string(),
+    );
+    info.meta.field_stats_truncate_len.clear();
+    let attached = FuseTable::try_create(info, None, true)?;
+    let schema = attached.schema();
+    let id = schema.column_id_of("id")?;
+    let s = schema.column_id_of("s")?;
+    let ranges = attached
+        .accurate_columns_ranges(ctx, &[id, s])
+        .await?
+        .unwrap();
+
+    // Four emoji occupy 16 UTF-8 bytes, but contain only four characters.
+    // Losing the source option must not make this truncated prefix look exact.
+    assert_eq!(ranges[&s].min.value, Scalar::String("👍".repeat(4)));
+    assert!(ranges[&s].min.may_be_truncated);
+    assert!(ranges[&s].max.may_be_truncated);
+    assert!(!ranges[&id].min.may_be_truncated);
+    assert!(!ranges[&id].max.may_be_truncated);
     Ok(())
 }
