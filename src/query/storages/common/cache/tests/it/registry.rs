@@ -62,7 +62,8 @@ fn test_builtin_kinds() {
 }
 
 /// Meta kinds come first, then the index kinds; the column kinds are the data pool. In the
-/// shared backend every kind starts bounded only by its pool, except raw column data, off.
+/// shared backend every kind starts bounded only by its pool, except raw column data and decoded
+/// block metas, off.
 #[test]
 fn test_pools_and_shared_defaults() {
     let in_pool = |pool| {
@@ -77,8 +78,12 @@ fn test_pools_and_shared_defaults() {
         "memory_cache_column_data",
         "memory_cache_table_data"
     ]);
+    let off = [
+        CacheKind::of::<column::Data>(),
+        CacheKind::of::<segment::BlockMetas>(),
+    ];
     for kind in CacheKind::all() {
-        let expected = match kind == CacheKind::of::<column::Data>() {
+        let expected = match off.contains(&kind) {
             true => KindLimit::DISABLED,
             false => KindLimit::UNLIMITED,
         };

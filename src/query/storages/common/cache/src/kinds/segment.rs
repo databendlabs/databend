@@ -24,6 +24,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOr
 
 use crate::CacheDef;
 use crate::CachedItem;
+use crate::KindLimit;
 use crate::Pool;
 use crate::size::block_meta;
 use crate::size::statistics;
@@ -52,14 +53,24 @@ impl CacheDef for ColumnOriented {
     const DISK: bool = true;
 }
 
-/// Decoded block metas of a segment, by segment location. Off by default in the legacy
-/// backend, as on `main`: decoded metas take several times the memory of the segment.
+/// Decoded block metas of a segment, by segment location: saves decoding the raw block metas
+/// of a `CompactSegmentInfo` again when the same segment is pruned, replaced into or fetched
+/// from soon after.
+///
+/// Off by default in both backends: decoded metas take several times the memory of the
+/// segment (about ten times for a wide table), and a scan over more segments than fit misses
+/// on every one while turning the meta pool over, evicting the segments it shares the pool
+/// with and taking memory from the page cache that serves the disk cache. Turn it on with a
+/// byte limit (`cache.kind_max_bytes`, `set_cache_capacity`) for workloads that revisit a set
+/// of segments small enough to keep decoded. The legacy backend sizes it by
+/// `segment_block_metas_count`, 0 by default, as on `main`.
 pub struct BlockMetas;
 
 impl CacheDef for BlockMetas {
     type Value = Arc<Vec<Arc<BlockMeta>>>;
     const NAME: &'static str = "memory_cache_segment_block_metas";
     const POOL: Pool = Pool::Meta;
+    const SHARED_DEFAULT: KindLimit = KindLimit::DISABLED;
 }
 
 /// Segment statistics, by location. Loads are not shared: `ANALYZE` rewrites the file in

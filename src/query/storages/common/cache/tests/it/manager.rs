@@ -474,12 +474,19 @@ fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
     );
     assert_eq!(capacity(&manager, "memory_cache_column_data"), Some(5000));
     // On without an entry, bounded only by the pool.
-    for name in [
-        "memory_cache_table_data",
-        "memory_cache_segment_block_metas",
-    ] {
-        assert_eq!(row(&manager, name).unwrap().capacity, None, "{name}");
-    }
+    let table_data = row(&manager, "memory_cache_table_data").unwrap();
+    assert_eq!(table_data.capacity, None);
+    // Off without an entry: decoded block metas are several times the segment.
+    assert!(row(&manager, "memory_cache_segment_block_metas").is_none());
+    let opted_in = CacheConfig {
+        kind_max_bytes: [("memory_cache_segment_block_metas".to_string(), 3000)].into(),
+        ..shared_config()
+    };
+    let opted_in = CacheManager::try_new(&opted_in, &1_000_000, "test", false)?;
+    assert_eq!(
+        capacity(&opted_in, "memory_cache_segment_block_metas"),
+        Some(3000)
+    );
 
     // Pools can be resized; the payload size is not split as in the legacy backend.
     manager.set_cache_capacity("pool:index", 0)?;
@@ -503,7 +510,8 @@ fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
 }
 
 /// A kind is turned off by 0, sized by bytes, and put back to its default by `default`: bounded
-/// only by its pool, or off for raw column data. The legacy backend has no such default.
+/// only by its pool, or off for raw column data and decoded block metas. The legacy backend has
+/// no such default.
 #[test]
 fn test_capacity_default() -> Result<()> {
     let shared = CacheManager::try_new(&shared_config(), &1_000_000, "test", false)?;
@@ -516,12 +524,16 @@ fn test_capacity_default() -> Result<()> {
     assert_eq!(capacity(&shared, name), Some(5000));
     shared.set_cache_capacity_default(name)?;
     assert_eq!(row(&shared, name).unwrap().capacity, None);
-    let column_data = "memory_cache_column_data";
-    assert!(row(&shared, column_data).is_none());
-    shared.set_cache_capacity(column_data, 5000)?;
-    assert_eq!(capacity(&shared, column_data), Some(5000));
-    shared.set_cache_capacity_default(column_data)?;
-    assert!(row(&shared, column_data).is_none());
+    for off in [
+        "memory_cache_column_data",
+        "memory_cache_segment_block_metas",
+    ] {
+        assert!(row(&shared, off).is_none(), "{off}");
+        shared.set_cache_capacity(off, 5000)?;
+        assert_eq!(capacity(&shared, off), Some(5000), "{off}");
+        shared.set_cache_capacity_default(off)?;
+        assert!(row(&shared, off).is_none(), "{off}");
+    }
     for other in ["all", "pool:data", "no_such_cache"] {
         assert!(shared.set_cache_capacity_default(other).is_err(), "{other}");
     }
