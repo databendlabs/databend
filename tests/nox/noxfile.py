@@ -32,9 +32,7 @@ HTTP_USER_AGENT = "databend-nox-client"
 PYTHON_SOURCE_REPO = "bendsql"
 PYTHON_BINDINGS_TEST_DIR = Path("bindings") / "python"
 PYTHON_CLIENT_ARCHIVE_ROOT = f"{GITHUB_ARCHIVE_ROOT}/{PYTHON_SOURCE_REPO}/archive/refs"
-PYTHON_CLIENT_LATEST_RELEASE_URL = (
-    f"https://github.com/databendlabs/{PYTHON_SOURCE_REPO}/releases/latest"
-)
+PYTHON_CLIENT_PYPI_URL = "https://pypi.org/pypi/databend-driver/json"
 
 JDBC_DRIVER_PINNED = ["0.4.1"]
 JDBC_DRIVER = ["main", "latest", *JDBC_DRIVER_PINNED]
@@ -200,7 +198,9 @@ def resolve_python_driver_version(driver_version):
     if driver_version != "latest":
         return driver_version
 
-    return resolve_latest_release_tag(PYTHON_CLIENT_LATEST_RELEASE_URL).removeprefix("v")
+    # GitHub releases can exist before the Python package is published.
+    with urllib.request.urlopen(get_request(PYTHON_CLIENT_PYPI_URL), timeout=30) as response:
+        return json.load(response)["info"]["version"]
 
 
 def prepare_python_client_source():
@@ -455,6 +455,12 @@ def prepare_go_client_source(source_ref):
         required_path="tests/Makefile",
     )
     return source_dir, resolved_ref
+
+
+@nox.session
+def noxfile_tests(session):
+    session.install("pytest", "nox")
+    session.run("pytest", "test_noxfile.py")
 
 
 @nox.session(name="sqllogic_hook_tests")
