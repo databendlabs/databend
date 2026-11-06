@@ -35,6 +35,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::NodeInfo;
 use fastrace::func_name;
@@ -63,6 +64,7 @@ use poem::Response;
 use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::auth::AuthMgr;
@@ -77,6 +79,7 @@ use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpSessionConf;
+use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::SessionClaim;
 use crate::servers::login_history::LoginEventType;
 use crate::servers::login_history::LoginHandler;
@@ -85,7 +88,7 @@ use crate::sessions::SessionManager;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EndpointKind {
     Login,
     Logout,
@@ -545,6 +548,59 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
     Ok(poem_resp)
 }
 
+/// The node this request is pinned to is no longer in the cluster, so the
+/// session state it held (temporary tables, transaction) is gone for sure.
+/// Reject the request and, when the request carries the client's session
+/// state, hand back a corrected copy so the client stops pinning. Page and
+/// final requests carry no session state; their next `POST /v1/query` will.
+async fn sticky_node_lost_response(
+    mut req: Request,
+    sticky_node_id: &str,
+    endpoint_kind: EndpointKind,
+) -> Response {
+    let session = request_session_conf(&mut req, endpoint_kind).await;
+    let msg = format!(
+        "Sticky session state lost: node '{sticky_node_id}' not found in cluster, request={}",
+        get_request_info(req)
+    );
+    warn!("{}", msg);
+    let err = ErrorCode::SessionNodeLost(msg);
+    metrics_incr_http_response_errors_count(err.name(), err.code());
+    let session = session.map(|s| s.after_failed_start(true));
+    // Built here instead of returned as Err: the outer `json_response`
+    // wrapper flattens poem errors to the HTTP status, hiding the error code.
+    (
+        StatusCode::BAD_REQUEST,
+        Json(QueryResponse::failed_to_start(session, err)),
+    )
+        .into_response()
+}
+
+/// Best effort: the session state a request carries, from the
+/// `X-DATABEND-QUERY-CONTEXT` header or, for `POST /v1/query`, the body.
+async fn request_session_conf(
+    req: &mut Request,
+    endpoint_kind: EndpointKind,
+) -> Option<HttpSessionConf> {
+    if let Some(v) = req.headers().get(HEADER_QUERY_CONTEXT) {
+        return v
+            .to_str()
+            .ok()
+            .and_then(|v| serde_json::from_str(v.trim()).ok());
+    }
+    if endpoint_kind != EndpointKind::StartQuery || req.method() != Method::POST {
+        return None;
+    }
+    #[derive(Deserialize)]
+    struct SessionOnly {
+        session: Option<HttpSessionConf>,
+    }
+    let body = req.take_body().into_bytes().await.ok()?;
+    serde_json::from_slice::<SessionOnly>(&body)
+        .ok()
+        .and_then(|r| r.session)
+}
+
 fn get_request_info(req: Request) -> String {
     format!(
         "method={} uri={} headers={:?}",
@@ -587,16 +643,10 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         );
                         forward_request(req, node).await
                     } else {
-                        let msg = format!(
-                            "Sticky session state lost: node '{sticky_node_id}' not found in cluster, request={}",
-                            get_request_info(req)
-                        );
-                        warn!("{}", msg);
-                        // Build the response here instead of returning Err: the
-                        // outer `json_response` wrapper flattens poem errors to
-                        // the HTTP status, which would hide the error code.
-                        Ok(HttpErrorCode::bad_request(ErrorCode::SessionNodeLost(msg))
-                            .as_response())
+                        Ok(
+                            sticky_node_lost_response(req, &sticky_node_id, self.endpoint_kind)
+                                .await,
+                        )
                     };
                 }
             } else if let Some(warehouse) = headers.get(HEADER_WAREHOUSE) {
