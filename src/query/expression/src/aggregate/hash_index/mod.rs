@@ -19,3 +19,4 @@ mod index;
 
 pub(in crate::aggregate) use index::CHUNK_SLOTS;
 pub(in crate::aggregate) use index::HashIndex;
+pub(in crate::aggregate) use index::PREFETCH_DISTANCE;

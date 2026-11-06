@@ -25,15 +25,13 @@ use std::simd::u16x8;
 use crate::aggregate::HASH_INDEX_LOAD_FACTOR;
 use crate::aggregate::ProbeState;
 use crate::aggregate::hash_index_adapter::TableAdapter;
+use crate::aggregate::partitioned_payload::RowReserver;
 use crate::aggregate::row_ptr::RowDecoder;
 
 /// The id of a row as a hash index slot keeps it: 4 bytes while the ids of the table fit, 8 bytes
 /// otherwise, see `RowIds`.
 pub(in crate::aggregate) trait RowId: Copy + PartialEq {
     const ZERO: Self;
-    /// The id of a slot that a probe claimed for a new group, until the probe appends its row.
-    /// Never the id of a row.
-    const CLAIMED: Self;
 
     fn from_id(id: u64) -> Self;
 
@@ -42,15 +40,13 @@ pub(in crate::aggregate) trait RowId: Copy + PartialEq {
 
 impl RowId for u32 {
     const ZERO: Self = 0;
-    const CLAIMED: Self = u32::MAX;
 
     #[inline]
     fn from_id(id: u64) -> Self {
-        // A truncated id would name another row and mix two groups, and the largest id would read
-        // as `CLAIMED`. The table switches to wide ids before either can happen, so this is a
-        // check that is never taken.
-        assert!(
-            id < u32::MAX as u64,
+        // A truncated id would name another row and mix two groups. `resize` and
+        // `restart_index` switch the table to wide ids before that can happen.
+        debug_assert!(
+            id <= u32::MAX as u64,
             "row id {id} does not fit a compact index"
         );
         id as u32
@@ -64,7 +60,6 @@ impl RowId for u32 {
 
 impl RowId for u64 {
     const ZERO: Self = 0;
-    const CLAIMED: Self = u64::MAX;
 
     #[inline]
     fn from_id(id: u64) -> Self {
@@ -150,6 +145,16 @@ impl HashIndex {
         }
     }
 
+    /// Fetch the chunk where a row of hash `hash` starts its probe, to set it later: a rebuild
+    /// does this a few rows ahead, as the index is mostly out of the caches.
+    #[inline]
+    pub fn prefetch(&self, hash: u64) {
+        match self {
+            HashIndex::Compact(index) => index.prefetch(hash),
+            HashIndex::Wide(index) => index.prefetch(hash),
+        }
+    }
+
     /// Set a free slot for a row known to be absent, while the index is rebuilt.
     pub fn probe_slot_and_set(&mut self, hash: u64, row_id: u64) {
         match self {
@@ -190,7 +195,7 @@ impl Tag {
 /// Slots of a chunk.
 pub(in crate::aggregate) const CHUNK_SLOTS: usize = 12;
 /// Prefetch the chunks of the rows this far ahead, once the index outgrows the caches.
-const PREFETCH_DISTANCE: usize = 16;
+pub(in crate::aggregate) const PREFETCH_DISTANCE: usize = 16;
 const PREFETCH_MIN_BYTES: usize = 1 << 20;
 
 /// The tags of 12 slots, then their row ids: one probe reads one cache line with 4-byte ids
@@ -274,93 +279,107 @@ impl<I: RowId> RowIdIndex<I> {
         }
     }
 
+    /// The first slot from `slot` that holds the tag of `hash`, with its id, or else the first
+    /// empty one. `from` is the lane of `slot`, given apart so that a probe that starts at lane 0
+    /// can make it a constant.
     #[inline]
-    fn id(&self, slot: usize) -> I {
-        self.chunks[slot >> 4].ids[slot & 15]
-    }
-
-    #[inline]
-    fn set_id(&mut self, slot: usize, id: I) {
-        self.chunks[slot >> 4].ids[slot & 15] = id;
-    }
-
-    /// The first slot from `slot` that holds the tag of `hash`, with its id, or else an empty
-    /// one, which takes the tag and the id `CLAIMED`. `from` is the lane of `slot`, given apart
-    /// so that a probe that starts at lane 0 can make it a constant.
-    #[inline]
-    fn find_or_insert(&mut self, slot: usize, hash: u64, from: usize) -> (usize, bool, I) {
+    fn find(&self, slot: usize, hash: u64, from: usize) -> (usize, Option<I>) {
         debug_assert_eq!(from, slot & 15);
         let tag = Tag::full(hash);
         let mut chunk = slot >> 4;
         let mut from = from;
         loop {
-            let c = &mut self.chunks[chunk];
+            let c = &self.chunks[chunk];
             let matched = c.match_tag(tag, from);
             if matched != 0 {
                 let lane = (matched.trailing_zeros() / 4) as usize;
-                return ((chunk << 4) + lane, false, c.ids[lane]);
+                return ((chunk << 4) + lane, Some(c.ids[lane]));
             }
             let empty = c.match_tag(Tag::EMPTY, from);
             if empty != 0 {
                 let lane = (empty.trailing_zeros() / 4) as usize;
-                c.tags[lane] = tag;
-                c.ids[lane] = I::CLAIMED;
-                return ((chunk << 4) + lane, true, I::CLAIMED);
+                return ((chunk << 4) + lane, None);
             }
             chunk = (chunk + 1) & self.chunk_mask;
             from = 0;
         }
     }
 
-    /// Probe the first `remaining` rows of `state.no_match_vector` from their slots: a row that
-    /// meets its tag goes to `group_compare_vector` with its row and states already decoded,
-    /// unless the slot was claimed in this round; a row that meets an empty slot claims it and
-    /// goes to `empty_vector`. Returns the counts of both, and whether a row met a claimed slot.
+    /// Probe the rows `start..remaining` of `state.no_match_vector` from their slots: a row that
+    /// meets its tag goes to `group_compare_vector` with its row and states decoded; a row that
+    /// meets an empty slot reserves a row for its group, puts the id in the slot, and goes to
+    /// `empty_vector`. Stops at a row whose partition has no free row, returning the row and the
+    /// partition, before it changes anything.
     ///
     /// The first round starts every row at lane 0 (`FIRST`), and only the first round prefetches
-    /// (`PREFETCH`): each case has a loop of its own, without per-row checks for the others.
+    /// (`PREFETCH`): each case has a loop of its own, without per-row checks for the others. A
+    /// table without aggregate states (`STATES`) has no state addresses to find.
     #[inline(always)]
-    fn probe_round<const FIRST: bool, const PREFETCH: bool>(
+    fn probe_round<const FIRST: bool, const PREFETCH: bool, const STATES: bool>(
         &mut self,
         state: &mut ProbeState,
-        remaining: usize,
-        rows: RowDecoder,
-    ) -> (usize, usize, bool) {
-        let mut new_entry_count = 0;
-        let mut need_compare_count = 0;
-        let mut claimed = false;
-        for (i, &row) in state.no_match_vector[..remaining].iter().enumerate() {
+        (start, remaining): (usize, usize),
+        (rows, reserver): (RowDecoder, &mut RowReserver),
+        counts: &mut (usize, usize),
+    ) -> Option<(usize, usize)> {
+        let (mut new_entry_count, mut need_compare_count) = *counts;
+        let mut stop = None;
+        for i in start..remaining {
+            let row = state.no_match_vector[i];
             // Only the rows of this round: the rest of the vector holds rows of earlier calls,
             // possibly of another table.
             if PREFETCH && i + PREFETCH_DISTANCE < remaining {
                 let chunk = state.slots[state.no_match_vector[i + PREFETCH_DISTANCE]] >> 4;
                 prefetch_read_data::<_, 3>(self.chunks[..].as_ptr().wrapping_add(chunk));
             }
-            let start = state.slots[row];
-            let from = if FIRST { 0 } else { start & 15 };
-            let (slot, is_new, id) = self.find_or_insert(start, state.group_hashes[row], from);
-            state.slots[row] = slot;
+            let hash = state.group_hashes[row];
+            let first = state.slots[row];
+            let from = if FIRST { 0 } else { first & 15 };
+            let (slot, id) = self.find(first, hash, from);
 
-            if is_new {
-                state.empty_vector[new_entry_count] = row;
-                new_entry_count += 1;
-            } else {
+            match id {
                 // The chunk of the slot was just read: decode the id now, not in a pass of its
-                // own. A slot claimed in this round has no row yet.
-                if id == I::CLAIMED {
-                    claimed = true;
-                } else {
-                    (state.addresses[row], state.state_places[row]) = rows.row_and_states(id.id());
+                // own. A slot claimed earlier in this round has its row reserved, and the row is
+                // written before the compare.
+                Some(id) => {
+                    if STATES {
+                        (state.addresses[row], state.state_places[row]) =
+                            rows.row_and_states(id.id());
+                    } else {
+                        state.addresses[row] = rows.row(id.id());
+                    }
+                    state.slots[row] = slot;
+                    state.group_compare_vector[need_compare_count] = row;
+                    need_compare_count += 1;
                 }
-                state.group_compare_vector[need_compare_count] = row;
-                need_compare_count += 1;
+                None => {
+                    let (id, address, page) = match reserver.reserve(hash) {
+                        Ok(reserved) => reserved,
+                        Err(partition) => {
+                            stop = Some((i, partition));
+                            break;
+                        }
+                    };
+                    let c = &mut self.chunks[slot >> 4];
+                    c.tags[slot & 15] = Tag::full(hash);
+                    c.ids[slot & 15] = I::from_id(id);
+                    state.addresses[row] = address;
+                    if STATES {
+                        state.state_places[row] = rows.row_and_states(id).1;
+                        state.page_index[row] = page;
+                    }
+                    state.slots[row] = slot;
+                    state.empty_vector[new_entry_count] = row;
+                    new_entry_count += 1;
+                }
             }
         }
-        (new_entry_count, need_compare_count, claimed)
+        *counts = (new_entry_count, need_compare_count);
+        stop
     }
 
     /// Find or create the groups of the first `row_count` rows of `state`, and set their
-    /// `addresses` and `state_places`.
+    /// `addresses`, and their `state_places` if the table has aggregate states.
     pub(in crate::aggregate) fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
@@ -375,48 +394,48 @@ impl<I: RowId> RowIdIndex<I> {
         // Each row starts at a random chunk: once the index is out of the caches, fetch the chunks
         // of the rows ahead while probing the current one.
         let prefetch = self.allocated_bytes() >= PREFETCH_MIN_BYTES;
+        adapter.begin_rows();
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
         let mut first_round = true;
 
         while remaining_entries > 0 {
-            let rows = adapter.row_decoder();
-            let (new_entry_count, need_compare_count, claimed) = match (first_round, prefetch) {
-                (true, true) => self.probe_round::<true, true>(state, remaining_entries, rows),
-                (true, false) => self.probe_round::<true, false>(state, remaining_entries, rows),
-                // Mismatched rows go on in the chunk they reached.
-                (false, _) => self.probe_round::<false, false>(state, remaining_entries, rows),
-            };
+            let mut counts = (0, 0);
+            let mut start = 0;
+            loop {
+                let (rows, mut reserver) = adapter.rows();
+                let has_states = rows.has_states();
+                let r = (rows, &mut reserver);
+                let span = (start, remaining_entries);
+                let c = &mut counts;
+                let stop = match (first_round, prefetch, has_states) {
+                    (true, true, true) => self.probe_round::<true, true, true>(state, span, r, c),
+                    (true, true, false) => self.probe_round::<true, true, false>(state, span, r, c),
+                    (true, false, true) => self.probe_round::<true, false, true>(state, span, r, c),
+                    (true, false, false) => {
+                        self.probe_round::<true, false, false>(state, span, r, c)
+                    }
+                    // Mismatched rows go on in the chunk they reached.
+                    (false, _, true) => self.probe_round::<false, false, true>(state, span, r, c),
+                    (false, _, false) => self.probe_round::<false, false, false>(state, span, r, c),
+                };
+                let Some((row, partition)) = stop else {
+                    break;
+                };
+                adapter.open_rows(partition);
+                start = row;
+            }
             first_round = false;
+            let (new_entry_count, need_compare_count) = counts;
 
             if new_entry_count != 0 {
                 new_group_count += new_entry_count;
-
                 adapter.append_rows(state, new_entry_count);
-
-                let rows = adapter.row_decoder();
-                for row in state.empty_vector[..new_entry_count].iter().copied() {
-                    let id = state.row_ids[row];
-                    self.set_id(state.slots[row], I::from_id(id));
-                    state.state_places[row] = rows.row_and_states(id).1;
-                }
             }
 
             let mut no_match_count = 0;
             if need_compare_count > 0 {
-                if claimed {
-                    // The claimed slots have their ids now.
-                    let rows = adapter.row_decoder();
-                    for row in state.group_compare_vector[..need_compare_count]
-                        .iter()
-                        .copied()
-                    {
-                        (state.addresses[row], state.state_places[row]) =
-                            rows.row_and_states(self.id(state.slots[row]).id());
-                    }
-                }
-
                 no_match_count = adapter.compare(state, need_compare_count, no_match_count);
             }
 
@@ -438,6 +457,12 @@ impl<I: RowId> RowIdIndex<I> {
     pub fn reset(&mut self) {
         self.count = 0;
         self.chunks.fill(Chunk::EMPTY);
+    }
+
+    #[inline]
+    fn prefetch(&self, hash: u64) {
+        let chunk = hash as usize & self.chunk_mask;
+        prefetch_read_data::<_, 3>(self.chunks[..].as_ptr().wrapping_add(chunk));
     }
 
     /// Put a row known to be absent into the first empty slot of its probe sequence.
@@ -463,6 +488,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::aggregate::payload::RowCursor;
     use crate::aggregate::row_ptr::RowPtr;
 
     struct TestTableAdapter {
@@ -470,6 +496,7 @@ mod tests {
         payload: Vec<(u64, u64, u64)>, // (key, hash, value)
         pin_data: Box<[u8]>,
         pages: Vec<*const u8>,
+        cursor: RowCursor,
     }
 
     impl TestTableAdapter {
@@ -481,6 +508,7 @@ mod tests {
                 payload,
                 pin_data,
                 pages,
+                cursor: RowCursor::EMPTY,
             }
         }
 
@@ -514,21 +542,37 @@ mod tests {
     }
 
     impl TableAdapter for TestTableAdapter {
+        fn begin_rows(&mut self) {
+            // The id of a row is its position in the payload.
+            let id = self.payload.len();
+            self.cursor = RowCursor {
+                next: self.get_row_ptr(id).as_ptr(),
+                id: id as u64,
+                end: self.pin_data.len() as u64,
+                page: 0,
+            };
+        }
+
+        fn open_rows(&mut self, _: usize) {
+            unreachable!("the test payload has a single page");
+        }
+
+        fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>) {
+            (
+                RowDecoder::new(&self.pages, 32, 1),
+                RowReserver::single(&mut self.cursor, 1),
+            )
+        }
+
         fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize) {
             for row in state.empty_vector[..new_entry_count].iter() {
                 let (key, hash) = self.incoming[*row];
                 let value = key + 20;
 
-                // The id of a row is its position in the payload.
-                let id = self.payload.len();
+                // The probe reserved the rows in the order of the new groups.
+                assert_eq!(state.addresses[*row], self.get_row_ptr(self.payload.len()));
                 self.payload.push((key, hash, value));
-                state.addresses[*row] = self.get_row_ptr(id);
-                state.row_ids[*row] = id as u64;
             }
-        }
-
-        fn row_decoder(&self) -> RowDecoder<'_> {
-            RowDecoder::new(&self.pages, 32, 1)
         }
 
         fn compare(
@@ -626,7 +670,7 @@ mod tests {
     #[test]
     fn test_hash_index_rows_meet_slots_claimed_in_the_batch() {
         // Key 7 comes three times and key 8 once, all with the same hash: the later rows meet the
-        // slot that the first row of key 7 claimed before its row was appended.
+        // slot that the first row of key 7 claimed before its row was written.
         TestCase {
             capacity: 16,
             incoming: vec![(7, 99), (7, 99), (8, 99), (7, 99)],

@@ -27,8 +27,6 @@ pub type SelectVector = [RowID; BATCH_SIZE];
 pub struct ProbeState {
     pub(super) group_hashes: [u64; BATCH_SIZE],
     pub(super) addresses: [RowPtr; BATCH_SIZE],
-    /// The ids of the rows appended for new groups, for the hash index.
-    pub(super) row_ids: [u64; BATCH_SIZE],
     pub(super) page_index: [usize; BATCH_SIZE],
     /// The states of the groups of the rows: a probe sets them with `addresses`.
     pub(super) state_places: [StateAddr; BATCH_SIZE],
@@ -50,7 +48,6 @@ impl Default for ProbeState {
         Self {
             group_hashes: [0; BATCH_SIZE],
             addresses: [RowPtr::null(); BATCH_SIZE],
-            row_ids: [0; BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::null(); BATCH_SIZE],
             group_compare_vector: [RowID::default(); BATCH_SIZE],

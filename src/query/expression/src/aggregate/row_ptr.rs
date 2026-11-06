@@ -209,6 +209,8 @@ pub(super) struct RowIds {
     max_compact_pages: usize,
     /// Where the states of the rows of a page are, see `StatesRegion`.
     states: StatesRegion,
+    /// Whether the rows have aggregate states.
+    has_states: bool,
 }
 
 impl RowIds {
@@ -217,6 +219,7 @@ impl RowIds {
         row_per_page: usize,
         row_size: usize,
         states: StatesRegion,
+        has_states: bool,
     ) -> Self {
         let row_bits = usize::BITS - (row_per_page.max(2) - 1).leading_zeros();
         assert!(row_bits < u32::BITS);
@@ -226,10 +229,9 @@ impl RowIds {
             row_size,
             row_bits,
             row_mask: (1 << row_bits) - 1,
-            // The largest id stays free: an index slot claimed by a probe holds it until its row
-            // is appended, see `RowId::CLAIMED`.
-            max_compact_pages: (1 << (u32::BITS - row_bits)) - 1,
+            max_compact_pages: 1 << (u32::BITS - row_bits),
             states,
+            has_states,
         }
     }
 
@@ -277,7 +279,7 @@ impl RowIds {
     /// The row with id `id`.
     #[inline]
     pub(super) fn row_ptr(&self, id: u64) -> RowPtr {
-        self.decoder().row_and_states(id).0
+        self.decoder().row(id)
     }
 
     /// Decodes the ids, see `RowDecoder`.
@@ -290,6 +292,7 @@ impl RowIds {
             row_size: self.row_size,
             states_offset: self.states.offset,
             state_size: self.states.size,
+            has_states: self.has_states,
         }
     }
 }
@@ -305,6 +308,7 @@ pub(in crate::aggregate) struct RowDecoder<'a> {
     row_size: usize,
     states_offset: usize,
     state_size: usize,
+    has_states: bool,
 }
 
 impl<'a> RowDecoder<'a> {
@@ -322,7 +326,21 @@ impl<'a> RowDecoder<'a> {
             row_size,
             states_offset: 0,
             state_size: 0,
+            has_states: false,
         }
+    }
+
+    /// Whether the rows have aggregate states.
+    #[inline]
+    pub(in crate::aggregate) fn has_states(self) -> bool {
+        self.has_states
+    }
+
+    /// The row with id `id`.
+    #[inline]
+    pub(in crate::aggregate) fn row(self, id: u64) -> RowPtr {
+        let page = self.pages[(id >> self.row_bits) as usize];
+        RowPtr::new(page.wrapping_add((id & self.row_mask) as usize * self.row_size))
     }
 
     /// The row with id `id` and its states, found from the page and the row in it: the states of

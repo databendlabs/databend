@@ -79,6 +79,24 @@ pub struct Payload {
     // if set, the payload contains at least duplicate rows
 }
 
+/// The next rows of a page, reserved one by one by a probe: see `RowReserver`.
+#[derive(Clone, Copy)]
+pub(in crate::aggregate) struct RowCursor {
+    pub(super) next: *const u8,
+    pub(super) id: u64,
+    pub(super) end: u64,
+    pub(super) page: usize,
+}
+
+impl RowCursor {
+    pub(super) const EMPTY: RowCursor = RowCursor {
+        next: std::ptr::null(),
+        id: 0,
+        end: 0,
+        page: usize::MAX,
+    };
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum GroupRows<'a> {
     Columns(ProjectedBlock<'a>),
@@ -399,21 +417,58 @@ impl Payload {
         }
     }
 
-    pub(super) fn reserve_append_rows(
+    /// The rows still free in the writable page, without opening a page.
+    pub(super) fn current_cursor(&mut self, ids: &mut RowIds, partition: usize) -> RowCursor {
+        match self.current_write_page.checked_sub(1) {
+            Some(page) if self.pages[page].rows < self.pages[page].capacity => {
+                self.cursor_at(ids, partition, page)
+            }
+            _ => RowCursor::EMPTY,
+        }
+    }
+
+    /// The rows of the writable page, opening one if the current one is full.
+    pub(super) fn open_cursor(&mut self, ids: &mut RowIds, partition: usize) -> RowCursor {
+        let (_, page) = self.writable_page();
+        self.cursor_at(ids, partition, page)
+    }
+
+    fn cursor_at(&mut self, ids: &mut RowIds, partition: usize, page_index: usize) -> RowCursor {
+        let page_id = ids.number_pages(partition, &self.pages, page_index);
+        let page = &self.pages[page_index];
+        RowCursor {
+            next: page.base().wrapping_add(page.rows * self.tuple_size),
+            id: page_id | page.rows as u64,
+            end: page_id | page.capacity as u64,
+            page: page_index,
+        }
+    }
+
+    /// Count the rows reserved through `cursor` in its page.
+    pub(super) fn commit_cursor(&mut self, cursor: &RowCursor) {
+        if cursor.page == usize::MAX {
+            return;
+        }
+        let page = &mut self.pages[cursor.page];
+        let rows = page.capacity - (cursor.end - cursor.id) as usize;
+        debug_assert!(rows >= page.rows);
+        self.total_rows += rows - page.rows;
+        page.rows = rows;
+        // SAFETY: a cursor reserves at most the capacity of its page, and the probe writes the
+        // reserved rows before they are read, as `Page::reserve_row` does.
+        unsafe { page.data.set_len(rows * self.tuple_size) };
+    }
+
+    /// Write the groups and the states of the rows of `select_vector`, reserved at `address`.
+    pub(super) fn write_rows(
         &mut self,
         select_vector: &[RowID],
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
-        row_ids: (&mut [u64; BATCH_SIZE], &mut RowIds, usize),
         groups: GroupRows,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
-        let (row_ids, ids, partition) = row_ids;
-        let tuple_size = self.tuple_size;
-        let (_, mut page_index_value) = self.writable_page();
-        let mut page_id = ids.number_pages(partition, &self.pages, page_index_value);
-        let mut page = &mut self.pages[page_index_value];
         let address = unsafe {
             // SAFETY: RowPtr and RowMut are repr(transparent) wrappers over raw
             // u8 pointers. Raw pointer mutability does not change layout, and
@@ -421,19 +476,6 @@ impl Payload {
             // two wrappers.
             std::mem::transmute::<&mut [RowPtr; BATCH_SIZE], &mut [RowMut; BATCH_SIZE]>(address)
         };
-        for row in select_vector {
-            let row_mut = page.reserve_row(tuple_size);
-            address[*row] = row_mut;
-            page_index[*row] = page_index_value;
-            row_ids[*row] = page_id | (page.rows - 1) as u64;
-
-            if page.rows == page.capacity {
-                (_, page_index_value) = self.writable_page();
-                page_id = ids.number_pages(partition, &self.pages, page_index_value);
-                page = &mut self.pages[page_index_value];
-            }
-        }
-
         match groups {
             GroupRows::Columns(group_columns) => {
                 self.append_rows(select_vector, group_hashes, address, group_columns)
@@ -598,8 +640,6 @@ impl Payload {
                 }
             }
         }
-
-        self.total_rows += select_vector.len();
 
         debug_assert_eq!(
             self.total_rows,

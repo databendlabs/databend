@@ -16,6 +16,7 @@ use super::BATCH_SIZE;
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::StateAddr;
+use super::partitioned_payload::RowReserver;
 use super::payload::GroupRows;
 use super::payload_row::CompareState;
 use super::row_ptr::RowDecoder;
@@ -23,8 +24,14 @@ use super::row_ptr::RowDecoder;
 pub(super) trait TableAdapter {
     fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize);
 
-    /// Decodes the row ids of the index.
-    fn row_decoder(&self) -> RowDecoder<'_>;
+    /// Start reserving the rows of new groups, see `PartitionedPayload::begin_rows`.
+    fn begin_rows(&mut self);
+
+    /// Reserve the rows of `partition` in a new page.
+    fn open_rows(&mut self, partition: usize);
+
+    /// Decodes the row ids of the index, and reserves the rows of new groups.
+    fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>);
 
     fn compare(
         &mut self,
@@ -52,9 +59,17 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
             .append_rows(state, count, self.groups, self.source_states);
     }
 
+    fn begin_rows(&mut self) {
+        self.payload.begin_rows();
+    }
+
+    fn open_rows(&mut self, partition: usize) {
+        self.payload.open_rows(partition);
+    }
+
     #[inline]
-    fn row_decoder(&self) -> RowDecoder<'_> {
-        self.payload.row_ids.decoder()
+    fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>) {
+        self.payload.rows()
     }
 
     fn compare(

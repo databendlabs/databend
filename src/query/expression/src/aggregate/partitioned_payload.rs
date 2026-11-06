@@ -24,7 +24,9 @@ use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::get_states_layout;
 use super::payload::GroupRows;
 use super::payload::Payload;
+use super::payload::RowCursor;
 use super::probe_state::ProbeState;
+use super::row_ptr::RowDecoder;
 use super::row_ptr::RowIds;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
@@ -34,7 +36,7 @@ use crate::types::DataType;
 /// bit 48 that start `start_bit` bits down. The final aggregate takes the next bits at each spill
 /// depth, so that a spilled partition splits further.
 #[derive(Debug, Clone, Copy)]
-struct PartitionMask {
+pub(super) struct PartitionMask {
     mask: u64,
     shift: u64,
 }
@@ -56,6 +58,44 @@ impl PartitionMask {
     }
 }
 
+/// Reserves the rows of new groups while a probe claims their slots, so that a slot takes the
+/// id of its row at once.
+pub(in crate::aggregate) struct RowReserver<'a> {
+    cursors: &'a mut [RowCursor],
+    partition_mask: PartitionMask,
+    row_size: usize,
+}
+
+impl<'a> RowReserver<'a> {
+    /// A reserver of rows of `row_size` bytes from `cursor`, for a table of one partition.
+    #[cfg(test)]
+    pub(in crate::aggregate) fn single(cursor: &'a mut RowCursor, row_size: usize) -> Self {
+        RowReserver {
+            cursors: std::slice::from_mut(cursor),
+            partition_mask: PartitionMask::with_start_bit(1, 0),
+            row_size,
+        }
+    }
+
+    /// The id and the address of a new row for a group of hash `hash`, and the index of its page
+    /// in its partition; or else the partition, whose writable page is full.
+    #[inline]
+    pub(in crate::aggregate) fn reserve(
+        &mut self,
+        hash: u64,
+    ) -> Result<(u64, RowPtr, usize), usize> {
+        let partition = self.partition_mask.index(hash);
+        let cursor = &mut self.cursors[partition];
+        if cursor.id == cursor.end {
+            return Err(partition);
+        }
+        let row = (cursor.id, RowPtr::new(cursor.next), cursor.page);
+        cursor.id += 1;
+        cursor.next = cursor.next.wrapping_add(self.row_size);
+        Ok(row)
+    }
+}
+
 pub struct PartitionedPayload {
     pub(super) payloads: Vec<Payload>,
     pub(super) group_types: Vec<DataType>,
@@ -68,6 +108,8 @@ pub struct PartitionedPayload {
     partition_mask: PartitionMask,
     /// The ids of the rows in the hash index.
     pub(super) row_ids: RowIds,
+    /// The rows a probe reserves in each partition, see `RowReserver`.
+    cursors: Vec<RowCursor>,
 }
 
 unsafe impl Send for PartitionedPayload {}
@@ -124,6 +166,7 @@ impl PartitionedPayload {
             payloads[0].row_per_page,
             payloads[0].tuple_size,
             payloads[0].row_layout.states,
+            row_layout.states_layout.is_some(),
         );
         PartitionedPayload {
             payloads,
@@ -131,6 +174,7 @@ impl PartitionedPayload {
             aggrs,
             row_layout,
             row_ids,
+            cursors: vec![RowCursor::EMPTY; partition_count as usize],
 
             arenas,
             partition_mask: PartitionMask::with_start_bit(partition_count, partition_start_bit),
@@ -166,6 +210,38 @@ impl PartitionedPayload {
             .filter(|(_, payload)| payload.len() != 0)
     }
 
+    /// Start reserving rows for a probe: from the free rows of the writable page of each
+    /// partition, opening no page.
+    pub(super) fn begin_rows(&mut self) {
+        for (partition, (payload, cursor)) in self
+            .payloads
+            .iter_mut()
+            .zip(self.cursors.iter_mut())
+            .enumerate()
+        {
+            *cursor = payload.current_cursor(&mut self.row_ids, partition);
+        }
+    }
+
+    /// Reserve rows of `partition` in a page of its own, its writable page being full.
+    pub(super) fn open_rows(&mut self, partition: usize) {
+        let payload = &mut self.payloads[partition];
+        payload.commit_cursor(&self.cursors[partition]);
+        self.cursors[partition] = payload.open_cursor(&mut self.row_ids, partition);
+    }
+
+    /// Decodes the ids of the rows, and reserves new rows.
+    #[inline]
+    pub(super) fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>) {
+        (self.row_ids.decoder(), RowReserver {
+            cursors: &mut self.cursors,
+            partition_mask: self.partition_mask,
+            row_size: self.payloads[0].tuple_size,
+        })
+    }
+
+    /// Write the rows the probe reserved for the groups of the first `new_group_rows` rows of
+    /// `state.empty_vector`.
     pub(super) fn append_rows(
         &mut self,
         state: &mut ProbeState,
@@ -173,13 +249,15 @@ impl PartitionedPayload {
         groups: GroupRows,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
+        for (payload, cursor) in self.payloads.iter_mut().zip(&self.cursors) {
+            payload.commit_cursor(cursor);
+        }
         if self.payloads.len() == 1 {
-            self.payloads[0].reserve_append_rows(
+            self.payloads[0].write_rows(
                 &state.empty_vector[..new_group_rows],
                 &state.group_hashes,
                 &mut state.addresses,
                 &mut state.page_index,
-                (&mut state.row_ids, &mut self.row_ids, 0),
                 groups,
                 source_states,
             );
@@ -195,19 +273,17 @@ impl PartitionedPayload {
                 *count += 1;
             }
 
-            for (partition, (payload, (count, sel))) in self
+            for (payload, (count, sel)) in self
                 .payloads
                 .iter_mut()
                 .zip(state.partition_entries.iter_mut())
-                .enumerate()
             {
                 if *count > 0 {
-                    payload.reserve_append_rows(
+                    payload.write_rows(
                         &sel[..*count as _],
                         &state.group_hashes,
                         &mut state.addresses,
                         &mut state.page_index,
-                        (&mut state.row_ids, &mut self.row_ids, partition),
                         groups,
                         source_states,
                     );

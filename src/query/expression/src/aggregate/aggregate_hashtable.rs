@@ -27,6 +27,7 @@ use super::HashTableConfig;
 use super::Payload;
 use super::StateAddr;
 use super::group_hash_entries;
+use super::hash_index::PREFETCH_DISTANCE;
 use super::hash_index_adapter::AdapterImpl;
 use super::partial_controller::DistinctSampler;
 use super::partial_controller::PartialAddStats;
@@ -751,6 +752,12 @@ impl AggregateHashTable {
             for (page_index, page) in payload.pages.iter().enumerate() {
                 let first_row_id = row_ids.first_row_id(partition, page_index);
                 for idx in 0..page.rows {
+                    // Setting a slot reads its chunk first: fetch the chunks of the rows ahead,
+                    // the rows of a page being read in order.
+                    if idx + PREFETCH_DISTANCE < page.rows {
+                        let ahead = payload.data_ptr(page, idx + PREFETCH_DISTANCE);
+                        hash_index.prefetch(ahead.hash(&payload.row_layout));
+                    }
                     let row_ptr = payload.data_ptr(page, idx);
                     let hash = row_ptr.hash(&payload.row_layout);
 
