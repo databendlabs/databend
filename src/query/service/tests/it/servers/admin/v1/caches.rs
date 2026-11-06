@@ -26,6 +26,7 @@ use http::StatusCode;
 use http::Uri;
 use http::header;
 use poem::Endpoint;
+use poem::IntoResponse;
 use poem::Request;
 use serde_json::Value;
 use serde_json::json;
@@ -39,9 +40,16 @@ async fn get_caches(config: &InnerConfig) -> anyhow::Result<Vec<Value>> {
                 .method(Method::GET)
                 .finish(),
         )
-        .await?;
+        .await?
+        .into_response();
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+    assert_eq!(
+        response.headers()[header::CONTENT_TYPE]
+            .to_str()?
+            .split(';')
+            .next(),
+        Some("application/json")
+    );
     Ok(serde_json::from_slice(
         &response.into_body().into_vec().await?,
     )?)
