@@ -338,6 +338,25 @@ def test_recursive_cte_does_not_hide_user_temp_table(client):
     client.do_logout()
 
 
+def test_sticky_node_lost_error_code():
+    # A request pinned to a node that is no longer in the cluster is rejected
+    # by the session middleware before the query handler runs. Clients key on
+    # SessionNodeLost (5113) to drop their sticky state and reconnect.
+    response = requests.post(
+        query_url,
+        auth=auth,
+        headers={"X-DATABEND-STICKY-NODE": "node-that-does-not-exist"},
+        json={"sql": "select 1"},
+        timeout=30,
+    )
+    assert response.status_code == 400, response.text
+    error = response.json()["error"]
+    assert error["code"] == 5113, response.text
+    # Older clients match on this text; keep it stable alongside the code.
+    assert error["message"].startswith("Sticky session state lost: "), error
+    assert "node-that-does-not-exist" in error["message"], error
+
+
 @pytest.mark.parametrize("caps", [None, "", "unknown", "session_header_v2"])
 def test_no_session(caps):
     # Without the exact capability, even an invalid session header is ignored.
