@@ -29,6 +29,7 @@ use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
 
+mod decision;
 mod domain;
 mod encoded;
 mod kernel;
@@ -69,110 +70,6 @@ impl ArithmeticOp {
             ArithmeticOp::Multiply => "multiply",
             ArithmeticOp::Divide => "divide",
             ArithmeticOp::Modulo => "modulo",
-        }
-    }
-
-    // A legal decimal signature always has bound input/result sizes. Sizing
-    // rule violations are internal errors, never an overload miss.
-    fn size(&self, precision: u8, scale: u8) -> DecimalSize {
-        DecimalSize::new(precision, scale).unwrap_or_else(|error| {
-            panic!("internal {self:?} binding produced Decimal({precision},{scale}): {error}")
-        })
-    }
-
-    fn result_size(
-        &self,
-        a: &DecimalSize,
-        b: &DecimalSize,
-    ) -> (DecimalSize, DecimalSize, DecimalSize) {
-        if *self == ArithmeticOp::Modulo {
-            return Self::modulo_size(a, b);
-        }
-
-        // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
-        let (precision, scale) = match self {
-            ArithmeticOp::Multiply => {
-                let scale = (a.scale() + b.scale()).min(a.scale().max(b.scale()).max(12));
-                let leading = a.leading_digits() + b.leading_digits();
-                (leading + scale, scale)
-            }
-
-            ArithmeticOp::Divide => {
-                let scale = a.scale().max((a.scale() + 6).min(12)); // scale must be >= a.sale()
-                let leading = a.leading_digits() + b.scale(); // leading must be >= a.leading_digits()
-                (leading + scale, scale) // so precision must be >= a.precision()
-            }
-
-            ArithmeticOp::Plus | ArithmeticOp::Minus => {
-                let scale = a.scale().max(b.scale());
-                // for addition/subtraction, we add 1 to the width to ensure we don't overflow
-                let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
-                (plus_min_precision, scale)
-            }
-
-            ArithmeticOp::Modulo => unreachable!(),
-        };
-
-        // if the args both are Decimal128, we need to clamp the precision to 38
-        let precision =
-            if a.precision() <= i128::MAX_PRECISION && b.precision() <= i128::MAX_PRECISION {
-                precision.min(i128::MAX_PRECISION)
-            } else {
-                precision.min(i256::MAX_PRECISION)
-            };
-
-        let result_type = self.size(precision, scale);
-        match self {
-            ArithmeticOp::Multiply => (
-                self.size(precision, a.scale()),
-                self.size(precision, b.scale()),
-                result_type,
-            ),
-
-            ArithmeticOp::Divide => {
-                let p = precision.max(a.precision()).max(b.precision());
-                (
-                    self.size(p, a.scale()),
-                    self.size(p, b.scale()),
-                    result_type,
-                )
-            }
-
-            ArithmeticOp::Plus | ArithmeticOp::Minus => {
-                let required = a.leading_digits().max(b.leading_digits()) + scale + 1;
-                if required <= precision {
-                    (result_type, result_type, result_type)
-                } else {
-                    (
-                        self.size(precision, a.scale()),
-                        self.size(precision, b.scale()),
-                        result_type,
-                    )
-                }
-            }
-
-            ArithmeticOp::Modulo => unreachable!(),
-        }
-    }
-
-    // Align inside the arithmetic operation: aligned operands can exceed even
-    // Decimal256 while the remainder fits. Preserve each operand's own scale
-    // and use the larger input precision independently of the result precision.
-    fn modulo_size(a: &DecimalSize, b: &DecimalSize) -> (DecimalSize, DecimalSize, DecimalSize) {
-        let scale = a.scale().max(b.scale());
-        let precision = a.precision().max(b.precision());
-        let op = ArithmeticOp::Modulo;
-        let result = op.size(a.leading_digits().min(b.leading_digits()) + scale, scale);
-        let aligned = a.leading_digits().max(b.leading_digits()) + scale;
-        if aligned <= i256::MAX_PRECISION {
-            let operands = op.size(aligned, scale);
-            (operands, operands, result)
-        } else {
-            (
-                op.size(precision, a.scale()),
-                op.size(precision, b.scale()),
-                result,
-            )
         }
     }
 }

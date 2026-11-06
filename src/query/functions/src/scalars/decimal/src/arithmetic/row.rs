@@ -20,6 +20,7 @@
 use databend_common_expression::types::decimal::*;
 use num_bigint::BigInt;
 
+use super::decision::can_mul128_with_budget;
 use crate::decimal::DecimalExt;
 
 #[derive(Clone, Copy, Debug)]
@@ -330,19 +331,6 @@ impl Rounded128 {
             })
         }
     }
-}
-
-#[inline]
-fn can_mul128_with_budget(a: i128, b: i128, budget: i128) -> bool {
-    if a == 0 || b == 0 {
-        return true;
-    }
-    if a == i128::MIN || b == i128::MIN {
-        return false;
-    }
-    let magnitude_a = if a < 0 { -a } else { a };
-    let magnitude_b = if b < 0 { -b } else { b };
-    magnitude_a <= budget / magnitude_b
 }
 
 // Caller establishes |a*b| + half <= MAX before using native multiplication.
