@@ -52,7 +52,11 @@
 //!   `pool_full_pinned`.
 //! - `cache_memory_reclaim_count`, `cache_memory_reclaim_bytes` (charges released) and
 //!   `cache_memory_reclaim_milliseconds` (spent).
+//!
+//! Every family reaches both the Prometheus scrape and `system.metrics` (a `SampleCollector`),
+//! from one read; `TRUNCATE system.metrics` does not reset them.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -60,6 +64,9 @@ use std::sync::Once;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
+use databend_common_base::runtime::metrics::MetricSample;
+use databend_common_base::runtime::metrics::MetricValue;
+use databend_common_base::runtime::metrics::SampleCollector;
 use prometheus_client::collector::Collector;
 use prometheus_client::encoding::DescriptorEncoder;
 use prometheus_client::encoding::EncodeMetric;
@@ -94,12 +101,13 @@ impl Debug for CacheMetricsCollector {
 }
 
 impl CacheMetricsCollector {
-    /// Registers the collector of the global manager, once per process.
+    /// Registers the collector of the global manager, once per process, for both the scrape and
+    /// `system.metrics`.
     pub(crate) fn register_global() {
         static REGISTER: Once = Once::new();
         REGISTER.call_once(|| {
             GLOBAL_METRICS_REGISTRY
-                .register_collector(Box::new(CacheMetricsCollector { manager: None }));
+                .register_sample_collector(Arc::new(CacheMetricsCollector { manager: None }));
         });
     }
 
@@ -171,6 +179,32 @@ impl Family {
             encode(*value, family.encode_family(labels)?)?;
         }
         Ok(())
+    }
+
+    /// The samples of `system.metrics`, named as the scrape names them: counters with the
+    /// `_total` suffix the encoder appends.
+    fn sample(&self, samples: &mut Vec<MetricSample>) {
+        let counter = matches!(self.metric_type, MetricType::Counter);
+        let name = if counter {
+            format!("{}_total", self.name)
+        } else {
+            self.name.to_string()
+        };
+        for (labels, value) in &self.samples {
+            let value = *value as f64;
+            samples.push(MetricSample {
+                name: name.clone(),
+                labels: labels
+                    .iter()
+                    .map(|(key, value)| (key.to_string(), value.clone()))
+                    .collect::<HashMap<_, _>>(),
+                value: if counter {
+                    MetricValue::Counter(value)
+                } else {
+                    MetricValue::Gauge(value)
+                },
+            });
+        }
     }
 }
 
@@ -376,10 +410,12 @@ fn disk_kind_families(disk: &DiskCache) -> Vec<Family> {
     ]
 }
 
-impl Collector for CacheMetricsCollector {
-    fn encode(&self, mut encoder: DescriptorEncoder) -> Result<(), std::fmt::Error> {
+impl CacheMetricsCollector {
+    /// The families of one read, shared by the scrape and `system.metrics` so the two cannot
+    /// disagree.
+    fn families(&self) -> Vec<Family> {
         let Some(manager) = self.manager() else {
-            return Ok(());
+            return Vec::new();
         };
         let mut families = Families::new();
         let mut disk_pools = Family::gauge(
@@ -453,9 +489,23 @@ impl Collector for CacheMetricsCollector {
                 families.push(family);
             }
         }
-        for family in families {
+        families
+    }
+}
+
+impl Collector for CacheMetricsCollector {
+    fn encode(&self, mut encoder: DescriptorEncoder) -> Result<(), std::fmt::Error> {
+        for family in self.families() {
             family.encode(&mut encoder)?;
         }
         Ok(())
+    }
+}
+
+impl SampleCollector for CacheMetricsCollector {
+    fn sample(&self, samples: &mut Vec<MetricSample>) {
+        for family in self.families() {
+            family.sample(samples);
+        }
     }
 }

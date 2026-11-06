@@ -15,10 +15,18 @@
 //! The cache metrics: gauges of what each kind and pool holds, and the counts of why entries
 //! leave or are refused, which only the shared backend keeps.
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use databend_common_base::runtime::metrics::MetricSample;
+use databend_common_base::runtime::metrics::MetricValue;
+use databend_common_base::runtime::metrics::SampleCollector;
+use databend_common_config::CacheConfig;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheMetricsCollector;
 use databend_storages_common_cache::CacheRow;
 use databend_storages_common_cache::DiskKey;
@@ -291,4 +299,152 @@ fn test_counters_are_scraped() {
             Backend::Shared => assert_eq!((evictions, reclaims), (Some(0), Some(1))),
         }
     }
+}
+
+type Series = BTreeMap<(String, Vec<(String, String)>), (String, f64)>;
+
+/// The samples of a scrape, by name and sorted labels, with the type of their family.
+fn scraped(text: &str) -> Series {
+    let mut types = HashMap::new();
+    let mut series = Series::new();
+    for line in text.lines() {
+        if let Some(declared) = line.strip_prefix("# TYPE ") {
+            let (name, kind) = declared.split_once(' ').unwrap();
+            types.insert(name.to_string(), kind.to_string());
+            continue;
+        }
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        let (series_name, value) = line.rsplit_once(' ').unwrap();
+        let (name, labels) = match series_name.split_once('{') {
+            None => (series_name, Vec::new()),
+            Some((name, labels)) => {
+                let mut labels: Vec<_> = labels
+                    .strip_suffix('}')
+                    .unwrap()
+                    .split(',')
+                    .map(|pair| {
+                        let (key, value) = pair.split_once('=').unwrap();
+                        (key.to_string(), value.trim_matches('"').to_string())
+                    })
+                    .collect();
+                labels.sort();
+                (name, labels)
+            }
+        };
+        let family = name
+            .strip_suffix("_total")
+            .filter(|f| types.contains_key(*f));
+        let kind = types[family.unwrap_or(name)].clone();
+        series.insert((name.to_string(), labels), (kind, value.parse().unwrap()));
+    }
+    series
+}
+
+/// The samples `system.metrics` shows, keyed like `scraped`.
+fn sampled(collector: &CacheMetricsCollector) -> Series {
+    let mut samples: Vec<MetricSample> = Vec::new();
+    collector.sample(&mut samples);
+    samples
+        .into_iter()
+        .map(|sample| {
+            let mut labels: Vec<_> = sample.labels.into_iter().collect();
+            labels.sort();
+            let value = match sample.value {
+                MetricValue::Counter(value) | MetricValue::Gauge(value) => value,
+                other => panic!("{}: unexpected {other:?}", sample.name),
+            };
+            ((sample.name, labels), (sample.value.kind(), value))
+        })
+        .collect()
+}
+
+/// `system.metrics` shows every series of the scrape, with the same name, labels, type and
+/// value, and nothing else.
+fn assert_sampled_as_scraped(manager: &Arc<CacheManager>) -> Series {
+    let text = scrape(CacheMetricsCollector::of(manager.clone()));
+    let scraped = scraped(&text);
+    assert!(!scraped.is_empty());
+    assert_eq!(
+        sampled(&CacheMetricsCollector::of(manager.clone())),
+        scraped
+    );
+    scraped
+}
+
+/// Each backend, after lookups, evictions and a reclaim, shows in `system.metrics` exactly
+/// what it scrapes.
+#[test]
+fn test_samples_follow_scrape() {
+    for backend in Backend::ALL {
+        let manager = Arc::new(manager(&backend.config(MEMORY), MEMORY, false));
+        let segments = manager.cache::<segment::Info>();
+        let _held = segments.put("a", segment::Info::sample(1));
+        segments.put("b", segment::Info::sample(2));
+        segments.evict("a");
+        manager.shrink_for_pressure(&|| false);
+        assert_sampled_as_scraped(&manager);
+    }
+}
+
+/// With the shared backend and the disk cache, every cache family is in `system.metrics`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_every_cache_family_is_sampled() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config = CacheConfig {
+        shared_memory_enabled: true,
+        ..disk_config(&dir)
+    };
+    let manager = Arc::new(manager(&config, MEMORY, true));
+    let disk = manager.disk().unwrap();
+    let kind = CacheKind::of::<column::Data>();
+    let key = DiskKey::whole("1/2/_b/x.parquet");
+    assert!(disk.put(kind, &key, Bytes::from_static(b"bytes")).await);
+    wait_for(|| disk.contains(kind, &key));
+    assert!(disk.get(kind, &key).await.is_some());
+    assert!(disk.get(kind, &DiskKey::whole("missing")).await.is_none());
+    let segments = manager.cache::<segment::Info>();
+    segments.put("a", segment::Info::sample(1));
+    manager.shrink_for_pressure(&|| false);
+
+    let series = assert_sampled_as_scraped(&manager);
+    let names: BTreeSet<&str> = series.keys().map(|(name, _)| name.as_str()).collect();
+    let expected = [
+        "cache_items",
+        "cache_resident_bytes",
+        "cache_in_cache_bytes",
+        "cache_capacity",
+        "cache_enabled",
+        "cache_pool_items",
+        "cache_pool_resident_bytes",
+        "cache_pool_in_cache_bytes",
+        "cache_pool_capacity_bytes",
+        "cache_eviction_count_total",
+        "cache_eviction_bytes_total",
+        "cache_insert_rejected_count_total",
+        "cache_memory_reclaim_count_total",
+        "cache_memory_reclaim_bytes_total",
+        "cache_memory_reclaim_milliseconds_total",
+        "cache_disk_pool_items",
+        "cache_disk_pool_used_bytes",
+        "cache_disk_pool_capacity_bytes",
+        "cache_disk_queue_bytes",
+        "cache_disk_dropped_total",
+        "cache_disk_hit_bytes_total",
+        "cache_disk_queued_hit_count_total",
+        "cache_disk_read_microseconds_total",
+        "cache_disk_storage_read_bytes_total",
+        "cache_disk_write_count_total",
+        "cache_disk_write_bytes_total",
+        "cache_disk_drop_count_total",
+        "cache_disk_eviction_count_total",
+        "cache_disk_eviction_bytes_total",
+        "cache_disk_invalidation_count_total",
+        "cache_disk_invalidation_bytes_total",
+    ];
+    for name in expected {
+        assert!(names.contains(name), "{name} is not in system.metrics");
+    }
+    assert_eq!(names.len(), expected.len(), "{names:?}");
 }

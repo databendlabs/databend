@@ -53,5 +53,9 @@ harness = false
 name = "pressure_shrink"
 harness = false
 
+[[bench]]
+name = "metrics_read"
+harness = false
+
 [lints]
 workspace = true
