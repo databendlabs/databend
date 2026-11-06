@@ -51,8 +51,9 @@ select count(*) from t;
 ----
 16000000
 
+# QUOTE_NOT_NULL adds two quote bytes per integer across 8,000,000 source rows.
 query IB
-select count(), sum(content_length) between 183800000 and 183899999 from copy_history('t');
+select count(), sum(content_length) between 199800000 and 199899999 from copy_history('t');
 ----
 16 1
 
