@@ -112,50 +112,11 @@ impl HttpQueryRequest {
         // deliberately not handled: it also covers misroutes, where the tables
         // still exist on the original node.
         let temp_tables_gone = err.code() == ErrorCode::SESSION_TIMEOUT;
-        let session = self.session.as_ref().map(|s| {
-            let txn_state = if matches!(s.txn_state, Some(TxnState::Active)) {
-                Some(TxnState::Fail)
-            } else {
-                s.txn_state.clone()
-            };
-            let internal = s.internal.clone().map(|mut internal| {
-                if temp_tables_gone {
-                    internal.has_temp_table = false;
-                }
-                internal
-            });
-            let need_sticky = match &internal {
-                Some(internal) => internal.has_temp_table,
-                None => false,
-            };
-            HttpSessionConf {
-                txn_state,
-                need_sticky,
-                need_keep_alive: need_sticky,
-                internal,
-                ..s.clone()
-            }
-        });
-        Json(QueryResponse {
-            id: "".to_string(),
-            stats: QueryStats::default(),
-            state: ExecuteStateKind::Failed,
-            affect: None,
-            data: Arc::new(BlocksSerializer::empty()),
-            schema: vec![],
-            session_id: None,
-            warnings: vec![],
-            node_id: "".to_string(),
-            session,
-            next_uri: None,
-            stats_uri: None,
-            final_uri: None,
-            kill_uri: None,
-            error: Some(QueryError::from_error_code(err)),
-            has_result_set: None,
-            result_timeout_secs: None,
-            settings: None,
-        })
+        let session = self
+            .session
+            .as_ref()
+            .map(|s| s.after_failed_start(temp_tables_gone));
+        Json(QueryResponse::failed_to_start(session, err))
     }
 
     pub fn set_settings(&mut self, settings: BTreeMap<String, String>) {
@@ -376,6 +337,67 @@ pub struct HttpSessionConf {
         deserialize_with = "deserialize_from_json_string"
     )]
     pub internal: Option<HttpSessionStateInternal>,
+}
+
+impl HttpSessionConf {
+    /// The state a client should carry on with after a statement was rejected
+    /// before it started. Client-side state (database, role, settings,
+    /// variables) is kept; an active transaction is marked failed. With
+    /// `temp_tables_gone` the server has established that the temporary tables
+    /// this session claims no longer exist, so the session also stops being
+    /// sticky.
+    pub(crate) fn after_failed_start(&self, temp_tables_gone: bool) -> Self {
+        let txn_state = if matches!(self.txn_state, Some(TxnState::Active)) {
+            Some(TxnState::Fail)
+        } else {
+            self.txn_state.clone()
+        };
+        let internal = self.internal.clone().map(|mut internal| {
+            if temp_tables_gone {
+                internal.has_temp_table = false;
+            }
+            internal
+        });
+        let need_sticky = match &internal {
+            Some(internal) => internal.has_temp_table,
+            None => false,
+        };
+        HttpSessionConf {
+            txn_state,
+            need_sticky,
+            need_keep_alive: need_sticky,
+            internal,
+            ..self.clone()
+        }
+    }
+}
+
+impl QueryResponse {
+    /// Response for a statement rejected before a query existed, so there is
+    /// no id, node or uri. `session` is the state the client should carry on
+    /// with, see [`HttpSessionConf::after_failed_start`].
+    pub(crate) fn failed_to_start(session: Option<HttpSessionConf>, err: ErrorCode) -> Self {
+        QueryResponse {
+            id: "".to_string(),
+            stats: QueryStats::default(),
+            state: ExecuteStateKind::Failed,
+            affect: None,
+            data: Arc::new(BlocksSerializer::empty()),
+            schema: vec![],
+            session_id: None,
+            warnings: vec![],
+            node_id: "".to_string(),
+            session,
+            next_uri: None,
+            stats_uri: None,
+            final_uri: None,
+            kill_uri: None,
+            error: Some(QueryError::from_error_code(err)),
+            has_result_set: None,
+            result_timeout_secs: None,
+            settings: None,
+        }
+    }
 }
 
 impl Debug for HttpSessionStateInternal {

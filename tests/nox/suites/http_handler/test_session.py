@@ -342,19 +342,60 @@ def test_sticky_node_lost_error_code():
     # A request pinned to a node that is no longer in the cluster is rejected
     # by the session middleware before the query handler runs. Clients key on
     # SessionNodeLost (5113) to drop their sticky state and reconnect.
+    headers = {"X-DATABEND-STICKY-NODE": "node-that-does-not-exist"}
+
+    # No session in the request: nothing to correct, just the error.
     response = requests.post(
-        query_url,
-        auth=auth,
-        headers={"X-DATABEND-STICKY-NODE": "node-that-does-not-exist"},
-        json={"sql": "select 1"},
-        timeout=30,
+        query_url, auth=auth, headers=headers, json={"sql": "select 1"}, timeout=30
     )
     assert response.status_code == 400, response.text
-    error = response.json()["error"]
+    body = response.json()
+    error = body["error"]
     assert error["code"] == 5113, response.text
     # Older clients match on this text; keep it stable alongside the code.
     assert error["message"].startswith("Sticky session state lost: "), error
     assert "node-that-does-not-exist" in error["message"], error
+    assert body["session"] is None, body
+
+    # With the stale state the client is replaying, the response hands back a
+    # corrected copy: client-side state kept, node-bound state cleared.
+    stale = {
+        "database": "system",
+        "settings": {"max_threads": "3"},
+        "txn_state": "Active",
+        "need_sticky": True,
+        "need_keep_alive": True,
+        "internal": json.dumps(
+            {"has_temp_table": True, "last_node_id": "node-that-does-not-exist"}
+        ),
+    }
+    response = requests.post(
+        query_url,
+        auth=auth,
+        headers=headers,
+        json={"sql": "select 1", "session": stale},
+        timeout=30,
+    )
+    assert response.status_code == 400, response.text
+    body = response.json()
+    assert body["error"]["code"] == 5113, response.text
+    session = body["session"]
+    assert session["database"] == "system", body
+    assert session["settings"] == {"max_threads": "3"}, body
+    assert session["txn_state"] == "Fail", body
+    assert not session["need_sticky"], body
+    assert not session["need_keep_alive"], body
+    # false is omitted from the serialized internal state
+    assert not json.loads(session["internal"]).get("has_temp_table", False), body
+
+    # Page requests carry no session state, so none is returned.
+    response = requests.get(
+        f"{query_url}/some-query-id/page/1", auth=auth, headers=headers, timeout=30
+    )
+    assert response.status_code == 400, response.text
+    body = response.json()
+    assert body["error"]["code"] == 5113, response.text
+    assert body["session"] is None, body
 
 
 @pytest.mark.parametrize("caps", [None, "", "unknown", "session_header_v2"])
