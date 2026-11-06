@@ -281,3 +281,35 @@ FROM t_unicode_stats;
 
 statement ok
 DROP TABLE t_unicode_stats;
+
+## Different blocks can use different adaptive prefix lengths without a DDL change.
+statement ok
+CREATE TABLE t_mixed_stats_prefix(a STRING) row_per_block=100;
+
+## No common prefix: both bounds are truncated to 16 characters.
+statement ok
+INSERT INTO t_mixed_stats_prefix VALUES (repeat('a', 17)), (repeat('b', 17));
+
+## A common 20-character prefix extends this block's bounds to 21 characters.
+statement ok
+INSERT INTO t_mixed_stats_prefix VALUES
+    (repeat('m', 20) || 'a-tail'), (repeat('m', 20) || 'z-tail');
+
+query II
+SELECT char_length(statistics:min::string), char_length(statistics:max::string)
+FROM fuse_block_statistics('default', 't_mixed_stats_prefix') ORDER BY 1;
+----
+16 16
+21 21
+
+## The global min comes from the first block and max from the second.
+## Neither truncated bound may be used as an exact aggregate result.
+query II
+SELECT (MIN(a) = repeat('a', 17))::INT,
+       (MAX(a) = (repeat('m', 20) || 'z-tail'))::INT
+FROM t_mixed_stats_prefix;
+----
+1 1
+
+statement ok
+DROP TABLE t_mixed_stats_prefix;
