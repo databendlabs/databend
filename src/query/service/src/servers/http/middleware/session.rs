@@ -592,9 +592,11 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                             get_request_info(req)
                         );
                         warn!("{}", msg);
-                        Err(Error::from(HttpErrorCode::bad_request(
-                            ErrorCode::BadArguments(msg),
-                        )))
+                        // Build the response here instead of returning Err: the
+                        // outer `json_response` wrapper flattens poem errors to
+                        // the HTTP status, which would hide the error code.
+                        Ok(HttpErrorCode::bad_request(ErrorCode::SessionNodeLost(msg))
+                            .as_response())
                     };
                 }
             } else if let Some(warehouse) = headers.get(HEADER_WAREHOUSE) {
