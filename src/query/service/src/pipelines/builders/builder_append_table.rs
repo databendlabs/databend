@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
@@ -21,14 +23,19 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FromData;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::group_hash_entries;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::basic::Exchange;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline_transforms::Transform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_sql::evaluator::BlockOperator;
@@ -56,6 +63,23 @@ impl Exchange for PartitionKeyExchange {
             .map(|hash| hash % n as u64)
             .collect::<Vec<_>>();
         DataBlock::scatter(&data_block, &indices, n)
+    }
+}
+
+/// Appends each row's arrival position, counted across all input lanes: a
+/// block takes the next range of positions when it arrives.
+struct TransformInputPosition {
+    next: Arc<AtomicU64>,
+}
+
+impl Transform for TransformInputPosition {
+    const NAME: &'static str = "TransformInputPosition";
+
+    fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
+        let rows = data.num_rows() as u64;
+        let start = self.next.fetch_add(rows, Ordering::Relaxed);
+        data.add_column(UInt64Type::from_data((start..start + rows).collect()));
+        Ok(data)
     }
 }
 
@@ -104,8 +128,9 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        let num_partition_keys = partition_exprs.len();
         let mut fields = input_schema.fields().clone();
-        let mut sort_desc = Vec::with_capacity(partition_exprs.len());
+        let mut sort_desc = Vec::with_capacity(num_partition_keys + 1);
         for (index, expr) in partition_exprs.iter().enumerate() {
             fields.push(DataField::new(
                 &format!("partition_key_{index}"),
@@ -128,8 +153,25 @@ impl PipelineBuilder {
             CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns)
         });
 
+        // The sort below is not stable: ordering by the partition key alone
+        // would scramble the rows within a partition. Tie it to the arrival
+        // position, so each partition keeps the order its rows came in.
+        fields.push(DataField::new(
+            "input_position",
+            DataType::Number(NumberDataType::UInt64),
+        ));
+        sort_desc.push(SortColumnDescription {
+            offset: num_input_columns + num_partition_keys,
+            asc: true,
+            nulls_first: false,
+        });
+        let next_position = Arc::new(AtomicU64::new(0));
+        pipeline.add_transformer(|| TransformInputPosition {
+            next: next_position.clone(),
+        });
+
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let key_offsets = (num_input_columns..fields.len()).collect();
+        let key_offsets = (num_input_columns..num_input_columns + num_partition_keys).collect();
         pipeline.exchange(max_threads, Arc::new(PartitionKeyExchange { key_offsets }))?;
 
         let num_sort_columns = fields.len();

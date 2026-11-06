@@ -1223,5 +1223,58 @@ FROM (
 ----
 0
 
+# An input ordered by the cluster key keeps its order within each partition:
+# the hash layout sorts a lane by the partition key, and equal keys keep their
+# arrival order. No two blocks of one partition overlap on k beyond a shared
+# endpoint (the block that straddles a key change); an unordered input does.
+# The ordered input is one file, which a single node reads in order.
+statement ok
+UNSET max_block_size
+
+statement ok
+CREATE OR REPLACE STAGE s_09_0054
+
+statement ok
+REMOVE @s_09_0054
+
+statement ok
+COPY INTO @s_09_0054/ordered/ FROM (SELECT number // 10000 AS k, number AS v FROM numbers(400000) ORDER BY v) FILE_FORMAT = (TYPE = PARQUET) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+statement ok
+CREATE TABLE hash_input_order(k INT NOT NULL, v INT NOT NULL) PARTITION BY (v % 2) CLUSTER BY (k) ROW_PER_BLOCK = 10000 WRITE_DISTRIBUTION_MODE = 'hash'
+
+statement ok
+CREATE TABLE hash_input_unordered(k INT NOT NULL, v INT NOT NULL) PARTITION BY (v % 2) CLUSTER BY (k) ROW_PER_BLOCK = 10000 WRITE_DISTRIBUTION_MODE = 'hash'
+
+statement ok
+SET enable_compact_after_write = 0
+
+statement ok
+COPY INTO hash_input_order FROM @s_09_0054/ordered/ FILE_FORMAT = (TYPE = PARQUET)
+
+statement ok
+INSERT INTO hash_input_unordered SELECT number % 40, number FROM numbers(400000)
+
+statement ok
+UNSET enable_compact_after_write
+
+query I
+WITH b AS (SELECT _block_name n, min(v % 2) p, min(k) lo, max(k) hi FROM hash_input_order GROUP BY _block_name)
+SELECT count(*) FROM b x, b y WHERE x.n < y.n AND x.p = y.p AND x.lo < y.hi AND y.lo < x.hi
+----
+0
+
+query I
+WITH b AS (SELECT _block_name n, min(v % 2) p, min(k) lo, max(k) hi FROM hash_input_unordered GROUP BY _block_name)
+SELECT to_int64(count(*) > 0) FROM b x, b y WHERE x.n < y.n AND x.p = y.p AND x.lo < y.hi AND y.lo < x.hi
+----
+1
+
+statement ok
+REMOVE @s_09_0054
+
+statement ok
+DROP STAGE s_09_0054
+
 statement ok
 DROP DATABASE db_09_0054
