@@ -255,17 +255,7 @@ impl QueryContext {
         let tenant = self.get_tenant();
         for (catalog_name, db_name, table_name) in tables.iter() {
             let catalog = self.get_catalog(catalog_name).await?;
-            // Materialized CTE tables are registered before creation; a failed
-            // CREATE leaves a registration without a table, which is nothing to
-            // clean up.
-            let table = match self.get_table(catalog_name, db_name, table_name).await {
-                Ok(table) => table,
-                Err(e) if e.code() == ErrorCode::UNKNOWN_TABLE => {
-                    temp_tbl_mgr.lock().unmark_query_scoped(db_name, table_name);
-                    continue;
-                }
-                Err(e) => return Err(e),
-            };
+            let table = self.get_table(catalog_name, db_name, table_name).await?;
             let db = catalog.get_database(&tenant, db_name).await?;
             let temp_prefix = table
                 .options()

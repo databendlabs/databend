@@ -355,9 +355,12 @@ impl Binder {
 
         let create_table_sql = create_table_stmt.to_string();
         log::info!("[CTE]create_table_sql: {create_table_sql}");
-        // Register before creating so the table is never observed as a
-        // session-scoped temporary table, even by a concurrent HTTP page response.
-        self.ctx.add_m_cte_temp_table(&database, &table_name);
+        // Mark before creating so the table is never observed as a session
+        // temporary table, even by a concurrent HTTP page response. The table
+        // is registered for cleanup only after it exists: a context shared with
+        // the nested CTAS would otherwise drop it from that query's cleanup hook.
+        self.ctx
+            .mark_query_scoped_temp_table(&database, &table_name);
         if let Some(subquery_executor) = &self.subquery_executor {
             let scope = self.definition_scope.clone();
             let _ = databend_common_base::runtime::block_on(async move {
@@ -368,6 +371,8 @@ impl Binder {
         } else {
             return Err(ErrorCode::Internal("Binder's Subquery executor is not set"));
         };
+
+        self.ctx.add_m_cte_temp_table(&database, &table_name);
 
         self.ctx
             .evict_table_from_cache(&catalog, &database, &table_name)
