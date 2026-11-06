@@ -208,28 +208,6 @@ impl TableContextTableAccess for QueryContext {
 
 #[async_trait::async_trait]
 impl TableContextCte for QueryContext {
-    fn mark_query_scoped_temp_table(&self, database_name: &str, table_name: &str) {
-        // Scratch tables of this query must not be reported to HTTP clients as
-        // session temporary tables, otherwise the client session turns sticky.
-        // The mark is cleared when the table is dropped, or withdrawn by the
-        // binder if the CREATE fails.
-        self.shared
-            .session
-            .session_ctx
-            .temp_tbl_mgr()
-            .lock()
-            .mark_query_scoped(database_name, table_name);
-    }
-
-    fn unmark_query_scoped_temp_table(&self, database_name: &str, table_name: &str) {
-        self.shared
-            .session
-            .session_ctx
-            .temp_tbl_mgr()
-            .lock()
-            .unmark_query_scoped(database_name, table_name);
-    }
-
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
         let entry = (database_name.to_string(), table_name.to_string());
         let mut tables = self.m_cte_temp_table.write();

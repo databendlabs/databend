@@ -314,8 +314,8 @@ def test_materialized_cte_is_not_sticky(client):
 
 
 def test_failed_materialized_cte_is_not_sticky(client):
-    # The CTE's CREATE TEMP TABLE ... AS SELECT fails at execution; the mark
-    # set before it is withdrawn and the session stays non-sticky.
+    # The CTE's CREATE TEMP TABLE ... AS SELECT fails at execution; whatever
+    # it left behind is dropped with the query and the session is not sticky.
     client.login()
     body = client.request(
         "POST",
