@@ -1461,6 +1461,8 @@ impl Table for FuseTable {
                     .map(|&n| n as usize)
                     .unwrap_or(STATS_STRING_PREFIX_LEN);
                 // String statistics are trimmed by Unicode characters, not UTF-8 bytes.
+                // Assumes this column's STATS_TRUNCATE_LEN is unchanged across stored blocks.
+                // Without an explicit limit, adaptive prefixes are never shorter than the default.
                 // Without a persisted truncation marker, bounds at or above the limit
                 // remain possibly truncated, even if adaptive trimming kept them exact.
                 let min_may_be_truncated = match &v.min {
