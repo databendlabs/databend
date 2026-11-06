@@ -1460,12 +1460,15 @@ impl Table for FuseTable {
                     .get(&k)
                     .map(|&n| n as usize)
                     .unwrap_or(STATS_STRING_PREFIX_LEN);
+                // String statistics are trimmed by Unicode characters, not UTF-8 bytes.
+                // Without a persisted truncation marker, bounds at or above the limit
+                // remain possibly truncated, even if adaptive trimming kept them exact.
                 let min_may_be_truncated = match &v.min {
-                    Scalar::String(s) => s.len() >= truncate_len,
+                    Scalar::String(s) => s.chars().count() >= truncate_len,
                     _ => false,
                 };
                 let max_may_be_truncated = match &v.max {
-                    Scalar::String(s) => s.len() >= truncate_len,
+                    Scalar::String(s) => s.chars().count() >= truncate_len,
                     _ => false,
                 };
                 (k, ColumnRange {

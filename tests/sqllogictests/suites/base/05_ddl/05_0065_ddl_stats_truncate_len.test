@@ -239,3 +239,45 @@ explicit abcdefghijklmnop abcdefghijklmno􏿿
 
 statement ok
 DROP TABLE t_adaptive_stats_truncate;
+
+## UTF-8 byte length must not make exact short bounds look truncated.
+## Both columns have byte lengths >= their limits, but fewer Unicode characters.
+statement ok
+CREATE TABLE t_unicode_stats (
+    a STRING,
+    b STRING STATS_TRUNCATE_LEN 4
+) row_per_block=100;
+
+statement ok
+INSERT INTO t_unicode_stats VALUES
+    ('你好世界你好世', '你好世'),
+    ('👍👍👍👍👍', '👍👍');
+
+## All four aggregates must be answered from exact statistics, without a TableScan.
+query T
+EXPLAIN SELECT MIN(a), MAX(a), MIN(b), MAX(b) FROM t_unicode_stats;
+----
+EvalScalar
+├── output columns: [MIN(a) (#2), MAX(a) (#3), MIN(b) (#4), MAX(b) (#5)]
+├── expressions: ['你好世界你好世', '👍👍👍👍👍', '你好世', '👍👍']
+├── estimated rows: 1.00
+└── DummyTableScan
+
+statement ok
+TRUNCATE TABLE t_unicode_stats;
+
+## Genuinely truncated multibyte bounds must still scan and return full strings.
+## The different leading characters prevent adaptive extension of the default limit.
+statement ok
+INSERT INTO t_unicode_stats VALUES
+    (repeat('好', 17), repeat('好', 5)),
+    (repeat('👍', 17), repeat('👍', 5));
+
+query IIII
+SELECT char_length(MIN(a)), char_length(MAX(a)), char_length(MIN(b)), char_length(MAX(b))
+FROM t_unicode_stats;
+----
+17 17 5 5
+
+statement ok
+DROP TABLE t_unicode_stats;
