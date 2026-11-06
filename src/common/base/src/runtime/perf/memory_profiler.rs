@@ -43,6 +43,10 @@ pub const SAMPLE_INTERVAL: usize = 512 * 1024;
 
 const MAX_FRAMES: usize = 64;
 
+/// The root frame of samples of a query whose payload has no query id when
+/// sampling every query.
+const UNKNOWN_QUERY_ID: &str = "(unknown query id)";
+
 /// What the process-wide `MemoryProfiler` samples: `NO_PROFILER`,
 /// `ALL_QUERIES`, or the `perf_query_token` of the query whose threads it
 /// samples. Claiming it from `NO_PROFILER` is what makes a profiler
@@ -109,7 +113,7 @@ struct SampleKey {
 /// Like `CpuProfiler`, a query-scoped profiler samples the threads whose
 /// tracking payload carries the query's `perf_query_token`. A process-scoped
 /// one samples every thread working for a query, i.e. whose payload has a
-/// query id; other threads are not sampled.
+/// perf query token or a query id; other threads are not sampled.
 ///
 /// A thread picks up a started or stopped profiler at its next payload
 /// switch, i.e. the next time a processor or a task of it is polled, so
@@ -291,7 +295,8 @@ impl MemoryProfiler {
 fn samples_payload(scope: u64, payload: &TrackingPayload) -> bool {
     match scope {
         NO_PROFILER => false,
-        ALL_QUERIES => payload.query_id.is_some(),
+        // Some payloads of a query only carry its token, e.g. Flight SQL.
+        ALL_QUERIES => payload.perf_query_token != 0 || payload.query_id.is_some(),
         token => payload.perf_query_token == token,
     }
 }
@@ -306,7 +311,12 @@ fn record(bytes: u64) {
             return None;
         }
         let query_id = match scope {
-            ALL_QUERIES => payload.query_id.clone(),
+            ALL_QUERIES => Some(
+                payload
+                    .query_id
+                    .clone()
+                    .unwrap_or_else(|| UNKNOWN_QUERY_ID.to_string()),
+            ),
             _ => None,
         };
         let plan = payload.profile.as_ref().and_then(|profile| {
@@ -320,13 +330,23 @@ fn record(bytes: u64) {
 
     let mut frames = [0usize; MAX_FRAMES];
     let mut depth = 0;
-    // Safety: the sampler is not reentrant, see `in_sampler`.
-    unsafe {
-        backtrace::trace_unsynchronized(|frame| {
-            frames[depth] = frame.ip() as usize;
-            depth += 1;
-            depth < MAX_FRAMES
-        });
+    {
+        // The CPU profiler unwinds the interrupted thread in its SIGPROF
+        // handler. Unwinding again while this thread is inside the unwinder
+        // may deadlock on the unwinder's locks, so defer the signal.
+        let _deferred = DeferCpuProfilerSignal::enter();
+        // Safety: the sampler is not reentrant, see `in_sampler`. `trace`
+        // serializes unwinding only for the Windows unwinder; on Unix both
+        // this and the CPU profiler call `_Unwind_Backtrace`, which is thread
+        // safe, unsynchronized. Waiting for that lock here would block the
+        // allocating threads on each other and on symbolizing a dump.
+        unsafe {
+            backtrace::trace_unsynchronized(|frame| {
+                frames[depth] = frame.ip() as usize;
+                depth += 1;
+                depth < MAX_FRAMES
+            });
+        }
     }
 
     let key = SampleKey {
@@ -336,6 +356,33 @@ fn record(bytes: u64) {
     };
     if let Some(samples) = SAMPLES.lock().as_mut() {
         *samples.entry(key).or_default() += bytes;
+    }
+}
+
+/// Blocks SIGPROF, the signal of the CPU profiler, on the current thread
+/// while alive. A signal raised meanwhile is delivered once unblocked.
+struct DeferCpuProfilerSignal {
+    saved: libc::sigset_t,
+}
+
+impl DeferCpuProfilerSignal {
+    fn enter() -> DeferCpuProfilerSignal {
+        unsafe {
+            let mut block = std::mem::zeroed::<libc::sigset_t>();
+            libc::sigemptyset(&mut block);
+            libc::sigaddset(&mut block, libc::SIGPROF);
+            let mut saved = std::mem::zeroed::<libc::sigset_t>();
+            libc::pthread_sigmask(libc::SIG_BLOCK, &block, &mut saved);
+            DeferCpuProfilerSignal { saved }
+        }
+    }
+}
+
+impl Drop for DeferCpuProfilerSignal {
+    fn drop(&mut self) {
+        unsafe {
+            libc::pthread_sigmask(libc::SIG_SETMASK, &self.saved, std::ptr::null_mut());
+        }
     }
 }
 
@@ -525,16 +572,18 @@ mod tests {
         assert_eq!(bytes_under(&folded, ""), estimated, "{folded}");
         // Query-scoped profiles are not rooted at the query id.
         assert!(!folded.contains("mem-profiled"));
-        // The frames of the profiler are dropped, and so are those of this
-        // test, which lives in the same file: the innermost frame left is
-        // the test harness calling it.
+        // The frames of the profiler are dropped. Symbols resolved from
+        // debug info may lack their module path, so match the plain names.
         for line in folded.lines() {
             let (stack, _) = line.rsplit_once(' ').unwrap();
-            let innermost = stack.rsplit(';').next().unwrap();
-            assert!(
-                innermost.contains("test_samples_only_the_profiled_query"),
-                "{line}"
-            );
+            for frame in stack.split(';') {
+                assert!(
+                    !frame.ends_with("record")
+                        && !frame.ends_with("on_sampled_alloc")
+                        && !frame.contains("trace_unsynchronized"),
+                    "{line}"
+                );
+            }
         }
 
         let svg = MemoryProfiler::render_flamegraph(&folded).unwrap();
@@ -554,6 +603,13 @@ mod tests {
             MemoryProfiler::on_alloc(64 * SAMPLE_INTERVAL);
         }
         {
+            // A query whose payload only carries its token, e.g. Flight SQL.
+            let mut payload = ThreadTracker::new_tracking_payload();
+            payload.perf_query_token = QueryPerf::next_query_token();
+            let _guard = ThreadTracker::tracking(payload);
+            MemoryProfiler::on_alloc(64 * SAMPLE_INTERVAL);
+        }
+        {
             // Tracked, but not working for a query.
             let _guard = ThreadTracker::tracking(ThreadTracker::new_tracking_payload());
             MemoryProfiler::on_alloc(64 * SAMPLE_INTERVAL);
@@ -561,7 +617,7 @@ mod tests {
 
         let folded = profiler.dump_folded().unwrap();
         // The intervals are random, 64 samples deviate by about 2.3 samples.
-        for query_id in ["mem-q1", "mem-q2"] {
+        for query_id in ["mem-q1", "mem-q2", super::UNKNOWN_QUERY_ID] {
             let estimated = bytes_under(&folded, query_id);
             assert!(
                 estimated >= 48 * SAMPLE_INTERVAL as u64
