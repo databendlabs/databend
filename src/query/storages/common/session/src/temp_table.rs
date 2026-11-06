@@ -122,16 +122,14 @@ impl TempTblMgr {
             .insert(Self::temp_table_desc(database_name, table_name));
     }
 
-    pub fn unmark_query_scoped(&mut self, database_name: &str, table_name: &str) {
-        self.query_scoped
-            .remove(&Self::temp_table_desc(database_name, table_name));
-    }
-
     /// Whether the session holds temporary state that outlives the current
     /// query and therefore requires follow-up requests to reach this node:
     /// user-created temporary tables or unpublished atomic CTAS tables.
     /// Query-scoped scratch tables are excluded.
     pub fn has_session_scoped_tables(&self) -> bool {
+        if self.query_scoped.is_empty() {
+            return !self.is_empty();
+        }
         self.id_to_table
             .values()
             .chain(self.staged_tables.values())
@@ -597,6 +595,7 @@ pub async fn drop_all_temp_tables(
         guard.id_to_table.clear();
         guard.staged_tables.clear();
         guard.name_to_id.clear();
+        guard.query_scoped.clear();
         (fuse_table_data, mem_tbl_ids)
     };
 
@@ -951,10 +950,9 @@ mod tests {
         assert!(!mgr.lock().has_session_scoped_tables());
         assert!(mgr.lock().is_empty());
 
-        // A mark without a table (failed CREATE) can be withdrawn.
+        // A mark without a table (failed CREATE) stays but is inert.
         mgr.lock().mark_query_scoped("db", "never_created");
-        mgr.lock().unmark_query_scoped("db", "never_created");
-        assert!(mgr.lock().query_scoped.is_empty());
+        assert!(!mgr.lock().has_session_scoped_tables());
 
         // Atomic CTAS stages the table by id while the pipeline runs; a
         // query-scoped staged table must not count either, a user one must.

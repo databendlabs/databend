@@ -20,6 +20,11 @@ use crate::table::Table;
 
 #[async_trait::async_trait]
 pub trait TableContextCte: Send + Sync {
+    /// Declare a temporary table that is about to be created as scratch space
+    /// of this query (materialized CTE). Called before the CREATE so the table
+    /// is never reported to clients as a session temporary table.
+    fn mark_query_scoped_temp_table(&self, _database_name: &str, _table_name: &str) {}
+
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
 
     async fn drop_m_cte_temp_table(&self) -> Result<()>;
