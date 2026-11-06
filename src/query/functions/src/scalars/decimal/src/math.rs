@@ -62,7 +62,10 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
 
         let name = format!("{:?}", round_mode).to_lowercase();
 
-        let mut sig_args_type = args_type.to_owned();
+        let mut sig_args_type = args_type
+            .iter()
+            .map(DataType::remove_nullable)
+            .collect::<Vec<_>>();
         sig_args_type[0] = from_type.clone();
         let signature = FunctionSignature {
             name,
@@ -88,7 +91,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             },
             eval,
             None,
-            args_type[0].is_nullable(),
+            args_type.iter().any(DataType::is_nullable),
         ))
     };
 

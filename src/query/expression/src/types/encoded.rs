@@ -93,7 +93,7 @@ macro_rules! map_narrow_buffer {
 /// Widens a delta or key of any [`NarrowBuffer`] width. Generic so that the arms of
 /// `with_narrow_buffer!` share the code, the `u64` one included.
 #[inline(always)]
-fn widen<D: Into<u64>>(value: D) -> u64 {
+pub(crate) fn widen<D: Into<u64>>(value: D) -> u64 {
     value.into()
 }
 
@@ -225,21 +225,38 @@ impl ExactSizeIterator for NarrowIter<'_> {}
 
 unsafe impl TrustedLen for NarrowIter<'_> {}
 
-/// Values of a plain column that a [`DictColumn`] can be built from, other than strings and
-/// floats (keyed by their bits in [`DictColumn::try_encode`]).
-macro_rules! with_hashable_buffer {
-    ($column:expr, | $b:ident | $body:expr) => {
-        match $column {
-            Column::Number(n) => Some(crate::with_number_type!(|NUM| match n {
-                NumberColumn::NUM($b) => $body,
-            })),
-            Column::Date($b) => Some($body),
-            Column::Timestamp($b) => Some($body),
-            Column::Decimal(DecimalColumn::Decimal64($b, _)) => Some($body),
-            Column::Decimal(DecimalColumn::Decimal128($b, _)) => Some($body),
-            Column::Decimal(DecimalColumn::Decimal256($b, _)) => Some($body),
+/// Plain columns that a [`DictColumn`] can be built from, other than strings and floats
+/// (keyed by their bits in [`DictColumn::try_encode_chunks`]), as the [`AccessType`] `$T` of
+/// their buffers.
+macro_rules! with_hashable_type {
+    ($column:expr, | $T:ident | $body:expr) => {
+        crate::with_number_mapped_type!(|NUM_TYPE| match $column {
+            Column::Number(NumberColumn::NUM_TYPE(_)) => {
+                type $T = super::NumberType<NUM_TYPE>;
+                Some($body)
+            }
+            Column::Date(_) => {
+                type $T = super::DateType;
+                Some($body)
+            }
+            Column::Timestamp(_) => {
+                type $T = super::TimestampType;
+                Some($body)
+            }
+            Column::Decimal(DecimalColumn::Decimal64(..)) => {
+                type $T = super::Decimal64Type;
+                Some($body)
+            }
+            Column::Decimal(DecimalColumn::Decimal128(..)) => {
+                type $T = super::Decimal128Type;
+                Some($body)
+            }
+            Column::Decimal(DecimalColumn::Decimal256(..)) => {
+                type $T = super::Decimal256Type;
+                Some($body)
+            }
             _ => None,
-        }
+        })
     };
 }
 
@@ -358,32 +375,55 @@ impl DictColumn {
         )
     }
 
-    /// Builds the dictionary of a regular column, with the values in first-seen order.
-    ///
-    /// Gives up (`None`) when the column has more than `max_ndv` distinct values or its type
-    /// is not supported.
     pub fn try_encode(column: &Column, max_ndv: usize) -> Option<DictColumn> {
-        if column.len() == 0 {
-            return None;
-        }
-        // `first_rows[key]`: the first row holding the value of `key`.
-        let (keys, first_rows) = match column {
-            Column::String(c) => dict_keys(c.iter(), max_ndv)?,
+        Self::try_encode_chunks(std::iter::once(column), max_ndv)
+    }
+
+    /// Builds one dictionary of the chunks of a regular column, with the values in first-seen
+    /// order and the keys of the rows of all chunks in order.
+    ///
+    /// Gives up (`None`) when the chunks have no rows, more than `max_ndv` distinct values, or
+    /// a type that is not supported.
+    pub fn try_encode_chunks<'a>(
+        columns: impl IntoIterator<Item = &'a Column>,
+        max_ndv: usize,
+    ) -> Option<DictColumn> {
+        let mut columns = columns.into_iter().peekable();
+        let first = *columns.peek()?;
+        let (keys, values) = match first {
+            Column::String(_) => dict_keys(
+                columns.map(|c| (c, c.as_string().map(|c| c.iter()))),
+                max_ndv,
+            )?,
             // Floats are keyed by their bits: `F32`/`F64` equate `+0.0` and `-0.0` (and all
             // NaNs), but the dictionary must reproduce the exact values, e.g. for
             // `atan2(-0.0, -1.0) = -pi` vs `atan2(+0.0, -1.0) = pi`.
-            Column::Number(NumberColumn::Float32(b)) => {
-                dict_keys(b.iter().map(|v| v.0.to_bits()), max_ndv)?
-            }
-            Column::Number(NumberColumn::Float64(b)) => {
-                dict_keys(b.iter().map(|v| v.0.to_bits()), max_ndv)?
-            }
-            column => with_hashable_buffer!(column, |b| dict_keys(b.iter().copied(), max_ndv))??,
+            Column::Number(NumberColumn::Float32(_)) => dict_keys(
+                columns.map(|c| match c {
+                    Column::Number(NumberColumn::Float32(b)) => {
+                        (c, Some(b.iter().map(|v| v.0.to_bits())))
+                    }
+                    _ => (c, None),
+                }),
+                max_ndv,
+            )?,
+            Column::Number(NumberColumn::Float64(_)) => dict_keys(
+                columns.map(|c| match c {
+                    Column::Number(NumberColumn::Float64(b)) => {
+                        (c, Some(b.iter().map(|v| v.0.to_bits())))
+                    }
+                    _ => (c, None),
+                }),
+                max_ndv,
+            )?,
+            column => with_hashable_type!(column, |T| dict_keys(
+                columns.map(|c| (
+                    c,
+                    T::try_downcast_column(c).ok().map(IntoIterator::into_iter)
+                )),
+                max_ndv,
+            ))??,
         };
-        let values = BlockEntry::Column(column.clone())
-            .take(first_rows.as_slice())
-            .ok()?
-            .to_column();
         let max_key = values.len() as u64 - 1;
         let keys = NarrowBuffer::pack(keys.into_iter().map(|key| key as u64), max_key);
         Some(DictColumn::new(keys, values))
@@ -401,28 +441,43 @@ fn op_matches(op: &SelectOp, ordering: std::cmp::Ordering) -> bool {
     }
 }
 
-/// `(key of each row, first row of each key)`, or `None` beyond `max_ndv` distinct values.
-fn dict_keys<T: std::hash::Hash + Eq>(
-    values: impl ExactSizeIterator<Item = T>,
+/// `(key of each row, values of the keys)` of the values of the chunks, or `None` without
+/// rows, beyond `max_ndv` distinct values, or for a chunk of another type (`None` values).
+fn dict_keys<'a, T: std::hash::Hash + Eq>(
+    chunks: impl Iterator<Item = (&'a Column, Option<impl Iterator<Item = T>>)>,
     max_ndv: usize,
-) -> Option<(Vec<u32>, Vec<u32>)> {
+) -> Option<(Vec<u32>, Column)> {
     let max_ndv = max_ndv.min(u32::MAX as usize);
     let hasher = ahash::RandomState::with_seeds(0, 1, 2, 3);
     let mut dictionary = HashMap::with_capacity_and_hasher(max_ndv.min(1024), hasher);
-    let mut keys = Vec::with_capacity(values.len());
-    let mut first_rows = Vec::new();
-    for (row, value) in values.enumerate() {
-        let next = first_rows.len() as u32;
-        let key = *dictionary.entry(value).or_insert(next);
-        if key == next {
-            if first_rows.len() == max_ndv {
-                return None;
+    let mut keys = Vec::new();
+    // The values first seen in each chunk.
+    let mut values = Vec::new();
+    for (column, chunk) in chunks {
+        keys.reserve(column.len());
+        let mut first_rows = Vec::new();
+        for (row, value) in chunk?.enumerate() {
+            let next = dictionary.len() as u32;
+            let key = *dictionary.entry(value).or_insert(next);
+            if key == next {
+                if next as usize == max_ndv {
+                    return None;
+                }
+                first_rows.push(row as u32);
             }
-            first_rows.push(row as u32);
+            keys.push(key);
         }
-        keys.push(key);
+        if !first_rows.is_empty() {
+            let entry = BlockEntry::Column(column.clone()).take(first_rows.as_slice());
+            values.push(entry.ok()?.to_column());
+        }
     }
-    Some((keys, first_rows))
+    let values = match values.len() {
+        0 => return None,
+        1 => values.pop()?,
+        _ => Column::concat_columns(values).ok()?,
+    };
+    Some((keys, values))
 }
 
 /// Physical types that frame of reference columns decode to.
