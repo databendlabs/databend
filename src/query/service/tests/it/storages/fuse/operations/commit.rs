@@ -614,6 +614,10 @@ impl TableContextAuthorization for CtxDelegation {
 
 #[async_trait::async_trait]
 impl TableContextCte for CtxDelegation {
+    fn mark_query_scoped_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
+
     fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
         todo!()
     }

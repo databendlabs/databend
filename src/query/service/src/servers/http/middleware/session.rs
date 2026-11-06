@@ -88,7 +88,7 @@ use crate::sessions::SessionManager;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone)]
 pub enum EndpointKind {
     Login,
     Logout,
@@ -550,15 +550,19 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
 
 /// The node this request is pinned to is no longer in the cluster, so the
 /// session state it held (temporary tables, transaction) is gone for sure.
-/// Reject the request and, when the request carries the client's session
-/// state, hand back a corrected copy so the client stops pinning. Page and
-/// final requests carry no session state; their next `POST /v1/query` will.
+/// Reject the request. For `POST /v1/query`, which carries the client's
+/// session state, hand back a corrected copy so the client stops pinning.
+/// Page and final requests carry no session state; their next
+/// `POST /v1/query` will.
 async fn sticky_node_lost_response(
     mut req: Request,
     sticky_node_id: &str,
     endpoint_kind: EndpointKind,
 ) -> Response {
-    let session = request_session_conf(&mut req, endpoint_kind).await;
+    let session = match endpoint_kind {
+        EndpointKind::StartQuery => request_body_session_conf(&mut req).await,
+        _ => None,
+    };
     let msg = format!(
         "Sticky session state lost: node '{sticky_node_id}' not found in cluster, request={}",
         get_request_info(req)
@@ -566,29 +570,25 @@ async fn sticky_node_lost_response(
     warn!("{}", msg);
     let err = ErrorCode::SessionNodeLost(msg);
     metrics_incr_http_response_errors_count(err.name(), err.code());
-    let session = session.map(|s| s.after_failed_start(true));
     // Built here instead of returned as Err: the outer `json_response`
     // wrapper flattens poem errors to the HTTP status, hiding the error code.
-    (
-        StatusCode::BAD_REQUEST,
-        Json(QueryResponse::failed_to_start(session, err)),
-    )
-        .into_response()
+    match endpoint_kind {
+        // Same body shape as the endpoint would have returned.
+        EndpointKind::StartQuery | EndpointKind::PollQuery => {
+            let session = session.map(|s| s.after_failed_start(true));
+            (
+                StatusCode::BAD_REQUEST,
+                Json(QueryResponse::failed_to_start(session, err)),
+            )
+                .into_response()
+        }
+        _ => HttpErrorCode::bad_request(err).as_response(),
+    }
 }
 
-/// Best effort: the session state a request carries, from the
-/// `X-DATABEND-QUERY-CONTEXT` header or, for `POST /v1/query`, the body.
-async fn request_session_conf(
-    req: &mut Request,
-    endpoint_kind: EndpointKind,
-) -> Option<HttpSessionConf> {
-    if let Some(v) = req.headers().get(HEADER_QUERY_CONTEXT) {
-        return v
-            .to_str()
-            .ok()
-            .and_then(|v| serde_json::from_str(v.trim()).ok());
-    }
-    if endpoint_kind != EndpointKind::StartQuery || req.method() != Method::POST {
+/// Best effort: the session state in the body of a `POST /v1/query`.
+async fn request_body_session_conf(req: &mut Request) -> Option<HttpSessionConf> {
+    if req.method() != Method::POST {
         return None;
     }
     #[derive(Deserialize)]

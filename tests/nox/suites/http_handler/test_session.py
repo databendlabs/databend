@@ -397,6 +397,19 @@ def test_sticky_node_lost_error_code():
     assert body["error"]["code"] == 5113, response.text
     assert body["session"] is None, body
 
+    # Other sticky endpoints keep the minimal error-only body.
+    response = requests.post(
+        "http://localhost:8000/v1/session/logout",
+        auth=auth,
+        headers=headers,
+        json={},
+        timeout=30,
+    )
+    assert response.status_code == 400, response.text
+    body = response.json()
+    assert body["error"]["code"] == 5113, response.text
+    assert set(body) == {"error"}, body
+
 
 @pytest.mark.parametrize("caps", [None, "", "unknown", "session_header_v2"])
 def test_no_session(caps):
