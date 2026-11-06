@@ -242,12 +242,6 @@ impl TableContextCte for QueryContext {
             database_name.to_string(),
             table_name.to_string(),
         );
-        self.shared
-            .session
-            .session_ctx
-            .temp_tbl_mgr()
-            .lock()
-            .mark_query_scoped(database_name, table_name);
         let mut tables = self.shared.recursive_cte_temp_tables.write();
         if !tables.contains(&entry) {
             tables.push(entry);

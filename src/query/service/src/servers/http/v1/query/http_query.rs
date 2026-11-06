@@ -105,14 +105,13 @@ pub struct HttpQueryRequest {
 impl HttpQueryRequest {
     pub(crate) fn fail_to_start_sql(&self, err: ErrorCode) -> impl IntoResponse {
         metrics_incr_http_response_errors_count(err.name(), err.code());
-        // The server has just verified that the temporary tables this session
-        // claims to own no longer exist (expired, or lost with the node that
-        // held them). Tell the client so it stops pinning requests to a node
-        // that has nothing for it; otherwise the connection fails forever.
-        let temp_tables_gone = matches!(
-            err.code(),
-            ErrorCode::SESSION_TIMEOUT | ErrorCode::SESSION_LOST
-        );
+        // `SessionTimeout` here means the server checked for the temporary
+        // tables this session claims to own and found none: they expired on
+        // this node. Tell the client, otherwise it keeps replaying the stale
+        // state and every statement on the connection fails. `SessionLost` is
+        // deliberately not handled: it also covers misroutes, where the tables
+        // still exist on the original node.
+        let temp_tables_gone = err.code() == ErrorCode::SESSION_TIMEOUT;
         let session = self.session.as_ref().map(|s| {
             let txn_state = if matches!(s.txn_state, Some(TxnState::Active)) {
                 Some(TxnState::Fail)

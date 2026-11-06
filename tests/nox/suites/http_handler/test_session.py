@@ -295,6 +295,12 @@ def test_materialized_cte_is_not_sticky(client):
     else:
         pytest.fail("materialized CTE query did not finish")
     assert data == [["0"]], data
+    # The page that points at final_uri has already been appended to `states`
+    # above; /final itself carries no session, but request it to close the query.
+    body = client.request("GET", f"http://localhost:8000{final_uri}")
+    assert body["error"] is None, body
+    assert body["next_uri"] is None, body
+    assert body["session"] is None, body
     assert states, "expected at least one response carrying session state"
     for state in states:
         assert not state["need_sticky"], state
@@ -303,6 +309,31 @@ def test_materialized_cte_is_not_sticky(client):
     # echoes the final state runs without any temp-table check tripping.
     body = client.do_query("select 1", states[-1])
     assert body["data"] == [["1"]], body
+    assert not body["session"]["need_sticky"], body
+    client.do_logout()
+
+
+def test_recursive_cte_does_not_hide_user_temp_table(client):
+    # A recursive CTE materializes into a regular memory table
+    # (`__rcte_<query_id>_<node_id>_<n>_<cte>`), not a session temporary table.
+    # It must never be marked as query-scoped in the temp table manager: the mark
+    # would not be cleared (the table is dropped through the catalog) and the
+    # stickiness check must keep seeing a user temp table created afterwards.
+    client.login()
+    body = client.do_query(
+        "WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM t WHERE n < 3) "
+        "SELECT n FROM t ORDER BY n"
+    )
+    assert body["data"] == [["1"], ["2"], ["3"]], body
+    assert not body["session"]["need_sticky"], body
+    state = body["session"]
+    body = client.do_query("CREATE TEMP TABLE t(a INT)", state)
+    state = body["session"]
+    try:
+        assert state["need_sticky"], body
+        assert state["need_keep_alive"], body
+    finally:
+        body = client.do_query("DROP TABLE t", state)
     assert not body["session"]["need_sticky"], body
     client.do_logout()
 

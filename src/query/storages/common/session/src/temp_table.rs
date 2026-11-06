@@ -68,8 +68,9 @@ pub struct TempTblMgr {
     staged_tables: HashMap<u64, TempTable>,
 
     // Temporary tables (by `'db'.'table'` desc) that belong to a single running
-    // query, e.g. materialized CTE or recursive CTE scratch tables. They are
-    // dropped when the query finishes, so they must not make the session sticky.
+    // query: materialized CTE scratch tables. They are dropped when the query
+    // finishes, so they must not make the session sticky. Their names embed the
+    // query id, so a stale mark cannot match a user table.
     query_scoped: HashSet<String>,
 }
 
@@ -113,9 +114,9 @@ impl TempTblMgr {
         self.id_to_table.is_empty() && self.staged_tables.is_empty()
     }
 
-    /// Mark a temporary table as owned by a single query (materialized CTE,
-    /// recursive CTE). The mark is keyed by name so it can be set before the
-    /// table is created; it is cleared when the table is dropped.
+    /// Mark a temporary table as owned by a single query (materialized CTE).
+    /// The mark is keyed by name so it can be set before the table is created;
+    /// it is cleared when the table is dropped.
     pub fn mark_query_scoped(&mut self, database_name: &str, table_name: &str) {
         self.query_scoped
             .insert(Self::temp_table_desc(database_name, table_name));
