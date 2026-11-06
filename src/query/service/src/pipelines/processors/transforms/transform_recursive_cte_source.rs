@@ -660,11 +660,13 @@ async fn create_memory_table_for_cte_scan(
     for create_table_plan in create_table_plans {
         let table_name = create_table_plan.table.clone();
         let database_name = create_table_plan.database.clone();
+        let catalog_name = ctx.get_current_catalog();
+        // Register before creating so the table is never observed as a
+        // session-scoped temporary table, even by a concurrent HTTP page response.
+        ctx.add_recursive_cte_temp_table(&catalog_name, &database_name, &table_name);
         let create_table_interpreter =
             CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
         create_table_interpreter.execute2().await?;
-        let catalog_name = ctx.get_current_catalog();
-        ctx.add_recursive_cte_temp_table(&catalog_name, &database_name, &table_name);
     }
 
     Ok(())

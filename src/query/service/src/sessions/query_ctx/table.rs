@@ -209,6 +209,14 @@ impl TableContextTableAccess for QueryContext {
 #[async_trait::async_trait]
 impl TableContextCte for QueryContext {
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
+        // Scratch tables of this query must not be reported to HTTP clients as
+        // session temporary tables, otherwise the client session turns sticky.
+        self.shared
+            .session
+            .session_ctx
+            .temp_tbl_mgr()
+            .lock()
+            .mark_query_scoped(database_name, table_name);
         let entry = (database_name.to_string(), table_name.to_string());
         let mut tables = self.m_cte_temp_table.write();
         if !tables.contains(&entry) {
@@ -234,6 +242,12 @@ impl TableContextCte for QueryContext {
             database_name.to_string(),
             table_name.to_string(),
         );
+        self.shared
+            .session
+            .session_ctx
+            .temp_tbl_mgr()
+            .lock()
+            .mark_query_scoped(database_name, table_name);
         let mut tables = self.shared.recursive_cte_temp_tables.write();
         if !tables.contains(&entry) {
             tables.push(entry);
