@@ -43,6 +43,11 @@ pub struct BloomColumnFilterReader {
 }
 
 impl BloomColumnFilterReader {
+    /// Cache key of the filter of `filter_name` inside the index file at `index_path`.
+    pub fn cache_key(index_path: &str, filter_name: &str) -> String {
+        format!("{index_path}-{filter_name}")
+    }
+
     pub fn new(
         index_path: String,
         column_ordinal: BloomIndexColumnOrdinal,
@@ -51,7 +56,7 @@ impl BloomColumnFilterReader {
         operator: Operator,
         schema_desc: SchemaDescPtr,
     ) -> Self {
-        let cache_key = format!("{index_path}-{filter_name}");
+        let cache_key = Self::cache_key(&index_path, filter_name);
 
         let SingleColumnMeta {
             offset,

@@ -110,6 +110,32 @@ fn test_disk_decode_failure_evicts_disk_entry() {
     assert!(!disk.contains_key("bad"));
 }
 
+/// `lookup_memory` serves the memory tier only: a value only on disk is a miss, and a memory hit
+/// does not write the disk tier, while `lookup` does both.
+#[test]
+fn test_lookup_memory_skips_disk_tier() {
+    let dir = tempfile::tempdir().unwrap();
+    let disk = disk(&dir);
+    let store = shared_store(0, 1 << 20, 0);
+    let kind = CacheKind::of::<bloom::Filter>();
+    let cache =
+        MemCache::<Blob>::new(store.clone(), kind).with_disk(disk.clone(), allowed(), Codec::of());
+
+    cache.put("k", Blob(vec![1; 10]));
+    wait_for(|| disk.contains_key("k"));
+    store.evict(kind, "k");
+    assert!(cache.lookup_memory("k").is_none());
+    assert_eq!(store.kind_stats(kind).items, 0);
+
+    // Back in memory but not on disk.
+    assert_eq!(cache.lookup("k").unwrap().0, vec![1; 10]);
+    disk.evict("k");
+    assert_eq!(cache.lookup_memory("k").unwrap().0, vec![1; 10]);
+    assert!(!disk.contains_key("k"));
+    cache.lookup("k").unwrap();
+    wait_for(|| disk.contains_key("k"));
+}
+
 /// As before the refactor, a memory capacity of 0 leaves the disk tier working: the default
 /// column data cache is disk only.
 #[test]

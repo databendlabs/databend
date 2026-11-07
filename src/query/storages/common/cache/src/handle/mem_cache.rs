@@ -200,6 +200,23 @@ impl<T: CachedItem> MemCache<T> {
         self.lookup_tiers(key, Some(len))
     }
 
+    /// Like `lookup`, but only the memory tier: never reads, decodes or writes the disk tier.
+    /// For callers on threads that must not do disk I/O or encoding, and that fall back to
+    /// `lookup` / `get` elsewhere on a miss.
+    pub fn lookup_memory(&self, key: &str) -> Option<CacheRef<T>> {
+        if !self.memory_enabled() {
+            return None;
+        }
+        self.counters.access();
+        let hit = self.memory_hit(key);
+        if hit.is_some() {
+            self.counters.hit();
+        } else {
+            self.counters.miss();
+        }
+        hit
+    }
+
     pub fn contains(&self, key: &str) -> bool {
         (self.memory_enabled() && self.store.contains(self.kind, key))
             || self

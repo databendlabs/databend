@@ -49,6 +49,7 @@ use crate::io::FuseCaches;
 use crate::io::SpatialIndexBuilder;
 use crate::io::SpatialIndexResult;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::read::bloom::BloomColumnFilterReader;
 use crate::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use crate::io::read::load_spatial_index_files;
 use crate::io::read::load_vector_index_meta;
@@ -282,7 +283,9 @@ impl AssembleIndexes {
         let caches = FuseCaches::instance();
         caches.index_metas.bloom.evict(&path);
         for name in old_ngram_names {
-            caches.bloom_filters.evict(&format!("{path}-{name}"));
+            caches
+                .bloom_filters
+                .evict(&BloomColumnFilterReader::cache_key(&path, &name));
         }
         Ok(())
     }
