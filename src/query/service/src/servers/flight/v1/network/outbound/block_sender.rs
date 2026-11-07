@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use arrow_ipc::writer::IpcWriteOptions;
 use async_channel::Sender;
 use async_channel::TrySendError;
 use databend_common_base::runtime::profile::Profile;
@@ -32,6 +31,7 @@ use super::super::inbound::exchange_queue::QueueItem;
 use super::super::wire_format::make_ipc_options;
 use super::super::wire_format::serialize_block_for_thread;
 use super::exchange_send_buffer::ExchangeSendBuffer;
+use crate::servers::flight::v1::ipc_compression::FlightIpcOptions;
 
 /// Deliver a block to a destination, locally or over the network.
 ///
@@ -112,7 +112,7 @@ pub struct RemoteBlockSender {
     dest_idx: usize,
     thread_id: usize,
     buffer: Arc<ExchangeSendBuffer>,
-    ipc_options: IpcWriteOptions,
+    ipc_options: FlightIpcOptions,
 }
 
 impl RemoteBlockSender {
