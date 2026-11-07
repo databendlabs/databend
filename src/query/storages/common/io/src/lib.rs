@@ -38,6 +38,7 @@ pub use range_read::ChunkedRangeReader;
 pub use range_read::MergeRangeReader;
 pub use range_read::OperatorRangeReader;
 pub use range_read::RangeReader;
+pub use range_read::blocked_nanos;
 pub use read_settings::ReadSettings;
 
 #[cfg(test)]

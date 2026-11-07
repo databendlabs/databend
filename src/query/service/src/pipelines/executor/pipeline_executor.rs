@@ -22,6 +22,7 @@ use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::defer;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -281,6 +282,19 @@ impl PipelineExecutor {
                 executor.graph.top_memory_plan_nodes(limit)
             }
             PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.top_memory_plan_nodes(limit),
+        }
+    }
+
+    /// Per-processor profiles of the running graph.
+    ///
+    /// Unlike [`Self::fetch_profiling`], which aggregates by plan node, this keeps one entry
+    /// per processor instance so pipelines whose stages share a plan node (for example
+    /// recluster: sources, merge, compact, serialize all under one `Recluster` plan) can
+    /// still be broken down by stage.
+    pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_proc_profiles(),
+            PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.get_proc_profiles(),
         }
     }
 

@@ -36,11 +36,14 @@
 #![feature(iterator_try_reduce)]
 #![allow(clippy::large_enum_variant)]
 #![feature(try_blocks)]
-#![feature(variant_count)]
 #![feature(duration_constructors)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![feature(stmt_expr_attributes)]
+// Only used in `#[cfg(test)]` code now; keep the feature for test builds without
+// tripping `unused_features` on the lib build.
+#![cfg_attr(not(test), allow(unused_features))]
+#![feature(variant_count)]
 
 extern crate core;
 

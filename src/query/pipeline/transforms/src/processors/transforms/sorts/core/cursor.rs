@@ -71,6 +71,11 @@ where
         self.rows.len()
     }
 
+    #[inline]
+    pub fn rows(&self) -> &R {
+        &self.rows
+    }
+
     pub fn rows_column_suffix(&self) -> Column {
         self.rows.slice(self.row_index..self.rows.len()).to_column()
     }

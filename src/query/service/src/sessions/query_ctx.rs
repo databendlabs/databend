@@ -668,6 +668,18 @@ impl QueryContext {
         self.shared.cluster_spill_progress.write().clear();
     }
 
+    /// Add time a recluster group source spent blocked on an object-storage read.
+    pub fn incr_recluster_blocked_nanos(&self, nanos: u64) {
+        self.shared
+            .recluster_blocked_nanos
+            .fetch_add(nanos, Ordering::Relaxed);
+    }
+
+    /// Monotonic; callers diff two snapshots to get a per-round value.
+    pub fn get_recluster_blocked_nanos(&self) -> u64 {
+        self.shared.recluster_blocked_nanos.load(Ordering::Relaxed)
+    }
+
     pub fn add_spill_file(&self, location: spillers::Location, layout: spillers::Layout) {
         let mut w = self.shared.spilled_files.write();
         w.insert(location, layout);

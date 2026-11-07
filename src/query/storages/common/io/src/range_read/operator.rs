@@ -409,7 +409,10 @@ impl RangeReader for OperatorRangeReader {
                 .expect("operator range was dispatched above")
                 .result_rx
                 .clone();
-            match result_rx.recv_blocking() {
+            let blocked_at = Instant::now();
+            let received = result_rx.recv_blocking();
+            super::blocking_stats::record_blocked(blocked_at.elapsed());
+            match received {
                 Ok(Ok(fetched)) => {
                     metrics_inc_remote_io_read_milliseconds(fetched.io_time.as_millis() as u64);
                     self.prefetch_map
