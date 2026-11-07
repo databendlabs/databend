@@ -30,7 +30,7 @@ use geozero::wkb::Ewkb;
 
 use crate::field_encoder::FieldEncoderBytes;
 use crate::field_encoder::FieldEncoderJSON;
-use crate::field_encoder::write_tsv_escaped_string;
+use crate::field_encoder::helpers::write_tsv_escaped_string_with_record_delimiter;
 
 /// CSV output always escapes quotes by doubling them. The input-only `ESCAPE`
 /// option affects neither output quoting decisions nor the field contents.
@@ -57,7 +57,10 @@ impl CsvQuoteSettings {
 
 pub enum StringFormatter {
     Csv(CsvQuoteSettings),
-    Text { record_delimiter: u8 },
+    Text {
+        field_delimiter: u8,
+        record_delimiter: u8,
+    },
 }
 
 impl StringFormatter {
@@ -71,9 +74,15 @@ impl StringFormatter {
     fn write_string(&self, bytes: &[u8], buf: &mut Vec<u8>) {
         match self {
             StringFormatter::Csv(settings) => write_csv_string_maybe_quoted(bytes, buf, settings),
-            StringFormatter::Text { record_delimiter } => {
-                write_tsv_escaped_string(bytes, buf, *record_delimiter)
-            }
+            StringFormatter::Text {
+                field_delimiter,
+                record_delimiter,
+            } => write_tsv_escaped_string_with_record_delimiter(
+                bytes,
+                buf,
+                *field_delimiter,
+                *record_delimiter,
+            ),
         }
     }
 }
@@ -139,7 +148,8 @@ impl FieldEncoderCSV {
             simple: FieldEncoderBytes::create_for_tsv(params, settings.clone()),
             nested: FieldEncoderJSON::create(settings),
             string_formatter: StringFormatter::Text {
-                record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
+                field_delimiter: params.field_delimiter.as_bytes()[0],
+                record_delimiter: *params.record_delimiter.as_bytes().last().unwrap(),
             },
         }
     }

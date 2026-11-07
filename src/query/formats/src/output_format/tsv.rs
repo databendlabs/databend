@@ -19,7 +19,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::TextFileFormatParams;
 
 use crate::field_encoder::FieldEncoderCSV;
-use crate::field_encoder::helpers::write_tsv_escaped_string;
+use crate::field_encoder::helpers::write_tsv_escaped_string_with_record_delimiter;
 use crate::output_format::OutputFormat;
 
 pub struct TEXTOutputFormat {
@@ -55,7 +55,12 @@ impl TEXTOutputFormat {
             if col_index != 0 {
                 buf.push(fd);
             }
-            write_tsv_escaped_string(v.as_bytes(), &mut buf, self.field_delimiter);
+            write_tsv_escaped_string_with_record_delimiter(
+                v.as_bytes(),
+                &mut buf,
+                self.field_delimiter,
+                *self.record_delimiter.last().unwrap(),
+            );
         }
 
         buf.extend_from_slice(&self.record_delimiter);
@@ -129,6 +134,7 @@ mod test {
     use databend_common_expression::TableField;
     use databend_common_expression::types::BinaryType;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::StringType;
     use databend_common_expression::types::number::Int32Type;
     use databend_common_meta_app::principal::FileFormatOptionsReader;
     use databend_common_meta_app::principal::FileFormatParams;
@@ -268,6 +274,30 @@ mod test {
 
         assert_eq!(prefix, "c1\n");
         assert_eq!(body, "1\nNULL\n");
+        Ok(())
+    }
+
+    #[test]
+    fn test_text_output_escapes_custom_record_delimiter() -> Result<()> {
+        let (schema, block) = gen_schema_and_block(
+            vec![TableField::new("header;name", TableDataType::String)],
+            vec![StringType::from_data(vec!["a;b", "c|d", "tail\\;", ""])],
+        );
+        let settings = Settings::create(Tenant::new_literal("default"));
+        let options = BTreeMap::from([
+            ("type".to_string(), "text".to_string()),
+            ("output_header".to_string(), "true".to_string()),
+            ("field_delimiter".to_string(), "|".to_string()),
+            ("record_delimiter".to_string(), ";".to_string()),
+        ]);
+        let params =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)?;
+        let mut output = get_output_format(schema, params, settings.get_output_format_settings()?)?;
+        assert_eq!(output.serialize_prefix()?, b"header\\;name;");
+        assert_eq!(
+            output.serialize_block(&block)?,
+            b"a\\;b;c\\|d;tail\\\\\\;;;"
+        );
         Ok(())
     }
 
