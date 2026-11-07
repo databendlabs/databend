@@ -26,6 +26,7 @@ use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionID;
 use databend_common_expression::Scalar;
 use databend_common_expression::StatEvaluator;
+use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
@@ -204,12 +205,13 @@ impl DeriveStatSmokeCase {
         let input_stats = column_stats
             .iter()
             .map(|(binding, data_type, column_stat)| {
-                let stat = column_stat.to_arg_stat(data_type).unwrap_or_else(|err| {
-                    panic!(
-                        "derive_stat smoke cannot convert {} argument {:?} to ArgStat: {err}",
-                        self.display_name, data_type
-                    )
-                });
+                let stat =
+                    ArgStat::from_column_stat(column_stat, data_type).unwrap_or_else(|err| {
+                        panic!(
+                            "derive_stat smoke cannot convert {} argument {:?} to ArgStat: {err}",
+                            self.display_name, data_type
+                        )
+                    });
                 (binding.clone(), stat)
             })
             .collect::<HashMap<_, _>>();
@@ -510,7 +512,7 @@ fn assert_estimator_smoke_invariants(
             stat.null_count().expected() <= cardinality.ceil(),
             "null count must not exceed input cardinality"
         );
-        let arg_stat = stat.to_arg_stat(data_type).map_err(|err| {
+        let arg_stat = ArgStat::from_column_stat(stat, data_type).map_err(|err| {
             TestCaseError::fail(format!("column stat should convert to ArgStat: {err}"))
         })?;
         arg_stat
@@ -632,8 +634,7 @@ proptest! {
             .unwrap(),
         )]);
         for stat in column_stats.values() {
-            let arg_stat = stat
-                .to_arg_stat(&case.data_type)
+            let arg_stat = ArgStat::from_column_stat(stat, &case.data_type)
                 .map_err(|err| TestCaseError::fail(format!("input column stat should convert to ArgStat: {err}")))?;
             arg_stat
                 .check_consistency_with_type(Some(&case.data_type))

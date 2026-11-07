@@ -45,9 +45,11 @@ mod push_down_top_n_union_scan;
 mod selectivity;
 mod selectivity_smoke;
 mod stat_derivation;
+mod statistics_trace;
 mod type_consistency;
 mod typed_constant;
 mod union_all;
+mod upper_only_ndv;
 
 fn table_statistics(rows: u64) -> TableStatistics {
     TableStatistics {
@@ -65,10 +67,10 @@ fn table_statistics(rows: u64) -> TableStatistics {
     }
 }
 
-fn column_stat(json: &str) -> Result<BasicColumnStatistics> {
+fn column_stat(json: &str, num_rows: u64) -> Result<BasicColumnStatistics> {
     let stats: ColumnStats = serde_json::from_str(json)
         .map_err(|err| ErrorCode::Internal(format!("invalid column statistics JSON: {err}")))?;
-    Ok(stats.to_basic_column_statistics())
+    stats.to_basic_column_statistics(Some(num_rows))
 }
 
 fn histogram_stat(json: &str) -> Result<Histogram> {

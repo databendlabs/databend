@@ -485,10 +485,11 @@ impl ModifyTableColumnInterpreter {
                                 field.name, old_field.column_id
                             ))
                         })?;
-                    if column_stat.null_count > 0 {
+                    if column_stat.null_count() > 0 {
                         return Err(ErrorCode::BadArguments(format!(
                             "Cannot change column '{}' to NOT NULL: contains {} NULL values",
-                            field.name, column_stat.null_count
+                            field.name,
+                            column_stat.null_count()
                         )));
                     }
                 }

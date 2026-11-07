@@ -99,6 +99,7 @@ use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::NdvEstimate;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -301,7 +302,7 @@ impl ColumnStatisticsProvider for FakeColumnStatisticsProvider {
         }
         self.column_stats
             .get(&column_id)
-            .map(|stats| stats.in_memory_size / num_rows)
+            .map(|stats| stats.in_memory_size() / num_rows)
     }
 
     fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {
@@ -1445,13 +1446,15 @@ impl LiteTableContext {
 
                                     column_stats.insert(
                                         column_name.to_string(),
-                                        BasicColumnStatistics {
-                                            min: Some(Datum::UInt(0)),
-                                            max: Some(Datum::UInt(num_rows.saturating_sub(1))),
-                                            ndv: Some(num_rows),
-                                            null_count: 0,
-                                            in_memory_size: num_rows.saturating_mul(8),
-                                        },
+                                        BasicColumnStatistics::new(
+                                            Some(Datum::UInt(0)),
+                                            Some(Datum::UInt(num_rows.saturating_sub(1))),
+                                            0,
+                                            num_rows.saturating_mul(8),
+                                            NdvEstimate::exact(num_rows as f64),
+                                            Some(num_rows),
+                                        )
+                                        .map_err(ErrorCode::Internal)?,
                                     );
                                 }
                             }

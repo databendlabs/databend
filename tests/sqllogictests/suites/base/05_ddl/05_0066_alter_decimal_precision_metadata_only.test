@@ -336,12 +336,12 @@ table: default.default.decimal_stale_table_stats<slt:ignore>estimated rows: 9.09
 statement ok
 INSERT INTO decimal_stale_table_stats SELECT number::INT + 100, 3.00 FROM numbers(100)
 
-# Decimal interval width is not an NDV upper bound. The resulting NDV estimate
-# is 12 rather than the old width-based cap of 11, giving 200 / 12 = 16.67.
+# The append adds a second block. Without an HLL the block NDV sum (12) is only
+# an upper, so the equality takes the default selectivity: 200 * 0.2 = 40.
 query T
 EXPLAIN SELECT * FROM decimal_stale_table_stats WHERE d = 1.00
 ----
-table: default.default.decimal_stale_table_stats<slt:ignore>estimated rows: 16.67
+table: default.default.decimal_stale_table_stats<slt:ignore>estimated rows: 40.00
 
 query I
 SELECT count(*) FROM decimal_stale_table_stats WHERE d = 1.00
