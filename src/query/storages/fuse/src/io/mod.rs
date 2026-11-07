@@ -18,6 +18,7 @@ mod locations;
 pub mod read;
 mod segments;
 mod snapshots;
+mod table_files;
 mod write;
 
 pub use cache::FuseCaches;
@@ -59,6 +60,7 @@ pub use segments::SegmentsIO;
 pub use segments::SerializedSegment;
 pub use snapshots::SnapshotLiteExtended;
 pub use snapshots::SnapshotsIO;
+pub use table_files::TableFiles;
 pub use write::BlockBuilder;
 pub use write::BlockSerialization;
 pub use write::BlockStats;

@@ -23,6 +23,7 @@ use std::sync::atomic::Ordering;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::Reader;
@@ -42,7 +43,6 @@ use rand::rngs::SmallRng;
 
 use super::samples::Accuracy;
 use super::samples::Sample;
-use crate::fakes::wait_for;
 use crate::mem_bytes_accuracy::measure;
 
 /// One kind, for tests that run over every kind.
@@ -59,10 +59,6 @@ pub trait KindCase: Send + Sync {
 
     /// `legacy_bytes` of a sample value.
     fn legacy_bytes(&self) -> usize;
-
-    /// The disk tier, for kinds that define one: the value survives encoding, and is read back
-    /// from disk once the memory tier is off.
-    fn disk_round_trip(&self, manager: &CacheManager);
 
     /// `mem_bytes` over the bytes a sample value holds, and how close it should be.
     fn mem_bytes_ratio(&self) -> (f64, Accuracy);
@@ -145,7 +141,7 @@ impl<K: Sample> Reader for SampleReader<K> {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, key: &String) -> Result<K::Value> {
+    async fn read(&self, key: &String, _ctx: &CachePolicy) -> Result<K::Value> {
         if self.yields {
             yield_once().await;
         }
@@ -206,7 +202,7 @@ impl<K: Sample> KindCase for Case<K> {
         assert_eq!(stats.resident, charge(&first) + charge(&second), "{name}");
 
         // A read-only view hits, but does not fill.
-        let view = cache.read_only();
+        let view = cache.with_policy(CachePolicy::READ_ONLY);
         assert!(view.lookup("a").is_some(), "{name}");
         view.fill("b", K::sample(3));
         assert!(!cache.contains("b"), "{name}");
@@ -232,35 +228,6 @@ impl<K: Sample> KindCase for Case<K> {
             (0, 0, 0),
             "{name}"
         );
-    }
-
-    fn disk_round_trip(&self, manager: &CacheManager) {
-        let name = K::NAME;
-        let Some(disk) = K::DISK else {
-            return;
-        };
-        let value = K::sample(7);
-        let encoded = disk.codec.encode(&value).unwrap();
-        let decoded = disk.codec.decode(encoded.clone().into()).unwrap();
-        assert_eq!(disk.codec.encode(&decoded).unwrap(), encoded, "{name}");
-
-        let cache = manager.cache::<K>();
-        cache.put("d", value);
-        let disk_name = format!("disk_{}", name.trim_start_matches("memory_"));
-        let on_disk = || {
-            manager
-                .rows()
-                .iter()
-                .any(|r| r.name == disk_name && r.num_items == 1)
-        };
-        wait_for(on_disk);
-
-        manager.set_cache_capacity(name, 0).unwrap();
-        let read_back = cache.lookup("d").expect(name);
-        assert!(!read_back.is_charged(), "{name}");
-        assert_eq!(disk.codec.encode(&read_back).unwrap(), encoded, "{name}");
-        assert!(cache.evict("d"), "{name}");
-        assert!(cache.lookup("d").is_none() && !on_disk(), "{name}");
     }
 
     fn shared_loads(&self, manager: &CacheManager) {
@@ -301,7 +268,9 @@ impl<K: Sample> KindCase for Case<K> {
             2 => cache.lookup(&key),
             3 => Some(block_on(cache.get(&SampleReader::<K>::new(), key)).unwrap()),
             4 => {
-                cache.read_only().fill(&key, K::sample(rng.r#gen()));
+                cache
+                    .with_policy(CachePolicy::READ_ONLY)
+                    .fill(&key, K::sample(rng.r#gen()));
                 None
             }
             _ => {

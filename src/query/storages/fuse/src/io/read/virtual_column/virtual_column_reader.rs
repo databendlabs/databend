@@ -21,6 +21,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
@@ -64,6 +65,8 @@ pub struct VirtualColumnReader {
     pub(super) dal: Operator,
     pub(super) source_schema: TableSchemaRef,
     pub(super) compression: TableCompression,
+    /// How the sidecar files are read: the policy of the scan.
+    pub(super) policy: CachePolicy,
     pub virtual_column_info: VirtualColumnInfo,
 }
 
@@ -74,12 +77,14 @@ impl VirtualColumnReader {
         source_schema: TableSchemaRef,
         virtual_column_info: VirtualColumnInfo,
         compression: TableCompression,
+        policy: CachePolicy,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
             dal,
             source_schema,
             compression,
+            policy,
             virtual_column_info,
         })
     }
@@ -113,8 +118,12 @@ where
 pub async fn load_virtual_column_file_meta(
     dal: Operator,
     path: &str,
+    policy: CachePolicy,
 ) -> Result<Arc<VirtualColumnFileMeta>> {
-    let cache = FuseCaches::instance().index_metas.virtual_column.clone();
+    let cache = FuseCaches::instance()
+        .index_metas
+        .virtual_column
+        .with_policy(policy);
     let key = (path.to_owned(), None);
     async move {
         let reader = IndexMetaReader::<VirtualColumnFileMeta>::new(dal);

@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
@@ -101,7 +102,9 @@ pub async fn collect_refresh_plan(
         .any(|spec| spec.index.index_type == TableIndexType::Spatial);
     let targets = segment_locs.map(|locations| locations.into_iter().collect::<HashSet<_>>());
     let segment_reader = SegmentInfoReader::new(operator.clone(), schema.clone());
-    let cache = FuseCaches::instance().segments.read_only();
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let cache = FuseCaches::instance().segments.with_policy(policy);
+    let check_policy = ctx.cache_policy();
     let mut readers = BTreeMap::new();
     let mut blocks = VecDeque::new();
     // Locate targets only once. No other segment metadata or block data is read.
@@ -116,8 +119,9 @@ pub async fn collect_refresh_plan(
         let metas = segment.block_metas()?;
         let stats = match segment.summary.additional_stats_loc() {
             Some(location) => {
-                let mut stats =
-                    Arc::unwrap_or_clone(read_segment_stats(operator.clone(), location).await?);
+                let mut stats = Arc::unwrap_or_clone(
+                    read_segment_stats(operator.clone(), location, policy).await?,
+                );
                 stats.align_to_blocks(metas.len())?;
                 Some(stats)
             }
@@ -129,8 +133,14 @@ pub async fn collect_refresh_plan(
                 let operator = &operator;
                 let stats = &stats;
                 async move {
-                    let existing =
-                        ExistingIndexes::read(operator, &meta, check_bloom, check_spatial).await?;
+                    let existing = ExistingIndexes::read(
+                        operator,
+                        &meta,
+                        check_bloom,
+                        check_spatial,
+                        check_policy,
+                    )
+                    .await?;
                     let missing = try_join_all(specs.iter().map(|spec| async {
                         Ok::<_, ErrorCode>(
                             needs_refresh(operator, &meta, &spec.index, &spec.schema, &existing)
@@ -177,7 +187,7 @@ pub async fn collect_refresh_plan(
                     let reader = table.create_block_reader(
                         ctx.clone(),
                         Projection::Columns(projection.clone()),
-                        false,
+                        CachePolicy::READ_ONLY,
                     )?;
                     readers.insert(projection.clone(), reader.clone());
                     reader
@@ -225,16 +235,17 @@ impl ExistingIndexes {
         block: &BlockMeta,
         bloom: bool,
         spatial: bool,
+        policy: CachePolicy,
     ) -> Result<Self> {
         let bloom = if bloom {
-            bloom_meta(operator, block).await?
+            bloom_meta(operator, block, policy).await?
         } else {
             None
         };
         let spatial = if spatial {
             match &block.spatial_index_location {
                 Some(location) if operator.stat(&location.0).await.is_ok() => {
-                    Some(load_spatial_index_meta(operator.clone(), &location.0).await?)
+                    Some(load_spatial_index_meta(operator.clone(), &location.0, policy).await?)
                 }
                 _ => None,
             }
@@ -307,7 +318,11 @@ async fn needs_refresh(
     }
 }
 
-async fn bloom_meta(operator: &Operator, block: &BlockMeta) -> Result<Option<Arc<BloomIndexMeta>>> {
+async fn bloom_meta(
+    operator: &Operator,
+    block: &BlockMeta,
+    policy: CachePolicy,
+) -> Result<Option<Arc<BloomIndexMeta>>> {
     let path =
         TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&block.location.0);
     // Match the original Ngram check: stat failures are treated as absent.
@@ -315,7 +330,7 @@ async fn bloom_meta(operator: &Operator, block: &BlockMeta) -> Result<Option<Arc
         return Ok(None);
     };
     let size = stat.content_length();
-    let meta = load_index_meta(operator.clone(), &path, size, None).await?;
+    let meta = load_index_meta(operator.clone(), &path, size, None, policy).await?;
     Ok(Some(meta))
 }
 

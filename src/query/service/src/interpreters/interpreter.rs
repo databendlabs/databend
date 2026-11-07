@@ -26,6 +26,7 @@ use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -59,6 +60,7 @@ use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryIdentity;
@@ -81,6 +83,13 @@ pub trait Interpreter: Sync + Send {
     }
 
     fn is_ddl(&self) -> bool;
+
+    /// Maintenance statements (ANALYZE, compaction, recluster, vacuum, refreshes) run under
+    /// `CachePolicy::MAINTENANCE`: they bypass the disk cache, neither reading nor filling it,
+    /// as it serves queries. They still use the memory caches.
+    fn is_maintenance(&self) -> bool {
+        false
+    }
 
     /// Top-level entry point for user-facing queries (HTTP/MySQL/FlightSQL handlers).
     /// Logs Start/Finish, runs hooks, collects profiles.
@@ -110,6 +119,9 @@ pub trait Interpreter: Sync + Send {
         let already_tracked = ThreadTracker::io_stats()
             .is_some_and(|current| Arc::ptr_eq(current, &query_io_stats))
             && ThreadTracker::perf_query_token() == query_perf_token;
+        if self.is_maintenance() {
+            ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
+        }
         if already_tracked {
             return self.execute_with_hooks_inner(ctx, hooks).await;
         }
