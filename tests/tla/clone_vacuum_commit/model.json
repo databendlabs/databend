@@ -1,0 +1,165 @@
+{
+  "module": "CloneVacuumCommit",
+  "constants": {
+    "InitiallyGrouped": false,
+    "Statements": 1,
+    "Delta": 0,
+    "CheckRetryTime": true,
+    "RescanClones": true,
+    "PinStagedSnapshot": true,
+    "KeepEarliestFence": true,
+    "CloneCacheHits": false,
+    "RetainSnapshots": 1,
+    "OverwriteFirst": false,
+    "AdvanceAppends": false,
+    "SplitAdvance": false,
+    "CheckAdvanceSeq": true
+  },
+  "invariants": [
+    "TypeOK",
+    "OriginalObjectTimePreserved",
+    "BufferedFenceIsMinimum",
+    "PublishedReferencesExist",
+    "TransactionHistorySkipsBufferedSnapshots"
+  ],
+  "matrix": {
+    "InitiallyGrouped": [false, true],
+    "Statements": [1, 2],
+    "Delta": [0, 2],
+    "CloneCacheHits": [false, true]
+  },
+  "cases": {
+    "split_advance_overwrite": {
+      "constants": {"SplitAdvance": true, "Statements": 2}
+    },
+    "split_advance_append": {
+      "constants": {"SplitAdvance": true, "Statements": 2, "AdvanceAppends": true}
+    },
+    "split_advance_grouped_cache": {
+      "constants": {"SplitAdvance": true, "Statements": 2, "InitiallyGrouped": true, "CloneCacheHits": true}
+    },
+    "split_advance_offset": {
+      "constants": {"SplitAdvance": true, "Statements": 2, "InitiallyGrouped": true, "CloneCacheHits": true, "Delta": 2}
+    },
+    "split_advance_retained_overwrite": {
+      "constants": {"SplitAdvance": true, "Statements": 2, "RetainSnapshots": 3, "OverwriteFirst": true}
+    },
+    "split_advance_retained_append": {
+      "constants": {"SplitAdvance": true, "Statements": 2, "RetainSnapshots": 3, "AdvanceAppends": true}
+    },
+    "no_advance_seq": {
+      "constants": {"SplitAdvance": true, "Statements": 2, "CheckAdvanceSeq": false},
+      "violation": "PublishedReferencesExist"
+    },
+    "witness_advance_partial_gc": {
+      "constants": {"SplitAdvance": true, "Statements": 2},
+      "witness": "NeverAdvancePartialGc"
+    },
+    "witness_advance_conflict_after_gc": {
+      "constants": {"SplitAdvance": true, "Statements": 2},
+      "witness": "NeverAdvanceConflictAfterGc"
+    },
+    "witness_unpublished_advance_selected": {
+      "constants": {"SplitAdvance": true, "Statements": 2, "RetainSnapshots": 3},
+      "witness": "NeverUnpublishedAdvanceSelected"
+    },
+    "witness_writer_fence_race": {
+      "constants": {"InitiallyGrouped": true},
+      "witness": "NeverWriterFenceRace"
+    },
+    "witness_first_clone_invalidates_mark": {
+      "witness": "NeverFirstCloneInvalidatesMark"
+    },
+    "retained_uncommitted_overwrite": {
+      "constants": {"Statements": 2, "RetainSnapshots": 3, "OverwriteFirst": true, "AdvanceAppends": true}
+    },
+    "retained_append": {
+      "constants": {"Statements": 2, "RetainSnapshots": 3, "AdvanceAppends": true}
+    },
+    "no_retry_time": {
+      "constants": {"CheckRetryTime": false},
+      "invariants": ["TypeOK", "OriginalObjectTimePreserved", "BufferedFenceIsMinimum", "FirstCloneReferencesExist"],
+      "violation": "FirstCloneReferencesExist"
+    },
+    "no_clone_rescan": {
+      "constants": {"InitiallyGrouped": true, "RescanClones": false},
+      "violation": "PublishedReferencesExist"
+    },
+    "no_staged_snapshot_pin": {
+      "constants": {"InitiallyGrouped": true, "PinStagedSnapshot": false},
+      "violation": "PublishedReferencesExist"
+    },
+    "no_min_fence": {
+      "constants": {"InitiallyGrouped": true, "Statements": 2, "Delta": 2, "KeepEarliestFence": false},
+      "violation": "BufferedFenceIsMinimum"
+    },
+    "witness_first_clone_abort": {
+      "witness": "NeverFirstCloneAbort"
+    },
+    "witness_anchor_transition": {
+      "constants": {"InitiallyGrouped": true},
+      "witness": "NeverAnchorInstalledDuringMark"
+    },
+    "witness_failed_staged": {
+      "constants": {"InitiallyGrouped": true},
+      "witness": "NeverFailedStagedCloneProtected"
+    },
+    "witness_offset_retry": {
+      "constants": {"Delta": 2},
+      "witness": "NeverOffsetRetryCommit"
+    },
+    "witness_cached_clone_rejected": {
+      "constants": {"InitiallyGrouped": true, "CloneCacheHits": true},
+      "witness": "NeverCachedCloneRejected"
+    },
+    "witness_transaction_history": {
+      "constants": {"Statements": 2},
+      "witness": "NeverTransactionalHistoryCollapsed"
+    },
+    "witness_clone_refresh": {
+      "witness": "NeverCloneRefreshPublished"
+    }
+  },
+  "scope": [
+    "One source, one clone, one GC, 1-2 statements (optional first overwrite), at most two transaction retries.",
+    "RetainSnapshots=1 uses the captured head (zero retention); 3 models ByNumOfSnapshotsToKeep(3), including directory truncation and the candidate predecessor.",
+    "Delta is segment_block_timestamp minus snapshot_timestamp; logical time samples 1 and 3.",
+    "SplitAdvance=false keeps the atomic concurrent replacement/append baseline. True splits its metadata read, physical snapshot read/time sample, block/segment/snapshot writes, Meta precheck and CAS; a conflict ends this bounded attempt (no second-writer retry).",
+    "Snapshot UUID tie ordering samples two rankings. AdvanceSource and AdvanceSampleTime sample wall time two ticks later; no arbitrary clock jumps or skew.",
+    "decorate_snapshot makes every buffered statement point to the transaction base, not the previous buffered statement. Data refs still include earlier statements.",
+    "CLONE AT SNAPSHOT captures source metadata, walks prev links and rereads the selected snapshot. Up to three source-version refreshes keep the snapshot ID fixed.",
+    "CloneCacheHits models a remote cache retaining that history after GC; false uses physical reads. Rust MAINTENANCE bypasses disk cache but retains memory cache. This single-GC model checks existence at GC reads: all marking/protected-segment reads precede its only deletion phase, so prior/concurrent-GC stale-cache behavior is NOT covered. No eviction model.",
+    "Exact atomic storage listings, immutable objects; clone failures retain staged bindings. No DROP, FLASHBACK, tags, restart, clone writes, multi-table commits or concurrent/second GC. Streaming list pagination and partial delete errors remain outside scope."
+  ],
+  "audit": [
+    "2026-11-05 source review: HEAD still 29b08e94e01f0a3462815a4628ce05fac02a7b2f; no staged/unstaged tracked-code diff, only these four untracked model/docs files. No source-version drift. Rechecked clone staging, LVT CAS/rescan, timestamp sampling, buffered ancestry and retention selection.",
+    "Coverage gap: atomic AdvanceSource excluded a second writer's partially written objects and precheck/CAS windows. SplitAdvance refines this actor in the same model; original safety invariants and baseline cases are unchanged. Conflict is an incomplete writer attempt, not a claim that Rust always aborts rather than retries.",
+    "Cache-scope correction: catalog/src/cache_policy.rs::MAINTENANCE still reads/fills memory. The old GC-physical-read description was an abstraction, not the implementation policy; do not reuse it to claim multi-GC cache safety.",
+    "Retained-history normal failures with w2.prev=w1 were model errors: decorate_snapshot writes w2.prev=base. Same-HEAD native SQL confirmed the collapsed history; keep both retained cases as normal safety checks.",
+    "Same-HEAD licensed native runs: count retention kept live rows and later reclaimed buffered snapshots; a stale cross-node writer after first CLONE + VACUUM aborted on the txn-begin timestamp check. No production defect confirmed."
+  ],
+  "regressions": [
+    "tests/sqllogictests/suites/ee/03_ee_vacuum/03_0022_vacuum_first_clone_transaction.test",
+    "src/query/ee/tests/it/storages/fuse/operations/vacuum2.rs::test_clone_tag_scan_after_lvt_publication"
+  ],
+  "source_map": {
+    "AdvanceSource": "Atomic baseline abstraction of the AdvanceRead through AdvanceCAS implementation path; not evidence for intermediate-write safety.",
+    "AdvanceRead,AdvanceSampleTime": "src/query/service/src/catalogs/default/session_catalog.rs::get_table; src/query/service/src/sessions/query_ctx/table.rs::get_table_meta_timestamps_impl; src/query/storages/fuse/src/operations/common/processors/sink_commit.rs::async_process",
+    "AdvanceWriteBlock,AdvanceWriteSegment": "src/query/storages/fuse/src/io/write/block_writer.rs; src/query/storages/fuse/src/operations/common/processors/transform_serialize_segment.rs::async_process",
+    "AdvanceWriteSnapshot": "src/query/storages/fuse/src/operations/common/generators/append_generator.rs::do_generate_new_snapshot; src/query/storages/fuse/src/operations/common/processors/sink_commit.rs::process,async_process (GenerateSnapshot/TryCommit)",
+    "AdvancePrecheck,AdvanceCAS": "src/query/storages/fuse/src/operations/commit.rs::build_table_lvt_check; src/meta/api/src/api_impl/table_api.rs::update_multi_table_meta_with_sender",
+    "WriterBegin,WriterNextStatement": "src/query/service/src/catalogs/default/session_catalog.rs::get_table",
+    "WriterSampleTime": "src/query/service/src/sessions/query_ctx/table.rs::get_table_meta_timestamps_impl",
+    "WriterWriteBlock,WriterWriteSegment": "src/query/storages/fuse/src/io/write/block_writer.rs; src/query/storages/fuse/src/operations/common/processors/transform_serialize_segment.rs::async_process",
+    "WriterWriteSnapshot,WriterBuffer": "src/query/storages/common/table_meta/src/meta/v4/snapshot.rs::try_new; src/query/storages/fuse/src/operations/common/generators/snapshot_generator.rs::decorate_snapshot; src/query/storages/fuse/src/operations/common/generators/append_generator.rs::do_generate_new_snapshot; src/query/storages/common/session/src/transaction.rs::update_multi_table_meta",
+    "WriterLoadDiff,WriterRetryRead,WriterRetryTime,WriterRebuild": "src/query/storages/fuse/src/retry/commit.rs::compute_table_segments_diffs,try_rebuild_req",
+    "WriterPrecheck,WriterCAS": "src/meta/api/src/api_impl/table_api.rs::update_multi_table_meta_with_sender",
+    "CloneReadSource,CloneNavigate,CloneReadSnapshot,CloneConflict": "src/query/storages/fuse/src/operations/navigate.rs::find_snapshot_with_version,read_navigation_snapshot; src/query/service/src/interpreters/interpreter_table_create.rs::build_clone_request",
+    "CloneWriteAnchor,CloneInstallAnchor,ClonePublish,CloneFail": "src/query/service/src/interpreters/interpreter_table_create.rs::create_table_clone,build_clone_request,write_clone_anchor",
+    "ClonePrecheck,CloneStage": "src/meta/api/src/api_impl/table_api.rs::build_create_table_clone_txn",
+    "GcObserveFence,GcReadOwner,GcListSnapshots,GcReadAnchor,GcSelectRoot": "src/query/ee/src/storages/fuse/operations/vacuum_table_v2.rs::vacuum_base_snapshot_phase; src/query/storages/fuse/src/operations/vacuum.rs::prepare_snapshot_gc_selection,select_gc_root",
+    "GcListClones,GcReadClone,GcLoadClone,GcRescan,GcReadLate,GcLoadLate": "src/query/storages/fuse/src/operations/vacuum.rs::mark_clone_descendants,scan_clone_descendants,mark_one_clone_descendant,mark_new_clone_descendants",
+    "GcPublishFence": "src/meta/api/src/api_impl/table_api.rs::set_table_lvts",
+    "GcListSegments,GcLoadSegments,GcListBlocks,GcDeleteBlock,GcBlocksDone,GcDeleteSegment,GcSegmentsDone,GcDeleteSnapshot,GcFinish": "src/query/ee/src/storages/fuse/operations/vacuum_table_v2.rs::do_vacuum2"
+  }
+}
