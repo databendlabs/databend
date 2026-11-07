@@ -681,14 +681,14 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("grouping_sets_to_union", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables grouping sets to union.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_cascading_grouping_sets", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Builds hierarchical grouping sets from the closest available parent grouping.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
