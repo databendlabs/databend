@@ -1,0 +1,76 @@
+# Synthetic data: derived shuffle keys must not remove any join predicates.
+statement ok
+SET enforce_shuffle_join = 1
+
+statement ok
+SET disable_join_reorder = 1
+
+statement ok
+CREATE OR REPLACE TABLE shuffle_left (k INT, flag INT, tag STRING)
+
+statement ok
+CREATE OR REPLACE TABLE shuffle_right (k INT, flag INT, tag STRING)
+
+statement ok
+INSERT INTO shuffle_left VALUES (1, 1, 'aa'), (2, 1, 'bbb'), (2, 2, 'cc'), (NULL, 1, 'dd')
+
+statement ok
+INSERT INTO shuffle_right VALUES (1, 1, 'aa'), (2, 1, 'ccc'), (2, 2, 'cc'), (NULL, 1, 'dd')
+
+# Equal lengths alone do not replace the original string equality.
+query II rowsort
+SELECT l.k, l.flag
+FROM shuffle_left l JOIN shuffle_right r
+ON l.tag = r.tag AND length(l.tag) = length(r.tag) AND l.flag = r.flag
+----
+1 1
+2 2
+NULL 1
+
+# Nullable integer widening is redundant with the direct integer key.
+query II rowsort
+SELECT l.k, l.flag
+FROM shuffle_left l JOIN shuffle_right r
+ON l.k = r.k AND CAST(l.k AS BIGINT) = CAST(r.k AS BIGINT) AND l.flag = r.flag
+----
+1 1
+2 1
+2 2
+
+# Null-safe comparisons retain their original predicate semantics.
+query II rowsort
+SELECT l.k, l.flag
+FROM shuffle_left l JOIN shuffle_right r
+ON l.k IS NOT DISTINCT FROM r.k
+AND CAST(l.k AS BIGINT) IS NOT DISTINCT FROM CAST(r.k AS BIGINT)
+AND l.flag = r.flag
+----
+1 1
+2 1
+2 2
+NULL 1
+
+# The other expression depends on a column not covered by the direct key.
+query II rowsort
+SELECT l.k, l.flag
+FROM shuffle_left l JOIN shuffle_right r
+ON l.k = r.k AND l.flag = r.flag AND CAST(l.k AS BIGINT) = length(r.tag)
+----
+2 2
+
+# A direct and a derived key are still kept when there are only two keys.
+query I
+SELECT count(*)
+FROM shuffle_left l JOIN shuffle_right r
+ON l.tag = r.tag AND length(l.tag) = length(r.tag)
+----
+3
+
+statement ok
+DROP TABLE shuffle_left
+
+statement ok
+DROP TABLE shuffle_right
+
+statement ok
+UNSET (enforce_shuffle_join, disable_join_reorder)
