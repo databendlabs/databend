@@ -34,6 +34,7 @@ use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
+use crate::optimizer::optimizers::operator::NarrowingPushdownOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
@@ -336,9 +337,15 @@ pub(super) async fn query_logical_pipeline(
             RecursiveRuleOptimizer::new_with_materialized_view_output_columns(
                 opt_ctx.clone(),
                 &DEFAULT_REWRITE_RULES,
-                output_columns,
+                output_columns.clone(),
             ),
         )
+        // Evaluate narrowing extractions below windows so wide source columns
+        // are pruned before the partition shuffle and spill
+        .add(NarrowingPushdownOptimizer::new(
+            opt_ctx.clone(),
+            output_columns,
+        ))
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
         // Apply DPhyp algorithm for cost-based join reordering

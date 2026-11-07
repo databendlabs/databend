@@ -17,6 +17,7 @@ mod cte;
 mod decorrelate;
 mod filter;
 mod join;
+mod window;
 
 pub use aggregate::RuleNormalizeAggregateOptimizer;
 pub use aggregate::RuleStatsAggregateOptimizer;
@@ -35,6 +36,7 @@ pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use filter::PullUpFilterOptimizer;
 pub use join::FinalizeSpatialJoinOptimizer;
 pub use join::SingleToInnerOptimizer;
+pub use window::NarrowingPushdownOptimizer;
 
 mod eliminate_eval_scalar;
 pub use eliminate_eval_scalar::EliminateEvalScalarOptimizer;
