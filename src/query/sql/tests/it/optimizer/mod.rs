@@ -47,6 +47,7 @@ mod push_down_top_n_union_scan;
 mod selectivity;
 mod selectivity_smoke;
 mod stat_derivation;
+mod top_n_stats;
 mod type_consistency;
 mod typed_constant;
 mod union_all;
