@@ -50,8 +50,17 @@ impl Limit {
             _ => None,
         };
 
+        // The limit caps the input bound, but an underestimated input may still
+        // emit up to `limit` rows.
+        let input_max_cardinality = stat_info.max_cardinality.max(stat_info.cardinality);
+        let max_cardinality = match self.limit {
+            Some(limit) => input_max_cardinality.min(limit as f64),
+            None => input_max_cardinality,
+        };
+
         Ok(Arc::new(StatInfo {
             cardinality,
+            max_cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
