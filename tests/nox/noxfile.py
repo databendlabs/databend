@@ -15,7 +15,6 @@ import nox
 
 # nox also loads this file via --noxfile from outside tests/nox.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from tla import run as tla_runner
 
 PYTHON_DRIVER_PINNED = ["0.33.6"]
 PYTHON_DRIVER = ["latest", *PYTHON_DRIVER_PINNED]
@@ -577,6 +576,9 @@ def go_client(session, source_ref):
 
 
 def prepare_tlc():
+    # Keep TLA imports local: release testsuites do not include the tla package.
+    from tla import run as tla_runner
+
     target = tla_runner.cached_jar(CACHE_DIR)
     if target.exists():
         tla_runner.verify_jar(target)
@@ -593,6 +595,8 @@ def prepare_tlc():
 @nox.session(python=False, default=False)
 def tla(session):
     """Check a TLA+ model: nox -s tla -- <model-dir> [--case NAME]."""
+    from tla import run as tla_runner
+
     args = list(session.posargs)
     if args and not any(arg in args for arg in ("--list", "--help", "-h")):
         jar = prepare_tlc()
