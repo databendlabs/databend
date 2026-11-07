@@ -620,6 +620,13 @@ pub trait ColumnStatisticsProvider: Send {
     fn count_min_sketch(&self, _column_id: ColumnId) -> Option<ColumnCountMinSketch> {
         None
     }
+
+    // Returns the exact null count of a column whose every row is NULL, if
+    // known. Such a column has no min/max, so `column_statistics` may not
+    // return it.
+    fn all_null_count(&self, _column_id: ColumnId) -> Option<u64> {
+        None
+    }
 }
 
 pub struct DummyColumnStatisticsProvider;
