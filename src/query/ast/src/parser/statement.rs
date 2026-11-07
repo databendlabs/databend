@@ -1372,7 +1372,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let alter_table = map(
         rule! {
-            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only_with_branch ~ #alter_table_action
+            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only ~ #alter_table_action
         },
         |(_, _, opt_if_exists, table_reference, action)| {
             Statement::AlterTable(AlterTableStmt {
@@ -5529,19 +5529,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    let create_table_branch = map(
-        rule! {
-            CREATE ~ BRANCH ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
-        },
-        |(_, _, name, opt_travel_point, retain)| AlterTableAction::CreateTableBranch {
-            spec: CreateTableRefSpec {
-                name,
-                travel_point: opt_travel_point.map(|(_, point)| point),
-                retain: retain.map(|(_, retain)| retain),
-            },
-        },
-    );
-
     let create_table_tag = map(
         rule! {
             CREATE ~ TAG ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
@@ -5555,13 +5542,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    let drop_table_branch = map(
-        rule! {
-            DROP ~ BRANCH ~ #ident
-        },
-        |(_, _, branch_name)| AlterTableAction::DropTableBranch { branch_name },
-    );
-
     let drop_table_tag = map(
         rule! {
             DROP ~ TAG ~ #ident
@@ -5571,9 +5551,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     // The action list is split to avoid the trait bound limit in `alt(...)`.
     let alter_table_action_primary = rule!(
-        #create_table_branch
-            | #create_table_tag
-            | #drop_table_branch
+        #create_table_tag
             | #drop_table_tag
             | #alter_table_partition_by
             | #drop_table_partition_key

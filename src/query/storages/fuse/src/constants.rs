@@ -67,7 +67,6 @@ pub const FUSE_TBL_VECTOR_INDEX_PREFIX: &str = "_i_v";
 /// selects the bundle reader.
 pub const FUSE_TBL_VECTOR_INDEX_PREFIX_V2: &str = "_i_v_v2";
 pub const FUSE_TBL_SPATIAL_INDEX_PREFIX: &str = "_i_s";
-pub const LEGACY_FUSE_TBL_REF_PREFIX: &str = "_ref";
 
 pub const DEFAULT_ROW_PER_PAGE: usize = 8192;
 pub const DEFAULT_ROW_PER_INDEX: usize = 100000;

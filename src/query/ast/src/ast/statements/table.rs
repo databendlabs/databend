@@ -532,14 +532,8 @@ pub enum AlterTableAction {
     ModifyConnection {
         new_connection: BTreeMap<String, String>,
     },
-    CreateTableBranch {
-        spec: CreateTableRefSpec,
-    },
     CreateTableTag {
         spec: CreateTableRefSpec,
-    },
-    DropTableBranch {
-        branch_name: Identifier,
     },
     DropTableTag {
         tag_name: Identifier,
@@ -665,14 +659,8 @@ impl Display for AlterTableAction {
             AlterTableAction::DropAllRowAccessPolicies => {
                 write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
-            AlterTableAction::CreateTableBranch { spec } => {
-                write!(f, "CREATE BRANCH {spec}")?;
-            }
             AlterTableAction::CreateTableTag { spec } => {
                 write!(f, "CREATE TAG {spec}")?;
-            }
-            AlterTableAction::DropTableBranch { branch_name } => {
-                write!(f, "DROP BRANCH {branch_name}")?;
             }
             AlterTableAction::DropTableTag { tag_name } => {
                 write!(f, "DROP TAG {tag_name}")?;

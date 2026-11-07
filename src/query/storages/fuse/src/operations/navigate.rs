@@ -493,7 +493,6 @@ impl FuseTable {
         }
     }
 
-    // Only used when the table branch is none.
     #[async_backtrace::framed]
     pub async fn find_location<P>(
         &self,

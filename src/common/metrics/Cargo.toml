@@ -10,11 +10,5 @@ edition = { workspace = true }
 databend-common-base = { workspace = true }
 prometheus-client = { workspace = true }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-procfs = { workspace = true }
-
-[dev-dependencies]
-anyhow = { workspace = true }
-
 [lints]
 workspace = true
