@@ -49,6 +49,53 @@ pub enum SelectExpr {
     BooleanScalar((Scalar, DataType)),
 }
 
+impl SelectExpr {
+    /// Returns whether the predicate contains a string-column equality against a constant.
+    ///
+    /// The selector executor has a specialized row-index path for this shape and can
+    /// short-circuit the remaining branches of compound predicates.
+    pub fn contains_string_column_eq_constant(&self) -> bool {
+        match self {
+            SelectExpr::And((exprs, _)) | SelectExpr::Or((exprs, _)) => exprs
+                .iter()
+                .any(SelectExpr::contains_string_column_eq_constant),
+            SelectExpr::Compare((SelectOp::Equal, args, _)) if args.len() == 2 => {
+                is_string_column(&args[0]) && is_string_constant(&args[1])
+                    || is_string_column(&args[1]) && is_string_constant(&args[0])
+            }
+            _ => false,
+        }
+    }
+
+    /// Evaluates the children of every AND/OR in the order of the predicate.
+    pub fn disable_reorder(&mut self) {
+        if let SelectExpr::And((exprs, permutation)) | SelectExpr::Or((exprs, permutation)) = self {
+            permutation.disable_reorder();
+            exprs.iter_mut().for_each(SelectExpr::disable_reorder);
+        }
+    }
+}
+
+fn is_string_column(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::ColumnRef(ColumnRef {
+            data_type: DataType::String | DataType::Nullable(deref!(DataType::String)),
+            ..
+        })
+    )
+}
+
+fn is_string_constant(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Constant(Constant {
+            scalar: Scalar::String(_),
+            ..
+        })
+    )
+}
+
 pub struct SelectExprBuilder {
     not_function: (FunctionID, Arc<Function>),
     nullable_not_function: (FunctionID, Arc<Function>),
@@ -186,13 +233,21 @@ impl SelectExprBuilder {
                                     .can_push_down_not(false);
                                 }
                             };
-                            let option_escape = args.get(2).and_then(|expr| match expr {
-                                Expr::Constant(Constant {
+                            // Only a constant escape can be compiled into the pattern. An escape
+                            // read from a column needs the evaluator.
+                            let option_escape = match args.get(2) {
+                                None => None,
+                                Some(Expr::Constant(Constant {
                                     scalar: Scalar::String(escape),
                                     ..
-                                }) => Some(escape),
-                                _ => None,
-                            });
+                                })) => Some(escape),
+                                Some(_) => {
+                                    return SelectExprBuildResult::new(SelectExpr::Others(
+                                        expr.clone(),
+                                    ))
+                                    .can_push_down_not(false);
+                                }
+                            };
                             let can_reorder = Self::can_reorder(column);
                             let is_string = matches!(
                                 column_data_type,
@@ -224,7 +279,9 @@ impl SelectExprBuilder {
                                     .can_reorder(can_reorder),
                             }
                         }
-                        "is_true" => self.build_select_expr(&args[0], not),
+                        // `is_true` turns NULL into false, so a negation must not be pushed
+                        // through it: `NOT is_true(NULL)` is true while `NOT NULL` is NULL.
+                        "is_true" if !not => self.build_select_expr(&args[0], not),
                         _ => self
                             .other_select_expr(expr, not)
                             .can_reorder(Self::can_reorder(expr)),
@@ -256,6 +313,23 @@ impl SelectExprBuilder {
                     scalar.clone()
                 };
                 SelectExprBuildResult::new(SelectExpr::BooleanScalar((scalar, data_type.clone())))
+            }
+            // The type checker wraps a non-nullable boolean in this cast when it is combined
+            // with a nullable one by `and` / `or`. The cast neither introduces NULL nor fails,
+            // so the selection of the inner predicate is the selection of the cast, also under
+            // a negation. The cast used to be an `Others` leaf, evaluated as a whole and in
+            // place; keep its order and the order inside it, so a guard before it or inside it
+            // still runs first (e.g. `ns = 'ok' AND parse_json(v) = ..` must not parse the
+            // rows `ns = 'ok'` rejected).
+            Expr::Cast(Cast {
+                is_try: false,
+                expr: inner,
+                dest_type: DataType::Nullable(deref!(DataType::Boolean)),
+                ..
+            }) if inner.data_type() == &DataType::Boolean => {
+                let mut result = self.build_select_expr(inner, not);
+                result.select_expr.disable_reorder();
+                result.can_reorder(false)
             }
             Expr::Cast(Cast { is_try, .. }) if *is_try => self.other_select_expr(expr, not),
             _ => self.other_select_expr(expr, not).can_reorder(false),

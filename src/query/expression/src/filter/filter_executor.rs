@@ -219,6 +219,20 @@ impl FilterExecutor {
         self.max_block_size
     }
 
+    /// Evaluate the children of every AND/OR in the order of the predicate instead of
+    /// reordering them by runtime. A later child is then only evaluated on the rows that
+    /// earlier children kept, as `and_filters` / `or_filters` do in the evaluator.
+    pub fn disable_reorder(&mut self) {
+        self.select_expr.disable_reorder();
+    }
+
+    /// Grow the selection buffers so that `select` accepts a block of `num_rows` rows.
+    pub fn reserve(&mut self, num_rows: usize) {
+        if self.max_block_size < num_rows {
+            self.incr_max_block_size(num_rows);
+        }
+    }
+
     fn incr_max_block_size(&mut self, new_max_block_size: usize) {
         self.max_block_size = new_max_block_size;
         self.true_selection = vec![0; self.max_block_size];

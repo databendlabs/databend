@@ -51,6 +51,11 @@ impl FilterPermutation {
         }
     }
 
+    /// Keep the original order of the filter expressions.
+    pub fn disable_reorder(&mut self) {
+        self.can_reorder = false;
+    }
+
     pub fn get(&self, idx: usize) -> usize {
         if self.can_reorder {
             self.permutation[idx]

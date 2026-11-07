@@ -372,3 +372,305 @@ fn test_selector_take_runs() {
     }
     assert!(unordered_selections > 0);
 }
+
+/// Fuse prewhere switches to the selector executor only for predicates that contain a
+/// `<string column> = <string constant>` comparison, at any depth of AND/OR.
+#[test]
+fn test_contains_string_column_eq_constant() {
+    let columns = [
+        ("s", DataType::String),
+        ("t", DataType::String),
+        ("ns", DataType::Nullable(Box::new(DataType::String))),
+        ("k", DataType::Number(NumberDataType::Int32)),
+    ];
+    let func_ctx = FunctionContext::default();
+    for (text, expected) in [
+        ("s = 'v'", true),
+        ("'v' = s", true),
+        // Folding turns the cast of the literal into a constant, as the planner does.
+        ("ns = 'v'", true),
+        ("'v' = ns", true),
+        ("k > 1 AND s = 'v'", true),
+        ("k > 1 OR (k < 0 AND ns = 'v')", true),
+        ("s <> 'v'", false),
+        ("s = t", false),
+        ("k = 1", false),
+        ("s LIKE 'v%'", false),
+        ("k > 1 OR s > 'v'", false),
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let (select_expr, _): (SelectExpr, bool) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+            .build(&expr)
+            .into();
+        assert_eq!(
+            select_expr.contains_string_column_eq_constant(),
+            expected,
+            "{text}: {select_expr:?}"
+        );
+    }
+}
+
+/// `and` / `or` over a nullable and a non-nullable predicate wrap the non-nullable one in
+/// `CAST(.. AS Boolean NULL)`. The selector looks through that cast, also under NOT, and must
+/// select the same rows as the evaluator, including rows where the nullable column is NULL.
+#[test]
+fn test_select_mixed_nullability_and_or_not() {
+    let num_rows = 8;
+    let block = DataBlock::new_from_columns(vec![
+        StringType::from_opt_data(vec![
+            Some("a"),
+            None,
+            Some("b"),
+            Some("a"),
+            None,
+            Some("b"),
+            Some("a"),
+            None,
+        ]),
+        StringType::from_data(vec!["x", "x", "y", "y", "x", "y", "x", "y"]),
+        Int32Type::from_data((0..num_rows as i32).collect()),
+    ]);
+    let columns = [
+        ("ns", DataType::Nullable(Box::new(DataType::String))),
+        ("s", DataType::String),
+        ("k", DataType::Number(NumberDataType::Int32)),
+    ];
+    let func_ctx = FunctionContext::default();
+
+    for text in [
+        "ns = 'a' OR k < 5",
+        "'a' = ns OR k < 2",
+        "s = 'x' AND (ns = 'a' OR k < 5)",
+        "(ns = 'b' AND k > 1) OR s = 'x'",
+        "NOT (ns = 'a' OR k < 5)",
+        "NOT (ns = 'a' AND k > 2)",
+        "NOT (ns = 'a') OR k > 5",
+        "s = 'y' AND NOT (ns <> 'b' OR k = 2)",
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let (select_expr, _): (SelectExpr, bool) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+            .build(&expr)
+            .into();
+        let debug = format!("{select_expr:?}");
+        assert!(!debug.contains("Others"), "{text}: {debug}");
+
+        let truth = type_check::check(
+            &parse_raw_expr(&format!("is_true({text})"), &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expected = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+            .run(&truth)
+            .unwrap()
+            .try_downcast::<BooleanType>()
+            .unwrap();
+        let expected = block.clone().filter_boolean_value(&expected).unwrap();
+
+        let mut executor = FilterExecutor::new(
+            expr,
+            func_ctx.clone(),
+            num_rows,
+            None,
+            &BUILTIN_FUNCTIONS,
+            true,
+        );
+        for _ in 0..8 {
+            let actual = executor.filter(block.clone()).unwrap();
+            assert_eq!(actual.num_rows(), expected.num_rows(), "{text}");
+            assert_eq!(
+                actual.get_by_offset(2).value(),
+                expected.get_by_offset(2).value(),
+                "{text}"
+            );
+        }
+    }
+}
+
+/// `is_true` turns NULL into false, so a negation must not be pushed through it, including
+/// when `is_true` sits under a nullable boolean cast added by `or`. The selector must select
+/// the same rows as the evaluator.
+#[test]
+fn test_select_negated_is_true() {
+    let num_rows = 6;
+    let block = DataBlock::new_from_columns(vec![
+        StringType::from_opt_data(vec![Some("x"), None, Some("y"), None, Some("x"), Some("z")]),
+        StringType::from_opt_data(vec![Some("y"), Some("z"), None, Some("y"), Some("z"), None]),
+        StringType::from_data(vec!["a_1", "ab", "a_2", "a!_", "b_", "a_"]),
+        StringType::from_data(vec!["!", "!", "#", "!", "!", "!"]),
+        Int32Type::from_data((0..num_rows as i32).collect()),
+    ]);
+    let columns = [
+        ("ns", DataType::Nullable(Box::new(DataType::String))),
+        ("ns2", DataType::Nullable(Box::new(DataType::String))),
+        ("v", DataType::String),
+        ("e", DataType::String),
+        ("k", DataType::Number(NumberDataType::Int32)),
+    ];
+    let func_ctx = FunctionContext::default();
+
+    for text in [
+        "NOT is_true(ns <> 'x')",
+        "NOT (is_true(ns <> 'x') OR ns2 = 'y')",
+        "k > 0 AND NOT (is_true(ns <> 'x') AND ns2 = 'z')",
+        r#""like"(v, 'a!_%', '!')"#,
+        r#"NOT "like"(v, 'a!_%', '!')"#,
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let truth = type_check::check(
+            &parse_raw_expr(&format!("is_true({text})"), &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expected = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+            .run(&truth)
+            .unwrap()
+            .try_downcast::<BooleanType>()
+            .unwrap();
+        let expected = block.clone().filter_boolean_value(&expected).unwrap();
+
+        let mut executor = FilterExecutor::new(
+            expr,
+            func_ctx.clone(),
+            num_rows,
+            None,
+            &BUILTIN_FUNCTIONS,
+            true,
+        );
+        for _ in 0..8 {
+            let actual = executor.filter(block.clone()).unwrap();
+            assert_eq!(actual.num_rows(), expected.num_rows(), "{text}");
+            assert_eq!(
+                actual.get_by_offset(4).value(),
+                expected.get_by_offset(4).value(),
+                "{text}"
+            );
+        }
+    }
+}
+
+/// The selector compiles only a constant LIKE escape into the pattern. An escape read from a
+/// column is left to the evaluator instead of being ignored.
+#[test]
+fn test_select_like_with_column_escape_is_not_compiled() {
+    let columns = [("v", DataType::String), ("e", DataType::String)];
+    let func_ctx = FunctionContext::default();
+    for (text, compiled) in [
+        (r#""like"(v, 'a!_%', '!')"#, true),
+        (r#""like"(v, 'a!_%', e)"#, false),
+        (r#"NOT "like"(v, 'a!_%', e)"#, false),
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        let (select_expr, _): (SelectExpr, bool) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+            .build(&expr)
+            .into();
+        assert_eq!(
+            matches!(select_expr, SelectExpr::Like(_)),
+            compiled,
+            "{text}: {select_expr:?}"
+        );
+        if !compiled {
+            assert!(matches!(select_expr, SelectExpr::Others(_)), "{text}");
+        }
+    }
+}
+
+/// With a nullable `ns`, `ns = 'keep' AND ..` gets `CAST(.. AS Boolean NULL)` around its
+/// non-nullable side. The selector looks through that cast but must not reorder across blocks,
+/// neither the conjuncts around the cast nor the AND/OR inside it: `parse_json` would then run
+/// on rows a guard rejected and raise their errors.
+#[test]
+fn test_select_nullable_boolean_cast_keeps_conjunct_order() {
+    let num_rows = 6;
+    let block = DataBlock::new_from_columns(vec![
+        StringType::from_opt_data(vec![
+            Some("keep"),
+            Some("keep"),
+            Some("no"),
+            Some("keep"),
+            Some("keep"),
+            None,
+        ]),
+        StringType::from_data(vec!["ok", "no", "ok", "ok", "no", "no"]),
+        StringType::from_data(vec!["invalid", "{}", "invalid", "invalid", "[]", "invalid"]),
+        Int32Type::from_data((0..num_rows as i32).collect()),
+    ]);
+    let columns = [
+        ("ns", DataType::Nullable(Box::new(DataType::String))),
+        ("s", DataType::String),
+        ("v", DataType::String),
+        ("k", DataType::Number(NumberDataType::Int32)),
+    ];
+    let func_ctx = FunctionContext::default();
+    for (text, expected) in [
+        // The guard is next to the cast.
+        (
+            "ns = 'keep' AND s = 'no' AND parse_json(v) = parse_json('{}')",
+            vec![1],
+        ),
+        // The guard is inside the cast.
+        (
+            "ns = 'keep' AND (s = 'ok' OR parse_json(v) = parse_json('{}'))",
+            vec![0, 1, 3],
+        ),
+    ] {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned();
+        assert!(
+            expr.sql_display().contains("CAST"),
+            "{}",
+            expr.sql_display()
+        );
+
+        let mut executor = FilterExecutor::new(
+            expr,
+            func_ctx.clone(),
+            num_rows,
+            None,
+            &BUILTIN_FUNCTIONS,
+            true,
+        );
+        // Adaptive reordering would swap two reorderable children after the first block.
+        for _ in 0..16 {
+            let actual = executor.filter(block.clone()).unwrap();
+            assert_eq!(
+                actual.get_by_offset(3).to_column(),
+                Int32Type::from_data(expected.clone()),
+                "{text}"
+            );
+        }
+    }
+}
