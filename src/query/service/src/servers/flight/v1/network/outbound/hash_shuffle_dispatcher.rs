@@ -97,6 +97,10 @@ impl HashShuffleDispatcher {
                         thread: Some(thread),
                     };
                     for block in blocks {
+                        // Local hash output can later cross a generic Merge/Broadcast edge.
+                        // Compact here, including routed blocks, before charging the local queue.
+                        // Opaque metadata and constants retain their existing representation.
+                        let block = block.compact_string_buffers();
                         let sender = sender.clone();
                         futures.push(Box::pin(async move {
                             (address, sender.send_block(block).await)

@@ -1033,6 +1033,19 @@ impl DataBlock {
             .sum()
     }
 
+    /// Compact string buffers while preserving row count, constants and block metadata.
+    pub fn compact_string_buffers(self) -> DataBlock {
+        let entries = self
+            .entries
+            .into_iter()
+            .map(|entry| match entry {
+                BlockEntry::Column(column) => BlockEntry::Column(column.compact_string_buffers()),
+                entry => entry,
+            })
+            .collect();
+        DataBlock::new_with_meta(entries, self.num_rows, self.meta)
+    }
+
     pub fn maybe_gc(self) -> DataBlock {
         let mut columns = Vec::with_capacity(self.entries.len());
 

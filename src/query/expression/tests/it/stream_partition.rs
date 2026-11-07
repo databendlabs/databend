@@ -16,6 +16,7 @@ use std::collections::HashSet;
 
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockPartitionStream;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -225,4 +226,147 @@ fn test_take_partitions_keeps_constants() {
     assert_eq!((*id, block.num_rows()), (2, 0));
     assert_eq!(stream.partition_ids(), vec![1]);
     assert_eq!(stream.finalize_partition(1).unwrap().num_rows(), 3);
+}
+
+fn string_buffer(column: &Column) -> *const u8 {
+    let Column::String(column) = column else {
+        panic!("expected string column");
+    };
+    column.data_buffers()[0].as_ptr()
+}
+
+#[test]
+fn test_shared_views_rebase_sliced_inputs_and_outlive_stream() {
+    let first = StringType::from_data(vec![
+        "discarded first row",
+        "red",
+        "red red red red red",
+        "blue blue blue blue",
+    ])
+    .slice(1..4);
+    let second = StringType::from_data(vec!["green green green green", "g"]);
+    let first_buffer = string_buffer(&first);
+    let second_buffer = string_buffer(&second);
+    let mut stream = BlockPartitionStream::create_with_string_views(0, 0, 2);
+    stream.partition(
+        vec![0, 1, 0],
+        DataBlock::new_from_columns(vec![first]),
+        false,
+    );
+    stream.partition(vec![1, 0], DataBlock::new_from_columns(vec![second]), false);
+    let left = stream.finalize_partition(0).unwrap();
+    let right = stream.finalize_partition(1).unwrap();
+    stream.reset();
+    drop(stream);
+
+    assert_eq!(
+        left.get_by_offset(0).to_column(),
+        StringType::from_data(vec!["red", "blue blue blue blue", "g",])
+    );
+    let right_column = right.get_by_offset(0).to_column();
+    assert_eq!(
+        right_column,
+        StringType::from_data(vec!["red red red red red", "green green green green",])
+    );
+    assert_eq!(
+        string_buffer(&left.get_by_offset(0).to_column()),
+        first_buffer
+    );
+    let Column::String(right_column) = right_column else {
+        unreachable!()
+    };
+    assert_eq!(right_column.data_buffers()[0].as_ptr(), first_buffer);
+    assert_eq!(right_column.data_buffers()[1].as_ptr(), second_buffer);
+}
+
+#[test]
+fn test_shared_views_keep_constant_transitions() {
+    let blocks = vec![
+        const_block(3, 0, "red red red red red"),
+        const_block(2, 3, "blue blue blue blue"),
+        column_block(4, 5),
+        const_block(2, 9, "green green green green"),
+    ];
+    let mut shared = BlockPartitionStream::create_with_string_views(0, 0, 2);
+    let mut copied = BlockPartitionStream::create(0, 0, 2);
+    for block in blocks {
+        let indices = (0..block.num_rows())
+            .map(|i| (i % 2) as u64)
+            .collect::<Vec<_>>();
+        shared.partition(indices.clone(), block.clone(), false);
+        copied.partition(indices, block, false);
+    }
+    for id in 0..2 {
+        assert_same_values(
+            &shared.finalize_partition(id).unwrap(),
+            &copied.finalize_partition(id).unwrap(),
+        );
+    }
+}
+
+#[test]
+fn test_shared_views_separate_logical_threshold_from_retained_bytes() {
+    let source = StringType::from_data(vec!["x".repeat(32768), "y".repeat(32)]).slice(1..2);
+    let retained = source.memory_size(false);
+    let mut stream = BlockPartitionStream::create_with_string_views(0, 1024, 2);
+    let ready = stream.partition(vec![0], DataBlock::new_from_columns(vec![source]), true);
+    assert!(ready.is_empty());
+    assert!(stream.memory_size() >= retained);
+    assert_eq!(stream.partition_ids(), vec![0]);
+    let block = stream.finalize_partition(0).unwrap();
+    assert_eq!(block.num_rows(), 1);
+    assert!(stream.finalize_partition(1).is_none());
+    assert_eq!(stream.memory_size(), 0);
+}
+
+#[test]
+fn test_shared_views_inside_nullable_tuple() {
+    let source = StringType::from_opt_data(vec![
+        Some("ignored ignored ignored"),
+        Some("red red red red red"),
+        None,
+        Some("blue blue blue blue"),
+    ])
+    .slice(1..4);
+    let Column::Nullable(nullable) = &source else {
+        unreachable!()
+    };
+    let source_buffer = string_buffer(&nullable.column);
+    let tuple = Column::Tuple(vec![source, Int32Type::from_data(vec![4, 5, 6])]);
+    let mut stream = BlockPartitionStream::create_with_string_views(0, 0, 2);
+    stream.partition(
+        vec![1, 0, 1],
+        DataBlock::new_from_columns(vec![tuple]),
+        false,
+    );
+    let null = stream.finalize_partition(0).unwrap();
+    assert_eq!(
+        null.get_by_offset(0).to_column(),
+        Column::Tuple(vec![
+            StringType::from_opt_data(vec![None::<&str>]),
+            Int32Type::from_data(vec![5]),
+        ])
+    );
+    let values = stream
+        .finalize_partition(1)
+        .unwrap()
+        .get_by_offset(0)
+        .to_column();
+    assert_eq!(
+        values,
+        Column::Tuple(vec![
+            StringType::from_opt_data(vec![
+                Some("red red red red red"),
+                Some("blue blue blue blue")
+            ]),
+            Int32Type::from_data(vec![4, 6]),
+        ])
+    );
+    let Column::Tuple(fields) = values else {
+        unreachable!()
+    };
+    let Column::Nullable(nullable) = &fields[0] else {
+        unreachable!()
+    };
+    assert_eq!(string_buffer(&nullable.column), source_buffer);
 }

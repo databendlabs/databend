@@ -1,0 +1,25 @@
+# Synthetic long strings, NULLs and arrays survive join and aggregate exchanges.
+# The expected totals are hand-computed from the twelve integers 0 through 11.
+
+query IIIIII
+WITH a AS (
+    SELECT
+        number % 3 AS k,
+        concat(repeat('k', 32), to_string(number % 3)) AS join_key,
+        concat(repeat('r', 32), to_string(number)) AS s,
+        if(number % 2 = 0, NULL, to_string(number)) AS n,
+        [concat(repeat('r', 32), to_string(number)), NULL] AS tags
+    FROM numbers(12)
+), b AS (
+    SELECT concat(repeat('k', 32), to_string(number)) AS join_key
+    FROM numbers(3)
+)
+SELECT a.k, count(*), sum(length(a.s)), count(a.n),
+       sum(length(a.tags[1])), count(a.tags[2])
+FROM a INNER JOIN b ON a.join_key = b.join_key
+GROUP BY a.k
+ORDER BY a.k;
+----
+0 4 132 2 132 0
+1 4 133 2 133 0
+2 4 133 2 133 0
