@@ -34,6 +34,7 @@ mod join_cardinality;
 mod late_split_aggregate;
 mod materialized_cte_distribution;
 mod mutation;
+mod non_broadcast;
 mod normalize_scalar;
 mod outer_join_to_anti;
 mod physical_planner;
