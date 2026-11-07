@@ -294,6 +294,7 @@ mod tests {
             }),
             probe_targets: vec![],
             build_table_rows: Some(2),
+            probe_table_rows: None,
             enable_bloom_runtime_filter: false,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: false,
