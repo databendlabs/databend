@@ -338,7 +338,7 @@ impl VirtualColumnBuilder {
             JsonbValue::Interval(v) => {
                 Scalar::Interval(months_days_micros::new(v.months, v.days, v.micros))
             }
-            _ => Scalar::Variant(value.to_vec()),
+            _ => Scalar::Variant(value.to_vec().expect("failed to encode jsonb value")),
         }
     }
 
@@ -392,7 +392,9 @@ impl VirtualColumnBuilder {
     fn scalar_to_variant_bytes(scalar: ScalarRef<'_>) -> Vec<u8> {
         let jsonb_value = Self::scalar_to_jsonb_value(scalar);
         let mut buf = Vec::new();
-        jsonb_value.write_to_vec(&mut buf);
+        jsonb_value
+            .write_to_vec(&mut buf)
+            .expect("failed to encode jsonb value");
         buf
     }
 

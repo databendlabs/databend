@@ -773,7 +773,7 @@ impl TestFixture {
                             JsonbValue::Number(JsonbNumber::Int64(((idx + i) * 2) as i64)),
                         );
                         let val = JsonbValue::Object(obj);
-                        val.write_to_vec(&mut builder.data);
+                        val.write_to_vec(&mut builder.data).unwrap();
                         builder.commit_row();
                     }
                     let variant_column = Column::Variant(builder.build());

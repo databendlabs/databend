@@ -71,7 +71,12 @@ impl NdJsonDecoder {
         if self.field_decoder.is_select {
             if let ColumnBuilder::Variant(column) = &mut columns[0] {
                 let value = jsonb::Value::from(&json);
-                value.write_to_vec(&mut column.data);
+                value
+                    .write_to_vec(&mut column.data)
+                    .map_err(|e| FileParseError::InvalidRow {
+                        format: "NDJSON".to_string(),
+                        message: format!("invalid variant value: {e:?}"),
+                    })?;
                 column.commit_row();
             } else {
                 return Err(FileParseError::InvalidRow {
