@@ -239,3 +239,77 @@ explicit abcdefghijklmnop abcdefghijklmno􏿿
 
 statement ok
 DROP TABLE t_adaptive_stats_truncate;
+
+## UTF-8 byte length must not make exact short bounds look truncated.
+## Both columns have byte lengths >= their limits, but fewer Unicode characters.
+statement ok
+CREATE TABLE t_unicode_stats (
+    a STRING,
+    b STRING STATS_TRUNCATE_LEN 4
+) row_per_block=100;
+
+statement ok
+INSERT INTO t_unicode_stats VALUES
+    ('你好世界你好世', '你好世'),
+    ('👍👍👍👍👍', '👍👍');
+
+## All four aggregates must be answered from exact statistics, without a TableScan.
+query T
+EXPLAIN SELECT MIN(a), MAX(a), MIN(b), MAX(b) FROM t_unicode_stats;
+----
+EvalScalar
+├── output columns: [MIN(a) (#2), MAX(a) (#3), MIN(b) (#4), MAX(b) (#5)]
+├── expressions: ['你好世界你好世', '👍👍👍👍👍', '你好世', '👍👍']
+├── estimated rows: 1.00
+└── DummyTableScan
+
+statement ok
+TRUNCATE TABLE t_unicode_stats;
+
+## Genuinely truncated multibyte bounds must still scan and return full strings.
+## The different leading characters prevent adaptive extension of the default limit.
+statement ok
+INSERT INTO t_unicode_stats VALUES
+    (repeat('好', 17), repeat('好', 5)),
+    (repeat('👍', 17), repeat('👍', 5));
+
+query IIII
+SELECT char_length(MIN(a)), char_length(MAX(a)), char_length(MIN(b)), char_length(MAX(b))
+FROM t_unicode_stats;
+----
+17 17 5 5
+
+statement ok
+DROP TABLE t_unicode_stats;
+
+## Different blocks can use different adaptive prefix lengths without a DDL change.
+statement ok
+CREATE TABLE t_mixed_stats_prefix(a STRING) row_per_block=100;
+
+## No common prefix: both bounds are truncated to 16 characters.
+statement ok
+INSERT INTO t_mixed_stats_prefix VALUES (repeat('a', 17)), (repeat('b', 17));
+
+## A common 20-character prefix extends this block's bounds to 21 characters.
+statement ok
+INSERT INTO t_mixed_stats_prefix VALUES
+    (repeat('m', 20) || 'a-tail'), (repeat('m', 20) || 'z-tail');
+
+query II
+SELECT char_length(statistics:min::string), char_length(statistics:max::string)
+FROM fuse_block_statistics('default', 't_mixed_stats_prefix') ORDER BY 1;
+----
+16 16
+21 21
+
+## The global min comes from the first block and max from the second.
+## Neither truncated bound may be used as an exact aggregate result.
+query II
+SELECT (MIN(a) = repeat('a', 17))::INT,
+       (MAX(a) = (repeat('m', 20) || 'z-tail'))::INT
+FROM t_mixed_stats_prefix;
+----
+1 1
+
+statement ok
+DROP TABLE t_mixed_stats_prefix;

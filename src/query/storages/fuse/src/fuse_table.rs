@@ -1453,6 +1453,9 @@ impl Table for FuseTable {
         }
 
         let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
+        // ATTACH does not preserve the source column's STATS_TRUNCATE_LEN option.
+        // Its string bounds may have been truncated at any number of characters.
+        let unknown_string_truncation = self.table_type == FuseTableType::Attached;
         let r = reduced
             .into_iter()
             .map(|(k, v)| {
@@ -1460,12 +1463,24 @@ impl Table for FuseTable {
                     .get(&k)
                     .map(|&n| n as usize)
                     .unwrap_or(STATS_STRING_PREFIX_LEN);
+                // STATS_TRUNCATE_LEN N truncates string min/max statistics when the
+                // original value contains more than N Unicode characters, not bytes.
+                // Assumes this column setting is unchanged since writing these stats.
+                // When the column has no STATS_TRUNCATE_LEN option, each block chooses
+                // its own N >= STATS_STRING_PREFIX_LEN (the fallback used above).
+                // A stored min/max shorter than truncate_len cannot have been truncated.
+                // Otherwise, metadata cannot distinguish an unchanged original value
+                // from a result of truncation, so mark it as possibly truncated.
                 let min_may_be_truncated = match &v.min {
-                    Scalar::String(s) => s.len() >= truncate_len,
+                    Scalar::String(s) => {
+                        unknown_string_truncation || s.chars().count() >= truncate_len
+                    }
                     _ => false,
                 };
                 let max_may_be_truncated = match &v.max {
-                    Scalar::String(s) => s.len() >= truncate_len,
+                    Scalar::String(s) => {
+                        unknown_string_truncation || s.chars().count() >= truncate_len
+                    }
                     _ => false,
                 };
                 (k, ColumnRange {
