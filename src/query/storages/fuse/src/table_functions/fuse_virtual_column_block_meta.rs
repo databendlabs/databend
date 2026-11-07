@@ -30,7 +30,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
@@ -239,15 +238,13 @@ fn build_virtual_column_metas(
         UInt64Type::from_data(lens),
         UInt64Type::from_data(num_values),
         StringType::from_data(data_types),
-        Column::Nullable(Box::new(NullableColumn::new(
-            Column::Tuple(vec![
-                VariantType::from_data(mins),
-                VariantType::from_data(maxes),
-                UInt64Type::from_data(null_counts),
-                UInt64Type::from_data(in_memory_sizes),
-            ]),
-            column_stat_bitmap.into(),
-        ))),
+        Column::Tuple(vec![
+            VariantType::from_data(mins),
+            VariantType::from_data(maxes),
+            UInt64Type::from_data(null_counts),
+            UInt64Type::from_data(in_memory_sizes),
+        ])
+        .wrap_nullable(Some(column_stat_bitmap.into())),
     ]));
 
     let data_type = TableDataType::Array(Box::new(TableDataType::Tuple {

@@ -33,7 +33,6 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -288,7 +287,7 @@ fn build_series_row(
         }
         _ => unreachable!(),
     };
-    let column = NullableColumn::new_column(column, Bitmap::new_constant(true, len));
+    let column = column.wrap_nullable(Some(Bitmap::new_constant(true, len)));
     (Value::Column(Column::Tuple(vec![column])), len)
 }
 

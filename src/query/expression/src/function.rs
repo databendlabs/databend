@@ -680,20 +680,16 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
     debug_assert!(!O::data_type().is_nullable_or_null());
     move |val, ctx| {
         let output = func(val, ctx);
-        if let Some((validity, _)) = ctx.errors.take() {
-            match output {
-                Value::Scalar(_) => Value::Scalar(None),
-                Value::Column(column) => {
-                    Value::Column(NullableColumn::new_unchecked(column, validity.into()))
-                }
-            }
-        } else {
-            match output {
-                Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
-                Value::Column(column) => Value::Column(NullableColumn::new_unchecked(
-                    column,
-                    Bitmap::new_constant(true, ctx.num_rows),
-                )),
+        match (output, ctx.errors.take()) {
+            // Scalar evaluation runs once; its error bitmap has not been broadcast yet.
+            (Value::Scalar(_), Some(_)) => Value::Scalar(None),
+            (Value::Scalar(scalar), None) => Value::Scalar(Some(scalar)),
+            (Value::Column(column), errors) => {
+                let validity = match errors {
+                    Some((validity, _)) => validity.into(),
+                    None => Bitmap::new_constant(true, ctx.num_rows),
+                };
+                NullableType::<O>::wrap_value(Value::Column(column), validity, ctx.generics)
             }
         }
     }
