@@ -358,8 +358,8 @@ fn read_footer(
 pub(super) mod tests {
     use databend_common_base::runtime::GlobalIORuntime;
     use opendal::services::Memory;
+    use tantivy::IndexBuilder;
     use tantivy::IndexSettings;
-    use tantivy::SingleSegmentIndexWriter;
     use tantivy::directory::RamDirectory;
     use tantivy::index::SegmentComponent;
     use tantivy::schema::IndexRecordOption;
@@ -369,6 +369,7 @@ pub(super) mod tests {
     use tantivy::schema::TantivyDocument;
     use tantivy::schema::TextFieldIndexing;
     use tantivy::schema::TextOptions;
+    use tantivy::tokenizer::RAW_TOKENIZER_NAME;
 
     use super::*;
     use crate::init_test_runtime;
@@ -391,20 +392,24 @@ pub(super) mod tests {
             "meta",
             JsonObjectOptions::default()
                 .set_indexing_options(indexing)
-                .set_fast(Some("raw")),
+                .set_fast(RAW_TOKENIZER_NAME),
         );
         builder.build()
     }
 
-    fn add_documents(index: Index) -> Index {
-        add_rows(index, ROWS)
+    fn add_documents<D: Directory>(directory: D) -> Index {
+        add_rows(directory, ROWS)
     }
 
-    fn add_rows(index: Index, rows: usize) -> Index {
-        let schema = index.schema();
+    fn add_rows<D: Directory>(directory: D, rows: usize) -> Index {
+        let schema = schema();
         let title = schema.get_field("title").unwrap();
         let meta = schema.get_field("meta").unwrap();
-        let mut writer = SingleSegmentIndexWriter::new(index, 16 * 1024 * 1024).unwrap();
+        let mut writer = IndexBuilder::new()
+            .schema(schema)
+            .settings(settings())
+            .single_segment_index_writer(directory, 16 * 1024 * 1024)
+            .unwrap();
         for i in 0..rows {
             let mut doc = TantivyDocument::new();
             doc.add_text(title, format!("alpha beta w{} delta w{}", i % 97, i));
@@ -434,10 +439,7 @@ pub(super) mod tests {
             "t/h1.index".into(),
             threshold,
         );
-        let index = add_rows(
-            Index::create(directory.clone(), schema(), settings()).unwrap(),
-            rows,
-        );
+        let index = add_rows(directory.clone(), rows);
         let builder = InvertedIndexBundleBuilder::try_create(
             directory.clone(),
             index,
@@ -467,8 +469,7 @@ pub(super) mod tests {
         let index = source.open_index().unwrap();
         let walked = walk(&index);
 
-        let reference =
-            add_documents(Index::create(RamDirectory::default(), schema(), settings()).unwrap());
+        let reference = add_documents(RamDirectory::default());
         assert_eq!(walked, walk(&reference));
         assert!(walked.len() > 100);
 
@@ -512,8 +513,7 @@ pub(super) mod tests {
                 .is_none()
         );
         let index = source.open_index().unwrap();
-        let reference =
-            add_documents(Index::create(RamDirectory::default(), schema(), settings()).unwrap());
+        let reference = add_documents(RamDirectory::default());
         assert_eq!(walk(&index), walk(&reference));
     }
 

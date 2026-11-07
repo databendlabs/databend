@@ -303,9 +303,9 @@ impl InvertedIndexWarmupInfo {
                 // Read physical components through the raw directory to populate the full pool.
                 let components = [SegmentComponent::Postings, SegmentComponent::Positions];
                 let count = if with_positions { 2 } else { 1 };
-                let full_reads = components[..count].iter().map(|&component| async move {
+                let full_reads = components[..count].iter().map(|component| async move {
                     raw_bundle_directory
-                        .open_read(&segment.relative_path(component))?
+                        .open_read(&segment.relative_path(component.clone()))?
                         .read_bytes_async()
                         .await?;
                     Ok::<(), ErrorCode>(())
@@ -341,6 +341,7 @@ mod tests {
     use tantivy::schema::Schema;
     use tantivy::schema::TEXT;
     use tantivy::schema::TextFieldIndexing;
+    use tantivy::tokenizer::RAW_TOKENIZER_NAME;
     use tantivy::tokenizer::TokenizerManager;
 
     use super::*;
@@ -418,7 +419,7 @@ mod tests {
             "meta",
             JsonObjectOptions::default()
                 .set_indexing_options(TextFieldIndexing::default())
-                .set_fast(None),
+                .set_fast(RAW_TOKENIZER_NAME),
         );
         let num = builder.add_u64_field("num", FAST);
         let schema = builder.build();
@@ -444,7 +445,7 @@ mod tests {
             "meta",
             JsonObjectOptions::default()
                 .set_indexing_options(TextFieldIndexing::default())
-                .set_fast(None),
+                .set_fast(RAW_TOKENIZER_NAME),
         );
         let fast_only = builder.add_u64_field("num", FAST);
         let schema = builder.build();

@@ -68,6 +68,7 @@ use tantivy::schema::TextFieldIndexing;
 use tantivy::schema::TextOptions;
 use tantivy::tokenizer::Language;
 use tantivy::tokenizer::LowerCaser;
+use tantivy::tokenizer::RAW_TOKENIZER_NAME;
 use tantivy::tokenizer::SimpleTokenizer;
 use tantivy::tokenizer::Stemmer;
 use tantivy::tokenizer::StopWordFilter;
@@ -318,8 +319,8 @@ impl InvertedIndexWriter {
             .schema(index_schema.clone())
             .tokenizers(tokenizer_manager.clone());
 
-        let index = index_builder.open_or_create(directory.clone())?;
-        let index_writer = SingleSegmentIndexWriter::new(index, INDEX_WRITER_TABLE_SIZING_HINT)?;
+        let index_writer = index_builder
+            .single_segment_index_writer(directory.clone(), INDEX_WRITER_TABLE_SIZING_HINT)?;
 
         Ok(Self {
             schema,
@@ -591,7 +592,7 @@ pub(crate) fn create_index_schema(
     // `.fast` file asynchronously before starting synchronous search.
     let json_options = JsonObjectOptions::default()
         .set_indexing_options(text_field_indexing)
-        .set_fast(Some("raw"));
+        .set_fast(RAW_TOKENIZER_NAME);
 
     let mut schema_builder = Schema::builder();
     let mut index_fields = Vec::with_capacity(schema.fields.len());

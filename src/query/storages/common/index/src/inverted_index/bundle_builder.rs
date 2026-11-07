@@ -169,9 +169,8 @@ mod streaming_tests {
     use databend_common_base::runtime::GlobalIORuntime;
     use opendal::Operator;
     use opendal::services::Memory;
-    use tantivy::Index;
+    use tantivy::IndexBuilder;
     use tantivy::IndexSettings;
-    use tantivy::SingleSegmentIndexWriter;
     use tantivy::schema::IndexRecordOption;
     use tantivy::schema::JsonObjectOptions;
     use tantivy::schema::OwnedValue;
@@ -179,6 +178,7 @@ mod streaming_tests {
     use tantivy::schema::TantivyDocument;
     use tantivy::schema::TextFieldIndexing;
     use tantivy::schema::TextOptions;
+    use tantivy::tokenizer::RAW_TOKENIZER_NAME;
 
     use super::InvertedIndexBundleBuilder;
     use crate::inverted_index::InvertedIndexBundleFooter;
@@ -213,14 +213,17 @@ mod streaming_tests {
             "meta",
             JsonObjectOptions::default()
                 .set_indexing_options(indexing)
-                .set_fast(Some("raw")),
+                .set_fast(RAW_TOKENIZER_NAME),
         );
         let settings = IndexSettings {
             docstore_compress_dedicated_thread: false,
             ..Default::default()
         };
-        let index = Index::create(directory.clone(), builder.build(), settings).unwrap();
-        let mut writer = SingleSegmentIndexWriter::new(index, 16 * 1024 * 1024).unwrap();
+        let mut writer = IndexBuilder::new()
+            .schema(builder.build())
+            .settings(settings)
+            .single_segment_index_writer(directory.clone(), 16 * 1024 * 1024)
+            .unwrap();
         for i in 0..rows {
             let mut doc = TantivyDocument::new();
             doc.add_text(

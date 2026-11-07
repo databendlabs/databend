@@ -331,9 +331,10 @@ lexical-core = "1"
 libc = { version = "0.2.158" }
 libm = "0.2.6"
 limits-rs = "0.2.0"
-lindera = { version = "5.0.1", features = ["embed-ipadic"] }
-lindera-analysis = "5.0.1"
-lindera-tantivy = { version = "5.0.1", features = ["embed-ipadic"] }
+lindera = { version = "6.2.0", features = ["embed-ipadic"] }
+lindera-analysis = "6.2.0"
+#lindera-tantivy = { version = "5.0.1", features = ["embed-ipadic"] }
+lindera-tantivy = { git = "https://github.com/b41sh/lindera-tantivy.git", rev = "3b6ccf98f8870168e36b5878164b686ef3cb4b79", features = ["embed-ipadic"] }
 logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "dev", features = [
     'json',
     'rolling-file',
@@ -465,10 +466,10 @@ sub-cache = "0.2.1"
 syn = { version = "2.0", features = ["full"] }
 sys-info = "0.9"
 sysinfo = "0.34.2"
-tantivy = { version = "0.26.2", features = ["quickwit"] }
-tantivy-common = "0.11.0"
-tantivy-jieba = "0.20.0"
-tantivy-query-grammar = "0.26.0"
+tantivy = { version = "0.27.0", features = ["quickwit"] }
+tantivy-common = "0.27.0"
+tantivy-jieba = "0.21.0"
+tantivy-query-grammar = "0.27.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
 terminal_size = "0.4.2"

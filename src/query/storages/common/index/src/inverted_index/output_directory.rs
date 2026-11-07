@@ -32,6 +32,8 @@ use bytes::Bytes;
 use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::BlockingWrite;
 use databend_storages_common_io::OpenDalBlockingWrite;
+use databend_storages_common_io::OperatorRangeReader;
+use databend_storages_common_io::RangeReader;
 use databend_storages_common_io::create_blocking_write;
 use opendal::Buffer;
 use opendal::Operator;
@@ -40,6 +42,7 @@ use tantivy::HasLen;
 use tantivy::directory::AntiCallToken;
 use tantivy::directory::DirectoryLock;
 use tantivy::directory::FileHandle;
+use tantivy::directory::FileSlice;
 use tantivy::directory::Lock;
 use tantivy::directory::OwnedBytes;
 use tantivy::directory::RamDirectory;
@@ -51,17 +54,23 @@ use tantivy::directory::error::DeleteError;
 use tantivy::directory::error::LockError;
 use tantivy::directory::error::OpenReadError;
 use tantivy::directory::error::OpenWriteError;
+use tantivy::directory::footer::Footer;
+use tantivy_common::BinarySerializable;
+use tantivy_common::VInt;
 
 use super::bundle::ExternalFile;
 
 /// Files up to this size stay inline; streamed files retain this many trailing bytes.
 pub const INVERTED_INDEX_STREAM_THRESHOLD: usize = 4 * 1024 * 1024;
 
-/// Bytes retained from the file start and from after every `flush` of a streamed file.
+/// Bytes retained from the start of every section of a streamed file.
 ///
-/// Tantivy's `FieldSerializer::close` flushes the postings writer after each field, so a flush
-/// marks the start of the next field's section, whose first 8 bytes (`total_num_tokens`) are read
-/// synchronously when the field is opened. Reads are matched by exact section offset.
+/// Tantivy writes `.idx` / `.pos` as composite files with one section per field, and reads the
+/// first 8 bytes (`total_num_tokens`) of every `.idx` section synchronously when the field is
+/// opened. Reads are matched by exact section offset. Section starts are taken from the
+/// composite footer once the file is complete; heads not retained while writing are read back
+/// from the committed sibling object. A `flush` also starts a head, which avoids that read for
+/// writers that flush at section boundaries (Tantivy 0.27 does for `.pos`, not for `.idx`).
 const SECTION_HEAD_RETAIN: usize = 64;
 
 #[derive(Clone)]
@@ -287,11 +296,14 @@ impl OutputFileWrite {
         Buffer::from(vec![bytes.slice(pos..), bytes.slice(..pos)])
     }
 
+    fn object(&self) -> String {
+        format!("{}{}", self.directory.bundle_location, self.suffix)
+    }
+
     fn start_streaming(&mut self) -> io::Result<()> {
-        let object = format!("{}{}", self.directory.bundle_location, self.suffix);
         let mut sink = create_blocking_write(
             self.directory.operator.clone(),
-            object,
+            self.object(),
             BLOCKING_WRITE_MAX_CHUNKS,
         );
         sink.write_all(&self.buffer)?;
@@ -335,6 +347,13 @@ impl TerminatingWrite for OutputFileWrite {
         for (offset, head) in std::mem::take(&mut self.heads) {
             heads.insert(offset, Bytes::from(head));
         }
+        let committed = Arc::new(CommittedFile {
+            operator: self.directory.operator.clone(),
+            object: self.object(),
+            len: self.written,
+            tail: tail.clone(),
+        });
+        committed.retain_section_heads(&mut heads)?;
         let mut streamed = self.directory.streamed.lock().unwrap();
         for file in streamed.values() {
             if file.suffix == self.suffix {
@@ -415,6 +434,158 @@ impl FileHandle for StreamedFileHandle {
             }
         }
     }
+}
+
+/// A streamed file whose sibling object is complete. Reads inside the retained tail come from
+/// memory, other reads from the sibling object. Used only to retain section heads before the
+/// file is published.
+struct CommittedFile {
+    operator: Operator,
+    object: String,
+    len: u64,
+    tail: Buffer,
+}
+
+impl CommittedFile {
+    fn tail_start(&self) -> u64 {
+        self.len - self.tail.len() as u64
+    }
+
+    fn read_object(&self, ranges: &[Range<u64>]) -> io::Result<Vec<Bytes>> {
+        let mut reader =
+            OperatorRangeReader::new(self.operator.clone(), self.object.clone(), ranges.len());
+        reader.prefetch(ranges);
+        let mut chunks = Vec::with_capacity(ranges.len());
+        for range in ranges {
+            let data = RangeReader::read(&mut reader, range.clone())
+                .map_err(|error| io::Error::other(error.to_string()))?;
+            if data.len() as u64 != range.end - range.start {
+                let message = format!(
+                    "{} returned {} bytes for {range:?}",
+                    self.object,
+                    data.len()
+                );
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, message));
+            }
+            chunks.push(data.to_bytes());
+        }
+        Ok(chunks)
+    }
+
+    /// Adds the head of every composite section that is neither retained nor inside the tail.
+    fn retain_section_heads(self: Arc<Self>, heads: &mut BTreeMap<u64, Bytes>) -> io::Result<()> {
+        let Some((starts, sections_end)) = composite_section_starts(FileSlice::new(self.clone()))?
+        else {
+            return Ok(());
+        };
+        let tail_start = self.tail_start();
+        let mut missing = Vec::new();
+        for (i, &start) in starts.iter().enumerate() {
+            if start >= tail_start {
+                continue;
+            }
+            // A head never extends into the next section.
+            let next = starts[i + 1..]
+                .iter()
+                .copied()
+                .find(|next| *next > start)
+                .unwrap_or(sections_end);
+            let end = next.min(start + SECTION_HEAD_RETAIN as u64);
+            let retained = heads.get(&start).map_or(0, |head| head.len() as u64);
+            if retained < end - start {
+                missing.push(start..end);
+            }
+        }
+        // Sections without bytes share their start with the next section.
+        missing.dedup();
+        if missing.is_empty() {
+            return Ok(());
+        }
+        for (range, head) in missing.iter().zip(self.read_object(&missing)?) {
+            heads.insert(range.start, head);
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for CommittedFile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("CommittedFile")
+            .field("object", &self.object)
+            .field("len", &self.len)
+            .finish()
+    }
+}
+
+impl HasLen for CommittedFile {
+    fn len(&self) -> usize {
+        usize::try_from(self.len).unwrap_or(usize::MAX)
+    }
+}
+
+impl FileHandle for CommittedFile {
+    fn read_bytes(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
+        let range = range.start as u64..range.end as u64;
+        if range.start > range.end || range.end > self.len {
+            let message = format!("read {range:?} past the end of {}", self.object);
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, message));
+        }
+        let tail_start = self.tail_start();
+        let bytes = if range.start >= tail_start {
+            let start = (range.start - tail_start) as usize;
+            let end = (range.end - tail_start) as usize;
+            self.tail.slice(start..end).to_bytes()
+        } else {
+            let mut chunks = self.read_object(std::slice::from_ref(&range))?;
+            chunks.remove(0)
+        };
+        Ok(OwnedBytes::new(bytes.to_vec()))
+    }
+}
+
+/// Section starts of a composite file written through Tantivy's managed directory, and the end
+/// of its last section. The file holds the sections, the composite footer and its `u32` length,
+/// then Tantivy's file footer. `None` if the file has no Tantivy file footer.
+fn composite_section_starts(file: FileSlice) -> io::Result<Option<(Vec<u64>, u64)>> {
+    let body = match Footer::extract_footer(file) {
+        Ok((_, body)) => body,
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::InvalidData | io::ErrorKind::UnexpectedEof
+            ) =>
+        {
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
+    let corrupted = || {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "corrupted composite file footer",
+        )
+    };
+    let footer_end = body.len().checked_sub(4).ok_or_else(corrupted)?;
+    let footer_len = u32::deserialize(&mut body.slice_from(footer_end).read_bytes()?.as_slice())?;
+    let footer_start = footer_end
+        .checked_sub(footer_len as usize)
+        .ok_or_else(corrupted)?;
+    let footer = body.slice(footer_start..footer_end).read_bytes()?;
+    let mut reader = footer.as_slice();
+    let num_sections = VInt::deserialize(&mut reader)?.0;
+    let mut starts = Vec::new();
+    let mut offset = 0u64;
+    for _ in 0..num_sections {
+        offset = offset
+            .checked_add(VInt::deserialize(&mut reader)?.0)
+            .filter(|offset| *offset <= footer_start as u64)
+            .ok_or_else(corrupted)?;
+        // Section address: field id, then the section index within the field.
+        u32::deserialize(&mut reader)?;
+        VInt::deserialize(&mut reader)?;
+        starts.push(offset);
+    }
+    Ok(Some((starts, footer_start as u64)))
 }
 
 #[cfg(test)]
@@ -702,11 +873,10 @@ mod tests {
             schema_builder.add_text_field("b", text.clone()),
             schema_builder.add_text_field("c", text),
         ];
-        let index = tantivy::IndexBuilder::new()
+        let mut writer = tantivy::IndexBuilder::new()
             .schema(schema_builder.build())
-            .open_or_create(directory)
+            .single_segment_index_writer(directory, 15_000_000)
             .unwrap();
-        let mut writer = tantivy::SingleSegmentIndexWriter::new(index.clone(), 15_000_000).unwrap();
         for i in 0..DOCS {
             let mut doc = TantivyDocument::default();
             // Field k carries k + 1 tokens per document.
@@ -729,7 +899,7 @@ mod tests {
 
     #[test]
     fn test_tantivy_opens_every_field_from_retained_bytes() {
-        // Guards the assumption behind SECTION_HEAD_RETAIN: Tantivy flushes between fields.
+        // Tantivy does not flush between `.idx` fields; their heads come from the composite footer.
         let (_, directory) = directory(256);
         let (index, expected) = build_multi_field_index(directory.clone());
         let external = directory.external_files();
@@ -857,29 +1027,31 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_flush_between_fields_is_detected() {
-        // Negative control: without the per-field flush only the first field's head exists.
+    fn test_fields_open_without_any_flush() {
+        // Section heads do not depend on the writer flushing at field boundaries.
         let (_, directory) = directory(256);
         let (index, expected) =
             build_multi_field_index(FlushWrapper(directory.clone(), FlushPolicy::Never));
+        let postings = index.searchable_segment_metas().unwrap()[0]
+            .relative_path(tantivy::index::SegmentComponent::Postings);
+        assert!(directory.external_files().contains_key(&postings));
         let reader = index.reader().unwrap();
         let searcher = reader.searcher();
         let segment = searcher.segment_reader(0);
-        assert!(
-            segment.inverted_index(expected[0].0).is_ok(),
-            "file start is always retained"
-        );
-        let error = match segment.inverted_index(expected[1].0) {
-            Ok(_) => panic!("field opened without its section head"),
-            Err(error) => error,
-        };
-        assert!(
-            error
-                .to_string()
-                .contains("outside the retained tail and section heads"),
-            "{error}"
-        );
-        assert!(super::super::collect_index_open_slices(directory).is_err());
+        for (field, tokens) in &expected {
+            let inverted = segment.inverted_index(*field).unwrap();
+            assert_eq!(inverted.total_num_tokens(), *tokens, "{field:?}");
+        }
+        let slices = super::super::collect_index_open_slices(directory).unwrap();
+        assert!(slices.contains_key(&postings));
+    }
+
+    #[test]
+    fn test_section_heads_need_a_tantivy_footer() {
+        // Raw bytes carry no composite footer, so only the file start is retained.
+        let (_, directory) = directory(64);
+        write_in_pieces(&directory, "seg.idx", &pattern(1000), 13);
+        assert_eq!(directory.section_head_count(Path::new("seg.idx")), 1);
     }
 
     #[test]
