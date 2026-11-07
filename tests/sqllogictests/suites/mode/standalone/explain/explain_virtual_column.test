@@ -14,7 +14,7 @@ statement ok
 drop table if exists t1
 
 statement ok
-create table t1 (a int null, v json null) storage_format = 'parquet'
+create table t1 (a int null, v json null) storage_format = 'parquet' enable_virtual_column = false
 
 statement ok
 insert into t1 values(1, parse_json('{"a":[1,2,3],"b":{"c":10},"d":20}'))
