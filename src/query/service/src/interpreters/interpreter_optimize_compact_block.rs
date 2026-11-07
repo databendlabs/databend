@@ -22,6 +22,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::ir::DefaultPhysicalPlanner;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 
 use crate::interpreters::Interpreter;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -29,6 +30,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct OptimizeCompactBlockInterpreter {
     ctx: Arc<QueryContext>,
@@ -70,12 +72,30 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
                 ..
             } = self.s_expr.plan().clone().try_into()?;
 
-            // try add lock table.
-            let lock_guard = self
+            // MV tables reject ordinary writes but allow maintenance. Resolve the current
+            // table directly and use the maintenance read-only check, rather than the generic
+            // write-lock helper which deliberately skips these engines.
+            let target = self
                 .ctx
-                .clone()
-                .acquire_table_lock(&catalog, &database, &table, &self.lock_opt)
+                .get_catalog(&catalog)
+                .await?
+                .get_table(&self.ctx.get_tenant(), &database, &table)
                 .await?;
+            let lock_guard = if is_fuse_backed_engine(target.engine())
+                && !target.is_read_only_for_maintenance()
+                && !target.is_temp()
+            {
+                self.ctx
+                    .clone()
+                    .acquire_table_lock_by_id(&catalog, target.get_id(), &self.lock_opt)
+                    .await?
+            } else {
+                None
+            };
+            if lock_guard.is_some() {
+                self.ctx
+                    .evict_table_from_cache(&catalog, &database, &table)?;
+            }
 
             let mut build_res = PipelineBuildResult::create();
             let mut builder =

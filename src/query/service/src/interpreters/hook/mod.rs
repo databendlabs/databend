@@ -25,6 +25,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 pub use hook::HookOperator;
+pub(crate) use hook::execute_deferred_table_hooks;
 use log::info;
 use log::warn;
 pub use table_hook_scheduler::TableHookScheduler;

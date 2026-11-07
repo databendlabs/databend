@@ -28,7 +28,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use log::info;
+use databend_common_pipeline::core::SharedLockGuard;
 use log::warn;
 use parking_lot::Mutex;
 use tokio::sync::OwnedSemaphorePermit;
@@ -52,8 +52,63 @@ pub struct TableHookTask {
     pub compact_target: CompactTargetTableDescription,
     pub hook_settings: TableHookTaskSettings,
     pub lock_opt: LockTableOption,
+    /// Only synchronous autocommit tasks carry a statement lock. Queued and post-commit
+    /// tasks carry none and acquire their own maintenance locks.
+    pub lock_guard: Option<SharedLockGuard>,
     pub operation_name: String,
     pub main_operation_start: Instant,
+}
+
+impl TableHookTask {
+    /// Run the same maintenance chain for autocommit and post-commit hooks, in both modes.
+    /// Release any handed-over statement lock after refresh and before analyze.
+    pub(crate) async fn execute(self) {
+        log::info!(
+            "Start table hook job for operation {}, table_id={}, table={}",
+            self.operation_name,
+            self.table_id,
+            self.compact_target.table
+        );
+        if self.hook_settings.compact_after_write {
+            execute_compact_hook(
+                self.ctx.clone(),
+                self.compact_target.clone(),
+                CompactHookTraceCtx {
+                    start: self.main_operation_start,
+                    operation_name: self.operation_name.clone(),
+                },
+                self.lock_opt,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                warn!("Table hook compact failed, table_id={}: {e}", self.table_id)
+            });
+        }
+        execute_refresh_hook(self.ctx.clone(), RefreshDesc {
+            catalog: self.compact_target.catalog.clone(),
+            database: self.compact_target.database.clone(),
+            table: self.compact_target.table.clone(),
+            table_id: Some(self.table_id),
+        })
+        .await
+        .unwrap_or_else(|e| warn!("Table hook refresh failed, table_id={}: {e}", self.table_id));
+        if let Some(guard) = self.lock_guard {
+            drop(guard.try_take());
+        }
+        execute_analyze_hook(self.ctx, AnalyzeDesc {
+            catalog: self.compact_target.catalog,
+            database: self.compact_target.database,
+            table: self.compact_target.table,
+            table_id: Some(self.table_id),
+        })
+        .await
+        .unwrap_or_else(|e| warn!("Table hook analyze failed, table_id={}: {e}", self.table_id));
+        log::info!(
+            "Table hook job completed for operation {}, table_id={}",
+            self.operation_name,
+            self.table_id
+        );
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -150,8 +205,7 @@ enum TableHookState<T> {
 
 impl TableHookScheduler {
     pub fn init(max_concurrency: usize) -> Result<()> {
-        let runner: SchedulerRunner<TableHookTask> =
-            Arc::new(|task| Box::pin(Self::execute_task(task)));
+        let runner: SchedulerRunner<TableHookTask> = Arc::new(|task| Box::pin(task.execute()));
         let spawner: SchedulerSpawner = Arc::new(|future, name| {
             GlobalIORuntime::instance().spawn_named(future, name);
         });
@@ -174,62 +228,6 @@ impl TableHookScheduler {
 
     pub fn enqueue(&self, task: TableHookTask) {
         self.core.enqueue(task);
-    }
-
-    async fn execute_task(task: TableHookTask) {
-        info!(
-            "Start async table hook job for operation {}, table_id={}, table={}",
-            task.operation_name, task.table_id, task.compact_target.table
-        );
-
-        Self::execute_compact(&task).await;
-        Self::execute_refresh(&task).await;
-        Self::execute_analyze(&task).await;
-
-        info!(
-            "Async table hook job completed for operation {}, table_id={}, table={}",
-            task.operation_name, task.table_id, task.compact_target.table
-        );
-    }
-
-    async fn execute_compact(task: &TableHookTask) {
-        if !task.hook_settings.compact_after_write {
-            return;
-        }
-
-        execute_compact_hook(
-            task.ctx.clone(),
-            task.compact_target.clone(),
-            CompactHookTraceCtx {
-                start: task.main_operation_start,
-                operation_name: task.operation_name.clone(),
-            },
-            task.lock_opt.clone(),
-        )
-        .await
-        .ok();
-    }
-
-    async fn execute_refresh(task: &TableHookTask) {
-        execute_refresh_hook(task.ctx.clone(), RefreshDesc {
-            catalog: task.compact_target.catalog.clone(),
-            database: task.compact_target.database.clone(),
-            table: task.compact_target.table.clone(),
-            table_id: Some(task.table_id),
-        })
-        .await
-        .ok();
-    }
-
-    async fn execute_analyze(task: &TableHookTask) {
-        execute_analyze_hook(task.ctx.clone(), AnalyzeDesc {
-            catalog: task.compact_target.catalog.clone(),
-            database: task.compact_target.database.clone(),
-            table: task.compact_target.table.clone(),
-            table_id: Some(task.table_id),
-        })
-        .await
-        .ok();
     }
 }
 
@@ -781,6 +779,7 @@ mod tests {
             },
             hook_settings,
             lock_opt: LockTableOption::NoLock,
+            lock_guard: None,
             operation_name: "insert".to_string(),
             main_operation_start: Instant::now(),
         }

@@ -28,14 +28,19 @@ use databend_common_storages_fuse::operations::vacuum_tables_from_info;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_io::Files;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_session::TxnTableHook;
 use log::error;
 use log::info;
 use log::warn;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::hook::execute_deferred_table_hooks;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextSession;
+use crate::sessions::TableContextTableAccess;
 
 pub struct CommitInterpreter {
     ctx: Arc<QueryContext>,
@@ -78,10 +83,41 @@ impl Drop for ClearTxnManagerGuard {
     }
 }
 
-pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> {
+/// Automatic maintenance for a committed transaction. Dispatch only after releasing any
+/// enclosing lifecycle locks; each maintenance operation acquires its own locks.
+#[must_use]
+pub struct PostCommitHooks {
+    ctx: Arc<QueryContext>,
+    table_hooks: Vec<TxnTableHook>,
+    txn_id: String,
+}
+
+impl PostCommitHooks {
+    pub async fn execute(self) {
+        // Maintenance builds and executes SQL pipelines. Keep its large future off the
+        // caller's stack, including internal transactions nested in materialized-view refresh.
+        Box::pin(execute_deferred_table_hooks(
+            self.ctx,
+            self.table_hooks,
+            &self.txn_id,
+        ))
+        .await;
+    }
+}
+
+pub async fn execute_commit_statement(ctx: Arc<QueryContext>) -> Result<()> {
+    if let Some(hooks) = commit_transaction(ctx).await? {
+        hooks.execute().await;
+    }
+    Ok(())
+}
+
+/// Commit and clear the transaction, returning automatic maintenance separately so callers
+/// with an enclosing lifecycle lock can release it before dispatching the hooks.
+pub async fn commit_transaction(ctx: Arc<QueryContext>) -> Result<Option<PostCommitHooks>> {
     // After commit statement, current session should be in auto commit mode, no matter update meta success or not.
     // Use this guard to clear txn manager before return.
-    let _guard = ClearTxnManagerGuard(ctx.txn_mgr().clone());
+    let guard = ClearTxnManagerGuard(ctx.txn_mgr());
     let is_active = ctx.txn_mgr().lock().is_active();
     if is_active {
         ctx.txn_mgr().lock().set_auto_commit();
@@ -94,12 +130,22 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
             )
         };
         commit_with_backoff(ctx.clone(), &tenant, req).await?;
-        let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
+        let (need_purge_files, tables_need_purge, table_hooks, txn_id) = {
+            let txn_mgr = ctx.txn_mgr();
+            let mut txn_mgr = txn_mgr.lock();
+            (
+                txn_mgr.need_purge_files(),
+                txn_mgr.table_need_purge(),
+                txn_mgr.take_table_hooks(),
+                txn_mgr.txn_id().to_string(),
+            )
+        };
+        // set_auto_commit only changed the state. Clear the actual buffer before any
+        // post-commit work, and finish the guard before handing tasks to another context.
+        drop(guard);
         for (stage_info, files) in need_purge_files {
             try_purge_files(ctx.clone(), &stage_info, &files).await;
         }
-
-        let tables_need_purge = { ctx.txn_mgr().lock().table_need_purge() };
 
         if !tables_need_purge.is_empty() {
             if LicenseManagerSwitch::instance()
@@ -124,8 +170,13 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
                 warn!("EE feature is not enabled, vacuum after transaction commit is skipped");
             }
         }
+        return Ok(Some(PostCommitHooks {
+            ctx,
+            table_hooks,
+            txn_id,
+        }));
     }
-    Ok(())
+    Ok(None)
 }
 
 #[async_backtrace::framed]

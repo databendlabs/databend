@@ -18,13 +18,11 @@ databend_common_tracing::register_module_tag!("[COMPACT-HOOK]");
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::ExecutionInfo;
-use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::MaintenanceTarget;
@@ -63,49 +61,6 @@ pub struct CompactTargetTableDescription {
 pub struct CompactHookTraceCtx {
     pub start: Instant,
     pub operation_name: String,
-}
-
-/// Hook compact action with a on-finished callback.
-/// errors (if any) are ignored.
-pub async fn hook_compact(
-    ctx: Arc<QueryContext>,
-    pipeline: &mut Pipeline,
-    compact_target: CompactTargetTableDescription,
-    trace_ctx: CompactHookTraceCtx,
-    lock_opt: LockTableOption,
-) {
-    let op_name = trace_ctx.operation_name.clone();
-    if let Err(e) = do_hook_compact(ctx, pipeline, compact_target, trace_ctx, lock_opt).await {
-        info!("Operation {} failed with error (ignored): {}", op_name, e);
-    }
-}
-
-/// hook the compact action with a on-finished callback.
-async fn do_hook_compact(
-    ctx: Arc<QueryContext>,
-    pipeline: &mut Pipeline,
-    compact_target: CompactTargetTableDescription,
-    trace_ctx: CompactHookTraceCtx,
-    lock_opt: LockTableOption,
-) -> Result<()> {
-    if pipeline.is_empty() {
-        return Ok(());
-    }
-
-    pipeline.set_on_finished(move |info: &ExecutionInfo| {
-        if info.res.is_ok() {
-            let _ = GlobalIORuntime::instance().block_on(execute_compact_hook(
-                ctx,
-                compact_target,
-                trace_ctx,
-                lock_opt,
-            ));
-        }
-
-        Ok(())
-    });
-
-    Ok(())
 }
 
 pub(crate) fn compact_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
