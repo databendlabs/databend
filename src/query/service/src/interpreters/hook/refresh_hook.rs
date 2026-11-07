@@ -17,7 +17,6 @@ databend_common_tracing::register_module_tag!("[REFRESH-HOOK]");
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
@@ -42,21 +41,6 @@ pub struct RefreshDesc {
     pub database: String,
     pub table: String,
     pub table_id: Option<u64>,
-}
-
-/// Hook refresh action with a on-finished callback.
-/// errors (if any) are ignored.
-pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc: RefreshDesc) {
-    if pipeline.is_empty() {
-        return;
-    }
-
-    pipeline.set_on_finished(move |info: &ExecutionInfo| {
-        if info.res.is_ok() {
-            let _ = GlobalIORuntime::instance().block_on(execute_refresh_hook(ctx, desc));
-        }
-        Ok(())
-    });
 }
 
 pub(crate) async fn execute_refresh_hook(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {

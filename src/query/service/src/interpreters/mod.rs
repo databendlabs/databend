@@ -344,6 +344,8 @@ pub use interpreter_table_undrop::UndropTableInterpreter;
 pub use interpreter_table_vacuum::VacuumTableInterpreter;
 pub use interpreter_tag_create::CreateTagInterpreter;
 pub use interpreter_tag_drop::DropTagInterpreter;
+pub use interpreter_txn_commit::PostCommitHooks;
+pub use interpreter_txn_commit::commit_transaction;
 pub use interpreter_txn_commit::execute_commit_statement;
 pub use interpreter_unset::UnSetInterpreter;
 pub use interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;

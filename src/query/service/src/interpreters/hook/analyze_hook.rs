@@ -17,10 +17,8 @@ databend_common_tracing::register_module_tag!("[ANALYZE-HOOK]");
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::AnalyzeOptions;
@@ -42,21 +40,6 @@ pub struct AnalyzeDesc {
     pub database: String,
     pub table: String,
     pub table_id: Option<u64>,
-}
-
-/// Hook analyze action with a on-finished callback.
-/// errors (if any) are ignored.
-pub async fn hook_analyze(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc: AnalyzeDesc) {
-    if pipeline.is_empty() {
-        return;
-    }
-
-    pipeline.set_on_finished(move |info: &ExecutionInfo| {
-        if info.res.is_ok() {
-            let _ = GlobalIORuntime::instance().block_on(execute_analyze_hook(ctx, desc));
-        }
-        Ok(())
-    });
 }
 
 pub(crate) fn analyze_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {

@@ -87,11 +87,12 @@ impl MaterializedViewHandler for RealMaterializedViewHandler {
                 ErrorCode::Internal("materialized view refresh requires QueryContext".to_string())
             })?;
 
-        // Refresh consumes one source checkpoint range. Keep the same mandatory non-waiting lock
-        // across the complete lifecycle so concurrent refreshes cannot consume the same changes.
+        // Refresh consumes one source checkpoint range. Keep the mandatory non-waiting lock
+        // through the data/checkpoint commit so concurrent refreshes cannot consume the same
+        // changes. Post-commit maintenance acquires its own locks after this guard is released.
         let locked_table_id = table.get_id();
         let table_lock = CoordinationManager::create_table_lock(table.get_table_info().clone());
-        let _lock_guard = table_lock.try_lock(query_ctx.clone(), false).await?;
+        let lock_guard = table_lock.try_lock(query_ctx.clone(), false).await?;
 
         // Reload after acquiring the lock: the table may have been replaced while lock acquisition
         // was in progress, and refresh must use the endpoint protected by this guard.
@@ -115,7 +116,11 @@ impl MaterializedViewHandler for RealMaterializedViewHandler {
         )
         .await?
         {
-            refresh.execute().await?;
+            let hooks = refresh.execute().await?;
+            drop(lock_guard);
+            if let Some(hooks) = hooks {
+                hooks.execute().await;
+            }
         }
         Ok(())
     }
