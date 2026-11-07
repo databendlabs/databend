@@ -1,0 +1,22 @@
+# Reject unsupported fractional quantities instead of silently changing their value.
+statement error Fractional interval quantities are not supported
+SELECT '1.5 SECOND'::INTERVAL
+
+statement error Fractional interval quantities are not supported
+SELECT to_interval('0.0000001 HOUR')
+
+query I
+SELECT count_if(try_to_interval(s) IS NULL)
+FROM (VALUES ('1.5 MINUTE'), ('-2.75 HOUR'), ('1.5 DAY'),
+             ('0.5 DAY'), ('1.0000000001 MONTH')) AS t(s)
+----
+5
+
+# Keep zero fractional parts, clock fractions, mixed units, and ISO parsing unchanged.
+query TTTT
+SELECT to_string(to_interval('1.0000000 HOUR')),
+       to_string(to_interval('00:00:01.5')),
+       to_string(to_interval('1 second 500 milliseconds')),
+       to_string(to_interval('PT1.5M'))
+----
+1:00:00 0:00:01.5 0:00:01.5 0:01:30

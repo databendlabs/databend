@@ -67,6 +67,9 @@ fn test_interval_from_string() {
             days: -1,
             micros: -5025000000,
         }),
+        ("1.0000000 hour", Interval::new(0, 0, 3_600_000_000)),
+        ("00:00:01.5", Interval::new(0, 0, 1_500_000)),
+        ("1 second 500 milliseconds", Interval::new(0, 0, 1_500_000)),
         ("P1Y2M3DT4H5M6S", Interval {
             months: 14,
             days: 3,
@@ -128,6 +131,16 @@ fn test_interval_from_string() {
         "P1D2Y",
         "PT1H2Y",
         "PT0.123456789S",
+        "1.5 second",
+        "1.5 minute",
+        "-2.75 hour",
+        "1.5 day",
+        "0.5 week",
+        "1.5 month",
+        "0.5 year",
+        "1.5 millisecond",
+        "0.0000001 hour",
+        "1.0000000001 month",
     ] {
         assert!(
             Interval::from_string(input).is_err(),
