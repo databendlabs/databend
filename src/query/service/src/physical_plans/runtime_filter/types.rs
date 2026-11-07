@@ -83,6 +83,40 @@ pub(crate) struct RuntimeFilterProbeKey<T> {
     pub is_null_equal: bool,
 }
 
+/// One join key may have several vertical origins. These are alternatives in
+/// UNION ALL, not equality connectors between simultaneously present rows.
+pub(crate) struct RuntimeFilterProbeKeys<T> {
+    pub keys: Vec<RuntimeFilterProbeKey<T>>,
+    pub derived: bool,
+}
+
+impl<T> RuntimeFilterProbeKeys<T> {
+    pub fn map_probe_key<U>(self, mut map: impl FnMut(T) -> U) -> RuntimeFilterProbeKeys<U> {
+        RuntimeFilterProbeKeys {
+            keys: self
+                .keys
+                .into_iter()
+                .map(|key| key.map_probe_key(&mut map))
+                .collect(),
+            derived: self.derived,
+        }
+    }
+
+    pub fn try_map_probe_key<U, E>(
+        self,
+        mut map: impl FnMut(T) -> Result<U, E>,
+    ) -> Result<RuntimeFilterProbeKeys<U>, E> {
+        Ok(RuntimeFilterProbeKeys {
+            keys: self
+                .keys
+                .into_iter()
+                .map(|key| key.try_map_probe_key(&mut map))
+                .collect::<Result<_, _>>()?,
+            derived: self.derived,
+        })
+    }
+}
+
 impl<T> RuntimeFilterProbeKey<T> {
     pub fn map_probe_key<U>(self, map: impl FnOnce(T) -> U) -> RuntimeFilterProbeKey<U> {
         RuntimeFilterProbeKey {
@@ -165,6 +199,10 @@ pub struct PhysicalRuntimeFilter {
     pub probe_targets: Vec<(RemoteExpr<String>, usize)>,
 
     pub build_table_rows: Option<u64>,
+
+    /// Source table rows, only for one confirmed probe target.
+    #[serde(default)]
+    pub probe_table_rows: Option<u64>,
 
     /// Enable bloom filter for this runtime filter
     pub enable_bloom_runtime_filter: bool,

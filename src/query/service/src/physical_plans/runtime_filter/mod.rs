@@ -16,4 +16,6 @@ mod builder;
 mod types;
 
 pub use builder::build_runtime_filter;
+pub(in crate::physical_plans) use builder::resolve_runtime_filter_build_table_index;
+pub(in crate::physical_plans) use builder::resolve_runtime_filter_probe_origins;
 pub use types::*;

@@ -37,7 +37,6 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
@@ -50,9 +49,9 @@ use tokio::sync::Barrier;
 
 use super::PhysicalPlanCast;
 use super::runtime_filter::PhysicalRuntimeFilters;
-use super::runtime_filter::RuntimeFilterProbeKey;
-use super::runtime_filter::canonical_equivalence_connector;
-use super::runtime_filter::resolve_runtime_filter_probe_expr;
+use super::runtime_filter::RuntimeFilterProbeKeys;
+use super::runtime_filter::resolve_runtime_filter_build_table_index;
+use super::runtime_filter::resolve_runtime_filter_probe_origins;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -81,7 +80,7 @@ type JoinConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
     Vec<bool>,
-    Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
+    Vec<Option<RuntimeFilterProbeKeys<RemoteExpr<String>>>>,
     Vec<((usize, bool), usize)>,
     Vec<Option<IndexType>>,
 );
@@ -92,7 +91,7 @@ type ProjectionsResult = (
     Option<(usize, HashMap<Symbol, usize>)>,
 );
 
-type RuntimeFilterExpr = Option<RuntimeFilterProbeKey<databend_common_expression::Expr<String>>>;
+type RuntimeFilterExpr = Option<RuntimeFilterProbeKeys<databend_common_expression::Expr<String>>>;
 
 type MergedFieldsResult = (
     Vec<DataField>,
@@ -709,24 +708,14 @@ impl PhysicalPlanBuilder {
     /// * `left_condition` - The left side condition
     ///
     /// # Returns
-    /// The typed probe key and its scan/column metadata, if the expression
-    /// references exactly one physical base column.
+    /// Typed base key or branch-specific origins of a derived union/identity
+    /// key. Origin paths are checked before mapping to physical scan fields.
     fn prepare_runtime_filter_expr(
         &self,
+        probe_side: &PExpr,
         left_condition: &ScalarExpr,
     ) -> Result<RuntimeFilterExpr> {
-        let Some(probe) = resolve_runtime_filter_probe_expr(&self.metadata, left_condition)? else {
-            return Ok(None);
-        };
-        let is_connector =
-            canonical_equivalence_connector(probe.probe_key.as_remote_expr()).is_ok();
-        Ok(Some(RuntimeFilterProbeKey {
-            probe_key: probe.probe_key,
-            scan_id: probe.scan_id,
-            column_idx: probe.column_idx,
-            is_connector,
-            is_null_equal: false,
-        }))
+        resolve_runtime_filter_probe_origins(&self.metadata, probe_side, left_condition)
     }
 
     /// Handles inner join column optimization
@@ -785,6 +774,7 @@ impl PhysicalPlanBuilder {
     ///
     /// # Arguments
     /// * `join` - Join operation
+    /// * `build_side` - Build expression used to recover statistics provenance
     /// * `probe_schema` - Probe schema
     /// * `build_schema` - Build schema
     /// * `column_projections` - Column projections
@@ -795,6 +785,8 @@ impl PhysicalPlanBuilder {
     fn process_equi_conditions(
         &self,
         join: &Join,
+        build_side: &PExpr,
+        probe_side: &PExpr,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
         column_projections: &[Symbol],
@@ -822,22 +814,14 @@ impl PhysicalPlanBuilder {
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()))?;
 
             // Prepare runtime filter expression
-            let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
+            let left_expr_for_runtime_filter =
+                self.prepare_runtime_filter_expr(probe_side, left_condition)?;
 
-            let right_used_columns = right_condition.used_columns();
-            let build_table_index = if right_used_columns.len() == 1 {
-                let column_idx = *right_used_columns.iter().next().unwrap();
-                if matches!(
-                    self.metadata.read().column(column_idx),
-                    ColumnEntry::BaseTableColumn(_)
-                ) {
-                    self.metadata.read().column(column_idx).table_index()
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            let build_table_index = resolve_runtime_filter_build_table_index(
+                &self.metadata,
+                build_side,
+                right_condition,
+            );
 
             // Handle inner join column optimization
             if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
@@ -894,7 +878,9 @@ impl PhysicalPlanBuilder {
                 })
                 .transpose()?;
             let left_expr_for_runtime_filter = left_expr_for_runtime_filter.map(|mut probe| {
-                probe.is_null_equal = condition.is_null_equal;
+                for key in &mut probe.keys {
+                    key.is_null_equal = condition.is_null_equal;
+                }
                 probe
             });
 
@@ -1315,6 +1301,8 @@ impl PhysicalPlanBuilder {
             build_table_indexes,
         ) = self.process_equi_conditions(
             join,
+            s_expr.build_side_child(),
+            s_expr.probe_side_child(),
             &probe_schema,
             &build_schema,
             &column_projections,
