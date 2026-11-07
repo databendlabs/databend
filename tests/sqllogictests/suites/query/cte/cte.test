@@ -576,6 +576,22 @@ with t(tt) as (select number as tt from numbers(10)),  t2(tt) AS MATERIALIZED (S
 8
 9
 
+# A materialized CTE spilled into a Memory temporary table: the planner's
+# CREATE TEMP TABLE carries the internal `materialized_cte` option, which the
+# Memory engine must accept.
+statement ok
+SET persist_materialized_cte = 0
+
+query I
+with t(tt) as (select number as tt from numbers(3)), t2(tt) AS MATERIALIZED (SELECT tt FROM t) select * from t2 order by tt;
+----
+0
+1
+2
+
+statement ok
+UNSET persist_materialized_cte
+
 # https://github.com/databendlabs/databend/issues/17295
 statement ok
 create or replace table t1(a int);

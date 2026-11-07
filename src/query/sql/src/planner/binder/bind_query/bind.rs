@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -39,6 +40,7 @@ use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::convert_to_type_name;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_CTE;
 
 use crate::CteResolution;
 use crate::NameResolutionContext;
@@ -346,7 +348,12 @@ impl Binder {
             uri_location: None,
             cluster_by: None,
             ttl: None,
-            table_options: Default::default(),
+            // Marks the table as query scratch space, so it does not count as
+            // session state (see `TempTblMgr::has_session_scoped_tables`).
+            table_options: BTreeMap::from([(
+                OPT_KEY_MATERIALIZED_CTE.to_string(),
+                "1".to_string(),
+            )]),
             partition_by: None,
             table_properties: Default::default(),
             as_query: Some(as_query),
