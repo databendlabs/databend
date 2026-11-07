@@ -149,6 +149,46 @@ impl AdminService {
                 "/v1/perf/flamegraph",
                 get(super::v1::perf::process_perf_flamegraph),
             )
+            .at(
+                "/v1/queries/:query_id/memory_perf",
+                get(super::v1::perf::query_memory_perf_page),
+            )
+            .at(
+                "/v1/queries/:query_id/memory_perf/start",
+                post(super::v1::perf::start_query_memory_perf),
+            )
+            .at(
+                "/v1/queries/:query_id/memory_perf/stop",
+                post(super::v1::perf::stop_query_memory_perf),
+            )
+            .at(
+                "/v1/queries/:query_id/memory_perf/status",
+                get(super::v1::perf::query_memory_perf_status),
+            )
+            .at(
+                "/v1/queries/:query_id/memory_perf/flamegraph",
+                get(super::v1::perf::query_memory_perf_flamegraph),
+            )
+            .at(
+                "/v1/memory_perf",
+                get(super::v1::perf::process_memory_perf_page),
+            )
+            .at(
+                "/v1/memory_perf/start",
+                post(super::v1::perf::start_process_memory_perf),
+            )
+            .at(
+                "/v1/memory_perf/stop",
+                post(super::v1::perf::stop_process_memory_perf),
+            )
+            .at(
+                "/v1/memory_perf/status",
+                get(super::v1::perf::process_memory_perf_status),
+            )
+            .at(
+                "/v1/memory_perf/flamegraph",
+                get(super::v1::perf::process_memory_perf_flamegraph),
+            )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
             .at("/debug/async_tasks/dump", get(debug_dump_stack));

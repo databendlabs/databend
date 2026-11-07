@@ -185,12 +185,18 @@ impl CpuProfiler {
 
     /// Render folded stacks as a flamegraph SVG, empty without samples.
     pub fn render_flamegraph(folded: &str) -> Result<String> {
+        Self::render_folded(folded, &mut inferno::flamegraph::Options::default())
+    }
+
+    pub(crate) fn render_folded(
+        folded: &str,
+        options: &mut inferno::flamegraph::Options,
+    ) -> Result<String> {
         if folded.is_empty() {
             return Ok(String::new());
         }
         let mut svg = Vec::new();
-        let mut options = inferno::flamegraph::Options::default();
-        inferno::flamegraph::from_lines(&mut options, folded.lines(), &mut svg)
+        inferno::flamegraph::from_lines(options, folded.lines(), &mut svg)
             .map_err(|e| ErrorCode::Internal(format!("Failed to generate flamegraph SVG, {e}")))?;
         String::from_utf8(svg).map_err(|_e| ErrorCode::Internal("Failed to convert SVG to string"))
     }
