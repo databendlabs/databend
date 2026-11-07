@@ -1,0 +1,19 @@
+# Equal durations must remain equal at hash-based scalar boundaries.
+
+skipif mysql
+query I
+select array_length(array_distinct([to_interval('1 month'), to_interval('30 days'), to_interval('29 days 24 hours')]))
+----
+1
+
+skipif mysql
+query I
+select sum(array_length(array_distinct([to_interval(if(number % 2 = 0, '1 month', '30 days')), to_interval('30 days')]))) from numbers(4)
+----
+4
+
+skipif mysql
+query I
+select array_length(array_distinct([[to_interval('1 month')], [to_interval('30 days')]]))
+----
+1

@@ -33,7 +33,6 @@ use crate::types::decimal::Decimal;
 use crate::types::i256;
 use crate::types::number::Number;
 use crate::types::*;
-use crate::utils::bitmap::normalize_bitmap_column;
 use crate::visitor::ValueVisitor;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
@@ -136,10 +135,7 @@ fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(
         Scalar::Date(value) => value.agg_hash(),
         Scalar::Boolean(value) => value.agg_hash(),
         Scalar::String(value) => value.as_bytes().agg_hash(),
-        Scalar::Binary(value)
-        | Scalar::Bitmap(value)
-        | Scalar::Variant(value)
-        | Scalar::Geometry(value) => value.agg_hash(),
+        Scalar::Binary(value) | Scalar::Variant(value) => value.agg_hash(),
         Scalar::Geography(value) => value.0.agg_hash(),
         _ => scalar.as_ref().agg_hash(),
     };
@@ -258,8 +254,8 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<()> {
-        let column = normalize_bitmap_column(&column);
-        self.combine_group_hash_string_column::<BitmapType>(column.as_ref());
+        // Equal bitmaps can have different encodings, including within the hybrid format.
+        self.combine_group_hash_type_column::<AnyType>(&Column::Bitmap(column));
         Ok(())
     }
 
@@ -269,7 +265,7 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_geometry(&mut self, column: BinaryColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<GeometryType>(&column);
+        self.combine_group_hash_type_column::<AnyType>(&Column::Geometry(column));
         Ok(())
     }
 
@@ -400,7 +396,6 @@ where I: Index
             Scalar::Binary(v) => v.agg_hash(),
             Scalar::String(v) => v.as_bytes().agg_hash(),
             Scalar::Variant(v) => v.agg_hash(),
-            Scalar::Geometry(v) => v.agg_hash(),
             Scalar::Geography(v) => v.0.agg_hash(),
             Scalar::Opaque(v) => v.as_ref().agg_hash(),
             v => v.as_ref().agg_hash(),
@@ -467,11 +462,7 @@ where I: Index
     }
 
     fn visit_bitmap(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
-        let column = normalize_bitmap_column(&column);
-        self.visit_indices(|i| {
-            let value = column.as_ref().index(i.to_usize()).unwrap();
-            value.agg_hash()
-        })
+        self.visit_typed_column::<BitmapType>(column, &DataType::Bitmap)
     }
 
     fn visit_string(&mut self, column: crate::types::StringColumn) -> Result<()> {
@@ -483,7 +474,7 @@ where I: Index
     }
 
     fn visit_geometry(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
-        self.visit_binary(column)
+        self.visit_typed_column::<GeometryType>(column, &DataType::Geometry)
     }
 
     fn visit_geography(&mut self, column: crate::types::GeographyColumn) -> Result<()> {

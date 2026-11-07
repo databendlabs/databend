@@ -57,6 +57,7 @@ use string::StringColumnBuilder;
 
 use crate::BlockEntry;
 use crate::ColumnView;
+use crate::bitmap::hash_bitmap;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
 use crate::types::EncodedColumn;
@@ -1022,7 +1023,11 @@ impl PartialOrd for Scalar {
                 let Ok(map_2) = deserialize_bitmap(b2) else {
                     return None;
                 };
-                map_1.eq(&map_2).then_some(Ordering::Equal)
+                // Roaring's equality distinguishes array and bitset stores.
+                // Decoding a run can leave an oversized array at the threshold,
+                // so compare members through compressed intersection instead.
+                (map_1.len() == map_2.len() && map_1.intersection_len(&map_2) == map_1.len())
+                    .then_some(Ordering::Equal)
             }
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
@@ -1144,7 +1149,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Timestamp(v) => v.hash(state),
             ScalarRef::TimestampTz(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
-            ScalarRef::Interval(v) => v.0.hash(state),
+            ScalarRef::Interval(v) => v.hash(state),
             ScalarRef::Array(v) | ScalarRef::Map(v) => {
                 v.len().hash(state);
                 for value in v.iter() {
@@ -1154,15 +1159,7 @@ impl Hash for ScalarRef<'_> {
             // `Scalar::eq` compares bitmaps by their decoded members, so the
             // hash must not depend on the encoding. Undecodable payloads only
             // compare equal bytewise and fall back to hashing the bytes.
-            ScalarRef::Bitmap(v) => match deserialize_bitmap(v) {
-                Ok(bitmap) => {
-                    bitmap.len().hash(state);
-                    for member in bitmap.iter() {
-                        member.hash(state);
-                    }
-                }
-                Err(_) => v.hash(state),
-            },
+            ScalarRef::Bitmap(v) => hash_bitmap(v, state),
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
