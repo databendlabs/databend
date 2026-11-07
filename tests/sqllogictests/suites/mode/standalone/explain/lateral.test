@@ -431,57 +431,61 @@ HashJoin
 │   ├── partition by: [k]
 │   ├── order by: []
 │   ├── frame: [Range: Preceding(None) ~ Following(None)]
-│   └── AggregateFinal
+│   └── WindowPartition
 │       ├── output columns: [COUNT(*) (#4), k (#7)]
-│       ├── group by: [k]
-│       ├── aggregate functions: [count()]
+│       ├── hash keys: [k]
 │       ├── estimated rows: 1.00
-│       └── AggregatePartial
+│       └── AggregateFinal
+│           ├── output columns: [COUNT(*) (#4), k (#7)]
 │           ├── group by: [k]
 │           ├── aggregate functions: [count()]
 │           ├── estimated rows: 1.00
-│           └── HashJoin
-│               ├── output columns: [k (#7)]
-│               ├── join type: INNER
-│               ├── build keys: [k (#7)]
-│               ├── probe keys: [i.k (#2)]
-│               ├── keys is null equal: [false]
-│               ├── filters: []
-│               ├── build join filters:
-│               │   └── filter id:0, build key:k (#7), probe targets:[i.k (#2)@scan1], filter type:bloom,inlist,min_max
+│           └── AggregatePartial
+│               ├── group by: [k]
+│               ├── aggregate functions: [count()]
 │               ├── estimated rows: 1.00
-│               ├── AggregateFinal(Build)
-│               │   ├── output columns: [k (#7)]
-│               │   ├── group by: [k]
-│               │   ├── aggregate functions: []
-│               │   ├── estimated rows: 1.00
-│               │   └── AggregatePartial
-│               │       ├── group by: [k]
-│               │       ├── aggregate functions: []
-│               │       ├── estimated rows: 1.00
-│               │       └── TableScan
-│               │           ├── table: default.default.lateral_nullable_outer
-│               │           ├── scan id: 2
-│               │           ├── output columns: [k (#7)]
-│               │           ├── read rows: 3
-│               │           ├── read size: < 1 KiB
-│               │           ├── partitions total: 1
-│               │           ├── partitions scanned: 1
-│               │           ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│               │           ├── push downs: [filters: [], limit: NONE]
-│               │           └── estimated rows: 3.00
-│               └── TableScan(Probe)
-│                   ├── table: default.default.lateral_nullable_inner
-│                   ├── scan id: 1
-│                   ├── output columns: [k (#2)]
-│                   ├── read rows: 3
-│                   ├── read size: < 1 KiB
-│                   ├── partitions total: 1
-│                   ├── partitions scanned: 1
-│                   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│                   ├── push downs: [filters: [], limit: NONE]
-│                   ├── apply join filters: [#0]
-│                   └── estimated rows: 3.00
+│               └── HashJoin
+│                   ├── output columns: [k (#7)]
+│                   ├── join type: INNER
+│                   ├── build keys: [k (#7)]
+│                   ├── probe keys: [i.k (#2)]
+│                   ├── keys is null equal: [false]
+│                   ├── filters: []
+│                   ├── build join filters:
+│                   │   └── filter id:0, build key:k (#7), probe targets:[i.k (#2)@scan1], filter type:bloom,inlist,min_max
+│                   ├── estimated rows: 1.00
+│                   ├── AggregateFinal(Build)
+│                   │   ├── output columns: [k (#7)]
+│                   │   ├── group by: [k]
+│                   │   ├── aggregate functions: []
+│                   │   ├── estimated rows: 1.00
+│                   │   └── AggregatePartial
+│                   │       ├── group by: [k]
+│                   │       ├── aggregate functions: []
+│                   │       ├── estimated rows: 1.00
+│                   │       └── TableScan
+│                   │           ├── table: default.default.lateral_nullable_outer
+│                   │           ├── scan id: 2
+│                   │           ├── output columns: [k (#7)]
+│                   │           ├── read rows: 3
+│                   │           ├── read size: < 1 KiB
+│                   │           ├── partitions total: 1
+│                   │           ├── partitions scanned: 1
+│                   │           ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│                   │           ├── push downs: [filters: [], limit: NONE]
+│                   │           └── estimated rows: 3.00
+│                   └── TableScan(Probe)
+│                       ├── table: default.default.lateral_nullable_inner
+│                       ├── scan id: 1
+│                       ├── output columns: [k (#2)]
+│                       ├── read rows: 3
+│                       ├── read size: < 1 KiB
+│                       ├── partitions total: 1
+│                       ├── partitions scanned: 1
+│                       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│                       ├── push downs: [filters: [], limit: NONE]
+│                       ├── apply join filters: [#0]
+│                       └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.lateral_nullable_outer
     ├── scan id: 0

@@ -261,7 +261,7 @@ impl HashJoinBuildState {
                 return Ok(());
             }
 
-            if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
+            if self.hash_join_state.probes_all_pairs() {
                 return Ok(());
             }
             let unique_entry = matches!(
@@ -817,9 +817,7 @@ impl HashJoinBuildState {
         info!("finish build hash table with {} rows", build_num_rows);
 
         let data_blocks = &mut build_state.generation_state.chunks;
-        if !data_blocks.is_empty()
-            && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
-        {
+        if !data_blocks.is_empty() && !self.hash_join_state.probes_all_pairs() {
             let num_columns = data_blocks[0].num_columns();
             let columns_data_type: Vec<DataType> = (0..num_columns)
                 .map(|index| data_blocks[0].data_type(index))
@@ -843,7 +841,7 @@ impl HashJoinBuildState {
         if self.finalize_counter.fetch_sub(1, Ordering::AcqRel) == 1 {
             self.build_generation_state();
             if self.hash_join_state.need_next_round.load(Ordering::Acquire) {
-                let partition_id = if self.join_type() != JoinType::Cross {
+                let partition_id = if !self.hash_join_state.probes_all_pairs() {
                     // If build side has spilled data, we need to wait build side to next round.
                     // Set partition id to `HashJoinState`
                     let mut spill_partitions = self.hash_join_state.spilled_partitions.write();
@@ -915,10 +913,6 @@ impl HashJoinBuildState {
         Ok(())
     }
 
-    pub(crate) fn join_type(&self) -> JoinType {
-        self.hash_join_state.hash_join_desc.join_type
-    }
-
     pub fn runtime_filter_desc(&self) -> &[RuntimeFilterDesc] {
         &self.hash_join_state.hash_join_desc.runtime_filter.filters
     }
@@ -945,7 +939,106 @@ impl HashJoinBuildState {
 
 #[cfg(test)]
 mod tests {
-    use super::HashJoinBuildState;
+    use databend_common_expression::DataSchema;
+
+    use super::*;
+    use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
+    use crate::pipelines::processors::transforms::hash_join::desc::MarkJoinDesc;
+    use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFiltersDesc;
+    use crate::test_kits::TestFixture;
+
+    // The integration tests exercise pipeline wiring and spill progress. These
+    // tests additionally inspect private state to rule out per-input chunks.
+    async fn zero_column_cross_build(fixture: &TestFixture) -> Result<Arc<HashJoinBuildState>> {
+        let ctx = fixture.new_query_ctx().await?;
+        let schema = Arc::new(DataSchema::empty());
+        let desc = HashJoinDesc {
+            build_keys: vec![],
+            probe_keys: vec![],
+            is_null_equal: vec![],
+            join_type: JoinType::Cross,
+            single_to_inner: None,
+            other_predicate: None,
+            marker_join_desc: MarkJoinDesc {
+                has_null: RwLock::new(false),
+            },
+            from_correlated_subquery: false,
+            runtime_filter: RuntimeFiltersDesc { filters: vec![] },
+            build_projection: BTreeSet::new(),
+            probe_projection: BTreeSet::new(),
+            probe_to_build: vec![],
+            build_schema: schema.clone(),
+            probe_schema: schema.clone(),
+            nested_loop_filter: None,
+        };
+        let state = HashJoinState::try_create(
+            ctx.clone(),
+            schema,
+            &BTreeSet::new(),
+            desc,
+            &[],
+            false,
+            false,
+            None,
+        )?;
+        HashJoinBuildState::try_create(
+            ctx.clone(),
+            ctx.get_function_context()?,
+            &[],
+            &BTreeSet::new(),
+            state,
+            4,
+            None,
+        )
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn zero_column_cross_build_keeps_one_chunk() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let build = zero_column_cross_build(&fixture).await?;
+        for _ in 0..4 {
+            build.build_attach();
+        }
+        std::thread::scope(|scope| -> Result<()> {
+            let mut handles = vec![];
+            for _ in 0..4 {
+                let build = &build;
+                handles.push(scope.spawn(move || -> Result<()> {
+                    for _ in 0..1024 {
+                        build.build(DataBlock::new(vec![], 3))?;
+                    }
+                    Ok(())
+                }));
+            }
+            for handle in handles {
+                handle.join().unwrap()?;
+            }
+            Ok(())
+        })?;
+        for _ in 0..4 {
+            assert_eq!(build.hash_join_state.num_build_chunks(), 0);
+            build.collect_done()?;
+        }
+        let state = unsafe { &*build.hash_join_state.build_state.get() };
+        assert_eq!(state.generation_state.build_num_rows, 12_288);
+        assert_eq!(state.generation_state.chunks.len(), 1);
+        assert_eq!(state.generation_state.chunks[0].num_rows(), 12_288);
+        assert_eq!(state.generation_state.chunks[0].num_columns(), 0);
+        assert!(
+            !build
+                .hash_join_state
+                .is_spill_happened
+                .load(Ordering::Acquire)
+        );
+
+        let empty = zero_column_cross_build(&fixture).await?;
+        empty.build_attach();
+        empty.build(DataBlock::new(vec![], 0))?;
+        empty.collect_done()?;
+        assert!(empty.hash_join_state.fast_return.load(Ordering::Acquire));
+        assert_eq!(empty.hash_join_state.num_build_chunks(), 0);
+        Ok(())
+    }
 
     #[test]
     fn test_should_check_build_interrupt_interval() {

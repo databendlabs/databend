@@ -103,27 +103,27 @@ HashJoin
 ├── filters: []
 ├── estimated rows: 0.00
 ├── TableScan(Build)
-│   ├── table: default.default.t
-│   ├── scan id: 0
-│   ├── output columns: [number (#0)]
-│   ├── read rows: 0
-│   ├── read size: 0
+│   ├── table: default.default.t1
+│   ├── scan id: 1
+│   ├── output columns: []
+│   ├── read rows: 10
+│   ├── read size: < 1 KiB
 │   ├── partitions total: 1
-│   ├── partitions scanned: 0
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
-│   ├── push downs: [filters: [t.number (#0) > 1], limit: NONE]
-│   └── estimated rows: 0.00
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [t1.number (#1) > 1], limit: NONE]
+│   └── estimated rows: 8.00
 └── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── scan id: 1
-    ├── output columns: []
-    ├── read rows: 10
-    ├── read size: < 1 KiB
+    ├── table: default.default.t
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 0
+    ├── read size: 0
     ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [t1.number (#1) > 1], limit: NONE]
-    └── estimated rows: 8.00
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
+    ├── push downs: [filters: [t.number (#0) > 1], limit: NONE]
+    └── estimated rows: 0.00
 
 query T
 explain select t.number from t, t1 where t.number + t1.number = 1

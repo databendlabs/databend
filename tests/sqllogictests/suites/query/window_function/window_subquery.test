@@ -13,7 +13,7 @@ create table t(a int)
 statement ok
 insert into t values(1),(2),(3)
 
-query III
+query III rowsort
 select * from t, (select a, sum(a) over (order by a) from t) t1
 ----
 1 1 1
