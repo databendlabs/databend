@@ -92,7 +92,8 @@ jobs:
       - self-hosted
       - ARM64
       - Linux
-      - 2c
+      - 16c
+      - on-demand
       - aws
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}

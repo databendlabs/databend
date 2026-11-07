@@ -571,7 +571,7 @@ pub struct CsvFileFormatParams {
     pub record_delimiter: String,
     pub escape: String,
     pub quote: String,
-    /// Controls whether CSV output quotes every field or only fields that require quoting.
+    /// Controls whether CSV output quotes all non-NULL, non-numeric, or only necessary fields.
     #[serde(default)]
     pub quote_style: CsvQuoteStyle,
     pub error_on_column_count_mismatch: bool,
@@ -747,8 +747,10 @@ pub enum CsvQuoteStyle {
     /// Quote every non-NULL field in the CSV output.
     #[default]
     QuoteNotNull,
-    /// Quote a field only when required by the CSV output format.
+    /// Quote a field only when required by CSV syntax or to distinguish it from NULL.
     QuoteMinimal,
+    /// Quote every non-NULL field except numbers and decimals.
+    QuoteNonNumeric,
 }
 
 impl CsvQuoteStyle {
@@ -763,9 +765,10 @@ impl FromStr for CsvQuoteStyle {
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "quote_not_null" => Ok(Self::QuoteNotNull),
+            "quote_non_numeric" => Ok(Self::QuoteNonNumeric),
             "quote_minimal" => Ok(Self::QuoteMinimal),
             _ => Err(format!(
-                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_NOT_NULL | QUOTE_MINIMAL."
+                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_NOT_NULL | QUOTE_NON_NUMERIC | QUOTE_MINIMAL."
             )),
         }
     }
@@ -775,6 +778,7 @@ impl Display for CsvQuoteStyle {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Self::QuoteNotNull => write!(f, "quote_not_null"),
+            Self::QuoteNonNumeric => write!(f, "quote_non_numeric"),
             Self::QuoteMinimal => write!(f, "quote_minimal"),
         }
     }
