@@ -44,6 +44,9 @@ impl ProjectSet {
         // The bound expands by the same factor.
         input_stat.max_cardinality = input_stat.max_cardinality.max(input_stat.cardinality) * 3.0;
         input_stat.cardinality *= 3.0;
+        // Each input row may be repeated, so an input NDV no longer shows that
+        // a column is unique.
+        input_stat.statistics.observed_ndv_columns.clear();
         Ok(Arc::new(input_stat.clone()))
     }
 }
@@ -104,3 +107,28 @@ impl Operator for ProjectSet {
 }
 
 impl PhysicalOperator for ProjectSet {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Symbol;
+    use crate::optimizer::ir::Statistics;
+
+    #[test]
+    fn test_project_set_drops_observed_ndv_columns() {
+        let mut input = StatInfo {
+            cardinality: 100.0,
+            max_cardinality: 100.0,
+            statistics: Statistics {
+                observed_ndv_columns: ColumnSet::from([Symbol::new(0)]),
+                ..Default::default()
+            },
+        };
+        let output = ProjectSet { srfs: vec![] }
+            .derive_project_set_stats(&mut input)
+            .unwrap();
+
+        assert_eq!(output.cardinality, 300.0);
+        assert!(output.statistics.observed_ndv_columns.is_empty());
+    }
+}

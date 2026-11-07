@@ -29,6 +29,13 @@ pub struct BasicColumnStatistics {
     pub null_count: u64,
     // Memory size of the column
     pub in_memory_size: u64,
+    /// Set when `ndv` was not collected over exactly the current rows and may
+    /// overstate their distinct count: `merge` summed the NDVs of several
+    /// parts, or `get_useful_stat` filled it from the row count or the value
+    /// domain, or derived it from statistics collected over a different
+    /// number of rows.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ndv_is_inferred: bool,
 }
 
 impl From<ColumnStatistics> for BasicColumnStatistics {
@@ -39,6 +46,7 @@ impl From<ColumnStatistics> for BasicColumnStatistics {
             ndv: value.distinct_of_values,
             null_count: value.null_count,
             in_memory_size: value.in_memory_size,
+            ndv_is_inferred: false,
         }
     }
 }
@@ -51,10 +59,21 @@ impl BasicColumnStatistics {
             ndv: None,
             null_count: 0,
             in_memory_size: 0,
+            ndv_is_inferred: false,
         }
     }
 
     pub fn merge(&mut self, other: BasicColumnStatistics) {
+        // The sum of two NDVs counts values present in both parts twice, and
+        // the NDV of one part says nothing about the other part, so neither is
+        // an NDV collected over the merged rows. Merging into an empty
+        // statistic, such as `new_null()`, keeps the part's NDV as is.
+        let inferred_ndv = match (self.ndv, other.ndv) {
+            (Some(_), Some(_)) => true,
+            (Some(_), None) => !other.is_empty(),
+            (None, Some(_)) => !self.is_empty(),
+            (None, None) => false,
+        };
         self.min = Datum::min(self.min.clone(), other.min);
         self.max = Datum::max(self.max.clone(), other.max);
         self.ndv = match (self.ndv, other.ndv) {
@@ -64,6 +83,15 @@ impl BasicColumnStatistics {
         };
         self.null_count += other.null_count;
         self.in_memory_size += other.in_memory_size;
+        self.ndv_is_inferred |= other.ndv_is_inferred || inferred_ndv;
+    }
+
+    fn is_empty(&self) -> bool {
+        self.min.is_none()
+            && self.max.is_none()
+            && self.ndv.is_none()
+            && self.null_count == 0
+            && self.in_memory_size == 0
     }
 
     // Only exactly computed discrete domains are valid NDV upper bounds.
@@ -107,6 +135,14 @@ impl BasicColumnStatistics {
         }
         let min = self.min.clone().unwrap();
         let max = self.max.clone().unwrap();
+        // Without a collected NDV, or with legacy HLL metadata that has no
+        // sample size, the NDV below comes from the row count or the domain.
+        // With statistics collected over fewer rows, it is extrapolated; over
+        // more rows, it is capped at the current row count, which may still
+        // exceed the distinct count of those rows.
+        let ndv_is_inferred = self.ndv_is_inferred
+            || matches!(self.ndv, None | Some(0))
+            || stats_row_count != num_rows;
         let ndv = Self::adjust_ndv_by_min_max(self.ndv, min.clone(), max.clone());
         let ndv = match ndv {
             None => num_rows,
@@ -124,6 +160,7 @@ impl BasicColumnStatistics {
             ndv: Some(ndv),
             null_count: self.null_count,
             in_memory_size: self.in_memory_size,
+            ndv_is_inferred,
         })
     }
 
@@ -189,6 +226,81 @@ mod tests {
                 "ndv={ndv:?}, sampled_rows={sampled_rows}, rows={rows}, max={max}"
             );
         }
+    }
+
+    #[test]
+    fn test_inferred_ndv_is_marked() {
+        // 1_000 current rows. An NDV of 100 over 100 sampled rows is
+        // extrapolated to 1_000, and an NDV of 1_500 over 2_000 rows is capped
+        // at 1_000; both only look unique.
+        for (ndv, sampled_rows, expected_ndv, inferred) in [
+            (Some(500), 1_000, 500, false),
+            (Some(500), 2_000, 500, true),
+            (Some(1_500), 2_000, 1_000, true),
+            (Some(100), 100, 1_000, true),
+            (Some(50), 100, 163, true),
+            (None, 1_000, 1_000, true),
+            (Some(0), 1_000, 1_000, true),
+            (Some(500), 0, 1_000, true),
+        ] {
+            let stat = BasicColumnStatistics {
+                min: Some(Datum::Int(1)),
+                max: Some(Datum::Int(1_000_000)),
+                ndv,
+                ..Default::default()
+            };
+            let useful = stat.get_useful_stat(1_000, sampled_rows).unwrap();
+            assert_eq!(
+                useful.ndv,
+                Some(expected_ndv),
+                "ndv={ndv:?}, sampled_rows={sampled_rows}"
+            );
+            assert_eq!(
+                useful.ndv_is_inferred, inferred,
+                "ndv={ndv:?}, sampled_rows={sampled_rows}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_merged_ndv_is_marked() {
+        let part = |ndv| BasicColumnStatistics {
+            min: Some(Datum::Int(1)),
+            max: Some(Datum::Int(1_000_000)),
+            ndv,
+            ..Default::default()
+        };
+
+        // The first part is merged into an empty statistic and keeps its NDV.
+        let mut single = BasicColumnStatistics::new_null();
+        single.merge(part(Some(500)));
+        assert_eq!(single.ndv, Some(500));
+        assert!(!single.ndv_is_inferred);
+        let useful = single.get_useful_stat(500, 500).unwrap();
+        assert_eq!(useful.ndv, Some(500));
+        assert!(!useful.ndv_is_inferred);
+
+        // Two parts with 500 distinct values each may share all of them.
+        let mut merged = single.clone();
+        merged.merge(part(Some(500)));
+        assert_eq!(merged.ndv, Some(1_000));
+        assert!(merged.ndv_is_inferred);
+        let useful = merged.get_useful_stat(1_000, 1_000).unwrap();
+        assert_eq!(useful.ndv, Some(1_000));
+        assert!(useful.ndv_is_inferred);
+
+        // A part without NDV leaves the NDV of the other part only.
+        let mut partial = single;
+        partial.merge(part(None));
+        assert_eq!(partial.ndv, Some(500));
+        assert!(partial.ndv_is_inferred);
+
+        // The same when the part without NDV comes first.
+        let mut partial = BasicColumnStatistics::new_null();
+        partial.merge(part(None));
+        partial.merge(part(Some(500)));
+        assert_eq!(partial.ndv, Some(500));
+        assert!(partial.ndv_is_inferred);
     }
 
     #[test]

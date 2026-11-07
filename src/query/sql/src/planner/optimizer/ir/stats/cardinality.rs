@@ -38,6 +38,9 @@ pub(crate) fn cap_stat_info_by_rows(mut stat_info: StatInfo, limit: usize) -> St
     }
 
     stat_info.cardinality = limit;
+    // Capping NDV at the limit can make it equal the output rows although
+    // the kept rows repeat key values, so the NDV no longer shows uniqueness.
+    stat_info.statistics.observed_ndv_columns.clear();
     stat_info.statistics.precise_cardinality = stat_info
         .statistics
         .precise_cardinality
@@ -72,6 +75,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::ColumnSet;
     use crate::Symbol;
     use crate::optimizer::ir::ColumnStat;
     use crate::optimizer::ir::Statistics;
@@ -91,6 +95,7 @@ mod tests {
                 })]),
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                observed_ndv_columns: ColumnSet::from([Symbol::new(0)]),
             },
         }
     }
@@ -113,6 +118,12 @@ mod tests {
         assert_eq!(capped.statistics.precise_cardinality, Some(10));
         assert_eq!(column_stat.ndv(), NdvEstimate::new(80.0, 90.0));
         assert_eq!(column_stat.null_count(), StatCount::estimate(20.0, 30.0));
+        assert!(
+            capped
+                .statistics
+                .observed_ndv_columns
+                .contains(&Symbol::new(0))
+        );
     }
 
     #[test]
@@ -132,7 +143,10 @@ mod tests {
 
         assert_eq!(capped.cardinality, 10.0);
         assert_eq!(capped.statistics.precise_cardinality, Some(10));
+        // An NDV of 80 over 100 rows is not unique, but capped at 10 rows it
+        // equals the row count, so the column is no longer observed.
         assert_eq!(column_stat.ndv(), NdvEstimate::exact(10.0));
+        assert!(capped.statistics.observed_ndv_columns.is_empty());
         assert_eq!(column_stat.null_count(), StatCount::estimate(2.0, 10.0));
         assert!(matches!(column_stat, ColumnStat::Int {
             histogram: None,
