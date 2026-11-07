@@ -218,7 +218,8 @@ impl SnapshotGenerator for AppendGenerator {
             }
         }
         new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
-        TableSnapshot::try_new(
+        let block_timestamp = table_meta_timestamps.segment_block_timestamp;
+        let mut snapshot = TableSnapshot::try_new(
             Some(table_info.ident.seq),
             previous.clone(),
             table_schema.clone(),
@@ -227,7 +228,11 @@ impl SnapshotGenerator for AppendGenerator {
             cluster_key_info,
             table_statistics_location,
             table_meta_timestamps,
-        )
+        )?;
+        if !snapshot_merged.merged_segments.is_empty() {
+            snapshot.max_block_timestamp = snapshot.max_block_timestamp.max(Some(block_timestamp));
+        }
+        Ok(snapshot)
     }
 }
 

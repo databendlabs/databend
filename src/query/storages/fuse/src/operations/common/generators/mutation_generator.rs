@@ -128,7 +128,8 @@ impl SnapshotGenerator for MutationGenerator {
                         }
                     }
                     new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
-                    let new_snapshot = TableSnapshot::try_new(
+                    let block_timestamp = table_meta_timestamps.segment_block_timestamp;
+                    let mut new_snapshot = TableSnapshot::try_new(
                         Some(table_info.ident.seq),
                         previous.clone(),
                         table_info.schema().as_ref().clone(),
@@ -138,6 +139,11 @@ impl SnapshotGenerator for MutationGenerator {
                         table_statistics_location,
                         table_meta_timestamps,
                     )?;
+
+                    if !ctx.appended_segments.is_empty() || !ctx.replaced_segments.is_empty() {
+                        new_snapshot.max_block_timestamp =
+                            new_snapshot.max_block_timestamp.max(Some(block_timestamp));
+                    }
 
                     if matches!(
                         self.mutation_kind,

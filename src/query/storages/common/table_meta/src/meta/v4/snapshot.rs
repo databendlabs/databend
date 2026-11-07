@@ -49,7 +49,7 @@ use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::table::ClusterType;
 
-#[frozen_api("9de02316")]
+#[frozen_api("410c6c6d")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -105,6 +105,12 @@ pub struct TableSnapshot {
     // Also cleared by transaction retry when the complete delta is unknown.
     #[serde(default)]
     logical_change_counters: Option<LogicalChangeCounters>,
+
+    /// Largest block timestamp recorded along this snapshot's committed history.
+    /// Writes may conservatively record their block timestamp when reusing blocks.
+    /// Legacy snapshots and histories without block writes have no known bound.
+    #[serde(default)]
+    pub max_block_timestamp: Option<DateTime<Utc>>,
 }
 
 /// Cumulative UPDATE/DELETE counters. Only endpoints with the same known epoch
@@ -225,6 +231,9 @@ impl TableSnapshot {
             cluster_type,
             table_statistics_location,
             logical_change_counters: Some(counters),
+            max_block_timestamp: prev_snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.max_block_timestamp),
         })
     }
 
@@ -411,6 +420,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
             logical_change_counters: None,
+            max_block_timestamp: None,
         }
     }
 }
@@ -437,6 +447,7 @@ where T: Into<v3::TableSnapshot>
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
             logical_change_counters: None,
+            max_block_timestamp: None,
         }
     }
 }
@@ -578,6 +589,35 @@ mod tests {
             TableMetaTimestamps::new(None, TimeDelta::hours(1)),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn test_max_block_timestamp_inheritance_and_compatibility() {
+        let mut original = snapshot(None);
+        assert_eq!(original.max_block_timestamp, None);
+        let bound = Utc::now() + TimeDelta::hours(1);
+        original.max_block_timestamp = Some(bound);
+        let inherited = snapshot(Some(Arc::new(original)));
+        assert_eq!(inherited.max_block_timestamp, Some(bound));
+        let metadata_only = TableSnapshot::try_from_previous(
+            Arc::new(inherited),
+            None,
+            None,
+            TableMetaTimestamps::new(None, TimeDelta::hours(2)),
+        )
+        .unwrap();
+        assert_eq!(metadata_only.max_block_timestamp, Some(bound));
+
+        let bytes = rmp_serde::to_vec_named(&metadata_only).unwrap();
+        let decoded: TableSnapshot = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(decoded.max_block_timestamp, Some(bound));
+        let mut legacy = serde_json::to_value(&metadata_only).unwrap();
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove("max_block_timestamp");
+        let decoded: TableSnapshot = serde_json::from_value(legacy).unwrap();
+        assert_eq!(decoded.max_block_timestamp, None);
     }
 
     fn strip_counters(snapshot: &TableSnapshot) -> TableSnapshot {
