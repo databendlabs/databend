@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::hints::assume;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FixedKey;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodFixedKeys;
-use databend_common_expression::KeyAccessor;
+use databend_common_expression::KeysState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_hashtable::HashtableKeyable;
 
@@ -31,7 +31,8 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeDat
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::probe_chain::ChainProbeStream;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::probe_chain::FixedKeyEntries;
 
 impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTable<T, UNIQUE> {
     pub fn new(
@@ -87,7 +88,7 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
         let keys = ProjectedBlock::from(data.columns());
         let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
+        let entries = Self::chain_entries(keys_state)?;
 
         let probed_rows = data.non_null_rows();
         let (_, valids, ctx) = data.into_raw();
@@ -112,13 +113,18 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
         match matched_rows {
             0 => Ok(Box::new(EmptyProbeStream)),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<_, true, UNIQUE>::create(
+                true => Ok(ChainProbeStream::<_, true, UNIQUE>::from_selection(
+                    entries,
                     hashes,
-                    keys,
-                    &ctx.selection,
+                    &mut ctx.selection,
                     &[],
                 )),
-                false => Ok(FixedKeyProbeStream::<_, true, UNIQUE>::create(hashes, keys)),
+                false => Ok(ChainProbeStream::<_, true, UNIQUE>::from_pointers(
+                    entries,
+                    hashes,
+                    &mut ctx.selection,
+                    &mut ctx.unmatched_selection,
+                )),
             },
         }
     }
@@ -131,7 +137,7 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
         let keys = ProjectedBlock::from(data.columns());
         let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
+        let entries = Self::chain_entries(keys_state)?;
 
         let probed_rows = data.non_null_rows();
         let (_, valids, ctx) = data.into_raw();
@@ -160,245 +166,28 @@ impl<T: HashtableKeyable + FixedKey, const UNIQUE: bool> FixedKeyHashJoinHashTab
         match matched_rows {
             0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<_, false, UNIQUE>::create(
+                true => Ok(ChainProbeStream::<_, false, UNIQUE>::from_selection(
+                    entries,
                     hashes,
-                    keys,
-                    &ctx.selection,
+                    &mut ctx.selection,
                     &ctx.unmatched_selection,
                 )),
-                false => Ok(FixedKeyProbeStream::<_, false, UNIQUE>::create(
-                    hashes, keys,
+                false => Ok(ChainProbeStream::<_, false, UNIQUE>::from_pointers(
+                    entries,
+                    hashes,
+                    &mut ctx.selection,
+                    &mut ctx.unmatched_selection,
                 )),
             },
         }
     }
-}
 
-struct FixedKeyProbeStream<
-    Key: FixedKey + HashtableKeyable,
-    const MATCHED: bool,
-    const MATCH_FIRST: bool,
-> {
-    key_idx: usize,
-    pointers: Vec<u64>,
-    probe_entry_ptr: u64,
-    keys: Box<dyn KeyAccessor<Key = Key>>,
-    matched_num_rows: usize,
-}
-
-impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: bool>
-    FixedKeyProbeStream<Key, MATCHED, MATCH_FIRST>
-{
-    pub fn create(
-        pointers: Vec<u64>,
-        keys: Box<dyn KeyAccessor<Key = Key>>,
-    ) -> Box<dyn ProbeStream> {
-        Box::new(FixedKeyProbeStream::<Key, MATCHED, MATCH_FIRST> {
-            keys,
-            pointers,
-            key_idx: 0,
-            probe_entry_ptr: 0,
-            matched_num_rows: 0,
-        })
-    }
-}
-
-impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
-    for FixedKeyProbeStream<Key, MATCHED, MATCH_FIRST>
-{
-    fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
-        while self.key_idx < self.keys.len() {
-            if res.matched_probe.len() == max_rows {
-                break;
-            }
-
-            if !MATCHED && res.unmatched.len() >= max_rows {
-                break;
-            }
-
-            assume(res.unmatched.len() < res.unmatched.capacity());
-            assume(res.matched_probe.len() == res.matched_build.len());
-            assume(res.matched_build.len() < res.matched_build.capacity());
-            assume(res.matched_probe.len() < res.matched_probe.capacity());
-            assume(self.key_idx < self.pointers.len());
-
-            if self.probe_entry_ptr == 0 {
-                self.probe_entry_ptr = self.pointers[self.key_idx];
-
-                if self.probe_entry_ptr == 0 {
-                    if !MATCHED {
-                        res.unmatched.push(self.key_idx as u64);
-                    }
-
-                    self.key_idx += 1;
-                    self.matched_num_rows = 0;
-                    continue;
-                }
-            }
-
-            let key = unsafe { self.keys.key_unchecked(self.key_idx) };
-
-            while self.probe_entry_ptr != 0 {
-                let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut RawEntry<Key>) };
-
-                if key == &raw_entry.key {
-                    let row_ptr = raw_entry.row_ptr;
-                    res.matched_probe.push(self.key_idx as u64);
-                    res.matched_build.push(row_ptr);
-                    self.matched_num_rows += 1;
-
-                    if res.matched_probe.len() == max_rows {
-                        self.probe_entry_ptr = match MATCH_FIRST {
-                            true => 0,
-                            false => raw_entry.next,
-                        };
-
-                        if self.probe_entry_ptr == 0 {
-                            self.key_idx += 1;
-                            self.matched_num_rows = 0;
-                        }
-
-                        return Ok(());
-                    }
-
-                    if MATCH_FIRST {
-                        self.probe_entry_ptr = 0;
-                        break;
-                    }
-                }
-
-                self.probe_entry_ptr = raw_entry.next;
-            }
-
-            if !MATCHED && self.matched_num_rows == 0 {
-                res.unmatched.push(self.key_idx as u64);
-            }
-
-            self.key_idx += 1;
-            self.matched_num_rows = 0;
+    fn chain_entries(keys_state: KeysState) -> Result<FixedKeyEntries<T>> {
+        match T::downcast_owned(keys_state) {
+            Some(keys) => Ok(FixedKeyEntries::new(keys)),
+            None => Err(ErrorCode::Internal(
+                "Fixed key hash join expects primitive probe keys",
+            )),
         }
-
-        Ok(())
-    }
-}
-
-struct EarlyFilteringProbeStream<
-    'a,
-    Key: FixedKey + HashtableKeyable,
-    const MATCHED: bool,
-    const MATCH_FIRST: bool,
-> {
-    idx: usize,
-    pointers: Vec<u64>,
-    probe_entry_ptr: u64,
-    keys: Box<dyn KeyAccessor<Key = Key>>,
-    selections: &'a [u32],
-    unmatched_selection: &'a [u32],
-    matched_num_rows: usize,
-    returned_unmatched: bool,
-}
-
-impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: bool>
-    EarlyFilteringProbeStream<'a, Key, MATCHED, MATCH_FIRST>
-{
-    pub fn create(
-        pointers: Vec<u64>,
-        keys: Box<dyn KeyAccessor<Key = Key>>,
-        selections: &'a [u32],
-        unmatched_selection: &'a [u32],
-    ) -> Box<dyn ProbeStream + 'a> {
-        Box::new(EarlyFilteringProbeStream::<Key, MATCHED, MATCH_FIRST> {
-            keys,
-            pointers,
-            selections,
-            unmatched_selection,
-            idx: 0,
-            probe_entry_ptr: 0,
-            matched_num_rows: 0,
-            returned_unmatched: false,
-        })
-    }
-}
-
-impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
-    for EarlyFilteringProbeStream<'a, Key, MATCHED, MATCH_FIRST>
-{
-    fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
-        if !MATCHED && !self.returned_unmatched {
-            self.returned_unmatched = true;
-            res.unmatched
-                .extend(self.unmatched_selection.iter().map(|x| *x as u64));
-        }
-
-        while self.idx < self.selections.len() {
-            let key_idx = self.selections[self.idx] as usize;
-
-            if res.matched_probe.len() == max_rows {
-                break;
-            }
-
-            if !MATCHED && res.unmatched.len() >= max_rows {
-                break;
-            }
-
-            assume(res.unmatched.len() < res.unmatched.capacity());
-            assume(res.matched_probe.len() == res.matched_build.len());
-            assume(res.matched_build.len() < res.matched_build.capacity());
-            assume(res.matched_probe.len() < res.matched_probe.capacity());
-            assume(key_idx < self.pointers.len());
-
-            if self.probe_entry_ptr == 0 {
-                self.probe_entry_ptr = self.pointers[key_idx];
-
-                if self.probe_entry_ptr == 0 {
-                    self.idx += 1;
-                    self.matched_num_rows = 0;
-                    continue;
-                }
-            }
-
-            let key = unsafe { self.keys.key_unchecked(key_idx) };
-
-            while self.probe_entry_ptr != 0 {
-                let raw_entry = unsafe { &*(self.probe_entry_ptr as *mut RawEntry<Key>) };
-
-                if key == &raw_entry.key {
-                    let row_ptr = raw_entry.row_ptr;
-                    res.matched_probe.push(key_idx as u64);
-                    res.matched_build.push(row_ptr);
-                    self.matched_num_rows += 1;
-
-                    if res.matched_probe.len() == max_rows {
-                        self.probe_entry_ptr = match MATCH_FIRST {
-                            true => 0,
-                            false => raw_entry.next,
-                        };
-
-                        if self.probe_entry_ptr == 0 {
-                            self.idx += 1;
-                            self.matched_num_rows = 0;
-                        }
-
-                        return Ok(());
-                    }
-
-                    if MATCH_FIRST {
-                        self.probe_entry_ptr = 0;
-                        break;
-                    }
-                }
-
-                self.probe_entry_ptr = raw_entry.next;
-            }
-
-            if !MATCHED && self.matched_num_rows == 0 {
-                res.unmatched.push(key_idx as u64);
-            }
-
-            self.idx += 1;
-            self.matched_num_rows = 0;
-        }
-
-        Ok(())
     }
 }
