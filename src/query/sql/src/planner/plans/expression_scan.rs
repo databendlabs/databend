@@ -100,6 +100,7 @@ impl Operator for ExpressionScan {
         Ok(Arc::new(StatInfo {
             cardinality: self.values.len() as f64,
             max_cardinality: self.values.len() as f64,
+            statistics_zero_bound: false,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),

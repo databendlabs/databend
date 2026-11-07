@@ -372,11 +372,61 @@ Exchange(Merge)
                 └── limit: NONE
 
 
-=== range_outside_statistics_build_is_shuffled ===
-description: A build side filtered by a range outside the recorded min/max is not broadcast when its unknown-filter bound exceeds max_broadcast_join_build_rows.
+=== range_outside_statistics_build_is_broadcast ===
+description: A build side filtered by a range outside the recorded min/max is broadcast when its expected rows are within max_broadcast_join_build_rows, although its unknown-filter bound exceeds the limit.
 sql: SELECT p.v FROM p JOIN r ON p.k = r.k WHERE r.t > 1000
 cluster nodes: 2
 settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#4), r.k (#2) AS (#5), r.t (#3) AS (#6)]
+    └── Join(Inner)
+        ├── build keys: [r.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Scan
+        │       ├── table: default.r (#1)
+        │       ├── filters: [gt(r.t (#3), 1000)]
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== range_outside_statistics_or_build_is_broadcast ===
+description: An OR with a range outside the recorded min/max keeps the range's bound source, so the build side is broadcast by its expected rows.
+sql: SELECT p.v FROM p JOIN r ON p.k = r.k WHERE r.t > 1000 OR r.k = 5
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#4), r.k (#2) AS (#5), r.t (#3) AS (#6)]
+    └── Join(Inner)
+        ├── build keys: [r.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Scan
+        │       ├── table: default.r (#1)
+        │       ├── filters: [or_filters(gt(r.t (#3), 1000), eq(r.k (#2), 5))]
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== range_outside_statistics_expected_rows_over_row_limit_is_shuffled ===
+description: A build side filtered by a range outside the recorded min/max is not broadcast when its expected rows exceed max_broadcast_join_build_rows.
+sql: SELECT p.v FROM p JOIN r ON p.k = r.k WHERE r.t > 1000
+cluster nodes: 2
+settings: [("disable_join_reorder", "1"), ("max_broadcast_join_build_rows", "100000")]
 Exchange(Merge)
 └── EvalScalar
     ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#4), r.k (#2) AS (#5), r.t (#3) AS (#6)]
@@ -389,6 +439,34 @@ Exchange(Merge)
         │   └── Scan
         │       ├── table: default.r (#1)
         │       ├── filters: [gt(r.t (#3), 1000)]
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [p.k (#0)]
+            └── Scan
+                ├── table: default.p (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== range_outside_statistics_severe_underestimate_is_shuffled ===
+description: A selective equality next to a range outside the recorded min/max lowers the expected rows far below the unknown-filter bound, so the build side is not broadcast.
+sql: SELECT p.v FROM p JOIN e ON p.k = e.k WHERE e.t > 1000 AND e.v = 5
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#5), e.k (#2) AS (#6), e.t (#3) AS (#7), e.v (#4) AS (#8)]
+    └── Join(Inner)
+        ├── build keys: [e.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [e.k (#2)]
+        │   └── Scan
+        │       ├── table: default.e (#1)
+        │       ├── filters: [gt(e.t (#3), 1000), eq(e.v (#4), 5)]
         │       ├── order by: []
         │       └── limit: NONE
         └── Exchange(Hash)
