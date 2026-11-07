@@ -17,6 +17,8 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnIndex;
+use databend_common_expression::Expr as EExpr;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -155,5 +157,14 @@ where A: TypeCheckAdapter
         let mut arena = self.core_expr_arena();
         let root = arena.lower_unary_op_expr(span, op, child)?;
         self.resolve_checked_core(&arena, root)
+    }
+
+    /// Records that type checking stores the value of `expr` in the logical plan. A value
+    /// computed from a non-deterministic expression such as `now()` is valid only for this
+    /// query, so the plan must not enter the plan cache.
+    pub(super) fn mark_folded_value<Index: ColumnIndex>(&self, expr: &EExpr<Index>) {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            self.mark_query_specific_value();
+        }
     }
 }

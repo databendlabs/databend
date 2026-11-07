@@ -52,7 +52,27 @@ where A: TypeCheckAdapter
         let expr =
             type_check::check(&Self::placeholder(0, scalar, facts), &BUILTIN_FUNCTIONS).ok()?;
         let value = FoldRules::eval_constant(&self.func_ctx, &BUILTIN_FUNCTIONS, &expr)?;
+        if !facts.deterministic {
+            self.mark_query_specific_value();
+        }
         Some((value, expr.into_data_type()))
+    }
+
+    /// Records that type checking stores a value computed from a non-deterministic
+    /// expression, such as `now()`, in the logical plan. The value is valid only for this
+    /// query, so the plan must not enter the plan cache.
+    pub(super) fn mark_query_specific_value(&self) {
+        self.metadata.write().set_holds_query_specific_value();
+    }
+
+    /// Like `ScalarExpr::constant_value`, and records a value computed from a
+    /// non-deterministic expression.
+    pub(super) fn scalar_constant_value(&self, scalar: &ScalarExpr) -> Option<(Scalar, DataType)> {
+        let value = scalar.constant_value(&self.func_ctx)?;
+        if !scalar.is_deterministic() {
+            self.mark_query_specific_value();
+        }
+        Some(value)
     }
 
     /// Casts a constant as `CAST(value AS to)` would, or `None` if the cast
@@ -87,8 +107,8 @@ where A: TypeCheckAdapter
     pub(super) fn constant_number<T: Number>(&self, span: Span, scalar: &ScalarExpr) -> Result<T> {
         let target = DataType::Number(T::data_type());
         let origin_type = scalar.data_type().into_owned();
-        let value = scalar
-            .constant_value(&self.func_ctx)
+        let value = self
+            .scalar_constant_value(scalar)
             .and_then(|(value, data_type)| self.cast_constant(span, value, data_type, &target));
         match value {
             Some(Scalar::Number(number)) => T::try_downcast_scalar(&number).ok_or_else(|| {

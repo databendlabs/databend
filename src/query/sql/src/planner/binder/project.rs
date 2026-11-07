@@ -694,6 +694,11 @@ impl Binder {
                 true,
             )?;
             let (scalar, _) = *type_checker.resolve(&expr)?;
+            if !scalar.is_deterministic() {
+                // The selected columns depend on a value such as `now()` that is valid only
+                // for this query.
+                self.metadata.write().set_holds_query_specific_value();
+            }
             match scalar.constant_value(&self.ctx.get_function_context()?) {
                 Some((Scalar::Array(Column::Boolean(bitmap)), _)) => {
                     let mut new_column_idx = Vec::new();

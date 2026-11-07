@@ -122,4 +122,9 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
         self.adapter.clone()?.function_context()
     }
+
+    /// Records that the logical plan holds a value that is valid only for this query.
+    pub(crate) fn set_holds_query_specific_value(&self) {
+        self.metadata.write().set_holds_query_specific_value();
+    }
 }

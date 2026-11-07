@@ -17,8 +17,10 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_statistics::StatCount;
 
+use crate::MetadataRef;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -30,20 +32,25 @@ use crate::plans::Aggregate;
 use crate::plans::ConstantExpr;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
+use crate::plans::FunctionCall;
+use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::Visitor;
 
 /// Fold simple `COUNT(*)` aggregate with statistics information.
 pub struct RuleFoldCountAggregate {
     id: RuleID,
     matchers: Vec<Matcher>,
+    metadata: MetadataRef,
     stat_context: StatContext,
 }
 
 impl RuleFoldCountAggregate {
-    pub fn new(stat_context: StatContext) -> Self {
+    pub fn new(metadata: MetadataRef, stat_context: StatContext) -> Self {
         Self {
             id: RuleID::FoldCountAggregate,
+            metadata,
             stat_context,
             //  Aggregate
             //  \
@@ -103,6 +110,12 @@ impl Rule for RuleFoldCountAggregate {
                     return Ok(());
                 }
             }
+            if contains_non_deterministic_function(s_expr.child(0)?)? {
+                // Statistics are derived with the current query's function context, so a count
+                // computed from them over e.g. `if(to_second(now()) % 2 = 0, 1, NULL)` is valid
+                // only for this query.
+                self.metadata.write().set_holds_query_specific_value();
+            }
             let eval_scalar = EvalScalar { items: scalars };
             // Collect source table indexes from the original plan for cache invalidation
             let source_table_indexes = DummyTableScan::collect_source_tables(s_expr);
@@ -118,4 +131,41 @@ impl Rule for RuleFoldCountAggregate {
     fn matchers(&self) -> &[Matcher] {
         &self.matchers
     }
+}
+
+/// Whether any operator in `s_expr` evaluates a non-deterministic function such as `now()`.
+fn contains_non_deterministic_function(s_expr: &SExpr) -> Result<bool> {
+    struct Finder {
+        found: bool,
+    }
+
+    impl<'a> Visitor<'a> for Finder {
+        fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
+            if BUILTIN_FUNCTIONS
+                .get_property(&func.func_name)
+                .is_some_and(|property| property.non_deterministic)
+            {
+                self.found = true;
+                return Ok(());
+            }
+            for arg in &func.arguments {
+                self.visit(arg)?;
+            }
+            Ok(())
+        }
+    }
+
+    let mut finder = Finder { found: false };
+    for scalar in s_expr.plan().scalar_expr_iter() {
+        finder.visit(scalar)?;
+        if finder.found {
+            return Ok(true);
+        }
+    }
+    for child in s_expr.children() {
+        if contains_non_deterministic_function(child)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }

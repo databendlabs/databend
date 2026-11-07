@@ -652,6 +652,13 @@ impl SubqueryDecorrelatorOptimizer {
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
                     let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
                     if let Some((value, data_type)) = scalar_expr.constant_value(&func_ctx) {
+                        if !scalar_expr.is_deterministic() {
+                            // The value of e.g. `(SELECT now())` is valid only for this query.
+                            self.ctx
+                                .get_metadata()
+                                .write()
+                                .set_holds_query_specific_value();
+                        }
                         constant_scalar = Some(ScalarExpr::TypedConstantExpr(
                             ConstantExpr {
                                 span: scalar_expr.span(),

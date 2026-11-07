@@ -159,8 +159,8 @@ where A: super::TypeCheckAdapter
         let mut builder = ColumnBuilder::with_capacity(&common_type, num_rows);
         for (scalar, data_type) in list_scalars.into_iter().zip(list_types.iter()) {
             let scalar = if *data_type != common_type {
-                let value = scalar
-                    .constant_value(&self.func_ctx)
+                let value = self
+                    .scalar_constant_value(&scalar)
                     .and_then(|(value, from)| {
                         self.cast_constant(scalar.span(), value, from, &common_type)
                     });

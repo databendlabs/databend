@@ -36,17 +36,41 @@ pub fn is_builtin_function(name: &str) -> bool {
         || ASYNC_FUNCTIONS.contains(&name)
 }
 
-// The plan of search function, async function and udf contains some arguments defined in meta,
-// which may be modified by user at any time. Those functions are not not suitable for caching.
+/// Whether a query calling `name` may have its logical plan cached by the planner.
+///
+/// The plan of search function, async function and udf contains some arguments defined in meta,
+/// which may be modified by user at any time. Those functions are not suitable for caching.
+///
+/// The query-time functions in [`PLAN_CACHEABLE_QUERY_TIME_FUNCTIONS`] are also eligible:
+/// the type checker keeps them symbolic in the logical plan, and the physical plan folds them
+/// with the function context of the current query. Planning paths that turn them into a value
+/// stored in the logical plan mark that plan as not cacheable. Other non-deterministic builtins
+/// keep their existing policy.
 pub fn is_cacheable_function(name: &str) -> bool {
-    let n = name;
-    let name = Ascii::new(name);
-    (BUILTIN_FUNCTIONS.contains(name.into_inner())
-        && !BUILTIN_FUNCTIONS.get_property(n).unwrap().non_deterministic)
-        || AGGR_REGISTRY.contains(name.into_inner())
-        || GENERAL_WINDOW_FUNCTIONS.contains(&name)
-        || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
+    let ascii_name = Ascii::new(name);
+    (BUILTIN_FUNCTIONS.contains(ascii_name.into_inner())
+        && (!BUILTIN_FUNCTIONS
+            .get_property(name)
+            .unwrap()
+            .non_deterministic
+            || PLAN_CACHEABLE_QUERY_TIME_FUNCTIONS.contains(&ascii_name)))
+        || AGGR_REGISTRY.contains(ascii_name.into_inner())
+        || GENERAL_WINDOW_FUNCTIONS.contains(&ascii_name)
+        || GENERAL_LAMBDA_FUNCTIONS.contains(&ascii_name)
 }
+
+/// Non-deterministic builtins that read only the query start time and the session time zone
+/// from the function context. Their value is the same for every row of one query, and a cached
+/// logical plan that keeps them symbolic is folded again for each query.
+pub const PLAN_CACHEABLE_QUERY_TIME_FUNCTIONS: [Ascii<&str>; 7] = [
+    Ascii::new("now"),
+    Ascii::new("current_timestamp"),
+    Ascii::new("current_time"),
+    Ascii::new("today"),
+    Ascii::new("current_date"),
+    Ascii::new("yesterday"),
+    Ascii::new("tomorrow"),
+];
 
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();

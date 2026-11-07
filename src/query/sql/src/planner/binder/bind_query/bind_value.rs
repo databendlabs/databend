@@ -667,6 +667,10 @@ pub fn bind_constant_scan(
             let expr = scalar
                 .as_expr()?
                 .project_column_ref(|col| value_schema.index_of(&col.index.to_string()))?;
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                // The value of e.g. `VALUES (now())` is valid only for this query.
+                metadata.write().set_holds_query_specific_value();
+            }
             let result = evaluator.run(&expr)?;
 
             match result.as_scalar() {

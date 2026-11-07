@@ -102,6 +102,10 @@ pub struct Metadata {
     next_runtime_filter_id: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
+    /// Planning stored a value computed from a non-deterministic expression, such as the
+    /// result of `now()`, in this plan. The value is valid only for the current query, so the
+    /// plan must not be reused through the planner cache.
+    holds_query_specific_value: bool,
 }
 
 impl Metadata {
@@ -573,6 +577,17 @@ impl Metadata {
 
     pub fn bound_query_lineage(&self) -> Option<&BoundQueryLineage> {
         self.bound_query_lineage.as_ref()
+    }
+
+    /// Whether the plan holds a value that is valid only for the current query.
+    pub fn holds_query_specific_value(&self) -> bool {
+        self.holds_query_specific_value
+    }
+
+    /// Records that the plan holds a value or a decision that is valid only for the current
+    /// query.
+    pub fn set_holds_query_specific_value(&mut self) {
+        self.holds_query_specific_value = true;
     }
 
     pub(crate) fn add_view_lineage_source_column(

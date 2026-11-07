@@ -127,6 +127,7 @@ impl RuleFactory {
                 Ok(Box::new(RuleHierarchicalGroupingSetsToUnion::new(ctx)))
             }
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new(
+                metadata,
                 ctx.get_stat_context().clone(),
             ))),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new(
