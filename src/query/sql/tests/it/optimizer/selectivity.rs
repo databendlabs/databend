@@ -70,6 +70,7 @@ struct CaseOptions {
     and_strategy: Option<FilterAndStrategy>,
     top_n: Option<TopNSet>,
     count_min_sketch: Option<CountMinSketchSet>,
+    show_max_cardinality: bool,
 }
 
 fn run_case(
@@ -137,6 +138,7 @@ fn run_scalar_case_with_predicates(
         predicates,
         &databend_common_expression::FunctionContext::default(),
     )?;
+    let max_rows = estimator.max_cardinality(estimated_rows, cardinality.value());
     let out_stats = estimator.into_column_stats();
 
     writeln!(
@@ -145,6 +147,9 @@ fn run_scalar_case_with_predicates(
         cardinality_to_string(cardinality)
     )?;
     writeln!(file, "estimated     : {estimated_rows}")?;
+    if options.show_max_cardinality {
+        writeln!(file, "max           : {max_rows}")?;
+    }
     writeln!(file, "in stats      :\n{in_stats}")?;
     if let Some(in_top_n) = in_top_n {
         writeln!(file, "in topn       :\n{in_top_n}")?;
@@ -2157,5 +2162,198 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         CaseOptions::default(),
     )?;
 
+    Ok(())
+}
+
+#[test]
+fn test_selectivity_range_outside_statistics_outcomes() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "selectivity_range_outside_statistics.txt")?;
+    write_case_title(
+        &mut file,
+        "range_outside_statistics",
+        "A range comparison outside the column min/max expects 1/2500 of the input rows and keeps the 1/5 unknown-filter bound as max; ranges that contradict each other and other predicates estimated as no rows keep a zero bound.",
+    )?;
+    let stats = ColumnStatSet::from_iter([
+        (Symbol::new(0), ColumnStat::UInt {
+            min: 10,
+            max: 19,
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (Symbol::new(1), ColumnStat::UInt {
+            min: 0,
+            max: 99,
+            ndv: NdvEstimate::exact(100.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+    ]);
+    let columns = &[
+        ("a", UInt64Type::data_type()),
+        ("b", UInt64Type::data_type()),
+    ];
+    for predicates in [
+        &["a > 25"][..],
+        &["a <= 5"],
+        &["a > 15"],
+        &["a > 25", "b = 5"],
+        &["and_filters(a > 25, b = 5)"],
+        &["and_filters(a > 25, a < 30)"],
+        &["and_filters(a > 25, a < 5)"],
+        &["and_filters(a > 15, a < 12)"],
+        &["or_filters(a > 25, a < 5)"],
+        &["or_filters(a > 25, b = 5)"],
+        &["or_filters(a > 25, b < 50)"],
+        &["or_filters(and_filters(a > 25, b = 5), and_filters(a > 25, b = 6))"],
+        &["not(a > 25)"],
+        &["not(a <= 19)"],
+        &["not(a >= 10)"],
+        &["not(a <= 15)"],
+        &["not(not(a > 25))"],
+        &["not(and_filters(a <= 19, b <= 99))"],
+        &["not(or_filters(a <= 19, b = 5))"],
+        &["not(a != 25)"],
+        &["a = 25"],
+        &["and_filters(a > 25, b = 500)"],
+        &["a + 1 > 100"],
+    ] {
+        run_case_with_predicates(
+            &mut file,
+            predicates,
+            columns,
+            stats.clone(),
+            StatCardinality::estimate(1_000_000.0),
+            CaseOptions {
+                show_max_cardinality: true,
+                ..Default::default()
+            },
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
+        "range_outside_statistics_nullable",
+        "A range outside the min/max of a nullable column rejects its NULLs, also when written as a negated range, and contradicts IS NULL on the same column in either order. Under OR the negated range records no constraint, so NULLs are kept, unless every OR arm rejects them.",
+    )?;
+    let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 10,
+        max: 19,
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(100_000),
+        histogram: None,
+    })]);
+    let nullable_columns = &[("c", UInt64Type::data_type().wrap_nullable())];
+    for predicates in [
+        &["c > 25"][..],
+        &["not(c <= 19)"],
+        &["and_filters(not(is_not_null(c)), c > 25)"],
+        &["and_filters(c > 25, not(is_not_null(c)))"],
+        &["and_filters(not(is_not_null(c)), not(c <= 19))"],
+        &["and_filters(not(is_not_null(c)), not(or_filters(c <= 19, c = 15)))"],
+        &["or_filters(not(c <= 19), not(is_not_null(c)))"],
+        &["or_filters(c > 25, c < 5)"],
+        &["and_filters(not(is_not_null(c)), or_filters(c > 25, c < 5))"],
+    ] {
+        run_case_with_predicates(
+            &mut file,
+            predicates,
+            nullable_columns,
+            nullable_stats.clone(),
+            StatCardinality::estimate(1_000_000.0),
+            CaseOptions {
+                show_max_cardinality: true,
+                ..Default::default()
+            },
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
+        "range_outside_statistics_all_null",
+        "A range on a column whose estimated input is all NULL keeps a small estimate and drops the column statistics, because the matching rows are not NULL. An OR of such ranges does the same, and a redundant IS NOT NULL on the same column does not change either, unless the counts are exact.",
+    )?;
+    let all_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::AllNull {
+        null_count: StatCount::estimate(1_000_000.0, 1_000_000.0),
+    })]);
+    // `IS NOT NULL` is implied by the range, so it does not remove the
+    // fallback in either order. With exact counts the column is proven to hold
+    // only NULLs, and the conjunction stays empty.
+    for (predicates, cardinality, null_count) in [
+        (&["c > 5"][..], StatCardinality::estimate(1_000_000.0), None),
+        (
+            &["and_filters(c > 5, is_not_null(c))"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["and_filters(is_not_null(c), c > 5)"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["or_filters(c > 5, c < 1)"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["and_filters(is_not_null(c), or_filters(c > 5, c < 1))"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["and_filters(or_filters(c > 5, c < 1), is_not_null(c))"],
+            StatCardinality::estimate(1_000_000.0),
+            None,
+        ),
+        (
+            &["and_filters(c > 5, is_not_null(c))"],
+            StatCardinality::exact(1_000_000),
+            Some(StatCount::exact(1_000_000)),
+        ),
+    ] {
+        let mut stats = all_null_stats.clone();
+        if let Some(null_count) = null_count {
+            stats.insert(Symbol::new(0), ColumnStat::AllNull { null_count });
+        }
+        run_case_with_predicates(
+            &mut file,
+            predicates,
+            nullable_columns,
+            stats,
+            cardinality,
+            CaseOptions {
+                show_max_cardinality: true,
+                ..Default::default()
+            },
+        )?;
+    }
+
+    // Estimated statistics can also put every row at NULL while keeping a
+    // value range. `IS NOT NULL` is then estimated as 0, but an OR whose arms
+    // all reject the NULLs makes it redundant, in either order.
+    let estimated_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+        min: 10,
+        max: 19,
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::estimate(1_000_000.0, 1_000_000.0),
+        histogram: None,
+    })]);
+    for predicates in [
+        &["and_filters(is_not_null(c), or_filters(c > 25, c < 5))"][..],
+        &["and_filters(or_filters(c > 25, c < 5), is_not_null(c))"],
+    ] {
+        run_case_with_predicates(
+            &mut file,
+            predicates,
+            nullable_columns,
+            estimated_null_stats.clone(),
+            StatCardinality::estimate(1_000_000.0),
+            CaseOptions {
+                show_max_cardinality: true,
+                ..Default::default()
+            },
+        )?;
+    }
     Ok(())
 }
