@@ -34,6 +34,10 @@ pub const DEFAULT_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS: usize = 1024;
 pub const MAX_VIRTUAL_COLUMN_DIRECT_COLUMNS: usize = 10000;
 pub const DEFAULT_VIRTUAL_COLUMN_MAX_PATH_STATISTICS: usize = 10000;
 pub const MAX_VIRTUAL_COLUMN_PATH_STATISTICS: usize = 50000;
+/// Target number of overflow map entries per bucket of a virtual column block.
+pub const VIRTUAL_COLUMN_OVERFLOW_ENTRIES_PER_BUCKET: usize = 8192;
+/// Maximum number of overflow map buckets per source of a virtual column block.
+pub const VIRTUAL_COLUMN_MAX_OVERFLOW_BUCKETS: usize = 8;
 pub const FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD: &str =
     "auto_compaction_imperfect_blocks_threshold";
 pub const FUSE_OPT_KEY_ATTACH_COLUMN_IDS: &str = "attach_column_ids";

@@ -38,6 +38,8 @@ use databend_storages_common_pruner::VirtualReadSlot;
 use databend_storages_common_pruner::VirtualReadSlotId;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::VirtualOverflowBucketMeta;
+use databend_storages_common_table_meta::meta::VirtualValueState;
 use jsonb::keypath::OwnedKeyPath;
 use jsonb::keypath::OwnedKeyPaths;
 use opendal::Operator;
@@ -129,7 +131,7 @@ impl VirtualColumnPruner {
         // - Direct: exact path is a materialized virtual column.
         // - Shared: sparse path stored in the shared map column.
         // - Object: reconstruct parent object from child plans.
-        // - FromParent: read nearest variant parent and extract suffix via keypath.
+        // - FromParent: read nearest Variant/Array parent and extract suffix via keypath.
         let mut slot_builder = VirtualReadSlotBuilder::default();
         let mut fields = BTreeMap::new();
         let mut fallback_source_column_ids = HashSet::new();
@@ -149,6 +151,21 @@ impl VirtualColumnPruner {
             let name_positions = &match_info.name_positions;
             let has_index = match_info.has_index;
             let starts_with_index = match_info.starts_with_index;
+            if has_index
+                && let Some(root) = virtual_meta.virtual_column_nodes.get(&source_column_id)
+                && let Some(plan) = build_array_index_plan(
+                    root,
+                    source_column_id,
+                    &field.key_paths,
+                    &virtual_meta,
+                    virtual_block_meta,
+                    projected_virtual_schema,
+                    &mut slot_builder,
+                )?
+            {
+                fields.insert(field.query_column_id, plan);
+                continue;
+            }
             let mut segment_ids = Vec::with_capacity(segments.len());
             let mut all_segments_known = true;
             for segment in segments {
@@ -160,7 +177,7 @@ impl VirtualColumnPruner {
             }
 
             let mut matched_node: Option<&VirtualColumnNode> = None;
-            let mut last_jsonb_parent: Option<usize> = None;
+            let mut last_extractable_parent: Option<usize> = None;
             let mut prefix_nodes: Vec<&VirtualColumnNode> = Vec::new();
             if let Some(root) = virtual_meta.virtual_column_nodes.get(&source_column_id) {
                 let mut node = root;
@@ -174,8 +191,8 @@ impl VirtualColumnPruner {
                     node = child;
                     prefix_nodes.push(node);
                     prefix_len += 1;
-                    if node_has_jsonb_parent_plan(node, &virtual_meta) {
-                        last_jsonb_parent = Some(prefix_len);
+                    if node_has_extractable_parent_plan(node, &virtual_meta) {
+                        last_extractable_parent = Some(prefix_len);
                     }
                 }
                 if !failed && all_segments_known && segment_ids.len() == segments.len() {
@@ -186,6 +203,7 @@ impl VirtualColumnPruner {
             if let Some(node) = matched_node {
                 if !has_index {
                     // Build direct/object/shared plans when the full path exists in the trie.
+                    let requested_type = DataType::from(field.data_type.as_ref());
                     let mut node_plans = build_plans_for_node(
                         node,
                         source_column_id,
@@ -194,15 +212,18 @@ impl VirtualColumnPruner {
                         virtual_block_meta,
                         projected_virtual_schema,
                         &mut slot_builder,
+                        OverflowRead::For(&requested_type),
                     )?;
                     plans.append(&mut node_plans);
                 }
             }
 
-            if let Some(prefix_len) = last_jsonb_parent {
+            if let Some(prefix_len) = last_extractable_parent {
                 if prefix_len <= prefix_nodes.len() {
-                    // Build FromParent plans when only a prefix exists as a variant column.
-                    // The suffix will be extracted at read time.
+                    // Extract from the complete Jsonb/typed Array parent at read
+                    // time. JSON null, `{}` and `[]` in the parent's overflow
+                    // produce NULL for a non-empty suffix, so no overflow read
+                    // is needed.
                     let parent_node = prefix_nodes[prefix_len - 1];
                     let parent_segments = &segments[..prefix_len];
                     let parent_plans = build_plans_for_node(
@@ -213,6 +234,7 @@ impl VirtualColumnPruner {
                         virtual_block_meta,
                         projected_virtual_schema,
                         &mut slot_builder,
+                        OverflowRead::Skip,
                     )?;
                     let suffix_start = name_positions
                         .get(prefix_len.saturating_sub(1))
@@ -234,13 +256,26 @@ impl VirtualColumnPruner {
             if let Some(plan) = coalesce_read_plans(plans) {
                 fields.insert(field.query_column_id, plan);
             } else if starts_with_index {
-                // Virtual column metadata currently does not fully support unresolved array-index
-                // paths. In particular, root-array paths like `v[0]['k']` have no object segment
-                // before the first index, so there is no materialized parent in the virtual file
-                // to extract from. Keep the source column so the reader can fall back to
-                // `get_by_keypath`. A future format can support this by materializing a root
-                // JSONB parent or indexed virtual paths.
-                fallback_source_column_ids.insert(source_column_id);
+                // Root-array paths like `v[0]['k']` have no object segment before the
+                // first index. They are read from the root value column, which stores
+                // root scalars and arrays. Blocks without any root column cannot tell
+                // whether the root was recorded, so they keep the source column for
+                // `get_by_keypath`.
+                match build_root_index_plan(
+                    source_column_id,
+                    &field.key_paths,
+                    &virtual_meta,
+                    virtual_block_meta,
+                    projected_virtual_schema,
+                    &mut slot_builder,
+                )? {
+                    Some(plan) => {
+                        fields.insert(field.query_column_id, plan);
+                    }
+                    None => {
+                        fallback_source_column_ids.insert(source_column_id);
+                    }
+                }
             } else {
                 // The virtual column file was generated from the observed paths in this block.
                 // If a requested path is absent from the trie/shared metadata, the path is absent
@@ -297,29 +332,43 @@ impl VirtualColumnPruner {
             if projected_field.has_related_paths() {
                 return None;
             }
-            let Some(column_id) = projected_field.column_id else {
-                fields.insert(field.query_column_id, VirtualFieldReadPlan::Missing);
-                continue;
+            let block_column = |column_id: Option<ColumnId>| {
+                let column_id = column_id?;
+                Some((
+                    column_id,
+                    virtual_block_meta.virtual_column_metas.get(&column_id)?,
+                ))
             };
-            match virtual_block_meta.virtual_column_metas.get(&column_id) {
-                Some(column_meta) => {
-                    let slot = slot_builder.add_segment_column(column_id, column_meta);
-                    fields.insert(field.query_column_id, VirtualFieldReadPlan::Direct { slot });
+            let requested_type = DataType::from(field.data_type.as_ref());
+            let value_meta = block_column(projected_field.column_id);
+            let value_plan = value_meta.map(|(column_id, column_meta)| {
+                let slot = slot_builder.add_segment_column(column_id, column_meta);
+                VirtualFieldReadPlan::Direct { slot }
+            });
+            let plan = with_overflow(
+                value_plan,
+                value_meta.map(|(_, meta)| meta.value_state_mask),
+                field.source_column_id,
+                &virtual_column_field.encoded_path,
+                virtual_block_meta,
+                OverflowRead::For(&requested_type),
+                &mut slot_builder,
+            )
+            .unwrap_or(VirtualFieldReadPlan::Missing);
 
-                    if self.top_n_query_column_id == Some(field.query_column_id) {
-                        let requested_type = DataType::from(field.data_type.as_ref());
-                        let physical_type = DataType::from(&column_meta.data_type());
-                        if let Some(stat) = column_meta.column_stat.as_ref().and_then(|stat| {
-                            cast_virtual_column_statistics(stat, &physical_type, &requested_type)
-                        }) {
-                            virtual_column_stats.insert(field.query_column_id, stat);
-                        }
-                    }
-                }
-                None => {
-                    fields.insert(field.query_column_id, VirtualFieldReadPlan::Missing);
+            // Value statistics describe the query values only when no overflow is merged.
+            if let (VirtualFieldReadPlan::Direct { .. }, Some((_, column_meta))) =
+                (&plan, value_meta)
+                && self.top_n_query_column_id == Some(field.query_column_id)
+            {
+                let physical_type = DataType::from(&column_meta.data_type());
+                if let Some(stat) = column_meta.column_stat.as_ref().and_then(|stat| {
+                    cast_virtual_column_statistics(stat, &physical_type, &requested_type)
+                }) {
+                    virtual_column_stats.insert(field.query_column_id, stat);
                 }
             }
+            fields.insert(field.query_column_id, plan);
         }
 
         Some(VirtualBlockMetaIndex {
@@ -332,11 +381,157 @@ impl VirtualColumnPruner {
     }
 }
 
-fn is_variant_meta(meta: &VirtualColumnIdWithMeta) -> bool {
-    meta.data_type.remove_nullable() == DataType::Variant
+fn is_extractable_meta(meta: &VirtualColumnIdWithMeta) -> bool {
+    matches!(
+        meta.data_type.remove_nullable(),
+        DataType::Variant | DataType::Array(_)
+    )
 }
 
-fn node_has_jsonb_parent_plan(
+/// How a plan reads the overflow map of a path.
+#[derive(Clone, Copy)]
+enum OverflowRead<'a> {
+    /// The overflow values of the path do not affect the result.
+    Skip,
+    /// The path is read as the given type; see `can_skip_overflow`.
+    For(&'a DataType),
+    /// The path is read as Variant, e.g. to reconstruct an object.
+    Always,
+    /// Element-space columns are inline list columns, without overflow maps.
+    Element,
+}
+
+/// Whether the overflow values of a path can be skipped when the path is read
+/// as `requested_type`: every value kind in `value_state_mask` must read as
+/// NULL for that type, so the value column alone gives the same result.
+///
+/// Only JSON null qualifies, and only for targets where casting a JSON null
+/// yields NULL. `{}` and `[]` must be read, because a strict cast of them
+/// fails. String and Variant targets keep the JSON null.
+fn can_skip_overflow(value_state_mask: u32, requested_type: &DataType) -> bool {
+    let null_only = value_state_mask & !VirtualValueState::JsonNull.mask_bit() == 0;
+    null_only
+        && matches!(
+            requested_type.remove_nullable(),
+            DataType::Boolean | DataType::Number(_)
+        )
+}
+
+/// Merges the overflow map into the plan of a path when the block may store
+/// values of the path there.
+///
+/// `value_state_mask` is the mask of the path's value column when known from
+/// BlockMeta; otherwise the mask of the path's overflow bucket is used, which
+/// covers every path in the bucket. Returns `value_plan` unchanged when the
+/// overflow map is not needed, including for legacy blocks without
+/// per-source metadata.
+fn with_overflow(
+    value_plan: Option<VirtualFieldReadPlan>,
+    value_state_mask: Option<u32>,
+    source_column_id: ColumnId,
+    canonical_path: &str,
+    block_meta: &VirtualBlockMeta,
+    read: OverflowRead,
+    slot_builder: &mut VirtualReadSlotBuilder,
+) -> Option<VirtualFieldReadPlan> {
+    if matches!(read, OverflowRead::Skip | OverflowRead::Element) {
+        return value_plan;
+    }
+    let Some((bucket, bucket_meta)) = block_meta
+        .sources
+        .get(&source_column_id)
+        .and_then(|source| source.overflow_bucket(canonical_path))
+    else {
+        return value_plan;
+    };
+    let mask = value_state_mask.unwrap_or(bucket_meta.value_state_mask);
+    if mask == 0 {
+        return value_plan;
+    }
+    if let OverflowRead::For(requested_type) = read
+        && can_skip_overflow(mask, requested_type)
+    {
+        return value_plan;
+    }
+    let (key_slot, value_slot) =
+        slot_builder.add_overflow_bucket(source_column_id, bucket, bucket_meta);
+    Some(VirtualFieldReadPlan::WithOverflow {
+        value: value_plan.map(Box::new),
+        key_slot,
+        value_slot,
+        path: canonical_path.to_string(),
+    })
+}
+
+/// The overflow mask of a path's value column from BlockMeta, or `None` when
+/// the path is not in the projected schema.
+fn block_value_state_mask(
+    source_column_id: ColumnId,
+    canonical_path: &str,
+    block_meta: &VirtualBlockMeta,
+    projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
+) -> Option<u32> {
+    projected_virtual_schema
+        .and_then(|schema| schema.find_column_id(source_column_id, canonical_path))
+        .and_then(|column_id| block_meta.virtual_column_metas.get(&column_id))
+        .map(|meta| meta.value_state_mask)
+}
+
+/// Builds the plan of a path that starts with an array index, e.g. `v[0]['k']`.
+///
+/// Such a path is non-NULL only for rows whose root is a non-empty array, and
+/// those are stored in the root value column. Rows whose root is an object, a
+/// scalar, SQL NULL, or an overflow value (JSON null, `{}`, `[]`) all read as
+/// NULL.
+///
+/// Returns `None` for legacy blocks, which do not record root values.
+fn build_root_index_plan(
+    source_column_id: ColumnId,
+    key_paths: &OwnedKeyPaths,
+    virtual_meta: &VirtualColumnFileMeta,
+    block_meta: &VirtualBlockMeta,
+    projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
+    slot_builder: &mut VirtualReadSlotBuilder,
+) -> Result<Option<VirtualFieldReadPlan>> {
+    if !block_meta.sources.contains_key(&source_column_id) {
+        return Ok(None);
+    }
+    // Root arrays are either typed scalar Array leaves or whole Jsonb leaves.
+    // Object-array groups have already been handled by build_array_index_plan.
+    let Some(VirtualColumnNameIndex::Column(leaf_index)) = virtual_meta
+        .virtual_column_nodes
+        .get(&source_column_id)
+        .and_then(|root| root.leaf.as_ref())
+    else {
+        return Ok(Some(VirtualFieldReadPlan::Missing));
+    };
+    let meta = virtual_meta
+        .column_metas
+        .get(*leaf_index as usize)
+        .ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "virtual column trie references missing parquet column {}",
+                leaf_index
+            ))
+        })?;
+    if !is_extractable_meta(meta) {
+        return Ok(Some(VirtualFieldReadPlan::Missing));
+    }
+    let column_meta = direct_virtual_column_meta(
+        source_column_id,
+        "",
+        meta,
+        block_meta,
+        projected_virtual_schema,
+    )?;
+    let slot = slot_builder.add_parquet_column(meta, &column_meta);
+    Ok(Some(VirtualFieldReadPlan::FromParent {
+        parent: Box::new(VirtualFieldReadPlan::Direct { slot }),
+        suffix_path: build_virtual_column_suffix_path(key_paths, 0),
+    }))
+}
+
+fn node_has_extractable_parent_plan(
     node: &VirtualColumnNode,
     virtual_meta: &VirtualColumnFileMeta,
 ) -> bool {
@@ -344,7 +539,7 @@ fn node_has_jsonb_parent_plan(
         Some(VirtualColumnNameIndex::Column(leaf_index)) => virtual_meta
             .column_metas
             .get(*leaf_index as usize)
-            .is_some_and(is_variant_meta),
+            .is_some_and(is_extractable_meta),
         Some(VirtualColumnNameIndex::Shared(_)) => true,
         Some(VirtualColumnNameIndex::TypedShared { data_type, .. }) => {
             *data_type == VirtualColumnSharedDataType::Jsonb
@@ -385,6 +580,8 @@ struct VirtualReadSlotBuilder {
     slots_by_physical_column: HashMap<PhysicalSlotKey, VirtualReadSlotId>,
     shared_slots:
         HashMap<(ColumnId, VirtualColumnSharedDataType), (VirtualReadSlotId, VirtualReadSlotId)>,
+    /// `(source column id, bucket)` -> key/value slots of an overflow bucket.
+    overflow_slots: HashMap<(ColumnId, usize), (VirtualReadSlotId, VirtualReadSlotId)>,
 }
 
 impl VirtualReadSlotBuilder {
@@ -430,6 +627,23 @@ impl VirtualReadSlotBuilder {
         slot
     }
 
+    fn add_array_column(&mut self, meta: &VirtualColumnIdWithMeta) -> VirtualReadSlotId {
+        let key = PhysicalSlotKey::ParquetLeaf(meta.parquet_column_id);
+        if let Some(slot) = self.slots_by_physical_column.get(&key) {
+            return *slot;
+        }
+        let slot = self.push_slot(VirtualReadSlot {
+            offset: meta.meta.offset,
+            len: meta.meta.len,
+            num_values: meta.meta.num_values,
+            // Preserve nullable elements; the scalar physical-type encoding
+            // alone cannot describe the complete list's definition levels.
+            data_type: meta.data_type.clone(),
+        });
+        self.slots_by_physical_column.insert(key, slot);
+        slot
+    }
+
     fn add_shared_columns(
         &mut self,
         typed_shared_column_metas: &VirtualColumnSharedColumnMetaMap,
@@ -462,6 +676,35 @@ impl VirtualReadSlotBuilder {
         Some((key_slot, value_slot))
     }
 
+    fn add_overflow_bucket(
+        &mut self,
+        source_column_id: ColumnId,
+        bucket: usize,
+        meta: &VirtualOverflowBucketMeta,
+    ) -> (VirtualReadSlotId, VirtualReadSlotId) {
+        let overflow_key = (source_column_id, bucket);
+        if let Some(slots) = self.overflow_slots.get(&overflow_key) {
+            return *slots;
+        }
+        // Like shared maps, the key/value slots of a bucket are adjacent and
+        // decoded as one `Map(String, Variant)` column.
+        let key_slot = self.push_slot(VirtualReadSlot {
+            offset: meta.key_offset,
+            len: meta.key_len,
+            num_values: meta.num_values,
+            data_type: DataType::String,
+        });
+        let value_slot = self.push_slot(VirtualReadSlot {
+            offset: meta.value_offset,
+            len: meta.value_len,
+            num_values: meta.num_values,
+            data_type: DataType::Variant,
+        });
+        self.overflow_slots
+            .insert(overflow_key, (key_slot, value_slot));
+        (key_slot, value_slot)
+    }
+
     fn push_slot(&mut self, slot: VirtualReadSlot) -> VirtualReadSlotId {
         let id = VirtualReadSlotId(self.slots.len() as u32);
         self.slots.push(slot);
@@ -469,6 +712,13 @@ impl VirtualReadSlotBuilder {
     }
 }
 
+/// Builds the read plans of one trie node and its subtree.
+///
+/// Direct paths may store JSON null, `{}` and `[]` in the overflow map, and a
+/// node without a leaf may have only overflow values; `overflow` decides how
+/// their plans merge the overflow map. Child nodes always read it, because
+/// object reconstruction needs every value.
+#[allow(clippy::too_many_arguments)]
 fn build_plans_for_node(
     node: &VirtualColumnNode,
     source_column_id: ColumnId,
@@ -477,9 +727,18 @@ fn build_plans_for_node(
     block_meta: &VirtualBlockMeta,
     projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
     slot_builder: &mut VirtualReadSlotBuilder,
+    overflow: OverflowRead,
 ) -> Result<Vec<VirtualFieldReadPlan>> {
     let mut plans = Vec::new();
 
+    let canonical_path = OwnedKeyPaths {
+        paths: segments.iter().cloned().map(OwnedKeyPath::Name).collect(),
+    }
+    .to_canonical_path();
+    let mut leaf_plan = None;
+    // Only direct paths and leafless nodes have overflow values.
+    let mut has_overflow = node.leaf.is_none();
+    let mut value_state_mask = None;
     if let Some(leaf) = node.leaf.as_ref() {
         match leaf {
             VirtualColumnNameIndex::Column(leaf_index) => {
@@ -492,19 +751,28 @@ fn build_plans_for_node(
                             leaf_index
                         ))
                     })?;
-                let canonical_path = OwnedKeyPaths {
-                    paths: segments.iter().cloned().map(OwnedKeyPath::Name).collect(),
+                if matches!(overflow, OverflowRead::Element) {
+                    let slot = slot_builder.add_array_column(meta);
+                    leaf_plan = Some(VirtualFieldReadPlan::Direct { slot });
+                    has_overflow = false;
+                } else {
+                    has_overflow = true;
+                    value_state_mask = block_value_state_mask(
+                        source_column_id,
+                        &canonical_path,
+                        block_meta,
+                        projected_virtual_schema,
+                    );
+                    let column_meta = direct_virtual_column_meta(
+                        source_column_id,
+                        &canonical_path,
+                        meta,
+                        block_meta,
+                        projected_virtual_schema,
+                    )?;
+                    let slot = slot_builder.add_parquet_column(meta, &column_meta);
+                    leaf_plan = Some(VirtualFieldReadPlan::Direct { slot });
                 }
-                .to_canonical_path();
-                let column_meta = direct_virtual_column_meta(
-                    source_column_id,
-                    &canonical_path,
-                    meta,
-                    block_meta,
-                    projected_virtual_schema,
-                )?;
-                let slot = slot_builder.add_parquet_column(meta, &column_meta);
-                plans.push(VirtualFieldReadPlan::Direct { slot });
             }
             VirtualColumnNameIndex::Shared(index) => {
                 if let Some((key_slot, value_slot)) = slot_builder.add_shared_columns(
@@ -512,7 +780,7 @@ fn build_plans_for_node(
                     source_column_id,
                     VirtualColumnSharedDataType::Jsonb,
                 ) {
-                    plans.push(VirtualFieldReadPlan::Shared {
+                    leaf_plan = Some(VirtualFieldReadPlan::Shared {
                         key_slot,
                         value_slot,
                         index: *index,
@@ -525,13 +793,49 @@ fn build_plans_for_node(
                     source_column_id,
                     *data_type,
                 ) {
-                    plans.push(VirtualFieldReadPlan::Shared {
+                    leaf_plan = Some(VirtualFieldReadPlan::Shared {
                         key_slot,
                         value_slot,
                         index: *index,
                     });
                 }
             }
+        }
+    }
+
+    let leaf_plan = if has_overflow {
+        with_overflow(
+            leaf_plan,
+            value_state_mask,
+            source_column_id,
+            &canonical_path,
+            block_meta,
+            overflow,
+            slot_builder,
+        )
+    } else {
+        leaf_plan
+    };
+    plans.extend(leaf_plan);
+
+    if let Some(element) = node.element.as_deref() {
+        let element_plans = build_plans_for_node(
+            element,
+            source_column_id,
+            &[],
+            virtual_meta,
+            block_meta,
+            projected_virtual_schema,
+            slot_builder,
+            OverflowRead::Element,
+        )?;
+        if let Some(element_plan) = coalesce_read_plans(element_plans) {
+            let boundary_slot = array_element_boundary(&element_plan, slot_builder)?;
+            plans.push(VirtualFieldReadPlan::ArrayGroup {
+                boundary_slot,
+                element: Box::new(element_plan),
+                index: None,
+            });
         }
     }
 
@@ -546,9 +850,8 @@ fn build_plans_for_node(
         let Some(segment_name) = virtual_meta.string_table.get(child_id as usize) else {
             continue;
         };
-        let Some(child_key) = segment_to_object_key(segment_name) else {
-            continue;
-        };
+        // Empty object keys are valid JSON keys, including in array elements.
+        let child_key = segment_name.clone();
         let mut child_segments = segments.to_vec();
         child_segments.push(segment_name.to_string());
         let child_plans = build_plans_for_node(
@@ -559,6 +862,11 @@ fn build_plans_for_node(
             block_meta,
             projected_virtual_schema,
             slot_builder,
+            if matches!(overflow, OverflowRead::Element) {
+                OverflowRead::Element
+            } else {
+                OverflowRead::Always
+            },
         )?;
         if let Some(plan) = coalesce_read_plans(child_plans) {
             entries.push((child_key, plan));
@@ -569,6 +877,142 @@ fn build_plans_for_node(
     }
 
     Ok(plans)
+}
+
+/// Reuse the smallest leaf already needed by the element plan for boundaries;
+/// no dedicated length column or extra sibling leaf needs to be read.
+fn array_element_boundary(
+    plan: &VirtualFieldReadPlan,
+    slots: &VirtualReadSlotBuilder,
+) -> Result<VirtualReadSlotId> {
+    match plan {
+        VirtualFieldReadPlan::Direct { slot } => Ok(*slot),
+        VirtualFieldReadPlan::FromParent { parent, .. } => array_element_boundary(parent, slots),
+        VirtualFieldReadPlan::Coalesce { plans } => smallest_array_boundary(plans.iter(), slots),
+        VirtualFieldReadPlan::Object { entries } => {
+            smallest_array_boundary(entries.iter().map(|(_, plan)| plan), slots)
+        }
+        _ => Err(ErrorCode::Internal("invalid virtual array element plan")),
+    }
+}
+
+fn smallest_array_boundary<'a>(
+    plans: impl Iterator<Item = &'a VirtualFieldReadPlan>,
+    slots: &VirtualReadSlotBuilder,
+) -> Result<VirtualReadSlotId> {
+    let mut smallest = None;
+    for plan in plans {
+        let candidate = array_element_boundary(plan, slots)?;
+        let size = |slot: VirtualReadSlotId| (slots.slots[slot.as_usize()].len, slot);
+        if smallest.is_none_or(|slot| size(candidate) < size(slot)) {
+            smallest = Some(candidate);
+        }
+    }
+    smallest.ok_or_else(|| ErrorCode::Internal("virtual array group has no element columns"))
+}
+
+/// Resolve the first array index against a group, then plan the remaining path
+/// within its element space. Array fields are complete typed scalar Array or
+/// Jsonb leaves, never recursively expanded by the current writer.
+#[allow(clippy::too_many_arguments)]
+fn build_array_index_plan(
+    root: &VirtualColumnNode,
+    source_column_id: ColumnId,
+    path: &OwnedKeyPaths,
+    virtual_meta: &VirtualColumnFileMeta,
+    block_meta: &VirtualBlockMeta,
+    schema: Option<&ProjectedVirtualSegmentSchema>,
+    slots: &mut VirtualReadSlotBuilder,
+) -> Result<Option<VirtualFieldReadPlan>> {
+    let mut node = root;
+    for (position, key) in path.paths.iter().enumerate() {
+        match key {
+            OwnedKeyPath::Name(name) => {
+                let Some(id) = virtual_meta.string_table.iter().position(|key| key == name) else {
+                    return Ok(None);
+                };
+                let Some(child) = node.children.get(&(id as u32)) else {
+                    return Ok(None);
+                };
+                node = child;
+            }
+            OwnedKeyPath::Index(index) => {
+                let Some(element) = node.element.as_deref() else {
+                    return Ok(None);
+                };
+                let suffix = &path.paths[position + 1..];
+                let mut target = element;
+                let mut consumed = 0;
+                let mut parent = None;
+                loop {
+                    if let Some(VirtualColumnNameIndex::Column(id)) = target.leaf.as_ref()
+                        && let Some(meta) = virtual_meta.column_metas.get(*id as usize)
+                        && matches!(meta.data_type.remove_nullable(), DataType::Array(inner)
+                            if matches!(inner.remove_nullable(), DataType::Variant | DataType::Array(_)))
+                    {
+                        parent = Some((target, consumed));
+                    }
+                    let Some(OwnedKeyPath::Name(name)) = suffix.get(consumed) else {
+                        break;
+                    };
+                    let Some(id) = virtual_meta.string_table.iter().position(|key| key == name)
+                    else {
+                        break;
+                    };
+                    let Some(child) = target.children.get(&(id as u32)) else {
+                        break;
+                    };
+                    target = child;
+                    consumed += 1;
+                }
+                let mut plans = Vec::new();
+                if consumed == suffix.len() {
+                    plans.extend(build_plans_for_node(
+                        target,
+                        source_column_id,
+                        &[],
+                        virtual_meta,
+                        block_meta,
+                        schema,
+                        slots,
+                        OverflowRead::Element,
+                    )?);
+                }
+                if let Some((parent, depth)) = parent
+                    && depth < suffix.len()
+                    && let Some(parent) = coalesce_read_plans(build_plans_for_node(
+                        parent,
+                        source_column_id,
+                        &[],
+                        virtual_meta,
+                        block_meta,
+                        schema,
+                        slots,
+                        OverflowRead::Element,
+                    )?)
+                {
+                    plans.push(VirtualFieldReadPlan::FromParent {
+                        parent: Box::new(parent),
+                        suffix_path: format_runtime_keypaths(&OwnedKeyPaths {
+                            paths: suffix[depth..].to_vec(),
+                        }),
+                    });
+                }
+                let Some(plan) = coalesce_read_plans(plans) else {
+                    return Ok(Some(VirtualFieldReadPlan::Missing));
+                };
+                // When the selected element plan already reads a list leaf,
+                // use it for boundaries too: items[0].k reads just one leaf.
+                let boundary_slot = array_element_boundary(&plan, slots)?;
+                return Ok(Some(VirtualFieldReadPlan::ArrayGroup {
+                    boundary_slot,
+                    element: Box::new(plan),
+                    index: Some(*index),
+                }));
+            }
+        }
+    }
+    Ok(None)
 }
 
 fn coalesce_read_plans(plans: Vec<VirtualFieldReadPlan>) -> Option<VirtualFieldReadPlan> {
@@ -632,11 +1076,4 @@ fn build_virtual_column_suffix_path(key_paths: &OwnedKeyPaths, start: usize) -> 
         paths: key_paths.paths[start..].to_vec(),
     };
     format_runtime_keypaths(&suffix)
-}
-
-fn segment_to_object_key(segment: &str) -> Option<String> {
-    if segment.is_empty() {
-        return None;
-    }
-    Some(segment.to_string())
 }
