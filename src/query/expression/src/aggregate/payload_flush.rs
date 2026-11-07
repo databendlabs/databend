@@ -403,11 +403,8 @@ impl Payload {
 
         unsafe {
             for address in &state.addresses[..len] {
-                let str_len = address.read::<u32>(col_offset) as usize;
-                let data_address = address.read::<u64>(col_offset + 4) as usize as *const u8;
-
-                let scalar = std::slice::from_raw_parts(data_address, str_len);
-                let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
+                let scalar: Scalar =
+                    bincode_deserialize_from_slice(address.read_bytes(col_offset)).unwrap();
 
                 builder.push(scalar.as_ref());
             }

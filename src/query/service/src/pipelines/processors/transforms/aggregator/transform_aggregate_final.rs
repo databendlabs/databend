@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use bumpalo::Bump;
 use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -58,6 +57,9 @@ use crate::sessions::TableContextSettings;
 
 const SPILL_BUCKET_NUM: usize = 4;
 const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
+/// The bits of the group hash that partition a hash table; each spill depth takes the next
+/// `SPILL_BUCKET_BITS` of them.
+const PARTITION_HASH_BITS: u64 = 48;
 
 enum Stage {
     Input,
@@ -97,10 +99,10 @@ pub struct TransformFinalAggregate {
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
     statistics: AggregationStatistics,
-    _id: usize,
+    id: usize,
     max_partition_depth: usize,
     current_partition_depth: usize,
-    spiller: AggregateSpiller<LocalPartitionStream>,
+    spiller: AggregateSpiller,
     settings: MemorySettings,
     max_aggregate_spill_level: usize,
     next_task_id: Arc<AtomicU64>,
@@ -111,14 +113,14 @@ impl TransformFinalAggregate {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         params: Arc<AggregatorParams>,
-        _id: usize,
+        id: usize,
         ctx: Arc<QueryContext>,
         tx: Sender<FinalAggregateTask>,
         rx: Receiver<FinalAggregateTask>,
         next_task_id: Arc<AtomicU64>,
     ) -> Result<Box<dyn Processor>> {
         let settings = ctx.get_settings();
-        let available_partition_depths = (48 / SPILL_BUCKET_BITS) as usize;
+        let available_partition_depths = (PARTITION_HASH_BITS / SPILL_BUCKET_BITS) as usize;
         let max_partition_depth = available_partition_depths.saturating_sub(1);
         let max_aggregate_spill_level =
             (settings.get_max_aggregate_spill_level()? as usize).min(max_partition_depth);
@@ -150,7 +152,7 @@ impl TransformFinalAggregate {
             params,
             flush_state,
             statistics: AggregationStatistics::new("FinalAggregate"),
-            _id,
+            id,
             max_partition_depth,
             current_partition_depth: 0,
             spiller,
@@ -179,11 +181,11 @@ impl TransformFinalAggregate {
         )
     }
 
-    /// Drop the current hash table and switch to `spilled_depth`. The next hash
+    /// Drop the current hash table and switch to `partition_depth`. The next hash
     /// table is created by `hashtable_mut` when data arrives.
-    fn reset_hashtable(&mut self, spilled_depth: usize) {
+    fn reset_hashtable(&mut self, partition_depth: usize) {
         self.hashtable = None;
-        self.current_partition_depth = spilled_depth.min(self.max_partition_depth);
+        self.current_partition_depth = partition_depth;
     }
 
     // Takes the fields separately so callers can still borrow `flush_state`.
@@ -203,7 +205,7 @@ impl TransformFinalAggregate {
     fn ensure_spill_depth(&mut self, spilled_depth: usize) {
         let partition_depth = spilled_depth.min(self.max_partition_depth);
         if self.current_partition_depth != partition_depth {
-            self.reset_hashtable(spilled_depth);
+            self.reset_hashtable(partition_depth);
         }
     }
 
@@ -246,21 +248,25 @@ impl TransformFinalAggregate {
         self.check_spill(need_check_spill)
     }
 
+    /// Merge the serialized states straight into the hash table: a serialized block holds the
+    /// states, then the group keys.
     fn merge_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
-        let partitioned_payload = payload.convert_to_partitioned_payload(
-            self.params.group_data_types.clone(),
-            self.params.aggregate_functions.clone(),
-            self.params.num_states(),
-            0,
-            Arc::new(Bump::new()),
-        )?;
-
         let ht = Self::hashtable_mut(
             &mut self.hashtable,
             &self.params,
             self.current_partition_depth,
         );
-        ht.combine_payloads(&partitioned_payload, &mut self.flush_state)?;
+        let block = &payload.data_block;
+        let num_states = self.params.num_states();
+        let states = (0..num_states).collect::<Vec<_>>();
+        let groups =
+            (num_states..num_states + self.params.group_data_types.len()).collect::<Vec<_>>();
+        ht.add_serialized_groups(
+            &mut self.flush_state,
+            ProjectedBlock::project(&groups, block),
+            ProjectedBlock::project(&states, block),
+            block.num_rows(),
+        )?;
 
         Ok(())
     }
@@ -311,8 +317,7 @@ impl TransformFinalAggregate {
                     self.handle_serialized(restored, need_check_spill)?;
                 }
             }
-            AggregateMeta::Partitioned { data, .. } => match data {
-                PartitionedData::Empty => {}
+            AggregateMeta::Partitioned(data) => match data {
                 PartitionedData::Serialized(payloads) => {
                     for payload in payloads {
                         check_interrupt()?;
@@ -370,7 +375,6 @@ impl TransformFinalAggregate {
                 self.merge_serialized(SerializedPayload {
                     bucket: bucket as isize,
                     data_block,
-                    max_partition_count: SPILL_BUCKET_NUM,
                 })?;
                 let (rows, resizes) = self.output_hashtable(None)?;
                 output_rows += rows;
@@ -382,16 +386,9 @@ impl TransformFinalAggregate {
                 FinalAggregateFinishMode::Buffered,
             )
         } else if self.spilled_occurred {
-            let (output_rows, hash_index_resizes) = match &self.hashtable {
-                Some(ht) => (ht.payload.len(), ht.hash_index_resize_count()),
-                None => (0, 0),
-            };
+            // `spill_out` above took the hash table.
             self.spill_finish(spilled_depth, tx)?;
-            (
-                output_rows,
-                hash_index_resizes,
-                FinalAggregateFinishMode::Spilled,
-            )
+            (0, 0, FinalAggregateFinishMode::Spilled)
         } else {
             let output_stream = BlockPartitionStream::create(
                 self.params.max_block_rows,
@@ -408,14 +405,13 @@ impl TransformFinalAggregate {
 
         self.statistics.log_final_finish_statistics(
             task_id,
-            self._id,
+            self.id,
             spilled_depth,
             output_rows,
             hash_index_resizes,
             finish_mode,
         );
         self.spilled_occurred = false;
-        self.hashtable = None;
         Ok(())
     }
 
@@ -487,7 +483,7 @@ impl TransformFinalAggregate {
             log::info!(
                 "Spill finish emitted task: task_id={}, processor={}, spill_depth={}, bucket={}, payloads={}, rows={}",
                 task_id,
-                self._id,
+                self.id,
                 spilled_depth,
                 bucket,
                 chunk.len(),
@@ -602,11 +598,8 @@ impl Processor for TransformFinalAggregate {
             self.ensure_spill_depth(task.spilled_depth);
             self.statistics.reset();
             let meta = AggregateMeta::Spilled(mem::take(&mut task.spilled_payload));
-            if task.spilled_depth >= self.max_aggregate_spill_level {
-                self.handle_meta(meta, false)?;
-            } else {
-                self.handle_meta(meta, true)?;
-            }
+            let need_check_spill = task.spilled_depth < self.max_aggregate_spill_level;
+            self.handle_meta(meta, need_check_spill)?;
             self.finish(Some(task.task_id), task.spilled_depth, task.tx)?;
 
             return Ok(());
@@ -660,6 +653,7 @@ fn sort_blocks(
 
 #[cfg(test)]
 mod tests {
+    use bumpalo::Bump;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchema;
     use databend_common_expression::types::DataType;
@@ -682,7 +676,6 @@ mod tests {
             &[0],
             &[],
             &[],
-            false,
             1024,
             1024 * 1024,
         )
@@ -762,15 +755,9 @@ mod tests {
         .map(|(bucket, payload)| AggregatePayload {
             bucket: bucket as isize,
             payload,
-            max_partition_count: 0,
         })
         .collect::<Vec<_>>();
-        upstream.push_data(Ok(DataBlock::empty_with_meta(
-            AggregateMeta::create_partitioned(
-                None,
-                PartitionedData::AggregatePayload(empty_payloads),
-            ),
-        )));
+        upstream.push_data(Ok(AggregateMeta::payloads_block(empty_payloads)));
         upstream.finish();
 
         let mut processor = TransformFinalAggregate::try_create(
