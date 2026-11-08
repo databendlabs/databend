@@ -19,6 +19,7 @@ mod snapshot_cache;
 pub use fuse_caches::FuseCaches;
 pub use fuse_caches::IndexMetaCache;
 pub use fuse_caches::InvertedIndexCache;
+pub use fuse_caches::SegmentZoneMapCache;
 pub use segment_cache::BlockMetas;
 pub use segment_cache::SegmentCache;
 pub use snapshot_cache::SnapshotCache;

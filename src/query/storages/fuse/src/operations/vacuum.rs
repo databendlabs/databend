@@ -222,12 +222,16 @@ pub async fn is_gc_candidate_segment_block(
 
 impl FuseTable {
     /// Protect live table-tag references from VACUUM2 and remove expired tags.
+    ///
+    /// Tagged snapshots keep their segments (`protected_segments`) and the
+    /// segment zone map file they point to (`protected_segment_zone_maps`).
     pub async fn protect_table_tag_references(
         &self,
         catalog: &Arc<dyn Catalog>,
         root_snapshot_location: &str,
         snapshot_files_to_gc: &mut Vec<String>,
         protected_segments: &mut HashSet<Location>,
+        protected_segment_zone_maps: &mut HashSet<String>,
         policy: CachePolicy,
     ) -> Result<()> {
         let now = Utc::now();
@@ -271,6 +275,8 @@ impl FuseTable {
                 .await?
                 {
                     protected_segments.extend(snapshot.segments.iter().cloned());
+                    protected_segment_zone_maps
+                        .extend(snapshot.segment_zone_map_path().map(str::to_string));
                 }
                 protected_snapshot_locs.insert(tag_snapshot_loc);
             }

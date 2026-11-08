@@ -24,11 +24,15 @@ use crate::kinds::spatial;
 use crate::kinds::table;
 use crate::kinds::vector;
 use crate::kinds::virtual_column;
+use crate::kinds::zone_map;
 use crate::legacy::LegacyKind;
 use crate::legacy::LegacyKinds;
 
 /// Parquet footers were always bounded by count, with no option.
 const PARQUET_META_ITEMS: u64 = 3000;
+/// Segment zone maps came after the options: footers bounded by count, chunks by bytes.
+const ZONE_MAP_META_ITEMS: u64 = 1024;
+const ZONE_MAP_CHUNK_BYTES: u64 = 512 * 1024 * 1024;
 
 impl LegacyKinds {
     /// The pre-refactor caches, each sized by its pre-refactor options.
@@ -56,6 +60,7 @@ impl LegacyKinds {
             .register::<segment::Stats>(LegacyKind::bytes("segment_statistics_bytes", |c, _| {
                 c.segment_statistics_bytes
             }))
+            .register::<zone_map::Meta>(LegacyKind::items("", |_, _| ZONE_MAP_META_ITEMS))
             .register::<bloom::IndexMeta>(LegacyKind::items(
                 "table_bloom_index_meta_count",
                 |c, _| c.table_bloom_index_meta_count,
@@ -85,6 +90,7 @@ impl LegacyKinds {
                 "table_bloom_index_filter_size",
                 |c, _| c.table_bloom_index_filter_size,
             ))
+            .register::<zone_map::Chunk>(LegacyKind::bytes("", |_, _| ZONE_MAP_CHUNK_BYTES))
             .register::<vector::Index>(
                 LegacyKind::bytes(
                     "vector_index_filter_size, vector_index_filter_memory_ratio",

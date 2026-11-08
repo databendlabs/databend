@@ -20,6 +20,13 @@ pub struct PruningStatistics {
     /// Segment block metas decompress cost in microseconds.
     pub segments_decompress_cost: u64,
 
+    /// Segment zone map pruning stats: segments excluded by the snapshot-level
+    /// segment zone map before any segment info was read.
+    pub segments_zone_map_pruning_before: usize,
+    pub segments_zone_map_pruning_after: usize,
+    /// Segment zone map pruning cost in microseconds.
+    pub segments_zone_map_pruning_cost: u64,
+
     /// Segment range pruning stats.
     pub segments_range_pruning_before: usize,
     pub segments_range_pruning_after: usize,
@@ -69,6 +76,17 @@ impl PruningStatistics {
     pub fn merge(&mut self, other: &Self) {
         self.segments_read_cost += other.segments_read_cost;
         self.segments_decompress_cost += other.segments_decompress_cost;
+        // Segment zone map pruning runs once per scan before the segments are
+        // distributed, and every node reports the same numbers: keep one copy.
+        self.segments_zone_map_pruning_before = self
+            .segments_zone_map_pruning_before
+            .max(other.segments_zone_map_pruning_before);
+        self.segments_zone_map_pruning_after = self
+            .segments_zone_map_pruning_after
+            .max(other.segments_zone_map_pruning_after);
+        self.segments_zone_map_pruning_cost = self
+            .segments_zone_map_pruning_cost
+            .max(other.segments_zone_map_pruning_cost);
         self.segments_range_pruning_before += other.segments_range_pruning_before;
         self.segments_range_pruning_after += other.segments_range_pruning_after;
         self.segments_range_pruning_cost += other.segments_range_pruning_cost;

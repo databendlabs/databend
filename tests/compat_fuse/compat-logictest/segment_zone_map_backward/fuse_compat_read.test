@@ -1,0 +1,125 @@
+# Read by the current query. The old snapshot has no zone map pointer. Zone maps
+# are on by default, so the first recluster round builds one; every covered type
+# prunes, and results match the reads without one.
+
+query B
+SELECT segment_zone_map_location IS NULL FROM fuse_snapshot('default', 'compat_segment_zone_map_old') ORDER BY timestamp DESC LIMIT 1;
+----
+1
+
+statement ok
+SET enable_compact_after_write = 0;
+
+statement ok
+SET segment_zone_map_full_segment_threshold = 0;
+
+# Baseline without a zone map.
+query ITI
+SELECT id, label, n FROM compat_segment_zone_map_old WHERE d128 > 2500 ORDER BY id;
+----
+3 charlie 30
+4 delta NULL
+
+# Two overlapping inserts give the round something to merge; the four old
+# single-row blocks are merged along with them.
+statement ok
+INSERT INTO compat_segment_zone_map_old VALUES (5, 'echo', 5.5, 5000.25, '2024-05-01 00:00:00', '2024-05-01', 50);
+
+statement ok
+INSERT INTO compat_segment_zone_map_old VALUES (6, 'foxtrot', 6.5, 6000.25, '2024-06-01 00:00:00', '2024-06-01', NULL), (8, 'hotel', 8.5, 8000.25, '2024-08-01 00:00:00', '2024-08-01', 80);
+
+statement ok
+INSERT INTO compat_segment_zone_map_old VALUES (7, 'golf', 7.5, 7000.25, '2024-07-01 00:00:00', '2024-07-01', 70), (9, 'india', 9.5, 9000.25, '2024-09-01 00:00:00', '2024-09-01', NULL);
+
+statement ok
+OPTIMIZE TABLE compat_segment_zone_map_old RECLUSTER FINAL;
+
+query BI
+SELECT segment_zone_map_location IS NOT NULL, segment_count FROM fuse_snapshot('default', 'compat_segment_zone_map_old') ORDER BY timestamp DESC LIMIT 1;
+----
+1 1
+
+# One segment covers everything: a matching filter keeps it, a non-matching
+# filter on each covered type drops it before the segment is read.
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE id = 2;
+----
+<slt:ignore>zone map pruning: 1 to 1<slt:ignore>
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE id = 100;
+----
+<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE label = 'zulu';
+----
+<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE d64 = 40.5;
+----
+<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE d128 > 25000;
+----
+<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE ts >= '2025-01-01 00:00:00';
+----
+<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE dt = '2023-03-01';
+----
+<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE n > 100;
+----
+<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
+
+query ITI
+SELECT id, label, n FROM compat_segment_zone_map_old WHERE d128 > 2500 ORDER BY id;
+----
+3 charlie 30
+4 delta NULL
+5 echo 50
+6 foxtrot NULL
+7 golf 70
+8 hotel 80
+9 india NULL
+
+query I
+SELECT id FROM compat_segment_zone_map_old WHERE n > 20 ORDER BY id;
+----
+3
+5
+7
+8
+
+query I
+SELECT id FROM compat_segment_zone_map_old WHERE n IS NULL ORDER BY id;
+----
+2
+4
+6
+9
+
+query I
+SELECT id FROM compat_segment_zone_map_old WHERE d64 = 4.5;
+----
+4
+
+query I
+SELECT id FROM compat_segment_zone_map_old WHERE ts >= '2024-08-15 00:00:00';
+----
+9
+
+query IT
+SELECT id, label FROM compat_segment_zone_map_old WHERE id >= 8 ORDER BY id;
+----
+8 hotel
+9 india
