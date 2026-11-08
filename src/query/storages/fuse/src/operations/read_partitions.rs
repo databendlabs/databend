@@ -316,14 +316,22 @@ impl FuseTable {
         let filters = push_downs.as_ref()?.effective_filters(&BUILTIN_FUNCTIONS)?;
         let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
         let func_ctx = ctx.get_function_context().ok()?;
+        let concurrency = ctx.get_settings().get_max_threads().ok()? as usize;
 
         let start = Instant::now();
         let before = read_info.segment_locations.len();
         let schema = self.schema_with_stream();
         let segments = &read_info.segment_locations;
-        match prune_segments_by_zone_map(&self.operator, meta, func_ctx, &schema, &filter, segments)
-            .await
-        {
+        let pruned = prune_segments_by_zone_map(
+            &self.operator,
+            meta,
+            func_ctx,
+            &schema,
+            &filter,
+            segments,
+            concurrency,
+        );
+        match pruned.await {
             Ok(kept) => read_info.segment_locations = kept,
             Err(e) => {
                 warn!(

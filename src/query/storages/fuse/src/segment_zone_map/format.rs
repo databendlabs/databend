@@ -24,6 +24,13 @@
 //! `null_count_c` with NULL `min_c`/`max_c` means the column is entirely NULL
 //! in that segment, as in the segment summary.
 //!
+//! Rows are grouped into row groups of at most [`ROW_GROUP_ROWS`] segments so
+//! that neither the build nor a query has to hold the whole file in memory:
+//! the writer streams finished row groups to storage, and readers decode one
+//! row group at a time. Each column chunk records min/max statistics in the
+//! footer, which lets a reader skip row groups a filter cannot match before
+//! fetching them.
+//!
 //! The footer's key-value metadata records the covered columns with their
 //! types and the admission ratio the build used. The snapshot only points at
 //! the footer; readers fetch it first and then the column chunks they need.
@@ -33,8 +40,9 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::future::IntoFuture;
 use std::ops::Range;
+use std::sync::Arc;
 
-use bytes::Bytes;
+use arrow_schema::Schema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -48,7 +56,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
@@ -58,16 +65,27 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::supported_stat_type;
 use databend_storages_common_table_meta::table::TableCompression;
 use futures::future::try_join_all;
-use opendal::Buffer;
 use opendal::Operator;
+use parquet::arrow::ArrowSchemaConverter;
+use parquet::arrow::ArrowWriter;
+use parquet::arrow::arrow_reader::statistics::StatisticsConverter;
+use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::ParquetMetaDataReader;
+use parquet::file::metadata::RowGroupMetaData;
+use parquet::file::properties::EnabledStatistics;
+use parquet::file::properties::WriterProperties;
+use parquet::file::statistics::Statistics as ParquetStatistics;
+use parquet::schema::types::SchemaDescriptor;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::io::read::DataItem;
 use crate::io::read::column_chunks_to_record_batch;
+
+/// Rows per row group: bounds the memory a build or a query holds for one file.
+pub const ROW_GROUP_ROWS: usize = 16 * 1024;
 
 /// Number of leading fields describing the segment itself: path, block_count, fresh.
 const SEGMENT_FIELDS: usize = 3;
@@ -100,6 +118,19 @@ impl ZoneMapColumn {
     /// Type of the stored `min`/`max`: the column's non-null type, made nullable.
     fn value_type(&self) -> TableDataType {
         self.data_type.remove_nullable().wrap_nullable()
+    }
+
+    /// Whether the parquet statistics of this column's chunks bound its values:
+    /// the chunk min/max of `min`/`max` then hold for every row of the row
+    /// group. Floats are left out because parquet statistics skip NaN, and
+    /// TimestampTz because it is stored packed in a decimal.
+    fn chunk_stats_bound_values(&self) -> bool {
+        match self.data_type.remove_nullable() {
+            TableDataType::Number(number) => !number.is_float(),
+            TableDataType::Decimal(_) => true,
+            TableDataType::Date | TableDataType::Timestamp | TableDataType::String => true,
+            _ => false,
+        }
     }
 }
 
@@ -146,6 +177,10 @@ fn u64_scalar(value: u64) -> ScalarRef<'static> {
     ScalarRef::Number(NumberScalar::UInt64(value))
 }
 
+fn column_builder(data_type: &TableDataType) -> ColumnBuilder {
+    ColumnBuilder::with_capacity(&DataType::from(data_type), ROW_GROUP_ROWS)
+}
+
 struct StatColumnBuilder {
     /// Non-null type the stored scalars must have.
     value_type: DataType,
@@ -155,13 +190,13 @@ struct StatColumnBuilder {
 }
 
 impl StatColumnBuilder {
-    fn new(column: &ZoneMapColumn, capacity: usize) -> Self {
-        let value_type = DataType::from(&column.value_type());
+    fn new(column: &ZoneMapColumn) -> Self {
+        let value_type = column.value_type();
         Self {
-            value_type: value_type.remove_nullable(),
-            min: ColumnBuilder::with_capacity(&value_type, capacity),
-            max: ColumnBuilder::with_capacity(&value_type, capacity),
-            null_count: ColumnBuilder::with_capacity(&DataType::from(&null_count_type()), capacity),
+            value_type: DataType::from(&value_type).remove_nullable(),
+            min: column_builder(&value_type),
+            max: column_builder(&value_type),
+            null_count: column_builder(&null_count_type()),
         }
     }
 
@@ -192,39 +227,89 @@ impl StatColumnBuilder {
         self.max.push(stats.max.index(row).unwrap());
         self.null_count.push(stats.null_count.index(row).unwrap());
     }
+
+    /// Take the buffered rows as columns, leaving the builder empty.
+    fn take(&mut self, out: &mut Vec<Column>) {
+        for builder in [&mut self.min, &mut self.max, &mut self.null_count] {
+            let data_type = builder.data_type();
+            let rows = std::mem::replace(builder, ColumnBuilder::with_capacity(&data_type, 0));
+            out.push(rows.build());
+        }
+    }
 }
 
-/// For each column of a builder, the position of the same column (same id and
-/// type) in a previous zone map, if it was read. See [`SegmentZoneMapBuilder::copy_sources`].
+/// For each column of a writer, the position of the same column (same id and
+/// type) in a previous zone map, if it was read. See [`SegmentZoneMapWriter::copy_sources`].
 pub struct CopySources(Vec<Option<usize>>);
 
-/// Accumulates zone map rows in segment order.
-pub struct SegmentZoneMapBuilder {
+/// Writes zone map rows in row groups of [`ROW_GROUP_ROWS`], streaming each
+/// finished row group to storage so a build holds one row group at a time.
+pub struct SegmentZoneMapWriter {
     columns: Vec<ZoneMapColumn>,
-    ratio: f64,
+    arrow_schema: Arc<Schema>,
+    /// Encodes into an in-memory buffer that is drained after every row group.
+    parquet: ArrowWriter<Vec<u8>>,
+    output: opendal::Writer,
+    location: Location,
     paths: ColumnBuilder,
     block_counts: ColumnBuilder,
     fresh: ColumnBuilder,
     stats: Vec<StatColumnBuilder>,
+    row_group_rows: usize,
+    buffered: usize,
     num_rows: usize,
+    written_bytes: u64,
 }
 
-impl SegmentZoneMapBuilder {
+impl SegmentZoneMapWriter {
     /// `ratio` is the admission ratio of this build, recorded for the next one.
-    pub fn new(columns: Vec<ZoneMapColumn>, ratio: f64, capacity: usize) -> Self {
-        let mut stats = Vec::with_capacity(columns.len());
-        for column in &columns {
-            stats.push(StatColumnBuilder::new(column, capacity));
-        }
-        Self {
+    pub async fn create(
+        operator: &Operator,
+        location: Location,
+        columns: Vec<ZoneMapColumn>,
+        ratio: f64,
+    ) -> Result<Self> {
+        let metadata = vec![
+            KeyValue::new(KV_COLUMNS.to_string(), serde_json::to_string(&columns)?),
+            KeyValue::new(KV_RATIO.to_string(), ratio.to_string()),
+        ];
+        // Chunk statistics let readers skip whole row groups; see
+        // `SegmentZoneMapFile::row_group_stats`.
+        let props = WriterProperties::builder()
+            .set_compression(WRITE_COMPRESSION.into())
+            .set_max_row_group_row_count(Some(ROW_GROUP_ROWS))
+            .set_encoding(Encoding::PLAIN)
+            .set_dictionary_enabled(false)
+            .set_statistics_enabled(EnabledStatistics::Chunk)
+            .set_bloom_filter_enabled(false)
+            .set_key_value_metadata(Some(metadata))
+            .build();
+        let arrow_schema = Arc::new(Schema::from(&file_schema(&columns)));
+        let parquet = ArrowWriter::try_new(Vec::new(), arrow_schema.clone(), Some(props))?;
+        let output = operator.writer(&location.0).await?;
+        let stats = columns.iter().map(StatColumnBuilder::new).collect();
+        Ok(Self {
             columns,
-            ratio,
-            paths: ColumnBuilder::with_capacity(&DataType::String, capacity),
-            block_counts: ColumnBuilder::with_capacity(&DataType::from(&U64), capacity),
-            fresh: ColumnBuilder::with_capacity(&DataType::Boolean, capacity),
+            arrow_schema,
+            parquet,
+            output,
+            location,
+            paths: column_builder(&TableDataType::String),
+            block_counts: column_builder(&U64),
+            fresh: column_builder(&TableDataType::Boolean),
             stats,
+            row_group_rows: ROW_GROUP_ROWS,
+            buffered: 0,
             num_rows: 0,
-        }
+            written_bytes: 0,
+        })
+    }
+
+    /// Smaller row groups, so tests cover several of them cheaply.
+    #[cfg(test)]
+    pub fn with_row_group_rows(mut self, rows: usize) -> Self {
+        self.row_group_rows = rows;
+        self
     }
 
     pub fn num_rows(&self) -> usize {
@@ -232,17 +317,17 @@ impl SegmentZoneMapBuilder {
     }
 
     /// Append a fresh row from a segment summary.
-    pub fn push_summary(&mut self, path: &str, summary: &Statistics) {
+    pub async fn push_summary(&mut self, path: &str, summary: &Statistics) -> Result<()> {
         self.paths.push(ScalarRef::String(path));
         self.block_counts.push(u64_scalar(summary.block_count));
         self.fresh.push(ScalarRef::Boolean(true));
         for (column, builder) in self.columns.iter().zip(&mut self.stats) {
             builder.push(summary.col_stats.get(&column.column_id));
         }
-        self.num_rows += 1;
+        self.row_done().await
     }
 
-    /// Match this builder's columns against `previous`. A column is copied only
+    /// Match this writer's columns against `previous`. A column is copied only
     /// when `previous` stores it with the same id and type and it was read; a
     /// column whose type changed, or that `previous` lacks, is written as unknown.
     pub fn copy_sources(&self, previous: &SegmentZoneMapData) -> CopySources {
@@ -255,7 +340,12 @@ impl SegmentZoneMapBuilder {
     }
 
     /// Copy row `row` of `previous` as a non-fresh row.
-    pub fn push_copy(&mut self, previous: &SegmentZoneMapData, row: usize, sources: &CopySources) {
+    pub async fn push_copy(
+        &mut self,
+        previous: &SegmentZoneMapData,
+        row: usize,
+        sources: &CopySources,
+    ) -> Result<()> {
         let (path, block_count) = (previous.path(row), previous.block_count(row));
         self.paths.push(ScalarRef::String(path));
         self.block_counts.push(u64_scalar(block_count));
@@ -266,71 +356,91 @@ impl SegmentZoneMapBuilder {
                 None => builder.push_unknown(),
             }
         }
-        self.num_rows += 1;
+        self.row_done().await
     }
 
-    /// Serialize and write the zone map, returning its pointer.
-    pub async fn write(
-        self,
-        operator: &Operator,
-        location: Location,
-    ) -> Result<SegmentZoneMapMeta> {
+    async fn row_done(&mut self) -> Result<()> {
+        self.buffered += 1;
+        self.num_rows += 1;
+        match self.buffered == self.row_group_rows {
+            true => self.flush_row_group().await,
+            false => Ok(()),
+        }
+    }
+
+    /// Encode the buffered rows as one row group and send it to storage.
+    async fn flush_row_group(&mut self) -> Result<()> {
+        if self.buffered == 0 {
+            return Ok(());
+        }
+        let mut columns = Vec::with_capacity(self.arrow_schema.fields().len());
+        for builder in [&mut self.paths, &mut self.block_counts, &mut self.fresh] {
+            let data_type = builder.data_type();
+            let rows = std::mem::replace(builder, ColumnBuilder::with_capacity(&data_type, 0));
+            columns.push(rows.build());
+        }
+        for stats in &mut self.stats {
+            stats.take(&mut columns);
+        }
+        let block = DataBlock::new_from_columns(columns);
+        let batch = block.to_record_batch_with_arrow_schema(&self.arrow_schema)?;
+        self.parquet.write(&batch)?;
+        self.parquet.flush()?;
+        self.buffered = 0;
+        self.send().await
+    }
+
+    /// Send what the parquet writer has encoded so far.
+    async fn send(&mut self) -> Result<()> {
+        let bytes = std::mem::take(self.parquet.inner_mut());
+        self.written_bytes += bytes.len() as u64;
+        Ok(self.output.write(bytes).await?)
+    }
+
+    /// Write the last row group and the footer, returning the pointer to the file.
+    pub async fn finish(mut self) -> Result<SegmentZoneMapMeta> {
+        match self.finish_inner().await {
+            Ok(footer_offset) => Ok(SegmentZoneMapMeta {
+                location: self.location,
+                footer_offset,
+            }),
+            Err(e) => {
+                self.abort().await;
+                Err(e)
+            }
+        }
+    }
+
+    async fn finish_inner(&mut self) -> Result<u64> {
         if self.num_rows == 0 {
             return Err(ErrorCode::Internal("segment zone map has no rows"));
         }
-        let schema = file_schema(&self.columns);
-        let mut columns = vec![
-            self.paths.build(),
-            self.block_counts.build(),
-            self.fresh.build(),
-        ];
-        for stats in self.stats {
-            columns.push(stats.min.build());
-            columns.push(stats.max.build());
-            columns.push(stats.null_count.build());
+        self.flush_row_group().await?;
+        self.parquet.finish()?;
+        // The buffer now holds the footer and its 8-byte tail.
+        let tail = self.parquet.inner();
+        let footer_len = tail.len().saturating_sub(PARQUET_FOOTER_TAIL);
+        let Some(len) = parse_footer_tail(&tail[footer_len..]) else {
+            return Err(ErrorCode::Internal(
+                "serialized segment zone map is not parquet",
+            ));
+        };
+        if len > footer_len {
+            return Err(ErrorCode::Internal(
+                "serialized segment zone map footer is longer than the file",
+            ));
         }
-        let blocks = vec![DataBlock::new_from_columns(columns)];
-        let metadata = vec![
-            KeyValue::new(
-                KV_COLUMNS.to_string(),
-                serde_json::to_string(&self.columns)?,
-            ),
-            KeyValue::new(KV_RATIO.to_string(), self.ratio.to_string()),
-        ];
-        let compression = WRITE_COMPRESSION;
-        let serialized = blocks_to_parquet(&schema, blocks, compression, false, Some(metadata))?;
-        let footer_offset = footer_offset(&serialized.payload)?;
-        let payload = Buffer::from(serialized.payload);
-        operator.write(&location.0, payload).await?;
-        Ok(SegmentZoneMapMeta {
-            location,
-            footer_offset,
-        })
+        let footer_offset = self.written_bytes + (footer_len - len) as u64;
+        self.send().await?;
+        self.output.close().await?;
+        Ok(footer_offset)
     }
-}
 
-/// Offset of the footer metadata of a complete parquet file given as chunks.
-fn footer_offset(payload: &[Bytes]) -> Result<u64> {
-    let total: usize = payload.iter().map(Bytes::len).sum();
-    // The 8-byte tail may straddle chunks; gather it from the end.
-    let mut tail = Vec::with_capacity(PARQUET_FOOTER_TAIL);
-    for chunk in payload.iter().rev() {
-        let take = chunk.len().min(PARQUET_FOOTER_TAIL - tail.len());
-        tail.splice(0..0, chunk[chunk.len() - take..].iter().copied());
-        if tail.len() == PARQUET_FOOTER_TAIL {
-            break;
+    /// Discard the file; for a build that failed after writing rows.
+    pub async fn abort(mut self) {
+        if let Err(e) = self.output.abort().await {
+            log::warn!("failed to abort segment zone map {}: {e}", self.location.0);
         }
-    }
-    let Some(footer_len) = parse_footer_tail(&tail) else {
-        return Err(ErrorCode::Internal(
-            "serialized segment zone map is not parquet",
-        ));
-    };
-    match total.checked_sub(PARQUET_FOOTER_TAIL + footer_len) {
-        Some(offset) => Ok(offset as u64),
-        None => Err(ErrorCode::Internal(
-            "serialized segment zone map footer is longer than the file",
-        )),
     }
 }
 
@@ -353,11 +463,11 @@ struct StatColumns {
     null_count: Column,
 }
 
-/// An opened zone map file: its footer, parsed. Column data is read on demand.
+/// An opened zone map file: its footer, parsed. Rows are read per row group.
 pub struct SegmentZoneMapFile {
     operator: Operator,
     path: String,
-    num_rows: usize,
+    schema: TableSchema,
     parquet: ParquetMetaData,
     columns: Vec<ZoneMapColumn>,
     ratio: f64,
@@ -390,15 +500,14 @@ impl SegmentZoneMapFile {
         let expected = SEGMENT_FIELDS + columns.len() * STAT_FIELDS;
         let fields = parquet.file_metadata().schema_descr().num_columns();
         let groups = parquet.num_row_groups();
-        if groups != 1 || fields != expected {
+        if groups == 0 || fields != expected {
             let found = format!("{groups} row groups of {fields} fields");
-            return Err(invalid(format!("{found}, want 1 of {expected}")));
+            return Err(invalid(format!("{found}, want 1 or more of {expected}")));
         }
-        let num_rows = usize::try_from(parquet.file_metadata().num_rows())?;
         Ok(Self {
             operator: operator.clone(),
             path,
-            num_rows,
+            schema: file_schema(&columns),
             parquet,
             columns,
             ratio,
@@ -414,8 +523,94 @@ impl SegmentZoneMapFile {
         self.ratio
     }
 
-    /// Read the segment fields and the statistics of the given table columns.
-    pub async fn read(&self, column_ids: &HashSet<ColumnId>) -> Result<SegmentZoneMapData> {
+    pub fn num_rows(&self) -> usize {
+        self.parquet.file_metadata().num_rows() as usize
+    }
+
+    pub fn num_row_groups(&self) -> usize {
+        self.parquet.num_row_groups()
+    }
+
+    /// Per row group, statistics of the given table columns that hold for every
+    /// row of the group, from the chunk statistics in the footer: the least
+    /// `min`, the greatest `max`, and a null count that is positive if any row
+    /// has nulls. Columns are left out where a row of the group has unknown
+    /// statistics, or where the chunk statistics do not bound the values; see
+    /// [`ZoneMapColumn::chunk_stats_bound_values`].
+    pub fn row_group_stats(&self, column_ids: &HashSet<ColumnId>) -> Vec<StatisticsOfColumns> {
+        let groups = self.parquet.row_groups();
+        let mut out = vec![StatisticsOfColumns::new(); groups.len()];
+        let arrow_schema = Schema::from(&self.schema);
+        let Ok(parquet_schema) = ArrowSchemaConverter::new().convert(&arrow_schema) else {
+            return out;
+        };
+        let bounds =
+            |field_id, max| self.chunk_bounds(field_id, &arrow_schema, &parquet_schema, max);
+        for (idx, column) in self.columns.iter().enumerate() {
+            if !column_ids.contains(&column.column_id) || !column.chunk_stats_bound_values() {
+                continue;
+            }
+            let first = stat_field_id(idx);
+            let (min, max, nulls) = (
+                bounds(first, false),
+                bounds(first + 1, true),
+                bounds(first + 2, true),
+            );
+            let (Some(min), Some(max), Some(nulls)) = (min, max, nulls) else {
+                continue;
+            };
+            for (g, (group, stats)) in groups.iter().zip(&mut out).enumerate() {
+                let nulls_of = |field_id: usize| {
+                    let chunk_stats = group.column(field_id).statistics();
+                    chunk_stats.and_then(ParquetStatistics::null_count_opt)
+                };
+                // A NULL null_count is a row with unknown statistics.
+                if nulls_of(first + 2) != Some(0) {
+                    continue;
+                }
+                let (min, max) = (min.index(g).unwrap(), max.index(g).unwrap());
+                let mut null_count = match nulls.index(g) {
+                    Some(ScalarRef::Number(NumberScalar::UInt64(nulls))) => nulls,
+                    _ => 1,
+                };
+                // Rows whose column is entirely NULL store NULL as min.
+                null_count = null_count.max(u64::from(nulls_of(first) != Some(0)));
+                let (min, max) = (min.to_owned(), max.to_owned());
+                stats.insert(
+                    column.column_id,
+                    ColumnStatistics::new(min, max, null_count, 0, None),
+                );
+            }
+        }
+        out
+    }
+
+    /// The least (or, with `max`, the greatest) value of field `field_id` in
+    /// each row group, from the chunk statistics; NULL where a group has none.
+    fn chunk_bounds(
+        &self,
+        field_id: usize,
+        arrow_schema: &Schema,
+        parquet_schema: &SchemaDescriptor,
+        max: bool,
+    ) -> Option<Column> {
+        let field = &self.schema.fields()[field_id];
+        let converter = StatisticsConverter::try_new(field.name(), arrow_schema, parquet_schema);
+        let groups = self.parquet.row_groups();
+        let array = match max {
+            true => converter.ok()?.row_group_maxes(groups),
+            false => converter.ok()?.row_group_mins(groups),
+        };
+        Column::from_arrow_rs(array.ok()?, &DataType::from(field.data_type())).ok()
+    }
+
+    /// Read the segment fields and the statistics of the given table columns
+    /// of row group `group`.
+    pub async fn read_row_group(
+        &self,
+        group: usize,
+        column_ids: &HashSet<ColumnId>,
+    ) -> Result<SegmentZoneMapData> {
         let mut selected = Vec::new();
         let mut field_ids: Vec<usize> = (0..SEGMENT_FIELDS).collect();
         for (idx, column) in self.columns.iter().enumerate() {
@@ -425,10 +620,11 @@ impl SegmentZoneMapFile {
             }
         }
 
-        let chunks = self.read_fields(&field_ids).await?;
-        let schema = file_schema(&self.columns);
-        let (rows, compression) = (self.num_rows, &READ_COMPRESSION);
-        let batch = column_chunks_to_record_batch(&schema, rows, &chunks, compression, None, None)?;
+        let row_group = self.parquet.row_group(group);
+        let chunks = self.read_fields(row_group, &field_ids).await?;
+        let (schema, rows, compression) = (&self.schema, row_group.num_rows(), &READ_COMPRESSION);
+        let rows = usize::try_from(rows)?;
+        let batch = column_chunks_to_record_batch(schema, rows, &chunks, compression, None, None)?;
         let column_of = |field_id: usize| -> Result<Column> {
             let field = &schema.fields()[field_id];
             let missing = || invalid(&self.path, format!("missing {}", field.name()));
@@ -455,10 +651,14 @@ impl SegmentZoneMapFile {
         })
     }
 
-    /// Fetch the chunks of `field_ids` (ascending). Adjacent fields are adjacent
-    /// in the file: one request per run of them, all issued concurrently.
-    async fn read_fields(&self, field_ids: &[usize]) -> Result<HashMap<ColumnId, DataItem<'_>>> {
-        let row_group = self.parquet.row_group(0);
+    /// Fetch the chunks of `field_ids` (ascending) of a row group. Adjacent
+    /// fields are adjacent in the file: one request per run of them, all issued
+    /// concurrently.
+    async fn read_fields(
+        &self,
+        row_group: &RowGroupMetaData,
+        field_ids: &[usize],
+    ) -> Result<HashMap<ColumnId, DataItem<'_>>> {
         let bytes_of = |field_id: usize| -> Range<u64> {
             let (offset, len) = row_group.column(field_id).byte_range();
             offset..offset + len
@@ -498,7 +698,7 @@ impl SegmentZoneMapFile {
     }
 }
 
-/// Rows of one zone map file: the segment fields plus the statistics that were read.
+/// Rows of one row group: the segment fields plus the statistics that were read.
 pub struct SegmentZoneMapData {
     columns: Vec<ZoneMapColumn>,
     paths: Column,
@@ -533,12 +733,6 @@ impl SegmentZoneMapData {
             Some(ScalarRef::Boolean(fresh)) => fresh,
             _ => unreachable!("segment zone map fresh column is a non-null boolean"),
         }
-    }
-
-    /// Row of each covered segment path.
-    pub fn path_rows(&self) -> HashMap<&str, usize> {
-        let rows = 0..self.num_rows();
-        rows.map(|row| (self.path(row), row)).collect()
     }
 
     /// Fill `out` with the known statistics of row `row` among the columns read.
@@ -612,24 +806,33 @@ mod tests {
         columns.iter().map(|column| column.column_id).collect()
     }
 
-    async fn write(
-        builder: SegmentZoneMapBuilder,
+    async fn new_writer(
         op: &Operator,
         name: &str,
-    ) -> Result<SegmentZoneMapMeta> {
+        columns: Vec<ZoneMapColumn>,
+        ratio: f64,
+    ) -> Result<SegmentZoneMapWriter> {
         let location = (name.to_string(), SegmentZoneMapMeta::VERSION);
-        builder.write(op, location).await
+        SegmentZoneMapWriter::create(op, location, columns, ratio).await
     }
 
-    /// Open and read every covered column.
+    /// Open and read every covered column of the only row group.
     async fn read_all(op: &Operator, meta: &SegmentZoneMapMeta) -> Result<SegmentZoneMapData> {
         let file = SegmentZoneMapFile::open(op, meta).await?;
-        file.read(&all_column_ids(file.columns())).await
+        assert_eq!(file.num_row_groups(), 1);
+        file.read_row_group(0, &all_column_ids(file.columns()))
+            .await
+    }
+
+    fn row_of(data: &SegmentZoneMapData, path: &str) -> usize {
+        (0..data.num_rows())
+            .find(|row| data.path(*row) == path)
+            .unwrap()
     }
 
     fn read_stats(data: &SegmentZoneMapData, path: &str) -> StatisticsOfColumns {
         let mut out = StatisticsOfColumns::new();
-        data.fill_stats(data.path_rows()[path], &mut out);
+        data.fill_stats(row_of(data, path), &mut out);
         out
     }
 
@@ -655,17 +858,22 @@ mod tests {
         // Missing statistics and statistics of the wrong type are both unknown.
         let seg_c = StatisticsOfColumns::from([(0, string_stats("1", "2", 0))]);
 
-        let mut builder = SegmentZoneMapBuilder::new(columns.clone(), 0.75, 3);
-        builder.push_summary("seg_a", &summary(1000, seg_a.clone()));
-        builder.push_summary("seg_b", &summary(7, seg_b.clone()));
-        builder.push_summary("seg_c", &summary(1, seg_c));
-        let meta = write(builder, &op, "zm_1.parquet").await?;
+        let mut writer = new_writer(&op, "zm_1.parquet", columns.clone(), 0.75).await?;
+        writer
+            .push_summary("seg_a", &summary(1000, seg_a.clone()))
+            .await?;
+        writer
+            .push_summary("seg_b", &summary(7, seg_b.clone()))
+            .await?;
+        writer.push_summary("seg_c", &summary(1, seg_c)).await?;
+        let meta = writer.finish().await?;
 
         let file = SegmentZoneMapFile::open(&op, &meta).await?;
         assert_eq!(file.columns(), &columns[..]);
         assert_eq!(file.ratio(), 0.75);
+        assert_eq!((file.num_rows(), file.num_row_groups()), (3, 1));
 
-        let data = file.read(&all_column_ids(&columns)).await?;
+        let data = file.read_row_group(0, &all_column_ids(&columns)).await?;
         assert_eq!(data.num_rows(), 3);
         assert_eq!(read_stats(&data, "seg_a"), normalize(&seg_a));
         assert_eq!(read_stats(&data, "seg_b"), normalize(&seg_b));
@@ -675,16 +883,16 @@ mod tests {
         assert!((0..3).all(|row| data.is_fresh(row)));
 
         // Only the requested column is read.
-        let data = file.read(&HashSet::from([1])).await?;
+        let data = file.read_row_group(0, &HashSet::from([1])).await?;
         assert_eq!(
             read_stats(&data, "seg_a").into_keys().collect::<Vec<_>>(),
             vec![1]
         );
 
         // Segment fields alone, as used for the start decision.
-        let data = file.read(&HashSet::new()).await?;
+        let data = file.read_row_group(0, &HashSet::new()).await?;
         assert!(read_stats(&data, "seg_b").is_empty());
-        assert_eq!(data.path_rows().len(), 3);
+        assert_eq!(data.num_rows(), 3);
         assert_eq!(data.block_count(2), 1);
         Ok(())
     }
@@ -695,9 +903,11 @@ mod tests {
         let columns = zone_map_columns(&schema());
         let seg_a =
             StatisticsOfColumns::from([(0, int_stats(1, 10)), (1, string_stats("x", "y", 2))]);
-        let mut builder = SegmentZoneMapBuilder::new(columns.clone(), 1.0, 1);
-        builder.push_summary("seg_a", &summary(1000, seg_a.clone()));
-        let previous = read_all(&op, &write(builder, &op, "zm_1.parquet").await?).await?;
+        let mut writer = new_writer(&op, "zm_1.parquet", columns.clone(), 1.0).await?;
+        writer
+            .push_summary("seg_a", &summary(1000, seg_a.clone()))
+            .await?;
+        let previous = read_all(&op, &writer.finish().await?).await?;
 
         // Column 1 changed type (string to binary), column 2 is new.
         let mut changed = columns.clone();
@@ -707,12 +917,16 @@ mod tests {
             data_type: TableDataType::Date,
         });
         let seg_b = StatisticsOfColumns::from([(0, int_stats(20, 30))]);
-        let mut builder = SegmentZoneMapBuilder::new(changed.clone(), 0.5, 2);
-        let sources = builder.copy_sources(&previous);
+        let mut writer = new_writer(&op, "zm_2.parquet", changed.clone(), 0.5).await?;
+        let sources = writer.copy_sources(&previous);
         assert_eq!(sources.0, vec![Some(0), None, None]);
-        builder.push_summary("seg_b", &summary(3, seg_b.clone()));
-        builder.push_copy(&previous, previous.path_rows()["seg_a"], &sources);
-        let data = read_all(&op, &write(builder, &op, "zm_2.parquet").await?).await?;
+        writer
+            .push_summary("seg_b", &summary(3, seg_b.clone()))
+            .await?;
+        writer
+            .push_copy(&previous, row_of(&previous, "seg_a"), &sources)
+            .await?;
+        let data = read_all(&op, &writer.finish().await?).await?;
 
         assert_eq!(data.path(0), "seg_b");
         assert!(data.is_fresh(0));
@@ -823,10 +1037,37 @@ mod tests {
         assert_eq!(columns.len(), col_stats.len());
 
         let op = Operator::new(Memory::default())?.finish();
-        let mut builder = SegmentZoneMapBuilder::new(columns, 1.0, 1);
-        builder.push_summary("seg", &summary(1, col_stats.clone()));
-        let data = read_all(&op, &write(builder, &op, "zm.parquet").await?).await?;
+        let mut writer = new_writer(&op, "zm.parquet", columns.clone(), 1.0).await?;
+        writer
+            .push_summary("seg", &summary(1, col_stats.clone()))
+            .await?;
+        let meta = writer.finish().await?;
+        let file = SegmentZoneMapFile::open(&op, &meta).await?;
+        let data = file.read_row_group(0, &all_column_ids(&columns)).await?;
         assert_eq!(read_stats(&data, "seg"), col_stats);
+
+        // The chunk statistics of a one-row group are that row's statistics,
+        // except for the types they do not bound.
+        let group_stats = file.row_group_stats(&all_column_ids(&columns));
+        let unbounded: Vec<ColumnId> = columns
+            .iter()
+            .filter(|c| !c.chunk_stats_bound_values())
+            .map(|c| c.column_id)
+            .collect();
+        let bounded_types = |id: &ColumnId| !unbounded.contains(id);
+        let mut expected = col_stats.clone();
+        expected.retain(|id, _| bounded_types(id));
+        assert_eq!(group_stats.len(), 1);
+        assert_eq!(group_stats[0], expected);
+        let float_or_tz = |ty: &TableDataType| {
+            matches!(ty, NumType(Float32 | Float64) | TableDataType::TimestampTz)
+        };
+        let expected_unbounded: Vec<ColumnId> = columns
+            .iter()
+            .filter(|c| float_or_tz(&c.data_type))
+            .map(|c| c.column_id)
+            .collect();
+        assert_eq!(unbounded, expected_unbounded);
         Ok(())
     }
 
@@ -845,9 +1086,9 @@ mod tests {
         let col_stats = StatisticsOfColumns::from([(0, stats(wide(-15000), wide(25000), 1))]);
 
         let op = Operator::new(Memory::default())?.finish();
-        let mut builder = SegmentZoneMapBuilder::new(zone_map_columns(&schema), 1.0, 1);
-        builder.push_summary("seg", &summary(1, col_stats));
-        let data = read_all(&op, &write(builder, &op, "zm.parquet").await?).await?;
+        let mut writer = new_writer(&op, "zm.parquet", zone_map_columns(&schema), 1.0).await?;
+        writer.push_summary("seg", &summary(1, col_stats)).await?;
+        let data = read_all(&op, &writer.finish().await?).await?;
         let expected = StatisticsOfColumns::from([(0, stats(narrow(-15000), narrow(25000), 1))]);
         assert_eq!(read_stats(&data, "seg"), expected);
         Ok(())
@@ -856,9 +1097,11 @@ mod tests {
     #[tokio::test]
     async fn test_segment_zone_map_open_rejects_corrupt_pointer() -> Result<()> {
         let op = Operator::new(Memory::default())?.finish();
-        let mut builder = SegmentZoneMapBuilder::new(zone_map_columns(&schema()), 1.0, 1);
-        builder.push_summary("seg_a", &summary(1, StatisticsOfColumns::new()));
-        let meta = write(builder, &op, "zm_1.parquet").await?;
+        let mut writer = new_writer(&op, "zm_1.parquet", zone_map_columns(&schema()), 1.0).await?;
+        writer
+            .push_summary("seg_a", &summary(1, StatisticsOfColumns::new()))
+            .await?;
+        let meta = writer.finish().await?;
         let corrupt = |f: fn(&mut SegmentZoneMapMeta)| {
             let mut meta = meta.clone();
             f(&mut meta);
@@ -875,6 +1118,69 @@ mod tests {
                 "{meta:?}"
             );
         }
+        Ok(())
+    }
+
+    /// Rows beyond [`ROW_GROUP_ROWS`] go to further row groups, each read on
+    /// its own; the chunk statistics bound the rows of each group.
+    #[tokio::test]
+    async fn test_segment_zone_map_row_groups() -> Result<()> {
+        let op = Operator::new(Memory::default())?.finish();
+        let columns = zone_map_columns(&schema());
+        let rows = 2 * ROW_GROUP_ROWS + 5;
+        let mut writer = new_writer(&op, "zm.parquet", columns.clone(), 1.0).await?;
+        for row in 0..rows {
+            let group = row / ROW_GROUP_ROWS;
+            let value = row as i32;
+            let mut col_stats = StatisticsOfColumns::from([(0, int_stats(value, value + 1))]);
+            // Group 0: strings known; group 1: one row unknown; group 2: one
+            // row entirely NULL, the others known.
+            if group != 1 || row != ROW_GROUP_ROWS + 1 {
+                col_stats.insert(1, string_stats("k", "k", 0));
+            }
+            if row == 2 * ROW_GROUP_ROWS + 1 {
+                col_stats.insert(1, stats(Scalar::Null, Scalar::Null, 9));
+            }
+            writer
+                .push_summary(&format!("seg_{row}"), &summary(1, col_stats))
+                .await?;
+        }
+        let meta = writer.finish().await?;
+
+        let file = SegmentZoneMapFile::open(&op, &meta).await?;
+        assert_eq!((file.num_rows(), file.num_row_groups()), (rows, 3));
+        let group_rows = [ROW_GROUP_ROWS, ROW_GROUP_ROWS, 5];
+        for (group, expected) in group_rows.into_iter().enumerate() {
+            let data = file
+                .read_row_group(group, &all_column_ids(&columns))
+                .await?;
+            assert_eq!(data.num_rows(), expected);
+            let first = group * ROW_GROUP_ROWS;
+            assert_eq!(data.path(0), format!("seg_{first}"));
+            assert_eq!(
+                data.path(expected - 1),
+                format!("seg_{}", first + expected - 1)
+            );
+            let first_stats = read_stats(&data, &format!("seg_{first}"));
+            assert_eq!(first_stats[&0], int_stats(first as i32, first as i32 + 1));
+        }
+
+        let group_stats = file.row_group_stats(&all_column_ids(&columns));
+        assert_eq!(group_stats.len(), 3);
+        let last = |group: usize| (group_rows[..=group].iter().sum::<usize>() - 1) as i32;
+        for (group, stats_of) in group_stats.iter().enumerate() {
+            let first = (group * ROW_GROUP_ROWS) as i32;
+            assert_eq!(
+                stats_of[&0],
+                int_stats(first, last(group) + 1),
+                "group {group}"
+            );
+        }
+        assert_eq!(group_stats[0][&1], string_stats("k", "k", 0));
+        // A row with unknown statistics leaves the column out of its group.
+        assert!(!group_stats[1].contains_key(&1));
+        // A row that is entirely NULL makes the group nullable.
+        assert_eq!(group_stats[2][&1], string_stats("k", "k", 9));
         Ok(())
     }
 }

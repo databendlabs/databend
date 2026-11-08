@@ -29,6 +29,9 @@
 //!
 //! Every build writes a complete new file: rows of the previous zone map whose
 //! segment is still live are copied, admitted segments have their summary read.
+//! Both sides stream one row group at a time (see [`crate::segment_zone_map::format`]),
+//! so a build holds no more than a row group of either file, plus one bit per
+//! segment of the snapshot.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -41,9 +44,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_expression::ColumnId;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentZoneMapMeta;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -55,8 +60,8 @@ use crate::FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::operations::set_backoff;
-use crate::segment_zone_map::format::SegmentZoneMapBuilder;
 use crate::segment_zone_map::format::SegmentZoneMapFile;
+use crate::segment_zone_map::format::SegmentZoneMapWriter;
 use crate::segment_zone_map::format::zone_map_columns;
 
 /// Segments whose summaries are read per batch while building.
@@ -115,19 +120,30 @@ enum CommitCheck {
 
 /// `base` is the pointer of the snapshot the build read, `written` the segment
 /// paths in the new file.
-fn commit_check(
+fn commit_check<'a>(
     latest: &TableSnapshot,
     base: Option<&SegmentZoneMapMeta>,
-    written: &[&str],
+    mut written: impl Iterator<Item = &'a str>,
 ) -> CommitCheck {
     if latest.segment_zone_map.as_ref().map(|m| &m.location) != base.map(|m| &m.location) {
         return CommitCheck::Superseded;
     }
     let live: HashSet<&str> = latest.segments.iter().map(|(p, _)| p.as_str()).collect();
-    match written.iter().any(|path| live.contains(path)) {
+    match written.any(|path| live.contains(path)) {
         true => CommitCheck::Proceed,
         false => CommitCheck::NoLiveSegment,
     }
+}
+
+/// Paths of the segments of `snapshot` flagged in `flags`.
+fn flagged_paths<'a>(
+    snapshot: &'a TableSnapshot,
+    flags: &'a [bool],
+) -> impl Iterator<Item = &'a str> + Clone {
+    let segments = snapshot.segments.iter().zip(flags);
+    segments
+        .filter(|(_, flag)| **flag)
+        .map(|((path, _), _)| path.as_str())
 }
 
 /// Outcome of a refresh attempt, for logging.
@@ -168,7 +184,8 @@ impl FuseTable {
         {
             return Ok(RefreshOutcome::Skipped);
         }
-        let Some(snapshot) = self.read_table_snapshot().await? else {
+        let policy = ctx.cache_policy();
+        let Some(snapshot) = self.read_table_snapshot_with_policy(policy).await? else {
             return Ok(RefreshOutcome::Skipped);
         };
         let columns = zone_map_columns(&snapshot.schema);
@@ -176,14 +193,17 @@ impl FuseTable {
             return Ok(RefreshOutcome::Skipped);
         }
         let pointer = snapshot.segment_zone_map.as_ref();
-        let live: HashSet<&str> = snapshot.segments.iter().map(|(p, _)| p.as_str()).collect();
+        // Snapshot position of every live segment.
+        let mut live = HashMap::with_capacity(snapshot.segments.len());
+        for (idx, (path, _)) in snapshot.segments.iter().enumerate() {
+            live.insert(path.as_str(), idx);
+        }
 
-        // The previous zone map and its segment fields; a missing or unreadable
-        // one only costs a full rebuild.
+        // The previous zone map; a missing or unreadable one only costs a full rebuild.
         let mut previous = None;
         if let Some(meta) = pointer {
             match SegmentZoneMapFile::open(&self.operator, meta).await {
-                Ok(file) => previous = Some((file.read(&HashSet::new()).await?, file)),
+                Ok(file) => previous = Some(file),
                 Err(e) => warn!(
                     "ignore unreadable segment zone map {}: {e}",
                     meta.location.0
@@ -191,21 +211,27 @@ impl FuseTable {
             }
         }
 
-        // Start decision.
+        // Start decision, from the segment fields of the previous zone map.
+        let mut covered = vec![false; snapshot.segments.len()];
         let (mut alive_rows, mut covered_blocks, mut dead_blocks) = (0u64, 0u64, 0u64);
         let (mut fresh_rows, mut fresh_alive) = (0u64, 0u64);
-        if let Some((rows, _)) = &previous {
-            for row in 0..rows.num_rows() {
-                let is_live = live.contains(rows.path(row));
-                if is_live {
-                    alive_rows += 1;
-                    covered_blocks += rows.block_count(row);
-                } else {
-                    dead_blocks += rows.block_count(row);
-                }
-                if rows.is_fresh(row) {
-                    fresh_rows += 1;
-                    fresh_alive += u64::from(is_live);
+        if let Some(file) = &previous {
+            for group in 0..file.num_row_groups() {
+                let rows = file.read_row_group(group, &HashSet::new()).await?;
+                for row in 0..rows.num_rows() {
+                    let idx = live.get(rows.path(row));
+                    match idx {
+                        Some(idx) => {
+                            covered[*idx] = true;
+                            alive_rows += 1;
+                            covered_blocks += rows.block_count(row);
+                        }
+                        None => dead_blocks += rows.block_count(row),
+                    }
+                    if rows.is_fresh(row) {
+                        fresh_rows += 1;
+                        fresh_alive += u64::from(idx.is_some());
+                    }
                 }
             }
         }
@@ -220,9 +246,9 @@ impl FuseTable {
             per_segment as u64,
         );
         let survival = (fresh_rows > 0).then(|| fresh_alive as f64 / fresh_rows as f64);
-        let previous_ratio = previous.as_ref().map_or(1.0, |(_, file)| file.ratio());
+        let previous_ratio = previous.as_ref().map_or(1.0, SegmentZoneMapFile::ratio);
         let ratio = next_ratio(previous_ratio, survival);
-        let previous_rows = previous.as_ref().map_or(0, |(r, _)| r.num_rows() as u64);
+        let previous_rows = previous.as_ref().map_or(0, |f| f.num_rows() as u64);
         let dead_rows = previous_rows - alive_rows;
         info!(
             "segment zone map of table {}: {total_segments} live segments ({} blocks), {alive_rows} covered, \
@@ -236,75 +262,45 @@ impl FuseTable {
         }
 
         // Admission: the oldest uncovered segments first (appends go to the front).
-        let mut previous_data = None;
-        if let Some((_, file)) = &previous {
-            let wanted = columns.iter().map(|c| c.column_id).collect();
-            previous_data = Some(file.read(&wanted).await?);
-        }
-        let mut path_rows = HashMap::new();
-        if let Some(data) = &previous_data {
-            path_rows = data.path_rows();
-        }
-        let mut uncovered = Vec::new();
-        for (idx, (path, _)) in snapshot.segments.iter().enumerate() {
-            if !path_rows.contains_key(path.as_str()) {
-                uncovered.push(idx);
-            }
-        }
+        let uncovered: Vec<usize> = (0..covered.len()).filter(|idx| !covered[*idx]).collect();
         let admit = admitted_count(uncovered.len(), ratio);
-        let skip = uncovered.len() - admit;
-        let admitted: HashSet<usize> = uncovered[skip..].iter().copied().collect();
-
-        // Build: copy live rows, read the summaries of admitted segments in batches.
-        let schema = Arc::new(snapshot.schema.clone());
-        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), schema);
-        let abort_checker = ctx.clone().get_abort_checker();
-        let capacity = alive_rows as usize + admit;
-        let mut builder = SegmentZoneMapBuilder::new(columns, ratio, capacity);
-        let sources = previous_data.as_ref().map(|d| builder.copy_sources(d));
-        let mut written = Vec::with_capacity(capacity);
-        let mut copied = 0usize;
-        for (batch_idx, batch) in snapshot.segments.chunks(BUILD_SEGMENT_BATCH).enumerate() {
-            abort_checker
-                .try_check_aborting()
-                .with_context(|| "build_segment_zone_map")?;
-            let batch_start = batch_idx * BUILD_SEGMENT_BATCH;
-            let mut to_read = Vec::new();
-            for (i, location) in batch.iter().enumerate() {
-                if admitted.contains(&(batch_start + i)) {
-                    to_read.push(location.clone());
-                }
-            }
-            let summaries = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(&to_read, CachePolicy::READ_ONLY);
-            let mut summaries = summaries.await?.into_iter();
-            for (i, (path, _)) in batch.iter().enumerate() {
-                if let Some(row) = path_rows.get(path.as_str()) {
-                    let (data, sources) =
-                        (previous_data.as_ref().unwrap(), sources.as_ref().unwrap());
-                    builder.push_copy(data, *row, sources);
-                    copied += 1;
-                } else if admitted.contains(&(batch_start + i)) {
-                    let mismatch = || ErrorCode::Internal("segment summary count mismatch");
-                    builder.push_summary(path, &summaries.next().ok_or_else(mismatch)??.summary);
-                } else {
-                    continue;
-                }
-                written.push(path.as_str());
-            }
+        let admitted = &uncovered[uncovered.len() - admit..];
+        // `covered` now flags every segment the new file will hold.
+        for idx in admitted {
+            covered[*idx] = true;
         }
 
         let timestamps = ctx.get_table_meta_timestamps(self, Some(snapshot.clone()))?;
         let location = self
             .meta_location_generator
             .gen_segment_zone_map_location(timestamps);
-        let rows = builder.num_rows() as u64;
-        let meta = builder.write(&self.operator, location).await?;
+        let column_ids = columns.iter().map(|c| c.column_id).collect();
+        let mut writer =
+            SegmentZoneMapWriter::create(&self.operator, location, columns, ratio).await?;
+        let writing = self.write_zone_map_rows(
+            ctx.clone(),
+            &snapshot,
+            previous.as_ref(),
+            &column_ids,
+            &live,
+            admitted,
+            &mut writer,
+        );
+        let copied = match writing.await {
+            Ok(copied) => copied,
+            Err(e) => {
+                writer.abort().await;
+                return Err(e);
+            }
+        };
+        let rows = writer.num_rows() as u64;
+        let meta = writer.finish().await?;
         info!(
             "built segment zone map {} for table {}: {rows} rows, {admit} admitted, {copied} copied, ratio {ratio}",
             meta.location.0, self.table_info.desc,
         );
-        let committed = self.commit_segment_zone_map(ctx, pointer, &meta, &written);
+        let written = flagged_paths(&snapshot, &covered);
+        let committed = self.commit_segment_zone_map(ctx, pointer, &meta, written);
         if committed.await? {
             return Ok(RefreshOutcome::Built {
                 rows,
@@ -322,6 +318,57 @@ impl FuseTable {
         Ok(RefreshOutcome::Superseded)
     }
 
+    /// Write the rows of a new zone map: the rows of `previous` whose segment is
+    /// in `live`, copied one row group at a time, then the summaries of the
+    /// `admitted` segments of `snapshot`, read in batches. Returns the number of
+    /// copied rows.
+    async fn write_zone_map_rows(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        snapshot: &TableSnapshot,
+        previous: Option<&SegmentZoneMapFile>,
+        column_ids: &HashSet<ColumnId>,
+        live: &HashMap<&str, usize>,
+        admitted: &[usize],
+        writer: &mut SegmentZoneMapWriter,
+    ) -> Result<usize> {
+        let abort_checker = ctx.clone().get_abort_checker();
+        let check_aborting = || {
+            let check = abort_checker.try_check_aborting();
+            check.with_context(|| "build_segment_zone_map")
+        };
+        let mut copied = 0;
+        if let Some(file) = previous {
+            for group in 0..file.num_row_groups() {
+                check_aborting()?;
+                let rows = file.read_row_group(group, column_ids).await?;
+                let sources = writer.copy_sources(&rows);
+                for row in 0..rows.num_rows() {
+                    if live.contains_key(rows.path(row)) {
+                        writer.push_copy(&rows, row, &sources).await?;
+                        copied += 1;
+                    }
+                }
+            }
+        }
+        let schema = Arc::new(snapshot.schema.clone());
+        let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+        let segments_io = SegmentsIO::create(ctx, self.operator.clone(), schema);
+        for batch in admitted.chunks(BUILD_SEGMENT_BATCH) {
+            check_aborting()?;
+            let locations: Vec<Location> = batch
+                .iter()
+                .map(|i| snapshot.segments[*i].clone())
+                .collect();
+            let summaries =
+                segments_io.read_segments::<Arc<CompactSegmentInfo>>(&locations, policy);
+            for (location, summary) in locations.iter().zip(summaries.await?) {
+                writer.push_summary(&location.0, &summary?.summary).await?;
+            }
+        }
+        Ok(copied)
+    }
+
     /// Commit a snapshot that only points to `meta`, rebasing on concurrent
     /// commits. Any zone map is valid for any snapshot, so a rebase never rebuilds.
     ///
@@ -329,21 +376,22 @@ impl FuseTable {
     /// from (`base`) has been replaced by another writer, or when none of the
     /// segments in the file (`written`) is live any more: the table was
     /// truncated or wholly rewritten meanwhile, and the file is useless.
-    async fn commit_segment_zone_map(
+    async fn commit_segment_zone_map<'a>(
         &self,
         ctx: Arc<dyn TableContext>,
         base: Option<&SegmentZoneMapMeta>,
         meta: &SegmentZoneMapMeta,
-        written: &[&str],
+        written: impl Iterator<Item = &'a str> + Clone,
     ) -> Result<bool> {
         let mut backoff = None;
         loop {
             let table = self.refresh(ctx.as_ref()).await?;
             let table = FuseTable::try_from_table(table.as_ref())?;
-            let Some(latest) = table.read_table_snapshot().await? else {
+            let policy = ctx.cache_policy();
+            let Some(latest) = table.read_table_snapshot_with_policy(policy).await? else {
                 return Ok(false);
             };
-            let check = commit_check(&latest, base, written);
+            let check = commit_check(&latest, base, written.clone());
             if check != CommitCheck::Proceed {
                 info!(
                     "segment zone map {} not committed: {check:?}",
@@ -363,7 +411,8 @@ impl FuseTable {
             // retagged to stay fresh, as metadata-only ALTERs do.
             let generator = &table.meta_location_generator;
             let mut table_statistics = None;
-            if let Some(stats) = table.read_table_snapshot_statistics(Some(&latest)).await? {
+            let stats = table.read_table_snapshot_statistics_with_policy(Some(&latest), policy);
+            if let Some(stats) = stats.await? {
                 if stats.is_fresh_for(&latest) {
                     let mut stats = stats.as_ref().clone();
                     stats.snapshot_id = latest.snapshot_id;
@@ -464,7 +513,7 @@ mod tests {
                 commit_check(
                     &snapshot(segments, zone_map),
                     base.map(pointer).as_ref(),
-                    written,
+                    written.iter().copied(),
                 )
             };
 

@@ -19,6 +19,10 @@
 //! statistics, copied from the segment summaries. Queries read the few columns
 //! their filter references and skip segments before reading any segment info.
 //!
+//! The file is laid out in row groups that builds and queries stream one at a
+//! time, so neither holds the whole zone map in memory; the chunk statistics in
+//! the footer let a query skip row groups its filter cannot match. See [`format`].
+//!
 //! Recluster refreshes the zone map after each committed round; every other
 //! commit carries the pointer along, so the zone map may lag behind the
 //! snapshot. It is only used to exclude segments, which keeps a lagging zone
