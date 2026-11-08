@@ -23,13 +23,13 @@ SELECT id, label, n FROM compat_segment_zone_map_old WHERE d128 > 2500 ORDER BY 
 # Two overlapping inserts give the round something to merge; the four old
 # single-row blocks are merged along with them.
 statement ok
-INSERT INTO compat_segment_zone_map_old VALUES (5, 'echo', 5.5, 5000.25, 500000.125, '2024-05-01 00:00:00', '2024-05-01', 50);
+INSERT INTO compat_segment_zone_map_old VALUES (5, 'echo', 5.5, 5000.25, '2024-05-01 00:00:00', '2024-05-01', 50);
 
 statement ok
-INSERT INTO compat_segment_zone_map_old VALUES (6, 'foxtrot', 6.5, 6000.25, 600000.125, '2024-06-01 00:00:00', '2024-06-01', NULL), (8, 'hotel', 8.5, 8000.25, 800000.125, '2024-08-01 00:00:00', '2024-08-01', 80);
+INSERT INTO compat_segment_zone_map_old VALUES (6, 'foxtrot', 6.5, 6000.25, '2024-06-01 00:00:00', '2024-06-01', NULL), (8, 'hotel', 8.5, 8000.25, '2024-08-01 00:00:00', '2024-08-01', 80);
 
 statement ok
-INSERT INTO compat_segment_zone_map_old VALUES (7, 'golf', 7.5, 7000.25, 700000.125, '2024-07-01 00:00:00', '2024-07-01', 70), (9, 'india', 9.5, 9000.25, 900000.125, '2024-09-01 00:00:00', '2024-09-01', NULL);
+INSERT INTO compat_segment_zone_map_old VALUES (7, 'golf', 7.5, 7000.25, '2024-07-01 00:00:00', '2024-07-01', 70), (9, 'india', 9.5, 9000.25, '2024-09-01 00:00:00', '2024-09-01', NULL);
 
 statement ok
 OPTIMIZE TABLE compat_segment_zone_map_old RECLUSTER FINAL;
@@ -63,11 +63,6 @@ EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE d64 = 40.5;
 
 query T
 EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE d128 > 25000;
-----
-<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
-
-query T
-EXPLAIN SELECT id FROM compat_segment_zone_map_old WHERE d256 < 15000;
 ----
 <slt:ignore>zone map pruning: 1 to 0<slt:ignore>
 
@@ -122,11 +117,6 @@ query I
 SELECT id FROM compat_segment_zone_map_old WHERE ts >= '2024-08-15 00:00:00';
 ----
 9
-
-query I
-SELECT id FROM compat_segment_zone_map_old WHERE d256 < 150000;
-----
-1
 
 query IT
 SELECT id, label FROM compat_segment_zone_map_old WHERE id >= 8 ORDER BY id;

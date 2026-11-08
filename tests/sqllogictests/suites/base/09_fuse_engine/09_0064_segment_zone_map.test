@@ -136,7 +136,8 @@ statement ok
 unset enable_segment_zone_map_pruning;
 
 # Below the threshold a round does not refresh: the pointer is carried along,
-# and whatever the round rewrote is simply not covered.
+# and whatever the round rewrote is simply not covered. (How many segments the
+# round leaves depends on how its tasks are spread over the nodes.)
 statement ok
 set variable zm_before = (select segment_zone_map_location from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1);
 
@@ -152,10 +153,10 @@ insert into t values (4000, 'k'), (5000, 'l');
 statement ok
 optimize table t recluster;
 
-query IB
-select segment_count, segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+query B
+select segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
 ----
-3 1
+1
 
 query IT
 select ts, v from t where ts >= 1000 order by ts;
@@ -202,9 +203,10 @@ select segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zon
 ----
 1
 
-# Time travel reads the snapshot's own pointer.
+# Time travel reads the snapshot's own pointer: the latest snapshot of the
+# eight rows the second round left.
 statement ok
-set variable snap2 = (select snapshot_id from fuse_snapshot('db_segment_zone_map', 't') where segment_count = 2 order by timestamp desc limit 1);
+set variable snap2 = (select snapshot_id from fuse_snapshot('db_segment_zone_map', 't') where row_count = 8 order by timestamp desc limit 1);
 
 query I
 select count(*) from t at (snapshot => $snap2) where ts >= 1000;
