@@ -81,6 +81,7 @@ pub struct TableHookTarget {
 
 impl TableHookTarget {
     /// Resolve separately for each stage: maintenance can outlive a rename or drop.
+    /// Resolution refreshes the table cache and clears cached table metadata timestamps.
     async fn resolve(&self, ctx: &Arc<QueryContext>, hook_name: &str) -> Result<Option<Self>> {
         let Some((database, table)) = resolve_current_table_name_by_id(
             ctx,
@@ -170,9 +171,17 @@ impl TableHookTask {
         // Maintenance follows the write, whose own reads are done by now.
         ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
         let op_name = &self.operation_name;
-        let Some(target) = self.target.resolve_compact(&ctx).await? else {
-            return Ok(());
+        // Hints are attached to the task's original table name. With no work, keep the
+        // usual logging and metrics without resolving a maintenance target.
+        let resolved_target = if ctx.get_compaction_num_block_hint(&self.target.table) == 0 {
+            None
+        } else {
+            let Some(target) = self.target.resolve_compact(&ctx).await? else {
+                return Ok(());
+            };
+            Some(target)
         };
+        let target = resolved_target.as_ref().unwrap_or(&self.target);
 
         metrics_inc_compact_hook_main_operation_time_ms(
             op_name,
@@ -383,8 +392,8 @@ impl TableHookTask {
                 return Ok(());
             };
 
-            // Filter write and maintenance hints against the post-maintenance snapshot.
-            ctx.evict_table_from_cache(&target.catalog, &target.database, &target.table)?;
+            // Target resolution refreshed the table cache and checked its ID. Reuse that
+            // current table to filter hints against the post-maintenance snapshot.
             let table = ctx
                 .get_table(&target.catalog, &target.database, &target.table)
                 .await?;
@@ -398,7 +407,6 @@ impl TableHookTask {
             ) {
                 return Ok(());
             }
-            ctx.clear_table_meta_timestamps_cache();
             let names = table
                 .get_table_info()
                 .meta
@@ -457,8 +465,7 @@ impl TableHookTask {
                 return Ok(());
             };
 
-            ctx.evict_table_from_cache(&target.catalog, &target.database, &target.table)?;
-            ctx.clear_table_meta_timestamps_cache();
+            // Reuse the table freshly loaded and ID-checked by this stage's resolution.
             let table = ctx
                 .get_table(&target.catalog, &target.database, &target.table)
                 .await?;

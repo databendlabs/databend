@@ -89,7 +89,8 @@ impl MaterializedViewHandler for RealMaterializedViewHandler {
 
         // Refresh consumes one source checkpoint range. Keep the mandatory non-waiting lock
         // through the data/checkpoint commit so concurrent refreshes cannot consume the same
-        // changes. Post-commit maintenance acquires its own locks after this guard is released.
+        // changes. Release this guard before post-commit maintenance, which uses each
+        // operation's existing coordination mechanism.
         let locked_table_id = table.get_id();
         let table_lock = CoordinationManager::create_table_lock(table.get_table_info().clone());
         let lock_guard = table_lock.try_lock(query_ctx.clone(), false).await?;

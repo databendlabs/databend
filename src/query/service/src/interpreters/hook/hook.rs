@@ -155,6 +155,11 @@ impl HookOperator {
                 Ok(())
             });
         }
+        if !is_async {
+            // Successful tasks release the lock before analyze. Keep the callback-chain
+            // fallback for task creation failures and skipped or interrupted execution.
+            self.release_lock_guard(pipeline);
+        }
     }
 
     async fn defer_until_commit(&self, pipeline: &mut Pipeline) {

@@ -1347,9 +1347,8 @@ DROP MATERIALIZED VIEW mv_guard_recreated
 statement ok
 DROP TABLE mv_guard_source
 
-# Synchronous post-commit compaction acquires its own lock after the refresh
-# lifecycle lock is released. A lock-acquisition failure must not silently leave
-# the three small blocks uncompacted.
+# After three MV refreshes, synchronous post-commit maintenance must compact
+# the three small blocks into one block containing all three rows.
 statement ok
 CREATE TABLE mv_post_commit_source(id INT) auto_compaction_imperfect_blocks_threshold = 0
 

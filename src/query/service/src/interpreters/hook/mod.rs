@@ -73,6 +73,12 @@ pub(crate) async fn resolve_current_table_name_by_id(
         return Ok(Some((database.to_string(), table.to_string())));
     };
 
+    // Most hooks still target the original name. Refresh and verify it first so the
+    // common path needs no ID-to-name lookup and leaves a current table in the cache.
+    if table_id_exists_in_database(ctx, catalog_name, database, table, table, table_id).await? {
+        return Ok(Some((database.to_string(), table.to_string())));
+    }
+
     let catalog = ctx.get_catalog(catalog_name).await?;
     let Some(current_table_name) = catalog.get_table_name_by_id(table_id).await? else {
         warn!(
@@ -169,7 +175,9 @@ async fn table_id_exists_in_database(
     expected_table_id: u64,
 ) -> Result<bool> {
     ctx.evict_table_from_cache(catalog_name, database, original_table)?;
-    ctx.evict_table_from_cache(catalog_name, database, current_table_name)?;
+    if current_table_name != original_table {
+        ctx.evict_table_from_cache(catalog_name, database, current_table_name)?;
+    }
     ctx.clear_table_meta_timestamps_cache();
 
     match ctx
