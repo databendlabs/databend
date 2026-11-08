@@ -18,16 +18,70 @@ databend_common_tracing::register_module_tag!("[ANALYZE-HOOK]");
 use std::sync::Arc;
 
 use databend_common_catalog::cache_policy::CachePolicy;
+use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::AnalyzeOptions;
+use log::info;
+use log::warn;
 
+use crate::interpreters::hook::table_hook_task::TableHookTask;
+use crate::interpreters::hook::table_id_matches_target;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCachePolicy;
+use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+
+impl TableHookTask {
+    pub(super) async fn execute_analyze(&self) {
+        // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context
+        // of the write, whose own reads are done by now.
+        self.ctx
+            .set_cache_policy(self.ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
+        info!("Table hook starting analyze job");
+        if !self.ctx.get_enable_auto_analyze() {
+            return;
+        }
+
+        match self.do_analyze(self.ctx.clone()).await {
+            Ok(_) => {
+                info!("Analyze job completed successfully");
+            }
+            Err(e) => {
+                warn!("Analyze job failed (code {}): {}", e.code(), e);
+            }
+        }
+    }
+
+    async fn do_analyze(&self, ctx: Arc<QueryContext>) -> Result<()> {
+        let Some(desc) = self.target.resolve(&ctx, "analyze").await? else {
+            return Ok(());
+        };
+
+        // Reuse the table freshly loaded and ID-checked by this stage's resolution.
+        let table = ctx
+            .get_table(&desc.catalog, &desc.database, &desc.table)
+            .await?;
+        if !table_id_matches_target(
+            "analyze",
+            Some(desc.table_id),
+            table.get_id(),
+            &desc.catalog,
+            &desc.database,
+            &desc.table,
+        ) {
+            return Ok(());
+        }
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let options =
+            AnalyzeOptions::from_table_options(fuse_table.get_table_info().options())?.no_scan();
+        execute_analyze(ctx, fuse_table, options).await
+    }
+}
 
 /// Run ANALYZE over the table's current snapshot to completion. A table without a
 /// snapshot has nothing to analyze.

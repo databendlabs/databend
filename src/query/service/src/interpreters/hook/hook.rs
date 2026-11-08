@@ -29,6 +29,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_session::TxnTableHook;
 use log::warn;
 
+use crate::interpreters::hook::compact_hook::compact_after_write_enabled;
 use crate::interpreters::hook::table_hook_scheduler::TableHookScheduler;
 use crate::interpreters::hook::table_hook_task::TableHookTarget;
 use crate::interpreters::hook::table_hook_task::TableHookTask;
@@ -183,7 +184,7 @@ impl HookOperator {
         let catalog = self.catalog.clone();
         let database = self.database.clone();
         let table = self.table.clone();
-        let compact_after_write = TableHookTaskSettings::compact_after_write_enabled(&ctx);
+        let compact_after_write = compact_after_write_enabled(&ctx);
         pipeline.set_on_finished(move |info: &ExecutionInfo| {
             if info.res.is_ok() {
                 let hook = TxnTableHook {

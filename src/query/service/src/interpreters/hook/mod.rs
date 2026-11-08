@@ -13,6 +13,8 @@
 // limitations under the License.
 
 pub(crate) mod analyze_hook;
+pub(crate) mod compact_hook;
+pub(crate) mod refresh_hook;
 pub(crate) mod table_hook_scheduler;
 pub(crate) mod table_hook_task;
 pub(crate) mod vacuum_hook;
