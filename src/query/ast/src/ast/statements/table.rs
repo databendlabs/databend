@@ -514,11 +514,6 @@ pub enum AlterTableAction {
     RemoveTableTtl,
     /// Apply the current TTL definition to existing rows.
     MaterializeTableTtl,
-    ReclusterTable {
-        is_final: bool,
-        selection: Option<Expr>,
-        limit: Option<u64>,
-    },
     FlashbackTo {
         point: TimeTravelPoint,
     },
@@ -614,22 +609,6 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::MaterializeTableTtl => {
                 write!(f, "MATERIALIZE TTL")?;
-            }
-            AlterTableAction::ReclusterTable {
-                is_final,
-                selection,
-                limit,
-            } => {
-                write!(f, "RECLUSTER")?;
-                if *is_final {
-                    write!(f, " FINAL")?;
-                }
-                if let Some(conditions) = selection {
-                    write!(f, " WHERE {conditions}")?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " LIMIT {limit}")?;
-                }
             }
             AlterTableAction::FlashbackTo { point } => {
                 write!(f, "FLASHBACK TO {}", point)?;
@@ -1017,7 +996,13 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum OptimizeTableAction {
-    Compact { target: CompactTarget },
+    Compact {
+        target: CompactTarget,
+    },
+    Recluster {
+        is_final: bool,
+        selection: Option<Box<Expr>>,
+    },
 }
 
 impl Display for OptimizeTableAction {
@@ -1027,6 +1012,19 @@ impl Display for OptimizeTableAction {
                 CompactTarget::Block => write!(f, "COMPACT"),
                 CompactTarget::Segment => write!(f, "COMPACT SEGMENT"),
             },
+            OptimizeTableAction::Recluster {
+                is_final,
+                selection,
+            } => {
+                write!(f, "RECLUSTER")?;
+                if *is_final {
+                    write!(f, " FINAL")?;
+                }
+                if let Some(selection) = selection {
+                    write!(f, " WHERE {selection}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
