@@ -76,7 +76,7 @@ fn test_pools_and_shared_defaults() {
             .collect::<Vec<_>>()
     };
     assert_eq!(in_pool(Pool::Meta).len(), 15);
-    assert_eq!(in_pool(Pool::Index).len(), 8);
+    assert_eq!(in_pool(Pool::Index).len(), 9);
     assert_eq!(in_pool(Pool::Data), [
         "memory_cache_column_data",
         "memory_cache_table_data"
