@@ -12,19 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnIndex;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::Expr as EExpr;
 use databend_common_expression::FunctionKind;
-use databend_common_expression::expr;
-use databend_common_expression::shrink_scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use unicase::Ascii;
@@ -38,7 +31,6 @@ use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::binder::AliasLookup;
-use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
 impl<'a, A> TypeChecker<'a, A>
@@ -163,32 +155,5 @@ where A: TypeCheckAdapter
         let mut arena = self.core_expr_arena();
         let root = arena.lower_unary_op_expr(span, op, child)?;
         self.resolve_checked_core(&arena, root)
-    }
-
-    pub(super) fn try_fold_constant<Index: ColumnIndex>(
-        &self,
-        expr: EExpr<Index>,
-    ) -> std::result::Result<Box<(ScalarExpr, DataType)>, EExpr<Index>> {
-        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            return Err(expr);
-        }
-
-        let span = expr.span();
-        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let expr = expr.into_owned();
-        let EExpr::Constant(expr::Constant { scalar, .. }) = expr else {
-            return Err(expr);
-        };
-
-        let scalar = shrink_scalar(scalar);
-        let ty = scalar.as_ref().infer_data_type();
-        Ok(Box::new((
-            ConstantExpr {
-                span,
-                value: scalar,
-            }
-            .into(),
-            ty,
-        )))
     }
 }

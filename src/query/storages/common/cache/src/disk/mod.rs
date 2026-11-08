@@ -12,27 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builder;
-mod cache;
-mod codec;
-mod disk_def;
-mod disk_tiers;
-mod key;
-mod lru;
+//! The disk cache of raw object bytes. `DiskCachedStorage` is what readers use; `DiskCache`
+//! holds the pools (`disk_pool`), the writer (`disk_writer`) and the entry files (`disk_file`).
+//! The parts are public for their tests and diagnostics, as `backend` is.
 
-pub use builder::DiskCacheAccessor;
-pub use builder::DiskCacheBuilder;
-pub use builder::TableDataCacheKey;
-pub use cache::io_result::Error as DiskCacheError;
-pub use cache::io_result::Result as DiskCacheResult;
-pub use cache::*;
-pub use codec::DiskCodec;
-pub use disk_def::Codec;
-pub use disk_def::Disk;
-pub use disk_def::DiskInfo;
-pub(crate) use disk_tiers::disk_tiers;
-pub use key::DiskCacheKey;
-pub use lru::LruDiskCache;
-pub use lru::LruDiskCacheBuilder;
-pub use lru::LruDiskCacheHolder;
-pub use lru::read_cache_content;
+mod disk_cache;
+mod disk_cached_storage;
+pub mod disk_file;
+pub mod disk_pool;
+pub mod disk_writer;
+mod key;
+
+pub use disk_cache::DiskCache;
+pub use disk_cache::DiskCacheStats;
+pub use disk_cache::DiskKindEvents;
+pub use disk_cache::DiskKindStats;
+pub use disk_cache::DiskPoolStats;
+pub use disk_cache::split_caps;
+pub use disk_cached_storage::DiskCachedStorage;
+pub use disk_cached_storage::UnitsRead;
+pub use key::DiskKey;

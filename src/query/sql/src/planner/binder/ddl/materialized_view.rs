@@ -95,7 +95,6 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::MaintenanceTarget;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::Plan;
-use crate::plans::ReclusterPlan;
 use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
@@ -892,26 +891,6 @@ impl Binder {
                     target: MaintenanceTarget::MaterializedView { table_id },
                 },
             ))),
-            AlterTableAction::ReclusterTable {
-                is_final,
-                selection,
-                limit,
-            } => {
-                if selection.is_some() {
-                    return Err(ErrorCode::Unimplemented(
-                        "ALTER MATERIALIZED VIEW RECLUSTER WHERE is not supported".to_string(),
-                    ));
-                }
-                Ok(Plan::ReclusterTable(Box::new(ReclusterPlan {
-                    catalog,
-                    database,
-                    table,
-                    target: MaintenanceTarget::MaterializedView { table_id },
-                    limit: limit.map(|value| value as usize),
-                    selection: None,
-                    is_final: *is_final,
-                })))
-            }
             AlterTableAction::SetOptions { set_options } => {
                 Ok(Plan::SetOptions(Box::new(SetOptionsPlan {
                     set_options: set_options.clone(),

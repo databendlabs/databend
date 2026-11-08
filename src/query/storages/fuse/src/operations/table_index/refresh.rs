@@ -62,7 +62,10 @@ impl FuseTable {
         if index_names.is_empty() || segment_locs.as_ref().is_some_and(Vec::is_empty) {
             return Ok(0);
         }
-        let Some(snapshot) = self.read_table_snapshot().await? else {
+        let Some(snapshot) = self
+            .read_table_snapshot_with_policy(ctx.cache_policy())
+            .await?
+        else {
             return Ok(0);
         };
         let RefreshPlan { specs, blocks } =

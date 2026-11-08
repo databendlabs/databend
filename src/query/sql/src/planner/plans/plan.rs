@@ -574,6 +574,7 @@ impl Plan {
             | Plan::ExplainSyntax { .. } => QueryKind::Explain,
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
+            | Plan::ReclusterTable(_)
             | Plan::DataMutation { .. }
             | Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,

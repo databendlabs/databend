@@ -99,6 +99,7 @@ impl ReadDataTransform {
             self.table_schema.clone(),
             self.block_reader.operator(),
             read_settings,
+            self.block_reader.policy,
             inlist_bloom_prune_threshold,
             runtime_filters
                 .iter()

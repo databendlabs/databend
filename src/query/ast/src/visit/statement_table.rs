@@ -329,11 +329,6 @@ impl Walk for AlterTableAction {
                     try_walk!(expr.walk(visitor));
                 }
             }
-            AlterTableAction::ReclusterTable { selection, .. } => {
-                if let Some(selection) = selection {
-                    try_walk!(selection.walk(visitor));
-                }
-            }
             AlterTableAction::FlashbackTo { point } => {
                 try_walk!(point.walk(visitor));
             }
@@ -437,11 +432,6 @@ impl WalkMut for AlterTableAction {
             AlterTableAction::AlterTablePartitionBy { partition_by } => {
                 for expr in partition_by {
                     try_walk!(expr.walk_mut(visitor));
-                }
-            }
-            AlterTableAction::ReclusterTable { selection, .. } => {
-                if let Some(selection) = selection {
-                    try_walk!(selection.walk_mut(visitor));
                 }
             }
             AlterTableAction::FlashbackTo { point } => {

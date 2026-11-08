@@ -55,6 +55,7 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::lock::LockTableOption;

@@ -191,7 +191,8 @@ async fn variant_cast_pushdown_and_non_column_fallback() -> Result<()> {
         ),
         ("get(v, 'e')", false, false, Some(6), nullable_variant),
         (
-            "parse_json('{\"k\":1}')['k']::Int64",
+            // The base is not a constant, otherwise the whole cast folds.
+            "parse_json(a::String)['k']::Int64",
             true,
             false,
             None,

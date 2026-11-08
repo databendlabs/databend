@@ -31,6 +31,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_statistics::KllSketch;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CompactSegmentInfo;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_index::Index;
@@ -204,7 +205,8 @@ impl SegmentAnalyzer {
         let table_schema = table.schema();
         let (projection, policy) =
             build_analyze_column_projection(table, table_schema.clone(), options)?;
-        let block_reader = table.create_block_reader(ctx.clone(), projection, false)?;
+        let block_reader =
+            table.create_block_reader(ctx.clone(), projection, CachePolicy::READ_ONLY)?;
         let dal = table.get_operator();
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         Ok(Arc::new(Self {
@@ -213,7 +215,9 @@ impl SegmentAnalyzer {
             block_reader,
             settings: ReadSettings::from_ctx(ctx)?,
             storage_format: table.get_storage_format(),
-            segment_cache: FuseCaches::instance().segments.clone(),
+            segment_cache: FuseCaches::instance()
+                .segments
+                .with_policy(ctx.cache_policy()),
             segment_reader: SegmentInfoReader::new(dal.clone(), table_schema),
             stats_reader: SegmentStatsReader::new(dal.clone()),
             dal,

@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
 use chrono::Utc;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -98,6 +99,7 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
@@ -1190,7 +1192,7 @@ async fn rewrite_decimal_stats_and_commit(
 
     for chunk in base_snapshot.segments.chunks(SEGMENT_READ_CHUNK_SIZE) {
         let segments = segments_io
-            .read_segments::<SegmentInfo>(chunk, false)
+            .read_segments::<SegmentInfo>(chunk, CachePolicy::READ_ONLY)
             .await?;
         for segment in segments {
             let mut segment = segment?;
@@ -1203,10 +1205,11 @@ async fn rewrite_decimal_stats_and_commit(
                 .meta_location_generator()
                 .gen_segment_info_location(table_meta_timestamps, false);
             if let Some(old_stats_location) = segment.summary.additional_stats_loc() {
-                let mut stats = read_segment_stats(operator.clone(), old_stats_location)
-                    .await?
-                    .as_ref()
-                    .clone();
+                let mut stats =
+                    read_segment_stats(operator.clone(), old_stats_location, ctx.cache_policy())
+                        .await?
+                        .as_ref()
+                        .clone();
                 for rewrite in column_rewrites {
                     stats.widen_decimal_column(rewrite.column_id, rewrite.size)?;
                 }
@@ -1237,6 +1240,8 @@ async fn rewrite_decimal_stats_and_commit(
     )?;
     new_snapshot.schema = new_schema.as_ref().clone();
     new_snapshot.segments = new_segment_locations;
+    // Every segment was rewritten, so no row of the segment zone map is live.
+    new_snapshot.segment_zone_map = None;
     for rewrite in column_rewrites {
         new_snapshot
             .summary

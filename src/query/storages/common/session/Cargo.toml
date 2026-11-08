@@ -21,5 +21,8 @@ parking_lot = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true }
+
 [lints]
 workspace = true

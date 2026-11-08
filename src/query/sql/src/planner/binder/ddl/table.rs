@@ -104,6 +104,7 @@ use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::set_s3_storage_class;
@@ -1877,19 +1878,6 @@ impl Binder {
                 };
                 self.bind_delete(bind_context, &stmt, Some(ttl)).await
             }
-            AlterTableAction::ReclusterTable {
-                is_final,
-                selection,
-                limit,
-            } => Ok(Plan::ReclusterTable(Box::new(ReclusterPlan {
-                catalog,
-                database,
-                table,
-                target: MaintenanceTarget::Table,
-                limit: limit.map(|v| v as usize),
-                selection: selection.clone(),
-                is_final: *is_final,
-            }))),
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
@@ -2126,6 +2114,34 @@ impl Binder {
                     }))
                 }
             },
+            AstOptimizeTableAction::Recluster {
+                is_final,
+                selection,
+            } => {
+                let target_table = self.ctx.get_table(&catalog, &database, &table).await?;
+                let target = if is_materialized_view_engine(target_table.engine()) {
+                    self.check_materialized_view_license()?;
+                    if selection.is_some() {
+                        return Err(ErrorCode::Unimplemented(
+                            "RECLUSTER WHERE is not supported for materialized views",
+                        ));
+                    }
+                    MaintenanceTarget::MaterializedView {
+                        table_id: target_table.get_id(),
+                    }
+                } else {
+                    MaintenanceTarget::Table
+                };
+                Plan::ReclusterTable(Box::new(ReclusterPlan {
+                    catalog,
+                    database,
+                    table,
+                    target,
+                    limit,
+                    selection: selection.as_deref().cloned(),
+                    is_final: *is_final,
+                }))
+            }
         };
 
         Ok(plan)

@@ -18,6 +18,7 @@ databend_common_tracing::register_module_tag!("[REFRESH-HOOK]");
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
@@ -34,6 +35,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
 
@@ -60,6 +62,9 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 }
 
 pub(crate) async fn execute_refresh_hook(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
+    // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context of
+    // the write, whose own reads are done by now.
+    ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
     info!("Table hook starting refresh job");
     match do_refresh(ctx, desc).await {
         Ok(_) => info!("Refresh job completed successfully"),

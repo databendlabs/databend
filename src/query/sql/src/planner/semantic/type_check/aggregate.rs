@@ -21,13 +21,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use smallvec::SmallVec;
@@ -234,6 +232,13 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
+/// Children bound in the aggregate-argument context, before constructing the call.
+struct AggregateArguments {
+    scalars: Vec<ScalarExpr>,
+    types: Vec<DataType>,
+    sort_descs: Vec<AggregateFunctionScalarSortDesc>,
+}
+
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
@@ -264,35 +269,36 @@ where A: TypeCheckAdapter
         let in_window = self.in_window_function;
         self.in_window_function = self.in_window_function || in_window_call;
         let in_aggregate_function = self.in_aggregate_function;
-        let result = self.resolve_core_aggregate_call_inner(
-            arena,
-            display_name,
-            span,
-            func_name,
-            distinct,
-            args,
-            remove_count_args,
-            order_by,
-            new_params,
-        );
+        let result = (|| {
+            let arguments =
+                self.resolve_aggregate_arguments(arena, span, func_name, args, order_by)?;
+            self.resolve_aggregate_function(
+                span,
+                func_name,
+                display_name.to_string(),
+                distinct,
+                new_params,
+                arguments.scalars,
+                arguments.types,
+                arguments.sort_descs,
+                remove_count_args,
+            )
+        })();
         self.in_window_function = in_window;
         self.in_aggregate_function = in_aggregate_function;
         result
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn resolve_core_aggregate_call_inner(
+    /// Ordered child traversal only. Keep widening before WITHIN GROUP keys,
+    /// and preserve the existing argument alias/context transitions on errors.
+    fn resolve_aggregate_arguments(
         &mut self,
         arena: &CoreExprArena<'_>,
-        display_name: &str,
         span: Span,
         func_name: &str,
-        distinct: bool,
         args: &CoreExprArgs,
-        remove_count_args: bool,
         order_by: &CoreOrderByExprs,
-        new_params: Vec<Scalar>,
-    ) -> Result<(AggregateFunction, DataType)> {
+    ) -> Result<AggregateArguments> {
         if matches!(
             self.bind_context.expr_context,
             ExprContext::InLambdaFunction
@@ -357,17 +363,11 @@ where A: TypeCheckAdapter
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.resolve_aggregate_function(
-            span,
-            func_name,
-            display_name.to_string(),
-            distinct,
-            new_params,
-            arguments,
-            arg_types,
+        Ok(AggregateArguments {
+            scalars: arguments,
+            types: arg_types,
             sort_descs,
-            remove_count_args,
-        )
+        })
     }
 
     /// Resolve aggregation function call.
@@ -423,12 +423,7 @@ where A: TypeCheckAdapter
             && arguments.len() == expected_config_args
             && params.is_empty()
         {
-            let max_num_buckets: u64 = check_number(
-                None,
-                &self.func_ctx,
-                arguments[1].as_expr()?,
-                &BUILTIN_FUNCTIONS,
-            )?;
+            let max_num_buckets: u64 = self.constant_number(None, &arguments[1])?;
 
             arguments.remove(1);
             arg_types.remove(1);

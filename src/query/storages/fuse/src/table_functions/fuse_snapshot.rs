@@ -82,6 +82,7 @@ impl FuseSnapshotFunc {
         let mut vector_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
         let mut virtual_column_size: Vec<Option<u64>> = Vec::with_capacity(len);
         let mut timestamps: Vec<Option<i64>> = Vec::with_capacity(len);
+        let mut segment_zone_map_locations: Vec<Option<String>> = Vec::with_capacity(len);
         let mut current_snapshot_version = latest_snapshot_version;
         for s in snapshots {
             snapshot_ids.push(s.snapshot_id.simple().to_string());
@@ -106,6 +107,7 @@ impl FuseSnapshotFunc {
             vector_index_size.push(s.vector_index_size);
             virtual_column_size.push(s.virtual_column_size);
             timestamps.push(s.timestamp.map(|dt| dt.timestamp_micros()));
+            segment_zone_map_locations.push(s.segment_zone_map_location.clone());
             current_snapshot_version = ver;
         }
 
@@ -126,6 +128,7 @@ impl FuseSnapshotFunc {
             UInt64Type::from_opt_data(vector_index_size),
             UInt64Type::from_opt_data(virtual_column_size),
             TimestampType::from_opt_data(timestamps),
+            StringType::from_opt_data(segment_zone_map_locations),
         ]))
     }
 }
@@ -184,6 +187,10 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                 TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
             TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
+            TableField::new(
+                "segment_zone_map_location",
+                TableDataType::String.wrap_nullable(),
+            ),
         ])
     }
 

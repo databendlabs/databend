@@ -1556,6 +1556,27 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_segment_zone_map", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Maintain segment zone maps (per-segment min/max of every column) after each committed recluster round. Turn off to stop building them; existing zone maps stay usable. A table opts out with the table option enable_segment_zone_map = 0.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_segment_zone_map_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use a table's segment zone map, if it has one, to skip segments before reading segment info. Turn off to read every segment as before.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("segment_zone_map_full_segment_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(50),
+                    desc: "Refresh a table's segment zone map after a recluster round once more than this many full segments are estimated to be missing from it.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_prune_pipeline", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable pruning pipeline",

@@ -43,6 +43,7 @@ use databend_common_pipeline_transforms::sorts::core::VariableRowConverter;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::parse_cluster_keys;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -365,8 +366,13 @@ impl ClusteringInformationImpl<'_> {
                 let types = key_types.clone();
                 let exprs = prepared_exprs.clone();
                 tasks.pending.push(runtime.spawn(async move {
-                    let segment =
-                        SegmentsIO::read_compact_segment(operator, location, schema, true).await?;
+                    let segment = SegmentsIO::read_compact_segment(
+                        operator,
+                        location,
+                        schema,
+                        CachePolicy::DEFAULT,
+                    )
+                    .await?;
                     collect_segment_endpoints(&segment, &types, &exprs, cluster_key_id, is_hilbert)
                 }));
             }

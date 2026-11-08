@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
@@ -22,7 +21,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ConstantFolder;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -156,10 +155,16 @@ impl DefaultExprBinder {
         let (expr, is_deterministic) = if is_nextval {
             (scalar_expr.as_expr()?, false)
         } else if scalar_expr.is_deterministic() {
-            let expr = scalar_expr.as_expr()?;
-            let (fold_to_constant, _) =
-                ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-            (fold_to_constant.into_owned(), true)
+            let expr = match scalar_expr.constant_value(&self.func_ctx) {
+                Some((scalar, data_type)) => Constant {
+                    span: scalar_expr.span(),
+                    scalar,
+                    data_type,
+                }
+                .into(),
+                None => scalar_expr.as_expr()?,
+            };
+            (expr, true)
         } else {
             (scalar_expr.as_expr()?, false)
         };
