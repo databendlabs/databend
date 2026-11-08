@@ -45,9 +45,8 @@ use crate::ParquetPruner;
 use crate::meta::check_parquet_schema;
 use crate::parquet_reader::DataBlockIterator;
 use crate::parquet_reader::predicate::ParquetPredicate;
-use crate::parquet_reader::utils::FieldPaths;
+use crate::parquet_reader::utils::BatchReadPlan;
 use crate::parquet_reader::utils::transform_record_batch;
-use crate::transformer::RecordBatchTransformer;
 
 /// The reader to read a whole parquet file.
 pub struct ParquetWholeFileReader {
@@ -58,19 +57,10 @@ pub struct ParquetWholeFileReader {
 
     /// Columns to output.
     pub(super) projection: ProjectionMask,
-    /// Field paths helping to traverse columns.
-    ///
-    /// If we use [`ProjectionMask`] to get inner columns of a struct,
-    /// the columns will be contained in a struct array in the read [`RecordBatch`].
-    ///
-    /// Therefore, if `field_paths` is [Some],
-    /// we should extract inner columns from the struct manually by traversing the nested column;
-    /// if `field_paths` is [None], we can skip the traversing.
-    pub(super) field_paths: Arc<Option<FieldPaths>>,
+    /// Cached output conversion, including nested extraction when requested.
+    pub(super) read_plan: Arc<Option<BatchReadPlan>>,
 
     pub(super) pruner: Option<ParquetPruner>,
-
-    pub(super) transformer: Option<RecordBatchTransformer>,
 
     // Options
     pub(super) need_page_index: bool,
@@ -143,9 +133,9 @@ impl ParquetWholeFileReader {
 
         if let Some(batch) = record_batch {
             let blocks = transform_record_batch(
-                &self.output_schema.as_ref().into(),
+                &DataSchema::from(&self.output_schema),
                 &batch,
-                &self.field_paths,
+                &self.read_plan,
             )?;
             Ok(Some(blocks))
         } else {
@@ -210,19 +200,15 @@ impl ParquetWholeFileReader {
         }
         let reader = builder.build()?;
         let iter = reader.into_iter().map(|r| r.map_err(ErrorCode::from));
-        let output_data_schema: DataSchema = self.output_schema.as_ref().into();
+        let output_data_schema = DataSchema::from(&self.output_schema);
         let output_data_schema = Arc::new(output_data_schema);
-        let field_paths = self.field_paths.clone();
-        let mut transformer = self.transformer.clone();
+        let read_plan = self.read_plan.clone();
 
         Ok(Box::new(iter.map(move |r| {
             let output_data_schema = output_data_schema.clone();
-            let field_paths = field_paths.clone();
-            r.and_then(|mut batch| {
-                if let Some(transformer) = &mut transformer {
-                    batch = transformer.process_record_batch(batch)?;
-                }
-                transform_record_batch(&output_data_schema, &batch, field_paths.as_ref())
+            let read_plan = read_plan.clone();
+            r.and_then(|batch| {
+                transform_record_batch(&output_data_schema, &batch, read_plan.as_ref())
             })
         })))
     }

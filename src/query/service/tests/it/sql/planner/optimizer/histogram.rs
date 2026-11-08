@@ -19,13 +19,12 @@ use databend_common_statistics::TypedHistogramBucket;
 #[test]
 fn test_histogram() {
     let histogram = Histogram::UInt(TypedHistogram {
-        accuracy: false,
         row_scale: 1.0,
+        distinct_retention: 1.0,
         buckets: vec![
             TypedHistogramBucket::new(0, 1, 2.0, 1.0),
             TypedHistogramBucket::new(1, 2, 2.0, 1.0),
         ],
-        avg_spacing: None,
     });
 
     assert_eq!(histogram.num_buckets(), 2);

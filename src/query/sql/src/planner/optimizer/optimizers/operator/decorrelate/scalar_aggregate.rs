@@ -23,18 +23,15 @@
 //! evaluated after the join, where both outer columns and the filled aggregate values are
 //! available.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::eval_aggr;
 
 use super::DerivedColumnScope;
@@ -49,7 +46,6 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
@@ -166,8 +162,7 @@ pub(crate) fn match_scalar_aggregate(
         }
         current = current.unary_child();
     };
-    if aggregate.mode != AggregateMode::Initial
-        || !aggregate.group_items.is_empty()
+    if !aggregate.group_items.is_empty()
         || aggregate.grouping_sets.is_some()
         || aggregate.rank_limit.is_some()
     {
@@ -608,10 +603,7 @@ fn fold_with_values(
             .replace_column_with_scalar(column, &replacement)
             .ok()?;
     }
-    let expr = scalar.as_expr().ok()?;
-    let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
-    let constant = expr.into_owned().into_constant().ok()?;
-    Some((constant.scalar, constant.data_type))
+    scalar.constant_value(func_ctx)
 }
 
 /// Makes `scalar` evaluate only on rows where `matched` is true; other rows get the
@@ -619,7 +611,9 @@ fn fold_with_values(
 fn guard_scalar(scalar: &mut ScalarExpr, matched: &ScalarExpr) -> Result<()> {
     if matches!(
         scalar,
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_)
+        ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _)
     ) {
         return Ok(());
     }
@@ -702,7 +696,6 @@ fn has_correlated_scalar_aggregate(s_expr: &SExpr) -> Result<bool> {
 /// own indexes, so dropping it doesn't change the columns seen above it.
 fn is_passthrough_distinct(aggregate: &Aggregate) -> bool {
     aggregate.from_distinct
-        && aggregate.mode == AggregateMode::Initial
         && aggregate.aggregate_functions.is_empty()
         && aggregate.grouping_sets.is_none()
         && aggregate.rank_limit.is_none()
@@ -720,7 +713,13 @@ fn is_true_constant(scalar: &ScalarExpr) -> bool {
         ScalarExpr::ConstantExpr(ConstantExpr {
             value: Scalar::Boolean(true),
             ..
-        })
+        }) | ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                value: Scalar::Boolean(true),
+                ..
+            },
+            _
+        )
     )
 }
 
@@ -739,7 +738,7 @@ fn is_true_constant(scalar: &ScalarExpr) -> bool {
 /// NULL on empty input, which the LEFT join produces without a fill. The marker path is kept
 /// so that a future aggregate with a nullable result and a non-NULL empty-input value is
 /// still filled correctly instead of falling back to a plan that loses empty groups.
-fn empty_aggregate_value(func: &AggregateFunction) -> Option<(Scalar, bool)> {
+pub(super) fn empty_aggregate_value(func: &AggregateFunction) -> Option<(Scalar, bool)> {
     let eval = |nullable: bool| {
         let entries = func
             .args

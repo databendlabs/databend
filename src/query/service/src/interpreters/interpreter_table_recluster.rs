@@ -71,7 +71,6 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextQueryInfo;
@@ -139,6 +138,10 @@ impl ReclusterTableInterpreter {
 impl Interpreter for ReclusterTableInterpreter {
     fn name(&self) -> &str {
         "ReclusterTableInterpreter"
+    }
+
+    fn is_maintenance(&self) -> bool {
+        true
     }
 
     fn is_ddl(&self) -> bool {
@@ -325,9 +328,8 @@ impl Interpreter for ReclusterTableInterpreter {
 
 impl ReclusterTableInterpreter {
     fn vertical_max_tasks(&self) -> Result<usize> {
-        let settings = self.ctx.get_settings();
         let cluster = self.ctx.get_cluster();
-        if cluster.is_empty() || !settings.get_enable_distributed_recluster()? {
+        if cluster.is_empty() {
             return Ok(1);
         }
 
@@ -407,8 +409,7 @@ impl ReclusterTableInterpreter {
         } = &self.plan;
         // Callers that already own the lifecycle lock (for example, MV refresh) disable segment
         // claims to avoid reacquiring the shared table lock at the commit gate.
-        let mut use_segment_claims =
-            self.allow_segment_claims && settings.get_enable_table_lock()?;
+        let use_segment_claims = self.allow_segment_claims && settings.get_enable_table_lock()?;
 
         // Concurrent planning must evict this cache so the claim set is matched against the
         // latest snapshot.
@@ -418,10 +419,8 @@ impl ReclusterTableInterpreter {
         let mut tbl = self.ctx.get_table(catalog, database, table).await?;
         // Temporary tables are session-local, and their IDs are intentionally unsupported by
         // the segment-claim and lock catalog APIs.
-        if tbl.is_temp() {
-            use_segment_claims = false;
-        }
-        let claim_manager = use_segment_claims.then(CoordinationManager::instance);
+        let claim_manager =
+            (use_segment_claims && !tbl.is_temp()).then(CoordinationManager::instance);
         let mut claim_retries = 0;
         let (parts, snapshot, claim_guard) = loop {
             check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
@@ -487,7 +486,7 @@ impl ReclusterTableInterpreter {
         };
         let task_count = parts.tasks.len();
         let mut physical_plan =
-            self.build_linear_plan(tbl.as_ref(), parts, snapshot, use_segment_claims)?;
+            self.build_linear_plan(tbl.as_ref(), parts, snapshot, claim_manager.is_some())?;
         physical_plan.adjust_plan_id(&mut 0);
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
@@ -499,7 +498,8 @@ impl ReclusterTableInterpreter {
             let table = self.plan.table.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
-                    ctx.written_segment_locations().clear();
+                    // Retain parent-write refresh hints and published output
+                    // locations; index refresh filters out no-longer-live sources.
                     ctx.evict_table_from_cache(&catalog, &database, &table)?;
 
                     ctx.unload_spill_meta();
@@ -636,6 +636,7 @@ impl ReclusterTableInterpreter {
         let ReclusterParts {
             tasks,
             remained_blocks,
+            virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
         } = parts;
@@ -670,11 +671,13 @@ impl ReclusterTableInterpreter {
             table_meta_timestamps,
             recluster_info: Some(ReclusterInfoSideCar {
                 merged_blocks: remained_blocks,
+                virtual_schemas,
                 removed_segment_indexes,
                 removed_statistics: removed_segment_summary,
                 acquire_commit_lock,
             }),
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         }))
     }
 

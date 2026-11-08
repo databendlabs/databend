@@ -127,13 +127,10 @@ impl RuleEliminateSelfJoin {
         Matcher::MatchOp {
             op_type: RelOp::Aggregate,
             children: vec![Matcher::MatchOp {
-                op_type: RelOp::Aggregate,
+                op_type: RelOp::EvalScalar,
                 children: vec![Matcher::MatchOp {
-                    op_type: RelOp::EvalScalar,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
+                    op_type: RelOp::Scan,
+                    children: vec![],
                 }],
             }],
         }
@@ -338,24 +335,20 @@ impl RuleEliminateSelfJoin {
             return None;
         }
 
-        let final_agg = node.plan().as_aggregate().unwrap();
+        let aggregate = node.plan().as_aggregate().unwrap();
 
-        if final_agg.group_items.len() != 1 {
+        // Self-join elimination runs before physical lowering. A Partial aggregate does
+        // not guarantee unique group keys and must never qualify as a candidate.
+        if aggregate.group_items.len() != 1 {
             return None;
         }
 
-        let group_key = Self::group_key_signature(&final_agg.group_items[0], metadata)?;
-        let group_key_index = final_agg.group_items[0].index;
+        let group_key = Self::group_key_signature(&aggregate.group_items[0], metadata)?;
+        let group_key_index = aggregate.group_items[0].index;
 
-        let agg_func_indexes = Self::agg_func_indexes(&final_agg.aggregate_functions, metadata)?;
+        let agg_func_indexes = Self::agg_func_indexes(&aggregate.aggregate_functions, metadata)?;
 
-        let scan = node
-            .unary_child()
-            .unary_child()
-            .unary_child()
-            .plan()
-            .as_scan()
-            .unwrap();
+        let scan = node.unary_child().unary_child().plan().as_scan().unwrap();
 
         // Row-set-changing scan properties cannot be compared across
         // candidates, so they disqualify the candidate outright. Predicates

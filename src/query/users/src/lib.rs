@@ -34,6 +34,8 @@ mod visibility_checker;
 
 pub mod builtin;
 pub mod connection;
+mod external_access;
+pub use external_access::network_rule_endpoint;
 pub mod file_format;
 pub mod role_cache_mgr;
 pub mod role_util;
@@ -48,6 +50,7 @@ pub use user::CertifiedInfo;
 pub use user_api::UserApiProvider;
 pub use visibility_checker::DbTableVisibilityResult;
 pub use visibility_checker::GrantObjectVisibilityChecker;
+pub use visibility_checker::MGET_OWNERSHIP_BATCH_SIZE;
 pub use visibility_checker::Object;
 pub use visibility_checker::TablePrivilegeTarget;
 pub use visibility_checker::TableVisibilityTarget;

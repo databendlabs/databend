@@ -26,6 +26,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
@@ -89,7 +90,8 @@ impl Operator for Filter {
         let mut sb =
             SelectivityEstimator::new(stat_info.statistics.column_stats.clone(), input_cardinality)
                 .with_top_n(stat_info.statistics.top_n.clone())
-                .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone());
+                .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone())
+                .with_and_strategy(stat_ctx.filter_and_strategy);
         let cardinality = sb.apply(&self.predicates, &stat_ctx.function_context)?;
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
@@ -108,3 +110,5 @@ impl Operator for Filter {
         }))
     }
 }
+
+impl PhysicalOperator for Filter {}

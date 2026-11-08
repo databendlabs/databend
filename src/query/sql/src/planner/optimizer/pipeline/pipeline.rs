@@ -114,15 +114,14 @@ impl OptimizerPipeline {
             // Only trace if tracing is enabled
             if let Some(before_expr) = before_expr {
                 let metadata_ref = self.opt_ctx.get_metadata();
+                let metadata = metadata_ref.read();
                 self.trace_collector.trace_optimizer(
                     optimizer.name(),
                     idx,
                     total_optimizers,
                     duration,
-                    &before_expr,
-                    &current_expr,
-                    &metadata_ref.read(),
-                    self.opt_ctx.get_stat_context(),
+                    &before_expr.pretty_format(&metadata, self.opt_ctx.get_stat_context())?,
+                    &current_expr.pretty_format(&metadata, self.opt_ctx.get_stat_context())?,
                 )?;
             }
         }

@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
+use databend_storages_common_cache::CachePolicy;
 
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
@@ -43,16 +44,10 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         projection: Projection,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Arc<BlockReader>> {
         let table_schema = self.schema_with_stream();
-        BlockReader::create(
-            ctx,
-            self.operator.clone(),
-            table_schema,
-            projection,
-            put_cache,
-        )
+        BlockReader::create(ctx, self.operator.clone(), table_schema, projection, policy)
     }
 
     // Build the block reader.
@@ -60,7 +55,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Arc<BlockReader>> {
         self.create_block_reader(
             ctx,
@@ -68,7 +63,7 @@ impl FuseTable {
                 &self.schema_with_stream(),
                 plan.push_downs.as_ref(),
             ),
-            put_cache,
+            policy,
         )
     }
 
@@ -83,9 +78,9 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<FuseDataReaders> {
-        let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
+        let block_reader = self.build_block_reader(ctx.clone(), plan, policy)?;
         let virtual_reader = Arc::new(
             PushDownInfo::virtual_columns_of_push_downs(&plan.push_downs)
                 .as_ref()
@@ -94,9 +89,9 @@ impl FuseTable {
                         ctx,
                         self.operator.clone(),
                         block_reader.schema(),
-                        plan,
                         virtual_column.clone(),
                         self.table_compression,
+                        block_reader.policy,
                     )
                 })
                 .transpose()?,
@@ -134,11 +129,10 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<()> {
         self.check_format_supported()?;
-        let (block_reader, virtual_reader) =
-            self.build_data_readers(ctx.clone(), plan, put_cache)?;
+        let (block_reader, virtual_reader) = self.build_data_readers(ctx.clone(), plan, policy)?;
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
@@ -163,7 +157,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<()> {
         let snapshot_loc = plan.statistics.snapshot.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
@@ -178,8 +172,7 @@ impl FuseTable {
             }
         }
 
-        let (block_reader, virtual_reader) =
-            self.build_data_readers(ctx.clone(), plan, put_cache)?;
+        let (block_reader, virtual_reader) = self.build_data_readers(ctx.clone(), plan, policy)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;

@@ -27,6 +27,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 // Constant table is a table with constant values.
@@ -107,3 +108,5 @@ impl Operator for ExpressionScan {
         }))
     }
 }
+
+impl PhysicalOperator for ExpressionScan {}

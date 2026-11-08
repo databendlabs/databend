@@ -27,15 +27,11 @@ use crate::optimizer::cost::CostContext;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::DistributionEnforcer;
 use crate::optimizer::ir::Enforcer;
-use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::PatternExtractor;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
-use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
-use crate::plans::RelOperator;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeExprState {
@@ -188,7 +184,7 @@ impl OptimizeExprTask {
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
 
-        if matches!(m_expr.plan.as_ref(), RelOperator::Exchange(_),)
+        if m_expr.plan.physical().is_some_and(|op| op.is_exchange())
             && matches!(self.required_prop.distribution, Distribution::Any)
         {
             return Ok(OptimizeExprEvent::OptimizedSelf);
@@ -239,14 +235,37 @@ impl OptimizeExprTask {
 
             let group = optimizer.memo.group(m_expr.children[child_index])?;
             if group.best_prop(&required_prop).is_none() {
-                let task = OptimizeGroupTask::new(
-                    self.ctx.clone(),
-                    Some((self.group_index, self.m_expr_index)),
-                    group.group_index,
-                    required_prop.clone(),
-                )
-                .with_parent(self.ref_count.clone());
-                scheduler.add_task(Task::OptimizeGroup(task));
+                let child_group_index = group.group_index;
+                // An in-flight task for the same `(group, required_prop)` computes exactly
+                // the result we need, so wait for it instead of scheduling a duplicate.
+                //
+                // Enforcer expressions (e.g. `Exchange`) have their own group as child and
+                // rely on `owner_expr` to skip themselves; those requests keep a private
+                // task so that the skip stays tied to the requesting expression.
+                let shareable = child_group_index != self.group_index;
+                let attached = shareable
+                    && scheduler.attach_optimize_group_waiter(
+                        child_group_index,
+                        &required_prop,
+                        &self.ref_count,
+                    );
+                if !attached {
+                    let task = OptimizeGroupTask::new(
+                        self.ctx.clone(),
+                        Some((self.group_index, self.m_expr_index)),
+                        child_group_index,
+                        required_prop.clone(),
+                    )
+                    .with_parent(self.ref_count.clone());
+                    if shareable {
+                        scheduler.register_optimize_group(
+                            child_group_index,
+                            required_prop.clone(),
+                            task.waiters.clone(),
+                        );
+                    }
+                    scheduler.add_task(Task::OptimizeGroup(task));
+                }
             }
 
             self.last_optimized_child_index = Some(child_index + 1);
@@ -400,20 +419,12 @@ impl OptimizeExprTask {
             return Ok(OptimizeExprEvent::OptimizingSelf);
         }
 
-        let mut extractor = PatternExtractor::new();
-        let enforcer_child = Arc::new(
-            extractor
-                .extract(&optimizer.memo, m_expr, &Matcher::Leaf)?
-                .pop()
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!("Cannot find child of m_expr: {:?}", m_expr.plan))
-                })?,
-        );
-
         for enforcer in enforcers.iter() {
-            let operator = enforcer.enforce()?;
-            let s_expr = SExpr::create_unary(Arc::new(operator), enforcer_child.clone());
-            optimizer.memo.insert(Some(self.group_index), s_expr)?;
+            optimizer
+                .memo
+                .insert_physical(self.group_index, enforcer.enforce()?, vec![
+                    self.group_index,
+                ])?;
         }
 
         Ok(OptimizeExprEvent::OptimizedSelf)

@@ -95,6 +95,7 @@ use databend_common_sql::Planner;
 use databend_common_sql::normalize_identifier;
 use databend_common_sql::optimize;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
@@ -111,7 +112,6 @@ use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::NodeInfo;
 use databend_meta_client::types::SeqV;
-use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
@@ -796,6 +796,13 @@ impl LiteTableContext {
         Ok(())
     }
 
+    pub fn stat_context(&self) -> Result<StatContext> {
+        Ok(StatContext::new(
+            self.get_function_context()?,
+            &self.get_settings(),
+        ))
+    }
+
     pub fn configure_for_optimizer_case(&self, auto_stats: bool) -> Result<()> {
         let settings = self.get_settings();
         settings.set_enable_auto_materialize_cte(0)?;
@@ -941,7 +948,7 @@ impl LiteTableContext {
             rpc_conf.timeout = Some(Duration::from_millis(1));
             let catalog_manager = Arc::new(CatalogManager {
                 meta: MetaStoreProvider::new(rpc_conf)
-                    .create_meta_store::<DatabendRuntime>()
+                    .create_default_meta_store()
                     .await
                     .map_err(|err| ErrorCode::Internal(err.to_string()))?,
                 default_catalog: default_catalog_dyn,
@@ -1152,6 +1159,7 @@ impl LiteTableContext {
                 database: database.to_string(),
                 view: view_name.to_string(),
                 query: query.to_string(),
+                query_namespace: Some((self.current_catalog.clone(), database.to_string())),
             },
             // Production View TableMeta stores the query but no schema. Keep the harness aligned
             // so lineage tests cannot accidentally depend on persisted view fields.
@@ -1197,6 +1205,13 @@ impl LiteTableContext {
     fn register_view(&self, view: &ReplayView, schema: Arc<TableSchema>) -> Result<()> {
         let mut options = BTreeMap::new();
         options.insert(LITE_VIEW_QUERY_KEY.to_string(), view.query.clone());
+        if let Some((catalog, database)) = &view.query_namespace {
+            use databend_storages_common_table_meta::table::OPT_KEY_QUERY_CATALOG;
+            use databend_storages_common_table_meta::table::OPT_KEY_QUERY_DATABASE;
+
+            options.insert(OPT_KEY_QUERY_CATALOG.to_string(), catalog.clone());
+            options.insert(OPT_KEY_QUERY_DATABASE.to_string(), database.clone());
+        }
 
         let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
         let table = Arc::new(FakeTable {
@@ -1296,8 +1311,9 @@ impl LiteTableContext {
 
     pub async fn register_udf(self: &Arc<Self>, udf: UserDefinedFunction) -> Result<()> {
         UserApiProvider::instance()
-            .add_udf(&self.tenant, udf, &CreateOption::CreateOrReplace)
-            .await
+            .add_udf_with_owner(&self.tenant, udf, true, None)
+            .await?;
+        Ok(())
     }
 
     pub async fn register_table_sql(self: &Arc<Self>, sql: &str) -> Result<()> {
@@ -1324,8 +1340,14 @@ impl LiteTableContext {
                 match binder.bind(&extras.statement).await? {
                     Plan::CreateUDF(plan) => {
                         UserApiProvider::instance()
-                            .add_udf(&self.tenant, plan.udf.clone(), &plan.create_option)
-                            .await
+                            .add_udf_with_owner(
+                                &self.tenant,
+                                plan.udf.clone(),
+                                plan.create_option.is_overriding(),
+                                None,
+                            )
+                            .await?;
+                        Ok(())
                     }
                     _ => unreachable!("create udf statement must bind to create udf plan"),
                 }
@@ -1382,6 +1404,11 @@ impl LiteTableContext {
                     Some(CreateTableSource::Like { .. }) => {
                         return unsupported(
                             "lite sql harness DDL registration from CREATE TABLE LIKE",
+                        );
+                    }
+                    Some(CreateTableSource::Clone { .. }) => {
+                        return unsupported(
+                            "lite sql harness DDL registration from CREATE TABLE CLONE",
                         );
                     }
                     None => {
@@ -1560,6 +1587,8 @@ impl TableContextSettings for LiteTableContext {
         self.shared_settings.clone()
     }
 }
+
+impl TableContextCachePolicy for LiteTableContext {}
 
 impl TableContextLicense for LiteTableContext {
     fn get_license_key(&self) -> String {
@@ -2132,7 +2161,6 @@ impl TableContextVariables for LiteTableContext {
 mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_sql::FormatOptions;
-    use databend_common_sql::optimizer::ir::StatContext;
 
     use super::*;
 
@@ -2320,7 +2348,7 @@ $$
         let raw_plan = ctx.bind_sql("SELECT a FROM t").await?;
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
         let formatted =
-            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
+            optimized_plan.format_indent(FormatOptions::default(), &ctx.stat_context()?)?;
         assert!(
             formatted.contains("ROW ACCESS POLICY APPLIED"),
             "formatted plan:\n{formatted}"
@@ -2339,6 +2367,7 @@ $$
                 database: "default".to_string(),
                 view: "v".to_string(),
                 query: "SELECT a FROM default.t".to_string(),
+                query_namespace: None,
             }],
             udfs: vec![],
             table_stats: HashMap::from([(0, crate::ReplayTable {
@@ -2363,7 +2392,7 @@ $$
         "#;
         let raw_plan = ctx.bind_sql(sql).await?;
         let raw_formatted =
-            raw_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
+            raw_plan.format_indent(FormatOptions::default(), &ctx.stat_context()?)?;
         assert!(
             raw_formatted.contains("MaterializedCTE"),
             "formatted plan:\n{raw_formatted}"
@@ -2371,7 +2400,7 @@ $$
 
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
         let optimized =
-            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
+            optimized_plan.format_indent(FormatOptions::default(), &ctx.stat_context()?)?;
         assert!(
             optimized.contains("Scan") && optimized.contains("default.t"),
             "formatted plan:\n{optimized}"

@@ -57,6 +57,7 @@ fn test_decode_v152_table_meta() -> anyhow::Result<()> {
         drop_on: None,
         statistics: Default::default(),
         column_mask_policy: None,
+        masking_where_use_unmasked_value: Default::default(),
         column_mask_policy_columns_ids: {
             let mut map = BTreeMap::new();
             map.insert(2, mt::SecurityPolicyColumnMap {

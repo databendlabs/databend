@@ -37,6 +37,74 @@ fn main() {
 }
 
 #[divan::bench_group(max_time = 1)]
+mod range_constraints {
+    use std::borrow::Cow;
+
+    use databend_common_expression::ConstantFolder;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::expr::ColumnRef;
+    use databend_common_expression::expr::Constant;
+    use databend_common_expression::expr::Expr;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    fn comparison(operator: &str, value: usize) -> Expr<usize> {
+        let data_type = DataType::Number(NumberDataType::UInt64);
+        let column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: data_type.clone(),
+            display_name: "x".to_string(),
+        });
+        let constant = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::UInt64(value as u64)),
+            data_type,
+        });
+        check_function(None, operator, &[], &[column, constant], &BUILTIN_FUNCTIONS).unwrap()
+    }
+
+    fn bench_constraints(bencher: divan::Bencher, count: usize, operator: &str, singleton: bool) {
+        let mut args = (0..count)
+            .map(|value| comparison(operator, value))
+            .collect::<Vec<_>>();
+        if singleton {
+            args.push(comparison("gte", count / 2));
+            args.push(comparison("lte", count / 2));
+        }
+        // Expression construction/type checking is outside the measured fold.
+        let expr = check_function(None, "and_filters", &[], &args, &BUILTIN_FUNCTIONS).unwrap();
+        let context = FunctionContext::default();
+        bencher.bench(|| {
+            ConstantFolder::fold(
+                Cow::Borrowed(divan::black_box(&expr)),
+                &context,
+                &BUILTIN_FUNCTIONS,
+            )
+        });
+    }
+
+    #[divan::bench(args = [64, 512, 3000])]
+    fn lower_bounds(bencher: divan::Bencher, count: usize) {
+        bench_constraints(bencher, count, "gte", false);
+    }
+
+    #[divan::bench(args = [64, 512, 3000])]
+    fn exclusions(bencher: divan::Bencher, count: usize) {
+        bench_constraints(bencher, count, "noteq", false);
+    }
+
+    #[divan::bench(args = [64, 512, 3000])]
+    fn excluded_singleton(bencher: divan::Bencher, count: usize) {
+        bench_constraints(bencher, count, "noteq", true);
+    }
+}
+
+#[divan::bench_group(max_time = 1)]
 mod escaped_like {
     use std::borrow::Cow;
 
@@ -212,6 +280,108 @@ mod escaped_like {
     }
 }
 
+/// `Column::filter` on 65,536 rows (the default max_block_size) for masks of
+/// several selectivities and shapes.
+#[divan::bench_group(max_time = 1)]
+mod filter_selection {
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_column::buffer::Buffer;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::AnyType;
+    use databend_common_expression::types::ArrayColumn;
+    use databend_common_expression::types::BinaryType;
+    use databend_common_expression::types::BooleanType;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::StringType;
+    use divan::counter::ItemsCount;
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    const ROWS: usize = 65_536;
+    const SHAPES: &[&str] = &[
+        "none",
+        "random_1",
+        "random_50",
+        "clustered_50",
+        "random_99",
+        "all",
+    ];
+
+    /// `random_<p>` sets each bit with probability `p`%; `clustered_50`
+    /// alternates runs of 256 set and 256 unset bits.
+    fn mask(shape: &str) -> Bitmap {
+        let mut rng = StdRng::seed_from_u64(1);
+        let bits: Vec<bool> = match shape {
+            "none" => vec![false; ROWS],
+            "all" => vec![true; ROWS],
+            "clustered_50" => (0..ROWS).map(|i| (i / 256) % 2 == 0).collect(),
+            _ => {
+                let percent: u32 = shape.strip_prefix("random_").unwrap().parse().unwrap();
+                (0..ROWS).map(|_| rng.gen_range(0..100) < percent).collect()
+            }
+        };
+        Bitmap::from_iter(bits)
+    }
+
+    fn bench_filter(bencher: divan::Bencher, column: Column, shape: &str) {
+        let mask = mask(shape);
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .bench(|| divan::black_box(column.filter(&mask)));
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn int64(bencher: divan::Bencher, shape: &str) {
+        let column = Int64Type::from_data((0..ROWS as i64).collect());
+        bench_filter(bencher, column, shape);
+    }
+
+    /// About 10% of the rows are NULL.
+    #[divan::bench(args = SHAPES)]
+    fn nullable_int64(bencher: divan::Bencher, shape: &str) {
+        let mut rng = StdRng::seed_from_u64(2);
+        let validity = (0..ROWS).map(|_| rng.gen_range(0..10) != 0).collect();
+        let column = Int64Type::from_data_with_validity((0..ROWS as i64).collect(), validity);
+        bench_filter(bencher, column, shape);
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn string(bencher: divan::Bencher, shape: &str) {
+        let values = (0..ROWS)
+            .map(|i| format!("value_{i:08}_with_a_long_suffix"))
+            .collect::<Vec<_>>();
+        let column = StringType::from_data(values);
+        bench_filter(bencher, column, shape);
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn binary(bencher: divan::Bencher, shape: &str) {
+        let values = (0..ROWS)
+            .map(|i| format!("value_{i:08}").into_bytes())
+            .collect::<Vec<_>>();
+        let column = BinaryType::from_data(values);
+        bench_filter(bencher, column, shape);
+    }
+
+    #[divan::bench(args = SHAPES)]
+    fn boolean(bencher: divan::Bencher, shape: &str) {
+        let mut rng = StdRng::seed_from_u64(3);
+        let column = BooleanType::from_data((0..ROWS).map(|_| rng.r#gen::<bool>()).collect());
+        bench_filter(bencher, column, shape);
+    }
+
+    /// `Array(Int64)` with two elements per row.
+    #[divan::bench(args = SHAPES)]
+    fn array_int64(bencher: divan::Bencher, shape: &str) {
+        let values = Int64Type::from_data((0..2 * ROWS as i64).collect());
+        let offsets: Buffer<u64> = (0..=ROWS as u64).map(|i| 2 * i).collect();
+        let column = Column::Array(Box::new(ArrayColumn::<AnyType>::new(values, offsets)));
+        bench_filter(bencher, column, shape);
+    }
+}
+
 // bench                    fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ├─ concat_string_offset                │               │               │               │         │
 // │  ├─ 12                 22.58 ms      │ 31.43 ms      │ 24.05 ms      │ 24.83 ms      │ 100     │ 100
@@ -225,7 +395,9 @@ mod escaped_like {
 fn concat_string_offset(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
     let (_s, b) = generate_random_string_data(&mut rng, length);
-    let bin_col = (0..5).map(|_| BinaryType::from_data(b.clone()));
+    let bin_col = (0..5)
+        .map(|_| BinaryType::from_data(b.clone()))
+        .collect::<Vec<_>>();
 
     bencher.bench(|| {
         Column::concat_columns(bin_col.clone()).unwrap();
@@ -236,7 +408,9 @@ fn concat_string_offset(bencher: divan::Bencher, length: usize) {
 fn concat_string_view(bencher: divan::Bencher, length: usize) {
     let mut rng = StdRng::seed_from_u64(0);
     let (s, _b) = generate_random_string_data(&mut rng, length);
-    let str_col = (0..5).map(|_| StringType::from_data(s.clone()));
+    let str_col = (0..5)
+        .map(|_| StringType::from_data(s.clone()))
+        .collect::<Vec<_>>();
     bencher.bench(|| {
         Column::concat_columns(str_col.clone()).unwrap();
     });
@@ -524,4 +698,265 @@ fn collect_bool(len: usize, neg: bool, f: impl Fn(usize) -> bool) -> BooleanBuff
         unsafe { buffer.push_unchecked(packed) }
     }
     BooleanBuffer::new(buffer.into(), 0, len)
+}
+
+/// Take kernels on blocks of 65,536 rows (the default max_block_size). Every
+/// measurement includes the work to find runs of consecutive indices.
+#[divan::bench_group(max_time = 0.5)]
+mod take_selection {
+    use databend_common_column::buffer::Buffer;
+    use databend_common_expression::Column;
+    use databend_common_expression::Constant;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Expr;
+    use databend_common_expression::FromData;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::RepeatIndex;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::filter::FilterExecutor;
+    use databend_common_expression::types::AnyType;
+    use databend_common_expression::types::ArrayColumn;
+    use databend_common_expression::types::BinaryType;
+    use databend_common_expression::types::BooleanType;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::StringType;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use divan::counter::ItemsCount;
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+    use rand::seq::SliceRandom;
+
+    const ROWS: usize = 65_536;
+    const TYPES: &[&str] = &[
+        "int64",
+        "nullable_int64",
+        "string",
+        "binary",
+        "boolean",
+        "array_int64",
+    ];
+
+    fn column(ty: &str) -> Column {
+        let mut rng = StdRng::seed_from_u64(2);
+        match ty {
+            "int64" => Int64Type::from_data((0..ROWS as i64).collect()),
+            // About 10% of the rows are NULL.
+            "nullable_int64" => Int64Type::from_data_with_validity(
+                (0..ROWS as i64).collect(),
+                (0..ROWS).map(|_| rng.gen_range(0..10) != 0).collect(),
+            ),
+            "string" => StringType::from_data(
+                (0..ROWS)
+                    .map(|i| format!("value_{i:08}_with_a_long_suffix"))
+                    .collect::<Vec<_>>(),
+            ),
+            "binary" => BinaryType::from_data(
+                (0..ROWS)
+                    .map(|i| format!("value_{i:08}").into_bytes())
+                    .collect::<Vec<_>>(),
+            ),
+            "boolean" => BooleanType::from_data((0..ROWS).map(|_| rng.r#gen::<bool>()).collect()),
+            // `Array(Int64)` with two elements per row.
+            "array_int64" => {
+                let values = Int64Type::from_data((0..2 * ROWS as i64).collect());
+                let offsets: Buffer<u64> = (0..=ROWS as u64).map(|i| 2 * i).collect();
+                Column::Array(Box::new(ArrayColumn::<AnyType>::new(values, offsets)))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// One column of `ty`, or one column of each type for `mixed`.
+    fn block(ty: &str) -> DataBlock {
+        match ty {
+            "mixed" => DataBlock::new_from_columns(TYPES.iter().map(|ty| column(ty)).collect()),
+            _ => DataBlock::new_from_columns(vec![column(ty)]),
+        }
+    }
+
+    /// `random_<p>`: each row with probability `p`%. `runs_<n>_<p>`: runs of
+    /// `n` rows, `p`% of the runs, evenly spread. `unordered_*`: the selected
+    /// rows of the upper half of the block, then those of the lower half (as
+    /// OR without `keep_order` produces).
+    fn selection(shape: &str) -> Vec<u32> {
+        let mut rng = StdRng::seed_from_u64(1);
+        let (unordered, shape) = match shape.strip_prefix("unordered_") {
+            Some(shape) => (true, shape),
+            None => (false, shape),
+        };
+        let parts = shape.split('_').collect::<Vec<_>>();
+        let mut indices: Vec<u32> = match parts.as_slice() {
+            ["random", p] => {
+                let p: u32 = p.parse().unwrap();
+                (0..ROWS as u32)
+                    .filter(|_| rng.gen_range(0..100) < p)
+                    .collect()
+            }
+            ["runs", n, p] => {
+                let (n, p): (u32, u32) = (n.parse().unwrap(), p.parse().unwrap());
+                (0..ROWS as u32)
+                    .filter(|row| {
+                        let run = row / n;
+                        run * p / 100 != (run + 1) * p / 100
+                    })
+                    .collect()
+            }
+            _ => unreachable!(),
+        };
+        if unordered {
+            let half = indices.partition_point(|row| (*row as usize) < ROWS / 2);
+            indices.rotate_left(half);
+        }
+        indices
+    }
+
+    const SELECTOR_SHAPES: &[&str] = &[
+        "random_50",
+        "runs_4_50",
+        "runs_8_50",
+        "runs_32_50",
+        "runs_256_50",
+        "unordered_random_50",
+        "unordered_runs_256_50",
+        "random_90",
+        "runs_256_90",
+    ];
+
+    /// `FilterExecutor::take` (the selector executor) on a prepared selection.
+    fn selector(bencher: divan::Bencher, ty: &str, shape: &str) {
+        let block = block(ty);
+        let indices = selection(shape);
+        let expr = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Boolean(true),
+            data_type: DataType::Boolean,
+        });
+        let mut executor = FilterExecutor::new(
+            expr,
+            FunctionContext::default(),
+            ROWS,
+            None,
+            &BUILTIN_FUNCTIONS,
+            false,
+        );
+        executor.mutable_true_selection()[..indices.len()].copy_from_slice(&indices);
+        bencher.counter(ItemsCount::new(ROWS)).bench_local(|| {
+            divan::black_box(executor.take(block.clone(), ROWS, indices.len()).unwrap())
+        });
+    }
+
+    /// `hash_<p>`: random partition ids of `p` partitions; `clustered_<p>`:
+    /// runs of 256 rows with the same partition id.
+    const SCATTER_SHAPES: &[&str] = &[
+        "hash_2",
+        "hash_8",
+        "hash_64",
+        "clustered_2",
+        "clustered_8",
+        "clustered_64",
+    ];
+
+    fn scatter(bencher: divan::Bencher, ty: &str, shape: &str) {
+        let block = block(ty);
+        let (kind, partitions) = shape.split_once('_').unwrap();
+        let partitions: u32 = partitions.parse().unwrap();
+        let mut rng = StdRng::seed_from_u64(3);
+        let ids = (0..ROWS as u32)
+            .map(|row| match kind {
+                "hash" => rng.gen_range(0..partitions),
+                _ => (row / 256) % partitions,
+            })
+            .collect::<Vec<_>>();
+        bencher
+            .counter(ItemsCount::new(ROWS))
+            .bench(|| divan::black_box(block.scatter(&ids, partitions as usize).unwrap()));
+    }
+
+    /// `ranges_<n>`: `take_ranges` with ranges of `n` rows separated by `n`
+    /// rows.
+    const RANGE_SHAPES: &[&str] = &["ranges_1", "ranges_4", "ranges_64", "ranges_1024"];
+
+    fn ranges(bencher: divan::Bencher, ty: &str, shape: &str) {
+        let block = block(ty);
+        let n: u32 = shape.strip_prefix("ranges_").unwrap().parse().unwrap();
+        let ranges = (0..ROWS as u32)
+            .step_by(2 * n as usize)
+            .map(|start| start..start + n)
+            .collect::<Vec<_>>();
+        let num_rows = ranges.len() * n as usize;
+        bencher
+            .counter(ItemsCount::new(num_rows))
+            .bench(|| divan::black_box(block.clone().take_ranges(&ranges, num_rows).unwrap()));
+    }
+
+    /// `repeat_<n>`: `take_compacted_indices` on random rows, each repeated
+    /// `n` times, for 65,536 result rows.
+    const COMPACT_SHAPES: &[&str] = &["repeat_1", "repeat_4", "repeat_1000"];
+
+    fn compact(bencher: divan::Bencher, ty: &str, shape: &str) {
+        let block = block(ty);
+        let n: u32 = shape.strip_prefix("repeat_").unwrap().parse().unwrap();
+        let mut rng = StdRng::seed_from_u64(4);
+        let mut rows = (0..ROWS as u32).collect::<Vec<_>>();
+        rows.shuffle(&mut rng);
+        let indices = rows[..ROWS / n as usize]
+            .iter()
+            .map(|&row| RepeatIndex { row, count: n })
+            .collect::<Vec<_>>();
+        let num_rows = indices.len() * n as usize;
+        bencher
+            .counter(ItemsCount::new(num_rows))
+            .bench(|| divan::black_box(block.take_compacted_indices(&indices, num_rows).unwrap()));
+    }
+
+    /// One benchmark per data type for each kernel.
+    macro_rules! bench_types {
+        ($kernel:ident, $shapes:ident, [$($ty:ident),*]) => {
+            mod $kernel {
+                $(
+                    #[divan::bench(args = super::$shapes)]
+                    fn $ty(bencher: divan::Bencher, shape: &str) {
+                        super::$kernel(bencher, stringify!($ty), shape);
+                    }
+                )*
+            }
+        };
+    }
+
+    bench_types!(selector, SELECTOR_SHAPES, [
+        int64,
+        nullable_int64,
+        string,
+        binary,
+        boolean,
+        array_int64,
+        mixed
+    ]);
+    bench_types!(scatter, SCATTER_SHAPES, [
+        int64,
+        nullable_int64,
+        string,
+        binary,
+        boolean,
+        array_int64,
+        mixed
+    ]);
+    bench_types!(ranges, RANGE_SHAPES, [
+        int64,
+        nullable_int64,
+        string,
+        binary,
+        boolean,
+        array_int64
+    ]);
+    bench_types!(compact, COMPACT_SHAPES, [
+        int64,
+        nullable_int64,
+        string,
+        binary,
+        boolean,
+        array_int64
+    ]);
 }

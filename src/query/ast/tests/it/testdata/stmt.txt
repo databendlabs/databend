@@ -3788,6 +3788,145 @@ CreateTable(
 
 
 ---------- Input ----------
+create table a.b_clone clone c.d;
+---------- Output ---------
+CREATE TABLE a.b_clone CLONE c.d
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    13..14,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                15..22,
+            ),
+            name: "b_clone",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Clone {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        span: Some(
+                            29..30,
+                        ),
+                        name: "c",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                table: Identifier {
+                    span: Some(
+                        31..32,
+                    ),
+                    name: "d",
+                    quote: None,
+                    ident_type: None,
+                },
+                travel_point: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: None,
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+create table a.b_clone clone c.d at (snapshot => '0123456789abcdef');
+---------- Output ---------
+CREATE TABLE a.b_clone CLONE c.d AT (SNAPSHOT => '0123456789abcdef')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    13..14,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                15..22,
+            ),
+            name: "b_clone",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Clone {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        span: Some(
+                            29..30,
+                        ),
+                        name: "c",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                table: Identifier {
+                    span: Some(
+                        31..32,
+                    ),
+                    name: "d",
+                    quote: None,
+                    ident_type: None,
+                },
+                travel_point: Some(
+                    Snapshot(
+                        Literal {
+                            span: Some(
+                                49..67,
+                            ),
+                            value: String(
+                                "0123456789abcdef",
+                            ),
+                        },
+                    ),
+                ),
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: None,
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' )
@@ -16380,17 +16519,35 @@ DropRole {
 
 
 ---------- Input ----------
-OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
+OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
+OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
-        catalog: None,
-        database: None,
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    15..22,
+                ),
+                name: "catalog",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    23..25,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
         table: Identifier {
             span: Some(
-                15..16,
+                26..27,
             ),
             name: "t",
             quote: None,
@@ -17511,36 +17668,21 @@ CreateTable(
 ---------- Input ----------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
+OPTIMIZE TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
 ---------- AST ------------
-AlterTable(
-    AlterTableStmt {
-        if_exists: false,
-        table_reference: Table {
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
             span: Some(
                 12..13,
             ),
-            table: TableRef {
-                catalog: None,
-                database: None,
-                table: Identifier {
-                    span: Some(
-                        12..13,
-                    ),
-                    name: "t",
-                    quote: None,
-                    ident_type: None,
-                },
-                branch: None,
-            },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
+            name: "t",
+            quote: None,
+            ident_type: None,
         },
-        action: ReclusterTable {
+        action: Recluster {
             is_final: true,
             selection: Some(
                 BinaryOp {
@@ -17577,10 +17719,10 @@ AlterTable(
                     },
                 },
             ),
-            limit: Some(
-                10,
-            ),
         },
+        limit: Some(
+            10,
+        ),
     },
 )
 
@@ -18091,6 +18233,7 @@ AlterTable(
                 },
                 "mask",
                 None,
+                None,
             ),
         },
     },
@@ -18160,6 +18303,7 @@ AlterTable(
                         },
                     ],
                 ),
+                None,
             ),
         },
     },
@@ -34800,6 +34944,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -34834,6 +34979,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: NameWithTypes(
                 [
                     (
@@ -34878,6 +35024,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -34953,6 +35100,7 @@ AlterUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -34987,6 +35135,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -35117,6 +35266,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35161,6 +35311,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35285,6 +35436,7 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35402,6 +35554,7 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: NameWithTypes(
                 [
                     (
@@ -35473,6 +35626,7 @@ AlterUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,

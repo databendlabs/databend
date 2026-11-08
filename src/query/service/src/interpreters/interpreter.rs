@@ -22,7 +22,11 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::short_sql;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -56,6 +60,7 @@ use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryIdentity;
@@ -79,6 +84,13 @@ pub trait Interpreter: Sync + Send {
 
     fn is_ddl(&self) -> bool;
 
+    /// Maintenance statements (ANALYZE, compaction, recluster, vacuum, refreshes) run under
+    /// `CachePolicy::MAINTENANCE`: they bypass the disk cache, neither reading nor filling it,
+    /// as it serves queries. They still use the memory caches.
+    fn is_maintenance(&self) -> bool {
+        false
+    }
+
     /// Top-level entry point for user-facing queries (HTTP/MySQL/FlightSQL handlers).
     /// Logs Start/Finish, runs hooks, collects profiles.
     /// Internal callers should use `execute_with_hooks()` with the appropriate `QueryFinishHooks`.
@@ -91,7 +103,38 @@ pub trait Interpreter: Sync + Send {
 
     /// Build and run the pipeline with the given lifecycle hooks.
     /// All logging (start/finish) is handled here based on `hooks.log_finished`.
+    ///
+    /// Runs inside a tracking scope whose `io_stats` and `perf_query_token` are the
+    /// query's own, so the pipeline nodes built here (which capture the current
+    /// payload) attribute their storage IO and on-demand profiling samples to
+    /// the query no matter which handler called us. Handlers that already
+    /// installed them see no change.
     async fn execute_with_hooks(
+        &self,
+        ctx: Arc<QueryContext>,
+        hooks: QueryFinishHooks,
+    ) -> Result<SendableDataBlockStream> {
+        let query_io_stats = ctx.get_local_io_stats();
+        let query_perf_token = ctx.get_perf_query_token();
+        let already_tracked = ThreadTracker::io_stats()
+            .is_some_and(|current| Arc::ptr_eq(current, &query_io_stats))
+            && ThreadTracker::perf_query_token() == query_perf_token;
+        if self.is_maintenance() {
+            ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
+        }
+        if already_tracked {
+            return self.execute_with_hooks_inner(ctx, hooks).await;
+        }
+
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.io_stats = Some(query_io_stats);
+        tracking_payload.perf_query_token = query_perf_token;
+        tracking_payload
+            .tracking(self.execute_with_hooks_inner(ctx, hooks))
+            .await
+    }
+
+    async fn execute_with_hooks_inner(
         &self,
         ctx: Arc<QueryContext>,
         hooks: QueryFinishHooks,
@@ -192,7 +235,7 @@ async fn build_pipeline_before_execute(
         }
     };
 
-    CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
+    CacheManager::instance().set_disk_allowed(allow_disk_cache);
 
     let mut build_res = interpreter.execute2().await?;
 
@@ -272,21 +315,21 @@ pub async fn interpreter_plan_sql(
     params: Option<&serde_json::Value>,
 ) -> Result<(Plan, PlanExtras, AcquireQueueGuard)> {
     let result = plan_sql(ctx.clone(), sql, acquire_queue, params).await;
-    let short_sql = short_sql(
-        sql.to_string(),
-        ctx.get_settings().get_short_sql_max_length()?,
-    );
     let mut stmt = if let Ok((_, extras, _)) = &result {
         Some(extras.statement.clone())
     } else {
-        // Only log if there's an error
-        ctx.attach_query_str(QueryKind::Unknown, short_sql.to_string());
+        // Only log if there's an error. Planning failed, so the SQL may not
+        // parse; mask it before truncation can split a secret. Its values also
+        // scrub the error text written to query history.
+        let (masked, secrets) = mask_raw_sql_with_secrets(sql);
+        ctx.add_query_secrets(secrets);
+        ctx.attach_query_str(QueryKind::Unknown, masked);
         log_query_start(&ctx);
         log_query_finished(&ctx, result.as_ref().err().cloned());
         None
     };
 
-    attach_query_hash(&ctx, &mut stmt, &short_sql);
+    attach_query_hash(&ctx, &mut stmt, sql)?;
 
     result
 }
@@ -344,20 +387,25 @@ async fn plan_sql(
         // If a lock is required, acquire the queue guard before
         // planning the statement, to avoid potential deadlocks.
         // See PR https://github.com/databendlabs/databend/pull/16632
-        let query_entry = QueryEntry::create_entry(&ctx, &extras, true)?;
+        let query_entry = QueryEntry::create_entry(&ctx, true)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
         let plan = planner.plan_stmt(&extras.statement, false).await?;
         Ok((plan, extras, guard))
     } else {
         // No lock is needed, plan the statement first, then acquire the queue guard.
         let plan = planner.plan_stmt(&extras.statement, false).await?;
-        let query_entry = QueryEntry::create(&ctx, &plan, &extras)?;
+        let query_entry = QueryEntry::create(&ctx, &plan)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
         Ok((plan, extras, guard))
     }
 }
 
-fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql: &str) {
+/// Without a statement, the query is hashed by its text `sql`, shortened.
+fn attach_query_hash(
+    ctx: &Arc<QueryContext>,
+    stmt: &mut Option<Statement>,
+    sql: &str,
+) -> Result<()> {
     let (query_hash, query_parameterized_hash) = if let Some(stmt) = stmt {
         let query_hash = format!("{:x}", Md5::digest(stmt.to_string()));
         // Use Literal::Null replace literal. Ignore Literal.
@@ -377,11 +425,17 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
 
         (query_hash, format!("{:x}", Md5::digest(stmt.to_string())))
     } else {
+        // Shortened only here: it counts the graphemes of long statements.
+        let sql = short_sql(
+            sql.to_string(),
+            ctx.get_settings().get_short_sql_max_length()?,
+        );
         let hash = format!("{:x}", Md5::digest(sql));
         (hash.to_string(), hash)
     };
 
     ctx.attach_query_hash(query_hash, query_parameterized_hash);
+    Ok(())
 }
 
 /// Check if the statement need acquire a table lock.
@@ -399,7 +453,7 @@ fn need_acquire_lock(ctx: Arc<QueryContext>, stmt: &Statement) -> bool {
         | Statement::OptimizeTable(_) => true,
         Statement::AlterTable(AlterTableStmt { action, .. }) => matches!(
             action,
-            AlterTableAction::ReclusterTable { .. }
+            AlterTableAction::MaterializeTableTtl
                 | AlterTableAction::ModifyColumn {
                     action: ModifyColumnAction::SetDataType(_),
                 }

@@ -52,16 +52,18 @@ use databend_common_io::cursor_ext::BufferReadStringExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
+use databend_common_io::cursor_ext::collect_number;
+use databend_common_io::cursor_ext::read_num_text_exact;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::prelude::InputFormatSettings;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
-use num_traits::NumCast;
 
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
+use crate::field_decoder::common::read_int_from_decimal_text;
 use crate::field_decoder::common::read_timestamp;
 use crate::field_decoder::common::read_timestamp_tz;
 
@@ -197,27 +199,27 @@ impl FastFieldDecoderValues {
     fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical + NumCast,
+        T::Native: FromLexical,
     {
-        let val: Result<T::Native> = reader.read_int_text();
+        let buf = Cursor::split(reader).1;
+        let (n_in, effective) = collect_number(buf);
+        if n_in == 0 {
+            return Err(ErrorCode::BadBytes(
+                "Failed to parse number from text: input does not contain a valid numeric format.",
+            ));
+        }
+        let val: Result<T::Native> = read_num_text_exact(&buf[..effective]);
         let v = match val {
-            Ok(v) => v,
-            Err(_) => {
-                // cast float value to integer value
-                let val: f64 = reader.read_float_text()?;
-                let new_val: Option<T::Native> = if self.common_settings.settings.is_rounding_mode {
-                    num_traits::cast::cast(val.round())
-                } else {
-                    num_traits::cast::cast(val)
-                };
-                if let Some(v) = new_val {
-                    v
-                } else {
-                    return Err(ErrorCode::BadBytes(format!("number {} is overflowed", val)));
-                }
-            }
+            Ok(v) => v.into(),
+            // Not a plain integer (e.g. '1.5', '1.76e18' or out of range):
+            // parse it as an exact decimal so no precision is lost via f64.
+            Err(_) => read_int_from_decimal_text(
+                &buf[..effective],
+                self.common_settings.settings.is_rounding_mode,
+            )?,
         };
-        column.push(v.into());
+        reader.consume(n_in);
+        column.push(v);
         Ok(())
     }
 
@@ -242,7 +244,12 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let buf = Cursor::split(reader).1;
-        let (n, n_read) = read_decimal_with_size(buf, size, false, true)?;
+        let (n, n_read) = read_decimal_with_size(
+            buf,
+            size,
+            false,
+            self.common_settings.settings.is_rounding_mode,
+        )?;
         column.push(n);
         reader.consume(n_read);
         Ok(())
@@ -830,6 +837,24 @@ mod test {
                     DataType::Number(NumberDataType::Int16),
                     DataType::Number(NumberDataType::Int16),
                 ],
+            },
+            // Beyond 2^53 the fractional text must not go through f64 (#20786).
+            Test {
+                data: "(1760000000123456789.4, 1760000000123456789.5), (9223372036854775807.4, 18446744073709551615.4), (-9223372036854775808.4, 1.76e18);",
+                column_types: vec![
+                    DataType::Number(NumberDataType::Int64),
+                    DataType::Number(NumberDataType::UInt64),
+                ],
+            },
+            // Out of range must fail in the fast decoder (and then hit the dummy
+            // fallback) instead of being clamped to i64::MIN.
+            Test {
+                data: "(-9223372036854775809)",
+                column_types: vec![DataType::Number(NumberDataType::Int64)],
+            },
+            Test {
+                data: "(9223372036854775807.5)",
+                column_types: vec![DataType::Number(NumberDataType::Int64)],
             },
         ];
 

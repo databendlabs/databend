@@ -121,7 +121,7 @@ impl AccumulatingTransform for BlockBuilder {
         let bad_chunk = |message: String| {
             ErrorCode::BadBytes(format!("Invalid LOKI chunk '{}': {message}", file.path))
         };
-        let chunk = Chunk::parse(&file.data).map_err(&bad_chunk)?;
+        let chunk = Chunk::parse(&file.data).map_err(bad_chunk)?;
         // Keep state and blocks local to the file. Never publish partial data/status for
         // a structurally corrupt chunk, even when row conversion uses ON_ERROR=CONTINUE.
         let mut state = BlockBuilderState::create(self.ctx.clone());
@@ -138,8 +138,8 @@ impl AccumulatingTransform for BlockBuilder {
         let mut output = Vec::new();
         let mut row_id = 0;
         for block_index in 0..chunk.block_count() {
-            for entry in chunk.decode_block(block_index).map_err(&bad_chunk)? {
-                let entry = entry.map_err(&bad_chunk)?;
+            for entry in chunk.decode_block(block_index).map_err(bad_chunk)? {
+                let entry = entry.map_err(bad_chunk)?;
                 record["timestamp_ns"] = entry.timestamp_ns.into();
                 record["message"] = entry.message.into();
                 record["structured_metadata"] = Value::Object(entry.structured_metadata);

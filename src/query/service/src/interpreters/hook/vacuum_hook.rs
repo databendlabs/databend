@@ -72,7 +72,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 
         let nodes = node_files.keys().cloned().collect::<Vec<usize>>();
         let _ = GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
-            let removed_files = handler
+            let vacuumed = handler
                 .do_vacuum_temporary_files(
                     abort_checker,
                     spill_prefix.clone(),
@@ -81,7 +81,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
                 )
                 .await;
 
-            if let Err(cause) = &removed_files {
+            if let Err(cause) = &vacuumed {
                 log::warn!("Failed to clean temporary files: {:?}", cause);
             }
 

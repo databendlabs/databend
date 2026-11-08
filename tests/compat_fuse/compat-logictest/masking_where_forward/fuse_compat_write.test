@@ -1,0 +1,26 @@
+# Written by the current query: bind a masking policy with WHERE authorization.
+# The masking policy hides the value for every user, including the admin running
+# this test, so the WHERE result alone shows which semantics the reader applied.
+
+statement ok
+DROP TABLE IF EXISTS compat_masking_where
+
+statement ok
+DROP MASKING POLICY IF EXISTS compat_masking_where_policy
+
+statement ok
+CREATE MASKING POLICY compat_masking_where_policy AS (val STRING) RETURNS STRING -> '***'
+
+statement ok
+CREATE TABLE compat_masking_where(id INT, secret STRING)
+
+statement ok
+INSERT INTO compat_masking_where VALUES (1, 'alice'), (2, 'bob')
+
+statement ok
+ALTER TABLE compat_masking_where MODIFY COLUMN secret SET MASKING POLICY compat_masking_where_policy OPTIONS (where_use_unmasked_value = true)
+
+query IT
+SELECT id, secret FROM compat_masking_where WHERE secret = 'alice'
+----
+1 ***

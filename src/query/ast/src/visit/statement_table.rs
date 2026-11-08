@@ -58,6 +58,15 @@ impl Walk for CreateTableSource {
                 database,
                 table,
             } => try_walk!((catalog, database, table).walk(visitor)),
+            CreateTableSource::Clone {
+                catalog,
+                database,
+                table,
+                travel_point,
+            } => {
+                try_walk!((catalog, database, table).walk(visitor));
+                try_walk!(travel_point.walk(visitor));
+            }
         }
         Ok(VisitControl::Continue)
     }
@@ -102,6 +111,15 @@ impl WalkMut for CreateTableSource {
                 database,
                 table,
             } => try_walk!((catalog, database, table).walk_mut(visitor)),
+            CreateTableSource::Clone {
+                catalog,
+                database,
+                table,
+                travel_point,
+            } => {
+                try_walk!((catalog, database, table).walk_mut(visitor));
+                try_walk!(travel_point.walk_mut(visitor));
+            }
         }
         Ok(VisitControl::Continue)
     }
@@ -265,6 +283,7 @@ impl Walk for AlterTableAction {
             | AlterTableAction::DropTablePartitionKey
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
+            | AlterTableAction::MaterializeTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
@@ -273,7 +292,7 @@ impl Walk for AlterTableAction {
                 try_walk!(ttl.walk(visitor));
             }
             AlterTableAction::ModifyColumn { action } => match action {
-                ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
+                ModifyColumnAction::SetMaskingPolicy(column, _, using_columns, _) => {
                     try_walk!(column.walk(visitor));
                     if let Some(using_columns) = using_columns {
                         for ident in using_columns {
@@ -311,11 +330,6 @@ impl Walk for AlterTableAction {
             AlterTableAction::AlterTablePartitionBy { partition_by } => {
                 for expr in partition_by {
                     try_walk!(expr.walk(visitor));
-                }
-            }
-            AlterTableAction::ReclusterTable { selection, .. } => {
-                if let Some(selection) = selection {
-                    try_walk!(selection.walk(visitor));
                 }
             }
             AlterTableAction::FlashbackTo { point } => {
@@ -378,6 +392,7 @@ impl WalkMut for AlterTableAction {
             | AlterTableAction::DropTablePartitionKey
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
+            | AlterTableAction::MaterializeTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
@@ -386,7 +401,7 @@ impl WalkMut for AlterTableAction {
                 try_walk!(ttl.walk_mut(visitor));
             }
             AlterTableAction::ModifyColumn { action } => match action {
-                ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
+                ModifyColumnAction::SetMaskingPolicy(column, _, using_columns, _) => {
                     try_walk!(column.walk_mut(visitor));
                     if let Some(using_columns) = using_columns {
                         for ident in using_columns {
@@ -424,11 +439,6 @@ impl WalkMut for AlterTableAction {
             AlterTableAction::AlterTablePartitionBy { partition_by } => {
                 for expr in partition_by {
                     try_walk!(expr.walk_mut(visitor));
-                }
-            }
-            AlterTableAction::ReclusterTable { selection, .. } => {
-                if let Some(selection) = selection {
-                    try_walk!(selection.walk_mut(visitor));
                 }
             }
             AlterTableAction::FlashbackTo { point } => {

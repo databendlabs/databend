@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
+use fastrace::collector::Reporter;
 use fastrace::collector::SpanContext;
 use fastrace::prelude::*;
 use log::LevelFilter;
@@ -198,12 +199,11 @@ pub fn init_logging(
                 .build()
                 .unwrap();
             let reporter = rt.block_on(async {
-                fastrace_opentelemetry::OpenTelemetryReporter::new(
+                ServerSpanKind(fastrace_opentelemetry::OpenTelemetryReporter::new(
                     exporter,
-                    opentelemetry::trace::SpanKind::Server,
                     Cow::Owned(resource),
                     opentelemetry::InstrumentationScope::builder(trace_name).build(),
-                )
+                ))
             });
             (rt, reporter)
         })
@@ -464,14 +464,69 @@ pub fn init_logging(
     _drop_guards
 }
 
+/// fastrace-opentelemetry >= 0.14 takes the span kind from the `span.kind` property and defaults
+/// to `Internal`. Keep reporting spans as `Server` (the previous behavior) unless a span sets it.
+struct ServerSpanKind<R>(R);
+
+impl<R: Reporter> Reporter for ServerSpanKind<R> {
+    fn report(&mut self, mut spans: Vec<SpanRecord>) {
+        for span in &mut spans {
+            if !span.properties.iter().any(|(k, _)| k == "span.kind") {
+                span.properties
+                    .push((Cow::Borrowed("span.kind"), Cow::Borrowed("server")));
+            }
+        }
+        self.0.report(spans)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+
+    use fastrace::collector::Reporter;
+    use fastrace::collector::SpanRecord;
     use log::Level;
     use log::Metadata;
     use logforth::Filter;
     use logforth::filter::FilterResult;
 
+    use super::ServerSpanKind;
     use super::env_filter;
+
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<Vec<SpanRecord>>>);
+
+    impl Reporter for Capture {
+        fn report(&mut self, spans: Vec<SpanRecord>) {
+            self.0.lock().unwrap().extend(spans);
+        }
+    }
+
+    #[test]
+    fn test_server_span_kind_is_default() {
+        let explicit = SpanRecord {
+            properties: vec![(Cow::Borrowed("span.kind"), Cow::Borrowed("client"))],
+            ..Default::default()
+        };
+        let capture = Capture::default();
+        ServerSpanKind(capture.clone()).report(vec![SpanRecord::default(), explicit]);
+
+        let spans = capture.0.lock().unwrap();
+        let kinds: Vec<Vec<_>> = spans
+            .iter()
+            .map(|s| {
+                s.properties
+                    .iter()
+                    .filter(|(k, _)| k == "span.kind")
+                    .map(|(_, v)| v.as_ref())
+                    .collect()
+            })
+            .collect();
+        assert_eq!(kinds, vec![vec!["server"], vec!["client"]]);
+    }
 
     #[test]
     fn test_dump_graph_filter_is_off_by_default() {

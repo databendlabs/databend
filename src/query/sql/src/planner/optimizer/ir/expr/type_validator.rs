@@ -20,36 +20,57 @@ use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 
+use super::Logical;
+use super::PExpr;
+use super::Physical;
+use super::SExpr;
 use super::node::Expr;
-use super::node::RelExprKind;
+use super::node::ExprKind;
 use super::visitor::ExprVisitor;
 use super::visitor::VisitAction;
 use crate::MetadataRef;
 use crate::Symbol;
+use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
 use crate::plans::LambdaFunc;
 use crate::plans::Operator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::UnionAll;
 use crate::plans::Visitor as ScalarExprVisitor;
+use crate::plans::Window;
 use crate::plans::WindowFuncType;
+use crate::plans::WindowGroup;
 
-impl<K: RelExprKind> Expr<K> {
+impl<K: ExprKind> Expr<K> {
     /// Validate embedded type declarations against the types that can be inferred
     /// from scalar expressions and aggregate function signatures.
     ///
     /// Nullability is intentionally ignored when comparing a symbol with metadata:
     /// outer joins may add a nullable wrapper without changing the global symbol.
     pub fn validate_types(&self, metadata: &MetadataRef) -> Result<()> {
-        self.accept(&mut ExprTypeValidator {
-            metadata,
-            name: K::NAME,
-        })
-        .map(|_| ())
+        K::validate_types(self, metadata)
     }
+}
+
+pub(super) fn validate_logical_types(expr: &SExpr, metadata: &MetadataRef) -> Result<()> {
+    expr.accept(&mut ExprTypeValidator {
+        metadata,
+        name: Logical::NAME,
+    })
+    .map(|_| ())
+}
+
+pub(super) fn validate_physical_types(expr: &PExpr, metadata: &MetadataRef) -> Result<()> {
+    expr.accept(&mut ExprTypeValidator {
+        metadata,
+        name: Physical::NAME,
+    })
+    .map(|_| ())
 }
 
 struct ExprTypeValidator<'a> {
@@ -57,80 +78,147 @@ struct ExprTypeValidator<'a> {
     metadata: &'a MetadataRef,
 }
 
-impl<K: RelExprKind> ExprVisitor<K> for ExprTypeValidator<'_> {
-    fn visit(&mut self, s_expr: &Expr<K>) -> Result<VisitAction<K>> {
-        if let RelOperator::Scan(scan) = s_expr.plan() {
+impl ExprVisitor<Logical> for ExprTypeValidator<'_> {
+    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction<Logical>> {
+        let plan = expr.plan();
+        if let RelOperator::Scan(scan) = plan {
             self.validate_scan_scalars(scan)?;
         } else {
-            for scalar in s_expr.plan().scalar_expr_iter() {
-                self.validate_scalar(scalar, SymbolTypeSource::create(self.metadata, self.name))?;
-            }
+            self.validate_operator_scalars(plan)?;
         }
-
-        match s_expr.plan() {
+        match plan {
             RelOperator::EvalScalar(eval) => self.validate_items(&eval.items)?,
-            RelOperator::Aggregate(aggregate) => {
-                self.validate_items(&aggregate.group_items)?;
-                self.validate_items(&aggregate.aggregate_functions)?;
-            }
+            RelOperator::Aggregate(aggregate) => self.validate_aggregate(aggregate)?,
             RelOperator::ProjectSet(project_set) => self.validate_items(&project_set.srfs)?,
-            RelOperator::AsyncFunction(async_function) => {
-                self.validate_items(&async_function.items)?;
-            }
+            RelOperator::AsyncFunction(function) => self.validate_items(&function.items)?,
             RelOperator::Udf(udf) => self.validate_items(&udf.items)?,
-            RelOperator::Window(window) => {
-                self.validate_symbol_type(window.index, &window.function.return_type(), "window")?;
-                self.validate_window_function(&window.function)?;
-            }
-            RelOperator::WindowGroup(group) => {
-                self.validate_items(&group.scalar_items)?;
-                for window in &group.windows {
-                    self.validate_symbol_type(
-                        window.index,
-                        &window.function.return_type(),
-                        "window",
-                    )?;
-                    self.validate_window_function(&window.function)?;
-                }
-            }
-            RelOperator::UnionAll(union) => {
-                if union.left_outputs.len() != union.right_outputs.len()
-                    || union.left_outputs.len() != union.output_indexes.len()
-                {
-                    return Err(ErrorCode::Internal(format!(
-                        "{} union output length mismatch: left {}, right {}, output {}",
-                        self.name,
-                        union.left_outputs.len(),
-                        union.right_outputs.len(),
-                        union.output_indexes.len()
-                    )));
-                }
-                for (((left, left_cast), (right, right_cast)), output) in union
-                    .left_outputs
-                    .iter()
-                    .zip(&union.right_outputs)
-                    .zip(&union.output_indexes)
-                {
-                    let left_type = match left_cast {
-                        Some(cast) => cast.data_type(),
-                        None => Cow::Owned(self.metadata_type(*left)?),
-                    };
-                    let right_type = match right_cast {
-                        Some(cast) => cast.data_type(),
-                        None => Cow::Owned(self.metadata_type(*right)?),
-                    };
-                    self.validate_symbol_type(*output, left_type.as_ref(), "union left output")?;
-                    self.validate_symbol_type(*output, right_type.as_ref(), "union right output")?;
-                }
-            }
-            _ => {}
+            RelOperator::Window(window) => self.validate_window(window)?,
+            RelOperator::WindowGroup(group) => self.validate_window_group(group)?,
+            RelOperator::UnionAll(union) => self.validate_union(union)?,
+            RelOperator::Scan(_)
+            | RelOperator::Join(_)
+            | RelOperator::Filter(_)
+            | RelOperator::Sort(_)
+            | RelOperator::Limit(_)
+            | RelOperator::TopN(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::Mutation(_)
+            | RelOperator::CompactBlock(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::MaterializedCTE(_)
+            | RelOperator::MaterializedCTERef(_)
+            | RelOperator::Sequence(_) => {}
         }
+        Ok(VisitAction::Continue)
+    }
+}
 
+impl ExprVisitor<Physical> for ExprTypeValidator<'_> {
+    fn visit(&mut self, expr: &PExpr) -> Result<VisitAction<Physical>> {
+        let plan = expr.plan();
+        if let PhysicalRelOperator::Scan(scan) = plan {
+            self.validate_scan_scalars(scan)?;
+        } else {
+            self.validate_operator_scalars(plan)?;
+        }
+        match plan {
+            PhysicalRelOperator::EvalScalar(eval) => self.validate_items(&eval.items)?,
+            PhysicalRelOperator::Aggregate(aggregate) => {
+                self.validate_aggregate(&aggregate.aggregate)?
+            }
+            PhysicalRelOperator::ProjectSet(project_set) => {
+                self.validate_items(&project_set.srfs)?
+            }
+            PhysicalRelOperator::AsyncFunction(function) => self.validate_items(&function.items)?,
+            PhysicalRelOperator::Udf(udf) => self.validate_items(&udf.items)?,
+            PhysicalRelOperator::Window(window) => self.validate_window(window)?,
+            PhysicalRelOperator::WindowGroup(group) => self.validate_window_group(group)?,
+            PhysicalRelOperator::UnionAll(union) => self.validate_union(union)?,
+            PhysicalRelOperator::Scan(_)
+            | PhysicalRelOperator::Join(_)
+            | PhysicalRelOperator::Filter(_)
+            | PhysicalRelOperator::Sort(_)
+            | PhysicalRelOperator::Limit(_)
+            | PhysicalRelOperator::TopN(_)
+            | PhysicalRelOperator::Exchange(_)
+            | PhysicalRelOperator::DummyTableScan(_)
+            | PhysicalRelOperator::ConstantTableScan(_)
+            | PhysicalRelOperator::ExpressionScan(_)
+            | PhysicalRelOperator::CacheScan(_)
+            | PhysicalRelOperator::RecursiveCteScan(_)
+            | PhysicalRelOperator::Mutation(_)
+            | PhysicalRelOperator::CompactBlock(_)
+            | PhysicalRelOperator::MutationSource(_)
+            | PhysicalRelOperator::MaterializedCTE(_)
+            | PhysicalRelOperator::MaterializedCTERef(_)
+            | PhysicalRelOperator::Sequence(_) => {}
+        }
         Ok(VisitAction::Continue)
     }
 }
 
 impl ExprTypeValidator<'_> {
+    fn validate_operator_scalars(&self, plan: &impl Operator) -> Result<()> {
+        for scalar in plan.scalar_expr_iter() {
+            self.validate_scalar(scalar, SymbolTypeSource::create(self.metadata, self.name))?;
+        }
+        Ok(())
+    }
+
+    fn validate_aggregate(&self, aggregate: &Aggregate) -> Result<()> {
+        self.validate_items(&aggregate.group_items)?;
+        self.validate_items(&aggregate.aggregate_functions)
+    }
+
+    fn validate_window(&self, window: &Window) -> Result<()> {
+        self.validate_symbol_type(window.index, &window.function.return_type(), "window")?;
+        self.validate_window_function(&window.function)
+    }
+
+    fn validate_window_group(&self, group: &WindowGroup) -> Result<()> {
+        self.validate_items(&group.scalar_items)?;
+        for window in &group.windows {
+            self.validate_window(window)?;
+        }
+        Ok(())
+    }
+
+    fn validate_union(&self, union: &UnionAll) -> Result<()> {
+        if union.left_outputs.len() != union.right_outputs.len()
+            || union.left_outputs.len() != union.output_indexes.len()
+        {
+            return Err(ErrorCode::Internal(format!(
+                "{} union output length mismatch: left {}, right {}, output {}",
+                self.name,
+                union.left_outputs.len(),
+                union.right_outputs.len(),
+                union.output_indexes.len(),
+            )));
+        }
+        for (((left, left_cast), (right, right_cast)), output) in union
+            .left_outputs
+            .iter()
+            .zip(&union.right_outputs)
+            .zip(&union.output_indexes)
+        {
+            let left_type = match left_cast {
+                Some(cast) => cast.data_type(),
+                None => Cow::Owned(self.metadata_type(*left)?),
+            };
+            let right_type = match right_cast {
+                Some(cast) => cast.data_type(),
+                None => Cow::Owned(self.metadata_type(*right)?),
+            };
+            self.validate_symbol_type(*output, left_type.as_ref(), "union left output")?;
+            self.validate_symbol_type(*output, right_type.as_ref(), "union right output")?;
+        }
+        Ok(())
+    }
+
     fn validate_items(&self, items: &[ScalarItem]) -> Result<()> {
         for item in items {
             self.validate_symbol_type(

@@ -149,7 +149,7 @@ drop table t1;
 statement ok
 drop table t2;
 
-# table with float column
+# table with float column; retain the Float64 comparison because 1.1 is not exact in Float32
 statement ok
 create table t1(a float, b float);
 
@@ -177,7 +177,7 @@ HashJoin
 │   ├── read size: 0
 │   ├── partitions total: 0
 │   ├── partitions scanned: 0
-│   ├── push downs: [filters: [is_true(t2.a (#2) > 1.1)], limit: NONE]
+│   ├── push downs: [filters: [is_true(CAST(t2.a (#2) AS Float64 NULL) > 1.1)], limit: NONE]
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1

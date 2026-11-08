@@ -73,7 +73,7 @@ pub(crate) use spatial_index_writer::SpatialIndexState;
 pub use stream::FuseBlockWriteOptions;
 pub use stream::FuseBlockWriter;
 pub use vector_index_writer::VectorIndexBuilder;
-pub(crate) use vector_index_writer::VectorIndexState;
+pub use vector_index_writer::VectorIndexSearchOptions;
 pub use virtual_column_builder::VirtualColumnBuildMode;
 pub use virtual_column_builder::VirtualColumnBuilder;
 pub use virtual_column_layout::VirtualColumnLayoutPlanner;
@@ -81,3 +81,5 @@ pub use virtual_column_layout::VirtualColumnLayoutPolicy;
 pub use virtual_segment_schema::build_virtual_segment_schema;
 pub use write_settings::MAX_BLOCK_UNCOMPRESSED_SIZE;
 pub use write_settings::WriteSettings;
+
+pub(crate) use crate::io::write::spatial_index_writer::SpatialIndexResult;

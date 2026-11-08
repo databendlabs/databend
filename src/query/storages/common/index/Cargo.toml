@@ -14,6 +14,7 @@ cc = "1.0"
 
 [dependencies]
 databend-common-ast = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
@@ -23,6 +24,7 @@ databend-storages-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
+arrow-buffer = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 async-trait = { workspace = true }
@@ -32,9 +34,11 @@ bitvec = { workspace = true }
 bytemuck = { workspace = true }
 bytes = { workspace = true }
 cbordata = { workspace = true }
+crc32fast = { workspace = true }
 fastrace = { workspace = true }
 feistel-permutation-rs = { workspace = true }
 geo = { workspace = true }
+half = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
@@ -42,7 +46,7 @@ match-template = { workspace = true }
 num-traits = { workspace = true }
 num_cpus = { workspace = true }
 opendal = { workspace = true }
-ordered-float = { workspace = true }
+ordered-float = { workspace = true, features = ["bytemuck"] }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
@@ -57,6 +61,7 @@ unicase = { workspace = true }
 xorf = { workspace = true }
 xorfilter-rs = { workspace = true }
 zerocopy = { workspace = true }
+zstd = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }

@@ -51,6 +51,7 @@ fn test_decode_v57_udf() -> anyhow::Result<()> {
         name: "plus_int".to_string(),
         description: "This is a description".to_string(),
         definition: UDFDefinition::UDFServer(UDFServer {
+            external_access_integrations: vec![],
             address: "http://localhost:8888".to_string(),
             handler: "plus_int_py".to_string(),
             headers: BTreeMap::default(),

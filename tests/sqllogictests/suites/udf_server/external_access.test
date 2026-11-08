@@ -1,0 +1,169 @@
+# Uses the existing Arrow Flight fixture: python3 tests/udf/udf_server.py.
+# The existing udf_server suite config enables insecure Flight and allowlists
+# http://0.0.0.0:8815, deliberately also allowing the legacy path below.
+statement ok
+DROP FUNCTION IF EXISTS managed_gcd;
+
+statement ok
+DROP FUNCTION IF EXISTS legacy_gcd_access;
+
+statement ok
+DROP INTEGRATION IF EXISTS flight_access;
+
+statement ok
+DROP NETWORK RULE IF EXISTS flight_rule;
+
+statement ok
+DROP NETWORK RULE IF EXISTS unrelated_rule;
+
+statement ok
+CREATE NETWORK RULE flight_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('0.0.0.0:8815');
+
+statement ok
+CREATE NETWORK RULE unrelated_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('unrelated.example.com:443');
+
+statement ok
+CREATE EXTERNAL ACCESS INTEGRATION flight_access ALLOWED_NETWORK_RULES = (unrelated_rule, flight_rule) ENABLED = TRUE;
+
+statement ok
+CREATE FUNCTION managed_gcd(INT, INT) RETURNS INT LANGUAGE python IMMUTABLE HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815' EXTERNAL_ACCESS_INTEGRATIONS = (flight_access);
+
+statement ok
+CREATE FUNCTION legacy_gcd_access(INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815';
+
+query I
+SELECT managed_gcd(6, 4);
+----
+2
+
+# A dangling rule matches nothing instead of breaking the matching flight_rule.
+statement ok
+DROP NETWORK RULE unrelated_rule;
+
+statement ok
+SELECT sleep(0.5);
+
+query I
+SELECT managed_gcd(6, 4);
+----
+2
+
+# Restore the rule for the later integration DDL, which validates references.
+statement ok
+CREATE NETWORK RULE unrelated_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('unrelated.example.com:443');
+
+# SQL policy authorization must not bypass the nonempty operator allow list.
+statement ok
+CREATE OR REPLACE NETWORK RULE operator_denied_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('localhost:8815');
+
+statement ok
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION operator_denied_access ALLOWED_NETWORK_RULES = (operator_denied_rule) ENABLED = TRUE;
+
+statement error udf_server_allow_list
+CREATE FUNCTION operator_denied_gcd(INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://localhost:8815' EXTERNAL_ACCESS_INTEGRATIONS = (operator_denied_access);
+
+statement ok
+DROP INTEGRATION operator_denied_access;
+
+statement ok
+DROP NETWORK RULE operator_denied_rule;
+
+query I
+SELECT managed_gcd(number::INT, 2) FROM numbers(3);
+----
+2
+1
+2
+
+statement error not allowed by external access integrations
+CREATE FUNCTION denied_gcd(INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8816' EXTERNAL_ACCESS_INTEGRATIONS = (flight_access);
+
+statement error arg types mismatch
+CREATE FUNCTION wrong_gcd_schema(STRING, STRING) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815' EXTERNAL_ACCESS_INTEGRATIONS = (flight_access);
+
+statement ok
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION flight_access ALLOWED_NETWORK_RULES = (unrelated_rule, flight_rule) ENABLED = FALSE;
+
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
+
+statement error disabled
+SELECT managed_gcd(6, 4);
+
+# Explicit integrations must not fall back to udf_server_allow_list.
+statement error disabled
+CREATE FUNCTION denied_disabled_gcd(INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815' EXTERNAL_ACCESS_INTEGRATIONS = (flight_access);
+
+# Legacy UDFs retain their old behavior.
+query I
+SELECT legacy_gcd_access(6, 4);
+----
+2
+
+statement ok
+ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS flight_access SET ENABLED = TRUE;
+
+statement ok
+CREATE OR REPLACE NETWORK RULE flight_rule TYPE = HOST_PORT VALUE_LIST = ('0.0.0.0:8816') MODE = EGRESS;
+
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
+
+statement error not allowed by external access integrations
+SELECT managed_gcd(6, 4);
+
+statement ok
+ALTER NETWORK RULE flight_rule SET VALUE_LIST = ('0.0.0.0:8815');
+
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
+
+query I
+SELECT managed_gcd(6, 4);
+----
+2
+
+statement ok
+ALTER EXTERNAL ACCESS INTEGRATION flight_access SET ALLOWED_NETWORK_RULES = (unrelated_rule);
+
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
+
+statement error not allowed by external access integrations
+SELECT managed_gcd(6, 4);
+
+statement ok
+DROP INTEGRATION flight_access;
+
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
+
+statement error ExternalAccessIntegration
+SELECT managed_gcd(6, 4);
+
+statement ok
+DROP FUNCTION managed_gcd;
+
+statement ok
+DROP FUNCTION legacy_gcd_access;
+
+statement ok
+DROP NETWORK RULE flight_rule;
+
+statement ok
+DROP NETWORK RULE IF EXISTS unrelated_rule;

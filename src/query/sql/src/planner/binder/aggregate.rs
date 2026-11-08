@@ -52,7 +52,6 @@ use crate::planner::semantic::TypeChecker;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
@@ -1125,7 +1124,6 @@ impl Binder {
         }
 
         let aggregate_plan = Aggregate {
-            mode: AggregateMode::Initial,
             group_items: agg_info.group_items.clone(),
             aggregate_functions: agg_info.aggregate_calls().cloned().collect(),
             from_distinct: false,

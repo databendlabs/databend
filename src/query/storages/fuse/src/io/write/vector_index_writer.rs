@@ -14,47 +14,40 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::io::Write;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorColumn;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_generate_milliseconds;
-use databend_storages_common_blocks::SerializedParquet;
-use databend_storages_common_blocks::block_to_parquet_with_writer;
-use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
+use databend_storages_common_index::VectorBundleBuilder;
 use databend_storages_common_index::normalize_vector;
 use databend_storages_common_index::vector_stat_distance;
+use databend_storages_common_io::BlockingWrite;
 use databend_storages_common_io::OpenDalBlockingWrite;
-use databend_storages_common_io::ReadSettings;
-use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfVectorColumns;
 use databend_storages_common_table_meta::meta::VectorColumnStatistics;
-use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_EF_CONSTRUCT;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_M;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE;
+use databend_storages_common_table_meta::table::parse_vector_index_refine;
 use log::debug;
 use log::info;
 use opendal::Buffer;
-use opendal::Operator;
-use parquet::file::metadata::KeyValue;
 
-use crate::io::read::load_vector_index_files;
+use crate::io::TableMetaLocationGenerator;
 use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
 use crate::io::write::block_index::BlockIndexLowLevelWriter;
 use crate::io::write::block_index::BlockIndexSpec;
@@ -64,17 +57,41 @@ use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::PendingIndexFile;
 use crate::io::write::block_index::PendingVectorIndex;
 use crate::io::write::block_index::WrittenBlockIndexOutput;
-use crate::io::write::block_index::WrittenIndexFile;
 use crate::io::write::block_index::WrittenVectorIndex;
 
 const DEFAULT_M: usize = 16;
 const DEFAULT_EF_CONSTRUCT: usize = 100;
 
-#[derive(Debug, Clone)]
-pub struct VectorIndexState {
-    pub location: Location,
-    pub size: u64,
-    pub data: Buffer,
+/// Whether the index stores FP16 vectors for refinement (`refine = true`).
+fn vector_index_refine(options: &BTreeMap<String, String>) -> Result<bool> {
+    match options.get(VECTOR_INDEX_OPT_REFINE) {
+        None => Ok(false),
+        Some(value) => parse_vector_index_refine(value)
+            .ok_or_else(|| ErrorCode::IndexOptionInvalid("`refine` must be `true` or `false`")),
+    }
+}
+
+/// Query-time search parameters, from the `vector_refine_factor` and
+/// `vector_search_ef` settings (0 disables / uses the default).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VectorIndexSearchOptions {
+    /// Candidate multiplier; set only when the index stores FP16 data.
+    pub refine_factor: Option<usize>,
+    pub search_ef: Option<usize>,
+}
+
+impl VectorIndexSearchOptions {
+    pub fn new(
+        index_options: &BTreeMap<String, String>,
+        refine_factor: u64,
+        search_ef: u64,
+    ) -> Result<Self> {
+        let refine = refine_factor > 0 && vector_index_refine(index_options)?;
+        Ok(Self {
+            refine_factor: refine.then_some(refine_factor as usize),
+            search_ef: (search_ef > 0).then_some(search_ef as usize),
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +100,7 @@ struct VectorIndexParam {
     index_version: String,
     m: usize,
     ef_construct: usize,
+    refine: bool,
     distances: Vec<DistanceType>,
     field_offsets: Vec<(usize, ColumnId)>,
 }
@@ -98,22 +116,137 @@ pub struct VectorIndexBuilder {
     columns: BTreeMap<usize, Vec<Column>>,
 }
 
-pub(crate) struct VectorIndexBuildState {
-    pub(crate) index_state: Option<VectorIndexState>,
-    pub(crate) vector_stats: Option<StatisticsOfVectorColumns>,
+pub(crate) struct VectorIndexWriteSpec {
+    builder: VectorIndexBuilder,
 }
 
-pub(crate) struct VectorIndexWrittenState {
-    pub(crate) size: u64,
-    pub(crate) vector_stats: Option<StatisticsOfVectorColumns>,
+impl BlockIndexSpec for VectorIndexWriteSpec {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(VectorIndexBlockWriter {
+            builder: self.builder.clone(),
+            locations: context.meta_locations,
+        }))
+    }
+
+    fn new_low_level_writer(
+        &self,
+        context: BlockIndexWriteContext,
+    ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        Ok(Box::new(VectorIndexLowLevelWriter {
+            builder: self.builder.clone(),
+            next_field: 0,
+            num_fields: context.physical_schema.num_fields(),
+            context,
+        }))
+    }
+}
+
+struct VectorIndexBlockWriter {
+    builder: VectorIndexBuilder,
+    locations: TableMetaLocationGenerator,
+}
+
+impl BlockIndexWriter for VectorIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        Ok(PendingBlockIndexOutput {
+            vector: Some(self.builder.finalize_block(&self.locations)?),
+            ..Default::default()
+        })
+    }
+}
+
+/// Column-by-column writer: the bundle files are built in memory at the end, as the HNSW
+/// index needs every row, and written through blocking writes.
+struct VectorIndexLowLevelWriter {
+    builder: VectorIndexBuilder,
+    context: BlockIndexWriteContext,
+    next_field: usize,
+    num_fields: usize,
+}
+
+impl BlockIndexLowLevelWriter for VectorIndexLowLevelWriter {
+    fn next_column(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>> {
+        if self.next_field >= self.num_fields {
+            return Err(ErrorCode::Internal(
+                "vector index low-level writer has no remaining columns",
+            ));
+        }
+        let field_index = self.next_field;
+        self.next_field += 1;
+        Ok(Box::new(VectorIndexLowLevelColumnWriter {
+            parent: Some(self),
+            field_index,
+        }))
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<WrittenBlockIndexOutput> {
+        if self.next_field != self.num_fields {
+            return Err(ErrorCode::Internal(format!(
+                "vector index low-level writer consumed {} of {} columns",
+                self.next_field, self.num_fields
+            )));
+        }
+        let pending = self.builder.finalize_block(&self.context.meta_locations)?;
+        let mut files = Vec::with_capacity(pending.files.len());
+        for (meta, file) in pending.files {
+            let mut write = self.context.create_write(&file.location);
+            write_blocking(&mut write, file.data)?;
+            files.push(meta);
+        }
+        Ok(WrittenBlockIndexOutput {
+            vector: Some(WrittenVectorIndex {
+                files,
+                statistics: pending.statistics,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+/// Write `data` through `write` and close it.
+fn write_blocking(write: &mut OpenDalBlockingWrite, data: Buffer) -> Result<()> {
+    for chunk in data {
+        write.write_all(&chunk)?;
+    }
+    write.close()
+}
+
+struct VectorIndexLowLevelColumnWriter {
+    parent: Option<Box<VectorIndexLowLevelWriter>>,
+    field_index: usize,
+}
+
+impl BlockIndexLowLevelColumnWriter for VectorIndexLowLevelColumnWriter {
+    fn write(&mut self, column: &Column) -> Result<()> {
+        self.parent
+            .as_mut()
+            .ok_or_else(|| ErrorCode::Internal("vector index column writer has no parent"))?
+            .builder
+            .add_column(self.field_index, column.clone())
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        self.parent
+            .take()
+            .map(|parent| parent as Box<dyn BlockIndexLowLevelWriter>)
+            .ok_or_else(|| ErrorCode::Internal("vector index column writer has no parent"))
+    }
 }
 
 impl VectorIndexBuilder {
+    pub(crate) fn into_write_spec(self) -> VectorIndexWriteSpec {
+        VectorIndexWriteSpec { builder: self }
+    }
+
     pub fn try_create(
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,
         is_sync: bool,
-    ) -> Option<VectorIndexBuilder> {
+    ) -> Result<Option<VectorIndexBuilder>> {
         let mut index_params = Vec::with_capacity(table_indexes.len());
         let mut field_offsets_set = HashSet::new();
         let mut statistics_params = BTreeMap::new();
@@ -144,7 +277,9 @@ impl VectorIndexBuilder {
                 continue;
             }
 
-            // Parse index parameters
+            // Validated at bind time too; invalid persisted metadata must return an
+            // error, not silently omit the index.
+            let refine = vector_index_refine(&index.options)?;
             let m = match index.options.get(VECTOR_INDEX_OPT_M) {
                 Some(value) => value.parse::<usize>().unwrap_or(DEFAULT_M),
                 None => DEFAULT_M,
@@ -195,6 +330,8 @@ impl VectorIndexBuilder {
             let index_param = VectorIndexParam {
                 index_name: index.name.clone(),
                 index_version: index.version.clone(),
+                // Without refine the bundle contains HNSW components only.
+                refine,
                 m,
                 ef_construct,
                 distances,
@@ -209,14 +346,14 @@ impl VectorIndexBuilder {
         }
 
         if !field_offsets_set.is_empty() {
-            Some(VectorIndexBuilder {
+            Ok(Some(VectorIndexBuilder {
                 index_params,
                 field_offsets_set,
                 statistics_params,
                 columns,
-            })
+            }))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -229,10 +366,6 @@ impl VectorIndexBuilder {
         };
         columns.push(column);
         Ok(())
-    }
-
-    pub(crate) fn into_write_spec(self) -> VectorIndexWriteSpec {
-        VectorIndexWriteSpec { builder: self }
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -249,251 +382,71 @@ impl VectorIndexBuilder {
         Ok(())
     }
 
-    pub fn finalize(&mut self, location: &Location) -> Result<VectorIndexState> {
-        let start = Instant::now();
-        info!("Start build vector HNSW index for location: {}", location.0);
-
-        let concated_columns = self.take_concated_columns()?;
-        let result = self.build_vector_index(&concated_columns)?;
-        let VectorIndexResult {
-            index_fields,
-            index_columns,
-            metadata,
-        } = result;
-
-        let index_schema = TableSchemaRefExt::create(index_fields);
-        let index_block = DataBlock::new(index_columns, 1);
-
-        let serialized = blocks_to_parquet(
-            index_schema.as_ref(),
-            vec![index_block],
-            // Zstd has the best compression ratio
-            TableCompression::Zstd,
-            // No dictionary page for vector index
-            false,
-            Some(metadata),
-        )?;
-        let size = serialized.len() as u64;
-        let data = Buffer::from(serialized.payload);
-
-        let state = VectorIndexState {
-            location: location.clone(),
-            size,
-            data,
-        };
-
-        // Perf.
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        {
-            metrics_inc_block_vector_index_generate_milliseconds(elapsed_ms);
-        }
-        info!(
-            "Finish build vector HNSW index: location={}, size={} bytes in {} ms",
-            location.0, size, elapsed_ms
-        );
-
-        Ok(state)
-    }
-
-    pub(crate) fn finalize_block_to_writer(
+    /// Builds one bundle file per index from the buffered rows.
+    pub(crate) fn finalize_block(
         &mut self,
-        write: OpenDalBlockingWrite,
-    ) -> Result<VectorIndexWrittenState> {
-        let concated_columns = self.take_concated_columns()?;
-        let vector_stats = self.build_vector_statistics(&concated_columns)?;
-        if self.index_params.is_empty() {
-            return Ok(VectorIndexWrittenState {
-                size: 0,
-                vector_stats,
-            });
-        }
-        let result = self.build_vector_index(&concated_columns)?;
-        let index_schema = TableSchemaRefExt::create(result.index_fields);
-        let index_block = DataBlock::new(result.index_columns, 1);
-        let (_, write) = block_to_parquet_with_writer(
-            index_schema.as_ref(),
-            index_block,
-            TableCompression::Zstd,
-            false,
-            Some(result.metadata),
-            write,
-        )?;
-        Ok(VectorIndexWrittenState {
-            size: write.bytes_written(),
-            vector_stats,
-        })
-    }
-
-    pub(crate) fn finalize_block(&mut self, location: &Location) -> Result<VectorIndexBuildState> {
-        let concated_columns = self.take_concated_columns()?;
-        let vector_stats = self.build_vector_statistics(&concated_columns)?;
-        if self.index_params.is_empty() {
-            return Ok(VectorIndexBuildState {
-                index_state: None,
-                vector_stats,
-            });
-        }
-
-        let index_state = self.finalize_with_columns(location, &concated_columns)?;
-        Ok(VectorIndexBuildState {
-            index_state: Some(index_state),
-            vector_stats,
-        })
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn finalize_with_existing(
-        &mut self,
-        operator: Operator,
-        settings: &ReadSettings,
-        location: &Location,
-        existing_location: Option<&Location>,
-        existing_column_metas: Option<Vec<(String, SingleColumnMeta)>>,
-        existing_index_meta: Option<BTreeMap<String, String>>,
-    ) -> Result<VectorIndexBuildState> {
-        // If there's no existing vector index, just use the regular finalize method
-        if existing_location.is_none() || existing_column_metas.is_none() {
-            return self.finalize_block(location);
-        }
-
-        // Process new vector index data
+        locations: &TableMetaLocationGenerator,
+    ) -> Result<PendingVectorIndex> {
         let start = Instant::now();
-        info!(
-            "Start build merged vector HNSW index for location: {}",
-            location.0
-        );
-
-        let existing_location = existing_location.unwrap();
-        let existing_column_metas = existing_column_metas.unwrap();
-
-        let existing_column_names = existing_column_metas
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<Vec<_>>();
-
-        let existing_columns = load_vector_index_files(
-            operator,
-            settings,
-            &existing_column_names,
-            &existing_location.0,
-        )
-        .await?;
-
-        info!(
-            "Read existing vector index at location={} in {} ms",
-            existing_location.0,
-            start.elapsed().as_millis() as u64
-        );
-
-        let concated_columns = self.take_concated_columns()?;
-        let vector_stats = self.build_vector_statistics(&concated_columns)?;
-        let result = self.build_vector_index(&concated_columns)?;
-        let VectorIndexResult {
-            mut index_fields,
-            mut index_columns,
-            mut metadata,
-        } = result;
-
-        for (name, _) in existing_column_metas.into_iter() {
-            let existing_field = TableField::new(&name, TableDataType::Binary);
-            index_fields.push(existing_field);
-        }
-        for existing_column in existing_columns.into_iter() {
-            index_columns.push(BlockEntry::Column(existing_column));
-        }
-
-        if let Some(existing_index_meta) = existing_index_meta {
-            for (key, value) in &existing_index_meta {
-                let version_meta = KeyValue {
-                    key: key.clone(),
-                    value: Some(value.clone()),
-                };
-                metadata.push(version_meta);
+        let columns = self.take_concated_columns()?;
+        let statistics = self.build_vector_statistics(&columns)?;
+        // All columns are concatenated from the same blocks.
+        let row_count = columns.values().next().map(Column::len).unwrap_or(0);
+        let mut files = Vec::with_capacity(self.index_params.len());
+        for param in &self.index_params {
+            let mut bundle = VectorBundleBuilder::new(
+                param.index_name.clone(),
+                param.index_version.clone(),
+                row_count as u64,
+            );
+            for &(offset, column_id) in &param.field_offsets {
+                let column = columns
+                    .get(&offset)
+                    .ok_or_else(|| ErrorCode::Internal("Vector source column missing"))?;
+                // Common to all distance representations and optional FP16 pages.
+                // Non-nullable and nullable-but-all-valid columns need no bitmap.
+                let validity = column
+                    .as_nullable()
+                    .map(|nullable| &nullable.validity)
+                    .filter(|bitmap| bitmap.null_count() != 0);
+                if let Some(bitmap) = validity {
+                    bundle.add_validity(column_id, bitmap)?;
+                }
+                for &distance in &param.distances {
+                    let (fields, entries) = HNSWIndex::build(
+                        param.m,
+                        param.ef_construct,
+                        column_id,
+                        column.clone(),
+                        distance,
+                    )?;
+                    for (field, entry) in fields.into_iter().zip(entries) {
+                        let column = entry.to_column();
+                        let bytes = column
+                            .as_binary()
+                            .and_then(|column| column.index(0))
+                            .ok_or_else(|| ErrorCode::Internal("Invalid HNSW component"))?;
+                        bundle.add_hnsw(field.name().clone(), bytes)?;
+                    }
+                }
+                if param.refine {
+                    bundle.add_fp16_data(column_id, column)?;
+                }
             }
+            let file = PendingIndexFile {
+                location: locations.gen_vector_index_v2_location(&param.index_version),
+                data: Buffer::from(bundle.finish()?),
+            };
+            let meta = BlockIndexMeta {
+                index_name: param.index_name.clone(),
+                index_version: param.index_version.clone(),
+                location: file.location.clone(),
+                size: file.size(),
+            };
+            files.push((meta, file));
         }
-
-        // Create merged index
-        let index_schema = TableSchemaRefExt::create(index_fields);
-        let index_block = DataBlock::new(index_columns, 1);
-
-        // Serialize to parquet
-        let serialized = blocks_to_parquet(
-            index_schema.as_ref(),
-            vec![index_block],
-            // Zstd has the best compression ratio
-            TableCompression::Zstd,
-            // No dictionary page for vector index
-            false,
-            Some(metadata),
-        )?;
-        let size = serialized.len() as u64;
-        let data = Buffer::from(serialized.payload);
-
-        let state = VectorIndexState {
-            location: location.clone(),
-            size,
-            data,
-        };
-
-        // Perf.
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        {
-            metrics_inc_block_vector_index_generate_milliseconds(elapsed_ms);
-        }
-        info!(
-            "Finish build merged vector HNSW index: location={}, size={} bytes in {} ms",
-            location.0, size, elapsed_ms
-        );
-
-        Ok(VectorIndexBuildState {
-            index_state: Some(state),
-            vector_stats,
-        })
-    }
-
-    fn finalize_with_columns(
-        &self,
-        location: &Location,
-        concated_columns: &BTreeMap<usize, Column>,
-    ) -> Result<VectorIndexState> {
-        let start = Instant::now();
-        info!("Start build vector HNSW index for location: {}", location.0);
-
-        let result = self.build_vector_index(concated_columns)?;
-        let VectorIndexResult {
-            index_fields,
-            index_columns,
-            metadata,
-        } = result;
-
-        let index_schema = TableSchemaRefExt::create(index_fields);
-        let index_block = DataBlock::new(index_columns, 1);
-
-        let SerializedParquet { payload, .. } = blocks_to_parquet(
-            index_schema.as_ref(),
-            vec![index_block],
-            TableCompression::Zstd,
-            false,
-            Some(metadata),
-        )?;
-        let data = Buffer::from(payload);
-        let size = data.len() as u64;
-        let state = VectorIndexState {
-            location: location.clone(),
-            size,
-            data,
-        };
-
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        {
-            metrics_inc_block_vector_index_generate_milliseconds(elapsed_ms);
-        }
-        info!(
-            "Finish build vector HNSW index: location={}, size={} bytes in {} ms",
-            location.0, size, elapsed_ms
-        );
-
-        Ok(state)
+        metrics_inc_block_vector_index_generate_milliseconds(start.elapsed().as_millis() as u64);
+        Ok(PendingVectorIndex { files, statistics })
     }
 
     fn take_concated_columns(&mut self) -> Result<BTreeMap<usize, Column>> {
@@ -505,52 +458,11 @@ impl VectorIndexBuilder {
 
         let mut concated_columns = BTreeMap::new();
         for (offset, columns) in columns.into_iter() {
-            let concated_column = Column::concat_columns(columns.into_iter())?;
+            let concated_column = Column::concat_columns(columns)?;
             concated_columns.insert(offset, concated_column);
         }
 
         Ok(concated_columns)
-    }
-
-    fn build_vector_index(
-        &self,
-        concated_columns: &BTreeMap<usize, Column>,
-    ) -> Result<VectorIndexResult> {
-        let mut index_fields = Vec::new();
-        let mut index_columns = Vec::new();
-        let mut metadata = Vec::with_capacity(self.index_params.len());
-
-        for index_param in &self.index_params {
-            debug!("Building HNSW index for {}", index_param.index_name);
-            for (offset, column_id) in &index_param.field_offsets {
-                let Some(column) = concated_columns.get(offset) else {
-                    return Err(ErrorCode::Internal("Can't find vector column"));
-                };
-                for distance in &index_param.distances {
-                    let (mut hnsw_index_fields, mut hnsw_index_columns) = HNSWIndex::build(
-                        index_param.m,
-                        index_param.ef_construct,
-                        *column_id,
-                        column.clone(),
-                        *distance,
-                    )?;
-                    index_fields.append(&mut hnsw_index_fields);
-                    index_columns.append(&mut hnsw_index_columns);
-                }
-            }
-            let version_meta = KeyValue {
-                key: index_param.index_name.clone(),
-                value: Some(index_param.index_version.clone()),
-            };
-            metadata.push(version_meta);
-        }
-
-        let result = VectorIndexResult {
-            index_fields,
-            index_columns,
-            metadata,
-        };
-        Ok(result)
     }
 
     fn build_vector_statistics(
@@ -574,135 +486,6 @@ impl VectorIndexBuilder {
 
         Ok((!statistics.is_empty()).then_some(statistics))
     }
-}
-
-pub(crate) struct VectorIndexWriteSpec {
-    builder: VectorIndexBuilder,
-}
-
-impl BlockIndexSpec for VectorIndexWriteSpec {
-    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
-        Ok(Box::new(VectorIndexWriter {
-            builder: self.builder.clone(),
-            location: context.meta_locations.block_vector_index_location(),
-        }))
-    }
-
-    fn new_low_level_writer(
-        &self,
-        context: BlockIndexWriteContext,
-    ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        let location = context.meta_locations.block_vector_index_location();
-        let write = context.create_write(&location);
-        Ok(Box::new(VectorIndexLowLevelWriter {
-            builder: self.builder.clone(),
-            location,
-            write: Some(write),
-            next_field: 0,
-            num_fields: context.physical_schema.num_fields(),
-        }))
-    }
-}
-
-struct VectorIndexWriter {
-    builder: VectorIndexBuilder,
-    location: Location,
-}
-
-impl BlockIndexWriter for VectorIndexWriter {
-    fn write(&mut self, block: &DataBlock) -> Result<()> {
-        self.builder.add_block(block)
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
-        let result = self.builder.finalize_block(&self.location)?;
-        Ok(PendingBlockIndexOutput {
-            vector: Some(PendingVectorIndex {
-                file: result.index_state.map(|state| PendingIndexFile {
-                    location: state.location,
-                    data: state.data,
-                }),
-                statistics: result.vector_stats,
-            }),
-            ..Default::default()
-        })
-    }
-}
-
-struct VectorIndexLowLevelWriter {
-    builder: VectorIndexBuilder,
-    location: Location,
-    write: Option<OpenDalBlockingWrite>,
-    next_field: usize,
-    num_fields: usize,
-}
-
-impl BlockIndexLowLevelWriter for VectorIndexLowLevelWriter {
-    fn next_column(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>> {
-        if self.next_field >= self.num_fields {
-            return Err(ErrorCode::Internal(
-                "vector index low-level writer has no remaining columns",
-            ));
-        }
-        let field_index = self.next_field;
-        self.next_field += 1;
-        Ok(Box::new(VectorIndexLowLevelColumnWriter {
-            parent: Some(self),
-            field_index,
-        }))
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<WrittenBlockIndexOutput> {
-        if self.next_field != self.num_fields {
-            return Err(ErrorCode::Internal(format!(
-                "vector index low-level writer consumed {} of {} columns",
-                self.next_field, self.num_fields
-            )));
-        }
-        let write = self
-            .write
-            .take()
-            .ok_or_else(|| ErrorCode::Internal("vector index blocking output was consumed"))?;
-        let result = self.builder.finalize_block_to_writer(write)?;
-        Ok(WrittenBlockIndexOutput {
-            vector: Some(WrittenVectorIndex {
-                file: (result.size > 0).then_some(WrittenIndexFile {
-                    location: self.location,
-                    size: result.size,
-                }),
-                statistics: result.vector_stats,
-            }),
-            ..Default::default()
-        })
-    }
-}
-
-struct VectorIndexLowLevelColumnWriter {
-    parent: Option<Box<VectorIndexLowLevelWriter>>,
-    field_index: usize,
-}
-
-impl BlockIndexLowLevelColumnWriter for VectorIndexLowLevelColumnWriter {
-    fn write(&mut self, column: &Column) -> Result<()> {
-        self.parent
-            .as_mut()
-            .ok_or_else(|| ErrorCode::Internal("vector index column writer has no parent"))?
-            .builder
-            .add_column(self.field_index, column.clone())
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        self.parent
-            .take()
-            .map(|parent| parent as Box<dyn BlockIndexLowLevelWriter>)
-            .ok_or_else(|| ErrorCode::Internal("vector index column writer has no parent"))
-    }
-}
-
-struct VectorIndexResult {
-    index_fields: Vec<TableField>,
-    index_columns: Vec<BlockEntry>,
-    metadata: Vec<KeyValue>,
 }
 
 fn vector_statistics_from_column(

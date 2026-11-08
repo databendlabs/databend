@@ -43,8 +43,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
@@ -60,7 +60,8 @@ use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -985,8 +986,6 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
         .await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(1)?;
-    ctx.get_settings()
-        .set_setting("enable_distributed_recluster".to_owned(), "0".to_owned())?;
     execute_command(ctx, &format!("alter table {name} recluster")).await?;
 
     let table = fixture.latest_default_table().await?;
@@ -996,13 +995,8 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     let mut ordered = 0;
     let mut unordered = 0;
     for location in &snapshot.segments {
-        let segment = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema())
-            .read(&LoadParams {
-                location: location.0.clone(),
-                len_hint: None,
-                ver: location.1,
-                put_cache: false,
-            })
+        let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
+            .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)
             .await?;
         for block in segment.block_metas()?.iter() {
             if block
@@ -1030,13 +1024,8 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     let snapshot = fuse.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.summary.row_count, 6);
     for location in &snapshot.segments {
-        let segment = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema())
-            .read(&LoadParams {
-                location: location.0.clone(),
-                len_hint: None,
-                ver: location.1,
-                put_cache: false,
-            })
+        let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
+            .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)
             .await?;
         assert!(segment.block_metas()?.iter().all(|block| {
             block
@@ -2871,7 +2860,7 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
                 remained_blocks.len()
             );
             for remain in remained_blocks {
-                blocks.push(remain.0.location.0.clone());
+                blocks.push(remain.block_meta.location.0.clone());
             }
 
             let block_ids_after_recluster = HashSet::from_iter(blocks.into_iter());

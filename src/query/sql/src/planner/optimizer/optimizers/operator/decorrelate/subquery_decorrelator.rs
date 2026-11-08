@@ -167,7 +167,6 @@ impl SubqueryDecorrelatorOptimizer {
                 | RelOperator::ConstantTableScan(_)
                 | RelOperator::ExpressionScan(_)
                 | RelOperator::CacheScan(_)
-                | RelOperator::Exchange(_)
                 | RelOperator::RecursiveCteScan(_)
                 | RelOperator::Mutation(_)
                 | RelOperator::MutationSource(_)
@@ -335,7 +334,6 @@ impl SubqueryDecorrelatorOptimizer {
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
-            | RelOperator::Exchange(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
@@ -778,7 +776,9 @@ pub fn check_child_expr_in_subquery(
             }
             Ok((child_expr.clone(), op != &SubqueryComparisonOp::Equal))
         }
-        ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
+        ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => {
+            Ok((child_expr.clone(), true))
+        }
         ScalarExpr::CastExpr(cast) => {
             let arg = &cast.argument;
             let (_, is_non_equi_condition) = check_child_expr_in_subquery(arg, op)?;

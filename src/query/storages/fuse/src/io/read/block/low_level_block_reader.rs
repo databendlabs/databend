@@ -99,8 +99,6 @@ pub struct FuseLowLevelBlockReadOptions {
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
-    populate_cache: bool,
-    direct_read: bool,
     merge_settings: Option<databend_storages_common_io::ReadSettings>,
     window_rows: Option<usize>,
 }
@@ -119,8 +117,6 @@ impl FuseLowLevelBlockReadOptions {
             #[cfg(test)]
             window_size: None,
             max_prefetch: DEFAULT_MAX_PREFETCH,
-            populate_cache: true,
-            direct_read: false,
             merge_settings: None,
             window_rows: None,
         }
@@ -164,21 +160,8 @@ impl FuseLowLevelBlockReadOptions {
         self
     }
 
-    /// Whether fetched chunks are admitted into the shared disk cache; reads
-    /// still serve existing entries when disabled.
-    pub fn with_populate_cache(mut self, populate_cache: bool) -> Self {
-        self.populate_cache = populate_cache;
-        self
-    }
-
     pub fn with_merge_io(mut self, settings: databend_storages_common_io::ReadSettings) -> Self {
         self.merge_settings = Some(settings);
-        self
-    }
-
-    /// Bypass the optional shared disk-cache range layer.
-    pub fn with_direct_read(mut self) -> Self {
-        self.direct_read = true;
         self
     }
 
@@ -262,8 +245,6 @@ pub struct FuseLowLevelBlockReader {
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
-    populate_cache: bool,
-    direct_read: bool,
     merge_settings: Option<databend_storages_common_io::ReadSettings>,
     window_rows: Option<usize>,
 }
@@ -359,8 +340,6 @@ impl FuseLowLevelBlockReader {
             #[cfg(test)]
             window_size: options.window_size,
             max_prefetch: options.max_prefetch,
-            populate_cache: options.populate_cache,
-            direct_read: options.direct_read,
             merge_settings: options.merge_settings,
             window_rows: options.window_rows,
         })
@@ -478,8 +457,6 @@ impl FuseLowLevelBlockReader {
         }
         options.window_rows = self.window_rows;
         options.merge_settings = self.merge_settings;
-        options.direct_read = self.direct_read;
-        options.populate_cache = self.populate_cache;
         if let Some(default_values) = &self.default_values {
             options = options.with_default_values(vec![default_values[field_index].clone()]);
         }
@@ -1024,7 +1001,7 @@ impl FuseLowLevelColumnBatchReader {
         if parts.len() == 1 {
             Ok(parts.pop().expect("one logical-column batch"))
         } else {
-            Column::concat_columns(parts.into_iter())
+            Column::concat_columns(parts)
         }
     }
 
@@ -1061,7 +1038,7 @@ impl FuseLowLevelColumnBatchReader {
         if parts.len() == 1 {
             Ok(parts.pop())
         } else {
-            Ok(Some(Column::concat_columns(parts.into_iter())?))
+            Ok(Some(Column::concat_columns(parts)?))
         }
     }
 
@@ -1132,7 +1109,7 @@ impl FuseLowLevelFullRowReader {
                 Some(column) if column.len() == actual_rows => column,
                 Some(column) => {
                     let tail = reader.read_rows(actual_rows - column.len())?;
-                    Column::concat_columns([column, tail].into_iter())?
+                    Column::concat_columns(vec![column, tail])?
                 }
                 None => reader.read_rows(actual_rows)?,
             };
@@ -1652,21 +1629,11 @@ impl ParquetLeafRowGroupAdapter {
                     settings,
                     reader.max_prefetch.saturating_add(1),
                 )?)
-            } else if reader.direct_read {
-                Box::new(OperatorRangeReader::new(
-                    reader.operator.clone(),
-                    reader.path.clone(),
-                    reader.max_prefetch.saturating_add(1),
-                ))
             } else {
                 create_file_range_reader(
                     reader.operator.clone(),
                     reader.path.clone(),
-                    reader.block_meta.file_size,
                     reader.max_prefetch,
-                    window_size as u64,
-                    window_size.saturating_mul(reader.max_prefetch.saturating_add(2)),
-                    reader.populate_cache,
                 )?
             };
         let input =
@@ -1931,7 +1898,7 @@ mod tests {
         while let Some(column) = reader.read().unwrap() {
             parts.push(column);
         }
-        Column::concat_columns(parts.into_iter()).unwrap()
+        Column::concat_columns(parts).unwrap()
     }
 
     fn read_columns(
@@ -1952,7 +1919,7 @@ mod tests {
                 lengths.push(column.len());
                 parts.push(column);
             }
-            columns.push(Column::concat_columns(parts.into_iter()).unwrap());
+            columns.push(Column::concat_columns(parts).unwrap());
             boundaries.push(lengths);
             data = reader.finish().unwrap();
         }
@@ -2034,10 +2001,7 @@ mod tests {
         while let Some(part) = column.read_min_rows(2).unwrap() {
             parts.push(part);
         }
-        assert_eq!(
-            Column::concat_columns(parts.into_iter()).unwrap(),
-            columns[0]
-        );
+        assert_eq!(Column::concat_columns(parts).unwrap(), columns[0]);
         column.finish().unwrap();
 
         let mut reader = block.read_full_rows().unwrap();
@@ -2292,9 +2256,11 @@ mod tests {
                 Default::default(),
                 schema.next_column_id,
             ));
-            let block = FuseLowLevelBlockReader::create(
-                read_options(operator.clone(), flat_schema, meta.clone()).with_direct_read(),
-            )
+            let block = FuseLowLevelBlockReader::create(read_options(
+                operator.clone(),
+                flat_schema,
+                meta.clone(),
+            ))
             .unwrap();
             let mut rows = block.read_full_rows().unwrap();
             let first = rows.read(2, true).unwrap().unwrap();
@@ -2326,10 +2292,7 @@ mod tests {
         reader.finish().unwrap().finish().unwrap();
 
         assert_eq!(boundaries, vec![2, 1, 1, 1]);
-        assert_eq!(
-            Column::concat_columns(batches.into_iter()).unwrap(),
-            expected
-        );
+        assert_eq!(Column::concat_columns(batches).unwrap(), expected);
     }
 
     #[test]
@@ -2483,10 +2446,7 @@ mod tests {
         reader.finish().unwrap().finish().unwrap();
 
         assert_eq!(boundaries, vec![2, 1, 2]);
-        assert_eq!(
-            Column::concat_columns(batches.into_iter()).unwrap(),
-            expected
-        );
+        assert_eq!(Column::concat_columns(batches).unwrap(), expected);
     }
 
     #[test]
@@ -2800,7 +2760,7 @@ mod tests {
             assert!(batch.len() > 0);
             batches.push(batch);
         }
-        let column = Column::concat_columns(batches.into_iter()).unwrap();
+        let column = Column::concat_columns(batches).unwrap();
         let actual = column
             .iter()
             .map(|value| value.to_owned())

@@ -57,6 +57,10 @@ impl ErrorHandler {
                 {
                     Err(e.to_error_code(&self.on_error_mode, file_path))
                 } else {
+                    // The bad row is skipped, record it so that ERRORS_SEEN / FIRST_ERROR
+                    // (and RETURN_FAILED_ONLY) reflect the dropped rows, like `Continue`.
+                    let line = e.line;
+                    file_status.add_error(e.error, line);
                     Ok(())
                 }
             }

@@ -20,7 +20,7 @@ use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::PExpr;
 use crate::optimizer::ir::RelExpr;
-use crate::plans::RelOperator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::spatial_join_gate;
 
 /// Finalize derived spatial join annotations after logical rewrites have settled.
@@ -57,7 +57,7 @@ impl FinalizeSpatialJoinOptimizer {
 
         let mut result = s_expr.replace_children(children);
 
-        if let RelOperator::Join(join) = result.plan() {
+        if let PhysicalRelOperator::Join(join) = result.plan() {
             let left_prop = RelExpr::with_p_expr(result.left_child()).derive_relational_prop()?;
             let right_prop = RelExpr::with_p_expr(result.right_child()).derive_relational_prop()?;
             let spatial_join =
@@ -65,7 +65,7 @@ impl FinalizeSpatialJoinOptimizer {
                     .map(Box::new);
 
             if join.spatial_join != spatial_join {
-                let RelOperator::Join(join) = Arc::make_mut(&mut result.plan) else {
+                let PhysicalRelOperator::Join(join) = Arc::make_mut(&mut result.plan) else {
                     unreachable!()
                 };
                 join.spatial_join = spatial_join;

@@ -287,6 +287,7 @@ impl TableSnapshot {
 struct SecurityPolicySnapshot {
     column_mask_policy_columns_ids: BTreeMap<ColumnId, SecurityPolicyColumnMap>,
     row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
+    masking_where_use_unmasked_value: std::collections::BTreeSet<ColumnId>,
 }
 
 impl SecurityPolicySnapshot {
@@ -301,6 +302,7 @@ impl From<&TableMeta> for SecurityPolicySnapshot {
         Self {
             column_mask_policy_columns_ids: meta.column_mask_policy_columns_ids.clone(),
             row_access_policy_columns_ids: meta.row_access_policy_columns_ids.clone(),
+            masking_where_use_unmasked_value: meta.masking_where_use_unmasked_value.clone(),
         }
     }
 }

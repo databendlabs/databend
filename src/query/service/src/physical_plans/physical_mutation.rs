@@ -18,6 +18,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -363,6 +364,7 @@ impl PhysicalPlanBuilder {
                 recluster_info: None,
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                expected_ttl: mutation.expected_ttl.clone(),
             });
             plan.adjust_plan_id(&mut 0);
             return Ok(plan);
@@ -456,6 +458,7 @@ impl PhysicalPlanBuilder {
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 recluster_info: None,
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                expected_ttl: mutation.expected_ttl.clone(),
             });
 
             plan.adjust_plan_id(&mut 0);
@@ -697,6 +700,7 @@ impl PhysicalPlanBuilder {
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+            expected_ttl: mutation.expected_ttl.clone(),
         });
 
         physical_plan.adjust_plan_id(&mut 0);
@@ -842,7 +846,8 @@ fn build_mutation_row_fetch(
         cols_to_fetch,
         fetched_fields,
         need_wrap_nullable,
-        populate_cache: false,
+        // Rows fetched to mutate them are not read again soon.
+        cache_policy: CachePolicy::READ_ONLY,
         enable_block_id_repartition: true,
         stat_info: None,
         meta: PhysicalPlanMeta::new("RowFetch"),

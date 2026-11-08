@@ -126,6 +126,14 @@ impl VisitedPool {
         }
     }
 
+    /// Reserve the maximum retained workspace size when accounting for a cached index.
+    /// Active lists beyond the retention limit remain query-local temporary allocations.
+    pub(crate) fn retained_memory_size(&self, num_points: usize) -> usize {
+        std::mem::size_of::<Self>()
+            .saturating_add(self.pool.read().capacity() * std::mem::size_of::<VisitedList>())
+            .saturating_add(num_points.saturating_mul(*POOL_KEEP_LIMIT))
+    }
+
     pub fn get(&self, num_points: usize) -> VisitedListHandle<'_> {
         // If there are more concurrent requests, a new temporary list is created dynamically.
         // This limit is implemented to prevent memory leakage.

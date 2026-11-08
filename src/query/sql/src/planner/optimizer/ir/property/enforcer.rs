@@ -27,7 +27,7 @@ use crate::optimizer::ir::property::PhysicalProperty;
 use crate::optimizer::ir::property::RelExpr;
 use crate::optimizer::ir::property::RequiredProperty;
 use crate::plans::Exchange;
-use crate::plans::RelOperator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::ScalarExpr;
 
 /// Enforcer is a trait that can enforce the physical property
@@ -36,7 +36,7 @@ pub trait Enforcer: std::fmt::Debug + Send + Sync {
     fn check_enforce(&self, input_prop: &PhysicalProperty) -> bool;
 
     /// Enforce the physical property
-    fn enforce(&self) -> Result<RelOperator>;
+    fn enforce(&self) -> Result<PhysicalRelOperator>;
 }
 
 /// Enforcer for distribution properties
@@ -66,7 +66,7 @@ impl Enforcer for DistributionEnforcer {
         !self.0.satisfied_by(&input_prop.distribution)
     }
 
-    fn enforce(&self) -> Result<RelOperator> {
+    fn enforce(&self) -> Result<PhysicalRelOperator> {
         match &self.0 {
             Distribution::Serial => Ok(Exchange::Merge.into()),
             Distribution::Broadcast => Ok(Exchange::Broadcast.into()),
@@ -123,7 +123,7 @@ impl PropertyEnforcer {
 
         let plan = s_expr.plan.as_ref().clone();
 
-        if let RelOperator::Join(_) = &plan {
+        if let PhysicalRelOperator::Join(_) = &plan {
             let (probe_required_property, build_required_property) =
                 required_properties.split_at_mut(1);
 

@@ -1,4 +1,4 @@
-# Regressions found by the metamorphic oracle harness (tests/fuzz/tlp.py).
+# Filter semantics regressions, including cases found by tests/fuzz/tlp.py.
 
 statement ok
 CREATE OR REPLACE TABLE fs_t(a INT NULL, c STRING NULL)
@@ -72,8 +72,158 @@ SELECT count(*) FROM fs_t l CROSS JOIN fs_r r WHERE NOT (l.c LIKE 'h%' AND r.x I
 ----
 10
 
+# The null-extended side of a LEFT JOIN without matches is a constant NULL column. A LIKE
+# over it inside an OR must leave its rows to the next OR child instead of dropping them.
+statement ok
+CREATE OR REPLACE TABLE fs_l(k INT, f BOOLEAN NULL, d INT NULL)
+
+statement ok
+INSERT INTO fs_l VALUES (1, true, 1), (2, true, 0), (3, false, 1), (4, false, 0), (5, true, 1), (6, NULL, 1), (7, true, NULL), (8, true, 1)
+
+statement ok
+CREATE OR REPLACE TABLE fs_m(k INT, x INT NULL, c STRING NULL)
+
+statement ok
+INSERT INTO fs_m VALUES (100, 10, 'a')
+
+query I
+SELECT l.k FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k
+WHERE (10 = r.x OR l.f) AND (r.c LIKE '_' OR l.d = 1) ORDER BY l.k
+----
+1
+5
+8
+
+query I
+SELECT l.k FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k
+WHERE (r.c LIKE '_' OR l.f) AND (r.c NOT LIKE 'b%' OR l.d = 1) ORDER BY l.k
+----
+1
+5
+8
+
+query I
+SELECT (SELECT count(*) FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k WHERE (l.f) AND (r.c LIKE '_' OR l.d = 1))
+     + (SELECT count(*) FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k WHERE NOT ((l.f) AND (r.c LIKE '_' OR l.d = 1)))
+     + (SELECT count(*) FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k WHERE ((l.f) AND (r.c LIKE '_' OR l.d = 1)) IS NULL)
+----
+8
+
+statement ok
+DROP TABLE fs_l
+
+statement ok
+DROP TABLE fs_m
+
 statement ok
 DROP TABLE fs_t
 
 statement ok
 DROP TABLE fs_r
+
+# Range-constraint folding must preserve SQL comparison and three-valued logic.
+statement ok
+CREATE OR REPLACE TABLE range_constraint_t(i INT NULL, f DOUBLE NULL, d DECIMAL(25, 4) NULL)
+
+statement ok
+INSERT INTO range_constraint_t VALUES (NULL, NULL, NULL), (5, 5, 5), (10, 'NaN'::DOUBLE, 10), (20, 'inf'::DOUBLE, 5)
+
+# Exclusions can precede the bounds that reduce the range to a singleton.
+query I
+SELECT count(*) FROM range_constraint_t WHERE i != 10 AND i >= 5 AND i >= 10 AND i <= 10
+----
+0
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE i >= 5 AND i <= 10 AND i != 5
+----
+1
+
+# An open endpoint makes a coincident lower/upper range empty.
+query I
+SELECT count(*) FROM range_constraint_t WHERE i > 5 AND i <= 5
+----
+0
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE i >= 5 AND i <= 5
+----
+1
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE i = 10 AND i = 20
+----
+0
+
+# Bounds and exclusions on different columns must not be combined.
+query I
+SELECT count(*) FROM range_constraint_t WHERE i >= 10 AND d <= 5 AND i != 10
+----
+1
+
+# FALSE and NULL are interchangeable only for the top-level filter.
+query I
+SELECT count(*) FROM range_constraint_t WHERE (i != 10 AND i >= 10 AND i <= 10) IS NULL
+----
+1
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE NOT (i != 10 AND i >= 10 AND i <= 10)
+----
+3
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE coalesce(i >= 10 AND i < 10, TRUE)
+----
+1
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE i >= 5 AND i <= NULL
+----
+0
+
+# Decimal comparisons retain precision/scale and endpoint inclusivity.
+query I
+SELECT count(*) FROM range_constraint_t WHERE d != 5.0000 AND d >= 5.0000 AND d <= 5.0000
+----
+0
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE d >= 5.0000 AND d <= 5.0000
+----
+2
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE 5.0000 < d AND 5.0000 >= d
+----
+0
+
+# OrderedFloat SQL semantics: NaN equals NaN and is greater than infinity.
+query I
+SELECT count(*) FROM range_constraint_t WHERE f >= 'NaN'::DOUBLE AND f <= 'NaN'::DOUBLE
+----
+1
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE f != 'NaN'::DOUBLE AND f >= 'NaN'::DOUBLE AND f <= 'NaN'::DOUBLE
+----
+0
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE f > 'inf'::DOUBLE AND f <= 'NaN'::DOUBLE
+----
+1
+
+query I
+SELECT count(*) FROM range_constraint_t WHERE f >= 'NaN'::DOUBLE AND f <= 'inf'::DOUBLE
+----
+0
+
+# Scalar ordering cannot substitute for mixed string/number SQL comparisons.
+query I
+SELECT count(*) FROM (SELECT to_string(number) AS s FROM numbers(3)) WHERE s = 1 AND s = '1'
+----
+1
+
+statement ok
+DROP TABLE range_constraint_t

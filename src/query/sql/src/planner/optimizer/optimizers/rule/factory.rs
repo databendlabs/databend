@@ -60,8 +60,8 @@ use crate::optimizer::optimizers::rule::RulePushDownRankLimitAggregate;
 use crate::optimizer::optimizers::rule::RulePushDownSortEvalScalar;
 use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
+use crate::optimizer::optimizers::rule::RulePushDownTopNUnionScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
-use crate::optimizer::optimizers::rule::RuleSplitAggregate;
 use crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView;
 
 pub struct RuleFactory;
@@ -93,6 +93,7 @@ impl RuleFactory {
             RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
             RuleID::PushDownSortFilterScan => Ok(Box::new(RulePushDownSortFilterScan::new())),
+            RuleID::PushDownTopNUnionScan => Ok(Box::new(RulePushDownTopNUnionScan::new())),
             RuleID::PushDownSortEvalScalar => {
                 Ok(Box::new(RulePushDownSortEvalScalar::new(metadata)))
             }
@@ -106,9 +107,12 @@ impl RuleFactory {
             RuleID::PushDownLimitWindow => Ok(Box::new(RulePushDownLimitWindow::new(
                 ctx.get_max_push_down_limit(),
             ))),
-            RuleID::PushDownRankLimitAggregate => Ok(Box::new(
-                RulePushDownRankLimitAggregate::new(ctx.get_max_push_down_limit()),
-            )),
+            RuleID::PushDownRankLimitAggregate => {
+                Ok(Box::new(RulePushDownRankLimitAggregate::new(
+                    ctx.get_max_push_down_limit(),
+                    ctx.get_enable_aggregate_final_top_n(),
+                )))
+            }
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
             RuleID::PushDownFilterWindowTopN => {
@@ -122,7 +126,6 @@ impl RuleFactory {
             RuleID::HierarchicalGroupingSetsToUnion => {
                 Ok(Box::new(RuleHierarchicalGroupingSetsToUnion::new(ctx)))
             }
-            RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new(
                 ctx.get_stat_context().clone(),
             ))),

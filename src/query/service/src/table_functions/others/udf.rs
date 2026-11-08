@@ -19,6 +19,7 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoType;
@@ -192,7 +193,7 @@ impl Table for UdfEchoTable {
         _ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let part = plan.parts.partitions.first().unwrap();
         let part = part.as_any().downcast_ref::<StringPart>().unwrap();

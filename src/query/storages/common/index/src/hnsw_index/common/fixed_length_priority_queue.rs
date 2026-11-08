@@ -58,6 +58,10 @@ impl<T: Ord> FixedLengthPriorityQueue<T> {
         FixedLengthPriorityQueue::<T> { heap, length }
     }
 
+    pub(crate) fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.heap.capacity() * std::mem::size_of::<T>()
+    }
+
     /// Pushes a value into the priority queue.
     ///
     /// If the queue if full, replaces the smallest value and returns it.

@@ -105,7 +105,14 @@ impl Interpreter for AlterTablePartitionByInterpreter {
 
             new_table_meta.updated_on = chrono::Utc::now();
             let catalog = self.ctx.get_catalog(&plan.catalog).await?;
-            update_table_meta(fuse_table, &new_table_meta, catalog, self.ctx.get_tenant()).await?;
+            update_table_meta(
+                fuse_table,
+                &new_table_meta,
+                catalog,
+                self.ctx.get_tenant(),
+                None,
+            )
+            .await?;
 
             Ok(PipelineBuildResult::create())
         })

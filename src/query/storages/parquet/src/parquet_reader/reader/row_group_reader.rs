@@ -69,8 +69,8 @@ use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::predicate::build_predicate;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::partition::ParquetRowGroupPart;
+use crate::read_schema::ParquetSchemaResolver;
 use crate::read_settings::ReadSettings;
-use crate::transformer::RecordBatchTransformer;
 
 static DELETES_FILE_SCHEMA: LazyLock<arrow_schema::Schema> = LazyLock::new(|| {
     arrow_schema::Schema::new(vec![
@@ -131,7 +131,7 @@ pub struct RowGroupReader {
     pub(super) schema_desc_from: Option<String>,
     pub(super) schema_desc_from_arrow_fallback: bool,
     pub(super) arrow_schema: Option<arrow_schema::Schema>,
-    pub(super) transformer: Option<RecordBatchTransformer>,
+    pub(super) schema_resolver: Option<Arc<dyn ParquetSchemaResolver>>,
     // Options
     pub(super) batch_size: usize,
 }
@@ -139,6 +139,10 @@ pub struct RowGroupReader {
 impl RowGroupReader {
     pub fn operator<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
         Ok(self.op_registry.get_operator_path(location)?)
+    }
+
+    pub(crate) fn schema_resolver(&self) -> Option<&Arc<dyn ParquetSchemaResolver>> {
+        self.schema_resolver.as_ref()
     }
 
     pub fn schema_desc(&self) -> &SchemaDescPtr {
@@ -241,12 +245,17 @@ impl RowGroupReader {
             };
             let row_selection =
                 Self::build_deletes_row_selection(parquet_meta.row_groups(), positional_deletes)?;
+            let read_schema = self
+                .schema_resolver
+                .as_ref()
+                .map(|resolver| resolver.read_schema());
             let (predicate, _) = build_predicate(
                 self.ctx.get_function_context()?,
                 &prewhere_info,
                 &self.table_schema,
                 &self.schema_desc,
                 self.arrow_schema.as_ref(),
+                read_schema.as_deref(),
             )?;
             *delete_filter = Some(DeleteFilter {
                 row_selection,
@@ -292,14 +301,7 @@ impl RowGroupReader {
 
         let builder = &self.policy_builders[policy as usize];
         builder
-            .fetch_and_build(
-                row_group,
-                selections,
-                topk_sorter,
-                self.transformer.clone(),
-                self.batch_size,
-                filter,
-            )
+            .fetch_and_build(row_group, selections, topk_sorter, self.batch_size, filter)
             .await
     }
 

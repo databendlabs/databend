@@ -63,7 +63,7 @@ pub enum FlightCompression {
     Zstd,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FlightKeepAliveParams {
     pub time: Option<Duration>,
     pub interval: Option<Duration>,
@@ -256,6 +256,10 @@ impl Settings {
         self.try_set_u64("max_threads", val)
     }
 
+    pub fn get_enable_experimental_clone_table(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_clone_table")? != 0)
+    }
+
     pub fn get_max_vacuum_threads(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_threads")
     }
@@ -437,6 +441,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_dio")? != 0)
     }
 
+    pub fn get_filter_and_strategy(&self) -> Result<String> {
+        self.try_get_string("filter_and_strategy")
+    }
+
     /// # Safety
     pub unsafe fn get_disable_join_reorder(&self) -> Result<bool> {
         Ok(unsafe { self.unchecked_try_get_u64("disable_join_reorder") }? != 0)
@@ -448,6 +456,10 @@ impl Settings {
 
     pub fn get_enable_top_n(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_top_n")? != 0)
+    }
+
+    pub fn get_enable_aggregate_final_top_n(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_aggregate_final_top_n")? != 0)
     }
 
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
@@ -651,6 +663,10 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_partial_aggregate_mode(&self) -> Result<String> {
+        self.try_get_string("partial_aggregate_mode")
+    }
+
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
@@ -683,20 +699,8 @@ impl Settings {
         self.try_set_u64("enable_table_lock", value)
     }
 
-    pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
-    }
-
     pub fn get_enable_experimental_row_access_policy(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_row_access_policy")? != 0)
-    }
-
-    pub fn get_enable_experimental_connection_privilege_check(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_connection_privilege_check")? != 0)
-    }
-
-    pub fn get_enable_experimental_sequence_privilege_check(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_sequence_privilege_check")? != 0)
     }
 
     pub fn get_enable_expand_roles(&self) -> Result<bool> {
@@ -749,10 +753,6 @@ impl Settings {
 
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
-    }
-
-    pub fn get_enable_distributed_compact(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_compact")? != 0)
     }
 
     pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
@@ -875,10 +875,6 @@ impl Settings {
         self.try_get_u64("compact_max_block_selection")
     }
 
-    pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
-    }
-
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
         Ok(self.try_get_u64("ddl_column_type_nullable")? != 0)
     }
@@ -897,6 +893,10 @@ impl Settings {
 
     pub fn get_prewhere_selectivity_threshold(&self) -> Result<u64> {
         self.try_get_u64("prewhere_selectivity_threshold")
+    }
+
+    pub fn get_enable_encoded_columns(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_encoded_columns")? != 0)
     }
 
     pub fn get_numeric_cast_option(&self) -> Result<String> {
@@ -1124,6 +1124,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_prune_cache")? == 1)
     }
 
+    pub fn get_vector_refine_factor(&self) -> Result<u64> {
+        self.try_get_u64("vector_refine_factor")
+    }
+
+    pub fn get_vector_search_ef(&self) -> Result<u64> {
+        self.try_get_u64("vector_search_ef")
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
@@ -1140,12 +1148,32 @@ impl Settings {
         self.try_get_u64("flight_connection_retry_interval")
     }
 
+    pub fn get_enable_flight_control_channel_reuse(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_flight_control_channel_reuse")? != 0)
+    }
+
     pub fn get_hash_shuffle_rows_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("hash_shuffle_rows_threshold")? as usize)
     }
 
     pub fn get_hash_shuffle_bytes_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("hash_shuffle_bytes_threshold")? as usize)
+    }
+
+    pub fn get_hash_shuffle_send_buffer_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("hash_shuffle_send_buffer_bytes")? as usize)
+    }
+
+    pub fn get_exchange_frame_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("exchange_frame_bytes")? as usize)
+    }
+
+    pub fn get_exchange_send_queue_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("exchange_send_queue_bytes")? as usize)
+    }
+
+    pub fn get_exchange_recv_queue_bytes(&self) -> Result<usize> {
+        Ok(self.try_get_u64("exchange_recv_queue_bytes")? as usize)
     }
 
     pub fn get_network_policy(&self) -> Result<String> {
@@ -1290,10 +1318,10 @@ impl Settings {
     }
 
     pub fn get_s3_storage_class(&self) -> Result<S3StorageClass> {
-        let s3_storage_class_setting = self.try_get_string("s3_storage_class")?;
+        let s3_storage_class_setting = self.try_get_string("experimental_s3_storage_class")?;
         S3StorageClass::from_str(&s3_storage_class_setting).map_err(|e| {
             ErrorCode::InvalidConfig(format!(
-                "Invalid s3_storage_class setting '{}': {}. Valid values are 'standard' or 'intelligent_tiering'.",
+                "Invalid experimental_s3_storage_class setting '{}': {}. Valid values are 'standard' or 'intelligent_tiering'.",
                 s3_storage_class_setting, e
             ))
         })
@@ -1309,10 +1337,6 @@ impl Settings {
 
     pub fn get_enable_experimental_table_ref(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_table_ref")? != 0)
-    }
-
-    pub fn get_force_aggregate_shuffle_mode(&self) -> Result<String> {
-        self.try_get_string("force_aggregate_shuffle_mode")
     }
 
     pub fn get_system_tables_count_db_concurrency(&self) -> Result<u64> {

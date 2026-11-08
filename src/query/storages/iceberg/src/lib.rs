@@ -24,6 +24,7 @@ mod catalog;
 mod credential;
 mod database;
 mod iceberg_inspect;
+mod parquet_schema;
 mod partition;
 mod predicate;
 mod statistics;

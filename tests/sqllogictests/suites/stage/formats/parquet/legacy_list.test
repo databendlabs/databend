@@ -1,0 +1,29 @@
+# Low-level Parquet fixtures, not PyArrow-generated three-level lists:
+# old_items (LIST) contains a repeated struct called array or old_items_tuple.
+# Each has x=[10,20,30], definitions=[3,3,3,0], repetitions=[0,1,0,0].
+# run-with-settings: parquet_fast_read_bytes=0
+# run-with-settings: parquet_fast_read_bytes=1048576
+
+query IT
+SELECT k, old_items FROM @data/parquet/legacy_list_array.parquet;
+----
+1 [(10),(20)]
+2 [(30)]
+3 NULL
+
+query IT
+SELECT k, old_items FROM @data/parquet/legacy_list_tuple.parquet;
+----
+1 [(10),(20)]
+2 [(30)]
+3 NULL
+
+query II
+SELECT k, old_items[1]:x FROM @data/parquet/legacy_list_tuple.parquet WHERE k < 3 ORDER BY k DESC LIMIT 1;
+----
+2 30
+
+query I
+SELECT count(*) FROM @data/parquet/legacy_list_array.parquet WHERE old_items IS NULL;
+----
+1

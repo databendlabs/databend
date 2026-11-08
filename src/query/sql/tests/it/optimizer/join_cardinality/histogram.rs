@@ -129,6 +129,7 @@ async fn write_sql_join_input(
         s_expr.planned()?.expr(),
         expected_join_type,
         case.name,
+        &ctx.stat_context()?,
     )?;
     assert_eq!(joins, 1);
     Ok(())

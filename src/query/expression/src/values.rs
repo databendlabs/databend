@@ -59,6 +59,8 @@ use crate::BlockEntry;
 use crate::ColumnView;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
+use crate::types::EncodedColumn;
+use crate::types::NarrowBuffer;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
@@ -217,6 +219,7 @@ pub enum Column {
     Geography(GeographyColumn),
     Vector(VectorColumn),
     Opaque(OpaqueColumn),
+    Encoded(Box<EncodedColumn>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -262,6 +265,11 @@ pub enum ColumnVec {
     Geography(Vec<GeographyColumn>),
     Vector(VectorColumnVec),
     Opaque(OpaqueColumnVec),
+    /// Dictionary encoded chunks whose keys index one shared dictionary.
+    Dict {
+        keys: Vec<NarrowBuffer>,
+        values: Column,
+    },
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -1277,6 +1285,7 @@ impl Column {
             Column::Tuple(fields) => fields[0].len(),
             Column::Variant(col) => col.len(),
             Column::Opaque(col) => col.len(),
+            Column::Encoded(col) => col.len(),
             Column::Geometry(col) => col.len(),
             Column::Geography(col) => col.len(),
             Column::Vector(col) => col.len(),
@@ -1312,6 +1321,7 @@ impl Column {
             Column::Geography(col) => Some(ScalarRef::Geography(col.index(index)?)),
             Column::Vector(col) => Some(ScalarRef::Vector(col.index(index)?)),
             Column::Opaque(col) => col.index(index).map(ScalarRef::Opaque),
+            Column::Encoded(col) => col.index(index),
         }
     }
 
@@ -1348,6 +1358,7 @@ impl Column {
                 Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
                 Column::Vector(col) => ScalarRef::Vector(col.index_unchecked(index)),
                 Column::Opaque(col) => ScalarRef::Opaque(col.index_unchecked(index)),
+                Column::Encoded(col) => col.index_unchecked(index),
             }
         }
     }
@@ -1411,6 +1422,7 @@ impl Column {
             Column::Geography(col) => Column::Geography(col.slice(range)),
             Column::Vector(col) => Column::Vector(col.slice(range)),
             Column::Opaque(col) => Column::Opaque(col.slice(range)),
+            Column::Encoded(col) => Column::Encoded(Box::new(col.slice(range))),
         }
     }
 
@@ -1522,6 +1534,7 @@ impl Column {
             | Column::Geography(_)
             | Column::Vector(_)
             | Column::Opaque(_) => Domain::Undefined,
+            Column::Encoded(col) => col.domain(),
         }
     }
 
@@ -1565,6 +1578,7 @@ impl Column {
             Column::Geography(_) => DataType::Geography,
             Column::Vector(col) => DataType::Vector(col.data_type()),
             Column::Opaque(col) => col.data_type(),
+            Column::Encoded(col) => col.data_type(),
         }
     }
 
@@ -1901,6 +1915,7 @@ impl Column {
             Column::Geography(col) => GeographyType::column_memory_size(col, gc),
             Column::Vector(col) => col.memory_size(),
             Column::Opaque(col) => col.memory_size(),
+            Column::Encoded(col) => col.memory_size(gc),
         }
     }
 
@@ -1937,6 +1952,22 @@ impl Column {
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
             Column::Vector(col) => col.memory_size(),
             Column::Opaque(col) => col.memory_size(), // Same as memory size for opaque types
+            // Encoded columns are decoded before serialization.
+            Column::Encoded(col) => match col.as_ref() {
+                EncodedColumn::For(c) => c.len() * c.decoded_width(),
+                // Rows can select some values more often than others: the size of variable
+                // size values is summed over the rows.
+                EncodedColumn::Dict(c) => match &c.values {
+                    Column::String(values) => {
+                        c.len() * 8
+                            + c.keys
+                                .iter()
+                                .map(|key| values.index(key as usize).unwrap().len())
+                                .sum::<usize>()
+                    }
+                    values => values.serialize_size() / values.len().max(1) * c.len(),
+                },
+            },
         }
     }
 
@@ -2067,6 +2098,7 @@ impl ColumnBuilder {
             Column::Opaque(col) => {
                 ColumnBuilder::Opaque(crate::types::opaque::OpaqueColumnBuilder::from_column(col))
             }
+            Column::Encoded(col) => ColumnBuilder::from_column(col.decode()),
         }
     }
 
@@ -2572,6 +2604,14 @@ impl ColumnBuilder {
             (ColumnBuilder::Vector(builder), ScalarRef::Vector(value)) => {
                 builder.push_repeat(value, n);
             }
+            (ColumnBuilder::Opaque(builder), ScalarRef::Opaque(value)) => {
+                with_opaque_type!(|T| match (builder, value) {
+                    (OpaqueColumnBuilder::T(builder), OpaqueScalarRef::T(value)) => {
+                        builder.extend(std::iter::repeat_n(*value, n));
+                    }
+                    _ => unreachable!("Mismatched Opaque types"),
+                })
+            }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         };
     }
@@ -3017,6 +3057,7 @@ impl ColumnBuilder {
                     _ => unreachable!("Mismatched Opaque types"),
                 })
             }
+            (this, Column::Encoded(other)) => this.append_column(&other.decode()),
             (this, other) => unreachable!(
                 "unable append column(data type: {:?}) into builder(data type: {:?})",
                 other.data_type(),

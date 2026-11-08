@@ -94,6 +94,7 @@ fn test_decode_v74_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         column_mask_policy_columns_ids: BTreeMap::new(),
+        masking_where_use_unmasked_value: Default::default(),
         row_access_policy: None,
         indexes: btreemap! {},
         row_access_policy_columns_ids: None,

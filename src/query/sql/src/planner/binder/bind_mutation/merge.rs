@@ -84,6 +84,7 @@ impl Binder {
             strategy: mutation_strategy,
             matched_clauses,
             unmatched_clauses,
+            expected_ttl: None,
         };
 
         self.bind_mutation(bind_context, mutation).await

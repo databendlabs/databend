@@ -32,6 +32,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_common_sql::DefinitionScope;
 use databend_common_sql::Planner;
 use databend_common_sql::QueryLineage;
 use databend_common_sql::QueryLineageRelation;
@@ -112,6 +113,7 @@ struct ViewEntry {
     /// The stored definition: the View query, or the original (logical) query of a
     /// materialized view.
     query: Option<String>,
+    definition_scope: DefinitionScope,
     /// Persisted logical output schema; only materialized views have one.
     logical_schema: Option<TableSchema>,
     /// The source table id a materialized view is bound to. The stored query names the source,
@@ -253,6 +255,7 @@ impl RefreshLineageInterpreter {
                     name: table.name().to_string(),
                     table_id: table_info.ident.table_id,
                     created_on: table_info.meta.created_on.timestamp_micros(),
+                    definition_scope: DefinitionScope::from_stored_options(table_info.options()),
                     query,
                     logical_schema,
                     source_table_id,
@@ -280,7 +283,8 @@ impl RefreshLineageInterpreter {
         })?;
         // Bind only: lineage must describe the stored definition, not an optimized plan
         // that may have been folded or routed through a materialized view.
-        let mut planner = Planner::new(self.ctx.clone());
+        let mut planner =
+            Planner::new(self.ctx.clone()).with_definition_scope(view.definition_scope.clone());
         let query_plan = planner.bind_sql(query).await?;
         let target = QueryLineageRelation {
             catalog: DEFAULT_CATALOG.to_string(),

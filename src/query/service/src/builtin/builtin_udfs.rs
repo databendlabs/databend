@@ -54,7 +54,13 @@ impl BuiltinUDFs {
                     headers,
                     language,
                     immutable,
+                    external_access_integrations,
                 } => {
+                    if !external_access_integrations.is_empty() {
+                        return Err(ErrorCode::InvalidArgument(
+                            "Built-in UDFs cannot reference tenant external access integrations",
+                        ));
+                    }
                     let mut arg_names = Vec::with_capacity(arg_types.len());
                     let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                     match &arg_types {

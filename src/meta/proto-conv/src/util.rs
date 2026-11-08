@@ -218,7 +218,12 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (186, "2026-09-04: Add: table.proto/TableMeta.ttl row-level TTL expression"),
     (187, "2026-09-08: Add: datatype.proto/AggregateState.state_version"),
     (188, "2026-10-09: Add: table.proto/TableMeta partition key sequence and identity"),
-    (189, "2026-10-10: Add: file_format.proto Loki file format"),
+    (189, "2026-10-11: Add: zero-copy table clone binding"),
+    (190, "2026-10-12: Add: remote UDF external access integrations and network rules"),
+    (191, "2026-10-22: Add: table.proto/TableMeta.masking_where_use_unmasked_value"),
+    (192, "2026-10-29: Add: Python script UDF external access integrations"),
+    (193, "2026-11-02: Add: CsvFileFormatParams quote_non_numeric quote style"),
+    (194, "2026-10-10: Add: file_format.proto Loki file format"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

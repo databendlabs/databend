@@ -90,15 +90,20 @@ fn cloud_udf() -> UserDefinedFunction {
 }
 
 fn udaf_script(name: &str) -> UserDefinedFunction {
+    udaf_script_with_language(name, "javascript")
+}
+
+fn udaf_script_with_language(name: &str, language: &str) -> UserDefinedFunction {
     let now = Utc::now();
     UserDefinedFunction {
         name: name.to_string(),
         description: String::new(),
         definition: UDFDefinition::UDAFScript(UDAFScript {
+            external_access_integrations: vec![],
             code: "return state;".to_string(),
             imports: Vec::new(),
             packages: Vec::new(),
-            language: "javascript".to_string(),
+            language: language.to_string(),
             arg_types: vec![DataType::String],
             state_fields: vec![DataField::new("state", DataType::String)],
             return_type: DataType::String,
@@ -491,5 +496,86 @@ async fn test_udaf_script_loads_code_and_marks_runtime_state() -> Result<()> {
     assert_eq!(udf_adapter.stage_load_count(), 1);
     assert!(bind_context.have_udf_script);
     assert!(result_cache.result_cache_uncacheable());
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_bound_python_scripts_recheck_operator_config_before_loading_code() -> Result<()> {
+    for (mut udf, sql) in [
+        (cloud_udf(), "cloud_udf(number)"),
+        (udaf_script_with_language("udaf", "python"), "udaf(text)"),
+    ] {
+        match &mut udf.definition {
+            UDFDefinition::UDFScript(script) => {
+                script.external_access_integrations = vec!["access".into()]
+            }
+            UDFDefinition::UDAFScript(script) => {
+                script.external_access_integrations = vec!["access".into()]
+            }
+            _ => unreachable!(),
+        }
+        for (enabled, sandboxed) in [(false, false), (true, false), (true, true)] {
+            let mut udf_adapter = TestUdfAdapter::with_definitions([udf.clone()]);
+            udf_adapter
+                .validation_config
+                .enable_python_udf_external_access = enabled;
+            udf_adapter.validation_config.enable_udf_sandbox = sandboxed;
+            let adapter =
+                TestTypeCheckAdapter::new(test_settings()).with_udf_adapter(udf_adapter.clone());
+            let mut bind_context = test_bind_context(ExprContext::Unknown);
+            let result = resolve_type_check_sql(sql, adapter, &mut bind_context);
+            if enabled && !sandboxed {
+                result?;
+                assert_eq!(udf_adapter.code_load_count(), 1);
+            } else {
+                let error = result.unwrap_err();
+                let option = if sandboxed {
+                    "enable_udf_sandbox"
+                } else {
+                    "enable_python_udf_external_access"
+                };
+                assert!(error.message().contains(option), "{error}");
+                assert_eq!(udf_adapter.code_load_count(), 0);
+            }
+            assert_eq!(udf_adapter.cloud_script_count(), 0);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_udaf_script_language_is_validated() -> Result<()> {
+    let resolve = |udf_adapter: TestUdfAdapter| {
+        let adapter = TestTypeCheckAdapter::new(test_settings()).with_udf_adapter(udf_adapter);
+        let mut bind_context = test_bind_context(ExprContext::Unknown);
+        resolve_type_check_sql("udaf(text)", adapter, &mut bind_context)
+    };
+
+    // Python aggregates run inside the query process; outside sandbox mode
+    // they follow `enable_udf_python_script` like scalar Python UDFs.
+    resolve(TestUdfAdapter::with_definitions([
+        udaf_script_with_language("udaf", "python"),
+    ]))?;
+
+    // In sandbox mode they have no isolated path and must be rejected
+    // before any code is loaded.
+    let sandboxed = TestUdfAdapter::with_definitions([udaf_script_with_language("udaf", "python")])
+        .with_enable_udf_sandbox();
+    let err = resolve(sandboxed.clone()).unwrap_err();
+    assert_eq!(err.code(), ErrorCode::UNIMPLEMENTED);
+    assert!(err.message().contains("enable_udf_sandbox"));
+    assert_eq!(sandboxed.code_load_count(), 0);
+
+    let mut disabled = TestUdfAdapter::with_definitions([udaf_script("udaf")]);
+    disabled.validation_config.enable_udf_js_script = false;
+    let err = resolve(disabled).unwrap_err();
+    assert!(err.message().contains("not enabled"));
+
+    // WebAssembly aggregates are not implemented by the runtime.
+    let err = resolve(TestUdfAdapter::with_definitions([
+        udaf_script_with_language("udaf", "wasm"),
+    ]))
+    .unwrap_err();
+    assert!(err.message().contains("WebAssembly aggregate UDF"));
     Ok(())
 }

@@ -39,10 +39,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_index::eliminate_cast;
 use databend_storages_common_index::statistics_to_domain;
-use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -59,7 +57,6 @@ const GRANULE_KEY_COLUMN_PREFIX: &str = "__granule_cluster_key_";
 pub struct SparseGranuleIndexPruner {
     evaluator: GranulePredicateEvaluator,
     dal: Operator,
-    read_settings: ReadSettings,
     cluster_key_types: Vec<DataType>,
     table_cluster_key_id: u32,
 }
@@ -77,7 +74,6 @@ pub(crate) struct SparsePrunePrefetch {
 }
 
 impl SparseGranuleIndexPruner {
-    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         func_ctx: FunctionContext,
         _schema: &TableSchemaRef,
@@ -85,7 +81,6 @@ impl SparseGranuleIndexPruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         dal: Operator,
-        read_settings: ReadSettings,
     ) -> Result<Option<Arc<SparseGranuleIndexPruner>>> {
         let Some(cluster_key_meta) = cluster_key_meta else {
             return Ok(None);
@@ -114,7 +109,6 @@ impl SparseGranuleIndexPruner {
         Ok(Some(Arc::new(SparseGranuleIndexPruner {
             evaluator,
             dal,
-            read_settings,
             cluster_key_types,
             table_cluster_key_id: cluster_key_meta.0,
         })))
@@ -139,15 +133,6 @@ impl SparseGranuleIndexPruner {
         block_meta: &BlockMeta,
         granule_index: &GranuleIndexLayout,
     ) -> Result<Option<SparsePrunePrefetch>> {
-        self.prefetch_mins_with_stats(block_meta, granule_index, None)
-    }
-
-    pub(crate) fn prefetch_mins_with_stats(
-        &self,
-        block_meta: &BlockMeta,
-        granule_index: &GranuleIndexLayout,
-        lock_stats: Option<Arc<CacheLockStats>>,
-    ) -> Result<Option<SparsePrunePrefetch>> {
         let Some(cluster_stats) = block_meta.cluster_stats.as_ref() else {
             return Ok(None);
         };
@@ -168,13 +153,11 @@ impl SparseGranuleIndexPruner {
             return Ok(None);
         };
 
-        let mins = PrefetchedGranuleMins::prefetch_with_stats(
+        let mins = PrefetchedGranuleMins::prefetch(
             &self.dal,
-            &self.read_settings,
             mins_layout,
             self.cluster_key_types.len(),
             num_granules,
-            lock_stats,
         )?;
         Ok(Some(SparsePrunePrefetch {
             mins,

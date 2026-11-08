@@ -222,6 +222,9 @@ def validate_pull_request(
     get_user: Callable[[str], dict | None],
 ) -> ValidationResult:
     pull_request = event["pull_request"]
+    if pull_request.get("draft"):
+        return ValidationResult(migration="draft-pr")
+
     created_at = parse_github_time(pull_request.get("created_at"))
     if created_at and created_at < AI_DECLARATION_ENFORCEMENT_START:
         return ValidationResult(migration="legacy-pr")

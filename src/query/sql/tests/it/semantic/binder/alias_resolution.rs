@@ -19,7 +19,6 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use databend_common_exception::Result;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use serde::Deserialize;
 
@@ -728,7 +727,7 @@ impl AliasMatrixYamlCase {
             writeln!(file, "sql: {}", run.sql)?;
             let outcome = match ctx.bind_sql(&run.sql).await {
                 Ok(plan) => SqlTestOutcome::Plan(
-                    plan.format_indent(Default::default(), &StatContext::default())?,
+                    plan.format_indent(Default::default(), &ctx.stat_context()?)?,
                 ),
                 Err(err) => SqlTestOutcome::Error {
                     code: err.code(),

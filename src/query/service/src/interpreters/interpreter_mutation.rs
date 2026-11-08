@@ -42,8 +42,8 @@ use log::info;
 
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::build_update_stream_reqs;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -256,7 +256,7 @@ pub async fn build_mutation_info(
 
     let table_snapshot = fuse_table.read_table_snapshot().await?;
     let table_info = fuse_table.get_table_info().clone();
-    let update_stream_meta = dml_build_update_stream_req(ctx.clone()).await?;
+    let update_stream_meta = build_update_stream_reqs(&ctx, false).await?;
     let (statistics, partitions) = mutation_source_partitions(
         ctx.clone(),
         mutation,

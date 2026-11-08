@@ -36,8 +36,8 @@ execute_and_verify() {
 # Setup users and roles
 execute_query_silent "drop user if exists a" "root:"
 execute_query_silent "drop role if exists ra" "root:"
-execute_query_silent "create user a identified by '123' with default_role='ra'" "root:"
 execute_query_silent "create role ra" "root:"
+execute_query_silent "create user a identified by '123' with default_role='ra'" "root:"
 execute_query_silent "grant select , drop on system_history.* to role ra" "root:"
 execute_query_silent "grant alter on system_history.* to role ra" "root:"
 execute_query_silent "grant role ra to a" "root:"

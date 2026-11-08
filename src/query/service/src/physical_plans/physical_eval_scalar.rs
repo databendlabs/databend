@@ -39,9 +39,9 @@ use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Filter;
 use databend_common_sql::plans::FunctionCall;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::ProjectSet;
 use databend_common_sql::plans::RelOp;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Visitor;
@@ -283,6 +283,11 @@ impl PhysicalPlanBuilder {
 
         let mut projections = BTreeSet::new();
         for column in column_projections.iter() {
+            // An item may redefine a child column under the same symbol, for example
+            // to make a grouping key nullable. Project only the new value, not both.
+            if exprs.iter().any(|(_, index)| index == column) {
+                continue;
+            }
             if let Some((index, _)) = input_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
             }
@@ -341,7 +346,7 @@ impl PhysicalPlanBuilder {
             return Ok(None);
         }
 
-        if let RelOperator::Filter(filter) = s_expr.plan() {
+        if let PhysicalRelOperator::Filter(filter) = s_expr.plan() {
             let child = s_expr.child(0)?;
             let project_set: ProjectSet = child.plan().clone().try_into()?;
             let Some(new_project_set) =

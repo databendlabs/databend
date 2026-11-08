@@ -27,7 +27,6 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::ConstantExpr;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
@@ -64,10 +63,6 @@ impl Rule for RuleFoldCountAggregate {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let agg: Aggregate = s_expr.plan().clone().try_into()?;
-
-        if agg.mode == AggregateMode::Final || agg.mode == AggregateMode::Partial {
-            return Ok(());
-        }
 
         let rel_expr = RelExpr::with_s_expr(s_expr);
         let input_stat_info = rel_expr.derive_cardinality_child(0, &self.stat_context)?;
@@ -122,11 +117,5 @@ impl Rule for RuleFoldCountAggregate {
 
     fn matchers(&self) -> &[Matcher] {
         &self.matchers
-    }
-}
-
-impl Default for RuleFoldCountAggregate {
-    fn default() -> Self {
-        Self::new(StatContext::default())
     }
 }

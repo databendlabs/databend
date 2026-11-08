@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashSet;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -153,7 +154,7 @@ impl IPhysicalPlan for CompactSource {
         let block_reader = table.create_block_reader(
             builder.ctx.clone(),
             Projection::Columns(table.all_column_indices()),
-            false,
+            CachePolicy::READ_ONLY,
         )?;
         let stream_ctx = if table.change_tracking_enabled() {
             Some(StreamContext::try_create(
@@ -270,8 +271,7 @@ impl PhysicalPlanBuilder {
             meta: PhysicalPlanMeta::new("ConstantTableScan"),
         });
 
-        let is_distributed = (!self.ctx.get_cluster().is_empty())
-            && self.ctx.get_settings().get_enable_distributed_compact()?;
+        let is_distributed = !self.ctx.get_cluster().is_empty();
         if is_distributed {
             root = PhysicalPlan::new(Exchange {
                 input: root,
@@ -296,6 +296,7 @@ impl PhysicalPlanBuilder {
             recluster_info: None,
             table_meta_timestamps,
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         });
 
         root.adjust_plan_id(&mut 0);

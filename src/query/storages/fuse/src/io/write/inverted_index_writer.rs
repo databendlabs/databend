@@ -276,7 +276,7 @@ impl BlockIndexLowLevelWriter for InvertedIndexLowLevelWriter {
             columns.push(if fragments.len() == 1 {
                 fragments.into_iter().next().unwrap()
             } else {
-                Column::concat_columns(fragments.into_iter())?
+                Column::concat_columns(fragments)?
             });
         }
         let mut writer = self
@@ -786,6 +786,7 @@ mod tests {
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::StringType;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_index::BundleSizes;
     use opendal::services::Memory;
     use tantivy::query::QueryParser;
@@ -872,6 +873,7 @@ mod tests {
                 .unwrap();
         let reader = InvertedIndexReader::create(
             operator.clone(),
+            CachePolicy::DEFAULT,
             false,
             create_tokenizer_manager(&index_options(), None),
             warmup,
@@ -936,8 +938,13 @@ mod tests {
                 fuzziness,
             )
             .unwrap();
-            let reader =
-                InvertedIndexReader::create(operator.clone(), false, tokenizers.clone(), warmup);
+            let reader = InvertedIndexReader::create(
+                operator.clone(),
+                CachePolicy::DEFAULT,
+                false,
+                tokenizers.clone(),
+                warmup,
+            );
             let (mut rows, _) = reader
                 .do_filter(
                     query,
@@ -1009,6 +1016,7 @@ mod merge_tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::VariantType;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_index::BundleSizes;
     use databend_storages_common_index::InvertedIndexMerger;
     use databend_storages_common_index::MergeOutput;
@@ -1099,6 +1107,7 @@ mod merge_tests {
                 .unwrap();
         let reader = InvertedIndexReader::create(
             operator.clone(),
+            CachePolicy::DEFAULT,
             false,
             create_tokenizer_manager(&index_options(), None),
             warmup,

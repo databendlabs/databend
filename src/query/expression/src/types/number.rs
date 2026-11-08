@@ -119,6 +119,25 @@ impl<Num: Number> SimpleType for CoreNumber<Num> {
         Num::try_downcast_column(col.as_number()?).cloned()
     }
 
+    #[inline]
+    fn from_for_raw(raw: i128) -> Self::Scalar {
+        // `raw as Num`. `Num` is one of the integer types below (floats are not frame of
+        // reference encoded); the type tests are resolved at compile time and the conversion
+        // from `$t` to `Num` is the identity, so a row costs a truncating cast, no range check.
+        macro_rules! truncate {
+            ($($t:ty),*) => {$(
+                if std::any::TypeId::of::<Num>() == std::any::TypeId::of::<$t>() {
+                    return num_traits::cast(raw as $t).unwrap();
+                }
+            )*};
+        }
+        truncate!(u8, u16, u32, u64, i8, i16, i32, i64);
+        unreachable!(
+            "{} is not frame of reference encodable",
+            std::any::type_name::<Num>()
+        )
+    }
+
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Num::try_downcast_domain(domain.as_number()?)
     }
@@ -354,6 +373,9 @@ impl AccessType for AnyNumberType {
     }
 
     fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        if let Column::Encoded(encoded) = col {
+            return Self::try_downcast_column(&encoded.decode());
+        }
         col.as_number().cloned().ok_or_else(|| {
             ErrorCode::BadDataValueType(format!("failed to downcast column {col:?} into number"))
         })

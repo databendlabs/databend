@@ -26,6 +26,7 @@ use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::utils::column_merge_validity;
+use databend_common_expression::with_column_view_iter;
 
 use super::*;
 
@@ -46,8 +47,8 @@ where
         validity: Option<&Bitmap>,
         function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        try_for_each_selected(values.iter(), validity, |value| {
-            self.add(value, function_info)
+        with_column_view_iter!(I, &values, |values| {
+            try_for_each_selected(values, validity, |value| self.add(value, function_info))
         })
     }
 
@@ -323,11 +324,13 @@ where
         .downcast::<I>()
         .unwrap();
 
-        input.states.try_for_each_state_value::<S, _>(
-            values.iter(),
-            validity.as_ref(),
-            |state, value| state.add(value, &self.function_info),
-        )
+        with_column_view_iter!(I, &values, |values| {
+            input.states.try_for_each_state_value::<S, _>(
+                values,
+                validity.as_ref(),
+                |state, value| state.add(value, &self.function_info),
+            )
+        })
     }
 
     fn accumulate_row(&self, input: UnaryAccumulateRowInput<'_>) -> Result<()> {

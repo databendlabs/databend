@@ -1,18 +1,19 @@
 <h1 align="center">Databend</h1>
 <h3 align="center">Enterprise Data Warehouse for AI Agents</h3>
-<p align="center">Large-scale analytics, vector search, full-text search — with flexible agent orchestration and secure Python UDF sandboxes. Built for enterprise AI workloads.</p>
+<h4 align="center">one warehouse for all your data</h4>
+<p align="center">SQL analytics, vector search, and full-text search in a single Rust warehouse on object storage: fast, elastic, and grows with your data — with sandboxed Python UDFs for agents.</p>
 
 <div align="center">
 
 <a href="https://databend.com/">☁️ Try Cloud</a> •
 <a href="#-quick-start">🚀 Quick Start</a> •
-<a href="https://docs.databend.com/">📖 Documentation</a> •
-<a href="https://link.databend.com/join-slack">💬 Slack</a>
+<a href="#-performance">📈 Performance</a> •
+<a href="https://docs.databend.com/">📖 Documentation</a>
 
 <br><br>
 
 <a href="https://github.com/databendlabs/databend/actions/workflows/release.yml">
-<img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/release.yml?branch=main" alt="CI Status" />
+<img src="https://img.shields.io/github/actions/workflow/status/databendlabs/databend/release.yml?branch=main" alt="Release Status" />
 </a>
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Platform" />
 
@@ -24,44 +25,66 @@
 
 ## 💡 Why Databend?
 
-Databend is an open-source enterprise data warehouse built in Rust.
-
-**Core capabilities**: Analytics, vector search, full-text search, auto schema evolution — unified in one engine.
-
-**Agent-ready**: Sandbox UDFs for agent logic, SQL for orchestration, transactions for reliability, branching for safe experimentation on production data.
+Databend is an open-source data warehouse built in Rust. Analytics, search, and agent workloads run on the same tables, so there is no second system to sync.
 
 | | |
 | :--- | :--- |
-| **📊 Core Engine**<br>Analytics, vector search, full-text search, auto schema evolution, transactions. | **🤖 Agent-Ready**<br>Sandbox UDF + SQL orchestration. Build and run agents on your enterprise data. |
-| **🏢 Enterprise Scale**<br>Elastic compute, cloud native. S3/Azure/GCS. | **🌿 Branching**<br>Git-like data versioning. Agents safely operate on production snapshots. |
+| **📊 One Warehouse**<br>SQL analytics, vector search, full-text search, auto schema evolution, transactions. | **🤖 Agent-Ready**<br>Sandboxed Python UDFs for agent logic, SQL for orchestration. |
+| **🏢 Enterprise Scale**<br>Fast vectorized engine, elastic compute on object storage: S3, Azure, GCS. | **🌿 Branching**<br>Git-like data versioning. Agents experiment safely on production snapshots. |
 
 ![Databend Architecture](https://github.com/user-attachments/assets/288dea8d-0243-4c45-8d18-d4d402b08075)
 
+## 📈 Performance
+
+Published results on Databend Cloud with default settings. Each page includes the SQL to reproduce it.
+
+| Benchmark | Result |
+| :--- | :--- |
+| [TPC-H SF100 vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch) | 1.25× faster, ~60% lower cost |
+| [Data ingestion vs. Snowflake](https://docs.databend.com/guides/benchmark/data-ingest) | 5.15× faster, 91% lower cost |
+| [Vector & full-text search](https://docs.databend.com/guides/benchmark/search-vector) | 10M docs: vector p50 41 ms, full-text p50 35 ms |
+| [TPC-H SF1000 (1 TB) scaling](https://docs.databend.com/guides/benchmark/tpch-sf1000) | 4.1× faster on Large vs. Small warehouse |
+
+See all [benchmarks](https://docs.databend.com/guides/benchmark).
+
 ## ⚡ Quick Start
 
-### 1. Cloud (Recommended)
-[Start for free on Databend Cloud](https://docs.databend.com/guides/cloud/) — Production-ready in 60 seconds.
+**Cloud (Recommended)** — [Sign up](https://app.databend.com/), create a warehouse, and run SQL in the worksheet. [Cloud guide →](https://docs.databend.com/guides/cloud/)
 
-### 2. Local (Python)
-Ideal for development and testing. Requires Python 3.12 or 3.13 and `databend-driver` 0.34.0 or later:
+**Self-hosted** — Run the all-in-one image and connect with [BendSQL](https://docs.databend.com/guides/connect/sql-clients/bendsql):
 
 ```bash
-pip install "databend-driver[local]>=0.34.0"
+docker run -d -p 127.0.0.1:8000:8000 datafuselabs/databend
+bendsql -u root
 ```
 
-```python
-from databend_driver import connect
+See [Docker image options](docker/README.md) and [self-hosted deployment](https://docs.databend.com/guides/self-hosted) for credentials, storage, and production setup.
 
-conn = connect("databend+local:///./local-state")
-print(conn.query_row("SELECT 'Hello, Databend!'").values())
+### Your First Query
+
+Analytics, full-text search, and vector search in one table:
+
+```sql
+CREATE TABLE docs (
+    id INT,
+    content STRING,
+    embedding VECTOR(3),
+    INVERTED INDEX content_idx(content),
+    VECTOR INDEX embedding_idx(embedding) distance = 'cosine'
+);
+
+INSERT INTO docs VALUES
+    (1, 'SQL analytics for agents', [1.0, 0.0, 0.0]),
+    (2, 'Vector search for documents', [0.0, 1.0, 0.0]);
+
+SELECT id, content FROM docs WHERE MATCH(content, 'analytics');
+
+SELECT id, content FROM docs
+ORDER BY COSINE_DISTANCE(embedding, [1.0, 0.0, 0.0]::VECTOR(3))
+LIMIT 1;
 ```
 
-### 3. Docker
-Run the full warehouse locally:
-
-```bash
-docker run -p 8000:8000 datafuselabs/databend
-```
+Both queries return document `1`. Learn more: [Vector search](https://docs.databend.com/guides/query/vector-db) · [JSON & search](https://docs.databend.com/guides/query/json-search).
 
 ## 🤖 Agent-Ready Architecture
 
@@ -78,7 +101,8 @@ LANGUAGE python HANDLER = 'run'
 AS $$
 def run(input):
     # Your agent logic: LLM calls, tool use, reasoning...
-    return response
+    answer = f"processed: {input}"
+    return answer
 $$;
 
 -- Orchestrate agents with SQL
@@ -97,6 +121,7 @@ SELECT my_agent(question) FROM tasks;
 - [💬 Join Slack](https://link.databend.com/join-slack)
 - [🐛 Issue Tracker](https://github.com/databendlabs/databend/issues)
 - [🗺️ Roadmap](https://github.com/databendlabs/databend/issues/14167)
+- [🛠️ Contributing](AI_POLICY.md) — AI-assisted PRs are welcome; a responsible human must review the full diff
 
 **Contributors are immortalized in the `system.contributors` table 🏆**
 

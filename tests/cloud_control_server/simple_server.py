@@ -1,4 +1,5 @@
 import hashlib
+import itertools
 import os
 import re
 import shutil
@@ -36,6 +37,9 @@ TASK_RUN_DB = {}
 
 NOTIFICATION_DB = {}
 NOTIFICATION_HISTORY_DB = {}
+# Read-only fixtures are shared; integrations and generated histories are tenant-scoped.
+NOTIFICATION_HISTORY_FIXTURES = {}
+NOTIFICATION_DELIVERY_IDS = itertools.count(1)
 WORKER_DB = {}
 
 UDF_HEADERS = {"x-authorization": os.getenv("UDF_MOCK_TOKEN", "123")}
@@ -137,6 +141,14 @@ def _get_udf_env_vars(tenant, resource_name):
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+def _get_notification_store(tenant_id):
+    return NOTIFICATION_DB.setdefault(tenant_id, {})
+
+
+def _get_notification_history_store(tenant_id):
+    return NOTIFICATION_HISTORY_DB.setdefault(tenant_id, {})
 
 
 def _get_worker_store(tenant_id):
@@ -362,7 +374,7 @@ def load_data_from_json():
                 notification_history_data = json.load(f)
                 notification_history = notification_pb2.NotificationHistory()
                 json_format.ParseDict(notification_history_data, notification_history)
-                NOTIFICATION_HISTORY_DB[notification_history.name] = (
+                NOTIFICATION_HISTORY_FIXTURES[notification_history.name] = (
                     notification_history
                 )
 
@@ -405,6 +417,7 @@ def create_notification_request_to_notification(id, create_notification_request)
     notification = notification_pb2.Notification()
 
     notification.name = create_notification_request.name
+    notification.tenant_id = create_notification_request.tenant_id
     notification.notification_id = id
     notification.notification_type = create_notification_request.notification_type
     notification.enabled = create_notification_request.enabled
@@ -694,14 +707,15 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
     def CreateNotification(self, request, context):
         print("CreateTask", request)
         name = request.name
-        if name in NOTIFICATION_DB and request.if_not_exists is False:
+        notifications = _get_notification_store(request.tenant_id)
+        if name in notifications and request.if_not_exists is False:
             return notification_pb2.CreateNotificationResponse(
                 error=notification_pb2.NotificationError(
                     kind="ALREADY_EXISTS", message="Notification already exists", code=6
                 )
             )
-        notification_id = len(NOTIFICATION_DB) + 1
-        NOTIFICATION_DB[name] = create_notification_request_to_notification(
+        notification_id = len(notifications) + 1
+        notifications[name] = create_notification_request_to_notification(
             notification_id, request
         )
         return notification_pb2.CreateNotificationResponse(
@@ -711,30 +725,32 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
     def GetNotification(self, request, context):
         print("GetNotification", request)
         name = request.name
-        if name not in NOTIFICATION_DB:
+        notifications = _get_notification_store(request.tenant_id)
+        if name not in notifications:
             return notification_pb2.GetNotificationResponse(
                 error=notification_pb2.NotificationError(
                     kind="NOT_FOUND", message="Notification not found", code=5
                 )
             )
-        notification = NOTIFICATION_DB[name]
+        notification = notifications[name]
         return notification_pb2.GetNotificationResponse(notification=notification)
 
     def ListNotification(self, request, context):
         print("ListNotification", request)
-        notifications = list(NOTIFICATION_DB.values())
+        notifications = list(_get_notification_store(request.tenant_id).values())
         return notification_pb2.ListNotificationResponse(notifications=notifications)
 
     def AlterNotification(self, request, context):
         print("AlterNotification", request)
         name = request.name
-        if name not in NOTIFICATION_DB:
+        notifications = _get_notification_store(request.tenant_id)
+        if name not in notifications:
             return notification_pb2.AlterNotificationResponse(
                 error=notification_pb2.NotificationError(
                     kind="NOT_FOUND", message="Notification not found", code=5
                 )
             )
-        notification = NOTIFICATION_DB[name]
+        notification = notifications[name]
         if request.operation_type == "SET":
             if request.HasField("enabled"):
                 notification.enabled = request.enabled
@@ -762,14 +778,80 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
     def DropNotification(self, request, context):
         print("DropNotification", request)
         name = request.name
-        if name not in NOTIFICATION_DB:
+        notifications = _get_notification_store(request.tenant_id)
+        if name not in notifications:
             return notification_pb2.DropNotificationResponse()
-        del NOTIFICATION_DB[name]
+        del notifications[name]
+        # Keep SQL cases isolated without removing fixtures or another tenant's history.
+        histories = _get_notification_history_store(request.tenant_id)
+        for key, history in list(histories.items()):
+            if history.name == name:
+                histories.pop(key, None)
         return notification_pb2.DropNotificationResponse()
+
+    def EnqueueNotification(self, request, context):
+        # Simulates durable acceptance only; no external webhook is called.
+        if request.name == "send_unimplemented":
+            context.abort(grpc.StatusCode.UNIMPLEMENTED, "old Cloud Control")
+        if request.name == "send_rejected":
+            return notification_pb2.EnqueueNotificationResponse(
+                error=notification_pb2.NotificationError(
+                    kind="INTERNAL", message="simulated persistence failure", code=13
+                )
+            )
+        notification = _get_notification_store(request.tenant_id).get(request.name)
+        if notification is None:
+            context.abort(grpc.StatusCode.NOT_FOUND, "Notification not found")
+        if not notification.enabled:
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION, "Notification is disabled"
+            )
+        size = len(request.message.encode("utf-8"))
+        if not 0 < size <= 262144:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid message size")
+        # Deleting another integration's history must not reuse a delivery ID.
+        delivery_id = str(next(NOTIFICATION_DELIVERY_IDS))
+        timestamp = timestamp_pb2.Timestamp()
+        now = datetime.now(timezone.utc)
+        timestamp.seconds = calendar.timegm(now.utctimetuple())
+        timestamp.nanos = now.microsecond * 1000
+        histories = _get_notification_history_store(request.tenant_id)
+        histories["delivery:" + delivery_id] = notification_pb2.NotificationHistory(
+            name=request.name,
+            message=request.message,
+            query_id=request.query_id if request.HasField("query_id") else None,
+            message_source="USER",
+            status="success",
+            created_time=timestamp,
+            processed_time=timestamp,
+        )
+        # Every attempt is recorded before a deterministic failure. Do not deduplicate:
+        # the SQL regression must observe multiple histories if the client retries.
+        if request.name == "send_lost_response":
+            context.abort(
+                grpc.StatusCode.UNAVAILABLE,
+                "simulated response loss after acceptance",
+            )
+        return notification_pb2.EnqueueNotificationResponse(delivery_id=delivery_id)
 
     def ListNotificationHistory(self, request, context):
         print("ListNotificationHistory", request)
-        notification_histories = list(NOTIFICATION_HISTORY_DB.values())
+        notification_histories = list(NOTIFICATION_HISTORY_FIXTURES.values())
+        notification_histories.extend(
+            _get_notification_history_store(request.tenant_id).values()
+        )
+        if request.HasField("notification_name"):
+            notification_histories = [
+                history
+                for history in notification_histories
+                if history.name == request.notification_name
+            ]
+        if request.HasField("query_id"):
+            notification_histories = [
+                history
+                for history in notification_histories
+                if history.HasField("query_id") and history.query_id == request.query_id
+            ]
 
         if (
             request.HasField("result_limit")

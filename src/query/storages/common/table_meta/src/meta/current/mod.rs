@@ -27,6 +27,7 @@ pub use v2::DraftVirtualColumnPathStatistics;
 pub use v2::ExtendedBlockMeta;
 pub use v2::GranuleIndexFileLayout;
 pub use v2::GranuleIndexLayout;
+pub use v2::IndexFileLocation;
 pub use v2::PartitionStatistics;
 pub use v2::SegmentStatistics;
 pub use v2::SpatialStatistics;

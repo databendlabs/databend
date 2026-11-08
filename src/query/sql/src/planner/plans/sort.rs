@@ -29,6 +29,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::cap_stat_info_by_rows;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
@@ -133,6 +134,53 @@ impl Operator for Sort {
         Box::new(partition_items)
     }
 
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        let input_prop = rel_expr.derive_relational_prop_child(0)?;
+
+        let output_columns = input_prop.output_columns.clone();
+        let mut outer_columns =
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
+        outer_columns.extend(
+            self.used_columns()
+                .difference(&input_prop.output_columns)
+                .copied(),
+        );
+        let mut used_columns = input_prop.used_columns.clone();
+        used_columns.extend(self.used_columns());
+
+        // Derive orderings
+        let orderings = self.items.clone();
+
+        let (orderings, partition_orderings) = match &self.window_partition {
+            Some(window) => (
+                vec![],
+                Some((window.partition_by.clone(), orderings.clone())),
+            ),
+            None => (self.items.clone(), None),
+        };
+
+        Ok(Arc::new(RelationalProperty {
+            output_columns,
+            outer_columns,
+            used_columns,
+            orderings,
+            partition_orderings,
+        }))
+    }
+
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let Some(limit) = self.limit else {
+            return Ok(input);
+        };
+        Ok(Arc::new(cap_stat_info_by_rows(
+            input.as_ref().clone(),
+            limit,
+        )))
+    }
+}
+
+impl PhysicalOperator for Sort {
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         if input_physical_prop.distribution == Distribution::Serial {
@@ -197,50 +245,5 @@ impl Operator for Sort {
 
         required.distribution = Distribution::GlobalHash(partition_by);
         Ok(vec![vec![required]])
-    }
-
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        let input_prop = rel_expr.derive_relational_prop_child(0)?;
-
-        let output_columns = input_prop.output_columns.clone();
-        let mut outer_columns =
-            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns);
-        outer_columns.extend(
-            self.used_columns()
-                .difference(&input_prop.output_columns)
-                .copied(),
-        );
-        let mut used_columns = input_prop.used_columns.clone();
-        used_columns.extend(self.used_columns());
-
-        // Derive orderings
-        let orderings = self.items.clone();
-
-        let (orderings, partition_orderings) = match &self.window_partition {
-            Some(window) => (
-                vec![],
-                Some((window.partition_by.clone(), orderings.clone())),
-            ),
-            None => (self.items.clone(), None),
-        };
-
-        Ok(Arc::new(RelationalProperty {
-            output_columns,
-            outer_columns,
-            used_columns,
-            orderings,
-            partition_orderings,
-        }))
-    }
-
-    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
-        let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
-        let Some(limit) = self.limit else {
-            return Ok(input);
-        };
-        Ok(Arc::new(cap_stat_info_by_rows(
-            input.as_ref().clone(),
-            limit,
-        )))
     }
 }

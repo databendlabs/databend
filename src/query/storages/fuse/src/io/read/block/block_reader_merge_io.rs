@@ -13,48 +13,55 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_storages_common_cache::ColumnData;
+use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::SizedColumnArray;
+use databend_storages_common_cache::UnitsRead;
 use databend_storages_common_io::MergeIOReadResult;
 use enum_as_inner::EnumAsInner;
 use opendal::Buffer;
 
-type CachedColumnData = Vec<(ColumnId, Arc<ColumnData>)>;
-type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
+/// Column chunks read from the disk cache.
+type DiskColumnData = Vec<(ColumnId, Bytes)>;
+type CachedColumnArray = Vec<(ColumnId, CacheRef<SizedColumnArray>)>;
 
 #[derive(EnumAsInner, Clone)]
 pub enum DataItem<'a> {
     RawData(Buffer),
     GranuleData(Buffer, std::ops::Range<u64>),
-    ColumnArray(&'a Arc<SizedColumnArray>),
+    ColumnArray(&'a CacheRef<SizedColumnArray>),
 }
 
+/// The column chunks of one block: from storage, from the disk cache, and from the memory cache
+/// of deserialized columns.
 pub struct BlockReadResult {
     merge_io_result: MergeIOReadResult,
-    pub(crate) cached_column_data: CachedColumnData,
+    pub(crate) disk_column_data: DiskColumnData,
     pub(crate) cached_column_array: CachedColumnArray,
     row_range: Option<std::ops::Range<usize>>,
     column_data_ranges: HashMap<ColumnId, std::ops::Range<u64>>,
 }
 
-impl BlockReadResult {
-    pub fn create(
-        merge_io_result: MergeIOReadResult,
-        cached_column_data: CachedColumnData,
-        cached_column_array: CachedColumnArray,
-    ) -> BlockReadResult {
+/// The chunks `read_units` read, with no deserialized columns.
+impl From<UnitsRead> for BlockReadResult {
+    fn from(units: UnitsRead) -> Self {
         BlockReadResult {
-            merge_io_result,
-            cached_column_data,
-            cached_column_array,
+            merge_io_result: units.fetched,
+            disk_column_data: units.cached.into_iter().collect(),
+            cached_column_array: vec![],
             row_range: None,
             column_data_ranges: HashMap::new(),
         }
+    }
+}
+
+impl BlockReadResult {
+    pub fn with_column_arrays(mut self, arrays: CachedColumnArray) -> Self {
+        self.cached_column_array = arrays;
+        self
     }
 
     pub fn create_with_row_range(
@@ -65,15 +72,11 @@ impl BlockReadResult {
     ) -> BlockReadResult {
         BlockReadResult {
             merge_io_result,
-            cached_column_data: vec![],
+            disk_column_data: vec![],
             cached_column_array,
             row_range: Some(row_range),
             column_data_ranges,
         }
-    }
-
-    pub(crate) fn location(&self) -> &str {
-        &self.merge_io_result.block_path
     }
 
     pub fn row_range(&self) -> Option<&std::ops::Range<usize>> {
@@ -100,9 +103,9 @@ impl BlockReadResult {
             }
         }
 
-        // merge column data from cache
-        for (column_id, data) in &self.cached_column_data {
-            res.insert(*column_id, DataItem::RawData(data.bytes().into()));
+        // merge column data from the disk cache
+        for (column_id, data) in &self.disk_column_data {
+            res.insert(*column_id, DataItem::RawData(data.clone().into()));
         }
 
         // merge column array from cache
@@ -125,9 +128,9 @@ impl BlockReadResult {
             res.insert(*column_id, chunk.slice(range.clone()).to_bytes());
         }
 
-        // merge column data from cache
-        for (column_id, data) in &self.cached_column_data {
-            res.insert(*column_id, data.bytes());
+        // merge column data from the disk cache
+        for (column_id, data) in &self.disk_column_data {
+            res.insert(*column_id, data.clone());
         }
 
         Ok(res)

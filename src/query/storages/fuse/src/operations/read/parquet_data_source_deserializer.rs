@@ -42,7 +42,6 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_storages_common_cache::CacheLockStats;
 use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
@@ -55,6 +54,7 @@ use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReadResult;
 use crate::io::BlockReader;
 use crate::io::GranuleDataReader;
+use crate::io::RowSelection;
 use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
@@ -127,7 +127,6 @@ pub struct DeserializeDataTransform {
     prewhere_info: Option<PrewhereInfo>,
     read_state: Option<ReadState>,
     diagnostics: ExecuteScanDiagnostics,
-    cache_lock_stats: Arc<CacheLockStats>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -188,7 +187,6 @@ impl DeserializeDataTransform {
             prewhere_info,
             read_state: None,
             diagnostics: ExecuteScanDiagnostics::default(),
-            cache_lock_stats: Arc::new(CacheLockStats::default()),
         })))
     }
 
@@ -267,7 +265,6 @@ impl DeserializeDataTransform {
         let columns_chunks = data.columns_chunks()?;
         let ReadStateOutput {
             mut block,
-            row_selection,
             bitmap_selection,
             mut scan_stats,
         } = self
@@ -287,9 +284,9 @@ impl DeserializeDataTransform {
                 .deserialize_virtual_columns(
                     block,
                     virtual_data,
-                    row_selection
+                    bitmap_selection
                         .as_ref()
-                        .map(|selection| selection.selection.clone()),
+                        .map(|bitmap| RowSelection::from(bitmap).selection),
                 )
                 .inspect_err(|error| {
                     log::warn!(
@@ -380,21 +377,17 @@ impl DeserializeDataTransform {
         self.diagnostics.granule_parts += 1;
         self.diagnostics.granule_groups += groups.len();
         self.diagnostics.granule_ranges += groups.iter().map(Vec::len).sum::<usize>();
-        let reader = self.read_block_context.create_granule_data_reader(
-            &part,
-            &groups,
-            self.cache_lock_stats.clone(),
-        )?;
+        let reader = self
+            .read_block_context
+            .create_granule_data_reader(&part, &groups)?;
         let (columns, selected, coalesced, requests) = reader.read_plan_stats();
         self.diagnostics.projected_columns += columns;
         self.diagnostics.selected_bytes += selected;
         self.diagnostics.coalesced_bytes += coalesced;
         self.diagnostics.coalesced_requests += requests;
-        let virtual_reader = self.read_block_context.create_virtual_granule_reader(
-            &part,
-            &groups,
-            self.cache_lock_stats.clone(),
-        )?;
+        let virtual_reader = self
+            .read_block_context
+            .create_virtual_granule_reader(&part, &groups)?;
         if let Some(reader) = &virtual_reader {
             let (columns, selected, coalesced, requests) = reader.read_plan_stats();
             self.diagnostics.projected_columns += columns;
@@ -526,9 +519,8 @@ impl Drop for DeserializeDataTransform {
         if !diagnostics.has_activity() {
             return;
         }
-        let lock_stats = self.cache_lock_stats.snapshot();
         log::info!(
-            "[FUSE-PRUNER-DIAG] stage=execute_scan scan_id={} normal_parts={} normal_ranges={} granule_parts={} granule_groups={} granule_ranges={} projected_columns={} selected_bytes={} coalesced_bytes={} coalesced_requests={} input_rows={} output_blocks={} output_rows={} output_bytes={} granule_reader_create_us={} granule_read_us={} decode_filter_us={} finalize_concat_us={} normal_process_us={} memory_cache_lock_wait_ns={} memory_cache_lock_hold_ns={} memory_cache_lock_acquires={} disk_cache_lock_wait_ns={} disk_cache_lock_hold_ns={} disk_cache_lock_acquires={}",
+            "[FUSE-PRUNER-DIAG] stage=execute_scan scan_id={} normal_parts={} normal_ranges={} granule_parts={} granule_groups={} granule_ranges={} projected_columns={} selected_bytes={} coalesced_bytes={} coalesced_requests={} input_rows={} output_blocks={} output_rows={} output_bytes={} granule_reader_create_us={} granule_read_us={} decode_filter_us={} finalize_concat_us={} normal_process_us={}",
             self.scan_id,
             diagnostics.normal_parts,
             diagnostics.normal_ranges,
@@ -548,12 +540,6 @@ impl Drop for DeserializeDataTransform {
             diagnostics.decode_filter.as_micros(),
             diagnostics.finalize_concat.as_micros(),
             diagnostics.normal_process.as_micros(),
-            lock_stats.memory_wait_ns,
-            lock_stats.memory_hold_ns,
-            lock_stats.memory_acquires,
-            lock_stats.disk_wait_ns,
-            lock_stats.disk_hold_ns,
-            lock_stats.disk_acquires,
         );
     }
 }

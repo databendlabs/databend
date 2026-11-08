@@ -46,7 +46,7 @@ use databend_common_storages_fuse::FuseTable;
 use super::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::common::dml_build_update_stream_req;
+use crate::interpreters::common::build_update_stream_reqs;
 use crate::physical_plans::CastSchema;
 use crate::physical_plans::ChunkAppendData;
 use crate::physical_plans::ChunkCastSchema;
@@ -149,7 +149,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 impl InsertMultiTableInterpreter {
     pub async fn build_physical_plan(&self, dry_run: bool) -> Result<PhysicalPlan> {
         let (mut root, _) = self.build_source_physical_plan().await?;
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
+        let update_stream_meta = build_update_stream_reqs(&self.ctx, false).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
         let serializable_tables = branches

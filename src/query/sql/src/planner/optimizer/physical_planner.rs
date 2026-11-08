@@ -131,14 +131,13 @@ impl PhysicalPlanner {
         }
         let mut search = CascadesOptimizer::new(self.opt_ctx.clone())?;
         if self.opt_ctx.is_optimizer_disabled(CascadesOptimizer::NAME) {
-            return Ok(input.into());
+            // Skipping search must still lower logical aggregates for execution.
+            let output = crate::optimizer::ir::DefaultPhysicalPlanner::plan(&input)?;
+            self.validate(&output)?;
+            return Ok(output);
         }
-        // Only tracing needs a physical copy of the input for the existing diff API.
-        // Search itself consumes the original logical expression directly.
-        let before = self
-            .opt_ctx
-            .get_enable_trace()
-            .then(|| PExpr::from(input.clone()));
+        // Trace the real logical-to-physical transition; the input is not yet executable.
+        let before = self.opt_ctx.get_enable_trace().then(|| input.clone());
         let start = Instant::now();
         let output = search.optimize_sync(input)?;
         self.validate(&output).map_err(|e| {
@@ -146,15 +145,15 @@ impl PhysicalPlanner {
         })?;
         self.memo = Some(search.memo().clone());
         if let Some(before) = before {
+            let metadata_ref = self.opt_ctx.get_metadata();
+            let metadata = metadata_ref.read();
             self.trace.trace_optimizer(
                 CascadesOptimizer::NAME.to_string(),
                 self.trace_offset,
                 total + self.trace_offset,
                 start.elapsed(),
-                &before,
-                &output,
-                &self.opt_ctx.get_metadata().read(),
-                self.opt_ctx.get_stat_context(),
+                &before.pretty_format(&metadata, self.opt_ctx.get_stat_context())?,
+                &output.pretty_format(&metadata, self.opt_ctx.get_stat_context())?,
             )?;
         }
         Ok(output)
@@ -182,15 +181,15 @@ impl PhysicalPlanner {
         self.validate(&output)
             .map_err(|e| e.add_message_back(format!(" (after physical planning pass `{name}`)")))?;
         if let Some(before) = before {
+            let metadata_ref = self.opt_ctx.get_metadata();
+            let metadata = metadata_ref.read();
             self.trace.trace_optimizer(
                 name,
                 index + self.trace_offset,
                 total + self.trace_offset,
                 start.elapsed(),
-                &before,
-                &output,
-                &self.opt_ctx.get_metadata().read(),
-                self.opt_ctx.get_stat_context(),
+                &before.pretty_format(&metadata, self.opt_ctx.get_stat_context())?,
+                &output.pretty_format(&metadata, self.opt_ctx.get_stat_context())?,
             )?;
         }
         Ok(output)

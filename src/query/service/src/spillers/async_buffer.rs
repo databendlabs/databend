@@ -436,6 +436,15 @@ impl SpillsDataWriter {
     }
 
     pub fn write(&mut self, block: DataBlock) -> Result<()> {
+        // Parquet takes a row group's row count from its column writers, so a block
+        // without columns would be written as an empty row group and lose its rows.
+        if block.num_columns() == 0 {
+            return Err(ErrorCode::Internal(format!(
+                "Cannot spill a block without columns ({} rows)",
+                block.num_rows()
+            )));
+        }
+
         match self {
             SpillsDataWriter::Uninitialize {
                 writer,
@@ -624,10 +633,15 @@ impl SpillsDataReader {
             num_rows,
             None,
         )?;
-        let batch = reader.next().transpose()?.unwrap();
+        let Some(batch) = reader.next().transpose()? else {
+            return Err(ErrorCode::Internal(format!(
+                "Spilled row group with {} rows returned no record batch",
+                num_rows
+            )));
+        };
         debug_assert!(reader.next().is_none());
         record_read_profile(self.target, start.elapsed(), fetched.read_bytes);
-        Ok(Some(DataBlock::from_record_batch(
+        Ok(Some(DataBlock::from_record_batch_keep_null_const(
             &self.data_schema,
             &batch,
         )?))
@@ -855,6 +869,8 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use databend_common_base::runtime::spawn;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
     use opendal::Operator;
 
     use super::*;
@@ -1021,6 +1037,48 @@ mod tests {
         buffer_writer.write_all(b"minimum chunk").unwrap();
         let metadata = buffer_writer.close().unwrap();
         assert!(metadata.content_length() > 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spill_rejects_blocks_without_columns() {
+        let pool = SpillsBufferPool::create(1).unwrap();
+        let operator = create_test_operator().unwrap();
+
+        // Rejected as the first block, before the parquet schema is inferred.
+        let mut writer = pool
+            .writer(
+                operator.clone(),
+                "zero_column_first_block".to_string(),
+                CHUNK_SIZE,
+                SpillTarget::Local,
+            )
+            .unwrap();
+        assert!(writer.write(DataBlock::new(vec![], 5)).is_err());
+        writer.close().unwrap();
+
+        // Rejected after the writer is initialized by a block with columns.
+        let mut writer = pool
+            .writer(
+                operator,
+                "zero_column_later_block".to_string(),
+                CHUNK_SIZE,
+                SpillTarget::Local,
+            )
+            .unwrap();
+        writer
+            .write(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                vec![1, 2, 3],
+            )]))
+            .unwrap();
+        assert!(writer.write(DataBlock::new(vec![], 5)).is_err());
+        let (_, row_groups) = writer.close().unwrap();
+        assert_eq!(
+            row_groups
+                .iter()
+                .map(|rg| rg.num_rows())
+                .collect::<Vec<_>>(),
+            vec![3]
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

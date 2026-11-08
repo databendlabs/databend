@@ -23,6 +23,7 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
@@ -64,6 +65,12 @@ impl Operator for Exchange {
         }))
     }
 
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        rel_expr.derive_cardinality_child(0, stat_ctx)
+    }
+}
+
+impl PhysicalOperator for Exchange {
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: match self {
@@ -75,9 +82,5 @@ impl Operator for Exchange {
                 Exchange::Merge | Exchange::MergeSort => Distribution::Serial,
             },
         })
-    }
-
-    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0, stat_ctx)
     }
 }

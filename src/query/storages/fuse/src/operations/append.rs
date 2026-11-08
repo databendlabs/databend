@@ -316,6 +316,13 @@ impl FuseTable {
     ///
     /// Pure Hilbert keys are evaluated for two-dimensional MBR statistics but are not used as
     /// ordinary lexicographic sort keys.
+    ///
+    /// The layout of the result is relied on by the hash write layout
+    /// (`PipelineBuilder::build_table_write_layout_with_schema`):
+    /// - `eval_operators` is empty or a single `BlockOperator::Map` whose expressions are the
+    ///   evaluated partition expressions followed by the evaluated cluster expressions;
+    /// - `out_fields` is the input schema, then one field per evaluated expression in that
+    ///   order, then the vector cluster sort key when vector clustering is active.
     pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,

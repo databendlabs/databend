@@ -20,6 +20,7 @@ use databend_common_sql_test_support::ColumnStats;
 use databend_common_sql_test_support::HistogramStats;
 use databend_common_statistics::Histogram;
 
+mod cascades_task_dedup;
 mod collect_statistics;
 mod column_scope;
 mod decorrelate_correlated_aliases;
@@ -30,6 +31,7 @@ mod eliminate_eval_scalar;
 mod hierarchical_grouping_sets;
 mod insert_multi_table;
 mod join_cardinality;
+mod late_split_aggregate;
 mod materialized_cte_distribution;
 mod mutation;
 mod normalize_scalar;
@@ -39,10 +41,12 @@ mod planning_context;
 mod push_down_filter_project_set;
 mod push_down_filter_window_top_n;
 mod push_down_rank_limit_aggregate;
+mod push_down_top_n_union_scan;
 mod selectivity;
 mod selectivity_smoke;
 mod stat_derivation;
 mod type_consistency;
+mod typed_constant;
 mod union_all;
 
 fn table_statistics(rows: u64) -> TableStatistics {

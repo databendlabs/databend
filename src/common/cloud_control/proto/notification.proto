@@ -104,6 +104,7 @@ message NotificationHistory {
   string message = 5;
   string status = 6;
   string error_message = 7; // if notification failed, provide failed message
+  optional string query_id = 8; // caller query ID, when available
 }
 
 message ListNotificationHistoryRequest {
@@ -115,6 +116,7 @@ message ListNotificationHistoryRequest {
   optional int32 page_size = 6; // 100 by default
   optional int64 next_page_token = 7;
   optional int64 previous_page_token = 8;
+  optional string query_id = 9; // caller query ID, when available
 }
 
 message ListNotificationHistoryResponse {
@@ -125,6 +127,21 @@ message ListNotificationHistoryResponse {
   int64 previous_page_token = 7;
 }
 
+// Success means the delivery was persisted, not that the webhook was delivered.
+message EnqueueNotificationRequest {
+  string tenant_id = 1;
+  string name = 2;
+  string message = 3;
+  // Query ID for correlation, not an idempotency key.
+  optional string query_id = 4;
+}
+
+message EnqueueNotificationResponse {
+  optional NotificationError error = 1;
+  // Internal delivery ID; SQL does not expose this as a result set.
+  string delivery_id = 2;
+}
+
 service NotificationService {
   rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
   rpc DropNotification(DropNotificationRequest) returns (DropNotificationResponse);
@@ -132,4 +149,5 @@ service NotificationService {
   rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
   rpc AlterNotification(AlterNotificationRequest) returns (AlterNotificationResponse);
   rpc ListNotificationHistory(ListNotificationHistoryRequest) returns (ListNotificationHistoryResponse);
+  rpc EnqueueNotification(EnqueueNotificationRequest) returns (EnqueueNotificationResponse);
 }

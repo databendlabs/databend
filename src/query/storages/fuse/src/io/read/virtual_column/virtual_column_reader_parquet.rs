@@ -45,13 +45,10 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::kinds::column;
 use databend_storages_common_index::VirtualColumnSharedDataType;
-use databend_storages_common_io::MergeIOReadResult;
-use databend_storages_common_io::MergeIOReader;
-use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualFieldReadPlan;
@@ -65,8 +62,7 @@ use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
 use crate::BlockReadResult;
-use crate::io::read::block::parquet::ArrayCacheContext;
-use crate::io::read::block::parquet::deserialize_column_chunks;
+use crate::io::read::block::parquet::column_chunks_to_record_batch;
 
 pub struct VirtualBlockReadResult {
     pub virtual_block_location: String,
@@ -179,76 +175,40 @@ impl VirtualColumnReader {
         }
 
         let schema = Self::read_schema(virtual_block_meta)?;
-        // Only scalar top-level fields are admitted to the decoded-array cache; nested map
-        // slots are always decoded from raw bytes.
-        let cache = CacheManager::instance().get_table_data_array_cache();
-        let scalar_types: HashMap<ColumnId, String> = schema
-            .fields()
-            .iter()
-            .filter(|field| !field.is_nested())
-            .map(|field| {
-                let data_type = DataType::from(field.data_type()).to_string();
-                (field.column_id, data_type)
-            })
-            .collect();
-        let mut cached_arrays = Vec::new();
-        let mut column_ranges = HashMap::new();
         let mut ranges = Vec::with_capacity(virtual_block_meta.read_slots.len());
         for (slot_index, slot) in virtual_block_meta.read_slots.iter().enumerate() {
-            let slot_id = slot_index as ColumnId;
-            let range = slot.offset..(slot.offset + slot.len);
-            let cached = scalar_types.get(&slot_id).and_then(|data_type| {
-                let key =
-                    TableDataCacheKey::new(virtual_loc, slot_id, slot.offset, slot.len, data_type);
-                cache
-                    .get_sized(&key, slot.len)
-                    .filter(|array| array.0.len() == num_rows)
-            });
-            match cached {
-                Some(array) => cached_arrays.push((slot_id, array)),
-                None => {
-                    column_ranges.insert(slot_id, range.clone());
-                    ranges.push((slot_id, range));
-                }
-            }
+            ranges.push((
+                slot_index as ColumnId,
+                slot.offset..(slot.offset + slot.len),
+            ));
         }
 
-        let merge_io_result = if ranges.is_empty() {
-            MergeIOReadResult::create(
-                OwnerMemory::create(vec![]),
-                HashMap::new(),
-                virtual_loc.clone(),
-            )
-        } else {
-            match MergeIOReader::merge_io_read(
-                read_settings,
-                self.dal.clone(),
+        // Sidecar column chunks, from the virtual block meta, are units of the disk cache.
+        let units = DiskCachedStorage::new(self.dal.clone())
+            .read_units(
+                CacheKind::of::<column::Data>(),
                 virtual_loc,
                 &ranges,
+                self.policy.disk,
+                read_settings,
             )
-            .await
-            {
-                Ok(result) => result,
-                Err(error) => {
-                    warn!(
-                        "failed to read virtual sidecar, fallback to source columns: stage=merge_io, location={}, range_count={}, error={}",
-                        virtual_loc,
-                        ranges.len(),
-                        error
-                    );
-                    return None;
-                }
+            .await;
+        let block_read_res = match units {
+            Ok(units) => BlockReadResult::from(units),
+            Err(error) => {
+                warn!(
+                    "failed to read virtual sidecar, fallback to source columns: stage=merge_io, location={}, range_count={}, error={}",
+                    virtual_loc,
+                    ranges.len(),
+                    error
+                );
+                return None;
             }
         };
-
-        let block_read_res = BlockReadResult::create_with_row_range(
-            merge_io_result,
-            cached_arrays,
-            column_ranges,
-            0..num_rows,
-        );
-        let ignore_column_ids =
-            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
+        // The planner already excluded source columns that the scan needs for their own
+        // values, so the ignored set from the pruner can be used directly.
+        let ignore_column_ids = (!virtual_block_meta.ignored_source_column_ids.is_empty())
+            .then(|| virtual_block_meta.ignored_source_column_ids.clone());
 
         Some(VirtualBlockReadResult::create(
             virtual_loc.clone(),
@@ -284,20 +244,13 @@ impl VirtualColumnReader {
             .filter(|virtual_data| !virtual_data.schema.fields().is_empty())
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
-                let cache = CacheManager::instance().get_table_data_array_cache();
-                let column_metas = HashMap::new();
-                deserialize_column_chunks(
+                column_chunks_to_record_batch(
                     &virtual_data.schema,
                     virtual_data.num_rows,
                     &columns_chunks,
                     &virtual_data.compression,
                     row_selection,
-                    cache.as_ref().map(|cache| ArrayCacheContext {
-                        cache,
-                        location: virtual_data.data.location(),
-                        column_metas: &column_metas,
-                        complete_column_chunks: false,
-                    }),
+                    None,
                 )
             })
             .transpose()?;

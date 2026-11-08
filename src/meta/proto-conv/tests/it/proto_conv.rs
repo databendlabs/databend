@@ -173,6 +173,7 @@ fn new_table_meta() -> mt::TableMeta {
         statistics: Default::default(),
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         column_mask_policy_columns_ids: BTreeMap::new(),
+        masking_where_use_unmasked_value: Default::default(),
         row_access_policy: None,
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
@@ -330,6 +331,7 @@ fn new_virtual_data_schema() -> ce::VirtualDataSchema {
 
 fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
     databend_common_meta_app::principal::UDFServer {
+        external_access_integrations: vec![],
         address: "http://127.0.0.1:8888".to_string(),
         handler: "isempty".to_string(),
         headers: BTreeMap::from([

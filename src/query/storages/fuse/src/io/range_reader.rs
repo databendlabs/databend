@@ -12,77 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
-use databend_storages_common_cache::CacheLockStats;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::DiskCacheRangeReader;
 use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_io::RangeReader;
 use opendal::Operator;
 
-const DISK_CACHE_CHUNK_SIZE: u64 = 1024 * 1024;
-
-/// The chunk size of the disk cache layer when it is active, `None` otherwise.
-pub(crate) fn disk_cache_chunk_size() -> Option<u64> {
-    let column_cache = CacheManager::instance().get_column_data_cache()?;
-    column_cache.on_disk_cache().map(|_| DISK_CACHE_CHUNK_SIZE)
-}
-
+/// The ranged-read chain of one file: storage only. A chunk cache link over the disk cache
+/// was set aside when the cache crate was rewritten upstream; see the branch notes.
 pub(crate) fn create_file_range_reader(
     operator: Operator,
     path: String,
-    file_len: u64,
     max_prefetch: usize,
-    max_segment_size: u64,
-    held_budget: usize,
-    populate_cache: bool,
 ) -> Result<Box<dyn RangeReader>> {
-    create_file_range_reader_with_stats(
-        operator,
-        path,
-        file_len,
-        max_prefetch,
-        max_segment_size,
-        held_budget,
-        populate_cache,
-        None,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn create_file_range_reader_with_stats(
-    operator: Operator,
-    path: String,
-    file_len: u64,
-    max_prefetch: usize,
-    max_segment_size: u64,
-    held_budget: usize,
-    populate_cache: bool,
-    lock_stats: Option<Arc<CacheLockStats>>,
-) -> Result<Box<dyn RangeReader>> {
-    let tail = OperatorRangeReader::new(operator, path.clone(), max_prefetch.saturating_add(1));
-    let cache_manager = CacheManager::instance();
-    let mut disk_cache = None;
-    if let Some(column_cache) = cache_manager.get_column_data_cache() {
-        if let Some(cache) = column_cache.on_disk_cache() {
-            disk_cache = Some(cache.lru_disk_cache().clone());
-        }
-    }
-
-    match disk_cache {
-        Some(cache) => Ok(Box::new(DiskCacheRangeReader::new_with_stats(
-            cache,
-            tail,
-            path,
-            file_len,
-            DISK_CACHE_CHUNK_SIZE,
-            max_segment_size,
-            held_budget,
-            populate_cache,
-            lock_stats,
-        )?)),
-        None => Ok(Box::new(tail)),
-    }
+    let tail = OperatorRangeReader::new(operator, path, max_prefetch.saturating_add(1));
+    Ok(Box::new(tail))
 }

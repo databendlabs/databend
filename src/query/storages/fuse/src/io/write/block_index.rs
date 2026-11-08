@@ -140,13 +140,14 @@ pub fn collect_inverted_index_metas(
 
 #[derive(Debug)]
 pub struct PendingVectorIndex {
-    pub file: Option<PendingIndexFile>,
+    pub files: Vec<(BlockIndexMeta, PendingIndexFile)>,
     pub statistics: Option<StatisticsOfVectorColumns>,
 }
 
 #[derive(Debug)]
 pub struct WrittenVectorIndex {
-    pub file: Option<WrittenIndexFile>,
+    /// One bundle file per index, already written.
+    pub files: Vec<BlockIndexMeta>,
     pub statistics: Option<StatisticsOfVectorColumns>,
 }
 
@@ -280,7 +281,7 @@ pub fn create_block_index_specs(
     for builder in create_inverted_index_builders(table)? {
         specs.push(Arc::new(builder.into_write_spec()));
     }
-    if let Some(builder) = VectorIndexBuilder::try_create(indexes, schema.clone(), true) {
+    if let Some(builder) = VectorIndexBuilder::try_create(indexes, schema.clone(), true)? {
         specs.push(Arc::new(builder.into_write_spec()));
     }
     if let Some(builder) = SpatialIndexBuilder::try_create(indexes, schema, true) {
@@ -372,38 +373,31 @@ mod tests {
     }
 
     #[test]
-    fn test_default_and_low_level_outputs_have_separate_file_states() {
-        let mut pending = PendingBlockIndexOutput {
-            vector: Some(PendingVectorIndex {
-                file: Some(PendingIndexFile {
-                    location: ("pending".to_string(), 0),
+    fn test_outputs_reject_duplicate_singletons() {
+        let vector = || PendingVectorIndex {
+            files: vec![(
+                BlockIndexMeta {
+                    index_name: "vector".to_owned(),
+                    index_version: "v1".to_owned(),
+                    location: ("location".to_owned(), 1),
+                    size: 7,
+                },
+                PendingIndexFile {
+                    location: ("location".to_string(), 1),
                     data: Buffer::from("payload"),
-                }),
-                statistics: None,
-            }),
+                },
+            )],
+            statistics: None,
+        };
+        let mut output = PendingBlockIndexOutput {
+            vector: Some(vector()),
             ..Default::default()
         };
-        assert_eq!(
-            pending
-                .vector
-                .as_ref()
-                .unwrap()
-                .file
-                .as_ref()
-                .unwrap()
-                .size(),
-            7
-        );
+        assert_eq!(output.vector.as_ref().unwrap().files[0].1.size(), 7);
         assert!(
-            pending
+            output
                 .merge(PendingBlockIndexOutput {
-                    vector: Some(PendingVectorIndex {
-                        file: Some(PendingIndexFile {
-                            location: ("duplicate".to_string(), 0),
-                            data: Buffer::new(),
-                        }),
-                        statistics: None,
-                    }),
+                    vector: Some(vector()),
                     ..Default::default()
                 })
                 .is_err()
@@ -411,14 +405,16 @@ mod tests {
 
         let written = WrittenBlockIndexOutput {
             vector: Some(WrittenVectorIndex {
-                file: Some(WrittenIndexFile {
-                    location: ("written".to_string(), 0),
+                files: vec![BlockIndexMeta {
+                    index_name: "vector".to_owned(),
+                    index_version: "v1".to_owned(),
+                    location: ("written".to_owned(), 1),
                     size: 11,
-                }),
+                }],
                 statistics: None,
             }),
             ..Default::default()
         };
-        assert_eq!(written.vector.unwrap().file.unwrap().size, 11);
+        assert_eq!(written.vector.unwrap().files[0].size, 11);
     }
 }

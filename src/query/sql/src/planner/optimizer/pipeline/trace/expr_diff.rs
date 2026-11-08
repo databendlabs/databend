@@ -12,64 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
 use similar::ChangeTag;
 use similar::TextDiff;
 
-use crate::Metadata;
-use crate::optimizer::ir::Expr;
-use crate::optimizer::ir::RelExprKind;
-use crate::optimizer::ir::StatContext;
-use crate::planner::format::FormatOptions;
-use crate::planner::format::MetadataIdHumanizer;
-
-impl<K: RelExprKind> Expr<K> {
-    /// Compares this SExpr with another SExpr and returns a diff of their string representations.
-    ///
-    /// # Arguments
-    /// * `other` - The other SExpr to compare with.
-    /// * `metadata` - The metadata used for humanizing IDs.
-    ///
-    /// # Returns
-    /// A string containing the diff between the two SExpr instances.
-    pub fn diff(
-        &self,
-        other: &Self,
-        metadata: &Metadata,
-        stat_context: &StatContext,
-    ) -> Result<String> {
-        let self_str = self.pretty_format(metadata, stat_context)?;
-        let other_str = other.pretty_format(metadata, stat_context)?;
-
-        if self_str == other_str {
-            return Ok("No differences found.".to_string());
-        }
-
-        let diff = TextDiff::from_lines(&self_str, &other_str);
-
-        let mut diff_output = String::new();
-        for change in diff.iter_all_changes() {
-            let sign = match change.tag() {
-                ChangeTag::Delete => "-",
-                ChangeTag::Insert => "+",
-                ChangeTag::Equal => " ",
-            };
-            diff_output.push_str(&format!("{}{}", sign, change));
-        }
-
-        Ok(diff_output)
+pub(super) fn diff_text(before: &str, after: &str) -> String {
+    if before == after {
+        return "No differences found.".to_string();
     }
+    let diff = TextDiff::from_lines(before, after);
+    let mut output = String::new();
+    for change in diff.iter_all_changes() {
+        let sign = match change.tag() {
+            ChangeTag::Delete => "-",
+            ChangeTag::Insert => "+",
+            ChangeTag::Equal => " ",
+        };
+        output.push_str(&format!("{}{}", sign, change));
+    }
+    output
+}
 
-    /// Formats this SExpr into a pretty-printed string using metadata.
-    ///
-    /// # Arguments
-    /// * `metadata` - The metadata used for humanizing IDs.
-    ///
-    /// # Returns
-    /// A Result containing the formatted SExpr string.
-    pub fn pretty_format(&self, metadata: &Metadata, stat_context: &StatContext) -> Result<String> {
-        let options = FormatOptions { verbose: false };
-        let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
-        Ok(self.to_format_tree(&humanizer)?.format_pretty()?)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn text_diff_preserves_trace_diagnostics() {
+        assert_eq!(diff_text("same\n", "same\n"), "No differences found.");
+        assert_eq!(
+            diff_text("old\nsame\n", "new\nsame\n"),
+            "-old\n+new\n same\n"
+        );
     }
 }

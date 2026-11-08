@@ -42,7 +42,7 @@ impl PlannedQuery {
     pub(crate) fn remove_root_merge(&self) -> Self {
         if matches!(
             self.expr.plan(),
-            crate::plans::RelOperator::Exchange(crate::plans::Exchange::Merge)
+            crate::plans::PhysicalRelOperator::Exchange(crate::plans::Exchange::Merge)
         ) {
             Self::new(self.expr.unary_child().clone())
         } else {

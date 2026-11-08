@@ -21,7 +21,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::*;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_meta_client::kvapi::KvApiExt;
@@ -36,7 +35,7 @@ async fn test_add_udf() -> anyhow::Result<()> {
     // lambda udf
     let udf = create_test_lambda_udf();
     udf_api
-        .add_udf(udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(udf.clone(), false, None)
         .await??;
 
     let value = kv_api
@@ -57,7 +56,7 @@ async fn test_add_udf() -> anyhow::Result<()> {
     let udf = create_test_udf_server();
 
     udf_api
-        .add_udf(udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(udf.clone(), false, None)
         .await??;
 
     let value = kv_api
@@ -79,7 +78,7 @@ async fn test_add_udf() -> anyhow::Result<()> {
     let udf = create_test_udf_script();
 
     udf_api
-        .add_udf(udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(udf.clone(), false, None)
         .await??;
 
     let value = kv_api
@@ -101,32 +100,22 @@ async fn test_add_udf() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_already_exists_add_udf() -> anyhow::Result<()> {
+async fn test_add_existing_udf_writes_nothing() -> anyhow::Result<()> {
     let (_, udf_api) = new_udf_api().await?;
-
-    // lambda udf
-    let udf = create_test_lambda_udf();
-    udf_api
-        .add_udf(udf.clone(), &CreateOption::Create)
-        .await??;
-
-    let got = udf_api.add_udf(udf.clone(), &CreateOption::Create).await?;
-
-    let err = got.unwrap_err();
-
-    assert_eq!(err.to_string(), r#"UDF already exists: 'isnotempty'; "#);
-
-    // udf server
     let udf = create_test_udf_server();
-    udf_api
-        .add_udf(udf.clone(), &CreateOption::Create)
-        .await??;
-
-    let got = udf_api.add_udf(udf.clone(), &CreateOption::Create).await?;
-
-    let err = got.unwrap_err();
-    assert_eq!(err.to_string(), r#"UDF already exists: 'strlen'; "#);
-
+    assert!(
+        udf_api
+            .add_udf_with_owner(udf.clone(), false, None)
+            .await??
+    );
+    let mut replacement = udf.clone();
+    replacement.description = "must not replace".into();
+    assert!(
+        !udf_api
+            .add_udf_with_owner(replacement, false, None)
+            .await??
+    );
+    assert_eq!(udf_api.get_udf(&udf.name).await?.unwrap().data, udf);
     Ok(())
 }
 
@@ -141,11 +130,11 @@ async fn test_successfully_get_udfs() -> anyhow::Result<()> {
     let udf_server = create_test_udf_server();
 
     udf_api
-        .add_udf(lambda_udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(lambda_udf.clone(), false, None)
         .await??;
 
     udf_api
-        .add_udf(udf_server.clone(), &CreateOption::Create)
+        .add_udf_with_owner(udf_server.clone(), false, None)
         .await??;
 
     let udfs = udf_api.list_udf().await?;
@@ -161,11 +150,11 @@ async fn test_successfully_drop_udf() -> anyhow::Result<()> {
     let udf_server = create_test_udf_server();
 
     udf_api
-        .add_udf(lambda_udf.clone(), &CreateOption::Create)
+        .add_udf_with_owner(lambda_udf.clone(), false, None)
         .await??;
 
     udf_api
-        .add_udf(udf_server.clone(), &CreateOption::Create)
+        .add_udf_with_owner(udf_server.clone(), false, None)
         .await??;
 
     let udfs = udf_api.list_udf().await?;

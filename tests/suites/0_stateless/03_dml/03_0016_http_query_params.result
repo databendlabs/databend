@@ -48,6 +48,39 @@ null
   ]
 ]
 null
+=== numeric column ranges with string params ===
+null
+null
+[
+  [
+    "1"
+  ],
+  [
+    "2"
+  ]
+]
+null
+=== numeric column ranges with numeric params ===
+[
+  [
+    "1"
+  ],
+  [
+    "2"
+  ]
+]
+null
+=== double column ranges with string params ===
+[
+  [
+    "1"
+  ],
+  [
+    "2"
+  ]
+]
+null
+null
 === sql injection prevention ===
 [
   [

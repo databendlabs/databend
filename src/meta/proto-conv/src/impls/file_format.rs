@@ -369,7 +369,7 @@ impl FromToProto for mt::principal::LokiFileFormatParams {
         pb::LokiFileFormatParams {
             ver: VER,
             // Loki is a new oneof alternative that older readers cannot interpret.
-            min_reader_ver: 189,
+            min_reader_ver: 194,
             missing_field_as: Some(self.missing_field_as.to_string()),
         }
     }
@@ -648,7 +648,11 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
         let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
         Self::PB {
             ver: VER,
-            min_reader_ver: MIN_READER_VER,
+            min_reader_ver: if self.quote_style == CsvQuoteStyle::QuoteNonNumeric {
+                193
+            } else {
+                MIN_READER_VER
+            },
             compression,
             headers: self.headers,
             field_delimiter: self.field_delimiter.clone(),

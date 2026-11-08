@@ -240,6 +240,9 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
                 connection,
             }) => Ok(mt::principal::GrantObject::Connection(connection)),
+            pb::grant_object::Object::Integration(name) => {
+                Ok(mt::principal::GrantObject::Integration(name))
+            }
             pb::grant_object::Object::Sequence(pb::grant_object::GrantSequenceObject {
                 sequence,
             }) => Ok(mt::principal::GrantObject::Sequence(sequence)),
@@ -299,6 +302,9 @@ impl FromToProto for mt::principal::GrantObject {
                     warehouse: w.clone(),
                 },
             )),
+            mt::principal::GrantObject::Integration(name) => {
+                Some(pb::grant_object::Object::Integration(name.clone()))
+            }
             mt::principal::GrantObject::Connection(c) => Some(
                 pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
                     connection: c.clone(),
@@ -329,7 +335,11 @@ impl FromToProto for mt::principal::GrantObject {
         };
         pb::GrantObject {
             ver: VER,
-            min_reader_ver: MIN_READER_VER,
+            min_reader_ver: if matches!(self, mt::principal::GrantObject::Integration(_)) {
+                190
+            } else {
+                MIN_READER_VER
+            },
             object,
         }
     }

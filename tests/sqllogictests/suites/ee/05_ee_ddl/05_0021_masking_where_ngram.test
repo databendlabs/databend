@@ -1,0 +1,120 @@
+statement ok
+SET enable_planner_cache = 1
+
+statement ok
+SET enable_query_result_cache = 0
+
+statement ok
+DROP TABLE IF EXISTS masking_where_ngram
+
+statement ok
+DROP MASKING POLICY IF EXISTS masking_where_ngram_policy
+
+statement ok
+CREATE MASKING POLICY masking_where_ngram_policy AS (val STRING) RETURNS STRING -> CASE WHEN val IS NULL THEN NULL ELSE '[redacted]' END
+
+# Each INSERT produces one block. Regular Bloom indexing is disabled, and the
+# substring pattern cannot use Min/Max. The Ngram filter must prune the second
+# block, which contains no occurrence of the selected substring.
+statement ok
+CREATE TABLE masking_where_ngram(id INT, content STRING, NGRAM INDEX masking_ngram_idx(content) gram_size = 3 bloom_size = 1048576) bloom_index_columns = '' storage_format = 'parquet'
+
+statement ok
+INSERT INTO masking_where_ngram VALUES (1, 'prefix secretneedle suffix'), (2, 'ordinary message')
+
+statement ok
+INSERT INTO masking_where_ngram VALUES (3, 'another message'), (4, 'unrelated document')
+
+statement ok
+ALTER TABLE masking_where_ngram MODIFY COLUMN content SET MASKING POLICY masking_where_ngram_policy
+
+query I
+SELECT count(*) FROM masking_where_ngram WHERE content LIKE '%secretneedle%'
+----
+0
+
+# The mask itself is not in the Ngram index. Indexing raw values must not cause
+# false negatives when ordinary masked-WHERE semantics are active.
+query I
+SELECT count(*) FROM masking_where_ngram WHERE content LIKE '%redacted%'
+----
+4
+
+statement ok
+ALTER TABLE masking_where_ngram MODIFY COLUMN content SET MASKING POLICY masking_where_ngram_policy OPTIONS (where_use_unmasked_value = true)
+
+query T
+EXPLAIN SELECT id FROM masking_where_ngram WHERE content LIKE '%secretneedle%'
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 2<slt:ignore>bloom pruning: 2 to 1<slt:ignore>
+
+query IT
+SELECT id, content FROM masking_where_ngram WHERE content LIKE '%secretneedle%'
+----
+1 [redacted]
+
+query I
+SELECT count(*) FROM masking_where_ngram WHERE content LIKE '%secretneedle%'
+----
+1
+
+query IT
+SELECT id, content FROM masking_where_ngram WHERE content LIKE 'prefix%' ORDER BY id
+----
+1 [redacted]
+
+query IT
+SELECT id, content FROM masking_where_ngram WHERE content LIKE '%message' ORDER BY id
+----
+2 [redacted]
+3 [redacted]
+
+query I
+SELECT count(*) FROM masking_where_ngram WHERE content LIKE '%absentneedle%'
+----
+0
+
+query I
+SELECT count(*) FROM masking_where_ngram WHERE content LIKE '%redacted%'
+----
+0
+
+# Compare identical raw predicates with and without the index. LIKE remains
+# executable without Ngram and must yield the same masked output.
+statement ok
+DROP NGRAM INDEX masking_ngram_idx ON masking_where_ngram
+
+query IT
+SELECT id, content FROM masking_where_ngram WHERE content LIKE '%secretneedle%'
+----
+1 [redacted]
+
+statement ok
+CREATE NGRAM INDEX masking_ngram_idx ON masking_where_ngram(content) gram_size = 3 bloom_size = 1048576
+
+statement ok
+REFRESH NGRAM INDEX masking_ngram_idx ON masking_where_ngram
+
+query IT
+SELECT id, content FROM masking_where_ngram WHERE content LIKE '%secretneedle%'
+----
+1 [redacted]
+
+statement ok
+ALTER TABLE masking_where_ngram MODIFY COLUMN content SET MASKING POLICY masking_where_ngram_policy OPTIONS (where_use_unmasked_value = false)
+
+query I
+SELECT count(*) FROM masking_where_ngram WHERE content LIKE '%secretneedle%'
+----
+0
+
+query I
+SELECT count(*) FROM masking_where_ngram WHERE content LIKE '%redacted%'
+----
+4
+
+statement ok
+DROP TABLE masking_where_ngram
+
+statement ok
+DROP MASKING POLICY masking_where_ngram_policy

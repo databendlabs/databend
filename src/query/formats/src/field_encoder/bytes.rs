@@ -137,6 +137,9 @@ impl FieldEncoderBytes {
         in_nested: bool,
     ) -> Result<()> {
         match &column {
+            Column::Encoded(c) => c.with_row(row_index, |column, row| {
+                self.write_field(column, row, out_buf, in_nested)
+            })?,
             Column::Null { .. } => self.write_null(out_buf),
             Column::EmptyArray { .. } => self.write_empty_array(out_buf),
             Column::EmptyMap { .. } => self.write_empty_map(out_buf),

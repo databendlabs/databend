@@ -30,6 +30,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 
@@ -132,12 +133,6 @@ impl Operator for DummyTableScan {
         }))
     }
 
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Serial,
-        })
-    }
-
     fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: 1.0,
@@ -148,6 +143,14 @@ impl Operator for DummyTableScan {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+}
+
+impl PhysicalOperator for DummyTableScan {
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Serial,
+        })
     }
 
     fn compute_required_prop_child(

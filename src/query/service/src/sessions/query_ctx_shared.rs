@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -24,10 +25,10 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use async_channel::Receiver;
+use databend_common_ast::parser::SqlSecrets;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
-use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::IoStats;
@@ -35,8 +36,11 @@ use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
+use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
@@ -49,6 +53,7 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
+use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -117,6 +122,7 @@ pub struct QueryContextShared {
     cluster_cache: Arc<RwLock<Arc<Cluster>>>,
     warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
     running_query: Arc<RwLock<Option<String>>>,
+    pub(super) query_secrets: RwLock<SqlSecrets>,
     running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     running_query_text_hash: Arc<RwLock<Option<String>>>,
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
@@ -142,6 +148,8 @@ pub struct QueryContextShared {
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
     pub(super) mutation_state: MutationState,
+    // Commit sinks in local fragments and the outer refresh hook must see the same hints.
+    pub(super) written_segment_locs: SegmentLocationsState,
     pub(super) result_cache_state: ResultCacheState,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
@@ -173,12 +181,24 @@ pub struct QueryContextShared {
 
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
-    pub(super) io_stats: Arc<IoStats>,
+    /// Object storage IO of this query on this node. Shared with the
+    /// `TrackingPayload.io_stats` of the threads executing the query, so the
+    /// global storage metrics layer records into it regardless of which
+    /// table instance performed the IO.
+    pub(super) local_io_stats: Arc<IoStats>,
+    /// IO reported by remote nodes for this query. Remote nodes send deltas
+    /// (see `StatisticsSender::send_io_stats`), so they are accumulated here.
+    pub(super) remote_io_stats: Arc<IoStats>,
+    /// Identifies this query on this node for on-demand profiling. Carried in
+    /// the `TrackingPayload.perf_query_token` of the threads executing it.
+    pub(super) perf_query_token: u64,
 
     pub(super) broadcast_registry: BroadcastRegistry,
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
+    /// What the reads of the statement may do with the caches (`TableContextCachePolicy`).
+    pub(super) cache_policy: RwLock<CachePolicy>,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
@@ -195,9 +215,18 @@ pub struct QueryContextShared {
     /// Shared across all QueryContext instances within this query.
     pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
 
+    /// Sequence visibility checker shared by the query: `nextval` asks for it per VALUES row
+    /// and per block, and building it lists all sequence ownerships.
+    pub(super) sequence_visibility_checker_cache:
+        tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
+
     /// Limits concurrent RowFetch reads and decodes across all pipelines and
     /// QueryContext instances belonging to this query on the local node.
     row_fetch_io_semaphore: OnceLock<Arc<Semaphore>>,
+
+    #[cfg(feature = "python-udf")]
+    pub(super) python_udf_workers:
+        Mutex<Option<Arc<databend_query_script_udf_support::PythonQueryWorkers>>>,
 }
 
 impl QueryContextShared {
@@ -225,6 +254,7 @@ impl QueryContextShared {
             warnings: Arc::new(Mutex::new(vec![])),
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
+            query_secrets: Default::default(),
             running_query_kind: Arc::new(RwLock::new(None)),
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
@@ -242,6 +272,7 @@ impl QueryContextShared {
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),
+            written_segment_locs: Default::default(),
             result_cache_state: Default::default(),
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
@@ -265,16 +296,25 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
-            io_stats: Default::default(),
+            local_io_stats: ThreadTracker::io_stats().cloned().unwrap_or_default(),
+            remote_io_stats: Default::default(),
+            perf_query_token: match ThreadTracker::perf_query_token() {
+                0 => QueryPerf::next_query_token(),
+                inherited => inherited,
+            },
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
+            cache_policy: RwLock::new(CachePolicy::DEFAULT),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
+            sequence_visibility_checker_cache: Default::default(),
             row_fetch_io_semaphore: Default::default(),
+            #[cfg(feature = "python-udf")]
+            python_udf_workers: Default::default(),
         }))
     }
 
@@ -313,6 +353,10 @@ impl QueryContextShared {
     }
 
     pub fn kill<C>(&self, cause: ErrorCode<C>) {
+        #[cfg(feature = "python-udf")]
+        if let Some(workers) = self.python_udf_workers.lock().as_ref() {
+            workers.finish();
+        }
         self.set_error(cause.clone());
 
         if let Some(executor) = self.executor.read().upgrade() {
@@ -399,19 +443,51 @@ impl QueryContextShared {
         tables.values().cloned().collect()
     }
 
+    /// Data metrics of the whole query.
+    ///
+    /// Byte and cost counters come from the per-query `IoStats` (local node plus
+    /// the latest snapshot of every remote node). Partition counters come from
+    /// the tables attached to this query, which is where pruning records them.
+    /// Partition counters of the tables attached to this context.
+    ///
+    /// Only `partitions_scanned` / `partitions_total` are meaningful here; the
+    /// byte and cost fields of the returned value are not populated. Storage IO
+    /// of the query is accounted per query in `IoStats`, see [`Self::get_io_stats`].
     pub fn get_data_metrics(&self) -> StorageMetrics {
         let tables = self.get_tables_refs();
-        let metrics: Vec<Arc<StorageMetrics>> =
-            tables.iter().filter_map(|v| v.get_data_metrics()).collect();
-        StorageMetrics::merge(&metrics)
+        // A stream and its ordinary source may expose the same metrics instance.
+        let mut seen = HashSet::new();
+        let table_metrics: Vec<Arc<StorageMetrics>> = tables
+            .iter()
+            .filter_map(|table| table.get_data_metrics())
+            .filter(|metrics| seen.insert(Arc::as_ptr(metrics)))
+            .collect();
+        StorageMetrics::merge(&table_metrics)
     }
 
-    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
-        self.io_stats.merge_snapshot(stats);
+    /// The IO counter of this query on this node. Threads executing the query
+    /// must carry it in their `TrackingPayload.io_stats`.
+    pub fn get_local_io_stats(&self) -> Arc<IoStats> {
+        self.local_io_stats.clone()
     }
 
+    /// The on-demand profiling token of this query on this node. Threads
+    /// executing the query must carry it in their
+    /// `TrackingPayload.perf_query_token`.
+    pub fn get_perf_query_token(&self) -> u64 {
+        self.perf_query_token
+    }
+
+    /// Add an IO delta reported by a remote node.
+    pub fn merge_remote_io_stats(&self, delta: &IoStatsSnapshot) {
+        self.remote_io_stats.merge_snapshot(delta);
+    }
+
+    /// IO of the whole query: this node plus everything reported by remote nodes.
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
-        self.io_stats.snapshot()
+        let mut stats = self.local_io_stats.snapshot();
+        stats.merge(&self.remote_io_stats.snapshot());
+        stats
     }
 
     pub fn get_tenant(&self) -> Tenant {
@@ -494,7 +570,7 @@ impl QueryContextShared {
         }
     }
 
-    // Cache the source table of a stream table to ensure can get the same table metadata.
+    // Bind streams to their own batch snapshots, separately from ordinary table refs.
     #[async_backtrace::framed]
     async fn cache_stream_source_table(
         &self,
@@ -507,54 +583,72 @@ impl QueryContextShared {
         }
 
         let stream = StreamTable::try_from_table(table.as_ref())?;
+        // Keep the shared-database identity check even when restoring a pinned source.
         let source_database_name = stream
             .source_database_name(catalog.as_ref(), &self.get_tenant())
             .await?;
-        let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
-        let meta_key = (
-            catalog.name(),
-            source_database_name.to_string(),
-            source_table_name.to_string(),
-        );
-        let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
-        let source_table = match already_in_cache {
-            false => {
-                let stream_desc = &stream.get_table_info().desc;
-                let source_table =
-                    match catalog.get_stream_source_table(stream_desc, max_batch_size)? {
-                        Some(source_table) => source_table,
-                        None => {
-                            let source_table = stream
-                                .navigate_within_batch_limit(
-                                    catalog.as_ref(),
-                                    &self.get_tenant(),
-                                    &source_database_name,
-                                    &source_table_name,
-                                    max_batch_size,
-                                    self.get_settings()
-                                        .get_enable_stream_batch_snapshot_forward_scan()?,
-                                    self.get_settings().get_s3_storage_class()?,
-                                )
-                                .await?;
-                            catalog.cache_stream_source_table(
-                                stream.get_table_info().clone(),
-                                source_table.get_table_info().clone(),
-                                max_batch_size,
-                            );
-                            source_table
-                        }
-                    };
-
-                let mut tables_refs = self.tables_refs.lock();
-                tables_refs.entry(meta_key).or_insert(source_table.clone());
+        let stream_desc = &stream.get_table_info().desc;
+        // Always validate and reuse the transaction's stream batch, even when
+        // this query has already referenced the ordinary source table.
+        let source_table = match catalog.get_stream_source_table(stream_desc, max_batch_size)? {
+            Some(source_table) => source_table,
+            None => {
+                let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
+                let meta_key = (
+                    catalog.name(),
+                    source_database_name.to_string(),
+                    source_table_name.to_string(),
+                );
+                let cached_source = self.tables_refs.lock().get(&meta_key).cloned();
+                let source = match cached_source {
+                    Some(source) => source,
+                    None => {
+                        let source = catalog
+                            .get_table(
+                                &self.get_tenant(),
+                                &source_database_name,
+                                &source_table_name,
+                            )
+                            .await
+                            .map_err(|err| {
+                                if matches!(
+                                    err.code(),
+                                    ErrorCode::LICENSE_KEY_INVALID | ErrorCode::LICENSE_KEY_EXPIRED
+                                ) {
+                                    return err;
+                                }
+                                ErrorCode::IllegalStream(format!(
+                                    "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                                    source_database_name,
+                                    source_table_name,
+                                    stream_desc,
+                                    err.message()
+                                ))
+                            })?;
+                        // Only the full source belongs in the ordinary table cache.
+                        self.tables_refs
+                            .lock()
+                            .entry(meta_key)
+                            .or_insert(source)
+                            .clone()
+                    }
+                };
+                let source_table = stream
+                    .navigate_within_batch_limit(
+                        source,
+                        max_batch_size,
+                        self.get_settings()
+                            .get_enable_stream_batch_snapshot_forward_scan()?,
+                        self.get_settings().get_s3_storage_class()?,
+                    )
+                    .await?;
+                catalog.cache_stream_source_table(
+                    stream.get_table_info().clone(),
+                    source_table.get_table_info().clone(),
+                    max_batch_size,
+                );
                 source_table
             }
-            true => self
-                .tables_refs
-                .lock()
-                .get(&meta_key)
-                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
-                .clone(),
         };
 
         let mut stream_info = stream.get_table_info().to_owned();
@@ -609,8 +703,9 @@ impl QueryContextShared {
         }
         {
             let mut running_query = self.running_query.write();
+            // Callers attach masked SQL, see `Statement::to_mask_sql`.
             *running_query = Some(short_sql(
-                mask_connection_info(&query),
+                query,
                 self.get_settings()
                     .get_short_sql_max_length()
                     .unwrap_or(1000),

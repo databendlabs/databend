@@ -303,6 +303,17 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
+        if let Some(bitmap) = self.evaluator.try_compare_encoded(select_op, exprs) {
+            let buffers = SelectionBuffers {
+                true_selection,
+                false_selection: false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            };
+            return Ok(self.select_boolean_column_adapt(bitmap, buffers, false_selection.1));
+        }
         let selection = self.selection(
             true_selection,
             false_selection.0,
@@ -352,6 +363,30 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
+        // Only the bits of the rows to select are read.
+        let rows = match select_strategy {
+            SelectStrategy::True => {
+                Some(&true_selection[*mutable_true_idx..*mutable_true_idx + count])
+            }
+            SelectStrategy::False => {
+                Some(&false_selection.0[*mutable_false_idx..*mutable_false_idx + count])
+            }
+            SelectStrategy::All => None,
+        };
+        if let Some(bitmap) = self
+            .evaluator
+            .try_like_encoded(column_ref, like_pattern, not, rows)
+        {
+            let buffers = SelectionBuffers {
+                true_selection,
+                false_selection: false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            };
+            return Ok(self.select_boolean_column_adapt(bitmap, buffers, false_selection.1));
+        }
         let selection = self.selection(
             true_selection,
             false_selection.0,
@@ -368,8 +403,19 @@ impl<'a> Selector<'a> {
             DataType::String | DataType::Nullable(deref!(DataType::String))
         ));
 
+        let buffers = SelectionBuffers {
+            true_selection,
+            false_selection: false_selection.0,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        };
         if value.is_scalar_null() {
-            return Ok(0);
+            // LIKE over NULL is NULL, which selects as false. The rows must still be written
+            // to the false selection when the caller tracks it: OR evaluates its next child
+            // only over the rows a previous child left false.
+            return Ok(self.select_boolean_scalar_adapt(false, buffers, false_selection.1));
         }
         // The operand is usually a column, but a block may carry it as a constant (e.g. the
         // replicated side of a cross join); the LIKE fast path then applies to every row.
@@ -382,14 +428,7 @@ impl<'a> Selector<'a> {
             like_pattern,
             not,
             validity,
-            SelectionBuffers {
-                true_selection,
-                false_selection: false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            },
+            buffers,
             false_selection.1,
         )
     }
@@ -420,7 +459,11 @@ impl<'a> Selector<'a> {
         buffers: SelectionBuffers,
         has_false: bool,
     ) -> Result<usize> {
-        let column = self.evaluator.data_block().get_by_offset(id).value();
+        let column = self
+            .evaluator
+            .data_block()
+            .get_by_offset(id)
+            .decoded_value();
         self.select_value(column, data_type, buffers, has_false)
     }
 
@@ -497,7 +540,10 @@ impl<'a> Selector<'a> {
 
                 let args = args
                     .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
+                    .map(|expr| {
+                        self.evaluator
+                            .partial_run(expr, None, &mut eval_options, false)
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -590,7 +636,10 @@ impl<'a> Selector<'a> {
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
+                    .map(|expr| {
+                        self.evaluator
+                            .partial_run(expr, None, &mut eval_options, false)
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()

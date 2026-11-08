@@ -123,6 +123,11 @@ pub async fn validate_grant_object_exists(
                 ))
             };
         }
+        GrantObject::Integration(name) => {
+            UserApiProvider::instance()
+                .get_external_access_integration(&tenant, name)
+                .await?;
+        }
         GrantObject::Connection(c) => {
             return match StageResolver::from_table_context(
                 ctx.clone(),

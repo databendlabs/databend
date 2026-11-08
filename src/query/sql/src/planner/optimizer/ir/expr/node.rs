@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::VectorIndexInfo;
@@ -25,36 +25,30 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
-use crate::IndexType;
 use crate::Symbol;
-use crate::plans::Exchange;
 use crate::plans::Operator;
-use crate::plans::RelOperator;
 
-/// Stage-specific operator and state types for a shared recursive expression.
-/// Constructors and invalidation remain stage-owned; relational utilities can be
-/// shared by opting into `RelExprKind`.
-pub trait ExprKind {
-    type Operator: Clone + Debug + Eq + Hash;
-    type State: Clone + Eq + Hash;
-}
-
-/// Opt-in support for rewriting the recursive shape; invalidation stays stage-owned.
-pub trait RewriteExprKind: ExprKind {
-    fn rewritten_state(state: &Self::State) -> Self::State;
-}
-
-/// Shared relational utilities apply only while a stage uses RelOperator. A future
-/// physical operator can provide its own utilities without changing the tree skeleton.
-pub trait RelExprKind: RewriteExprKind<Operator = crate::plans::RelOperator> + Sized {
+/// Operator, state and cache policy for a plan-tree stage. Logical and physical
+/// kinds implement this contract independently; rewrites keep their operator type
+/// and reset only the state prescribed by that stage.
+pub trait ExprKind: Sized + Send + Sync {
+    type Operator: Operator + Clone + Debug + Eq + Hash + Send + Sync;
+    type State: Clone + Eq + Hash + Send + Sync;
     const NAME: &'static str;
+
+    fn rewritten_state(state: &Self::State) -> Self::State;
     fn rel_expr(expr: &Expr<Self>) -> crate::optimizer::ir::RelExpr<'_>;
     fn relational_cache(
         state: &Self::State,
-    ) -> &Arc<std::sync::OnceLock<Arc<crate::optimizer::ir::RelationalProperty>>>;
-    fn statistics_cache(
-        state: &Self::State,
-    ) -> &Arc<std::sync::OnceLock<Arc<crate::optimizer::ir::StatInfo>>>;
+    ) -> &Arc<OnceLock<Arc<crate::optimizer::ir::RelationalProperty>>>;
+    fn statistics_cache(state: &Self::State)
+    -> &Arc<OnceLock<Arc<crate::optimizer::ir::StatInfo>>>;
+    fn validate_types(expr: &Expr<Self>, metadata: &crate::MetadataRef) -> Result<()>;
+    fn validate_column_scope(
+        expr: &Expr<Self>,
+        metadata: &crate::MetadataRef,
+        ambient: &crate::ColumnSet,
+    ) -> Result<()>;
 }
 
 #[derive(Educe)]
@@ -119,9 +113,7 @@ impl<K: ExprKind> Expr<K> {
     pub fn arity(&self) -> usize {
         self.children.len()
     }
-}
 
-impl<K: RewriteExprKind> Expr<K> {
     pub fn replace_children(&self, children: impl IntoIterator<Item = Arc<Self>>) -> Self {
         Self {
             plan: self.plan.clone(),
@@ -129,9 +121,7 @@ impl<K: RewriteExprKind> Expr<K> {
             state: K::rewritten_state(&self.state),
         }
     }
-}
 
-impl<K: RelExprKind> Expr<K> {
     pub fn derive_relational_prop(&self) -> Result<Arc<crate::optimizer::ir::RelationalProperty>> {
         use crate::plans::Operator;
         let prop = K::relational_cache(&self.state)
@@ -179,7 +169,7 @@ impl Side {
     }
 }
 
-impl<K: RelExprKind> Expr<K> {
+impl<K: ExprKind> Expr<K> {
     pub fn build_side_child(&self) -> &Expr<K> {
         debug_assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
         &self.children[1]
@@ -188,15 +178,6 @@ impl<K: RelExprKind> Expr<K> {
     pub fn probe_side_child(&self) -> &Expr<K> {
         debug_assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
         &self.children[0]
-    }
-
-    #[recursive::recursive]
-    pub fn support_lazy_materialize(&self) -> bool {
-        self.plan.support_lazy_materialize()
-            && self
-                .children
-                .iter()
-                .all(|child| child.support_lazy_materialize())
     }
 
     #[recursive::recursive]
@@ -217,115 +198,9 @@ impl<K: RelExprKind> Expr<K> {
         }
         Ok(udfs)
     }
-
-    #[recursive::recursive]
-    pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<Symbol>> {
-        let mut udf_ids = BTreeSet::new();
-        if let RelOperator::Udf(udf) = self.plan.as_ref() {
-            for item in udf.items.iter() {
-                udf_ids.insert(item.index);
-            }
-        }
-        for child in &self.children {
-            let udfs = child.get_udfs_col_ids()?;
-            udf_ids.extend(udfs);
-        }
-        Ok(udf_ids)
-    }
-
-    // Add column index to Scan nodes that match the given table index
-    pub fn add_column_index_to_scans(&self, table_index: IndexType, column_index: Symbol) -> Self {
-        let mut required_columns = BTreeMap::new();
-        required_columns.insert(table_index, ScanRequiredColumns {
-            columns: BTreeSet::from([column_index]),
-            inverted_index: None,
-            vector_index: None,
-        });
-        self.add_column_indexes_to_scans(&required_columns)
-    }
-
-    // Add column indexes to Scan nodes that match the given table indexes.
-    pub fn add_column_indexes_to_scans(
-        &self,
-        required_columns: &BTreeMap<IndexType, ScanRequiredColumns>,
-    ) -> Self {
-        struct Visitor<'a> {
-            required_columns: &'a BTreeMap<IndexType, ScanRequiredColumns>,
-        }
-
-        impl<K: RelExprKind> super::visitor::ExprVisitor<K> for Visitor<'_> {
-            fn visit(&mut self, expr: &Expr<K>) -> Result<super::visitor::VisitAction<K>> {
-                if let Some(p) = expr.plan.as_ref().as_scan() {
-                    if let Some(required_columns) = self.required_columns.get(&p.table_index) {
-                        let mut p = p.clone();
-                        p.columns.extend(required_columns.columns.iter().copied());
-                        if required_columns.inverted_index.is_some() {
-                            p.inverted_index = required_columns.inverted_index.clone();
-                        }
-                        if required_columns.vector_index.is_some() {
-                            p.vector_index = required_columns.vector_index.clone();
-                        }
-                        let expr = expr.replace_plan(p);
-                        return Ok(super::visitor::VisitAction::Replace(expr));
-                    } else {
-                        return Ok(super::visitor::VisitAction::SkipChildren);
-                    }
-                }
-                Ok(super::visitor::VisitAction::Continue)
-            }
-        }
-
-        let mut visitor = Visitor { required_columns };
-        let expr = self.accept(&mut visitor);
-        if let Ok(Some(expr)) = expr {
-            return expr;
-        }
-        self.clone()
-    }
-
-    #[recursive::recursive]
-    pub fn has_merge_exchange(&self) -> bool {
-        if let RelOperator::Exchange(Exchange::Merge) = self.plan.as_ref() {
-            return true;
-        }
-        self.children.iter().any(|child| child.has_merge_exchange())
-    }
-
-    pub fn get_data_distribution(&self) -> Result<Option<Exchange>> {
-        struct DataDistributionVisitor {
-            result: Option<Exchange>,
-        }
-        impl<K: RelExprKind> super::visitor::ExprVisitor<K> for DataDistributionVisitor {
-            fn visit(&mut self, expr: &Expr<K>) -> Result<super::visitor::VisitAction<K>> {
-                match expr.plan.as_ref() {
-                    RelOperator::Exchange(exchange) => {
-                        self.result = Some(exchange.clone());
-                        Ok(super::visitor::VisitAction::Stop)
-                    }
-
-                    RelOperator::Join(_) => {
-                        let child = expr.probe_side_child();
-                        self.result = child.get_data_distribution()?;
-                        Ok(super::visitor::VisitAction::Stop)
-                    }
-                    _ => {
-                        if expr.arity() > 0 {
-                            Ok(super::visitor::VisitAction::Continue)
-                        } else {
-                            Ok(super::visitor::VisitAction::Stop)
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut visitor = DataDistributionVisitor { result: None };
-        let _ = self.accept(&mut visitor);
-        Ok(visitor.result)
-    }
 }
 
-impl<K: RewriteExprKind<Operator = crate::plans::RelOperator>> Expr<K> {
+impl<K: ExprKind> Expr<K> {
     pub fn replace_left_child(&self, left: impl Into<Arc<Self>>) -> Self {
         assert_eq!(self.children.len(), 2);
         Self {
@@ -351,7 +226,7 @@ impl<K: RewriteExprKind<Operator = crate::plans::RelOperator>> Expr<K> {
         }
     }
 
-    pub fn replace_plan(&self, plan: impl Into<Arc<RelOperator>>) -> Self {
+    pub fn replace_plan(&self, plan: impl Into<Arc<K::Operator>>) -> Self {
         Self {
             plan: plan.into(),
             state: K::rewritten_state(&self.state),
@@ -363,94 +238,122 @@ impl<K: RewriteExprKind<Operator = crate::plans::RelOperator>> Expr<K> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::optimizer::ir::AsyncExprVisitor;
+    use crate::optimizer::ir::ExprVisitor;
+    use crate::optimizer::ir::PExpr;
+    use crate::optimizer::ir::SExpr;
+    use crate::optimizer::ir::StatContext;
+    use crate::optimizer::ir::VisitAction;
+    use crate::optimizer::optimizers::rule::RuleID;
+    use crate::plans::DummyTableScan;
+    use crate::plans::Join;
+    use crate::plans::Limit;
+    use crate::plans::RelOp;
 
-    // The skeleton does not require the physical stage to retain logical cache/rule
-    // fields, or even the same operator type.
-    struct IndependentStage;
-
-    impl ExprKind for IndependentStage {
-        type Operator = &'static str;
-        type State = u64;
-    }
-
-    impl RewriteExprKind for IndependentStage {
-        fn rewritten_state(_: &Self::State) -> Self::State {
-            99
-        }
-    }
-
-    struct ReplaceScan;
-
-    impl crate::optimizer::ir::ExprVisitor<IndependentStage> for ReplaceScan {
-        fn visit(
-            &mut self,
-            expr: &Expr<IndependentStage>,
-        ) -> Result<crate::optimizer::ir::VisitAction<IndependentStage>> {
-            use crate::optimizer::ir::VisitAction;
-            if *expr.plan() == "scan" {
-                Ok(VisitAction::Replace(Expr {
-                    plan: Arc::new("new_scan"),
-                    children: vec![],
-                    state: 7,
-                }))
+    struct ReplaceDummy<K: ExprKind>(Expr<K>);
+    impl<K: ExprKind> ExprVisitor<K> for ReplaceDummy<K> {
+        fn visit(&mut self, expr: &Expr<K>) -> Result<VisitAction<K>> {
+            Ok(if expr.plan().rel_op() == RelOp::DummyTableScan {
+                VisitAction::Replace(self.0.clone())
             } else {
-                Ok(VisitAction::Continue)
-            }
+                VisitAction::Continue
+            })
+        }
+    }
+    #[async_trait::async_trait]
+    impl<K: ExprKind> AsyncExprVisitor<K> for ReplaceDummy<K> {
+        async fn visit(&mut self, expr: &Expr<K>) -> Result<VisitAction<K>> {
+            ExprVisitor::visit(self, expr)
         }
     }
 
-    #[async_trait::async_trait]
-    impl crate::optimizer::ir::AsyncExprVisitor<IndependentStage> for ReplaceScan {
-        async fn visit(
-            &mut self,
-            expr: &Expr<IndependentStage>,
-        ) -> Result<crate::optimizer::ir::VisitAction<IndependentStage>> {
-            crate::optimizer::ir::ExprVisitor::visit(self, expr)
-        }
+    async fn check_traversal<K: ExprKind>(tree: &Expr<K>, empty: Expr<K>) -> Result<Expr<K>> {
+        let stats = StatContext::without_settings(Default::default());
+        tree.derive_relational_prop()?;
+        assert_eq!(tree.derive_cardinality(&stats)?.cardinality, 1.0);
+        let replaced = tree.accept(&mut ReplaceDummy(empty.clone()))?.unwrap();
+        assert!(K::relational_cache(&replaced.state).get().is_none());
+        assert!(K::statistics_cache(&replaced.state).get().is_none());
+        assert_eq!(replaced.derive_cardinality(&stats)?.cardinality, 0.0);
+        let asynchronous = tree.accept_async(&mut ReplaceDummy(empty)).await?.unwrap();
+        assert!(replaced == asynchronous);
+        assert_eq!(tree.derive_cardinality(&stats)?.cardinality, 1.0);
+        assert_eq!(tree.unary_child().plan().rel_op(), RelOp::DummyTableScan);
+        Ok(replaced)
     }
 
     #[tokio::test]
-    async fn shared_traversal_uses_stage_invalidation() -> Result<()> {
-        let tree = Expr::<IndependentStage> {
-            plan: Arc::new("filter"),
-            children: vec![Arc::new(Expr {
-                plan: Arc::new("scan"),
-                children: vec![],
-                state: 11,
-            })],
-            state: 23,
+    async fn logical_and_physical_traversal_reset_cached_state() -> Result<()> {
+        let limit = Limit {
+            before_exchange: false,
+            limit: Some(0),
+            offset: 0,
+            lazy_columns: Default::default(),
         };
-        let replaced = tree.accept(&mut ReplaceScan)?.unwrap();
-        assert_eq!(replaced.state, 99);
-        assert_eq!(*replaced.child(0)?.plan(), "new_scan");
-        assert_eq!(replaced.child(0)?.state, 7);
-        let asynchronous = tree.accept_async(&mut ReplaceScan).await?.unwrap();
-        assert!(replaced == asynchronous);
-        assert_eq!(tree.state, 23);
-        assert_eq!(*tree.child(0)?.plan(), "scan");
+        let parent = Limit {
+            limit: None,
+            ..limit.clone()
+        };
+        let mut logical = SExpr::create(
+            parent.clone(),
+            vec![Arc::new(SExpr::create_leaf(DummyTableScan::new()))],
+            Some(7),
+            None,
+            None,
+        );
+        let mut physical = PExpr::create(
+            parent,
+            vec![Arc::new(PExpr::create_leaf(DummyTableScan::new()))],
+            Some(7),
+            None,
+            None,
+        );
+        logical.set_applied_rule(&RuleID::EliminateEvalScalar);
+        physical.set_applied_rule(&RuleID::EliminateEvalScalar);
+        let rewritten = check_traversal(
+            &logical,
+            SExpr::create_unary(limit.clone(), SExpr::create_leaf(DummyTableScan::new())),
+        )
+        .await?;
+        assert_eq!(rewritten.original_group(), None);
+        assert!(rewritten.applied_rule(&RuleID::EliminateEvalScalar));
+        assert_eq!(logical.original_group(), Some(7));
+        let rewritten = check_traversal(
+            &physical,
+            PExpr::create_unary(limit, PExpr::create_leaf(DummyTableScan::new())),
+        )
+        .await?;
+        assert_eq!(rewritten.original_group(), None);
+        assert!(rewritten.applied_rule(&RuleID::EliminateEvalScalar));
+        assert_eq!(physical.original_group(), Some(7));
         Ok(())
     }
 
+    fn check_binary<K: ExprKind>(tree: Expr<K>) {
+        let left = tree.left_child_arc();
+        let right = tree.right_child_arc();
+        let replacement = Arc::new(left.replace_plan(left.plan.clone()));
+        let replaced = tree.replace_left_child(replacement.clone());
+        assert!(Arc::ptr_eq(&replaced.left_child_arc(), &replacement));
+        assert!(Arc::ptr_eq(&replaced.right_child_arc(), &right));
+        let replaced = tree.replace_side_child(Side::Right, replacement.clone());
+        assert!(Arc::ptr_eq(&replaced.left_child_arc(), &left));
+        assert!(Arc::ptr_eq(&replaced.right_child_arc(), &replacement));
+        assert!(tree.child(2).is_err());
+        assert!(tree == tree.clone());
+    }
+
     #[test]
-    fn tree_access_does_not_depend_on_stage_state() -> Result<()> {
-        let leaf = Arc::new(Expr::<IndependentStage> {
-            plan: Arc::new("scan"),
-            children: vec![],
-            state: 11,
-        });
-        let tree = Expr::<IndependentStage> {
-            plan: Arc::new("filter"),
-            children: vec![leaf.clone()],
-            state: 23,
-        };
-        assert_eq!(*tree.plan(), "filter");
-        assert_eq!(tree.arity(), 1);
-        assert_eq!(tree.child(0)?.state, 11);
-        assert!(tree.child(1).is_err());
-        assert!(Arc::ptr_eq(&leaf, &tree.unary_child_arc()));
-        let cloned = tree.clone();
-        assert!(tree == cloned);
-        assert!(Arc::ptr_eq(&tree.children[0], &cloned.children[0]));
-        Ok(())
+    fn binary_rewrites_preserve_the_other_child() {
+        check_binary(SExpr::create_binary(
+            Join::default(),
+            SExpr::create_leaf(DummyTableScan::new()),
+            SExpr::create_leaf(DummyTableScan::new()),
+        ));
+        check_binary(PExpr::create_binary(
+            Join::default(),
+            PExpr::create_leaf(DummyTableScan::new()),
+            PExpr::create_leaf(DummyTableScan::new()),
+        ));
     }
 }

@@ -17,7 +17,9 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 
 use databend_meta_client::ClientHandle;
+use databend_meta_client::types::SeqV;
 use databend_meta_runtime::DatabendRuntime;
+use futures::FutureExt;
 
 use crate::meta_cache_types::MetaCacheTypes;
 use crate::meta_client_source;
@@ -41,6 +43,16 @@ impl DerefMut for Cache {
 }
 
 impl Cache {
+    /// Read only if the cache can answer immediately. Initial sync and reconnect
+    /// hold the inner lock; callers must fall back instead of waiting for it.
+    pub fn try_get_ready(&mut self, key: &str) -> Option<SeqV> {
+        self.inner
+            .try_get(key)
+            .now_or_never()
+            .and_then(Result::ok)
+            .flatten()
+    }
+
     /// Create a new cache with the given prefix and meta client.
     ///
     /// The cache will start watching for changes immediately.

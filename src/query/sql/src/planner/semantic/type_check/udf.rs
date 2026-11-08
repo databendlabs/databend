@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -35,12 +34,10 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
@@ -53,6 +50,7 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
+use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 use parking_lot::RwLock;
 use serde_json::json;
@@ -604,6 +602,20 @@ impl UdfAdapter for FullTypeCheckAdapter {
         })
     }
 
+    fn validate_udf_server(&self, definition: &UDFServer) -> Result<()> {
+        let config = self.validation_config()?;
+        if definition.external_access_integrations.is_empty() {
+            UDFValidator::is_udf_server_allowed_with_config(&definition.address, &config)
+        } else {
+            UDFValidator::is_udf_server_policy_allowed_with_config(&definition.address, &config)?;
+            self.block_on(UserApiProvider::instance().validate_external_access(
+                &self.ctx.get_tenant(),
+                &definition.address,
+                &definition.external_access_integrations,
+            ))
+        }
+    }
+
     fn validation_config(&self) -> Result<crate::planner::expression::UdfValidationConfig> {
         Ok(
             crate::planner::expression::UdfValidationConfig::from_inner_config(
@@ -618,6 +630,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
         udf_definition: UDFScript,
     ) -> Result<UDFServer> {
         let UDFScript {
+            external_access_integrations: _,
             code,
             imports,
             packages,
@@ -647,6 +660,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
         )?;
         let (endpoint, headers) = self.apply_udf_cloud_resource(resource_name, "udf", script)?;
         Ok(UDFServer {
+            external_access_integrations: Vec::new(),
             address: endpoint,
             handler,
             headers,
@@ -942,8 +956,7 @@ where A: UdfAdapter
         validate_address: bool,
     ) -> Result<UdfResolveResult> {
         if validate_address {
-            let config = self.udf_adapter.validation_config()?;
-            UDFValidator::is_udf_server_allowed_with_config(&udf_definition.address, &config)?;
+            self.udf_adapter.validate_udf_server(&udf_definition)?;
         }
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -979,13 +992,10 @@ where A: UdfAdapter
                         "StageLocation must have a corresponding variable name",
                     ));
                 }
-                let expr = argument.scalar.as_expr()?;
-                let (expr, _) =
-                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let Ok(Some(location)) = expr
-                    .into_owned()
-                    .into_constant()
-                    .map(|c| c.scalar.as_string().cloned())
+                let Some(Scalar::String(location)) = argument
+                    .scalar
+                    .constant_value(&self.func_ctx)
+                    .map(|(value, _)| value)
                 else {
                     return Err(ErrorCode::SemanticError(format!(
                         "invalid parameter {argument} for udf function, expected constant string",
@@ -1034,7 +1044,9 @@ where A: UdfAdapter
                 .insert("databend-stage-mapping".to_string(), stage_location_value);
         }
         let immutable = udf_definition.immutable.unwrap_or_default();
-        if immutable && all_args_const {
+        // Keep policy-controlled calls in the execution plan so a cached plan
+        // cannot bypass subsequent integration/rule changes.
+        if immutable && all_args_const && udf_definition.external_access_integrations.is_empty() {
             let mut arg_scalars = Vec::with_capacity(args.len());
             for arg in &args {
                 let arg_scalar = match arg {
@@ -1074,6 +1086,7 @@ where A: UdfAdapter
                 handler: udf_definition.handler,
                 headers: udf_definition.headers,
                 display_name,
+                external_access_integrations: udf_definition.external_access_integrations.clone(),
                 udf_type: UDFType::Server(udf_definition.address.clone()),
                 arg_types,
                 return_type: Box::new(return_type.clone()),
@@ -1093,7 +1106,17 @@ where A: UdfAdapter
     ) -> Result<UdfResolveResult> {
         let language = udf_definition.language.parse()?;
         let config = self.udf_adapter.validation_config()?;
+        if !udf_definition.external_access_integrations.is_empty() {
+            UDFValidator::is_python_udf_external_access_allowed_with_config(&config)?;
+        }
         let use_cloud = matches!(language, UDFLanguage::Python) && config.enable_udf_sandbox;
+        if !udf_definition.external_access_integrations.is_empty()
+            && (language != UDFLanguage::Python || use_cloud)
+        {
+            return Err(ErrorCode::InvalidArgument(
+                "Script EXTERNAL_ACCESS_INTEGRATIONS requires local Python execution; the configured execution route is not supported",
+            ));
+        }
         if use_cloud {
             UDFValidator::is_udf_cloud_script_allowed_with_config(&language, &config)?;
             let udf_definition = self
@@ -1104,6 +1127,7 @@ where A: UdfAdapter
 
         UDFValidator::is_udf_script_allowed_with_config(&language, &config)?;
         let UDFScript {
+            external_access_integrations,
             code,
             handler,
             language: _,
@@ -1127,14 +1151,15 @@ where A: UdfAdapter
         let code_blob = self.udf_adapter.load_udf_code(code)?.into_boxed_slice();
         let imports_stage_info = self.udf_adapter.load_stage_locations(&imports)?;
 
-        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
+        let udf_type = UDFType::script(UDFScriptCode {
+            external_access_integrations,
             language,
             runtime_version,
             code: code_blob.into(),
             imports_stage_info,
             imports,
             packages,
-        }));
+        });
 
         let arg_names = arguments
             .iter()
@@ -1150,6 +1175,9 @@ where A: UdfAdapter
                 name,
                 handler,
                 headers: BTreeMap::default(),
+                // Script bindings live in UDFScriptCode, which also selects the
+                // fail-closed distributed-plan variant. This field is remote-only.
+                external_access_integrations: Vec::new(),
                 display_name,
                 arg_types,
                 return_type: Box::new(return_type.clone()),
@@ -1169,6 +1197,7 @@ where A: UdfAdapter
         udf_definition: UDAFScript,
     ) -> Result<UdfResolveResult> {
         let UDAFScript {
+            external_access_integrations,
             code,
             language,
             arg_types,
@@ -1179,17 +1208,28 @@ where A: UdfAdapter
             packages,
         } = udf_definition;
         let language = language.parse()?;
+        let config = self.udf_adapter.validation_config()?;
+        UDFValidator::is_udaf_script_allowed_with_config(&language, &config)?;
+        if !external_access_integrations.is_empty() {
+            UDFValidator::is_python_udf_external_access_allowed_with_config(&config)?;
+        }
         let code_blob = self.udf_adapter.load_udf_code(code)?.into_boxed_slice();
         let imports_stage_info = self.udf_adapter.load_stage_locations(&imports)?;
 
-        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
+        if !external_access_integrations.is_empty() && language != UDFLanguage::Python {
+            return Err(ErrorCode::InvalidArgument(
+                "Script EXTERNAL_ACCESS_INTEGRATIONS requires Python execution",
+            ));
+        }
+        let udf_type = UDFType::script(UDFScriptCode {
+            external_access_integrations,
             language,
             runtime_version,
             code: code_blob.into(),
             imports,
             imports_stage_info,
             packages,
-        }));
+        });
 
         let arguments = args
             .iter()

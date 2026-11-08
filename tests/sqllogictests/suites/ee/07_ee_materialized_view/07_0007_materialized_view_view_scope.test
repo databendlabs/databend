@@ -64,5 +64,90 @@ with foo as (select 99 as x) select v_aggregate.x, foo.x from v_aggregate, foo
 ----
 1 99
 
+# Every FROM item, including an MV, must hand the view's definition scope to later
+# lateral items. The nested CTE keeps the physical `arr` reference unqualified in the
+# stored SQL, so it must still bind in the view's database, not the session's.
+statement ok
+drop database if exists materialized_view_view_scope_caller
+
+statement ok
+create database materialized_view_view_scope_caller
+
+statement ok
+create table arr(xs array(int))
+
+statement ok
+insert into arr values ([22])
+
+statement ok
+create table materialized_view_view_scope_caller.arr(xs array(int))
+
+statement ok
+insert into materialized_view_view_scope_caller.arr values ([11])
+
+statement ok
+use materialized_view_view_scope_caller
+
+statement ok
+create view materialized_view_view_scope.v_mv_lateral as select * from materialized_view_view_scope.mv_detail t, lateral (select 2::int as m) l
+
+statement ok
+create view materialized_view_view_scope.v_mv_unnest as select * from materialized_view_view_scope.mv_detail t, lateral unnest((select xs from arr)) u where exists (with arr as (select 1 as k) select * from arr)
+
+statement ok
+create view materialized_view_view_scope.v_mv_aggregate_unnest as select * from materialized_view_view_scope.mv_aggregate t, lateral unnest((select xs from arr)) u where exists (with arr as (select 1 as k) select * from arr)
+
+query II
+select * from materialized_view_view_scope.v_mv_lateral
+----
+1 2
+
+query II
+select * from materialized_view_view_scope.v_mv_unnest
+----
+1 22
+
+query II
+select * from materialized_view_view_scope.v_mv_aggregate_unnest
+----
+1 22
+
+statement ok
+use materialized_view_view_scope
+
+query II
+select * from v_mv_unnest
+----
+1 22
+
+query II
+select * from v_mv_aggregate_unnest
+----
+1 22
+
+# A stale MV is read through the hybrid MV-plus-delta path.
+statement ok
+insert into src values (2)
+
+statement ok
+use materialized_view_view_scope_caller
+
+query II
+select * from materialized_view_view_scope.v_mv_unnest order by 1
+----
+1 22
+2 22
+
+query II
+select * from materialized_view_view_scope.v_mv_aggregate_unnest
+----
+3 22
+
+statement ok
+use materialized_view_view_scope
+
+statement ok
+drop database materialized_view_view_scope_caller
+
 statement ok
 drop database materialized_view_view_scope

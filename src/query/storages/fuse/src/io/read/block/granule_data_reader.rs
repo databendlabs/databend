@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::Range;
-use std::sync::Arc;
 
 use arrow_array::Array;
 use databend_common_base::runtime::profile::Profile;
@@ -26,10 +25,9 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::metrics_inc_remote_io_read_bytes;
 use databend_common_metrics::storage::metrics_inc_remote_io_read_parts;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheLockStats;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::ColumnArrayCache;
+use databend_storages_common_cache::CachedColumnArray;
+use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::OwnerMemory;
@@ -41,8 +39,9 @@ use opendal::Buffer;
 use super::BlockReadContext;
 use super::BlockReadResult;
 use crate::FuseBlockPartInfo;
+use crate::io::FuseCaches;
 use crate::io::OffsetsIndex;
-use crate::io::create_file_range_reader_with_stats;
+use crate::io::create_file_range_reader;
 
 const GRANULE_IO_RANGE_SIZE: u64 = 16 * 1024 * 1024;
 /// A hole this large always splits: a new request is cheaper than reading through.
@@ -52,6 +51,14 @@ const MAX_COALESCED_RANGE: u64 = 8 * 1024 * 1024;
 /// pathological tiny-range inputs linear with a small constant while still
 /// allowing later dense ranges to redeem a few sparse prefixes.
 const MAX_REJECTED_COALESCE_PREFIXES: usize = 64;
+
+/// Row count of a cached column, whichever representation it holds.
+fn cached_array_rows(array: &SizedColumnArray) -> Option<usize> {
+    match &array.0 {
+        CachedColumnArray::Arrow(array) => Some(array.len()),
+        CachedColumnArray::Column(column) => Some(column.len()),
+    }
+}
 
 /// Cost model for coalescing scattered column ranges into storage requests.
 struct RangeCoalescePolicy {
@@ -173,15 +180,6 @@ fn collect_ranges(groups: &[Vec<Range<usize>>]) -> Vec<Range<usize>> {
         for range in group {
             result.push(range.clone());
         }
-    }
-    result
-}
-
-fn block_file_len(part: &FuseBlockPartInfo) -> u64 {
-    let mut result = 0;
-    for meta in part.columns_meta.values() {
-        let (offset, len) = meta.offset_length();
-        result = result.max(offset.saturating_add(len));
     }
     result
 }
@@ -474,7 +472,7 @@ pub(crate) struct GranuleDataReader {
     location: String,
     ranges: VecDeque<Range<usize>>,
     column_readers: Vec<GranuleColumnReader>,
-    column_array_cache: Option<ColumnArrayCache>,
+    column_array_cache: MemCache<SizedColumnArray>,
     column_types: HashMap<ColumnId, String>,
     granule_rows: usize,
     block_rows: usize,
@@ -488,13 +486,11 @@ impl GranuleDataReader {
         groups: &[Vec<Range<usize>>],
         offsets: &OffsetsIndex,
         ignore_column_ids: Option<&HashSet<ColumnId>>,
-        lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Result<Self> {
         Self::create_for_file(
             read_context,
             settings,
             &part.location,
-            block_file_len(part),
             part.nums_rows,
             &part.columns_meta,
             read_context
@@ -504,7 +500,6 @@ impl GranuleDataReader {
                 .map(|(id, _, data_type)| (*id, data_type.to_string())),
             groups,
             offsets,
-            lock_stats,
         )
     }
 
@@ -513,19 +508,15 @@ impl GranuleDataReader {
         read_context: &BlockReadContext,
         settings: &ReadSettings,
         location: &str,
-        file_len: u64,
         block_rows: usize,
         col_metas: &HashMap<ColumnId, ColumnMeta>,
         columns: impl IntoIterator<Item = (ColumnId, String)>,
         groups: &[Vec<Range<usize>>],
         offsets: &OffsetsIndex,
-        lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Result<Self> {
         let ranges = collect_ranges(groups);
         offsets.validate_ranges(&ranges, block_rows)?;
         let fetch_part_num = read_context.storage_fetch_part_num()?.max(1);
-        let range_size = usize::try_from(GRANULE_IO_RANGE_SIZE).unwrap_or(usize::MAX);
-        let held_budget = range_size.saturating_mul(fetch_part_num.saturating_add(2));
         let policy = RangeCoalescePolicy {
             always_merge_gap: settings.max_gap_size,
             // Local filesystems seek cheaply; the cost model only pays off on
@@ -534,7 +525,7 @@ impl GranuleDataReader {
                 "fs" | "memory" => 0,
                 _ => read_context.storage_io_merge_equivalent_bytes()?,
             },
-            chunk_align: crate::io::disk_cache_chunk_size().unwrap_or(1),
+            chunk_align: 1,
         };
 
         let mut column_types = HashMap::new();
@@ -550,15 +541,10 @@ impl GranuleDataReader {
                 offsets.column_byte_ranges(column_id, meta, &ranges)?;
             record_remote_bytes(&byte_ranges);
 
-            let reader = create_file_range_reader_with_stats(
+            let reader = create_file_range_reader(
                 read_context.operator().clone(),
                 location.to_string(),
-                file_len,
                 fetch_part_num,
-                GRANULE_IO_RANGE_SIZE,
-                held_budget,
-                read_context.put_cache(),
-                lock_stats.clone(),
             )?;
             let reader = GranuleColumnReader::try_create(
                 column_id,
@@ -575,7 +561,9 @@ impl GranuleDataReader {
             location: location.to_string(),
             ranges: ranges.into(),
             column_readers,
-            column_array_cache: CacheManager::instance().get_table_data_array_cache(),
+            column_array_cache: FuseCaches::instance()
+                .column_arrays
+                .with_policy(read_context.policy()),
             column_types,
             granule_rows: offsets.granule_rows(),
             block_rows,
@@ -622,8 +610,8 @@ impl GranuleDataReader {
                     data_type,
                 );
                 self.column_array_cache
-                    .get_sized(&key, len)
-                    .filter(|array| array.0.len() == row_range.len())
+                    .lookup_sized(key.as_ref(), len)
+                    .filter(|array| cached_array_rows(array) == Some(row_range.len()))
             });
             if let Some(cached) = cached {
                 Profile::record_usize_profile(ProfileStatisticsName::ScanBytesFromMemory, cached.1);
@@ -662,11 +650,15 @@ impl GranuleDataReader {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::sync::Mutex;
 
     use arrow_array::ArrayRef;
     use arrow_array::Int32Array;
-    use databend_storages_common_cache::InMemoryLruCache;
+    use databend_storages_common_cache::CacheKind;
+    use databend_storages_common_cache::kinds::column;
+    use databend_storages_common_cache::legacy::LegacyCapacity;
+    use databend_storages_common_cache::legacy::LegacyStore;
 
     use super::*;
 
@@ -819,17 +811,22 @@ mod tests {
             1,
         )
         .unwrap();
-        let cache = InMemoryLruCache::with_bytes_capacity("granule-test".to_string(), 1024);
+        let kind = CacheKind::of::<column::Array>();
+        let store = LegacyStore::new([(kind, LegacyCapacity::Bytes(1024))]);
+        let cache = MemCache::new(Arc::new(store), kind);
         let array: ArrayRef = Arc::new(Int32Array::from(vec![10, 20]));
         let key = TableDataCacheKey::new("block", 0, 0, 100, "Int32");
-        cache.insert(key.into(), (array.clone(), array.get_array_memory_size()));
+        cache.put(
+            key.as_ref(),
+            (array.clone().into(), array.get_array_memory_size()),
+        );
         let mut ranges = VecDeque::new();
         ranges.push_back(0..1);
         let mut reader = GranuleDataReader {
             location: "block".to_string(),
             ranges,
             column_readers: vec![column_reader],
-            column_array_cache: Some(cache),
+            column_array_cache: cache,
             column_types: HashMap::from([(0, "Int32".to_string())]),
             granule_rows: 2,
             block_rows: 2,
@@ -839,7 +836,8 @@ mod tests {
         let chunks = result.data.columns_chunks().unwrap();
         assert!(matches!(
             chunks.get(&0),
-            Some(crate::io::DataItem::ColumnArray(cached)) if Arc::ptr_eq(&cached.0, &array)
+            Some(crate::io::DataItem::ColumnArray(cached))
+                if matches!(&cached.0, CachedColumnArray::Arrow(hit) if Arc::ptr_eq(hit, &array))
         ));
         assert!(reads.lock().unwrap().is_empty());
         assert_eq!(*discards.lock().unwrap(), vec![0..100]);

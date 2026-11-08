@@ -20,8 +20,7 @@ use databend_common_exception::Result;
 use log::info;
 use parking_lot::Mutex;
 
-use crate::Metadata;
-use crate::optimizer::ir::StatContext;
+use super::expr_diff::diff_text;
 
 /// Represents a trace entry for a rule execution
 #[derive(Clone)]
@@ -125,22 +124,19 @@ impl OptimizerTraceCollector {
     /// * `index` - Position of the optimizer in the pipeline
     /// * `total` - Total number of optimizers in the pipeline
     /// * `time` - Duration of the optimizer execution
-    /// * `before` - Expression state before optimization
-    /// * `after` - Expression state after optimization
-    /// * `metadata` - Metadata for expression comparison
-    pub fn trace_optimizer<K: crate::optimizer::ir::RelExprKind>(
+    /// * `before` - Formatted plan before optimization
+    /// * `after` - Formatted plan after optimization
+    pub fn trace_optimizer(
         &self,
         name: String,
         index: usize,
         total: usize,
         time: Duration,
-        before: &crate::optimizer::ir::Expr<K>,
-        after: &crate::optimizer::ir::Expr<K>,
-        metadata: &Metadata,
-        stat_context: &StatContext,
+        before: &str,
+        after: &str,
     ) -> Result<()> {
         // Calculate diff and determine if optimizer had an effect
-        let diff = before.diff(after, metadata, stat_context)?;
+        let diff = diff_text(before, after);
         let had_effect = !diff.is_empty() && diff != "No differences found.";
 
         // Create and store the optimizer trace
@@ -160,21 +156,18 @@ impl OptimizerTraceCollector {
     /// * `rule_name` - Name of the rule
     /// * `optimizer_name` - Name of the parent optimizer
     /// * `time` - Duration of the rule execution
-    /// * `before` - Expression state before rule application
-    /// * `after` - Expression state after rule application
-    /// * `metadata` - Metadata for expression comparison
-    pub fn trace_rule<K: crate::optimizer::ir::RelExprKind>(
+    /// * `before` - Formatted plan before rule application
+    /// * `after` - Formatted plan after rule application
+    pub fn trace_rule(
         &self,
         rule_name: String,
         optimizer_name: String,
         time: Duration,
-        before: &crate::optimizer::ir::Expr<K>,
-        after: &crate::optimizer::ir::Expr<K>,
-        metadata: &Metadata,
-        stat_context: &StatContext,
+        before: &str,
+        after: &str,
     ) -> Result<()> {
         // Calculate diff and determine if rule had an effect
-        let diff = before.diff(after, metadata, stat_context)?;
+        let diff = diff_text(before, after);
         let had_effect = !diff.is_empty() && diff != "No differences found.";
 
         // If rule had an effect, update the parent optimizer's status

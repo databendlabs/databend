@@ -17,8 +17,11 @@ use std::io::Write;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::ExprVisitor;
+use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::optimizer::ir::PVisitAction;
+use databend_common_sql::optimizer::ir::Physical;
 use databend_common_sql::optimizer::ir::QueryPlan;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimize;
 use databend_common_sql::plans::Plan;
 
@@ -84,12 +87,12 @@ async fn test_query_planning_boundary() -> Result<()> {
             writeln!(
                 file,
                 "raw_plan:\n{}",
-                raw.format_indent(Default::default(), &StatContext::default())?
+                raw.format_indent(Default::default(), &ctx.stat_context()?)?
             )?;
             writeln!(
                 file,
                 "planned_query:\n{}",
-                planned.format_indent(Default::default(), &StatContext::default())?
+                planned.format_indent(Default::default(), &ctx.stat_context()?)?
             )?;
             let without_merge = planned.remove_exchange_for_select();
             let Plan::Query { s_expr, .. } = without_merge else {
@@ -150,6 +153,8 @@ async fn test_physical_planner_explain_and_skip_compatibility() -> Result<()> {
     for skipped in ["", "CascadesOptimizer"] {
         for sql in [
             "SELECT sum(v) FROM t",
+            "SELECT count(DISTINCT k) FROM t",
+            "SELECT sum(total) FROM (SELECT k, sum(v) AS total FROM t GROUP BY k) grouped",
             "EXPLAIN MEMO SELECT sum(v) FROM t",
             "EXPLAIN DECORRELATED SELECT k FROM t",
         ] {
@@ -171,8 +176,28 @@ async fn test_physical_planner_explain_and_skip_compatibility() -> Result<()> {
                 .with_settings(&ctx.get_settings())?;
             let planned = optimize(context, raw).await?;
             match planned {
-                Plan::Query { s_expr, .. } => {
-                    s_expr.planned()?;
+                Plan::Query {
+                    s_expr, metadata, ..
+                } => {
+                    let output = s_expr.planned()?.expr();
+                    struct Check;
+                    impl ExprVisitor<Physical> for Check {
+                        fn visit(&mut self, expr: &PExpr) -> Result<PVisitAction> {
+                            assert!(
+                                !expr.plan().is_aggregate()
+                                    || matches!(
+                                        expr.plan().as_aggregate().unwrap().mode,
+                                        databend_common_sql::plans::AggregateMode::Partial
+                                            | databend_common_sql::plans::AggregateMode::Final
+                                    ),
+                                "logical aggregate skipped lowering"
+                            );
+                            Ok(PVisitAction::Continue)
+                        }
+                    }
+                    output.accept(&mut Check)?;
+                    output.validate_types(&metadata)?;
+                    output.validate_column_scope(&metadata)?;
                 }
                 Plan::Explain { plan, .. } => {
                     let Plan::Query { s_expr, .. } = plan.as_ref() else {
@@ -237,24 +262,21 @@ async fn test_nested_queries_keep_planned_state() -> Result<()> {
         writeln!(
             file,
             "raw_source:\n{}",
-            source(&raw).format_indent(Default::default(), &StatContext::default())?
+            source(&raw).format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
         writeln!(
             file,
             "planned_source:\n{}",
-            source(&planned).format_indent(Default::default(), &StatContext::default())?
+            source(&planned).format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
     }
     Ok(())
 }
 
-/// SQL produces the trees under test; compare both representations before allowing
-/// their implementations to diverge. Test forward conversion and invalidation.
+/// SQL-driven default implementation preserves root semantics and caches.
+/// Aggregates change shape; unrelated operators keep the existing strategy.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_physical_expression_fork_equivalence() -> Result<()> {
-    use std::hash::Hash;
-    use std::hash::Hasher;
-
     use databend_common_sql::optimizer::ir::ExprVisitor;
     use databend_common_sql::optimizer::ir::PExpr;
     use databend_common_sql::optimizer::ir::PVisitAction as VisitAction;
@@ -275,31 +297,30 @@ async fn test_physical_expression_fork_equivalence() -> Result<()> {
         else {
             unreachable!()
         };
-        let logical = s_expr.logical()?.clone();
+        let raw_logical = s_expr.logical()?.clone();
+        let logical = raw_logical;
         let property = logical.derive_relational_prop()?;
-        let statistics =
-            RelExpr::with_s_expr(&logical).derive_cardinality(&StatContext::default())?;
-        let physical = PExpr::from(logical.clone());
+        let statistics = RelExpr::with_s_expr(&logical).derive_cardinality(&ctx.stat_context()?)?;
+        let physical = databend_common_sql::optimizer::ir::DefaultPhysicalPlanner::plan(&logical)?;
         assert!(std::sync::Arc::ptr_eq(
             &property,
             &physical.derive_relational_prop()?
         ));
         assert!(std::sync::Arc::ptr_eq(
             &statistics,
-            &RelExpr::with_p_expr(&physical).derive_cardinality(&StatContext::default())?
+            &RelExpr::with_p_expr(&physical).derive_cardinality(&ctx.stat_context()?)?
         ));
         physical.validate_types(metadata)?;
         physical.validate_column_scope(metadata)?;
-        assert_eq!(
-            logical.pretty_format(&metadata.read(), &StatContext::default())?,
-            physical.pretty_format(&metadata.read(), &StatContext::default())?
-        );
-        fn hash(expr: &impl Hash) -> u64 {
-            let mut h = std::collections::hash_map::DefaultHasher::new();
-            expr.hash(&mut h);
-            h.finish()
+        let logical_text = logical.pretty_format(&metadata.read(), &ctx.stat_context()?)?;
+        let physical_text = physical.pretty_format(&metadata.read(), &ctx.stat_context()?)?;
+        if logical_text.contains("Aggregate(Initial)") {
+            assert!(!physical_text.contains("Aggregate(Initial)"));
+            assert!(physical_text.contains("Aggregate(Partial)"));
+            assert!(physical_text.contains("Aggregate(Final)"));
+        } else {
+            assert_eq!(logical_text, physical_text);
         }
-        assert_eq!(hash(&logical), hash(&physical));
         let replaced = physical.replace_plan(physical.plan.clone());
         // Some operators return their child's Arc directly. Compare replacement
         // behavior rather than assuming a newly allocated property value.
@@ -333,6 +354,10 @@ async fn test_physical_expression_fork_equivalence() -> Result<()> {
         let selected = s_expr.planned()?.expr();
         selected.validate_types(metadata)?;
         selected.validate_column_scope(metadata)?;
+        assert!(
+            selected.derive_relational_prop()?.outer_columns.is_empty(),
+            "Final aggregate state consumption must not introduce outer references: {sql}"
+        );
         // A selected implementation is inspected directly, never reconstructed as
         // a logical tree merely to exercise the old property interface.
         RelExpr::with_p_expr(selected).derive_physical_prop()?;

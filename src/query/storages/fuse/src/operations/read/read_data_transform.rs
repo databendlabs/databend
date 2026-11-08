@@ -116,6 +116,7 @@ impl ReadDataTransform {
             self.table_schema.clone(),
             self.block_reader.operator(),
             read_settings,
+            self.block_reader.policy,
             threshold,
             filter_exprs,
         ))

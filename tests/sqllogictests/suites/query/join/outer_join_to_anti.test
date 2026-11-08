@@ -74,6 +74,37 @@ where l.k is null;
 ----
 NULL 90 NULL
 
+# Use NULL keys and payloads so IF can return NULL on source rows, but 0
+# for an unmatched row. That makes IS NULL different from an anti-join test.
+statement ok
+create or replace table outer_to_anti_left(k int);
+
+statement ok
+create or replace table outer_to_anti_right(k int, payload int);
+
+statement ok
+insert into outer_to_anti_left values (0), (1), (2);
+
+statement ok
+insert into outer_to_anti_right values (null, null), (1, null), (1, 1);
+
+# No row passes. In particular, unmatched key 2 gets IF(NULL IS NULL,0,NULL)
+# = 0, which is not NULL. The old anti rewrite incorrectly returns 2.
+query I
+select l.k
+from outer_to_anti_left l
+left join outer_to_anti_right r on l.k = if(r.k is null, 0, r.payload)
+where if(r.k is null, 0, r.payload) is null;
+----
+
+# The same data/query with RIGHT JOIN must also return no rows.
+query I
+select l.k
+from outer_to_anti_right r
+right join outer_to_anti_left l on if(r.k is null, 0, r.payload) = l.k
+where if(r.k is null, 0, r.payload) is null;
+----
+
 statement ok
 drop table outer_to_anti_left;
 

@@ -376,7 +376,7 @@ struct FuseBlockDataResult {
     inverted_index_size: Option<u64>,
     inverted_index_metas: Vec<BlockIndexMeta>,
     vector_index_size: Option<u64>,
-    vector_index_location: Option<Location>,
+    vector_index_metas: Vec<BlockIndexMeta>,
     vector_stats: Option<StatisticsOfVectorColumns>,
     spatial_index_size: Option<u64>,
     spatial_index_location: Option<Location>,
@@ -657,7 +657,8 @@ impl FuseLowLevelBlockWriter {
             inverted_index_metas: Some(data.inverted_index_metas),
             ngram_filter_index_size: data.ngram_index_size,
             vector_index_size: data.vector_index_size,
-            vector_index_location: data.vector_index_location,
+            vector_index_location: None,
+            vector_index_metas: Some(data.vector_index_metas),
             spatial_index_size: data.spatial_index_size,
             spatial_index_location: data.spatial_index_location,
             spatial_stats: data.spatial_stats,
@@ -990,13 +991,13 @@ impl FuseLowLevelDataWriter {
         };
 
         let vector_index = block_indexes.vector;
-        let (vector_index_size, vector_index_location, vector_stats) = match vector_index {
+        let (vector_index_size, vector_index_metas, vector_stats) = match vector_index {
             Some(index) => (
-                index.file.as_ref().map(|file| file.size),
-                index.file.map(|file| file.location),
+                (!index.files.is_empty()).then(|| index.files.iter().map(|meta| meta.size).sum()),
+                index.files,
                 index.statistics,
             ),
-            None => (None, None, None),
+            None => (None, Vec::new(), None),
         };
 
         let spatial_index = block_indexes.spatial;
@@ -1034,7 +1035,7 @@ impl FuseLowLevelDataWriter {
             inverted_index_size,
             inverted_index_metas,
             vector_index_size,
-            vector_index_location,
+            vector_index_metas,
             vector_stats,
             spatial_index_size,
             spatial_index_location,
@@ -1294,7 +1295,7 @@ impl FuseLowLevelColumnWriter {
                 parent.parquet = Some(leaf.take().expect("streaming leaf is active").finish()?);
             }
             FuseBlockColumnState::Buffered(chunks) => {
-                let column = Column::concat_columns(chunks.into_iter())?;
+                let column = Column::concat_columns(chunks)?;
                 let mut parquet = parent
                     .parquet
                     .take()
@@ -1498,7 +1499,6 @@ mod tests {
     use databend_common_expression::types::number::Int32Type;
     use databend_common_expression::types::string::StringType;
     use databend_storages_common_blocks::build_parquet_writer_properties;
-    use databend_storages_common_io::ReadSettings;
     use databend_storages_common_table_meta::meta::StatisticsOfColumns;
     use databend_storages_common_table_meta::table::TableCompression;
     use opendal::services::Memory;
@@ -2008,24 +2008,13 @@ mod tests {
         assert_eq!(actual.get_by_offset(0).to_column(), keys);
         assert_eq!(actual.get_by_offset(1).to_column(), strings);
 
-        let settings = ReadSettings {
-            max_gap_size: 48,
-            max_range_size: 1024 * 1024,
-            parquet_fast_read_bytes: 0,
-        };
-        let mins = PrefetchedGranuleMins::prefetch(
-            &operator,
-            &settings,
-            granule.mins.as_ref().unwrap(),
-            2,
-            3,
-        )
-        .unwrap()
-        .read(&[
-            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
-            DataType::Nullable(Box::new(DataType::String)),
-        ])
-        .unwrap();
+        let mins = PrefetchedGranuleMins::prefetch(&operator, granule.mins.as_ref().unwrap(), 2, 3)
+            .unwrap()
+            .read(&[
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+                DataType::Nullable(Box::new(DataType::String)),
+            ])
+            .unwrap();
         assert_eq!(mins.into_scalars(), vec![
             Scalar::Tuple(vec![
                 Scalar::Number(1i32.into()),
@@ -2039,7 +2028,6 @@ mod tests {
         ]);
         OffsetsIndex::load(
             &operator,
-            &settings,
             &granule.offsets,
             granule.granule_rows as usize,
             result.block_meta.row_count as usize,

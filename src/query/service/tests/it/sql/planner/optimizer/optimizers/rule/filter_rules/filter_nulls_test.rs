@@ -25,6 +25,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::optimizer::ir::Statistics;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
@@ -87,7 +88,7 @@ fn join_with_null_ratio(is_null_equal: bool) -> SExpr {
 }
 
 fn apply_filter_nulls(s_expr: &SExpr) -> Result<SExpr> {
-    let rule = RuleFilterNulls::new(true, Default::default());
+    let rule = RuleFilterNulls::new(true, StatContext::without_settings(Default::default()));
     let mut result = TransformResult::default();
     rule.apply(s_expr, &mut result)?;
 

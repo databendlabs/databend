@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
@@ -43,7 +42,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::TableField;
 use databend_common_expression::is_stream_column;
@@ -191,6 +189,7 @@ impl Binder {
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: bind_context.cte_context.clone(),
+            definition_scope: bind_context.definition_scope.clone(),
             in_grouping: false,
             binding_views: bind_context.binding_views.clone(),
             have_async_func: false,
@@ -373,12 +372,28 @@ impl Binder {
         sample: &Option<SampleConfig>,
         case_sensitive: bool,
     ) -> Result<(SExpr, BindContext)> {
+        self.bind_base_table_with_policy(
+            bind_context,
+            database_name,
+            table_index,
+            change_type,
+            sample,
+            case_sensitive,
+            true,
+        )
+    }
+
+    pub(crate) fn bind_base_table_with_policy(
+        &mut self,
+        bind_context: &BindContext,
+        database_name: &str,
+        table_index: IndexType,
+        change_type: Option<ChangeType>,
+        sample: &Option<SampleConfig>,
+        case_sensitive: bool,
+        apply_row_access_policy: bool,
+    ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(bind_context.clone())?;
-        // All physical tables (including stages, table functions, result scans
-        // and MVs) pass through here. Tag them centrally to keep scopes separate.
-        self.metadata
-            .write()
-            .set_table_view_scope(table_index, &bind_context.binding_views);
 
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
@@ -485,11 +500,13 @@ impl Binder {
             )));
         }
         // Check for row_access_policy and write secure predicates into Scan
-        let final_s_expr = if let Some(policy) = &table
+        let final_s_expr = if let Some(policy) = table
             .table()
             .get_table_info()
             .meta
             .row_access_policy_columns_ids
+            .as_ref()
+            .filter(|_| apply_row_access_policy)
         {
             self.bind_row_access_policy(
                 table_index,
@@ -712,13 +729,15 @@ impl Binder {
             false,
         )?;
         let deref!((scalar, _)) = type_checker.resolve(expr)?;
-        let scalar_expr = scalar.as_expr()?;
-        let (new_expr, _) = ConstantFolder::fold(
-            Cow::Owned(scalar_expr),
-            &self.ctx.get_function_context()?,
-            &BUILTIN_FUNCTIONS,
-        );
-        Ok(new_expr.into_owned())
+        match scalar.constant_value(&self.ctx.get_function_context()?) {
+            Some((scalar, data_type)) => Ok(Constant {
+                span: expr.span(),
+                scalar,
+                data_type,
+            }
+            .into()),
+            None => scalar.as_expr(),
+        }
     }
 
     pub(crate) fn resolve_data_travel_point(

@@ -43,6 +43,7 @@ mod comparison;
 mod control;
 mod datetime;
 mod deep_expression;
+mod encoded;
 mod geo;
 // NOTE:(everpcpc) result different on macos
 // TODO: fix this in running on linux

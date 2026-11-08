@@ -7,6 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+argminmax = { workspace = true }
 base64 = { workspace = true }
 blake3 = { workspace = true }
 borsh = { workspace = true }
@@ -44,6 +45,7 @@ libm = { workspace = true }
 match-template = { workspace = true }
 md-5 = { workspace = true }
 naive-cityhash = { workspace = true }
+num-bigint = { workspace = true }
 num-traits = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }

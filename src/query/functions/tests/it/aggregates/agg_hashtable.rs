@@ -28,6 +28,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate_function::get_states_layout;
+use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
@@ -191,4 +192,448 @@ fn test_layout() {
         panic!("unexpected state description: {:?}", aggrs.state().fields());
     };
     assert_eq!(*state_layout, Layout::from_size_align(16, 8).unwrap());
+}
+
+fn aggregate_into_block(
+    group_columns: &[BlockEntry],
+    params: &[Vec<BlockEntry>],
+    aggrs: &[AggregateCallRef],
+    num_rows: usize,
+) -> DataBlock {
+    let group_types = group_columns.iter().map(|c| c.data_type()).collect_vec();
+    let params: Vec<ProjectedBlock> = params.iter().map(|v| v.into()).collect_vec();
+    let mut hashtable = AggregateHashTable::new(
+        group_types,
+        aggrs.to_vec(),
+        HashTableConfig::default(),
+        Arc::new(Bump::new()),
+    );
+    let mut state = ProbeState::default();
+    hashtable
+        .add_groups(
+            &mut state,
+            group_columns.into(),
+            &params,
+            (&[]).into(),
+            num_rows,
+        )
+        .unwrap();
+
+    let mut merge_state = PayloadFlushState::default();
+    let mut blocks = Vec::new();
+    while hashtable.merge_result(&mut merge_state).unwrap() {
+        let mut entries = merge_state.take_group_columns();
+        entries.extend(merge_state.take_aggregate_results());
+        let num_rows = entries[0].len();
+        blocks.push(DataBlock::new(entries, num_rows));
+    }
+    DataBlock::concat(&blocks).unwrap()
+}
+
+#[test]
+fn test_agg_hashtable_dictionary_across_batches() {
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::ForColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    let n = 8193;
+    let args = vec![vec![
+        Int64Type::from_data((0..n as i64).collect_vec()).into(),
+    ]];
+    let aggrs = vec![resolve_agg("sum", Int64Type::data_type())];
+    // Exercise block-scoped code reuse, multi-key combinations above the old 512-code
+    // batch limit, and the fallback for dictionaries too large for the whole block.
+    for ndv in [4, 1021, 3001] {
+        let mut values = (0..=ndv).map(|i| format!("key{}", i % ndv)).collect_vec();
+        values.push("unused".to_string());
+        let keys = NarrowBuffer::pack((0..n).map(|i| (i % (ndv + 1)) as u64), (ndv + 1) as u64);
+        let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+            keys,
+            StringType::from_data(values),
+        ))));
+        for nullable in [false, true] {
+            let column = if nullable {
+                encoded
+                    .clone()
+                    .wrap_nullable(Some(Bitmap::from_iter((0..n).map(|i| i % 5 != 0))))
+            } else {
+                encoded.clone()
+            };
+            let plain = column.clone().decode_owned();
+            let number = Int64Type::from_data((0..n).map(|i| (i % 2) as i64).collect_vec());
+            for second in [
+                None,
+                Some(number.clone()),
+                Some(Column::Encoded(Box::new(EncodedColumn::For(
+                    ForColumn::try_encode(&number).unwrap(),
+                )))),
+            ] {
+                let mut encoded_keys = vec![column.clone().into()];
+                let mut plain_keys = vec![plain.clone().into()];
+                if let Some(second) = second {
+                    encoded_keys.push(second.clone().into());
+                    plain_keys.push(second.decode_owned().into());
+                }
+                assert_block_value_sort_eq(
+                    &aggregate_into_block(&encoded_keys, &args, &aggrs, n),
+                    &aggregate_into_block(&plain_keys, &args, &aggrs, n),
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_agg_hashtable_shared_dictionary_keys() {
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::ForColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    let n = 8193;
+    let args = vec![vec![
+        Int64Type::from_data((0..n as i64).collect_vec()).into(),
+    ]];
+    let aggrs = vec![resolve_agg("sum", Int64Type::data_type())];
+    let dict = |keys, values| {
+        Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(keys, values))))
+    };
+    for ndv in [64, 1021] {
+        let all_keys =
+            NarrowBuffer::pack((0..n + 1).map(|i| (i / 2 % ndv) as u64), (ndv - 1) as u64);
+        let keys = all_keys.slice(0..n);
+        let values = |delta| Int64Type::from_data((0..ndv).map(|i| i as i64 - delta).collect_vec());
+        let raw = dict(keys.clone(), values(0));
+        let mod2 = dict(
+            keys.clone(),
+            Int64Type::from_data((0..ndv).map(|i| (i % 2) as i64).collect_vec()),
+        );
+        let mod3 = dict(
+            keys.clone(),
+            Int64Type::from_data((0..ndv).map(|i| (i % 3) as i64).collect_vec()),
+        );
+        let independent = Column::Encoded(Box::new(EncodedColumn::For(
+            ForColumn::try_encode(&Int64Type::from_data(
+                (0..n).map(|i| (i % 2) as i64).collect_vec(),
+            ))
+            .unwrap(),
+        )));
+        for columns in [
+            vec![
+                raw.clone(),
+                dict(keys.clone(), values(1)),
+                dict(keys.clone(), values(2)),
+                dict(keys.clone(), values(3)),
+            ],
+            vec![mod2.clone(), mod3.clone()],
+            vec![mod2, mod3, independent],
+            // Equal keys in independent storage are not proof of shared identity.
+            vec![
+                raw.clone(),
+                dict(NarrowBuffer::pack(keys.iter(), (ndv - 1) as u64), values(1)),
+            ],
+            // The same allocation at a different offset is a different code dimension.
+            vec![raw, dict(all_keys.slice(1..n + 1), values(0))],
+        ] {
+            let encoded = columns.iter().cloned().map(BlockEntry::from).collect_vec();
+            let plain = columns
+                .into_iter()
+                .map(|c| BlockEntry::from(c.decode_owned()))
+                .collect_vec();
+            assert_block_value_sort_eq(
+                &aggregate_into_block(&encoded, &args, &aggrs, n),
+                &aggregate_into_block(&plain, &args, &aggrs, n),
+            );
+        }
+    }
+}
+
+/// The final aggregation merges payloads row by row. Covers keys stored as bytes and as
+/// serialized scalars, nullable keys, duplicate keys within a payload, and states that need
+/// manual drop or not.
+#[test]
+fn test_agg_hashtable_combine_rows() {
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_expression::Column;
+    use databend_common_expression::types::ArrayColumn;
+    use databend_common_expression::types::NullableColumn;
+
+    // More keys per chunk than the partial index holds, so that it restarts.
+    let (n, chunk) = (120_000, 40_000);
+    let key = |i: usize| i % 36_000;
+    let columns = |rows: std::ops::Range<usize>| -> Vec<BlockEntry> {
+        let strings = rows.clone().map(|i| format!("s{}", key(i) % 300));
+        let nullable = NullableColumn::new_column(
+            StringType::from_data(strings.collect_vec()),
+            Bitmap::from_iter(rows.clone().map(|i| key(i) % 5 != 0)),
+        );
+        // 0.0 and -0.0 are equal, but serialize differently.
+        let sign = |i: usize| {
+            if (i / chunk).is_multiple_of(2) {
+                1.0
+            } else {
+                -1.0
+            }
+        };
+        let floats = rows.clone().map(|i| (key(i) % 3) as f64 * sign(i));
+        let arrays = Column::Array(Box::new(ArrayColumn::new(
+            Float64Type::from_data(floats.collect_vec()),
+            (0..=rows.len() as u64).collect_vec().into(),
+        )));
+        let ints = Int64Type::from_data(rows.map(|i| (key(i) / 300) as i64).collect_vec());
+        vec![nullable.into(), arrays.into(), ints.into()]
+    };
+    let params = |rows: std::ops::Range<usize>| -> Vec<Vec<BlockEntry>> {
+        let ints = Int64Type::from_data(rows.clone().map(|i| i as i64).collect_vec());
+        let strings = StringType::from_data(rows.map(|i| format!("v{}", i % 97)).collect_vec());
+        vec![vec![ints.clone().into()], vec![ints.into()], vec![
+            strings.into(),
+        ]]
+    };
+    let aggrs = vec![
+        resolve_agg("sum", Int64Type::data_type()),
+        resolve_agg("uniq", Int64Type::data_type()),
+        resolve_agg("max", StringType::data_type()),
+    ];
+    assert!(!aggrs[0].state().need_manual_drop() && aggrs[1].state().need_manual_drop());
+    let group_types = columns(0..1).iter().map(|c| c.data_type()).collect_vec();
+
+    let mut final_table = AggregateHashTable::new_with_partitioned_arenas(
+        group_types.clone(),
+        aggrs.clone(),
+        HashTableConfig::default().with_initial_radix_bits(2),
+    );
+    let mut state = ProbeState::default();
+    let mut flush_state = PayloadFlushState::default();
+    for start in (0..n).step_by(chunk) {
+        // The partial index restarts when full, which leaves duplicate keys in the payload.
+        let mut partial = AggregateHashTable::new(
+            group_types.clone(),
+            aggrs.clone(),
+            HashTableConfig::partial_aggregate(),
+            Arc::new(Bump::new()),
+        );
+        let rows = start..start + chunk;
+        let args = params(rows.clone());
+        let args: Vec<ProjectedBlock> = args.iter().map(|v| v.into()).collect_vec();
+        let groups = columns(rows);
+        let stats = partial
+            .add_groups_partial(
+                &mut state,
+                (&groups).into(),
+                &args,
+                chunk,
+                AggregateHashTable::capacity_for_groups(0),
+                None,
+            )
+            .unwrap();
+        assert!(stats.windows > 0 && partial.partial_restarted());
+        final_table.combine(partial, &mut flush_state).unwrap();
+    }
+
+    let mut merge_state = PayloadFlushState::default();
+    let mut blocks = Vec::new();
+    while final_table.merge_result(&mut merge_state).unwrap() {
+        let mut entries = merge_state.take_group_columns();
+        entries.extend(merge_state.take_aggregate_results());
+        let num_rows = entries[0].len();
+        blocks.push(DataBlock::new(entries, num_rows));
+    }
+    assert_block_value_sort_eq(
+        &DataBlock::concat(&blocks).unwrap(),
+        &aggregate_into_block(&columns(0..n), &params(0..n), &aggrs, n),
+    );
+}
+
+/// Group keys that are dictionary encoded (and arguments that are frame of reference encoded)
+/// must aggregate exactly like their decoded columns.
+#[test]
+fn test_agg_hashtable_encoded_columns() {
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DecimalColumn;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::ForColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    fn dict(values: &[&str], keys: &[u32]) -> (BlockEntry, BlockEntry) {
+        let plain = StringType::from_data(keys.iter().map(|k| values[*k as usize]).collect_vec());
+        let keys = NarrowBuffer::pack(keys.iter().map(|k| *k as u64), values.len() as u64 - 1);
+        let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+            keys,
+            StringType::from_data(values.to_vec()),
+        ))));
+        (encoded.into(), plain.into())
+    }
+
+    let size = DecimalSize::new_unchecked(15, 2);
+    // Declared i128, values within i64 (like the result of a decimal multiplication).
+    let wide_size = DecimalSize::new_unchecked(38, 6);
+    // 10 rows takes the decoding fallback (too few rows per key combination).
+    for n in [10usize, 2048, 5000] {
+        let (flag_a, plain_a) = dict(
+            &["A", "N", "R", "unused"],
+            &(0..n).map(|i| (i * 7 % 3) as u32).collect_vec(),
+        );
+        let (flag_b, plain_b) = dict(&["F", "O"], &(0..n).map(|i| (i % 2) as u32).collect_vec());
+        let values = (0..n as i64).map(|i| 100_000 + i * 13 % 5000).collect_vec();
+        let plain_price = Column::Decimal(DecimalColumn::Decimal64(values.clone().into(), size));
+        let price: BlockEntry = Column::Encoded(Box::new(EncodedColumn::For(
+            ForColumn::try_encode(&plain_price).unwrap(),
+        )))
+        .into();
+        let plain_price: BlockEntry = plain_price.into();
+        let wide_values = values.iter().map(|v| *v as i128 * 1_000_000).collect_vec();
+        let plain_wide: BlockEntry = Column::Decimal(DecimalColumn::Decimal128(
+            wide_values.clone().into(),
+            wide_size,
+        ))
+        .into();
+        let min = *wide_values.iter().min().unwrap();
+        let max = *wide_values.iter().max().unwrap();
+        let deltas = NarrowBuffer::pack(
+            wide_values.iter().map(|v| (v - min) as u64),
+            (max - min) as u64,
+        );
+        let wide: BlockEntry = Column::Encoded(Box::new(EncodedColumn::For(ForColumn::new(
+            DataType::Decimal(wide_size),
+            min,
+            (max - min) as u64,
+            deltas,
+        ))))
+        .into();
+        let number: BlockEntry =
+            Int64Type::from_data((0..n as i64).map(|i| i % 4).collect_vec()).into();
+        // numeric dictionary keys
+        let codes = Int64Type::from_data((0..n).map(|i| [5i64, -1, 1 << 40][i % 3]).collect_vec());
+        let code: BlockEntry = Column::Encoded(Box::new(EncodedColumn::Dict(
+            DictColumn::try_encode(&codes, 16).unwrap(),
+        )))
+        .into();
+        let plain_code: BlockEntry = codes.into();
+
+        let aggrs = vec![
+            resolve_agg("sum", DataType::Decimal(size)),
+            resolve_agg("avg", DataType::Decimal(size)),
+            resolve_agg("min", DataType::Decimal(size)),
+            resolve_agg("count", DataType::Decimal(size)),
+            resolve_agg("sum", DataType::Decimal(wide_size)),
+            resolve_agg("avg", DataType::Decimal(wide_size)),
+        ];
+        let encoded_args = [&price, &price, &price, &price, &wide, &wide];
+        let plain_args = [
+            &plain_price,
+            &plain_price,
+            &plain_price,
+            &plain_price,
+            &plain_wide,
+            &plain_wide,
+        ];
+
+        for (encoded_keys, plain_keys) in [
+            (vec![flag_a.clone(), flag_b.clone()], vec![
+                plain_a.clone(),
+                plain_b.clone(),
+            ]),
+            (vec![code.clone(), flag_b.clone()], vec![
+                plain_code.clone(),
+                plain_b.clone(),
+            ]),
+            // mixed keys take the decoding fallback
+            (vec![flag_a.clone(), number.clone()], vec![
+                plain_a.clone(),
+                number.clone(),
+            ]),
+        ] {
+            let encoded_params = encoded_args
+                .iter()
+                .map(|arg| vec![(*arg).clone()])
+                .collect_vec();
+            let plain_params = plain_args
+                .iter()
+                .map(|arg| vec![(*arg).clone()])
+                .collect_vec();
+            let encoded = aggregate_into_block(&encoded_keys, &encoded_params, &aggrs, n);
+            let plain = aggregate_into_block(&plain_keys, &plain_params, &aggrs, n);
+            assert_block_value_sort_eq(&encoded, &plain);
+        }
+    }
+}
+
+// Flushing a payload with a reused `PayloadFlushState` must produce the same
+// result as flushing it with a fresh state, including for empty payloads.
+#[test]
+fn test_payload_flush_all_with_reused_state() {
+    let aggrs = vec![
+        resolve_agg("sum", Int64Type::data_type()),
+        resolve_agg("count", Int64Type::data_type()),
+    ];
+
+    // (distinct groups, radix bits): the first case has payloads larger than
+    // one flush batch, the second one has mostly empty payloads.
+    for (m, radix_bits) in [(5000_usize, 1_u64), (2, 4)] {
+        let n = m * 2;
+        let group_columns: Vec<BlockEntry> =
+            vec![Int64Type::from_data((0..n).map(|x| (x % m) as i64).collect_vec()).into()];
+        let group_types = group_columns
+            .iter()
+            .map(|c| c.data_type())
+            .collect::<Vec<_>>();
+        let args = vec![group_columns[0].clone()];
+        let params: Vec<ProjectedBlock> = aggrs.iter().map(|_| (&args).into()).collect_vec();
+
+        let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
+        let mut hashtable = AggregateHashTable::new(
+            group_types.clone(),
+            aggrs.clone(),
+            config,
+            Arc::new(Bump::new()),
+        );
+
+        let mut state = ProbeState::default();
+        hashtable
+            .add_groups(
+                &mut state,
+                (&group_columns).into(),
+                &params,
+                (&[]).into(),
+                n,
+            )
+            .unwrap();
+
+        assert_eq!(hashtable.payload.partition_count(), 1 << radix_bits);
+
+        let mut shared_state = PayloadFlushState::default();
+        let mut total_rows = 0;
+        let mut empty_payloads = 0;
+        for (_, payload) in hashtable.payload.into_bucket_payloads() {
+            let expected = payload.aggregate_flush_all().unwrap();
+            let actual = payload
+                .aggregate_flush_all_with_state(&mut shared_state)
+                .unwrap();
+
+            assert_eq!(expected.num_rows(), payload.len());
+            assert_eq!(actual.num_rows(), payload.len());
+            assert_eq!(expected.num_columns(), group_types.len() + aggrs.len());
+            assert_eq!(actual.num_columns(), expected.num_columns());
+            assert_block_value_eq(&expected, &actual);
+
+            let group_by = payload.group_by_flush_all().unwrap();
+            assert_eq!(group_by.num_rows(), payload.len());
+
+            if payload.len() == 0 {
+                empty_payloads += 1;
+            }
+            total_rows += actual.num_rows();
+        }
+
+        assert_eq!(total_rows, m);
+        if m < (1 << radix_bits) {
+            assert!(empty_payloads > 0);
+        }
+    }
 }

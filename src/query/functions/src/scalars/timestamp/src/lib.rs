@@ -29,6 +29,7 @@ mod date_extract;
 mod date_format;
 mod date_round;
 mod date_time_slice;
+mod fixed_offset;
 
 pub mod datetime;
 pub mod interval;

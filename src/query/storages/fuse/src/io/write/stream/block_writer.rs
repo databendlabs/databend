@@ -342,13 +342,14 @@ impl FuseBlockWriter {
                     .as_ref()
                     .and_then(|state| state.draft_virtual_block_meta.path_statistics.clone())
             });
-        let (vector_index_size, vector_index_location, vector_stats) = match &block_indexes.vector {
+        let (vector_index_size, vector_index_metas, vector_stats) = match &block_indexes.vector {
             Some(index) => (
-                index.file.as_ref().map(PendingIndexFile::size),
-                index.file.as_ref().map(|file| file.location.clone()),
+                (!index.files.is_empty())
+                    .then(|| index.files.iter().map(|(_, file)| file.size()).sum()),
+                collect_inverted_index_metas(index.files.iter().map(|(meta, _)| meta.clone())),
                 index.statistics.clone(),
             ),
-            None => (None, None, None),
+            None => (None, Vec::new(), None),
         };
         let (spatial_index_size, spatial_index_location, spatial_stats) =
             match &block_indexes.spatial {
@@ -423,7 +424,8 @@ impl FuseBlockWriter {
             inverted_index_size,
             inverted_index_metas: Some(inverted_index_metas),
             vector_index_size,
-            vector_index_location,
+            vector_index_location: None,
+            vector_index_metas: Some(vector_index_metas),
             spatial_index_size,
             spatial_index_location,
             spatial_stats,

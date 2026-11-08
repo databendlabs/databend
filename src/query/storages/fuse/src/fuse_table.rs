@@ -77,6 +77,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::set_s3_storage_class;
@@ -92,10 +93,10 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
 use databend_common_storage::init_operator_with_policy_scope;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::RangeIndex;
-use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -117,6 +118,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
+use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
@@ -155,10 +157,13 @@ use crate::Table;
 use crate::TableStatistics;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
 use crate::io::SegmentsIO;
+use crate::io::SnapshotCache;
+use crate::io::SnapshotReader;
+use crate::io::SnapshotStatsReader;
+use crate::io::TableFiles;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::TableSnapshotReader;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
@@ -313,7 +318,12 @@ impl FuseTable {
                 match storage_params {
                     // External or attached table.
                     Some(sp) => {
-                        let sp = apply_storage_class(table_info, sp, storage_class_specs);
+                        let sp = apply_storage_class(
+                            table_info,
+                            sp,
+                            storage_class_specs,
+                            TableStorageKind::External,
+                        )?;
                         // Special handling for history tables. Since history
                         // table storage params are fully generated from server
                         // config, we both allow the credential chain and treat
@@ -344,7 +354,8 @@ impl FuseTable {
                                 table_info,
                                 default_storage_params,
                                 storage_class_specs,
-                            )
+                                TableStorageKind::Internal,
+                            )?
                         };
                         Ok(init_operator(&storage_params)?)
                     }
@@ -507,31 +518,49 @@ impl FuseTable {
         &self,
         snapshot: Option<&Arc<TableSnapshot>>,
     ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
+        self.read_table_snapshot_statistics_with_policy(snapshot, CachePolicy::DEFAULT)
+            .await
+    }
+
+    /// The statistics of `snapshot`, read under `policy`.
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_statistics_with_policy(
+        &self,
+        snapshot: Option<&Arc<TableSnapshot>>,
+        policy: CachePolicy,
+    ) -> Result<Option<Arc<TableSnapshotStatistics>>> {
         if let Some(snapshot) = snapshot {
             if let Some(loc) = &snapshot.table_statistics_location {
-                let reader = MetaReaders::table_snapshot_statistics_reader(self.get_operator());
-
+                let reader = SnapshotStatsReader::new(self.get_operator());
                 let ver = TableMetaLocationGenerator::table_statistics_version(loc);
-                let load_params = LoadParams {
-                    location: loc.clone(),
-                    len_hint: None,
-                    ver,
-                    put_cache: true,
-                };
-
-                return Ok(Some(reader.read(&load_params).await?));
+                let cache = &FuseCaches::instance().snapshots.with_policy(policy);
+                return Ok(Some(cache.get_stats(&reader, loc.clone(), ver).await?));
             }
         }
         Ok(None)
     }
 
+    /// The current snapshot, read as queries read it (`CachePolicy::DEFAULT`).
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        self.read_table_snapshot_with_policy(CachePolicy::DEFAULT)
+            .await
+    }
+
+    /// The current snapshot, read under `policy`, as maintenance reads it with the policy of
+    /// its statement.
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_with_policy(
+        &self,
+        policy: CachePolicy,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
         let loc = self.snapshot_loc();
         let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        let cache = &FuseCaches::instance().snapshots.with_policy(policy);
+        Self::read_table_snapshot_at(cache, self.get_operator(), loc, ver).await
     }
 
     #[fastrace::trace]
@@ -540,35 +569,47 @@ impl FuseTable {
         &self,
         loc: Option<String>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        let cache = &FuseCaches::instance().snapshots;
+        Self::read_table_snapshot_at(cache, self.get_operator(), loc, ver).await
     }
 
     #[fastrace::trace]
     #[async_backtrace::framed]
+    /// Reads the current snapshot from storage, bypassing the cache.
     pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
         let loc = self.snapshot_loc();
         let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        Self::read_table_snapshot_from_storage(self.get_operator(), loc, ver).await
     }
 
-    pub async fn read_table_snapshot_with_reader(
-        reader: TableSnapshotReader,
+    pub async fn read_table_snapshot_at(
+        cache: &SnapshotCache,
+        operator: Operator,
         snapshot_location: Option<String>,
         ver: u64,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        if let Some(location) = snapshot_location {
-            let params = LoadParams {
-                location,
-                len_hint: None,
-                ver,
-                put_cache: true,
-            };
-            Ok(Some(reader.read(&params).await?))
-        } else {
-            Ok(None)
+        match snapshot_location {
+            Some(location) => {
+                let reader = SnapshotReader::new(operator);
+                Ok(Some(cache.get(&reader, location, ver).await?))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn read_table_snapshot_from_storage(
+        operator: Operator,
+        snapshot_location: Option<String>,
+        ver: u64,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        match snapshot_location {
+            Some(location) => Ok(Some(
+                SnapshotReader::new(operator)
+                    .read(&(location, ver), &CachePolicy::BYPASS)
+                    .await?,
+            )),
+            None => Ok(None),
         }
     }
 
@@ -629,6 +670,19 @@ impl FuseTable {
 
     pub fn is_transient(&self) -> bool {
         self.table_info.meta.options.contains_key("TRANSIENT")
+    }
+
+    /// Stable identity shared by a base table and all of its zero-copy clones.
+    pub fn clone_group_id(&self) -> Result<u64> {
+        parse_clone_group_id(&self.table_info.meta.options)
+            .map_err(|err| {
+                ErrorCode::Internal(format!(
+                    "invalid clone group on table {}: {}",
+                    self.get_id(),
+                    err
+                ))
+            })
+            .map(|group_id| group_id.unwrap_or_else(|| self.get_id()))
     }
 
     pub fn cluster_key_str(&self) -> Option<&str> {
@@ -785,18 +839,8 @@ impl FuseTable {
     ///   1. Table options (number of snapshots first, then time period)
     ///   2. Settings (number of snapshots first, then time period)
     pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
-        if self.is_transient() {
-            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(1));
-        }
-
-        if let Some(num_snapshots) = self.try_get_table_option_num_snapshots_to_keep()? {
-            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(
-                num_snapshots as usize,
-            ));
-        }
-
-        if let Some(duration) = self.try_get_table_option_retention_period()? {
-            return Ok(RetentionPolicy::ByTimePeriod(duration));
+        if let Some(policy) = self.get_table_level_retention_policy()? {
+            return Ok(policy);
         }
 
         if let Some(num_snapshots) = self.try_get_setting_num_snapshots_to_keep(ctx)? {
@@ -807,6 +851,47 @@ impl FuseTable {
 
         let duration = self.get_data_retention_period_from_settings(ctx)?;
         Ok(RetentionPolicy::ByTimePeriod(duration))
+    }
+
+    /// Returns the retention policy that another clone-group member may apply to this table.
+    /// The VACUUM target's session may retain descendant history for longer, but it must not
+    /// shorten it below the built-in default. Session snapshot-count retention is ignored because
+    /// it has no time-based lower bound that can be safely clamped.
+    pub fn get_clone_descendant_retention_policy(
+        &self,
+        ctx: &dyn TableContext,
+    ) -> Result<RetentionPolicy> {
+        if let Some(policy) = self.get_table_level_retention_policy()? {
+            return Ok(policy);
+        }
+
+        let settings = ctx.get_settings();
+        let default_days = settings
+            .get_default_value("data_retention_time_in_days")?
+            .ok_or_else(|| ErrorCode::Internal("data retention default setting is missing"))?
+            .as_u64()?;
+        let retention_days = settings
+            .get_data_retention_time_in_days()?
+            .max(default_days);
+        Ok(RetentionPolicy::ByTimePeriod(Duration::days(
+            retention_days as i64,
+        )))
+    }
+
+    fn get_table_level_retention_policy(&self) -> Result<Option<RetentionPolicy>> {
+        if self.is_transient() {
+            return Ok(Some(RetentionPolicy::ByNumOfSnapshotsToKeep(1)));
+        }
+
+        if let Some(num_snapshots) = self.try_get_table_option_num_snapshots_to_keep()? {
+            return Ok(Some(RetentionPolicy::ByNumOfSnapshotsToKeep(
+                num_snapshots as usize,
+            )));
+        }
+
+        Ok(self
+            .try_get_table_option_retention_period()?
+            .map(RetentionPolicy::ByTimePeriod))
     }
 
     fn try_get_table_option_num_snapshots_to_keep(&self) -> Result<Option<u64>> {
@@ -905,10 +990,10 @@ impl FuseTable {
 
                     // refresh table schema by loading the snapshot
                     let begin = Instant::now();
-                    let reader = MetaReaders::table_snapshot_reader_without_cache(operator.clone());
                     let ver = TableMetaLocationGenerator::snapshot_version(loc.as_str());
                     let snapshot =
-                        Self::read_table_snapshot_with_reader(reader, Some(loc), ver).await?;
+                        Self::read_table_snapshot_from_storage(operator.clone(), Some(loc), ver)
+                            .await?;
                     info!(
                         "[FUSE-TABLE] Table snapshot refreshed, elapsed: {:?}",
                         begin.elapsed()
@@ -1189,11 +1274,11 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        put_cache: bool,
+        cache_policy: CachePolicy,
     ) -> Result<()> {
         self.check_data_sharing_license(ctx.as_ref())?;
         self.check_format_supported()?;
-        self.do_read_data(ctx, plan, pipeline, put_cache)
+        self.do_read_data(ctx, plan, pipeline, cache_policy)
     }
 
     fn append_data(
@@ -1408,7 +1493,7 @@ impl Table for FuseTable {
 
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
             let segments = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
                 .await?;
             let mut partial_col_stats = Vec::with_capacity(chunk_size);
             // 1. Carry the previously reduced ranges
@@ -1624,9 +1709,9 @@ impl Table for FuseTable {
             files.push(entry.path().to_string());
         }
 
-        let op = Files::create(ctx, self.operator.clone());
+        let op = TableFiles::create(ctx, self.operator.clone());
         let len = files.len() as u64;
-        op.remove_file_in_batch(files).await?;
+        op.remove_file_in_batch(&files).await?;
         Ok(len)
     }
 
@@ -1655,26 +1740,68 @@ impl Table for FuseTable {
         }
         let files = files.into_iter().collect::<Vec<_>>();
         let len = files.len() as u64;
-        Files::create(ctx, self.operator.clone())
-            .remove_file_in_batch(files)
+        TableFiles::create(ctx, self.operator.clone())
+            .remove_file_in_batch(&files)
             .await?;
         Ok(len)
     }
 }
 
+/// Whether a fuse table's data lives in the server-wide default storage
+/// (internal) or in a user-specified location (external / attached).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TableStorageKind {
+    /// Data is stored in the bucket configured by `[storage]` of the server.
+    Internal,
+    /// Data is stored in a location supplied by the user, i.e.
+    /// `CREATE TABLE ... 's3://bucket/path' CONNECTION = (...)`.
+    ///
+    /// Attached tables share this code path since they also carry their own
+    /// storage params, but they are read-only and never write new objects,
+    /// so the storage class is effectively irrelevant for them.
+    External,
+}
+
+/// Resolve the S3 storage class that should be used when writing new objects
+/// for `table_info`.
+///
+/// - Temporary tables always use `STANDARD`: their data rarely lives long
+///   enough to amortize the monitoring fee of `INTELLIGENT_TIERING`.
+/// - Internal tables ignore the user-provided `storage_class_specs` (e.g. the
+///   `experimental_s3_storage_class` session setting) and keep whatever `storage_params`
+///   already carries, i.e. the value from the server `[storage.s3]` config.
+///   The default bucket is owned by the operator of the deployment, so only
+///   the operator should decide its storage class; letting end users flip it
+///   per session could silently add cost to a bucket they do not own.
+/// - External tables honor the table option first, then `storage_class_specs`:
+///   the bucket is supplied by the user, who can judge whether tiering pays off.
+/// - Internal tables also ignore any legacy table option, including invalid
+///   values, so old metadata cannot override the operator's choice or block reads.
 fn apply_storage_class(
     table_info: &TableInfo,
     storage_params: StorageParams,
     storage_class_specs: Option<S3StorageClass>,
-) -> StorageParams {
+    storage_kind: TableStorageKind,
+) -> Result<StorageParams> {
     let mut sp = storage_params;
     if is_temp_table_by_table_info(table_info) {
-        // For temporary tables, always use the standard storage class
         set_s3_storage_class(&mut sp, S3StorageClass::Standard);
+        return Ok(sp);
+    }
+    if storage_kind == TableStorageKind::Internal {
+        return Ok(sp);
+    }
+    if let Some(value) = table_info.options().get(OPT_KEY_S3_STORAGE_CLASS) {
+        let storage_class = value.parse::<S3StorageClass>().map_err(|e| {
+            ErrorCode::TableOptionInvalid(format!(
+                "Invalid table option {OPT_KEY_S3_STORAGE_CLASS}: {e}"
+            ))
+        })?;
+        set_s3_storage_class(&mut sp, storage_class);
     } else if let Some(s3storage_class) = storage_class_specs {
         set_s3_storage_class(&mut sp, s3storage_class);
     }
-    sp
+    Ok(sp)
 }
 
 pub enum RetentionPolicy {
@@ -1723,11 +1850,18 @@ mod tests {
     use databend_common_meta_app::schema::TableIdent;
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableMeta;
+    use databend_common_meta_app::storage::S3StorageClass;
     use databend_common_meta_app::storage::StorageParams;
+    use databend_common_meta_app::storage::StorageS3Config;
+    use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
+    use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+    use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
 
     use super::ApproxDistinctColumns;
     use super::FuseTable;
+    use super::TableStorageKind;
     use super::allow_credential_chain_for_s3;
+    use super::apply_storage_class;
     use super::is_system_history_table;
 
     fn table_info_with_db(db_name: &str) -> TableInfo {
@@ -1770,11 +1904,202 @@ mod tests {
         }
     }
 
+    fn s3_params(storage_class: S3StorageClass) -> StorageParams {
+        StorageParams::S3(StorageS3Config {
+            storage_class,
+            ..Default::default()
+        })
+    }
+
+    fn s3_storage_class_of(sp: &StorageParams) -> S3StorageClass {
+        match sp {
+            StorageParams::S3(cfg) => cfg.storage_class,
+            other => panic!("expected S3 storage params, got {other:?}"),
+        }
+    }
+
+    fn temp_table_info() -> TableInfo {
+        let mut info = table_info_with_db("default");
+        info.ident = TableIdent::new(TEMP_TBL_ID_BEGIN, 0);
+        info.meta
+            .options
+            .insert(OPT_KEY_TEMP_PREFIX.to_string(), "tmp".to_string());
+        info
+    }
+
+    #[test]
+    fn test_apply_storage_class_external_table_honors_specs() {
+        let info = table_info_with_db("default");
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::Standard),
+            Some(S3StorageClass::IntelligentTiering),
+            TableStorageKind::External,
+        )
+        .unwrap();
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::IntelligentTiering);
+
+        // Specs can also downgrade back to STANDARD.
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::IntelligentTiering),
+            Some(S3StorageClass::Standard),
+            TableStorageKind::External,
+        )
+        .unwrap();
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::Standard);
+
+        // Without specs, the table's own params are left untouched.
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::IntelligentTiering),
+            None,
+            TableStorageKind::External,
+        )
+        .unwrap();
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::IntelligentTiering);
+    }
+
+    #[test]
+    fn test_apply_storage_class_internal_table_ignores_specs() {
+        let info = table_info_with_db("default");
+
+        // Session-level specs must not be able to upgrade the default bucket.
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::Standard),
+            Some(S3StorageClass::IntelligentTiering),
+            TableStorageKind::Internal,
+        )
+        .unwrap();
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::Standard);
+
+        // ... nor downgrade what the server config asked for.
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::IntelligentTiering),
+            Some(S3StorageClass::Standard),
+            TableStorageKind::Internal,
+        )
+        .unwrap();
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::IntelligentTiering);
+    }
+
+    #[test]
+    fn test_apply_storage_class_temp_table_always_standard() {
+        let mut info = temp_table_info();
+        info.meta.options.insert(
+            OPT_KEY_S3_STORAGE_CLASS.to_owned(),
+            "intelligent_tiering".to_owned(),
+        );
+        for kind in [TableStorageKind::Internal, TableStorageKind::External] {
+            let sp = apply_storage_class(
+                &info,
+                s3_params(S3StorageClass::IntelligentTiering),
+                Some(S3StorageClass::IntelligentTiering),
+                kind,
+            )
+            .unwrap();
+            assert_eq!(
+                s3_storage_class_of(&sp),
+                S3StorageClass::Standard,
+                "temp table with {kind:?} storage must stay STANDARD"
+            );
+        }
+    }
+
+    #[test]
+    fn test_apply_storage_class_is_noop_for_non_s3() {
+        let info = table_info_with_db("default");
+        let sp = apply_storage_class(
+            &info,
+            StorageParams::Memory,
+            Some(S3StorageClass::IntelligentTiering),
+            TableStorageKind::External,
+        )
+        .unwrap();
+        assert_eq!(sp, StorageParams::Memory);
+    }
+
     #[test]
     fn test_allow_credential_chain_for_s3_is_noop_for_non_s3() {
         let sp = StorageParams::Memory;
         let result = allow_credential_chain_for_s3(sp.clone());
         assert_eq!(result, sp);
+    }
+
+    #[test]
+    fn test_apply_storage_class_precedence() {
+        use S3StorageClass::IntelligentTiering;
+        use S3StorageClass::Standard;
+
+        for configured in [Standard, IntelligentTiering] {
+            for session in [None, Some(Standard), Some(IntelligentTiering)] {
+                for table_class in [None, Some(Standard), Some(IntelligentTiering)] {
+                    let mut info = table_info_with_db("default");
+                    if let Some(table_class) = table_class {
+                        info.meta.options.insert(
+                            OPT_KEY_S3_STORAGE_CLASS.to_owned(),
+                            table_class.to_string().to_lowercase(),
+                        );
+                    }
+                    let params = StorageParams::S3(StorageS3Config {
+                        storage_class: configured,
+                        ..Default::default()
+                    });
+                    let StorageParams::S3(actual) =
+                        apply_storage_class(&info, params, session, TableStorageKind::External)
+                            .unwrap()
+                    else {
+                        panic!("S3 storage params must remain S3");
+                    };
+                    assert_eq!(
+                        actual.storage_class,
+                        table_class.or(session).unwrap_or(configured)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_apply_storage_class_internal_ignores_legacy_table_options() {
+        for configured in [S3StorageClass::Standard, S3StorageClass::IntelligentTiering] {
+            for value in ["standard", "intelligent_tiering", "glacier"] {
+                let mut info = table_info_with_db("default");
+                info.meta
+                    .options
+                    .insert(OPT_KEY_S3_STORAGE_CLASS.to_owned(), value.to_owned());
+                let params = apply_storage_class(
+                    &info,
+                    s3_params(configured),
+                    Some(S3StorageClass::IntelligentTiering),
+                    TableStorageKind::Internal,
+                )
+                .unwrap();
+                assert_eq!(s3_storage_class_of(&params), configured);
+            }
+        }
+    }
+
+    #[test]
+    fn test_apply_storage_class_rejects_invalid_table_option() {
+        let mut info = table_info_with_db("default");
+        info.meta
+            .options
+            .insert(OPT_KEY_S3_STORAGE_CLASS.to_owned(), "glacier".to_owned());
+        let params = StorageParams::S3(StorageS3Config::default());
+        let err = apply_storage_class(
+            &info,
+            params,
+            Some(S3StorageClass::Standard),
+            TableStorageKind::External,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.code(),
+            databend_common_exception::ErrorCode::TABLE_OPTION_INVALID
+        );
     }
 
     #[test]

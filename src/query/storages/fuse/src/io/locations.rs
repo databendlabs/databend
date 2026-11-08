@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_storages_common_index::VECTOR_BUNDLE_VERSION;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
@@ -39,6 +40,7 @@ use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
 use crate::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
 use crate::FUSE_TBL_SPATIAL_INDEX_PREFIX;
 use crate::FUSE_TBL_VECTOR_INDEX_PREFIX;
+use crate::FUSE_TBL_VECTOR_INDEX_PREFIX_V2;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use crate::LEGACY_FUSE_TBL_REF_PREFIX;
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
@@ -78,6 +80,7 @@ pub struct TableMetaLocationGenerator {
     inverted_index_v2_location_prefix: String,
     inverted_index_dict_location_prefix: String,
     vector_index_location_prefix: String,
+    vector_index_v2_location_prefix: String,
     spatial_index_location_prefix: String,
     granule_index_location_prefix: String,
     segment_statistics_location_prefix: String,
@@ -100,6 +103,8 @@ impl TableMetaLocationGenerator {
         let inverted_index_dict_location_prefix =
             format!("{}/{}/", prefix, FUSE_TBL_INVERTED_INDEX_DICT_PREFIX);
         let vector_index_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
+        let vector_index_v2_location_prefix =
+            format!("{}/{}/", prefix, FUSE_TBL_VECTOR_INDEX_PREFIX_V2);
         let spatial_index_location_prefix =
             format!("{}/{}/", prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
         let granule_index_location_prefix =
@@ -118,6 +123,7 @@ impl TableMetaLocationGenerator {
             inverted_index_v2_location_prefix,
             inverted_index_dict_location_prefix,
             vector_index_location_prefix,
+            vector_index_v2_location_prefix,
             spatial_index_location_prefix,
             granule_index_location_prefix,
             segment_statistics_location_prefix,
@@ -137,8 +143,13 @@ impl TableMetaLocationGenerator {
         &self.bloom_index_location_prefix
     }
 
+    /// Legacy combined vector-index prefix.
     pub fn block_vector_index_prefix(&self) -> &str {
         &self.vector_index_location_prefix
+    }
+
+    pub fn vector_index_v2_location_prefix(&self) -> &str {
+        &self.vector_index_v2_location_prefix
     }
 
     pub fn block_spatial_index_prefix(&self) -> &str {
@@ -211,6 +222,22 @@ impl TableMetaLocationGenerator {
                 BlockFilter::VERSION,
             ),
             BlockFilter::VERSION,
+        )
+    }
+
+    /// Generates a new immutable vector-index bundle location for one index build,
+    /// `_i_v_v2/{index_version}/h{uuid}.index`, mirroring inverted-index V2. The
+    /// `h`-prefixed object UUID lets vacuum select candidates by name and age.
+    pub fn gen_vector_index_v2_location(&self, index_version: &str) -> Location {
+        (
+            format!(
+                "{}{}/{}{}.index",
+                self.vector_index_v2_location_prefix(),
+                index_version,
+                VACUUM2_OBJECT_KEY_PREFIX,
+                Uuid::now_v7().as_simple(),
+            ),
+            u64::from(VECTOR_BUNDLE_VERSION),
         )
     }
 

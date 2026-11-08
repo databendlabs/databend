@@ -31,6 +31,7 @@ use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
 use crate::optimizer::optimizers::cascades::rule::StrategyFactory;
 use crate::optimizer::optimizers::cascades::tasks::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
+use crate::optimizer::optimizers::cascades::tasks::SchedulerStat;
 use crate::optimizer::optimizers::cascades::tasks::Task;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
@@ -47,6 +48,8 @@ pub struct CascadesOptimizer {
     pub(crate) memo: Memo,
     pub(crate) cost_model: Box<dyn CostModel>,
     pub(crate) explore_rule_set: RuleSet,
+    /// Scheduler statistics of the last search, for diagnostics and tests.
+    scheduler_stat: Option<SchedulerStat>,
 }
 
 impl CascadesOptimizer {
@@ -74,11 +77,18 @@ impl CascadesOptimizer {
             memo,
             cost_model,
             explore_rule_set,
+            scheduler_stat: None,
         })
     }
 
     pub fn memo(&self) -> &Memo {
         &self.memo
+    }
+
+    /// Statistics of the task scheduler collected by the last search, for
+    /// diagnostics and tests.
+    pub fn scheduler_stat(&self) -> Option<&SchedulerStat> {
+        self.scheduler_stat.as_ref()
     }
 
     pub(crate) fn enforce_distribution(&self) -> bool {
@@ -123,6 +133,7 @@ impl CascadesOptimizer {
                     let mut local_optimizer = CascadesOptimizer::new(opt_ctx)?;
                     let local_expr = local_optimizer.optimize_without_staging(&s_expr)?;
                     self.memo = local_optimizer.memo;
+                    self.scheduler_stat = local_optimizer.scheduler_stat;
                     return Ok(local_expr);
                 }
             }
@@ -143,11 +154,14 @@ impl CascadesOptimizer {
                     e
                 );
 
+                // The input is still logical when Cascades fails (including CBO
+                // disabled). Lower aggregates before either fallback execution path.
+                let fallback = crate::optimizer::ir::DefaultPhysicalPlanner::plan(s_expr)?;
                 if self.opt_ctx.get_enable_distributed_optimization() {
                     let distributed_optimizer = DistributedOptimizer::new(self.opt_ctx.clone());
-                    distributed_optimizer.optimize(&PExpr::from(s_expr.clone()))
+                    distributed_optimizer.optimize(&fallback)
                 } else {
-                    Ok(PExpr::from(s_expr.clone()))
+                    Ok(fallback)
                 }
             }
         }
@@ -210,7 +224,9 @@ impl CascadesOptimizer {
 
         let mut scheduler = TaskManager::new().with_task_limit(task_limit);
         scheduler.add_task(Task::OptimizeGroup(root_task));
-        scheduler.run(self)?;
+        let run_result = scheduler.run(self);
+        self.scheduler_stat = Some(scheduler.into_stat());
+        run_result?;
 
         debug!("Memo:\n{}", self.memo.display()?);
 
@@ -268,7 +284,17 @@ impl CascadesOptimizer {
             .map(|(index, required_prop)| Ok(Arc::new(self.find_best_plan(*index, required_prop)?)))
             .collect::<Result<Vec<_>>>()?;
 
-        let result = PExpr::create(m_expr.plan.clone(), children, None, None, None);
+        let result = PExpr::create(
+            m_expr
+                .plan
+                .physical()
+                .cloned()
+                .ok_or_else(|| ErrorCode::Internal("Best Memo candidate must be physical"))?,
+            children,
+            None,
+            None,
+            None,
+        );
 
         Ok(result)
     }

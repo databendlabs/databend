@@ -23,6 +23,9 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::F32;
+use databend_storages_common_pruner::BlockMetaIndex as PrunedBlockMetaIndex;
+use databend_storages_common_pruner::VectorScores;
 use roaring::RoaringTreemap;
 
 use crate::FuseBlockPartInfo;
@@ -111,18 +114,7 @@ pub(crate) fn add_data_block_meta(
             )
         };
 
-        // Transform vector_scores indices from block-level to page-level
-        let vector_scores = block_meta.vector_scores.clone().map(|vector_scores| {
-            if let Some(offsets) = &offsets {
-                vector_scores
-                    .into_iter()
-                    .filter(|(idx, _)| offsets.contains(*idx as u64))
-                    .map(|(idx, score)| ((offsets.rank(idx as u64) - 1) as usize, score))
-                    .collect::<Vec<_>>()
-            } else {
-                vector_scores
-            }
-        });
+        let vector_scores = vector_output_scores(block_meta, offsets.as_ref());
 
         let internal_column_meta = InternalColumnMeta {
             segment_idx: block_meta.segment_idx,
@@ -140,4 +132,79 @@ pub(crate) fn add_data_block_meta(
         meta = Some(Box::new(internal_column_meta));
     }
     block.add_meta(meta)
+}
+
+/// The vector scores of the rows the scan outputs, in order. The output rows are
+/// `offsets` (the rows left by filters) or, without them, every row of the block;
+/// with `VectorScores::TopN`, `ReadState` keeps only its rows.
+fn vector_output_scores(
+    block_meta: &PrunedBlockMetaIndex,
+    offsets: Option<&RoaringTreemap>,
+) -> Option<Vec<F32>> {
+    let output = |row: u64| offsets.is_none_or(|offsets| offsets.contains(row));
+    Some(match block_meta.vector_scores.as_ref()? {
+        VectorScores::TopN(scores) => {
+            let mut scores = scores
+                .iter()
+                .filter(|(row, _)| output(u64::from(*row)))
+                .copied()
+                .collect::<Vec<_>>();
+            scores.sort_unstable_by_key(|(row, _)| *row);
+            scores.into_iter().map(|(_, score)| score).collect()
+        }
+        VectorScores::All(scores) => match offsets {
+            Some(offsets) => offsets
+                .iter()
+                .map(|row| {
+                    scores
+                        .get(row as usize)
+                        .copied()
+                        .unwrap_or(F32::from(f32::MAX))
+                })
+                .collect(),
+            None => scores.clone(),
+        },
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vector_output_scores() {
+        let f = |values: &[f32]| values.iter().map(|&v| F32::from(v)).collect::<Vec<_>>();
+        let offsets = RoaringTreemap::from_iter([1u64, 3]);
+        let sparse = PrunedBlockMetaIndex {
+            vector_scores: Some(VectorScores::TopN(vec![
+                (3, F32::from(0.3)),
+                (1, F32::from(0.1)),
+            ])),
+            ..Default::default()
+        };
+        // The output rows are the TopN rows, in row order, possibly fewer.
+        assert_eq!(
+            vector_output_scores(&sparse, Some(&offsets)),
+            Some(f(&[0.1, 0.3]))
+        );
+        let offsets_one = RoaringTreemap::from_iter([3u64]);
+        assert_eq!(
+            vector_output_scores(&sparse, Some(&offsets_one)),
+            Some(f(&[0.3]))
+        );
+
+        let all = PrunedBlockMetaIndex {
+            vector_scores: Some(VectorScores::All(f(&[0.0, 0.1, f32::MAX, 0.3]))),
+            ..Default::default()
+        };
+        assert_eq!(
+            vector_output_scores(&all, Some(&offsets)),
+            Some(f(&[0.1, 0.3]))
+        );
+        assert_eq!(
+            vector_output_scores(&all, None),
+            Some(f(&[0.0, 0.1, f32::MAX, 0.3]))
+        );
+        assert_eq!(vector_output_scores(&Default::default(), None), None);
+    }
 }

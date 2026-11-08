@@ -128,6 +128,8 @@ pub enum UserPrivilegeType {
     Delete,
     // Privilege to create databases or tables.
     Create,
+    // Privilege to attach existing storage data as a table. CREATE is also required.
+    AttachTable,
     // Privilege to drop databases or tables.
     Drop,
     // Privilege to alter databases or tables.
@@ -185,6 +187,7 @@ impl Display for UserPrivilegeType {
         write!(f, "{}", match self {
             UserPrivilegeType::Usage => "USAGE",
             UserPrivilegeType::Create => "CREATE",
+            UserPrivilegeType::AttachTable => "ATTACH TABLE",
             UserPrivilegeType::Update => "UPDATE",
             UserPrivilegeType::Select => "SELECT",
             UserPrivilegeType::Insert => "INSERT",

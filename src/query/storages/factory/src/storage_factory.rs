@@ -214,7 +214,17 @@ impl StorageFactory {
     fn get_storage_factory(&self, table_info: &TableInfo) -> Result<&Storage> {
         let engine = table_info.engine().to_uppercase();
         self.storages.get(&engine).ok_or_else(|| {
-            ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
+            // Include the table identity so users can locate tables left behind by
+            // engines that are no longer supported.
+            let table = if table_info.desc.is_empty() {
+                &table_info.name
+            } else {
+                &table_info.desc
+            };
+            ErrorCode::UnknownTableEngine(format!(
+                "Unknown table engine {} for table {} (id: {})",
+                engine, table, table_info.ident.table_id
+            ))
         })
     }
 
@@ -241,5 +251,49 @@ fn dynamic_table_description() -> StorageDescription {
         engine_name: DYNAMIC_TABLE_ENGINE.to_string(),
         comment: "Dynamic Table (Fuse-backed)".to_string(),
         support_cluster_key: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::ErrorCode;
+    use databend_common_meta_app::schema::TableIdent;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_meta_app::schema::TableMeta;
+
+    use super::StorageFactory;
+
+    fn table_info_with_engine(desc: &str, name: &str, table_id: u64, engine: &str) -> TableInfo {
+        TableInfo {
+            ident: TableIdent::new(table_id, 1),
+            desc: desc.to_string(),
+            name: name.to_string(),
+            meta: TableMeta {
+                engine: engine.to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_unknown_engine_error_identifies_table() {
+        let factory = StorageFactory::default();
+
+        let table_info = table_info_with_engine("'deltatable'.'t1'", "t1", 42, "delta");
+        let err = factory.get_table(&table_info, false).err().unwrap();
+        assert_eq!(err.code(), ErrorCode::UNKNOWN_TABLE_ENGINE);
+        assert_eq!(
+            err.message(),
+            "Unknown table engine DELTA for table 'deltatable'.'t1' (id: 42)"
+        );
+
+        // Fall back to the table name when the description is not populated.
+        let table_info = table_info_with_engine("", "t2", 43, "DELTA");
+        let err = factory.get_table(&table_info, false).err().unwrap();
+        assert_eq!(
+            err.message(),
+            "Unknown table engine DELTA for table t2 (id: 43)"
+        );
     }
 }

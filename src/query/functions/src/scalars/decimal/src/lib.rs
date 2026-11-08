@@ -26,9 +26,14 @@ mod arithmetic;
 mod cast;
 mod cast_from_jsonb;
 mod comparison;
+mod decimal;
 mod hash;
 mod math;
 mod uuid;
+mod vectorize;
+
+#[cfg(test)]
+mod testing;
 
 pub use arithmetic::*;
 pub use cast::*;

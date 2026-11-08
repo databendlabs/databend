@@ -19,6 +19,7 @@ use anyerror::AnyError;
 use databend_base::shutdown::Graceful;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
+use databend_common_http::TlsConfig;
 use databend_common_http::health_handler;
 use databend_common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
@@ -34,7 +35,6 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use poem::get;
-use poem::listener::OpensslTlsConfig;
 
 use crate::HttpServiceConfig;
 use crate::v1::ctrl::TransferLeaderQuery;
@@ -149,8 +149,8 @@ impl<SP: SpawnApi> HttpService<SP> {
         route.data(self.cfg.clone())
     }
 
-    fn build_tls(config: &HttpServiceConfig) -> OpensslTlsConfig {
-        OpensslTlsConfig::new()
+    fn build_tls(config: &HttpServiceConfig) -> TlsConfig {
+        TlsConfig::new()
             .cert_from_file(config.admin.tls.cert.as_str())
             .key_from_file(config.admin.tls.key.as_str())
     }

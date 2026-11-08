@@ -32,6 +32,7 @@ use crate::Symbol;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -84,6 +85,8 @@ pub struct Mutation {
     pub predicate_column_index: Option<Symbol>,
     pub direct_filter: Vec<ScalarExpr>,
     pub truncate_table: bool,
+    /// Present only for a MATERIALIZE TTL deletion. Rechecked after commit conflicts.
+    pub expected_ttl: Option<String>,
 }
 
 impl std::fmt::Debug for Mutation {
@@ -196,3 +199,5 @@ impl Operator for Mutation {
         RelOp::MergeInto
     }
 }
+
+impl PhysicalOperator for Mutation {}

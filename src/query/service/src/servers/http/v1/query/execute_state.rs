@@ -17,9 +17,9 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use ExecuteState::*;
+use databend_common_ast::parser::mask_raw_sql_secrets;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
-use databend_common_base::base::mask_connection_info;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -409,15 +409,15 @@ impl ExecuteState {
         arrow_features: Option<ArrowFeatures>,
         mut block_sender: Sender,
     ) -> Result<(), ExecutionError> {
-        let masked_sql = mask_connection_info(&sql);
-        let make_error = || format!("failed to start query: {masked_sql}");
+        // Error path only: parsing to mask the SQL is not paid by every query.
+        let make_error = || format!("failed to start query: {}", mask_raw_sql_secrets(&sql));
 
         info!("Preparing to plan SQL query");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true, params.as_ref())
             .await
-            .map_err(|err| err.display_with_sql(&masked_sql))
+            .map_err(|err| err.display_with_sql(&sql))
             .with_context(make_error)?;
 
         Self::apply_settings(

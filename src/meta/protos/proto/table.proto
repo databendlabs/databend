@@ -166,6 +166,9 @@ message TableMeta {
   // but preserves the sequence so re-adding cannot reuse historical statistics.
   optional uint32 partition_key_seq = 41;
   optional uint32 partition_key_id = 42;
+
+  // Masked source columns authorized to use original values in SELECT WHERE.
+  repeated uint32 masking_where_use_unmasked_value = 43;
 }
 
 message RowAccessPolicyColumnMap {

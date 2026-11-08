@@ -46,7 +46,6 @@ use crate::binder::wrap_cast;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CacheScan;
 use crate::plans::CacheSource;
@@ -346,7 +345,6 @@ impl Binder {
                     schema: DataSchemaRefExt::create(cache_scan_fields),
                 })
                 .build_unary(Aggregate {
-                    mode: AggregateMode::Initial,
                     group_items,
                     ..Default::default()
                 })

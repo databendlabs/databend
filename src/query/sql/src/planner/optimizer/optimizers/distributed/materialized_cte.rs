@@ -26,7 +26,7 @@ use crate::optimizer::ir::PVisitAction as VisitAction;
 use crate::optimizer::ir::RelExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::Exchange;
-use crate::plans::RelOperator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::ScalarExpr;
 
 /// Outcome of aligning materialized CTE placement with the distributed plan.
@@ -72,7 +72,7 @@ struct SerialProducerRedistributor;
 
 impl SerialProducerRedistributor {
     fn match_merge_backed_producer(expr: &PExpr) -> Result<Option<&PExpr>> {
-        let RelOperator::Sequence(_) = expr.plan() else {
+        let PhysicalRelOperator::Sequence(_) = expr.plan() else {
             return Ok(None);
         };
 
@@ -82,7 +82,7 @@ impl SerialProducerRedistributor {
             return Ok(None);
         }
 
-        let RelOperator::MaterializedCTE(_) = producer.plan() else {
+        let PhysicalRelOperator::MaterializedCTE(_) = producer.plan() else {
             return Err(ErrorCode::Internal(
                 "Sequence left child is expected to be MaterializedCTE".to_string(),
             ));
@@ -96,8 +96,8 @@ impl SerialProducerRedistributor {
             }
 
             match expr.plan() {
-                RelOperator::Exchange(Exchange::Merge) => return Ok(Some(producer)),
-                RelOperator::Exchange(_) => return Ok(None),
+                PhysicalRelOperator::Exchange(Exchange::Merge) => return Ok(Some(producer)),
+                PhysicalRelOperator::Exchange(_) => return Ok(None),
                 _ if expr.arity() == 1 => expr = expr.unary_child(),
                 _ => return Ok(None),
             }
@@ -138,7 +138,7 @@ impl ExprVisitor<crate::optimizer::ir::Physical> for SerialSequenceFinder {
             return Ok(VisitAction::SkipChildren);
         }
 
-        if matches!(expr.plan(), RelOperator::Sequence(_)) {
+        if matches!(expr.plan(), PhysicalRelOperator::Sequence(_)) {
             let left = expr.left_child();
             let physical_prop = RelExpr::with_p_expr(left).derive_physical_prop()?;
             if physical_prop.distribution == Distribution::Serial {

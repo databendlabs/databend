@@ -14,31 +14,39 @@
 
 use std::collections::HashMap;
 
+use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
 use databend_common_catalog::plan::Projection;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FilterVisitor;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
-use databend_storages_common_cache::CacheManager;
+use databend_common_expression::types::DataType;
+use databend_common_expression::visitor::ValueVisitor;
+use databend_storages_common_cache::CachedColumnArray;
+use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 mod adapter;
 mod deserialize;
+mod encode;
 mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
-pub(crate) use deserialize::ArrayCacheContext;
 pub use deserialize::column_chunks_to_record_batch;
-pub(crate) use deserialize::deserialize_column_chunks;
+pub use deserialize::dictionary_hint_fields;
+pub use encode::ColumnEncoding;
 pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
+use crate::io::FuseCaches;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
@@ -92,6 +100,9 @@ impl BlockReader {
         )
     }
 
+    /// `complete_column_chunks`: whether the raw chunks are whole column chunks. A narrowed
+    /// granule read carries its own byte range in `DataItem::GranuleData` and is cached under
+    /// it; a partial chunk without one is not cached.
     #[allow(clippy::too_many_arguments)]
     fn deserialize_parquet_chunks_inner(
         &self,
@@ -113,28 +124,27 @@ impl BlockReader {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
-        let array_cache = match self.put_cache {
-            true => CacheManager::instance().get_table_data_array_cache(),
-            false => None,
-        };
-        let record_batch = deserialize_column_chunks(
+        let has_selection = selection.is_some();
+        let parquet_selection = selection.map(|s| s.selection.clone());
+        let record_batch = column_chunks_to_record_batch(
             &self.original_schema,
             num_rows,
             &column_chunks,
             compression,
-            selection.map(|s| s.selection.clone()),
-            array_cache.as_ref().map(|cache| ArrayCacheContext {
-                cache,
-                location: block_path,
-                column_metas,
-                complete_column_chunks,
-            }),
+            parquet_selection,
+            self.parquet_hint_fields.as_ref(),
         )?;
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
+        let caches = FuseCaches::instance();
+        let array_cache = Some(&caches.column_arrays)
+            .filter(|cache| self.policy.memory.writes() && !has_selection && cache.is_enabled());
+
         for (i, field) in self.projected_schema.fields.iter().enumerate() {
-            let data_type = field.data_type().into();
+            let data_type: DataType = field.data_type().into();
+            let is_nested = field.is_nested();
+            let encoding = self.column_encodings.get(&field.column_id).copied();
 
             // NOTE, there is something tricky here:
             // - `column_chunks` always contains data of leaf columns
@@ -150,10 +160,80 @@ impl BlockReader {
             //
             //  Yes, it is too obscure, we need to polish it later.
 
-            let data_item = column_chunks.get(&field.column_id);
-            let value = match data_item {
-                Some(_) => {
-                    Value::from_arrow_rs(column_by_name(&record_batch, &name_paths[i]), &data_type)?
+            let value = match column_chunks.get(&field.column_id) {
+                Some(item @ (DataItem::RawData(_) | DataItem::GranuleData(..))) => {
+                    // get the deserialized arrow array, which may be a nested array
+                    let arrow_array = column_by_name(&record_batch, &name_paths[i]);
+                    // Nested columns are neither cached nor encoded. A raw chunk is cached
+                    // under its column meta only when it is the whole chunk.
+                    let byte_range = match item {
+                        DataItem::GranuleData(_, range) => Some(range.clone()),
+                        _ if complete_column_chunks => {
+                            column_metas.get(&field.column_id).map(|meta| {
+                                let (offset, len) = meta.offset_length();
+                                offset..offset + len
+                            })
+                        }
+                        _ => None,
+                    };
+                    let cache = array_cache.filter(|_| !is_nested && byte_range.is_some());
+                    let cache_key = || {
+                        let range = byte_range.clone().unwrap();
+                        TableDataCacheKey::new(
+                            block_path,
+                            field.column_id,
+                            range.start,
+                            range.end - range.start,
+                            &ColumnEncoding::cache_type_key(encoding, &data_type),
+                        )
+                    };
+                    match encoding {
+                        Some(encoding) => {
+                            let column = encoding.encode(
+                                arrow_array,
+                                &data_type,
+                                self.dictionary_ndv_ratio,
+                            )?;
+                            if let Some(cache) = cache {
+                                let memory_size = column.memory_size(false);
+                                cache.fill(
+                                    cache_key().as_ref(),
+                                    (CachedColumnArray::Column(column.clone()), memory_size),
+                                );
+                            }
+                            Value::Column(column)
+                        }
+                        None => {
+                            if let Some(cache) = cache {
+                                let array_memory_size = arrow_array.get_array_memory_size();
+                                cache.fill(
+                                    cache_key().as_ref(),
+                                    (arrow_array.clone().into(), array_memory_size),
+                                );
+                            }
+                            Value::from_arrow_rs(arrow_array, &data_type)?
+                        }
+                    }
+                }
+                Some(DataItem::ColumnArray(cached)) => {
+                    if is_nested {
+                        // a defensive check, should never happen
+                        return Err(ErrorCode::StorageOther(
+                            "unexpected nested field: nested leaf field hits cached",
+                        ));
+                    }
+                    let mut value = match &cached.0 {
+                        CachedColumnArray::Arrow(array) => {
+                            Value::from_arrow_rs(array.clone(), &data_type)?
+                        }
+                        CachedColumnArray::Column(column) => Value::Column(column.clone()),
+                    };
+                    if let Some(selection) = selection {
+                        let mut filter_visitor = FilterVisitor::new(&selection.bitmap);
+                        filter_visitor.visit_value(value)?;
+                        value = filter_visitor.take_result().unwrap();
+                    }
+                    value
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };

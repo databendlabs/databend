@@ -19,7 +19,6 @@ use databend_common_exception::Result;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::MutationPlan;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimize;
 use databend_common_sql::plans::Plan;
 
@@ -266,14 +265,14 @@ async fn test_mutation_preparation() -> Result<()> {
                 writeln!(
                     file,
                     "raw_plan:\n{}",
-                    raw.format_indent(Default::default(), &StatContext::default())?
+                    raw.format_indent(Default::default(), &ctx.stat_context()?)?
                 )?;
             }
             writeln!(file, "requested_distributed: {distributed}")?;
             writeln!(
                 file,
                 "optimized_plan:\n{}",
-                optimized.format_indent(Default::default(), &StatContext::default())?
+                optimized.format_indent(Default::default(), &ctx.stat_context()?)?
             )?;
             writeln!(
                 file,

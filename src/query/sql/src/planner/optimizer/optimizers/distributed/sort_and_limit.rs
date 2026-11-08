@@ -20,8 +20,8 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::PExpr;
 use crate::plans::Exchange;
 use crate::plans::Limit;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Sort;
 use crate::plans::TopN;
 
@@ -137,7 +137,7 @@ impl SortAndLimitPushDownOptimizer {
         let exchange_sexpr = s_expr.unary_child();
 
         match exchange_sexpr.plan() {
-            RelOperator::Exchange(exchange) => match exchange {
+            PhysicalRelOperator::Exchange(exchange) => match exchange {
                 // this is window shuffle sort or global hash join shuffle
                 Exchange::NodeToNodeHash(_) | Exchange::GlobalHash(_) => return Ok(s_expr.clone()),
                 Exchange::Merge | Exchange::MergeSort => {}
@@ -181,7 +181,7 @@ impl SortAndLimitPushDownOptimizer {
         let exchange_sexpr = s_expr.unary_child();
 
         match exchange_sexpr.plan() {
-            RelOperator::Exchange(exchange) => match exchange {
+            PhysicalRelOperator::Exchange(exchange) => match exchange {
                 Exchange::NodeToNodeHash(_) | Exchange::GlobalHash(_) => return Ok(s_expr.clone()),
                 Exchange::Merge | Exchange::MergeSort => {}
                 Exchange::Broadcast => unreachable!(),

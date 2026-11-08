@@ -20,6 +20,7 @@ use databend_common_base::runtime::spawn;
 use databend_common_cache::Cache;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::Symbol;
+use databend_common_sql::plans::UDFType;
 
 use super::*;
 
@@ -44,6 +45,7 @@ fn test_python_venv_wait_does_not_starve_query_workers() {
         data_type: Box::new(DataType::Number(NumberDataType::Int64)),
         headers: BTreeMap::new(),
         udf_type: UDFType::Script(Box::new(UDFScriptCode {
+            external_access_integrations: vec![],
             language: UDFLanguage::Python,
             runtime_version: String::new(),
             imports_stage_info: vec![],
@@ -168,6 +170,35 @@ fn test_python_venv_concurrent_misses_initialize_once() {
         .collect::<Vec<_>>();
     assert_eq!(installs.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert!(dirs.iter().all(|dir| dir.path() == dirs[0].path()));
+}
+
+#[test]
+fn test_python_venv_executable_directories_are_private() {
+    let source = venv::TempDir::new().unwrap();
+    std::fs::write(source.path().join("helper.py"), b"VALUE = 42\n").unwrap();
+    let archive = venv::archive_env(source.path()).unwrap();
+    let entry = venv::PyVenvCacheEntry::new(source.clone(), archive);
+    let first = entry.get_private(|| panic!("cache hit")).unwrap();
+    std::fs::write(first.path().join("helper.py"), b"VALUE = -1\n").unwrap();
+    let second = entry.get_private(|| panic!("cache hit")).unwrap();
+    assert_ne!(first.path(), second.path());
+    assert_ne!(first.path(), source.path());
+    for dir in [&source, &second] {
+        assert_eq!(
+            std::fs::read(dir.path().join("helper.py")).unwrap(),
+            b"VALUE = 42\n"
+        );
+    }
+    let worker = second.private_copy().unwrap();
+    std::fs::write(worker.path().join("helper.py"), b"VALUE = 99\n").unwrap();
+    assert_eq!(
+        std::fs::read(second.path().join("helper.py")).unwrap(),
+        b"VALUE = 42\n"
+    );
+    let first_path = first.path().to_path_buf();
+    drop(first);
+    assert!(!first_path.exists());
+    assert!(second.path().exists());
 }
 
 #[test]

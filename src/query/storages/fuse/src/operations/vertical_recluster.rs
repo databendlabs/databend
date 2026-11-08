@@ -242,6 +242,7 @@ impl VerticalReclusterSource {
                 ngram_filter_index_size: None,
                 vector_index_size: None,
                 vector_index_location: None,
+                vector_index_metas: None,
                 spatial_index_size: None,
                 spatial_index_location: None,
                 spatial_stats: None,
@@ -1690,8 +1691,13 @@ mod tests {
         let vertical = replay_columns(sources, &row_sources);
         let all_columns = (0..sources[0].len())
             .map(|field| {
-                Column::concat_columns(sources.iter().map(|columns| columns[field].clone()))
-                    .unwrap()
+                Column::concat_columns(
+                    sources
+                        .iter()
+                        .map(|columns| columns[field].clone())
+                        .collect(),
+                )
+                .unwrap()
             })
             .collect::<Vec<_>>();
         let order = compare_columns(all_columns.clone(), total_rows).unwrap();
@@ -1758,7 +1764,7 @@ mod tests {
         }
         assert_eq!(expected_start, expected_sources.len());
 
-        let merged = Column::concat_columns(key_batches.into_iter()).unwrap();
+        let merged = Column::concat_columns(key_batches).unwrap();
 
         let mut readers = vec![
             FuseLowLevelBlockReader::create(
@@ -1785,15 +1791,15 @@ mod tests {
                 output_batches
                     .push(gather_stream_batch(&mut readers, row_sources, &key_types[0]).unwrap());
             }
-            replayed_outputs.push(Column::concat_columns(output_batches.into_iter()).unwrap());
+            replayed_outputs.push(Column::concat_columns(output_batches).unwrap());
         }
         for reader in readers {
             reader.finish().unwrap();
         }
-        let replayed = Column::concat_columns(replayed_outputs.into_iter()).unwrap();
+        let replayed = Column::concat_columns(replayed_outputs).unwrap();
         assert_eq!(replayed, merged);
 
-        let all = Column::concat_columns([source0, source1].into_iter()).unwrap();
+        let all = Column::concat_columns(vec![source0, source1]).unwrap();
         let order = compare_columns(vec![all.clone()], all.len()).unwrap();
         assert_eq!(merged, take_columns(&[all], &order).unwrap().remove(0));
     }

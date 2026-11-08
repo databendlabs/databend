@@ -52,6 +52,13 @@ docker push k3d-registry.localhost:5111/databend-metaverifier:meta-chaos
 echo "install chaos mesh on k3d"
 curl -sSL https://mirrors.chaos-mesh.org/v2.6.3/install.sh | bash -s -- --k3s
 
+# Replace only toda: the bundled version disconnects FUSE on STATX requests.
+CHAOS_DAEMON_IMAGE=k3d-registry.localhost:5111/chaos-daemon:v2.6.3-toda-v0.3.0
+docker build --platform linux/amd64 -t "${CHAOS_DAEMON_IMAGE}" -f docker/meta-chaos/chaos-daemon.Dockerfile docker/meta-chaos
+docker push "${CHAOS_DAEMON_IMAGE}"
+kubectl -n chaos-mesh set image daemonset/chaos-daemon chaos-daemon="${CHAOS_DAEMON_IMAGE}"
+kubectl -n chaos-mesh rollout status daemonset/chaos-daemon --timeout=180s
+
 kubectl get pods -A -o wide
 kubectl get pvc -A
 

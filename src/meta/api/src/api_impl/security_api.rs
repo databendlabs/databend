@@ -130,20 +130,37 @@ where
                     };
 
                     if let Some(column_id) = column_ids.first() {
+                        if req.where_use_unmasked_value {
+                            new_table_meta
+                                .masking_where_use_unmasked_value
+                                .insert(*column_id);
+                        } else {
+                            new_table_meta
+                                .masking_where_use_unmasked_value
+                                .remove(column_id);
+                        }
                         new_table_meta
                             .column_mask_policy_columns_ids
                             .insert(*column_id, policy_map.clone());
                     }
                 }
-                SetSecurityPolicyAction::Unset(policy_id) => {
+                SetSecurityPolicyAction::Unset(column_id) => {
                     new_table_meta.column_mask_policy = None;
-                    // Remove entries where the policy ID matches
+                    // Unset only this column. Other columns may use the same policy
+                    // with a different WHERE option.
                     new_table_meta
                         .column_mask_policy_columns_ids
-                        .retain(|_, policy| policy.policy_id != *policy_id);
+                        .retain(|id, _| u64::from(*id) != *column_id);
                 }
             }
 
+            new_table_meta
+                .masking_where_use_unmasked_value
+                .retain(|column_id| {
+                    new_table_meta
+                        .column_mask_policy_columns_ids
+                        .contains_key(column_id)
+                });
             let mut txn_req = TxnRequest::new(
                 vec![
                     // table is not changed
@@ -159,7 +176,26 @@ where
                     .push(txn_cond_eq_keys_with_prefix(&share_ref_prefix, 0));
             }
 
-            let _ = update_mask_policy(&req.action, &mut txn_req, &req.tenant, req.table_id).await;
+            // Replacing a binding must not leave a policy->table reference behind. A
+            // policy can still be used by a different column in the same table.
+            for policy in table_meta.column_mask_policy_columns_ids.values() {
+                if !new_table_meta
+                    .column_mask_policy_columns_ids
+                    .values()
+                    .any(|binding| binding.policy_id == policy.policy_id)
+                {
+                    update_mask_policy(
+                        &SetSecurityPolicyAction::Unset(policy.policy_id),
+                        &mut txn_req,
+                        &req.tenant,
+                        req.table_id,
+                    )
+                    .await?;
+                }
+            }
+            if matches!(&req.action, SetSecurityPolicyAction::Set(..)) {
+                update_mask_policy(&req.action, &mut txn_req, &req.tenant, req.table_id).await?;
+            }
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 

@@ -19,6 +19,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
+use databend_common_http::TlsConfig;
 use databend_common_http::health_handler;
 use databend_common_http::home::debug_home_handler;
 #[cfg(feature = "memory-profiling")]
@@ -31,7 +32,6 @@ use log::warn;
 use poem::Endpoint;
 use poem::Route;
 use poem::get;
-use poem::listener::OpensslTlsConfig;
 use poem::post;
 
 use crate::servers::Server;
@@ -54,6 +54,7 @@ impl AdminService {
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::v1::config::config_handler))
+            .at("/v1/caches", get(super::v1::caches::caches_handler))
             .at("/v1/system", get(super::v1::system::system_handler))
             .at(
                 "/v1/status",
@@ -119,6 +120,34 @@ impl AdminService {
             .at(
                 "v1/queries/:query_id/graph_dump",
                 get(super::v1::query_dump::running_query_dump),
+            )
+            .at(
+                "/v1/queries/:query_id/perf",
+                get(super::v1::perf::query_perf_page),
+            )
+            .at(
+                "/v1/queries/:query_id/perf/start",
+                post(super::v1::perf::start_query_perf),
+            )
+            .at(
+                "/v1/queries/:query_id/perf/stop",
+                post(super::v1::perf::stop_query_perf),
+            )
+            .at(
+                "/v1/queries/:query_id/perf/status",
+                get(super::v1::perf::query_perf_status),
+            )
+            .at(
+                "/v1/queries/:query_id/perf/flamegraph",
+                get(super::v1::perf::query_perf_flamegraph),
+            )
+            .at("/v1/perf", get(super::v1::perf::process_perf_page))
+            .at("/v1/perf/start", post(super::v1::perf::start_process_perf))
+            .at("/v1/perf/stop", post(super::v1::perf::stop_process_perf))
+            .at("/v1/perf/status", get(super::v1::perf::process_perf_status))
+            .at(
+                "/v1/perf/flamegraph",
+                get(super::v1::perf::process_perf_flamegraph),
             )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
@@ -194,8 +223,8 @@ impl AdminService {
         route
     }
 
-    fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
-        let cfg = OpensslTlsConfig::new()
+    fn build_tls(config: &InnerConfig) -> Result<TlsConfig, std::io::Error> {
+        let cfg = TlsConfig::new()
             .cert_from_file(config.query.common.api_tls_server_cert.as_str())
             .key_from_file(config.query.common.api_tls_server_key.as_str());
 

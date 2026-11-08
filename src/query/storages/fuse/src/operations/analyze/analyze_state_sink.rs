@@ -47,9 +47,11 @@ use databend_common_statistics::Histogram;
 use databend_common_statistics::HistogramBucket;
 use databend_common_statistics::KllBucketBounds;
 use databend_common_storage::MetaHLL;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -221,10 +223,10 @@ enum HistogramState {
     /// and cannot be extended, so after an append rebase they miss the appended values
     /// while the rest of the statistics cover the latest snapshot. They are still
     /// published, as they would be after any later append: histograms are not gated by
-    /// statistics freshness and the optimizer scales them by row count. They also stay
-    /// flagged accurate, so the optimizer still caps a column's NDV by the histogram NDV
-    /// and may underestimate it by the distinct values only present in appended rows;
-    /// this is the same drift a later append causes and is accepted.
+    /// statistics freshness and the optimizer scales them by row count. The optimizer may
+    /// still cap a column's NDV by the histogram NDV and so underestimate it by the
+    /// distinct values only present in appended rows; this is the same drift a later
+    /// append causes and is accepted.
     Window {
         receivers: HashMap<u32, Receiver<DataBlock>>,
         buckets: HashMap<ColumnId, Vec<HistogramBucket>>,
@@ -256,12 +258,6 @@ impl HistogramState {
 
     fn enabled(&self) -> bool {
         !matches!(self, HistogramState::None)
-    }
-
-    /// Window buckets come from exact SQL; the KLL variants are sketches. Stays true for
-    /// rebased Window buckets, see [`HistogramState::Window`].
-    fn accurate(&self) -> bool {
-        matches!(self, HistogramState::Window { .. })
     }
 }
 
@@ -466,7 +462,10 @@ impl SinkAnalyzeState {
     async fn commit_statistics(&mut self) -> Result<()> {
         let table = self.table.refresh(self.ctx.as_ref()).await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let Some(snapshot) = table.read_table_snapshot().await? else {
+        let Some(snapshot) = table
+            .read_table_snapshot_with_policy(self.ctx.cache_policy())
+            .await?
+        else {
             return Ok(());
         };
         self.rebase_statistics(table, snapshot.clone()).await?;
@@ -486,11 +485,12 @@ impl SinkAnalyzeState {
             .await?;
         // ANALYZE bypasses the mutation sinks but still buffers a snapshot in an explicit
         // transaction. Record a known zero so commit retries preserve the source's
-        // cumulative counters instead of treating them as missing.
+        // cumulative counters instead of treating them as missing. Its full refresh
+        // is not a write delta, so it contributes no statistics to replay.
         self.ctx
             .txn_mgr()
             .lock()
-            .add_logical_change_delta(table.get_id(), (0, 0));
+            .add_table_delta(table.get_id(), (0, 0), &BlockHLL::new(), 0);
         Ok(())
     }
 
@@ -560,15 +560,13 @@ impl SinkAnalyzeState {
             return Ok(None);
         }
 
-        let accurate = self.histogram.accurate();
         let histograms = self
             .histogram_buckets()?
             .into_iter()
             .map(|(column_id, buckets)| {
                 Ok((
                     column_id,
-                    Histogram::try_from_buckets(accurate, buckets, None)
-                        .map_err(ErrorCode::Internal)?,
+                    Histogram::try_from_buckets(buckets).map_err(ErrorCode::Internal)?,
                 ))
             })
             .collect::<Result<_>>()?;
@@ -942,7 +940,11 @@ impl KllBucketScanner {
         }
         let projection = Projection::Columns(field_indices);
         Ok(Some(Self {
-            block_reader: table.create_block_reader(ctx.clone(), projection, false)?,
+            block_reader: table.create_block_reader(
+                ctx.clone(),
+                projection,
+                CachePolicy::READ_ONLY,
+            )?,
             settings: ReadSettings::from_ctx(ctx)?,
             storage_format: table.get_storage_format(),
             collector_indices,
@@ -980,7 +982,7 @@ impl KllBucketScanner {
         let (mut num_blocks, mut num_rows) = (0, 0);
         for chunk in segments.chunks(max_threads * 4) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
             for segment in segments {
                 for block_meta in segment?.block_metas()? {

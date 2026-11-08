@@ -27,6 +27,17 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
+/// Vector scores of a block, attached by vector pruning.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum VectorScores {
+    /// The rows of a vector TopN and their scores, as (row, score): the scan
+    /// outputs only these rows.
+    TopN(Vec<(u32, F32)>),
+    /// The score of every row, in row order: the scan outputs every row. Rows
+    /// without a score, such as NULL vectors, hold the placeholder `f32::MAX`.
+    All(Vec<F32>),
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BlockMetaIndex {
     /// {segment|block}_id is used in `InternalColumnMeta` to generate internal column data,
@@ -49,8 +60,8 @@ pub struct BlockMetaIndex {
     pub matched_rows: Option<Vec<usize>>,
     // Optional scores for the matched rows.
     pub matched_scores: Option<Vec<F32>>,
-    // The vector topn rows and scores in the block.
-    pub vector_scores: Option<Vec<(usize, F32)>>,
+    /// The vector scores of the rows the scan outputs.
+    pub vector_scores: Option<VectorScores>,
     // The optional meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMetaIndex>,
 }

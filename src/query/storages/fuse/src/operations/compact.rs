@@ -25,6 +25,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -58,7 +59,7 @@ impl FuseTable {
         num_segment_limit: Option<usize>,
     ) -> Result<()> {
         let compact_options = if let Some(v) = self
-            .compact_options_with_segment_limit(num_segment_limit)
+            .compact_options_with_segment_limit(num_segment_limit, ctx.cache_policy())
             .await?
         {
             v
@@ -139,6 +140,7 @@ impl FuseTable {
                 None,
                 table_meta_timestamps,
                 false,
+                None,
             )
         })
     }
@@ -150,7 +152,7 @@ impl FuseTable {
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
         let compact_options = if let Some(v) = self
-            .compact_options(limits.segment_limit, limits.block_limit)
+            .compact_options(limits.segment_limit, limits.block_limit, ctx.cache_policy())
             .await?
         {
             v
@@ -184,8 +186,9 @@ impl FuseTable {
     async fn compact_options_with_segment_limit(
         &self,
         num_segment_limit: Option<usize>,
+        policy: CachePolicy,
     ) -> Result<Option<CompactOptions>> {
-        self.compact_options(num_segment_limit, None).await
+        self.compact_options(num_segment_limit, None, policy).await
     }
 
     #[async_backtrace::framed]
@@ -193,8 +196,9 @@ impl FuseTable {
         &self,
         num_segment_limit: Option<usize>,
         num_block_limit: Option<usize>,
+        policy: CachePolicy,
     ) -> Result<Option<CompactOptions>> {
-        let snapshot_opt = self.read_table_snapshot().await?;
+        let snapshot_opt = self.read_table_snapshot_with_policy(policy).await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
         } else {

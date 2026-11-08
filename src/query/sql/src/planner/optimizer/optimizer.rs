@@ -41,7 +41,7 @@ use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
-use crate::optimizer::optimizers::rule::RuleEagerAggregation;
+use crate::optimizer::optimizers::rule::EagerAggregationOptimizer;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::pipeline::OptimizerPipeline;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
@@ -320,7 +320,7 @@ pub(super) async fn query_logical_pipeline(
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
         // Collect statistics for SExpr nodes to support cost estimation
         .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
-        // Normalize aggregate, it should be executed before RuleSplitAggregate.
+        // Normalize aggregate, it should be executed before physical lowering.
         .add(RuleNormalizeAggregateOptimizer::new())
         // Pull up and infer filter.
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
@@ -341,10 +341,6 @@ pub(super) async fn query_logical_pipeline(
         )
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
-        // Run post rewrite rules
-        .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
-            RuleID::SplitAggregate,
-        ]))
         // Apply DPhyp algorithm for cost-based join reordering
         .add(DPhpyOptimizer::new(opt_ctx.clone()))
         // Eliminate self joins when possible
@@ -360,7 +356,7 @@ pub(super) async fn query_logical_pipeline(
         )
         .add_if(
             settings.get_force_eager_aggregate()?,
-            RuleEagerAggregation::new(opt_ctx.get_metadata()),
+            EagerAggregationOptimizer::new(opt_ctx.get_metadata()),
         );
     Ok(pipeline)
 }
@@ -433,11 +429,7 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             opt_ctx.clone(),
             &DEFAULT_REWRITE_RULES,
         ))
-        // Run post rewrite rules
-        .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
-            RuleID::SplitAggregate,
-        ]))
-        // Cost based optimization
+        // Cost based join optimization still operates on logical aggregates.
         .add(DPhpyOptimizer::new(opt_ctx.clone()));
 
     let input = pipeline.execute().await?;

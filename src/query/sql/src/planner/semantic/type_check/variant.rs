@@ -46,6 +46,7 @@ use crate::binder::NameResolutionResult;
 use crate::binder::VirtualColumnName;
 use crate::binder::wrap_cast;
 use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
@@ -175,7 +176,11 @@ pub(super) fn json_op_core_function(op: &databend_common_ast::ast::JsonOperator)
 //               success → BoundColumnRef
 //               fail → get_by_keypath FunctionCall
 //
-//   try_pushdown_variant_paths(target)  (sole gate + bind)
+//   try_pushdown_variant_paths(target)
+//     direct leaf → try_bind_variant_paths
+//     conditional/object-safe expression → rewrite untyped paths, keep outer cast
+//
+//   try_bind_variant_paths(target)  (leaf gate + bind)
 //     1. allow_virtual_column
 //     2. base is BoundColumnRef
 //     3. BaseTableColumn | VirtualColumn → full keypaths
@@ -366,6 +371,152 @@ where A: super::TypeCheckAdapter
         }
     }
 
+    /// Resolve paths through a small set of equivalent expression shapes before trying the
+    /// existing leaf binding. In particular, casts must stay outside conditional branches:
+    /// reading a typed virtual column in an unselected branch can introduce conversion errors.
+    fn try_pushdown_variant_paths(
+        &mut self,
+        span: Span,
+        base: &ScalarExpr,
+        keypaths: &OwnedKeyPaths,
+        target: PushdownTarget,
+    ) -> Option<Box<(ScalarExpr, DataType)>> {
+        if let Some(result) = self.try_bind_variant_paths(span, base, keypaths, target.clone()) {
+            return Some(result);
+        }
+        let scalar = self.try_rewrite_variant_paths(span, base, keypaths, 0)?;
+        let data_type = DataType::Nullable(Box::new(DataType::Variant));
+        let (scalar, data_type) = match target {
+            PushdownTarget::Variant => (scalar, data_type),
+            PushdownTarget::Cast(target, is_try) => {
+                let data_type = DataType::from(&target).wrap_nullable();
+                let scalar = CastExpr {
+                    span,
+                    is_try,
+                    argument: Box::new(scalar),
+                    target_type: Box::new(data_type.clone()),
+                }
+                .into();
+                (scalar, data_type)
+            }
+        };
+        Some(Box::new((scalar, data_type)))
+    }
+
+    /// No generic function is traversed here. The depth bound also limits expansion of
+    /// adversarial nested conditionals. Unknown shapes retain their original evaluation.
+    fn try_rewrite_variant_paths(
+        &mut self,
+        span: Span,
+        base: &ScalarExpr,
+        keypaths: &OwnedKeyPaths,
+        depth: usize,
+    ) -> Option<ScalarExpr> {
+        if depth >= 32 {
+            return None;
+        }
+        if let Some(result) =
+            self.try_bind_variant_paths(span, base, keypaths, PushdownTarget::Variant)
+        {
+            return Some(result.0);
+        }
+        // Implicit nullability casts do not change the JSON value. Do not traverse any
+        // other cast, including conversions from String to Variant.
+        if let ScalarExpr::CastExpr(cast) = base
+            && cast.target_type.remove_nullable() == DataType::Variant
+            && cast.argument.data_type().remove_nullable() == DataType::Variant
+        {
+            return self.try_rewrite_variant_paths(span, &cast.argument, keypaths, depth + 1);
+        }
+        let ScalarExpr::FunctionCall(call) = base else {
+            return None;
+        };
+        if call.func_name == "if"
+            && call.return_type.remove_nullable() == DataType::Variant
+            && call.arguments.len() >= 3
+            && call.arguments.len() % 2 == 1
+        {
+            let mut arguments = Vec::with_capacity(call.arguments.len());
+            let last = call.arguments.len() - 1;
+            for (index, argument) in call.arguments.iter().enumerate() {
+                if index < last && index % 2 == 0 {
+                    arguments.push(argument.clone());
+                } else {
+                    arguments.push(
+                        self.try_rewrite_variant_paths(span, argument, keypaths, depth + 1)
+                            .unwrap_or_else(|| {
+                                Self::resolve_variant_map_access_fallback(
+                                    argument.clone(),
+                                    keypaths,
+                                )
+                                .0
+                            }),
+                    );
+                }
+            }
+            return Some(
+                FunctionCall {
+                    span: call.span,
+                    func_name: call.func_name.clone(),
+                    params: call.params.clone(),
+                    arguments,
+                    return_type: Box::new(DataType::Nullable(Box::new(DataType::Variant))),
+                }
+                .into(),
+            );
+        }
+        if call.func_name != "object_delete" || call.arguments.len() < 2 {
+            return None;
+        }
+        let source = &call.arguments[0];
+        if !is_known_object_or_null(source) {
+            // OBJECT_DELETE raises on non-objects; a path read does not preserve that check.
+            return None;
+        }
+        let Some(OwnedKeyPath::Name(first)) = keypaths.paths.first() else {
+            return None;
+        };
+        let mut deleted = false;
+        for key in &call.arguments[1..] {
+            match key {
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::String(key),
+                    ..
+                }) => {
+                    deleted |= key == first;
+                }
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Null,
+                    ..
+                }) => {}
+                _ => return None,
+            }
+        }
+        if deleted {
+            // Returning NULL must not discard evaluation of an object constructor's
+            // arguments (which may throw or be volatile). Only constants may be skipped.
+            if !matches!(
+                source,
+                ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(..)
+            ) {
+                return None;
+            }
+            return Some(ScalarExpr::TypedConstantExpr(
+                ConstantExpr {
+                    span,
+                    value: Scalar::Null,
+                },
+                DataType::Nullable(Box::new(DataType::Variant)),
+            ));
+        }
+        Some(
+            self.try_rewrite_variant_paths(span, source, keypaths, depth + 1)
+                .unwrap_or_else(|| {
+                    Self::resolve_variant_map_access_fallback(source.clone(), keypaths).0
+                }),
+        )
+    }
+
     /// Try to push a static variant JSON path down as a virtual column on the storage layer.
     ///
     /// Returns `Some(BoundColumnRef)` when `base` resolves to a base-table variant column or an
@@ -374,7 +525,7 @@ where A: super::TypeCheckAdapter
     /// to cast it to a concrete type up-front (see `PushdownTarget`).
     ///
     /// `keypaths` is borrowed; it is only cloned when pushdown actually binds a virtual column.
-    fn try_pushdown_variant_paths(
+    fn try_bind_variant_paths(
         &mut self,
         span: Span,
         base: &ScalarExpr,
@@ -842,11 +993,34 @@ where A: super::TypeCheckAdapter
     }
 }
 
+/// These expressions either produce an object/SQL NULL or raise their own error. Keeping
+/// the source expression evaluated preserves those errors when eliminating OBJECT_DELETE.
+/// A Variant column, PARSE_JSON, and JSON null do not establish objectness.
+fn is_known_object_or_null(scalar: &ScalarExpr) -> bool {
+    match scalar {
+        ScalarExpr::ConstantExpr(constant) | ScalarExpr::TypedConstantExpr(constant, _) => {
+            match &constant.value {
+                Scalar::Null => true,
+                Scalar::Variant(value) => jsonb::RawJsonb::new(value).is_object().unwrap_or(false),
+                _ => false,
+            }
+        }
+        ScalarExpr::FunctionCall(call) => matches!(
+            call.func_name.as_str(),
+            "object_construct"
+                | "object_construct_keep_null"
+                | "try_object_construct"
+                | "try_object_construct_keep_null"
+        ),
+        _ => false,
+    }
+}
+
 /// Target of a variant JSON path pushdown to the storage layer.
 ///
 /// Invariant: `Cast`'s `TableDataType` is always non-nullable. Pushdown results are always
 /// nullable; outer `Nullable` is stripped here and re-applied when the virtual column is bound.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum PushdownTarget {
     Variant,
     Cast(TableDataType, bool),

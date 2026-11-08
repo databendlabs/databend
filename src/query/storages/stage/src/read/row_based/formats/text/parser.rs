@@ -67,11 +67,22 @@ impl<'a> Iterator for TextFieldReader<'a> {
     }
 }
 
-pub(super) fn decode_tsv_field<'a>(col_data: &[u8], output: &'a mut Vec<u8>) -> Result<&'a [u8]> {
+pub(super) fn escape_delimiters(field_delimiter: Option<u8>, record_delimiter: u8) -> Vec<u8> {
+    match field_delimiter {
+        Some(delimiter) if delimiter != record_delimiter => vec![delimiter, record_delimiter],
+        _ => vec![record_delimiter],
+    }
+}
+
+pub(super) fn decode_tsv_field<'a>(
+    col_data: &[u8],
+    output: &'a mut Vec<u8>,
+    delimiters: &[u8],
+) -> Result<&'a [u8]> {
     let mut cursor = Cursor::new(col_data);
     output.clear();
     cursor
-        .read_escaped_string_text(output)
+        .read_escaped_string_text(output, delimiters)
         .map_err(|e| ErrorCode::BadBytes(e.to_string()))?;
     Ok(output.as_slice())
 }
@@ -79,9 +90,10 @@ pub(super) fn decode_tsv_field<'a>(col_data: &[u8], output: &'a mut Vec<u8>) -> 
 pub(super) fn decode_tsv_field_with_trim<'a>(
     col_data: &[u8],
     output: &'a mut Vec<u8>,
+    delimiters: &[u8],
     trim_space: bool,
 ) -> Result<&'a [u8]> {
-    let field = decode_tsv_field(col_data, output)?;
+    let field = decode_tsv_field(col_data, output, delimiters)?;
     Ok(if trim_space {
         trim_ascii_space(field)
     } else {
@@ -97,6 +109,7 @@ struct InferSchemaIter {
     field_buf: Vec<u8>,
     record_delimiter: u8,
     field_delimiter: u8,
+    escape_delimiters: Vec<u8>,
     trim_cr: bool,
     trim_space: bool,
 }
@@ -116,8 +129,13 @@ impl Iterator for InferSchemaIter {
             if let Some(fields) = &mut self.current_fields {
                 if let Some((i, field)) = fields.next() {
                     return Some(
-                        decode_tsv_field_with_trim(field, &mut self.field_buf, self.trim_space)
-                            .map(|field| (i, String::from_utf8_lossy(field).to_string())),
+                        decode_tsv_field_with_trim(
+                            field,
+                            &mut self.field_buf,
+                            &self.escape_delimiters,
+                            self.trim_space,
+                        )
+                        .map(|field| (i, String::from_utf8_lossy(field).to_string())),
                     );
                 } else {
                     self.current_fields = None;
@@ -201,6 +219,7 @@ pub fn parse_tsv_records_for_infer_schema(
 
         record_delimiter: record_delimiter_byte,
         field_delimiter,
+        escape_delimiters: escape_delimiters(Some(field_delimiter), record_delimiter_byte),
         trim_cr,
         trim_space: params.trim_space,
     };
@@ -232,6 +251,72 @@ mod tests {
             b"d".as_slice(),
             b""
         ]);
+    }
+
+    #[test]
+    fn test_escape_delimiters() {
+        assert_eq!(escape_delimiters(Some(b'|'), b'\n'), b"|\n");
+        assert_eq!(escape_delimiters(Some(b'|'), b'|'), b"|");
+        assert_eq!(escape_delimiters(None, b'\n'), b"\n");
+    }
+
+    #[test]
+    fn test_decode_tsv_field_delimiters() -> Result<()> {
+        let mut output = Vec::new();
+        assert_eq!(
+            decode_tsv_field(br"a\|b\,c\;d\#e\q\N", &mut output, b"|;")?,
+            br"a|b\,c;d\#e\q\N"
+        );
+        assert_eq!(
+            decode_tsv_field(br"\\|\\\|\x7c\n\t\r\0", &mut output, b"|\n")?,
+            b"\\|\\||\n\t\r\0"
+        );
+        assert_eq!(decode_tsv_field(br"a\|b", &mut output, b"\t\n")?, br"a\|b");
+        Ok(())
+    }
+
+    #[test]
+    fn test_tsv_custom_delimiter_round_trip() -> Result<()> {
+        use databend_common_formats::field_encoder::write_tsv_escaped_string;
+
+        let values = [
+            b"a|b,c;d#e".as_slice(),
+            b"|,;#",
+            b"\\|\\,\\;\\#",
+            b"\\q\\N\t\n\r\0",
+            b"",
+        ];
+        for &delimiter in b"|,;#\t" {
+            for value in values {
+                let mut encoded = Vec::new();
+                let mut decoded = Vec::new();
+                write_tsv_escaped_string(value, &mut encoded, delimiter);
+                assert_eq!(
+                    decode_tsv_field(&encoded, &mut decoded, &[delimiter, b'\n'])?,
+                    value
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_tsv_records_for_infer_schema_custom_delimiters() -> Result<()> {
+        let params = TextFileFormatParams {
+            field_delimiter: "|".to_string(),
+            record_delimiter: ";".to_string(),
+            ..TextFileFormatParams::default()
+        };
+        let records =
+            parse_tsv_records_for_infer_schema(b"a\\|b|c\\;d;\\\\\\||\\q;", &params, true)?
+                .collect::<Result<Vec<_>>>()?;
+        assert_eq!(records, vec![
+            (0, "a|b".to_string()),
+            (1, "c;d".to_string()),
+            (0, "\\|".to_string()),
+            (1, "\\q".to_string()),
+        ]);
+        Ok(())
     }
 
     #[test]
@@ -270,11 +355,11 @@ mod tests {
         let mut field_buf = Vec::new();
 
         assert_eq!(
-            decode_tsv_field_with_trim(b"  abc\\ ", &mut field_buf, true)?,
+            decode_tsv_field_with_trim(b"  abc\\ ", &mut field_buf, b"\t\n", true)?,
             b"abc\\"
         );
         assert_eq!(
-            decode_tsv_field_with_trim(b"  abc\\t", &mut field_buf, true)?,
+            decode_tsv_field_with_trim(b"  abc\\t", &mut field_buf, b"\t\n", true)?,
             b"abc"
         );
 

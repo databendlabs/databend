@@ -95,7 +95,6 @@ pub struct HashJoinBuildState {
     pub(crate) method: HashMethodKind,
     /// The size of each entry in HashTable.
     pub(crate) entry_size: AtomicUsize,
-    pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     /// `build_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in build schema.
     pub(crate) build_projections: BTreeSet<usize>,
@@ -157,7 +156,6 @@ impl HashJoinBuildState {
             barrier: Barrier::new(num_threads),
             method,
             entry_size: Default::default(),
-            raw_entry_spaces: Default::default(),
             build_projections: build_projections.clone(),
             build_worker_num: Default::default(),
             build_hash_table_tasks: Default::default(),
@@ -394,6 +392,8 @@ impl HashJoinBuildState {
             self.entry_size.store(entry_size, Ordering::Release);
             let hash_table = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hash_table = hash_join_hash_table;
+            // Entries of the previous spill round's table are no longer referenced.
+            self.hash_join_state.raw_entry_spaces.lock().clear();
             self.merge_into_try_generate_matched_memory();
         }
         Ok(())
@@ -798,7 +798,7 @@ impl HashJoinBuildState {
         }
 
         {
-            let mut raw_entry_spaces = self.raw_entry_spaces.lock();
+            let mut raw_entry_spaces = self.hash_join_state.raw_entry_spaces.lock();
             raw_entry_spaces.extend(local_raw_entry_spaces);
         }
         Ok(())

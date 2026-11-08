@@ -111,6 +111,7 @@ impl Binder {
             strategy: MutationStrategy::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
+            expected_ttl: None,
         };
 
         let plan = self.bind_mutation(bind_context, mutation).await?;

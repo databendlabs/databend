@@ -1,0 +1,326 @@
+=== eager_preparation_exposes_self_join ===
+description: Self-join elimination must consume logical aggregates before the late split boundary.
+sql: SELECT raw.k, sum(raw.v) FROM t raw JOIN
+          (SELECT k, sum(v) AS total FROM t GROUP BY k HAVING sum(v) > 10) strict
+          ON raw.k = strict.k GROUP BY raw.k
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(raw.v) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        └── Join(Inner)
+            ├── build keys: [t.k (#2)]
+            ├── probe keys: [t.k (#0)]
+            ├── other filters: []
+            ├── EvalScalar
+            │   ├── scalars: [t.k (#2) AS (#2), sum(v) (#4) AS (#4)]
+            │   └── Filter
+            │       ├── filters: [gt(sum(v) (#4), 10)]
+            │       └── Aggregate(Initial)
+            │           ├── group items: [t.k (#2) AS (#2)]
+            │           ├── aggregate functions: [sum(t.v (#3)) AS (#4)]
+            │           └── EvalScalar
+            │               ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3)]
+            │               └── Scan
+            │                   ├── table: default.t (#1)
+            │                   ├── filters: []
+            │                   ├── order by: []
+            │                   └── limit: NONE
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), _eager_final_sum (#8) AS (#5)]
+└── Aggregate(Final)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(sum(raw.v) (#5)) AS (#8)]
+    └── Aggregate(Partial)
+        ├── group items: [t.k (#0) AS (#0)]
+        ├── aggregate functions: [sum(sum(raw.v) (#5)) AS (#8)]
+        └── EvalScalar
+            ├── scalars: [t.k (#2) AS (#0), t.k (#2) AS (#2), sum(v) (#4) AS (#4), sum(v) (#4) AS (#5)]
+            └── Filter
+                ├── filters: [gt(sum(v) (#4), 10)]
+                └── Aggregate(Final)
+                    ├── group items: [t.k (#2) AS (#2)]
+                    ├── aggregate functions: [sum(t.v (#3)) AS (#4)]
+                    └── Aggregate(Partial)
+                        ├── group items: [t.k (#2) AS (#2)]
+                        ├── aggregate functions: [sum(t.v (#3)) AS (#4)]
+                        └── Scan
+                            ├── table: default.t (#1)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+=== unsuccessful_eager_preparation_is_discarded ===
+description: Self-join elimination must consume logical aggregates before the late split boundary.
+sql: SELECT raw.k, sum(raw.v) FROM t raw JOIN
+          (SELECT k, sum(v) AS total FROM t WHERE v > 0 GROUP BY k HAVING sum(v) > 10) strict
+          ON raw.k = strict.k GROUP BY raw.k
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(raw.v) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        └── Join(Inner)
+            ├── build keys: [t.k (#2)]
+            ├── probe keys: [t.k (#0)]
+            ├── other filters: []
+            ├── EvalScalar
+            │   ├── scalars: [t.k (#2) AS (#2), sum(v) (#4) AS (#4)]
+            │   └── Filter
+            │       ├── filters: [gt(sum(v) (#4), 10)]
+            │       └── Aggregate(Initial)
+            │           ├── group items: [t.k (#2) AS (#2)]
+            │           ├── aggregate functions: [sum(t.v (#3)) AS (#4)]
+            │           └── EvalScalar
+            │               ├── scalars: [t.k (#2) AS (#2), t.v (#3) AS (#3)]
+            │               └── Filter
+            │                   ├── filters: [gt(t.v (#3), 0)]
+            │                   └── Scan
+            │                       ├── table: default.t (#1)
+            │                       ├── filters: []
+            │                       ├── order by: []
+            │                       └── limit: NONE
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [t.k (#0) AS (#0)]
+├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+└── Aggregate(Partial)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1), sum(v) (#4) AS (#6), t.k (#2) AS (#7)]
+        └── Join(Inner)
+            ├── build keys: [t.k (#0)]
+            ├── probe keys: [t.k (#2)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.t (#0)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Filter
+                ├── filters: [gt(sum(v) (#4), 10)]
+                └── Aggregate(Final)
+                    ├── group items: [t.k (#2) AS (#2)]
+                    ├── aggregate functions: [sum(t.v (#3)) AS (#4)]
+                    └── Aggregate(Partial)
+                        ├── group items: [t.k (#2) AS (#2)]
+                        ├── aggregate functions: [sum(t.v (#3)) AS (#4)]
+                        └── Scan
+                            ├── table: default.t (#1)
+                            ├── filters: [gt(t.v (#3), 0)]
+                            ├── order by: []
+                            └── limit: NONE
+
+=== same_rows_eliminate_loose_aggregate ===
+description: Self-join elimination must consume logical aggregates before the late split boundary.
+sql: SELECT strict.k, strict.total, loose.total + 1 FROM
+          (SELECT k, sum(v) AS total FROM t GROUP BY k HAVING sum(v) > 10) strict
+          JOIN (SELECT k, sum(v) AS total FROM t GROUP BY k) loose ON strict.k = loose.k
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2), plus(sum(v) (#5), 1) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [t.k (#3)]
+    ├── probe keys: [t.k (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [t.k (#3) AS (#3), sum(v) (#5) AS (#5)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: [t.k (#3) AS (#3)]
+    │       ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+    │       └── EvalScalar
+    │           ├── scalars: [t.k (#3) AS (#3), t.v (#4) AS (#4)]
+    │           └── Scan
+    │               ├── table: default.t (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        └── Filter
+            ├── filters: [gt(sum(v) (#2), 10)]
+            └── Aggregate(Initial)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                └── EvalScalar
+                    ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2), plus(sum(v) (#5), 1) AS (#6), t.k (#3) AS (#7)]
+└── EvalScalar
+    ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2), t.k (#0) AS (#3), sum(v) (#2) AS (#5)]
+    └── Filter
+        ├── filters: [gt(sum(v) (#2), 10)]
+        └── Aggregate(Final)
+            ├── group items: [t.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+            └── Aggregate(Partial)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+=== same_filtered_rows_eliminate_loose_aggregate ===
+description: Self-join elimination must consume logical aggregates before the late split boundary.
+sql: SELECT strict.k, strict.total, loose.total + 1 FROM
+          (SELECT k, sum(v) AS total FROM t WHERE v > 0 GROUP BY k HAVING sum(v) > 10) strict
+          JOIN (SELECT k, sum(v) AS total FROM t WHERE v > 0 GROUP BY k) loose ON strict.k = loose.k
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2), plus(sum(v) (#5), 1) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [t.k (#3)]
+    ├── probe keys: [t.k (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [t.k (#3) AS (#3), sum(v) (#5) AS (#5)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: [t.k (#3) AS (#3)]
+    │       ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+    │       └── EvalScalar
+    │           ├── scalars: [t.k (#3) AS (#3), t.v (#4) AS (#4)]
+    │           └── Filter
+    │               ├── filters: [gt(t.v (#4), 0)]
+    │               └── Scan
+    │                   ├── table: default.t (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        └── Filter
+            ├── filters: [gt(sum(v) (#2), 10)]
+            └── Aggregate(Initial)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                └── EvalScalar
+                    ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                    └── Filter
+                        ├── filters: [gt(t.v (#1), 0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2), plus(sum(v) (#5), 1) AS (#6), t.k (#3) AS (#7)]
+└── EvalScalar
+    ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2), t.k (#0) AS (#3), sum(v) (#2) AS (#5)]
+    └── Filter
+        ├── filters: [gt(sum(v) (#2), 10)]
+        └── Aggregate(Final)
+            ├── group items: [t.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+            └── Aggregate(Partial)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: [gt(t.v (#1), 0)]
+                    ├── order by: []
+                    └── limit: NONE
+
+=== different_rows_keep_both_aggregates ===
+description: Self-join elimination must consume logical aggregates before the late split boundary.
+sql: SELECT strict.k, strict.total, loose.total + 1 FROM
+          (SELECT k, sum(v) AS total FROM t WHERE v > 0 GROUP BY k HAVING sum(v) > 10) strict
+          JOIN (SELECT k, sum(v) AS total FROM t GROUP BY k) loose ON strict.k = loose.k
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2), plus(sum(v) (#5), 1) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [t.k (#3)]
+    ├── probe keys: [t.k (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [t.k (#3) AS (#3), sum(v) (#5) AS (#5)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: [t.k (#3) AS (#3)]
+    │       ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+    │       └── EvalScalar
+    │           ├── scalars: [t.k (#3) AS (#3), t.v (#4) AS (#4)]
+    │           └── Scan
+    │               ├── table: default.t (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        └── Filter
+            ├── filters: [gt(sum(v) (#2), 10)]
+            └── Aggregate(Initial)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                └── EvalScalar
+                    ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                    └── Filter
+                        ├── filters: [gt(t.v (#1), 0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2), plus(sum(v) (#5), 1) AS (#6), t.k (#3) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [t.k (#0)]
+    ├── probe keys: [t.k (#3)]
+    ├── other filters: []
+    ├── Filter
+    │   ├── filters: [gt(sum(v) (#2), 10)]
+    │   └── Aggregate(Final)
+    │       ├── group items: [t.k (#0) AS (#0)]
+    │       ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+    │       └── Aggregate(Partial)
+    │           ├── group items: [t.k (#0) AS (#0)]
+    │           ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+    │           └── Scan
+    │               ├── table: default.t (#0)
+    │               ├── filters: [gt(t.v (#1), 0)]
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Aggregate(Final)
+        ├── group items: [t.k (#3) AS (#3)]
+        ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+        └── Aggregate(Partial)
+            ├── group items: [t.k (#3) AS (#3)]
+            ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+            └── Scan
+                ├── table: default.t (#1)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+

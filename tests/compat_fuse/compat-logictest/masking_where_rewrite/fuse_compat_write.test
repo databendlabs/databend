@@ -1,0 +1,10 @@
+# An older query rewrites TableMeta. Its encoder does not know field 43, so the
+# WHERE authorization is dropped rather than carried through.
+
+statement ok
+ALTER TABLE compat_masking_where COMMENT = 'rewritten by an older query'
+
+query I
+SELECT count(*) FROM compat_masking_where WHERE secret = 'alice'
+----
+0

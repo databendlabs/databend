@@ -39,7 +39,6 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatContext;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
@@ -779,7 +778,6 @@ fn try_build_state_rollup(
     Ok(Some(SExpr::create_unary(
         Arc::new(
             Aggregate {
-                mode: AggregateMode::Initial,
                 group_items: query_aggregate.group_items.clone(),
                 aggregate_functions,
                 from_distinct: false,
@@ -835,7 +833,6 @@ fn build_rollup_aggregate(
     }
 
     Ok(Some(Aggregate {
-        mode: AggregateMode::Initial,
         group_items,
         aggregate_functions,
         from_distinct: false,
@@ -1048,7 +1045,6 @@ mod tests {
         let with_aggregate = SExpr::create_unary(
             Arc::new(
                 Aggregate {
-                    mode: AggregateMode::Initial,
                     ..Default::default()
                 }
                 .into(),
@@ -1056,8 +1052,11 @@ mod tests {
             Arc::new(scan.clone()),
         );
         assert!(
-            estimate_compute_cost(&scan, &StatContext::default())
-                < estimate_compute_cost(&with_aggregate, &StatContext::default())
+            estimate_compute_cost(&scan, &StatContext::without_settings(Default::default()))
+                < estimate_compute_cost(
+                    &with_aggregate,
+                    &StatContext::without_settings(Default::default())
+                )
         );
     }
 

@@ -105,7 +105,7 @@ async fn test_execute_immediate_uses_inner_timezone_for_statistics() -> anyhow::
         let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
         plans.push(plan.format_indent(
             FormatOptions { verbose: true },
-            &StatContext::new(ctx.get_function_context()?),
+            &StatContext::new(ctx.get_function_context()?, &ctx.get_settings()),
         )?);
     }
 

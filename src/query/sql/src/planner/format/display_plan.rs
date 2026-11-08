@@ -21,20 +21,31 @@ use super::display::FormatOptions;
 use super::display::IdHumanizer;
 use super::display::MetadataIdHumanizer;
 use super::display::TreeHumanizer;
-use crate::optimizer::ir::Expr;
-use crate::optimizer::ir::RelExprKind;
+use crate::optimizer::ir::PExpr;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatContext;
 use crate::plans::CreateTablePlan;
 use crate::plans::Plan;
 
-impl<K: RelExprKind> Expr<K> {
-    pub(crate) fn to_format_tree<I: IdHumanizer>(
-        &self,
-        id_humanizer: &I,
-    ) -> Result<FormatTreeNode> {
-        let operator_humanizer = DefaultOperatorHumanizer;
-        let tree_humanizer = TreeHumanizer::new(id_humanizer, &operator_humanizer);
-        tree_humanizer.humanize_expr(self)
+impl SExpr {
+    pub(crate) fn to_format_tree<I: IdHumanizer>(&self, ids: &I) -> Result<FormatTreeNode> {
+        TreeHumanizer::new(ids, &DefaultOperatorHumanizer).humanize_expr(self)
+    }
+
+    pub fn pretty_format(&self, metadata: &crate::Metadata, stats: &StatContext) -> Result<String> {
+        let ids = MetadataIdHumanizer::new(metadata, FormatOptions { verbose: false }, stats);
+        Ok(self.to_format_tree(&ids)?.format_pretty()?)
+    }
+}
+
+impl PExpr {
+    pub(crate) fn to_format_tree<I: IdHumanizer>(&self, ids: &I) -> Result<FormatTreeNode> {
+        TreeHumanizer::new(ids, &DefaultOperatorHumanizer).humanize_expr(self)
+    }
+
+    pub fn pretty_format(&self, metadata: &crate::Metadata, stats: &StatContext) -> Result<String> {
+        let ids = MetadataIdHumanizer::new(metadata, FormatOptions { verbose: false }, stats);
+        Ok(self.to_format_tree(&ids)?.format_pretty()?)
     }
 }
 
@@ -273,6 +284,7 @@ impl Plan {
             Plan::ShowTasks(_) => Ok("ShowTasks".to_string()),
 
             // task
+            Plan::ExternalAccess(stmt) => Ok(stmt.to_string()),
             Plan::CreateConnection(_) => Ok("CreateConnection".to_string()),
             Plan::DescConnection(_) => Ok("DescConnection".to_string()),
             Plan::DropConnection(_) => Ok("DropConnection".to_string()),

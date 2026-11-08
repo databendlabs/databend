@@ -18,3 +18,5 @@ pub mod rule;
 pub mod tasks;
 
 pub use cascade::CascadesOptimizer;
+pub use tasks::DEFAULT_TASK_LIMIT;
+pub use tasks::SchedulerStat;

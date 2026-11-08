@@ -43,7 +43,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_metrics::storage::*;
 use databend_common_sql::StreamContext;
 use databend_common_storage::MutationStatus;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -56,8 +56,9 @@ use crate::io::BlockBuilder;
 use crate::io::BlockReader;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
-use crate::io::CompactSegmentInfoReader;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentCache;
+use crate::io::SegmentInfoReader;
 use crate::io::WriteSettings;
 use crate::operations::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -285,7 +286,8 @@ impl PreparedMatchedMutation {
 
 pub struct MatchedAggregatorConfig {
     ctx: Arc<dyn TableContext>,
-    segment_reader: CompactSegmentInfoReader,
+    segment_cache: SegmentCache,
+    segment_reader: SegmentInfoReader,
     aggregation_ctx: Arc<AggregationContext>,
 }
 
@@ -298,14 +300,14 @@ impl MatchedAggregatorConfig {
         let write_settings = table.get_write_settings();
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let segment_reader =
-            MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
+            SegmentInfoReader::new(data_accessor.clone(), target_table_schema.clone());
         let projection = Projection::Columns((0..target_table_schema.num_fields()).collect_vec());
         let block_reader = BlockReader::create(
             ctx.clone(),
             data_accessor,
             target_table_schema.clone(),
             projection,
-            false,
+            CachePolicy::READ_ONLY,
         )?;
         let stream_ctx = if table.change_tracking_enabled() {
             Some(StreamContext::try_create(
@@ -319,6 +321,9 @@ impl MatchedAggregatorConfig {
             None
         };
         Ok(Self {
+            segment_cache: FuseCaches::instance()
+                .segments
+                .with_policy(ctx.cache_policy()),
             ctx,
             segment_reader,
             aggregation_ctx: Arc::new(AggregationContext {
@@ -467,13 +472,11 @@ impl MatchedAggregator {
                         segment_idx
                     ))
                 })?;
-                let load_param = LoadParams {
-                    location: path.clone(),
-                    len_hint: None,
-                    ver: *ver,
-                    put_cache: true,
-                };
-                let compact_segment_info = self.config.segment_reader.read(&load_param).await?;
+                let compact_segment_info = self
+                    .config
+                    .segment_cache
+                    .get(&self.config.segment_reader, (path.clone(), *ver))
+                    .await?;
                 entry.insert(compact_segment_info.try_into()?);
             }
         }

@@ -41,6 +41,8 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_integer_mapped_type;
 
+use crate::decimal::DecimalExt;
+
 pub fn register_decimal_hash<H: HashFunction>(registry: &mut FunctionRegistry) {
     registry.register_function_factory(
         H::name(),
@@ -150,7 +152,7 @@ fn decimal_hash_typed<H, R, D, T>(
     cast: fn(u64) -> R::Scalar,
 ) -> Value<AnyType>
 where
-    T: Decimal + Hash,
+    T: DecimalExt + Hash,
     H: Hasher + Default,
     R: ArgType,
     D: for<'a> AccessType<ScalarRef<'a> = T>,
@@ -218,7 +220,7 @@ fn decimal_hash_typed_with_seed<H, S, T, D>(
 where
     H: HashFunctionWithSeed,
     S: AccessType,
-    T: Decimal + Hash,
+    T: DecimalExt + Hash,
     D: for<'a> AccessType<ScalarRef<'a> = T>,
 {
     vectorize_with_builder_2_arg::<D, S, UInt64Type>(|arg, seed, output, _| {

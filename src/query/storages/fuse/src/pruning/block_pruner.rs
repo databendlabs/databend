@@ -28,7 +28,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::*;
-use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
@@ -178,7 +177,7 @@ impl BlockPruner {
             return Ok(block_metas);
         }
 
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
+        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let pruning_ctx = self.pruning_ctx.clone();
 
@@ -203,7 +202,6 @@ impl BlockPruner {
                             block_meta.clone(),
                             block_meta.row_count,
                             true,
-                            None,
                             None,
                         )
                         .await?;
@@ -273,14 +271,13 @@ impl BlockPruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
+        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let pruning_ctx = self.pruning_ctx.clone();
 
         let blocks_after_internal = block_meta_indexes.len();
-        let cache_lock_stats = Arc::new(CacheLockStats::default());
         let block_range_ns = AtomicU64::new(0);
         let runtime_stats_ns = AtomicU64::new(0);
         let blocks_after_range_count = AtomicUsize::new(0);
@@ -356,7 +353,6 @@ impl BlockPruner {
 
                 // not pruned by block zone map index,
                 let pruning_ctx = pruning_ctx.clone();
-                let lock_stats = cache_lock_stats.clone();
                 let projected_virtual_schema = projected_virtual_schema.clone();
                 let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                     Box::pin(async move {
@@ -367,7 +363,6 @@ impl BlockPruner {
                             block_meta,
                             row_count,
                             false,
-                            Some(lock_stats),
                             projected_virtual_schema,
                         )
                         .await
@@ -453,9 +448,8 @@ impl BlockPruner {
         // time may exceed the stage total; `unaccounted` saturates to zero.
         let accounted = block_range + runtime_stats + granule_total + block_index_total;
         let unaccounted = elapsed_duration.saturating_sub(accounted);
-        let lock_stats = cache_lock_stats.snapshot();
         info!(
-            "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us=0 granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={} inverted_granules_pruned={} memory_cache_lock_wait_ns={} memory_cache_lock_hold_ns={} memory_cache_lock_acquires={} disk_cache_lock_wait_ns={} disk_cache_lock_hold_ns={} disk_cache_lock_acquires={} block_index_us={}",
+            "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us=0 granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={} inverted_granules_pruned={} block_index_us={}",
             segment_location.segment_idx,
             duration_us(elapsed_duration),
             duration_us(unaccounted),
@@ -481,12 +475,6 @@ impl BlockPruner {
             granule_diagnostics.other_index_prunes,
             duration_us(granule_diagnostics.other_index_prune),
             granule_diagnostics.inverted_granules_pruned,
-            lock_stats.memory_wait_ns,
-            lock_stats.memory_hold_ns,
-            lock_stats.memory_acquires,
-            lock_stats.disk_wait_ns,
-            lock_stats.disk_hold_ns,
-            lock_stats.disk_acquires,
             duration_us(block_index_total),
         );
 
@@ -519,7 +507,6 @@ impl BlockPruner {
         };
         let mut window: VecDeque<(usize, Arc<BlockMeta>, Option<SparsePrunePrefetch>)> =
             VecDeque::with_capacity(SPARSE_PRUNE_PREFETCH_BLOCKS);
-        let cache_lock_stats = Arc::new(CacheLockStats::default());
 
         for (block_idx, block_meta) in block_meta_indexes {
             metrics_inc_blocks_range_pruning_before(1);
@@ -562,11 +549,7 @@ impl BlockPruner {
             // `SPARSE_PRUNE_PREFETCH_BLOCKS` blocks stay in flight while the
             // oldest block is finished below.
             let sparse_prefetch = Instant::now();
-            let pending = Self::prefetch_sparse_mins(
-                &self.pruning_ctx,
-                &block_meta,
-                Some(cache_lock_stats.clone()),
-            );
+            let pending = Self::prefetch_sparse_mins(&self.pruning_ctx, &block_meta);
             diagnostics.sparse_prefetch += sparse_prefetch.elapsed();
             window.push_back((block_idx, block_meta, pending));
 
@@ -576,7 +559,6 @@ impl BlockPruner {
                     entry,
                     &segment_location,
                     block_num,
-                    Some(cache_lock_stats.clone()),
                     &mut diagnostics,
                     &mut result,
                 );
@@ -588,7 +570,6 @@ impl BlockPruner {
                 entry,
                 &segment_location,
                 block_num,
-                Some(cache_lock_stats.clone()),
                 &mut diagnostics,
                 &mut result,
             );
@@ -603,9 +584,8 @@ impl BlockPruner {
             + diagnostics.sparse_prefetch
             + diagnostics.granule_total;
         let unaccounted = elapsed_duration.saturating_sub(accounted);
-        let lock_stats = cache_lock_stats.snapshot();
         info!(
-            "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us={} granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={} memory_cache_lock_wait_ns={} memory_cache_lock_hold_ns={} memory_cache_lock_acquires={} disk_cache_lock_wait_ns={} disk_cache_lock_hold_ns={} disk_cache_lock_acquires={}",
+            "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us={} granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={}",
             segment_location.segment_idx,
             duration_us(elapsed_duration),
             duration_us(unaccounted),
@@ -631,12 +611,6 @@ impl BlockPruner {
             duration_us(diagnostics.granule.bloom_prune),
             diagnostics.granule.other_index_prunes,
             duration_us(diagnostics.granule.other_index_prune),
-            lock_stats.memory_wait_ns,
-            lock_stats.memory_hold_ns,
-            lock_stats.memory_acquires,
-            lock_stats.disk_wait_ns,
-            lock_stats.disk_hold_ns,
-            lock_stats.disk_acquires,
         );
         Ok(result)
     }
@@ -648,18 +622,11 @@ impl BlockPruner {
         (block_idx, block_meta, pending): (usize, Arc<BlockMeta>, Option<SparsePrunePrefetch>),
         segment_location: &SegmentLocation,
         block_num: usize,
-        lock_stats: Option<Arc<CacheLockStats>>,
         diagnostics: &mut RangeGranulePruneDiagnostics,
         result: &mut Vec<GranulePrunedBlock>,
     ) {
         let granule_start = Instant::now();
-        let outcome = Self::prune_granules_with_mins(
-            &self.pruning_ctx,
-            &block_meta,
-            pending,
-            None,
-            lock_stats,
-        );
+        let outcome = Self::prune_granules_with_mins(&self.pruning_ctx, &block_meta, pending, None);
         diagnostics.granule_total += granule_start.elapsed();
         diagnostics.granule.add(&outcome.diagnostics);
         if outcome.granule_ranges.as_ref().is_some_and(Vec::is_empty) {
@@ -701,7 +668,7 @@ impl BlockPruner {
         projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let start = Instant::now();
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
+        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let pruning_ctx = self.pruning_ctx.clone();
 
@@ -761,7 +728,6 @@ impl BlockPruner {
         block_meta: Arc<BlockMeta>,
         row_count: u64,
         limit_before_bloom: bool,
-        lock_stats: Option<Arc<CacheLockStats>>,
         projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
     ) -> Result<BlockPruneResult> {
         if !prune_result.keep {
@@ -773,7 +739,6 @@ impl BlockPruner {
             &pruning_ctx,
             &block_meta,
             prune_result.granule_ranges.take(),
-            lock_stats,
         );
         prune_result.granule_elapsed = granule_start.elapsed();
         let granule_bloom_applied = outcome.granule_bloom_applied;
@@ -807,10 +772,9 @@ impl BlockPruner {
         pruning_ctx: &PruningContext,
         block_meta: &BlockMeta,
         input_ranges: Option<Vec<Range<usize>>>,
-        lock_stats: Option<Arc<CacheLockStats>>,
     ) -> GranulePruneOutcome {
-        let pending = Self::prefetch_sparse_mins(pruning_ctx, block_meta, lock_stats.clone());
-        Self::prune_granules_with_mins(pruning_ctx, block_meta, pending, input_ranges, lock_stats)
+        let pending = Self::prefetch_sparse_mins(pruning_ctx, block_meta);
+        Self::prune_granules_with_mins(pruning_ctx, block_meta, pending, input_ranges)
     }
 
     /// Prefetch the sparse-mins file of one block without waiting.
@@ -819,11 +783,10 @@ impl BlockPruner {
     fn prefetch_sparse_mins(
         pruning_ctx: &PruningContext,
         block_meta: &BlockMeta,
-        lock_stats: Option<Arc<CacheLockStats>>,
     ) -> Option<SparsePrunePrefetch> {
         let pruner = pruning_ctx.sparse_granule_index_pruner.as_ref()?;
         let granule_index = block_meta.granule_index.as_ref()?;
-        match pruner.prefetch_mins_with_stats(block_meta, granule_index, lock_stats) {
+        match pruner.prefetch_mins(block_meta, granule_index) {
             Ok(pending) => pending,
             Err(e) => {
                 log::warn!(
@@ -840,7 +803,6 @@ impl BlockPruner {
         block_meta: &BlockMeta,
         pending_sparse: Option<SparsePrunePrefetch>,
         input_ranges: Option<Vec<Range<usize>>>,
-        lock_stats: Option<Arc<CacheLockStats>>,
     ) -> GranulePruneOutcome {
         let sparse_pruner = pruning_ctx.sparse_granule_index_pruner.as_ref();
         let index_pruners = &pruning_ctx.granule_index_pruners;
@@ -930,13 +892,11 @@ impl BlockPruner {
                 .collect::<Vec<_>>();
             diagnostics.marks_loads = 1;
             let marks_start = Instant::now();
-            let read_ctx = match GranulePruningReadContext::load_with_stats(
+            let read_ctx = match GranulePruningReadContext::load(
                 &pruning_ctx.dal,
-                &pruning_ctx.granule_read_settings,
                 &granule_index.offsets,
                 &mark_names,
                 num_granules,
-                lock_stats,
             ) {
                 Ok(ctx) => {
                     diagnostics.marks_load += marks_start.elapsed();

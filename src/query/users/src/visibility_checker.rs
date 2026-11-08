@@ -511,6 +511,7 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::Warehouse(w) => {
                         granted_ws.insert(Arc::from(w.as_str()));
                     }
+                    GrantObject::Integration(_) => {}
                     GrantObject::Connection(c) => {
                         granted_c.insert(Arc::from(c.as_str()));
                     }
@@ -996,7 +997,7 @@ pub struct DbTableVisibilityResult {
 
 /// Maximum batch size for `mget_ownerships` calls to avoid oversized RPC payloads.
 /// Aligned with `KVPbApi::CHUNK_SIZE = 256` as the default batch size.
-const MGET_OWNERSHIP_BATCH_SIZE: usize = 256;
+pub const MGET_OWNERSHIP_BATCH_SIZE: usize = 256;
 
 /// Filter table targets by one exact privilege, with table/database ownership fallback.
 ///
@@ -1039,7 +1040,7 @@ pub async fn filter_tables_by_privilege(
 
         if has_privilege(&id_object)
             || has_privilege(&legacy_database)
-            || legacy_table.as_ref().is_some_and(&has_privilege)
+            || legacy_table.as_ref().is_some_and(has_privilege)
         {
             visible.push(target_index);
         } else {

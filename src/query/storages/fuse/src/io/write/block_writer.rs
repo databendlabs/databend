@@ -17,7 +17,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
@@ -43,7 +46,9 @@ use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::build_parquet_writer_properties;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_table_meta::meta::BlockHLLState;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -59,15 +64,18 @@ use super::FuseBlockWriteOptions;
 use super::FuseBlockWriter;
 use super::parquet_block_writer::ParquetBlockWriter;
 use crate::FuseStorageFormat;
+use crate::io::BloomIndexState;
+use crate::io::FuseCaches;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::granule_index::materialize_cluster_key_columns;
 use crate::io::write::GranuleIndexState;
 use crate::io::write::JsonPathStatisticsBuilder;
 use crate::io::write::SpatialIndexState;
-use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
 use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::operations::column_parquet_metas;
@@ -282,10 +290,7 @@ impl BlockWriter {
         Ok(())
     }
 
-    pub async fn write_down_indexes(
-        dal: &Operator,
-        output: crate::io::write::block_index::PendingBlockIndexOutput,
-    ) -> Result<()> {
+    pub async fn write_down_indexes(dal: &Operator, output: PendingBlockIndexOutput) -> Result<()> {
         if let Some(index) = output.bloom {
             let start = Instant::now();
             let size = index.file.write(dal).await?;
@@ -294,14 +299,8 @@ impl BlockWriter {
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         // Inverted indexes were written while the block was built.
-        if let Some(index) = output.vector
-            && let Some(file) = index.file
-        {
-            let start = Instant::now();
-            let size = file.write(dal).await?;
-            metrics_inc_block_vector_index_write_nums(1);
-            metrics_inc_block_vector_index_write_bytes(size);
-            metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        if let Some(index) = output.vector {
+            Self::write_down_vector_index_files(dal, index.files).await?;
         }
         if let Some(index) = output.spatial
             && let Some(file) = index.file
@@ -315,35 +314,70 @@ impl BlockWriter {
         Ok(())
     }
 
+    /// Writes a bloom index to a new path, or one no cache holds: a rebuilt missing index.
     pub async fn write_down_bloom_index_state(
         dal: &Operator,
-        state: Option<crate::io::BloomIndexState>,
+        state: Option<BloomIndexState>,
     ) -> Result<()> {
         let Some(state) = state else {
             return Ok(());
         };
         let start = Instant::now();
         let size = state.data.len() as u64;
-        write_data(state.data, dal, &state.location.0).await?;
+        let location = &state.location.0;
+        // Owned before the write: an allocation failing after it would skip the eviction.
+        let evicted = [location.clone()];
+        write_data(state.data, dal, location).await?;
+        // The path may have been read before, missing: the disk cache keeps no such entry,
+        // but a unit read of it may be queued.
+        DiskCachedStorage::new(dal.clone())
+            .evict_objects(&evicted)
+            .await?;
         metrics_inc_block_index_write_nums(1);
         metrics_inc_block_index_write_bytes(size);
         metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
         Ok(())
     }
 
-    pub async fn write_down_vector_index_state(
+    /// Rewrites a bloom index in place (ngram refresh) and drops the old one from the caches:
+    /// its meta and the filters `old_filter_keys` from memory, after the write, as a reader
+    /// may have put them back meanwhile from the file as it still was; its bytes from the disk
+    /// cache. The write and the evictions run to their end on the IO runtime when the caller
+    /// is cancelled: a rewrite that went through leaves no stale entry.
+    pub async fn rewrite_bloom_index_state(
         dal: &Operator,
-        state: Option<VectorIndexState>,
+        index_state: BloomIndexState,
+        old_filter_keys: Vec<String>,
     ) -> Result<()> {
-        let Some(state) = state else {
-            return Ok(());
-        };
-        let start = Instant::now();
-        let size = state.data.len() as u64;
-        write_data(state.data, dal, &state.location.0).await?;
-        metrics_inc_block_vector_index_write_nums(1);
-        metrics_inc_block_vector_index_write_bytes(size);
-        metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        let dal = dal.clone();
+        GlobalIORuntime::instance()
+            .spawn(async move {
+                let location = index_state.location.0.clone();
+                Self::write_down_bloom_index_state(&dal, Some(index_state)).await?;
+                // Not held to the query's memory limit, which the task keeps.
+                let _unlimited = LimitMemGuard::enter_unlimited();
+                let caches = FuseCaches::instance();
+                caches.index_metas.bloom.evict(&location);
+                for key in &old_filter_keys {
+                    caches.bloom_filters.evict(key);
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("bloom index rewrite task failed: {e}")))?
+    }
+
+    pub(crate) async fn write_down_vector_index_files(
+        dal: &Operator,
+        files: Vec<(BlockIndexMeta, PendingIndexFile)>,
+    ) -> Result<()> {
+        for (_, file) in files {
+            let start = Instant::now();
+            let size = file.write(dal).await?;
+            metrics_inc_block_vector_index_write_nums(1);
+            metrics_inc_block_vector_index_write_bytes(size);
+            metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
         Ok(())
     }
 

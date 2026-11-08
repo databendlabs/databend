@@ -21,10 +21,9 @@ use databend_common_exception::Result;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::ir::PExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql_test_support::LiteTableContext;
 use databend_common_sql_test_support::ReplayColumn;
 use databend_common_sql_test_support::ReplayInput;
@@ -50,7 +49,8 @@ async fn main() -> Result<()> {
     let optimized_plan = ctx.optimize_plan(raw_plan).await?;
     let plan = match args.explain_kind {
         ExplainKind::Optimized => {
-            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?
+            let stat_context = ctx.stat_context()?;
+            optimized_plan.format_indent(FormatOptions::default(), &stat_context)?
         }
         ExplainKind::Join => format_join_explain(optimized_plan)?,
     };
@@ -150,7 +150,7 @@ fn format_join_explain(plan: Plan) -> Result<String> {
 
 fn join_format_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
     match s_expr.plan() {
-        RelOperator::Join(join) => {
+        PhysicalRelOperator::Join(join) => {
             let build_child =
                 FormatTreeNode::with_children("Build".to_string(), vec![join_format_tree(
                     s_expr.build_side_child(),
@@ -166,7 +166,7 @@ fn join_format_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Result<FormatTree
                 vec![build_child, probe_child],
             ))
         }
-        RelOperator::Scan(scan) => {
+        PhysicalRelOperator::Scan(scan) => {
             let metadata = metadata.read();
             let table = metadata.table(scan.table_index);
             let read_rows = scan

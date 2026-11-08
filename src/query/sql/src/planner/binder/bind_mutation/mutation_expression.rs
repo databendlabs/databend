@@ -47,6 +47,7 @@ use crate::binder::util::TableIdentifier;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
+use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::Join;
@@ -85,6 +86,7 @@ impl MutationExpression {
         target_table: Arc<dyn Table>,
         target_table_identifier: &TableIdentifier,
         target_table_schema: Arc<TableSchema>,
+        bypass_row_access_policy: bool,
     ) -> Result<MutationExpressionBindResult> {
         let mutation_type = self.mutation_type();
         let mut required_columns = ColumnSet::new();
@@ -118,6 +120,7 @@ impl MutationExpression {
                     target_table_identifier.table_name_alias(),
                     target_table.clone(),
                     target_alias,
+                    false,
                 )?;
 
                 // Get target table index.
@@ -243,6 +246,7 @@ impl MutationExpression {
                     target_table_identifier.table_name_alias(),
                     target_table.clone(),
                     target_alias,
+                    bypass_row_access_policy,
                 )?;
 
                 // Note: We intentionally get target table index before binding source table,
@@ -278,7 +282,7 @@ impl MutationExpression {
                 // Phase 1 only binds the mutation input and filter. UPDATE assignments are bound
                 // by `bind_mutation` before the strategy and physical input are finalized.
                 let (mutation_strategy, predicates) =
-                    binder.process_filter(&mut bind_context, filter)?;
+                    binder.process_filter(&mut bind_context, filter, bypass_row_access_policy)?;
 
                 Ok(MutationExpressionBindResult {
                     input: s_expr,
@@ -568,6 +572,7 @@ impl Binder {
         table_alias_name: Option<String>,
         table: Arc<dyn Table>,
         alias: &Option<TableAlias>,
+        bypass_row_access_policy: bool,
     ) -> Result<(SExpr, BindContext)> {
         let table_index = self.metadata.write().add_table(
             table.get_table_info().catalog().to_string(),
@@ -579,8 +584,15 @@ impl Binder {
             false,
             None,
         );
-        let (s_expr, mut target_context) =
-            self.bind_base_table(bind_context, database, table_index, None, &None, true)?;
+        let (s_expr, mut target_context) = self.bind_base_table_with_policy(
+            bind_context,
+            database,
+            table_index,
+            None,
+            &None,
+            true,
+            !bypass_row_access_policy,
+        )?;
         if let Some(alias) = alias {
             target_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -635,15 +647,25 @@ impl Binder {
         &self,
         bind_context: &mut BindContext,
         filter: &Option<Expr>,
+        ttl_maintenance: bool,
     ) -> Result<(MutationStrategy, Vec<ScalarExpr>)> {
         if let Some(expr) = filter {
+            let stored_names = NameResolutionContext::preserve_identifier_case();
+            let names = if ttl_maintenance {
+                &stored_names
+            } else {
+                &self.name_resolution_ctx
+            };
             let mut scalar_binder = ScalarBinder::new(
                 bind_context,
                 self.ctx.clone(),
-                &self.name_resolution_ctx,
+                names,
                 self.metadata.clone(),
                 &[],
             );
+            if ttl_maintenance {
+                scalar_binder.without_masking_policy();
+            }
             let (scalar, _) = scalar_binder.bind(expr)?;
             if !self.check_allowed_scalar_expr_with_subquery(&scalar)? {
                 return Err(ErrorCode::SemanticError(

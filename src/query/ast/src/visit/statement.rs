@@ -217,6 +217,7 @@ impl Walk for Statement {
             Statement::ShowTags(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::AlterObjectTag(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreateStage(_) | Statement::AlterStage(_) => {}
+            Statement::ExternalAccess(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreateConnection(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DropConnection(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DescribeConnection(stmt) => try_walk!(stmt.walk(visitor)),
@@ -446,6 +447,7 @@ impl WalkMut for Statement {
             Statement::ShowTags(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::AlterObjectTag(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreateStage(_) | Statement::AlterStage(_) => {}
+            Statement::ExternalAccess(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreateConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DropConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DescribeConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),

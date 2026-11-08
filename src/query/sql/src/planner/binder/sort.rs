@@ -394,6 +394,7 @@ impl Binder {
                     name: udf.name.clone(),
                     handler: udf.handler.clone(),
                     headers: udf.headers.clone(),
+                    external_access_integrations: udf.external_access_integrations.clone(),
                     display_name: udf.display_name.clone(),
                     udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),

@@ -311,6 +311,12 @@ pub enum CreateTableSource {
         database: Option<Identifier>,
         table: Identifier,
     },
+    Clone {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        travel_point: Option<TimeTravelPoint>,
+    },
 }
 
 impl Display for CreateTableSource {
@@ -342,6 +348,19 @@ impl Display for CreateTableSource {
             } => {
                 write!(f, "LIKE ")?;
                 write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
+            }
+            CreateTableSource::Clone {
+                catalog,
+                database,
+                table,
+                travel_point,
+            } => {
+                write!(f, "CLONE ")?;
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if let Some(point) = travel_point {
+                    write!(f, " AT {point}")?;
+                }
+                Ok(())
             }
         }
     }
@@ -493,11 +512,8 @@ pub enum AlterTableAction {
     /// `DROP TTL` is intentionally not accepted: `DROP <ident>` already means
     /// dropping a column, so it would be ambiguous with a column named `ttl`.
     RemoveTableTtl,
-    ReclusterTable {
-        is_final: bool,
-        selection: Option<Expr>,
-        limit: Option<u64>,
-    },
+    /// Apply the current TTL definition to existing rows.
+    MaterializeTableTtl,
     FlashbackTo {
         point: TimeTravelPoint,
     },
@@ -591,21 +607,8 @@ impl Display for AlterTableAction {
             AlterTableAction::RemoveTableTtl => {
                 write!(f, "REMOVE TTL")?;
             }
-            AlterTableAction::ReclusterTable {
-                is_final,
-                selection,
-                limit,
-            } => {
-                write!(f, "RECLUSTER")?;
-                if *is_final {
-                    write!(f, " FINAL")?;
-                }
-                if let Some(conditions) = selection {
-                    write!(f, " WHERE {conditions}")?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " LIMIT {limit}")?;
-                }
+            AlterTableAction::MaterializeTableTtl => {
+                write!(f, "MATERIALIZE TTL")?;
             }
             AlterTableAction::FlashbackTo { point } => {
                 write!(f, "FLASHBACK TO {}", point)?;
@@ -993,7 +996,13 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum OptimizeTableAction {
-    Compact { target: CompactTarget },
+    Compact {
+        target: CompactTarget,
+    },
+    Recluster {
+        is_final: bool,
+        selection: Option<Box<Expr>>,
+    },
 }
 
 impl Display for OptimizeTableAction {
@@ -1003,6 +1012,19 @@ impl Display for OptimizeTableAction {
                 CompactTarget::Block => write!(f, "COMPACT"),
                 CompactTarget::Segment => write!(f, "COMPACT SEGMENT"),
             },
+            OptimizeTableAction::Recluster {
+                is_final,
+                selection,
+            } => {
+                write!(f, "RECLUSTER")?;
+                if *is_final {
+                    write!(f, " FINAL")?;
+                }
+                if let Some(selection) = selection {
+                    write!(f, " WHERE {selection}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -1178,12 +1200,13 @@ pub enum ModifyColumnAction {
     // - Identifier: The column name to apply the masking policy to
     // - String: The masking policy name
     // - Option<Vec<Identifier>>: Optional USING clause columns
+    // - Option<bool>: Optional authorization to inspect original values in SELECT WHERE
     //
     // USING clause behavior (follows Snowflake semantics):
     // - First column: The column to mask/tokenize (must match the target column)
     // - Additional columns: Condition columns to evaluate for conditional masking
     // - If USING is omitted: Treats as normal (non-conditional) masking policy
-    SetMaskingPolicy(Identifier, String, Option<Vec<Identifier>>),
+    SetMaskingPolicy(Identifier, String, Option<Vec<Identifier>>, Option<bool>),
     // Unset masking policy from a column
     UnsetMaskingPolicy(Identifier),
     // vec<ColumnDefinition>
@@ -1197,13 +1220,21 @@ pub enum ModifyColumnAction {
 impl Display for ModifyColumnAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
-            ModifyColumnAction::SetMaskingPolicy(column, name, using_columns) => {
+            ModifyColumnAction::SetMaskingPolicy(
+                column,
+                name,
+                using_columns,
+                where_use_unmasked_value,
+            ) => {
                 if let Some(using_columns) = using_columns {
                     write!(f, "{} SET MASKING POLICY {} USING (", column, name)?;
                     write_comma_separated_list(f, using_columns)?;
                     write!(f, ")")?
                 } else {
                     write!(f, "{} SET MASKING POLICY {}", column, name)?
+                }
+                if let Some(value) = where_use_unmasked_value {
+                    write!(f, " OPTIONS (where_use_unmasked_value = {})", value)?;
                 }
             }
             ModifyColumnAction::UnsetMaskingPolicy(column) => {

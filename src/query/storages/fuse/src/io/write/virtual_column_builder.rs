@@ -1603,7 +1603,6 @@ mod tests {
     async fn test_virtual_granule_offsets_roundtrip_direct_and_shared() {
         use arrow_array::RecordBatch;
         use databend_storages_common_io::BufferReader;
-        use databend_storages_common_io::ReadSettings;
         use databend_storages_common_table_meta::meta::ColumnMeta;
         use databend_storages_common_table_meta::meta::SingleColumnMeta;
         use opendal::Operator;
@@ -1686,14 +1685,8 @@ mod tests {
             .serialize_offsets(&[], 3, state.granule_marks)
             .unwrap();
         op.write("offsets", marks.data).await.unwrap();
-        let read_settings = ReadSettings {
-            max_gap_size: 0,
-            max_range_size: 1024 * 1024,
-            parquet_fast_read_bytes: 0,
-        };
-        let offsets = OffsetsIndex::load_named_with_stats(
+        let offsets = OffsetsIndex::load_named(
             &op,
-            &read_settings,
             &marks.layout,
             2,
             5,
@@ -1704,7 +1697,6 @@ mod tests {
                     virtual_offset_mark(virtual_location, meta.offset_length().0),
                 )
             }),
-            None,
         )
         .unwrap();
         // Simulate segment-local/query ids unrelated to the file's leaf ordinals.
@@ -1712,9 +1704,8 @@ mod tests {
             .iter()
             .map(|(id, meta)| (*id + 100, meta.clone()))
             .collect::<HashMap<_, _>>();
-        let remapped_offsets = OffsetsIndex::load_named_with_stats(
+        let remapped_offsets = OffsetsIndex::load_named(
             &op,
-            &read_settings,
             &marks.layout,
             2,
             5,
@@ -1725,7 +1716,6 @@ mod tests {
                     virtual_offset_mark(virtual_location, meta.offset_length().0),
                 )
             }),
-            None,
         )
         .unwrap();
         for (id, meta) in &metas {
@@ -1773,77 +1763,13 @@ mod tests {
                 &chunks,
                 &settings.table_compression.into(),
                 None,
+                None,
             )
             .unwrap();
             assert_eq!(actual, expected.slice(rows.start, rows.len()));
-            use databend_storages_common_cache::CacheAccessor;
-            use databend_storages_common_cache::InMemoryLruCache;
-            use databend_storages_common_cache::TableDataCacheKey;
-
-            use crate::io::read::ArrayCacheContext;
-            use crate::io::read::deserialize_column_chunks;
-
-            // A direct column can be cached while the shared Map leaves remain raw.
-            let cache = InMemoryLruCache::with_bytes_capacity("virtual-mixed".into(), 1024 * 1024);
-            let context = ArrayCacheContext {
-                cache: &cache,
-                location: virtual_location,
-                column_metas: &metas,
-                complete_column_chunks: false,
-            };
-            let decoded = deserialize_column_chunks(
-                &read_schema,
-                rows.len(),
-                &chunks,
-                &settings.table_compression.into(),
-                None,
-                Some(context),
-            )
-            .unwrap();
-            assert_eq!(decoded, actual);
-            let column_types: HashMap<_, _> = read_schema
-                .leaf_fields()
-                .into_iter()
-                .map(|field| {
-                    (
-                        field.column_id,
-                        DataType::from(field.data_type()).to_string(),
-                    )
-                })
-                .collect();
-            let mut hits = Vec::new();
-            for (id, item) in &chunks {
-                let DataItem::GranuleData(_, range) = item else {
-                    unreachable!()
-                };
-                let key = TableDataCacheKey::new(
-                    virtual_location,
-                    *id,
-                    range.start,
-                    range.end - range.start,
-                    &column_types[id],
-                );
-                if let Some(array) = cache.get(&key) {
-                    hits.push((*id, array));
-                }
-            }
-            assert_eq!(hits.len(), 1);
-            for (id, array) in &hits {
-                chunks.insert(*id, DataItem::ColumnArray(array));
-            }
-            let mixed = deserialize_column_chunks(
-                &read_schema,
-                rows.len(),
-                &chunks,
-                &settings.table_compression.into(),
-                None,
-                None,
-            )
-            .unwrap();
-            assert_eq!(mixed, actual);
             use parquet::arrow::arrow_reader::RowSelection;
             use parquet::arrow::arrow_reader::RowSelector;
-            let empty = deserialize_column_chunks(
+            let empty = column_chunks_to_record_batch(
                 &read_schema,
                 rows.len(),
                 &chunks,

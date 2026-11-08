@@ -19,7 +19,6 @@ use databend_common_sql::optimizer::ir::ExprVisitor;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::PVisitAction as VisitAction;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOp;
@@ -33,6 +32,7 @@ async fn write_optimized_case(
     file: &mut impl std::io::Write,
     case: &SqlTestCase,
     enable_cascading: bool,
+    skip: &str,
 ) -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     ctx.set_cluster_node_num(2);
@@ -47,6 +47,9 @@ async fn write_optimized_case(
         u8::from(enable_cascading).to_string(),
     )?;
 
+    ctx.get_settings()
+        .set_setting("optimizer_skip_list".to_string(), skip.to_string())?;
+
     let raw_plan = ctx.bind_sql(case.sql).await?;
     let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
     assert_no_serial_sequence_producer(&optimized_plan)?;
@@ -56,13 +59,13 @@ async fn write_optimized_case(
     writeln!(
         file,
         "{}",
-        raw_plan.format_indent(Default::default(), &StatContext::default())?
+        raw_plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default(), &StatContext::default())?
+        optimized_plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
     writeln!(file)?;
 
@@ -107,7 +110,7 @@ async fn test_hierarchical_grouping_sets_optimizer_outcomes() -> Result<()> {
         setup_sqls: &[ROLLUP_TABLE],
         sql: ROLLUP_QUERY,
     };
-    write_optimized_case(&mut file, &shared_base, false).await?;
+    write_optimized_case(&mut file, &shared_base, false, "").await?;
 
     let cascading = SqlTestCase {
         name: "rollup_nearest_parent_cascade",
@@ -115,8 +118,34 @@ async fn test_hierarchical_grouping_sets_optimizer_outcomes() -> Result<()> {
         setup_sqls: &[ROLLUP_TABLE],
         sql: ROLLUP_QUERY,
     };
-    write_optimized_case(&mut file, &cascading, true).await?;
+    write_optimized_case(&mut file, &cascading, true, "").await?;
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_grouping_sets_sparse_symbols() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "grouping_sets_grouping_id.txt")?;
+    let cases = [
+        SqlTestCase {
+            name: "rollup_over_aggregate_result",
+            description: "Ordinary UNION computes grouping bits from symbols after an inner aggregate removes input columns.",
+            setup_sqls: &[ROLLUP_TABLE],
+            sql: "WITH c AS (SELECT a, b, sum(v) AS s FROM t GROUP BY a, b)
+SELECT s, grouping(s), avg(a) FROM c GROUP BY ROLLUP(s)",
+        },
+        SqlTestCase {
+            name: "reordered_keys_over_aggregate_result",
+            description: "Grouping bits retain group-item order even when it differs from input order.",
+            setup_sqls: &[ROLLUP_TABLE],
+            sql: "WITH c AS (SELECT a, b, sum(v) AS s FROM t GROUP BY a, b)
+SELECT s, a, grouping(s, a), avg(b)
+FROM c GROUP BY GROUPING SETS ((s, a), (s), (a), ())",
+        },
+    ];
+    for case in cases {
+        write_optimized_case(&mut file, &case, true, "HierarchicalGroupingSetsToUnion").await?;
+    }
     Ok(())
 }
 

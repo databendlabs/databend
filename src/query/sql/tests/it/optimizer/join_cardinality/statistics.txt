@@ -328,10 +328,10 @@ right ddl      : CREATE TABLE r(k1 INT NOT NULL, k2 INT NOT NULL)
 right rows     : 1000
 input stat    : right.k1 min=10, max=80, ndv=Some(71), null=0
 input stat    : right.k2 min=30, max=1000, ndv=Some(971), null=0
-join          : INNER cardinality=14.624
-stat          : l.k (#0) min=30, max=80, ndv=10.471, null=0.000, histogram=rows=14.624, ndv=10.471, bucket_count=51, buckets=[30..30:0.287/0.205, 31..31:0.287/0.205, 32..32:0.287/0.205, ..., 78..78:0.287/0.205, 79..79:0.287/0.205, 80..80:0.287/0.205]
-stat          : r.k1 (#1) min=10, max=80, ndv=13.672 (upper=14.624), null=0.000, histogram=rows=14.624, ndv=13.672, bucket_count=71, buckets=[10..10:0.206/1.000, 11..11:0.206/1.000, 12..12:0.206/1.000, ..., 78..78:0.206/1.000, 79..79:0.206/1.000, 80..80:0.206/1.000]
-stat          : r.k2 (#2) min=30, max=100, ndv=14.577 (upper=14.624), null=0.000, histogram=rows=14.624, ndv=14.577, bucket_count=71, buckets=[30..30:0.206/0.205, 31..31:0.206/0.205, 32..32:0.206/0.205, ..., 98..98:0.206/0.205, 99..99:0.206/0.205, 100..100:0.206/0.205]
+join          : INNER cardinality=100.321
+stat          : l.k (#0) min=30, max=80, ndv=51.000, null=0.000, histogram=none
+stat          : r.k1 (#1) min=10, max=80, ndv=61.015 (upper=71.000), null=0.000, histogram=rows=100.321, ndv=61.015, bucket_count=71, buckets=[10..10:1.413/1.000, 11..11:1.413/1.000, 12..12:1.413/1.000, ..., 78..78:1.413/1.000, 79..79:1.413/1.000, 80..80:1.413/1.000]
+stat          : r.k2 (#2) min=30, max=100, ndv=100.000, null=0.000, histogram=none
 
 === inner_repeated_column_complex_winner_blocks_source_histogram ===
 description: When a complex equality expression is more selective than a direct equality using the same source column, it affects cardinality but cannot supply that source column's histogram.
@@ -783,8 +783,8 @@ join          : INNER cardinality=3.000
 stat          : l.k (#0) min=b, max=c, ndv=2.000, null=0.000, histogram=none
 stat          : r.k (#1) min=b, max=c, ndv=2.000, null=0.000, histogram=none
 
-=== inner_inaccurate_bytes_histogram_fallback ===
-description: Inaccurate byte histograms are ignored for equality cardinality, so the complete SQL join falls back to NDV and propagates no histogram.
+=== inner_bytes_histogram_fallback ===
+description: Byte histograms have no equality join estimator, so the complete SQL join falls back to NDV and propagates no histogram.
 sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
 left ddl      : CREATE TABLE l(k VARCHAR NOT NULL)
 left rows     : 100

@@ -955,7 +955,7 @@ fn decode_filter_from_page(bytes: Buffer) -> Result<Option<FilterImpl>> {
     let mut chunks: HashMap<u32, DataItem> = HashMap::new();
     chunks.insert(0, DataItem::RawData(bytes));
 
-    let batch = column_chunks_to_record_batch(&schema, 1, &chunks, &Compression::None, None)?;
+    let batch = column_chunks_to_record_batch(&schema, 1, &chunks, &Compression::None, None, None)?;
     let column = Column::from_arrow_rs(
         batch.column(0).clone(),
         &DataType::Nullable(Box::new(DataType::Binary)),
@@ -1035,7 +1035,8 @@ mod tests {
         chunks.insert(0, DataItem::RawData(Buffer::from(bytes.to_vec())));
 
         let batch =
-            column_chunks_to_record_batch(&schema, 1, &chunks, &Compression::None, None).unwrap();
+            column_chunks_to_record_batch(&schema, 1, &chunks, &Compression::None, None, None)
+                .unwrap();
         let col = Column::from_arrow_rs(
             batch.column(0).clone(),
             &DataType::Nullable(Box::new(DataType::Binary)),

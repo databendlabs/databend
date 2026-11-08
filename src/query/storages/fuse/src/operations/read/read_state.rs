@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
@@ -37,6 +38,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_pruner::VectorScores;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -78,11 +80,12 @@ impl BlockScanStats {
 }
 
 /// Result of [`ReadState::deserialize_and_filter`]: the block after prewhere
-/// and runtime filters, the selections still to be applied by the caller, and
+/// and runtime filters, the selection still to be applied by the caller, and
 /// the scan statistics measured before any row was filtered out.
 pub struct ReadStateOutput {
     pub block: DataBlock,
-    pub row_selection: Option<RowSelection>,
+    /// Callers that need a Parquet [`RowSelection`] build it from the bitmap: it is
+    /// costly for fragmented bitmaps and most blocks never use it.
     pub bitmap_selection: Option<Bitmap>,
     pub scan_stats: BlockScanStats,
 }
@@ -221,9 +224,12 @@ impl ReadState {
         let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         for runtime_filter in &self.runtime_filters {
             let filter_start = Instant::now();
+            // The bloom filter hashes encoded columns without decoding them.
+            let probe_expr = &runtime_filter.probe_expr;
             let probe_column = evaluator
-                .run(&runtime_filter.probe_expr)?
-                .convert_to_full_column(runtime_filter.probe_expr.data_type(), num_rows);
+                .partial_run(probe_expr, None, &mut EvaluateOptions::default(), true)
+                .map_err(|err| Evaluator::map_err(err, probe_expr))?
+                .convert_to_full_column(probe_expr.data_type(), num_rows);
             let bitmap = ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column)?;
             runtime_filter.stats.record_bloom(
                 filter_start.elapsed().as_nanos() as u64,
@@ -303,8 +309,10 @@ impl ReadState {
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
         };
-
-        let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
+        let bitmap_selection = match (bitmap_selection, vector_topn_rows(part)) {
+            (Some(selection), Some(rows)) => Some(&selection & &rows),
+            (selection, rows) => selection.or(rows),
+        };
 
         if let Some(ref bitmap) = bitmap_selection {
             preread_block = preread_block.filter_with_bitmap(bitmap)?;
@@ -313,7 +321,6 @@ impl ReadState {
         if self.use_single_prewhere_reader {
             return Ok(ReadStateOutput {
                 block: preread_block,
-                row_selection,
                 bitmap_selection,
                 scan_stats,
             });
@@ -321,9 +328,14 @@ impl ReadState {
 
         let remain_columns_chunks =
             Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
-        let push_down_row_selection = row_selection.as_ref().is_some_and(|row_selection| {
-            should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
-        });
+        // Only built when pushed down to the remaining reader.
+        let row_selection = bitmap_selection
+            .as_ref()
+            .filter(|bitmap| {
+                should_push_down_row_selection(bitmap, self.prewhere_selectivity_threshold)
+            })
+            .map(RowSelection::from);
+        let push_down_row_selection = row_selection.is_some();
         let remain_raw_bytes = if push_down_row_selection {
             raw_bytes_of_chunks(&remain_columns_chunks)
         } else {
@@ -334,9 +346,7 @@ impl ReadState {
             part,
             num_rows,
             remain_columns_chunks,
-            push_down_row_selection
-                .then_some(row_selection.as_ref())
-                .flatten(),
+            row_selection.as_ref(),
         )?;
         if push_down_row_selection {
             scan_stats.bytes += estimate_block_bytes(
@@ -362,7 +372,6 @@ impl ReadState {
 
         Ok(ReadStateOutput {
             block: data_block,
-            row_selection,
             bitmap_selection,
             scan_stats,
         })
@@ -387,6 +396,25 @@ fn runtime_filter_column_is_projectable(
     name: &str,
 ) -> bool {
     Projection::from_column_names(schema, &[name]).is_ok()
+}
+
+/// The rows of a vector TopN in a block (see `VectorScores::TopN`): the scan
+/// outputs only them. `None` when every row is output.
+fn vector_topn_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
+    let Some(VectorScores::TopN(scores)) = part.block_meta_index()?.vector_scores.as_ref() else {
+        return None;
+    };
+    if scores.len() >= part.nums_rows {
+        return None;
+    }
+    let mut rows = MutableBitmap::from_len_zeroed(part.nums_rows);
+    for &(row, _) in scores {
+        let row = row as usize;
+        if row < part.nums_rows {
+            rows.set(row, true);
+        }
+    }
+    Some(rows.into())
 }
 
 fn expand_runtime_filter_bitmap(
@@ -440,13 +468,13 @@ fn estimate_block_bytes(
     ((decoded_bytes as u128 * total_rows as u128) / decoded_rows as u128) as usize
 }
 
-fn should_push_down_row_selection(row_selection: &RowSelection, threshold: u64) -> bool {
-    let total_rows = row_selection.bitmap.len();
+fn should_push_down_row_selection(bitmap: &Bitmap, threshold: u64) -> bool {
+    let total_rows = bitmap.len();
     if threshold == 0 || total_rows == 0 {
         return false;
     }
-
-    (row_selection.selected_rows as u128) * 100 < (total_rows as u128) * (threshold as u128)
+    let selected_rows = total_rows - bitmap.null_count();
+    (selected_rows as u128) * 100 < (total_rows as u128) * (threshold as u128)
 }
 
 #[cfg(test)]
@@ -466,15 +494,13 @@ mod tests {
         let mut sparse_bitmap = MutableBitmap::from_len_zeroed(5);
         sparse_bitmap.set(2, true);
         let sparse_bitmap: Bitmap = sparse_bitmap.into();
-        let sparse_selection = RowSelection::from(&sparse_bitmap);
 
-        assert!(should_push_down_row_selection(&sparse_selection, 50));
-        assert!(!should_push_down_row_selection(&sparse_selection, 20));
-        assert!(!should_push_down_row_selection(&sparse_selection, 0));
+        assert!(should_push_down_row_selection(&sparse_bitmap, 50));
+        assert!(!should_push_down_row_selection(&sparse_bitmap, 20));
+        assert!(!should_push_down_row_selection(&sparse_bitmap, 0));
 
         let dense_bitmap: Bitmap = MutableBitmap::from_len_set(5).into();
-        let dense_selection = RowSelection::from(&dense_bitmap);
-        assert!(!should_push_down_row_selection(&dense_selection, 100));
+        assert!(!should_push_down_row_selection(&dense_bitmap, 100));
     }
 
     #[test]
@@ -519,9 +545,8 @@ mod tests {
         let mut sparse_bitmap = MutableBitmap::from_len_zeroed(5);
         sparse_bitmap.set(2, true);
         let sparse_bitmap: Bitmap = sparse_bitmap.into();
-        let sparse_selection = RowSelection::from(&sparse_bitmap);
 
-        assert!(!should_push_down_row_selection(&sparse_selection, 0));
+        assert!(!should_push_down_row_selection(&sparse_bitmap, 0));
     }
 
     #[test]

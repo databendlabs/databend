@@ -107,14 +107,15 @@ impl TableRefHandler for RealTableRefHandler {
         let catalog = ctx.get_catalog(&plan.catalog).await?;
         catalog
             .create_table_tag(CreateTableTagReq {
+                tenant: ctx.get_tenant(),
                 table_id: table_info.ident.table_id,
                 seq: MatchSeq::Exact(table_info.ident.seq),
                 tag_name: plan.name.clone(),
                 snapshot_loc,
                 expire_at: plan.retain.map(|v| Utc::now() + v),
                 lvt_check: TableLvtCheck {
-                    tenant: ctx.get_tenant(),
                     time: snapshot_timestamp,
+                    touch: false,
                 },
             })
             .await

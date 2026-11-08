@@ -16,6 +16,7 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -66,10 +67,18 @@ use crate::fault_injection_layer::FaultInjectionLayer;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
+use crate::retry_stats::RetryStats;
 use crate::runtime_layer::RuntimeLayer;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
+
+/// Build a fresh, uncached operator for `cfg` whose retries are counted in `stats`. The cached
+/// operators are shared by everything on the node that uses the same storage parameters, so
+/// this is the way to attribute retries to one activity.
+pub fn init_operator_observed(cfg: &StorageParams, stats: Arc<RetryStats>) -> Result<Operator> {
+    init_operator_uncached_with(cfg, EndpointPolicyScope::Trusted, Some(stats))
+}
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -94,68 +103,97 @@ pub(crate) fn init_operator_uncached(
     cfg: &StorageParams,
     endpoint_policy_scope: EndpointPolicyScope,
 ) -> Result<Operator> {
+    init_operator_uncached_with(cfg, endpoint_policy_scope, None)
+}
+
+fn init_operator_uncached_with(
+    cfg: &StorageParams,
+    endpoint_policy_scope: EndpointPolicyScope,
+    retry_stats: Option<Arc<RetryStats>>,
+) -> Result<Operator> {
     let op = match &cfg {
         StorageParams::Azblob(cfg) => build_operator(
             init_azblob_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
-        StorageParams::Fs(cfg) => {
-            build_operator(init_fs_operator(cfg)?, None, endpoint_policy_scope)?
-        }
+        StorageParams::Fs(cfg) => build_operator(
+            init_fs_operator(cfg)?,
+            None,
+            endpoint_policy_scope,
+            retry_stats.clone(),
+        )?,
         StorageParams::Gcs(cfg) => build_operator(
             init_gcs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         #[cfg(feature = "storage-hdfs")]
         StorageParams::Hdfs(cfg) => build_operator(
             init_hdfs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Http(cfg) => {
             let (builder, layer) = init_http_operator(cfg)?;
-            build_operator(builder, cfg.network_config.as_ref(), endpoint_policy_scope)?
-                .layer(layer)
+            build_operator(
+                builder,
+                cfg.network_config.as_ref(),
+                endpoint_policy_scope,
+                retry_stats.clone(),
+            )?
+            .layer(layer)
         }
         StorageParams::Ipfs(cfg) => build_operator(
             init_ipfs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
-        StorageParams::Memory => {
-            build_operator(init_memory_operator()?, None, endpoint_policy_scope)?
-        }
+        StorageParams::Memory => build_operator(
+            init_memory_operator()?,
+            None,
+            endpoint_policy_scope,
+            retry_stats.clone(),
+        )?,
         StorageParams::Obs(cfg) => build_operator(
             init_obs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::S3(cfg) => build_operator(
             init_s3_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Oss(cfg) => build_operator(
             init_oss_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Webhdfs(cfg) => build_operator(
             init_webhdfs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Cos(cfg) => build_operator(
             init_cos_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Huggingface(cfg) => build_operator(
             init_huggingface_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         v => {
             return Err(Error::new(
@@ -190,6 +228,7 @@ fn build_operator<B: Builder>(
     builder: B,
     cfg: Option<&StorageNetworkParams>,
     endpoint_policy_scope: EndpointPolicyScope,
+    retry_stats: Option<Arc<RetryStats>>,
 ) -> Result<Operator> {
     let ob = Operator::new(builder)?
         // Timeout layer is required to be the first layer so that internal
@@ -260,7 +299,7 @@ fn build_operator<B: Builder>(
         .layer(
             RetryLayer::new()
                 .with_jitter()
-                .with_notify(DatabendRetryInterceptor),
+                .with_notify(DatabendRetryInterceptor::new(retry_stats)),
         )
         // Add async backtrace
         .layer(AsyncBacktraceLayer)
@@ -590,12 +629,25 @@ fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Buil
     Ok(builder)
 }
 
-pub struct DatabendRetryInterceptor;
+/// Retry hook of every Databend operator: counts retries in the node-wide metric and, when
+/// the operator is observed, in the caller's [`RetryStats`].
+pub struct DatabendRetryInterceptor {
+    retry_stats: Option<Arc<RetryStats>>,
+}
+
+impl DatabendRetryInterceptor {
+    pub fn new(retry_stats: Option<Arc<RetryStats>>) -> Self {
+        Self { retry_stats }
+    }
+}
 
 impl RetryInterceptor for DatabendRetryInterceptor {
     fn intercept(&self, err: &opendal::Error, dur: Duration) {
         let labels = vec![("err", err.kind().to_string())];
         METRIC_OPENDAL_RETRIES_COUNT.get_or_create(&labels).inc();
+        if let Some(stats) = &self.retry_stats {
+            stats.record_retry(err.kind());
+        }
         warn!(
             target: "opendal::layers::retry",
             "will retry after {:.2}s because: {:?}",
@@ -614,6 +666,9 @@ pub struct DataOperator {
     spill_operator: Operator,
     params: StorageParams,
     spill_params: Option<StorageParams>,
+    /// What `spill_operator` was built from: `spill_params`, or `params` with the storage class
+    /// forced to Standard.
+    spill_storage_params: StorageParams,
 }
 
 impl DataOperator {
@@ -628,6 +683,19 @@ impl DataOperator {
 
     pub fn spill_params(&self) -> Option<&StorageParams> {
         self.spill_params.as_ref()
+    }
+
+    /// A fresh operator on the spill store whose retries are counted in `stats`, for activities
+    /// that must detect throttling of their own requests. Not cached: build one per activity,
+    /// not per request.
+    ///
+    /// An in-memory spill store is process state owned by `spill_operator` and cannot be opened
+    /// twice; it is returned as is, and `stats` stays at zero since memory never throttles.
+    pub fn observed_spill_operator(&self, stats: Arc<RetryStats>) -> Result<Operator> {
+        if matches!(self.spill_storage_params, StorageParams::Memory) {
+            return Ok(self.spill_operator.clone());
+        }
+        init_operator_observed(&self.spill_storage_params, stats)
     }
 
     pub fn params(&self) -> StorageParams {
@@ -669,6 +737,7 @@ impl DataOperator {
             params: data_params,
             spill_operator,
             spill_params,
+            spill_storage_params: params,
         })
     }
 
@@ -938,8 +1007,40 @@ impl OperatorRegistry for IcebergFileIO {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::Duration;
 
+    use opendal::Error;
+    use opendal::ErrorKind;
+    use opendal::layers::RetryInterceptor;
+
+    use super::DatabendRetryInterceptor;
     use super::IcebergFileIO;
+    use crate::RetryStats;
+
+    #[test]
+    fn retry_interceptor_updates_only_its_observation_scope() {
+        let first = Arc::new(RetryStats::default());
+        let second = Arc::new(RetryStats::default());
+        let interceptor = DatabendRetryInterceptor::new(Some(first.clone()));
+        let throttled = Error::new(ErrorKind::RateLimited, "test throttling");
+        // How OSS, COS, OBS and Azure throttling reaches the retry layer: a temporary
+        // `Unexpected` error with no `RateLimited` classification.
+        let other = Error::new(ErrorKind::Unexpected, "test failure").set_temporary();
+
+        interceptor.intercept(&other, Duration::ZERO);
+        assert_eq!(first.retried(), 1);
+        assert_eq!(first.rate_limited(), 0);
+        interceptor.intercept(&throttled, Duration::ZERO);
+        assert_eq!(first.retried(), 2);
+        assert_eq!(first.rate_limited(), 1);
+        assert_eq!(second.retried(), 0);
+        assert_eq!(second.rate_limited(), 0);
+
+        DatabendRetryInterceptor::new(None).intercept(&throttled, Duration::ZERO);
+        assert_eq!(first.retried(), 2);
+        assert_eq!(first.rate_limited(), 1);
+    }
 
     #[test]
     fn iceberg_file_io_does_not_mix_catalog_token_with_explicit_s3_credentials() {

@@ -27,10 +27,9 @@ mod visited_pool;
 pub use common::fixed_length_priority_queue::FixedLengthPriorityQueue;
 pub use common::types::ScoredPointOffset;
 pub use hnsw::HNSWIndex;
+pub use hnsw::hnsw_component_names;
 pub use quantization::DistanceType;
 
 use crate::IndexFile;
-use crate::IndexMeta;
 
-pub type VectorIndexMeta = IndexMeta;
 pub type VectorIndexFile = IndexFile;

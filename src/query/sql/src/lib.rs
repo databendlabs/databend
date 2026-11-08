@@ -25,6 +25,7 @@
 // Recursive async binder futures exceed the default limit under the new trait solver.
 #![recursion_limit = "256"]
 #![allow(incomplete_features)]
+#![feature(share_trait)]
 #![feature(deref_patterns)]
 #![feature(iterator_try_reduce)]
 #![feature(trivial_bounds)]

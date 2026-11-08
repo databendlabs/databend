@@ -16,6 +16,7 @@
 //!
 //! Ambiguous and missing local times always use the shared resolver.
 
+use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::RwLock;
@@ -332,6 +333,31 @@ fn get_or_init_lut(tz: &Tz) -> Arc<TimeZoneLut> {
     lut
 }
 
+thread_local! {
+    // The last LUT this thread used. Datetime functions resolve the LUT once
+    // per row; going through TZ_LUTS each time takes its lock and clones the
+    // Arc, two atomic writes to cache lines every thread shares. Under parallel
+    // evaluation those writes serialize the threads: `to_date(ts)` on 16 threads
+    // spent ~1.7us per row against ~46ns on one.
+    static LAST_LUT: RefCell<Option<(Tz, Arc<TimeZoneLut>)>> = const { RefCell::new(None) };
+}
+
+/// Runs `f` with the LUT for `tz`, touching no state shared between threads
+/// when this thread last used the same timezone.
+fn with_lut<R>(tz: &Tz, f: impl FnOnce(&TimeZoneLut) -> R) -> R {
+    LAST_LUT.with(|last| {
+        if let Some((key, lut)) = last.borrow().as_ref()
+            && key == tz
+        {
+            return f(lut);
+        }
+        let lut = get_or_init_lut(tz);
+        let result = f(&lut);
+        *last.borrow_mut() = Some((*tz, lut));
+        result
+    })
+}
+
 /// Local calendar components for an instant.
 ///
 /// Uses the lookup table when the instant falls inside the cached year range and
@@ -344,9 +370,10 @@ pub fn components_from_timestamp(micros: i64, tz: &Tz) -> DateTimeComponents {
     let seconds = micros.div_euclid(MICROS_PER_SEC);
     let subsec = micros.rem_euclid(MICROS_PER_SEC) as u32;
 
-    if let Some(entry) = get_or_init_lut(tz).lookup(seconds)
-        && let Some(components) = entry.build_components(seconds, subsec)
-    {
+    if let Some(components) = with_lut(tz, |lut| {
+        lut.lookup(seconds)
+            .and_then(|entry| entry.build_components(seconds, subsec))
+    }) {
         return components;
     }
 
@@ -380,9 +407,10 @@ pub fn fast_utc_from_local(
 
     let local_seconds = (hour as i64) * 3600 + (minute as i64) * 60 + second as i64;
 
-    let unix_seconds = get_or_init_lut(tz)
-        .entry_for_local_date(year, month, day)
-        .and_then(|entry| entry.unique_instant(local_seconds));
+    let unix_seconds = with_lut(tz, |lut| {
+        lut.entry_for_local_date(year, month, day)
+            .and_then(|entry| entry.unique_instant(local_seconds))
+    });
 
     let unix_seconds = match unix_seconds {
         Some(seconds) => seconds,
@@ -440,4 +468,53 @@ fn day_index_for_date(year: i32, month: u8, day: u8) -> Option<usize> {
     let ordinal = day_of_year(year, month, day) as i64;
     let offset = days_before_year(year) - days_before_year(LUT_MIN_YEAR);
     Some((offset + ordinal - 1) as usize)
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono_tz::Tz;
+
+    use super::*;
+
+    fn fields(c: &DateTimeComponents) -> (i32, u8, u8, u8, u8, u8, u32, i32) {
+        (
+            c.year,
+            c.month,
+            c.day,
+            c.hour,
+            c.minute,
+            c.second,
+            c.micro,
+            c.offset_seconds,
+        )
+    }
+
+    // The per-thread LUT cache must follow the timezone of every call: a
+    // thread alternating between zones, as one evaluating several sessions
+    // does, gets each zone's local time, which chrono computes independently.
+    #[test]
+    fn test_components_follow_timezone_switches() {
+        let zones = [
+            Tz::UTC,
+            Tz::Europe__Paris,
+            Tz::Asia__Kathmandu,
+            Tz::America__St_Johns,
+        ];
+        std::thread::scope(|s| {
+            for t in 0..4usize {
+                s.spawn(move || {
+                    // 2024-03-31 00:00 UTC, a Paris DST change, in 17-minute steps.
+                    let start = 1_711_843_200i64;
+                    for i in 0..2000i64 {
+                        let seconds = start + i * 1020;
+                        let tz = &zones[(t + i as usize) % zones.len()];
+                        let micros = seconds * MICROS_PER_SEC + 123_456;
+                        let got = components_from_timestamp(micros, tz);
+                        let want = components_via_chrono(seconds, 123_456, tz);
+                        assert_eq!(fields(&got), fields(&want), "{tz} at {seconds}");
+                    }
+                });
+            }
+        });
+    }
 }

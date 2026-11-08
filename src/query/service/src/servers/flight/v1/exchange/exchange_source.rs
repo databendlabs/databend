@@ -31,6 +31,7 @@ use super::hash_send_source::HashSendSource;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
 
@@ -94,7 +95,7 @@ pub fn via_exchange_source(
 }
 
 /// Add HashSendSource receivers to the pipeline for hash exchange source-only path.
-/// Existing pipeline outputs pass through as DummyTransforms; remote InboundChannels
+/// Existing pipeline outputs pass through as DummyTransforms; remote ExchangeQueueReceivers
 /// are added as HashSendSource processors.
 #[allow(dead_code)]
 pub fn via_hash_exchange_source(
@@ -106,11 +107,11 @@ pub fn via_hash_exchange_source(
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
 
-    let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+    let receive_channels = exchange_manager.get_exchange_receive_channels(query_id, exchange_id)?;
     let waker = pipeline.get_waker();
 
     let last_output_len = pipeline.output_len();
-    let num_receivers = channel_set.channels.len();
+    let num_receivers = receive_channels.receivers.len();
     let mut items = Vec::with_capacity(last_output_len + num_receivers);
 
     for _index in 0..last_output_len {
@@ -124,10 +125,10 @@ pub fn via_hash_exchange_source(
         ));
     }
 
-    for idx in 0..num_receivers {
+    for (idx, receiver) in receive_channels.receivers.iter().enumerate() {
         items.push(HashSendSource::create_item(
             idx,
-            channel_set.create_receiver(idx, &params.schema),
+            ExchangeQueueReceiver::create(&params.schema, receiver.clone()),
             waker.clone(),
         ));
     }

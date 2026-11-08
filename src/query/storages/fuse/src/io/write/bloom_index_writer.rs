@@ -28,6 +28,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_blocks::block_to_parquet_with_writer;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::BloomIndexType;
@@ -360,7 +361,7 @@ impl BloomIndexRebuilder {
             self.table_dal.clone(),
             self.table_schema.clone(),
             projection,
-            false,
+            CachePolicy::READ_ONLY,
         )?;
 
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;

@@ -15,12 +15,15 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_sql::binder::validate_constraints_by_schema;
@@ -38,56 +41,80 @@ impl FuseTable {
         navigation_descriptor: NavigationDescriptor,
     ) -> Result<()> {
         // 1. try navigate to the point
-        let table = self
+        let (table_reverting_to, snapshot_timestamp) = self
             .navigate_for_revert(&ctx, &navigation_descriptor.point)
             .await?;
-        let table_reverting_to = FuseTable::try_from_table(table.as_ref())?;
 
+        let target_snapshot_location = table_reverting_to.snapshot_loc().ok_or_else(|| {
+            ErrorCode::Internal(
+                "internal error, fuse table which navigated to given point has no snapshot location",
+            )
+        })?;
+        let current_snapshot_location = self.snapshot_loc();
         // shortcut. if reverting to the same point, just return ok
-        if self.snapshot_loc() == table_reverting_to.snapshot_loc() {
+        if current_snapshot_location.as_deref() == Some(&target_snapshot_location) {
             return Ok(());
         }
 
-        // 2. prepare table meta which being reverted to
-        let table_meta_to_be_committed = table_reverting_to.table_info.meta.clone();
+        // Legacy snapshots may have no timestamp. Reject them with a user-facing error here;
+        // a missing timestamp on a newly generated commit remains an internal invariant error.
+        if snapshot_timestamp.is_none()
+            && self
+                .table_info
+                .meta
+                .options
+                .contains_key(OPT_KEY_CLONE_GROUP_ID)
+        {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Cannot FLASHBACK a clone-group member to a snapshot with no timestamp: \
+                 its GC safety cannot be verified",
+            ));
+        }
 
-        // 3. prepare the request
-        //  using the CURRENT version as the base table version
-        let base_version = self.table_info.ident.seq;
-        let table_id = self.table_info.ident.table_id;
+        // Only clone-group members check and touch the fence; ordinary FLASHBACK is unchanged.
+        // A live TAG preserves reads but does not permit restoring clone-group history below LVT.
+        let lvt_check =
+            Self::build_table_lvt_check(&self.table_info, snapshot_timestamp)?.map(|mut check| {
+                check.touch = true;
+                check
+            });
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(base_version),
-            new_table_meta: table_meta_to_be_committed.clone(),
-            base_snapshot_location: self.snapshot_loc(),
-            lvt_check: None,
+            table_id: self.table_info.ident.table_id,
+            seq: MatchSeq::Exact(self.table_info.ident.seq),
+            new_table_meta: table_reverting_to.table_info.meta.clone(),
+            base_snapshot_location: current_snapshot_location,
+            lvt_check,
         };
 
-        // 4. let's roll
-        let reply = catalog
+        // Publish the historical metadata.
+        catalog
             .update_single_table_meta(&tenant, req, &self.table_info)
+            .await
+            .map_err(|err| {
+                if let NavigationPoint::TableTag(name) = &navigation_descriptor.point
+                    && err.code() == ErrorCode::TABLE_SNAPSHOT_EXPIRED
+                {
+                    return err.add_message(format!(
+                        "Cannot FLASHBACK to TAG '{name}': clone group members cannot restore \
+                         snapshots below LVT. An active TAG preserves historical reads."
+                    ));
+                }
+                err
+            })?;
+
+        // Leave a hint file indicating the latest snapshot location.
+        let snapshot_hint_writer =
+            SnapshotHintWriter::new(ctx.as_ref(), &table_reverting_to.operator);
+        snapshot_hint_writer
+            .write_last_snapshot_hint(
+                &table_reverting_to.meta_location_generator,
+                &target_snapshot_location,
+                &table_reverting_to.table_info.meta,
+            )
             .await;
-        if reply.is_ok() {
-            // try keeping the snapshot hit
-            let snapshot_location = table_reverting_to.snapshot_loc().ok_or_else(|| {
-                    ErrorCode::Internal("internal error, fuse table which navigated to given point has no snapshot location")
-                })?;
-
-            // Left a hint file which indicates the location of the latest snapshot
-            let snapshot_hint_writer =
-                SnapshotHintWriter::new(ctx.as_ref(), &table_reverting_to.operator);
-            snapshot_hint_writer
-                .write_last_snapshot_hint(
-                    &table_reverting_to.meta_location_generator,
-                    &snapshot_location,
-                    &table_meta_to_be_committed,
-                )
-                .await;
-        };
-
-        reply.map(|_| ())
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -95,7 +122,7 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         point: &NavigationPoint,
-    ) -> Result<Arc<FuseTable>> {
+    ) -> Result<(Box<FuseTable>, Option<DateTime<Utc>>)> {
         let Some(snapshot_loc) = self.navigate_to_location(ctx.clone(), point).await? else {
             return Err(ErrorCode::TableHistoricalDataNotFound(
                 "No historical data found at given point",
@@ -111,6 +138,10 @@ impl FuseTable {
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
         if self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot.as_ref())? {
+            // Restore the original FLASHBACK behavior for non-versioned derived and legacy metadata.
+            table_info.meta.virtual_schema = None;
+            table_info.meta.column_mask_policy = None;
+            table_info.meta.row_access_policy = None;
             self.validate_revert_metadata(ctx, &table_info.meta).await?;
         }
 
@@ -118,13 +149,15 @@ impl FuseTable {
             databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION.to_string(),
             snapshot_loc,
         );
-        self.apply_snapshot_statistics(&mut table_info.meta, snapshot.as_ref());
+        Self::apply_snapshot_statistics(&mut table_info.meta, snapshot.as_ref());
 
-        Ok(FuseTable::create_without_refresh_table_info(
-            table_info,
-            ctx.get_settings().get_s3_storage_class()?,
-        )?
-        .into())
+        Ok((
+            FuseTable::create_without_refresh_table_info(
+                table_info,
+                ctx.get_settings().get_s3_storage_class()?,
+            )?,
+            snapshot.timestamp,
+        ))
     }
 
     async fn validate_revert_metadata(

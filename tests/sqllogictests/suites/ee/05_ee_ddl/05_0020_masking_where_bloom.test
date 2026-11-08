@@ -1,0 +1,158 @@
+statement ok
+SET enable_planner_cache = 1
+
+statement ok
+SET enable_query_result_cache = 0
+
+# Two blocks with identical [1, 10] ranges: equality on 5 cannot use Min/Max
+# to distinguish them. EXPLAIN must show Bloom pruning, not just correct rows.
+statement ok
+DROP TABLE IF EXISTS masking_where_bloom
+
+statement ok
+DROP MASKING POLICY IF EXISTS masking_where_number
+
+statement ok
+CREATE MASKING POLICY masking_where_number AS (val INT) RETURNS INT -> -1
+
+statement ok
+CREATE TABLE masking_where_bloom(id INT, secret INT) bloom_index_columns = 'secret' storage_format = 'parquet'
+
+statement ok
+INSERT INTO masking_where_bloom VALUES (1, 1), (2, 5), (3, 10)
+
+statement ok
+INSERT INTO masking_where_bloom VALUES (4, 1), (5, 7), (6, 10)
+
+statement ok
+ALTER TABLE masking_where_bloom MODIFY COLUMN secret SET MASKING POLICY masking_where_number
+
+query I
+SELECT count(*) FROM masking_where_bloom WHERE secret = 5
+----
+0
+
+# A predicate on the masked value must not be pushed onto the original Bloom
+# filter: -1 is absent from storage, but all six masked rows match it.
+query I
+SELECT count(*) FROM masking_where_bloom WHERE secret = -1
+----
+6
+
+statement ok
+ALTER TABLE masking_where_bloom MODIFY COLUMN secret SET MASKING POLICY masking_where_number OPTIONS (where_use_unmasked_value = true)
+
+query T
+EXPLAIN SELECT id FROM masking_where_bloom WHERE secret = 5
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 2<slt:ignore>bloom pruning: 2 to 1<slt:ignore>
+
+query II
+SELECT id, secret FROM masking_where_bloom WHERE secret = 5
+----
+2 -1
+
+query I
+SELECT count(*) FROM masking_where_bloom WHERE secret = 5
+----
+1
+
+query II
+SELECT id, secret FROM masking_where_bloom WHERE secret IN (5, 7) ORDER BY id
+----
+2 -1
+5 -1
+
+query I
+SELECT count(*) FROM masking_where_bloom WHERE secret = 6
+----
+0
+
+query I
+SELECT count(*) FROM masking_where_bloom WHERE secret = -1
+----
+0
+
+# The raw WHERE exception does not apply to a predicate in JOIN ON.
+query I
+SELECT count(*) FROM masking_where_bloom b JOIN (SELECT 5 AS secret) s ON b.secret = s.secret
+----
+0
+
+# New writes still index stored values, not the policy's output.
+statement ok
+INSERT INTO masking_where_bloom VALUES (7, 5), (8, NULL)
+
+query II
+SELECT id, secret FROM masking_where_bloom WHERE secret = 5 ORDER BY id
+----
+2 -1
+7 -1
+
+query II
+SELECT id, secret FROM masking_where_bloom WHERE secret IS NULL
+----
+8 -1
+
+# Changing authorization must invalidate the previous raw predicate plan.
+statement ok
+ALTER TABLE masking_where_bloom MODIFY COLUMN secret SET MASKING POLICY masking_where_number OPTIONS (where_use_unmasked_value = false)
+
+query I
+SELECT count(*) FROM masking_where_bloom WHERE secret = 5
+----
+0
+
+query I
+SELECT count(*) FROM masking_where_bloom WHERE secret = -1
+----
+8
+
+statement ok
+DROP TABLE masking_where_bloom
+
+# Range pruning is covered separately with Bloom explicitly disabled.
+statement ok
+DROP TABLE IF EXISTS masking_where_range
+
+statement ok
+CREATE TABLE masking_where_range(id INT, secret INT) bloom_index_columns = '' storage_format = 'parquet'
+
+statement ok
+INSERT INTO masking_where_range VALUES (1, 1), (2, 2), (3, 3)
+
+statement ok
+INSERT INTO masking_where_range VALUES (4, 100), (5, 101), (6, 102)
+
+statement ok
+ALTER TABLE masking_where_range MODIFY COLUMN secret SET MASKING POLICY masking_where_number OPTIONS (where_use_unmasked_value = true)
+
+query T
+EXPLAIN SELECT id FROM masking_where_range WHERE secret BETWEEN 100 AND 101
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
+
+query II
+SELECT id, secret FROM masking_where_range WHERE secret BETWEEN 100 AND 101 ORDER BY id
+----
+4 -1
+5 -1
+
+statement ok
+ALTER TABLE masking_where_range MODIFY COLUMN secret SET MASKING POLICY masking_where_number OPTIONS (where_use_unmasked_value = false)
+
+query I
+SELECT count(*) FROM masking_where_range WHERE secret BETWEEN 100 AND 101
+----
+0
+
+query I
+SELECT count(*) FROM masking_where_range WHERE secret = -1
+----
+6
+
+statement ok
+DROP TABLE masking_where_range
+
+statement ok
+DROP MASKING POLICY masking_where_number

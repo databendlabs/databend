@@ -67,6 +67,7 @@ use crate::interpreters::interpreter_create_workload_group::CreateWorkloadGroupI
 use crate::interpreters::interpreter_drop_warehouse_cluster::DropWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_drop_warehouses::DropWarehouseInterpreter;
 use crate::interpreters::interpreter_drop_workload_group::DropWorkloadGroupInterpreter;
+use crate::interpreters::interpreter_external_access::ExternalAccessInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
@@ -889,6 +890,10 @@ impl InterpreterFactory {
             #[cfg(not(feature = "task-support"))]
             Plan::ShowTasks(_) => Err(task_support_disabled("SHOW TASKS")),
 
+            Plan::ExternalAccess(stmt) => Ok(Arc::new(ExternalAccessInterpreter::new(
+                ctx,
+                stmt.as_ref().clone(),
+            ))),
             Plan::CreateConnection(p) => Ok(Arc::new(CreateConnectionInterpreter::try_create(
                 ctx,
                 *p.clone(),

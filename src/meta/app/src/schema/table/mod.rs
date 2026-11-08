@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -213,6 +214,11 @@ pub struct TableMeta {
     // ColumnId always equals the first value in SecurityPolicyColumnMap::columns_ids
     // One table can have multiple masking policies
     pub column_mask_policy_columns_ids: BTreeMap<ColumnId, SecurityPolicyColumnMap>,
+
+    /// Masked source columns whose original values may be inspected in SELECT WHERE.
+    /// This is an owner-authorized information disclosure, not a session setting.
+    #[serde(default)]
+    pub masking_where_use_unmasked_value: BTreeSet<ColumnId>,
     // One table only has an unique row access policy
     // should be discard
     pub row_access_policy: Option<String>,
@@ -434,6 +440,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             column_mask_policy: None,
             column_mask_policy_columns_ids: BTreeMap::new(),
+            masking_where_use_unmasked_value: BTreeSet::new(),
             row_access_policy: None,
             row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
@@ -540,6 +547,15 @@ impl Display for TableIdList {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTableCloneMeta {
+    pub source_table_id: u64,
+    pub source_table_seq: MatchSeq,
+    /// Timestamp of the source state selected for the clone. Empty tables use the request time.
+    /// This is mandatory so Meta can never skip the source LVT fence.
+    pub snapshot_timestamp: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
     pub create_option: CreateOption,
     pub catalog_name: Option<String>,
@@ -570,6 +586,9 @@ pub struct CreateTableReq {
     /// validates that the definition is still bound to the source metadata
     /// recorded in the CREATE plan. It is `None` for non-MV tables.
     pub materialized_view: Option<CreateMaterializedViewMeta>,
+
+    /// Source validation and lineage for a zero-copy table clone.
+    pub clone: Option<CreateTableCloneMeta>,
 
     /// Iceberg table properties
     pub table_properties: Option<BTreeMap<String, String>>,
@@ -838,8 +857,9 @@ pub struct UpdateTableMetaReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableLvtCheck {
-    pub tenant: Tenant,
     pub time: DateTime<Utc>,
+    /// Historical head publication must invalidate GC marks in the same transaction.
+    pub touch: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -905,6 +925,7 @@ pub struct SetTableColumnMaskPolicyReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub action: SetSecurityPolicyAction,
+    pub where_use_unmasked_value: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -912,9 +933,10 @@ pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SetSecurityPolicyAction {
-    // new policy name
+    // Policy ID and argument column IDs.
     Set(u64, Vec<ColumnId>),
-    // old policy name
+    // Masking: target ColumnId (losslessly widened to u64).
+    // Row access: policy ID.
     Unset(u64),
 }
 

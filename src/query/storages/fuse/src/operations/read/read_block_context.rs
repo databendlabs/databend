@@ -20,7 +20,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -157,22 +156,22 @@ impl ReadBlockContext {
         &self,
         part: &PartInfoPtr,
         groups: &[Vec<std::ops::Range<usize>>],
-        lock_stats: Arc<CacheLockStats>,
     ) -> Result<GranuleDataReader> {
         let fuse_part = FuseBlockPartInfo::from_part(part)?;
         let granule_index = fuse_part
             .granule_index
             .as_ref()
             .ok_or_else(|| ErrorCode::Internal("granule index metadata is missing"))?;
-        let ignore_column_ids = self.virtual_reader.as_ref().as_ref().and_then(|reader| {
+        // Plan-time `ignorable_source_column_ids` already keeps output and prewhere columns.
+        let ignore_column_ids = self.virtual_reader.as_ref().as_ref().and_then(|_| {
             fuse_part
                 .block_meta_index()
                 .and_then(|index| index.virtual_block_meta.as_ref())
-                .and_then(|meta| reader.generate_ignore_column_ids(&meta.ignored_source_column_ids))
+                .map(|meta| &meta.ignored_source_column_ids)
+                .filter(|ids| !ids.is_empty())
         });
-        let offsets = OffsetsIndex::load_with_stats(
+        let offsets = OffsetsIndex::load(
             self.block_read_ctx.operator(),
-            &self.read_settings,
             &granule_index.offsets,
             granule_index.granule_rows as usize,
             fuse_part.nums_rows,
@@ -181,12 +180,7 @@ impl ReadBlockContext {
                 .project_indices()
                 .values()
                 .map(|(column_id, ..)| *column_id)
-                .filter(|id| {
-                    !ignore_column_ids
-                        .as_ref()
-                        .is_some_and(|ignored| ignored.contains(id))
-                }),
-            Some(lock_stats.clone()),
+                .filter(|id| !ignore_column_ids.is_some_and(|ignored| ignored.contains(id))),
         )?;
         GranuleDataReader::create(
             &self.block_read_ctx,
@@ -194,8 +188,7 @@ impl ReadBlockContext {
             fuse_part,
             groups,
             &offsets,
-            ignore_column_ids.as_ref(),
-            Some(lock_stats),
+            ignore_column_ids,
         )
     }
 
@@ -203,7 +196,6 @@ impl ReadBlockContext {
         &self,
         part: &PartInfoPtr,
         groups: &[Vec<std::ops::Range<usize>>],
-        lock_stats: Arc<CacheLockStats>,
     ) -> Result<Option<GranuleDataReader>> {
         if self.virtual_reader.is_none() {
             return Ok(None);
@@ -236,9 +228,8 @@ impl ReadBlockContext {
                 )
             })
             .collect::<HashMap<_, _>>();
-        let offsets = OffsetsIndex::load_named_with_stats(
+        let offsets = OffsetsIndex::load_named(
             self.block_read_ctx.operator(),
-            &self.read_settings,
             &layout.offsets,
             layout.granule_rows as usize,
             part.nums_rows,
@@ -252,17 +243,7 @@ impl ReadBlockContext {
                         crate::io::virtual_offset_mark(&meta.virtual_block_location, slot.offset),
                     )
                 }),
-            Some(lock_stats.clone()),
         )?;
-        // The largest projected chunk end is sufficient: readers never request footer bytes.
-        let file_len = columns
-            .values()
-            .map(|meta| {
-                let (offset, len) = meta.offset_length();
-                offset + len
-            })
-            .max()
-            .unwrap_or(0);
         let schema = VirtualColumnReader::read_schema(meta).ok_or_else(|| {
             ErrorCode::Internal(format!(
                 "virtual sidecar {} has a read slot without a parquet type",
@@ -277,13 +258,11 @@ impl ReadBlockContext {
             &self.block_read_ctx,
             &self.read_settings,
             &meta.virtual_block_location,
-            file_len,
             part.nums_rows,
             &columns,
             column_types,
             groups,
             &offsets,
-            Some(lock_stats),
         )?))
     }
 

@@ -40,6 +40,7 @@ use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::ScanColumnStatistics;
 use databend_common_sql::plans::Statistics;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
@@ -108,9 +109,7 @@ impl ColumnStats {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HistogramStats {
-    pub accuracy: bool,
     pub buckets: Vec<HistogramBucketStats>,
-    pub avg_spacing: Option<f64>,
 }
 
 impl HistogramStats {
@@ -129,7 +128,7 @@ impl HistogramStats {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Histogram::try_from_buckets(self.accuracy, buckets, self.avg_spacing)
+        Histogram::try_from_buckets(buckets)
             .map_err(|err| ErrorCode::Internal(format!("invalid histogram: {err}")))
     }
 }
@@ -539,7 +538,7 @@ impl StatsApplier<'_> {
         metadata: &Metadata,
         table_index: IndexType,
         table_name: &str,
-    ) -> HashMap<Symbol, Option<BasicColumnStatistics>> {
+    ) -> HashMap<Symbol, Option<ScanColumnStatistics>> {
         let mut result = HashMap::new();
 
         for column in metadata.columns_by_table_index(table_index) {
@@ -554,7 +553,15 @@ impl StatsApplier<'_> {
                     let mut stats = stats.to_basic_column_statistics();
                     stats.min = stats.min.or_else(|| default_min_datum(&column.data_type()));
                     stats.max = stats.max.or_else(|| default_max_datum(&column.data_type()));
-                    result.insert(*column_index, Some(stats));
+                    result.insert(
+                        *column_index,
+                        Some(ScanColumnStatistics {
+                            basic: stats,
+                            histogram_spacing_unit: Statistics::histogram_spacing_unit(
+                                &column.data_type(),
+                            ),
+                        }),
+                    );
                 }
             }
         }
@@ -600,6 +607,8 @@ pub trait TestCaseRunner {
 
     async fn optimize_plan(&self, plan: Plan) -> Result<Plan>;
 
+    fn stat_context(&self) -> Result<StatContext>;
+
     async fn build_physical(&self, _optimized: &Plan) -> Result<Option<String>> {
         Ok(None)
     }
@@ -622,7 +631,7 @@ where
     )?;
     let raw = raw_plan.format_indent(
         databend_common_sql::FormatOptions { verbose: false },
-        &StatContext::default(),
+        &runner.stat_context()?,
     )?;
     write_result(mint, &format!("{}_raw.txt", case.stem), |f| {
         writeln!(f, "{}", raw).map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))
@@ -631,7 +640,7 @@ where
     let optimized_plan = runner.optimize_plan(raw_plan).await?;
     let optimized = optimized_plan.format_indent(
         databend_common_sql::FormatOptions::default(),
-        &StatContext::default(),
+        &runner.stat_context()?,
     )?;
     write_result(mint, &format!("{}_optimized.txt", case.stem), |f| {
         writeln!(f, "{}", optimized)

@@ -38,6 +38,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::decimal::DecimalScalar;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -107,9 +108,12 @@ impl FuseTable {
                 .parse::<u64>()?,
             Some(_) => {
                 if let Some(snapshot_loc) = &location {
-                    let (snapshot, _) =
-                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator(), true)
-                            .await?;
+                    let (snapshot, _) = SnapshotsIO::read_snapshot(
+                        snapshot_loc.clone(),
+                        self.get_operator(),
+                        CachePolicy::DEFAULT,
+                    )
+                    .await?;
                     let Some(prev_table_seq) = snapshot.prev_table_seq else {
                         return Err(ErrorCode::IllegalStream(
                             "The stream navigation at point has not table version".to_string(),
@@ -368,8 +372,12 @@ impl FuseTable {
         let latest = self.snapshot_loc();
 
         let latest_segments = if let Some(snapshot) = latest {
-            let (sn, _) =
-                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator(), true).await?;
+            let (sn, _) = SnapshotsIO::read_snapshot(
+                snapshot.to_string(),
+                self.get_operator(),
+                CachePolicy::DEFAULT,
+            )
+            .await?;
             HashSet::from_iter(sn.segments.clone())
         } else {
             HashSet::new()
@@ -409,7 +417,7 @@ impl FuseTable {
         let mut base_blocks = HashMap::new();
         for chunk in diff_in_base.chunks(chunk_size) {
             let segments = fuse_segment_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
             for segment in segments {
                 let segment = segment?;
@@ -422,7 +430,7 @@ impl FuseTable {
         let mut add_blocks = Vec::new();
         for chunk in diff_in_latest.chunks(chunk_size) {
             let segments = fuse_segment_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
 
             for segment in segments {
@@ -665,7 +673,12 @@ impl FuseTable {
         &self,
         base_location: &String,
     ) -> Result<Arc<TableSnapshot>> {
-        match SnapshotsIO::read_snapshot(base_location.to_string(), self.get_operator(), true).await
+        match SnapshotsIO::read_snapshot(
+            base_location.to_string(),
+            self.get_operator(),
+            CachePolicy::DEFAULT,
+        )
+        .await
         {
             Ok((base_snapshot, _)) => Ok(base_snapshot),
             Err(_) => Err(ErrorCode::IllegalStream(format!(
@@ -998,6 +1011,7 @@ mod tests {
             ngram_filter_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
+            vector_index_metas: None,
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,

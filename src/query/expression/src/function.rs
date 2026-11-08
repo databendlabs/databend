@@ -104,6 +104,12 @@ pub trait ScalarFunctionDomain: Send + Sync + 'static {
 
 pub trait ScalarFunction: Send + Sync + 'static {
     fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType>;
+
+    /// Whether `eval` accepts [`crate::Column::Encoded`] arguments. Column arguments
+    /// of functions that return `false` are decoded before the call.
+    fn accepts_encoded_args(&self) -> bool {
+        false
+    }
 }
 
 #[derive(EnumAsInner)]

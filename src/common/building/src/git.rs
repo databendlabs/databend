@@ -12,65 +12,88 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Git metadata for build scripts, read through the `git` CLI.
+//!
+//! We used to link `gix` into the build scripts, which costs ~85 CPU-seconds (125 crates) at the
+//! start of every clean build. Shelling out to `git` is what `vergen-gitcl` does as well.
+
 use std::collections::BTreeMap;
+use std::path::Path;
+use std::process::Command;
 
 use anyhow::Context;
 use anyhow::Result;
-use gix::Repository;
-use gix::commit::describe::SelectRef;
+use anyhow::bail;
 
-// Get the latest tag:
-// git describe --tags --abbrev=0
-// v0.6.99-nightly
-pub fn get_latest_tag(repo: &Repository) -> Result<String> {
-    let hc = repo.head_commit()?;
-
-    let desc = hc
-        .describe()
-        .names(SelectRef::AllTags)
-        .try_resolve()?
-        .with_context(|| {
-            format!(
-                "Did not find a single candidate ref for naming id '{}'",
-                hc.id
-            )
-        })?;
-    let tag = desc
-        .format()?
-        .name
-        .with_context(|| format!("Did not find a valid tag for '{}'", hc.id))?;
-    Ok(tag.to_string())
+/// Run `git <args>` in `dir` and return its trimmed stdout.
+fn git(dir: &Path, args: &[&str]) -> Result<String> {
+    let output = Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .with_context(|| format!("failed to run `git {}`", args.join(" ")))?;
+    if !output.status.success() {
+        bail!(
+            "`git {}` failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
-// Get commit author list
-// git shortlog HEAD -sne | awk '{$1=""; sub(" ", "    \""); print }' | awk -F'<' '!x[$1]++' | awk -F'<' '!x[$2]++' | awk -F'<' '{gsub(/ +$/, "\",", $1); print $1}' | sort | xargs
-// use email to uniq authors
-pub fn get_commit_authors(repo: &Repository) -> Result<String> {
-    let mut authors: BTreeMap<String, String> = BTreeMap::new();
+/// Top-level directory of the git work tree containing `dir`.
+pub fn discover(dir: &Path) -> Result<std::path::PathBuf> {
+    Ok(git(dir, &["rev-parse", "--show-toplevel"])?.into())
+}
 
-    let revwalk = repo
-        .rev_walk(Some(repo.head_id()?.detach()))
-        .all()?
-        .filter_map(Result::ok);
-    for oid in revwalk {
-        let cm = oid.object()?;
-        let author = cm.author()?;
-        let email = author.email.to_string();
-        if authors.contains_key(&email) {
-            continue;
+/// Name of the nearest tag (annotated or lightweight) reachable from HEAD.
+pub fn get_latest_tag(repo: &Path) -> Result<String> {
+    git(repo, &["describe", "--tags", "--abbrev=0", "HEAD"])
+        .context("Did not find a valid tag for HEAD")
+}
+
+/// Comma separated, sorted, de-duplicated author names of all commits reachable from HEAD.
+/// Authors are keyed by email; the name of the most recent commit for an email wins.
+pub fn get_commit_authors(repo: &Path) -> Result<String> {
+    let log = git(repo, &["log", "--format=%ae%x00%an", "HEAD"])?;
+
+    let mut authors: BTreeMap<&str, &str> = BTreeMap::new();
+    for line in log.lines() {
+        if let Some((email, name)) = line.split_once('\0') {
+            authors.entry(email).or_insert(name);
         }
-        let name = author.name.to_string();
-        authors.insert(email, name);
     }
 
-    let result = authors
-        .values()
-        .map(|name| (name, 1))
-        .collect::<BTreeMap<&String, u8>>()
-        .keys()
-        .map(|name| name.as_str())
+    let names = authors
+        .into_values()
+        .collect::<std::collections::BTreeSet<&str>>()
+        .into_iter()
         .collect::<Vec<&str>>()
         .join(", ");
+    Ok(names)
+}
 
-    Ok(result)
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    #[test]
+    fn test_git_metadata() -> Result<()> {
+        let repo = discover(Path::new(env!("CARGO_MANIFEST_DIR")))?;
+        // A shallow clone may have no tag; only check that the command works when one exists.
+        if let Ok(tag) = get_latest_tag(&repo) {
+            assert!(!tag.is_empty());
+        }
+        let authors = get_commit_authors(&repo)?;
+        assert!(!authors.is_empty());
+        let names: Vec<&str> = authors.split(", ").collect();
+        let mut sorted = names.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(names, sorted);
+        Ok(())
+    }
 }

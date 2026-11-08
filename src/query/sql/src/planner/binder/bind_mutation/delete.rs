@@ -32,7 +32,8 @@ impl Binder {
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
         bind_context: &mut BindContext,
-        stamt: &DeleteStmt,
+        stmt: &DeleteStmt,
+        expected_ttl: Option<String>,
     ) -> Result<Plan> {
         let DeleteStmt {
             catalog,
@@ -42,7 +43,7 @@ impl Binder {
             selection,
             with,
             ..
-        } = stamt;
+        } = stmt;
 
         self.init_cte(bind_context, with)?;
 
@@ -80,6 +81,7 @@ impl Binder {
             strategy: MutationStrategy::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
+            expected_ttl,
         };
 
         self.bind_mutation(bind_context, mutation).await

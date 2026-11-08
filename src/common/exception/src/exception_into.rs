@@ -392,6 +392,10 @@ impl From<tonic::Status> for ErrorCode {
                     .set_span(serialized_error.span),
                 }
             }
+            // tonic reports transport failures of an established channel as
+            // UNAVAILABLE: a connect error while reconnecting, a connection reset,
+            // or an expired keep-alive PING. None of these is an application error.
+            tonic::Code::Unavailable => ErrorCode::CannotConnectNode(status.to_string()),
             _ => ErrorCode::Unimplemented(status.to_string()),
         }
     }
