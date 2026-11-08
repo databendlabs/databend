@@ -21,6 +21,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_ast::ast::Engine;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -379,7 +380,11 @@ async fn set_segment_format(
                     projection.insert(field.name.clone());
                 }
                 let segments = segments_io
-                    .generic_read_segments::<RowOrientedSegmentReader>(chunk, false, &projection)
+                    .generic_read_segments::<RowOrientedSegmentReader>(
+                        chunk,
+                        CachePolicy::READ_ONLY,
+                        &projection,
+                    )
                     .await?;
                 for segment in segments {
                     let segment = segment?;

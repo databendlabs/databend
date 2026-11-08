@@ -13,11 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
@@ -27,14 +24,14 @@ use databend_common_metrics::cache::CacheLookupCounters;
 use databend_common_metrics::cache::get_cache_access_count;
 use databend_common_metrics::cache::get_cache_hit_count;
 use databend_common_metrics::cache::get_cache_miss_count;
+use log::info;
 use log::warn;
 
-use crate::CacheAccessor;
 use crate::CacheDef;
 use crate::CacheKind;
 use crate::CacheRef;
 use crate::CachedItem;
-use crate::DiskCacheAccessor;
+use crate::DiskCache;
 use crate::KindLimit;
 use crate::MemCache;
 use crate::Pool;
@@ -44,20 +41,24 @@ use crate::backend::KindEvents;
 use crate::backend::KindStore;
 use crate::backend::ReclaimStats;
 use crate::backend::ShrinkReport;
-use crate::disk::disk_tiers;
 use crate::legacy::LegacyKinds;
 use crate::legacy::LegacyStore;
 use crate::metrics::CacheMetricsCollector;
 use crate::shared::SharedStore;
 
 const POOL_PREFIX: &str = "pool:";
+const DISK_POOL_PREFIX: &str = "disk_pool:";
+const DISK_KIND_PREFIX: &str = "disk:";
+const DEFAULT_CAPACITY: &str = "default";
 
-/// One row of `system.caches`: a kind's memory tier, its disk tier, or a pool.
+/// One row of `system.caches`: a kind in memory or on disk, or a memory or disk pool.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheRow {
     pub name: String,
     pub kind: Option<CacheKind>,
     pub pool: Option<Pool>,
+    /// A row of the disk cache: a kind's bytes on disk, or a disk pool.
+    pub disk: bool,
     pub enabled: bool,
     pub num_items: u64,
     /// Bytes still alive, including values evicted but held by readers.
@@ -73,13 +74,11 @@ pub struct CacheRow {
     pub events: Option<KindEvents>,
 }
 
-/// The process-wide caches: the backend chosen by `cache.shared_memory_enabled` and the disk
-/// tiers. Hands out a typed cache per registered kind.
+/// The process-wide caches: the memory backend chosen by `cache.shared_memory_enabled`, and the
+/// disk cache below the readers. Hands out a typed memory cache per registered kind.
 pub struct CacheManager {
     store: Arc<dyn KindStore>,
-    disks: HashMap<CacheKind, Arc<DiskCacheAccessor>>,
-    /// Runtime switch of every disk tier; off when the license does not allow them.
-    disk_allowed: Arc<AtomicBool>,
+    disk: Option<Arc<DiskCache>>,
     /// In-flight loads of each kind sharing loads, by kind index: every handle of a kind shares
     /// them, so concurrent misses on one key load once even through handles made per call.
     flights: Box<[OnceLock<Arc<dyn Any + Send + Sync>>]>,
@@ -105,7 +104,7 @@ impl CacheManager {
         GlobalInstance::get()
     }
 
-    /// Disk tiers exist only in EE mode, and can then be turned off at runtime by
+    /// The disk cache exists only in EE mode, and can then be turned off at runtime by
     /// `set_disk_allowed`.
     pub fn try_new(
         config: &CacheConfig,
@@ -113,7 +112,14 @@ impl CacheManager {
         tenant_id: impl Into<String>,
         ee_mode: bool,
     ) -> Result<Self> {
-        let disks = disk_tiers(config, &tenant_id.into(), ee_mode)?;
+        let ignored = ignored_disk_options(config);
+        if !ignored.is_empty() {
+            info!(
+                "[CacheManager] The disk cache no longer reads: {}",
+                ignored.join(", ")
+            );
+        }
+        let disk = DiskCache::from_config(config, &tenant_id.into(), ee_mode)?;
         let store: Arc<dyn KindStore> = if config.shared_memory_enabled {
             let ignored = LegacyKinds::global().ignored_options(config, *max_server_memory_usage);
             if !ignored.is_empty() {
@@ -126,38 +132,31 @@ impl CacheManager {
         } else {
             Arc::new(LegacyStore::from_config(config, *max_server_memory_usage))
         };
-        let manager = CacheManager::new(store, disks);
-        manager.set_disk_allowed(ee_mode);
-        Ok(manager)
+        Ok(CacheManager::new(store, disk))
     }
 
-    pub fn new(
-        store: Arc<dyn KindStore>,
-        disks: HashMap<CacheKind, Arc<DiskCacheAccessor>>,
-    ) -> Self {
+    pub fn new(store: Arc<dyn KindStore>, disk: Option<Arc<DiskCache>>) -> Self {
         CacheManager {
             store,
-            disks,
-            disk_allowed: Arc::new(AtomicBool::new(true)),
+            disk,
             flights: CacheKind::all().map(|_| OnceLock::new()).collect(),
             counters: CacheKind::all().map(|_| OnceLock::new()).collect(),
         }
     }
 
-    /// The cache of kind `D`, with its disk tier when `D` defines one and the config enables it.
+    /// The memory cache of kind `D`.
     pub fn cache<D: CacheDef>(&self) -> MemCache<D::Value> {
         let kind = CacheKind::of::<D>();
         let flight = D::SHARE_LOADS.then(|| self.flight::<D::Value>(kind));
         let counters = self.counters[kind.index()]
             .get_or_init(|| Arc::new(CacheLookupCounters::new(kind.name())))
             .clone();
-        let cache = MemCache::with_shared(self.store.clone(), kind, counters, flight);
-        match (D::DISK, self.disks.get(&kind)) {
-            (Some(disk), Some(tier)) => {
-                cache.with_disk(tier.clone(), self.disk_allowed.clone(), disk.codec)
-            }
-            _ => cache,
-        }
+        MemCache::with_shared(self.store.clone(), kind, counters, flight)
+    }
+
+    /// The disk cache of the node, if `cache.data_cache_storage` is `disk` and the build is EE.
+    pub fn disk(&self) -> Option<Arc<DiskCache>> {
+        self.disk.clone()
     }
 
     fn flight<T: CachedItem>(&self, kind: CacheKind) -> Arc<SingleFlight<CacheRef<T>>> {
@@ -170,9 +169,11 @@ impl CacheManager {
             .unwrap_or_else(|_| panic!("cache {} read as another value type", kind.name()))
     }
 
-    /// Turns every disk tier on or off at runtime; memory tiers are unaffected.
+    /// Turns the disk cache on or off at runtime, by license; memory caches are unaffected.
     pub fn set_disk_allowed(&self, allowed: bool) {
-        self.disk_allowed.store(allowed, Ordering::Relaxed);
+        if let Some(disk) = &self.disk {
+            disk.set_allowed(allowed);
+        }
     }
 
     /// Evicts unreferenced entries until `relieved` returns true. Registered with the memory
@@ -187,14 +188,16 @@ impl CacheManager {
         self.store.reclaim_stats()
     }
 
-    /// Rows for `system.caches`: every kind, its disk tier while disk tiers are allowed, then
-    /// each pool. Kinds turned off are listed with `enabled: false`.
+    /// Rows for `system.caches`: every kind, its bytes on disk while the disk cache is on, then
+    /// each memory pool and each disk pool. Kinds turned off are listed with `enabled: false`.
     pub fn rows(&self) -> Vec<CacheRow> {
         self.composition()
             .into_iter()
             .map(|row| {
                 if row.kind.is_some() {
                     with_hits(row)
+                } else if row.disk {
+                    self.with_disk_pool_hits(row)
                 } else {
                     row
                 }
@@ -213,6 +216,7 @@ impl CacheManager {
                 name: kind.name().to_string(),
                 kind: Some(kind),
                 pool: Some(kind.pool()),
+                disk: false,
                 enabled: self.store.is_enabled(kind),
                 num_items: stats.items as u64,
                 size: stats.resident as u64,
@@ -224,18 +228,23 @@ impl CacheManager {
                 miss: 0,
                 events: stats.events,
             });
-            let disk_allowed = self.disk_allowed.load(Ordering::Relaxed);
-            if let Some(disk) = self.disks.get(&kind).filter(|_| disk_allowed) {
+            if let Some(disk) = self
+                .disk
+                .as_ref()
+                .filter(|d| d.is_allowed() && kind.on_disk())
+            {
+                let (items, bytes) = disk.kind_usage(kind);
                 rows.push(CacheRow {
-                    name: disk.name().to_string(),
+                    name: disk.metric_name(kind).to_string(),
                     kind: Some(kind),
                     pool: None,
-                    // Works without the memory tier.
-                    enabled: true,
-                    num_items: disk.len() as u64,
-                    size: disk.bytes_size(),
-                    in_cache_size: disk.bytes_size(),
-                    capacity: Some(disk.bytes_capacity()),
+                    disk: true,
+                    enabled: disk.is_enabled(kind),
+                    num_items: items,
+                    size: bytes,
+                    in_cache_size: bytes,
+                    // Bounded by its disk pool.
+                    capacity: None,
                     unit: Unit::Bytes,
                     access: 0,
                     hit: 0,
@@ -249,6 +258,7 @@ impl CacheManager {
                 name: format!("__{POOL_PREFIX}{}", stats.pool.name()),
                 kind: None,
                 pool: Some(stats.pool),
+                disk: false,
                 enabled: stats.cap > 0,
                 num_items: stats.items as u64,
                 size: stats.resident as u64,
@@ -261,7 +271,47 @@ impl CacheManager {
                 events: None,
             });
         }
+        if let Some(disk) = self.disk.as_ref().filter(|d| d.is_allowed()) {
+            for (pool, stats) in disk.pool_stats() {
+                rows.push(CacheRow {
+                    name: format!("__{DISK_POOL_PREFIX}{}", pool.name()),
+                    kind: None,
+                    pool: Some(pool),
+                    disk: true,
+                    enabled: stats.cap > 0,
+                    num_items: stats.items,
+                    size: stats.bytes,
+                    in_cache_size: stats.bytes,
+                    capacity: Some(stats.cap),
+                    unit: Unit::Bytes,
+                    access: 0,
+                    hit: 0,
+                    miss: 0,
+                    events: None,
+                });
+            }
+        }
         rows
+    }
+
+    fn with_disk_pool_hits(&self, row: CacheRow) -> CacheRow {
+        let stats = self
+            .disk
+            .as_ref()
+            .zip(row.pool)
+            .and_then(|(disk, pool)| {
+                disk.pool_stats()
+                    .into_iter()
+                    .find(|(p, _)| *p == pool)
+                    .map(|(_, s)| s)
+            })
+            .unwrap_or_default();
+        CacheRow {
+            access: stats.hit + stats.miss,
+            hit: stats.hit,
+            miss: stats.miss,
+            ..row
+        }
     }
 
     /// Accepts `all` (0 only) and `pool:<meta|index|data>` with the shared backend, and a kind
@@ -290,6 +340,58 @@ impl CacheManager {
         Ok(())
     }
 
+    /// `set_cache_capacity(<name>, <arg>)` with the argument as written in SQL: a number of
+    /// bytes (or items, for legacy kinds counted in items), `'<n>%'` of the disk cache's
+    /// `max_bytes` for a disk pool, or `'default'`. Names: `all`, `pool:<meta|index|data>`,
+    /// `disk_pool:<meta|index|data>`, `disk:<kind>`, a kind name or its old name.
+    pub fn set_cache_capacity_arg(&self, name: &str, arg: &str) -> Result<()> {
+        let arg = arg.trim();
+        if let Some(pool) = name.strip_prefix(DISK_POOL_PREFIX) {
+            let pool = Pool::from_name(pool).ok_or_else(|| {
+                ErrorCode::BadArguments(format!("unknown disk cache pool '{pool}'"))
+            })?;
+            let disk = self.disk_or_err()?;
+            let cap = if arg == DEFAULT_CAPACITY {
+                disk.default_pool_cap(pool)
+            } else if let Some(percent) = arg.strip_suffix('%') {
+                let percent = parse_u64(percent.trim(), arg)?;
+                if percent > 100 {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "disk pool capacity {arg} is over 100%"
+                    )));
+                }
+                (disk.max_bytes() as u128 * percent as u128 / 100) as u64
+            } else {
+                parse_u64(arg, arg)?
+            };
+            return disk.set_pool_cap(pool, cap);
+        }
+        if let Some(kind) = name.strip_prefix(DISK_KIND_PREFIX) {
+            let kind = adjustable_kind(kind)?;
+            if !kind.on_disk() {
+                return Err(ErrorCode::BadArguments(format!(
+                    "cache {} has no disk cache",
+                    kind.name()
+                )));
+            }
+            let enabled = arg == DEFAULT_CAPACITY || parse_u64(arg, arg)? > 0;
+            self.disk_or_err()?.set_kind_enabled(kind, enabled);
+            return Ok(());
+        }
+        if arg == DEFAULT_CAPACITY {
+            return self.set_cache_capacity_default(name);
+        }
+        self.set_cache_capacity(name, parse_u64(arg, arg)?)
+    }
+
+    fn disk_or_err(&self) -> Result<&Arc<DiskCache>> {
+        self.disk.as_ref().ok_or_else(|| {
+            ErrorCode::BadArguments(
+                "the disk cache is off: set cache.data_cache_storage = 'disk' (EE only)",
+            )
+        })
+    }
+
     /// Capacity `default` of a kind: back to the limit it started with, from the kind's
     /// `CacheDef::SHARED_DEFAULT` or `cache.kind_max_bytes`. Shared backend only: the legacy
     /// backend has no pools to bound a kind without a capacity.
@@ -301,6 +403,74 @@ impl CacheManager {
         self.store.set_kind_limit(kind, limit);
         Ok(())
     }
+}
+
+fn parse_u64(value: &str, arg: &str) -> Result<u64> {
+    value.parse::<u64>().map_err(|_| {
+        ErrorCode::BadArguments(format!(
+            "cache capacity must be a number of bytes, '<n>%' or 'default', got '{arg}'"
+        ))
+    })
+}
+
+/// Options of the pre-refactor disk tiers the disk cache no longer reads, when set: the disk
+/// pools replace the per-kind sizes, column chunks are no longer kept in memory as raw bytes,
+/// and the queue is bounded in bytes, by `cache.disk.queue_bytes`. They are still accepted, so configs written for older versions start.
+fn ignored_disk_options(config: &CacheConfig) -> Vec<&'static str> {
+    let sizes = [
+        (
+            "disk_cache_table_bloom_index_meta_size",
+            config.disk_cache_table_bloom_index_meta_size,
+        ),
+        (
+            "disk_cache_table_bloom_index_data_size",
+            config.disk_cache_table_bloom_index_data_size,
+        ),
+        (
+            "disk_cache_inverted_index_meta_size",
+            config.disk_cache_inverted_index_meta_size,
+        ),
+        (
+            "disk_cache_inverted_index_lookup_size",
+            config.disk_cache_inverted_index_lookup_size,
+        ),
+        (
+            "disk_cache_inverted_index_payload_size",
+            config.disk_cache_inverted_index_payload_size,
+        ),
+        (
+            "disk_cache_vector_index_meta_size",
+            config.disk_cache_vector_index_meta_size,
+        ),
+        (
+            "disk_cache_vector_index_data_size",
+            config.disk_cache_vector_index_data_size,
+        ),
+        (
+            "disk_cache_spatial_index_meta_size",
+            config.disk_cache_spatial_index_meta_size,
+        ),
+        (
+            "disk_cache_spatial_index_data_size",
+            config.disk_cache_spatial_index_data_size,
+        ),
+        (
+            "disk_cache_virtual_column_meta_size",
+            config.disk_cache_virtual_column_meta_size,
+        ),
+    ];
+    let mut ignored: Vec<&'static str> = sizes
+        .into_iter()
+        .filter(|(_, size)| *size > 0)
+        .map(|(name, _)| name)
+        .collect();
+    if config.data_cache_in_memory_bytes > 0 {
+        ignored.push("data_cache_in_memory_bytes");
+    }
+    if config.table_data_cache_population_queue_size > 0 {
+        ignored.push("table_data_cache_population_queue_size");
+    }
+    ignored
 }
 
 fn adjustable_kind(name: &str) -> Result<CacheKind> {

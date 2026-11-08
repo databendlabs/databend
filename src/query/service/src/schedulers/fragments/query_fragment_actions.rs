@@ -35,6 +35,7 @@ use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextPerf;
 use crate::sessions::TableContextQueryIdentity;
@@ -215,6 +216,7 @@ impl QueryFragmentsActions {
                 .get_create_query_flight_client_with_current_rt()?,
             perf_config: self.ctx.get_perf_config(),
             user: self.ctx.get_current_user()?,
+            cache_policy: self.ctx.cache_policy(),
         })
     }
 

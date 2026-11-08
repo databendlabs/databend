@@ -12,25 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use crate::cache_policy::CachePolicy;
 
-use bytes::Bytes;
-use databend_common_exception::Result;
-
-/// Serialization of the values of kinds that have a disk tier.
-pub trait DiskCodec: Sized {
-    fn encode(&self) -> Result<Vec<u8>>;
-
-    fn decode(bytes: Bytes) -> Result<Self>;
-}
-
-/// For kinds whose entries are handed out as `Arc<T>`.
-impl<T: DiskCodec> DiskCodec for Arc<T> {
-    fn encode(&self) -> Result<Vec<u8>> {
-        T::encode(self)
+/// The cache policy of the statement: readers built from the context apply it, together with
+/// their own (`CachePolicy::at_most`).
+pub trait TableContextCachePolicy: Send + Sync {
+    fn cache_policy(&self) -> CachePolicy {
+        CachePolicy::DEFAULT
     }
 
-    fn decode(bytes: Bytes) -> Result<Self> {
-        T::decode(bytes).map(Arc::new)
+    /// Sets the statement's policy, for the reads of the statement on every node from then on.
+    fn set_cache_policy(&self, _policy: CachePolicy) {
+        unimplemented!()
     }
 }

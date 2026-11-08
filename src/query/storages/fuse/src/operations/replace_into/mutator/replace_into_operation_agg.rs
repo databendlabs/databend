@@ -44,6 +44,7 @@ use databend_common_metrics::storage::*;
 use databend_common_sql::StreamContext;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
@@ -284,7 +285,7 @@ impl ReplaceIntoMutatorParams {
             data_accessor.clone(),
             table_schema.clone(),
             Projection::Columns(key_column_field_indexes),
-            false,
+            CachePolicy::READ_ONLY,
         )?;
         let remain_column_reader = if remain_column_field_ids.is_empty() {
             None
@@ -294,7 +295,7 @@ impl ReplaceIntoMutatorParams {
                 data_accessor.clone(),
                 table_schema.clone(),
                 Projection::Columns(remain_column_field_ids.clone()),
-                false,
+                CachePolicy::READ_ONLY,
             )?)
         };
         let stream_ctx = if table.change_tracking_enabled() {
@@ -320,7 +321,9 @@ impl ReplaceIntoMutatorParams {
             data_accessor,
             write_settings,
             read_settings: self.read_settings,
-            segment_cache: FuseCaches::instance().segments.clone(),
+            segment_cache: FuseCaches::instance()
+                .segments
+                .with_policy(ctx.cache_policy()),
             segment_reader,
             block_builder: self.block_builder,
             stream_ctx,
@@ -844,6 +847,7 @@ impl AggregationContext {
                 &self.read_settings,
                 &col_names,
                 index_len,
+                self.key_column_reader.policy,
             )
             .await?;
 

@@ -24,7 +24,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
+use databend_storages_common_cache::CacheFill;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_index::VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE;
 use databend_storages_common_index::VECTOR_BUNDLE_TRAILER_SIZE;
 use databend_storages_common_index::VectorBundleFooter;
@@ -32,7 +37,6 @@ use databend_storages_common_index::VectorBundlePageRead;
 use databend_storages_common_index::VectorBundleTrailer;
 use databend_storages_common_index::VectorIndexFile;
 use databend_storages_common_index::VectorIndexMeta;
-use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use opendal::Operator;
 
@@ -51,10 +55,14 @@ pub async fn load_bundle_footer(
     operator: Operator,
     location: &str,
     size: u64,
+    policy: CachePolicy,
 ) -> Result<Arc<VectorBundleFooter>> {
     // Parsed footers live in the vector index meta cache, keyed by location (bundle
     // and legacy files have different paths), so hits need no I/O or parsing.
-    let cache = &FuseCaches::instance().index_metas.vector;
+    let cache = &FuseCaches::instance()
+        .index_metas
+        .vector
+        .with_policy(policy);
     if let Some(meta) = cache.lookup(location) {
         return match meta.as_ref() {
             VectorIndexMeta::Bundle(footer) => Ok(footer.clone()),
@@ -70,11 +78,13 @@ pub async fn load_bundle_footer(
     // only a footer larger than the initial read needs a second request.
     let tail_start = size.saturating_sub(VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE as u64);
     let expected_tail_len = size - tail_start;
-    let tail = operator
-        .read_with(location)
-        .range(tail_start..size)
-        .await?
-        .to_bytes();
+    // The tail and, when larger, the footer are units of the disk cache.
+    let storage = DiskCachedStorage::new(operator);
+    let meta_kind = CacheKind::of::<vector::Meta>();
+    let fill = cache.policy().disk;
+    let tail = storage
+        .read(meta_kind, location, Some(tail_start..size), fill)
+        .await?;
     // Both the trailer and an in-tail footer are sliced using the recorded size.
     if tail.len() as u64 != expected_tail_len {
         return Err(ErrorCode::StorageOther(format!(
@@ -89,7 +99,7 @@ pub async fn load_bundle_footer(
     let footer_bytes = if range.start >= tail_start {
         tail.slice((range.start - tail_start) as usize..(range.end - tail_start) as usize)
     } else {
-        let bytes = operator.read_with(location).range(range).await?.to_bytes();
+        let bytes = storage.read(meta_kind, location, Some(range), fill).await?;
         read_bytes += bytes.len();
         bytes
     };
@@ -168,17 +178,31 @@ async fn load_bundle_reads_inner(
         }
     }
     if !ranges.is_empty() {
-        let read = MergeIOReader::merge_io_read(settings, operator, location, &ranges).await?;
+        // Pages go through the disk cache like the refine pages kind; whole components read
+        // without a memory cache (decoded into the HNSW cache) do not.
+        let fill = cache
+            .as_ref()
+            .map_or(CacheFill::Bypass, |cache| cache.policy().disk);
+        let read = DiskCachedStorage::new(operator)
+            .read_units(
+                CacheKind::of::<vector::Refine>(),
+                location,
+                &ranges,
+                fill,
+                settings,
+            )
+            .await?;
         metrics_inc_block_vector_index_read_bytes(
             ranges
                 .iter()
                 .map(|(_, range)| range.end - range.start)
                 .sum(),
         );
-        for (i, (chunk, range)) in &read.columns_chunk_offsets {
-            let owner = read.owner_memory.get_chunk(*chunk, &read.block_path)?;
+        for (i, _) in &ranges {
             // Keep uncached reads zero-copy when the merged buffer is contiguous.
-            let bytes = owner.slice(range.clone()).to_bytes();
+            let bytes = read.unit(*i).ok_or_else(|| {
+                ErrorCode::Internal(format!("vector page {i} of {location} was not read"))
+            })?;
             let index = *i as usize;
             let (name, entry) = &requests[index];
             let raw = entry.decode(bytes)?;

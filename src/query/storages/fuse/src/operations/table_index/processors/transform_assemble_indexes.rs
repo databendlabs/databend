@@ -30,6 +30,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::NumberDataType;
 use databend_common_pipeline_transforms::AsyncTransform;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_index::filters::BlockFilter;
@@ -45,7 +46,6 @@ use parquet::file::metadata::KeyValue;
 
 use crate::io::BlockWriter;
 use crate::io::BloomIndexState;
-use crate::io::FuseCaches;
 use crate::io::SpatialIndexBuilder;
 use crate::io::SpatialIndexResult;
 use crate::io::TableMetaLocationGenerator;
@@ -186,6 +186,7 @@ impl AssembleIndexes {
                     &location.0,
                     &self.active_vector_versions,
                     &metas,
+                    self.ctx.cache_policy(),
                 )
                 .await?
             }
@@ -251,6 +252,7 @@ impl AssembleIndexes {
                     &names,
                     &path,
                     block.bloom_filter_index_size,
+                    self.ctx.cache_policy(),
                 )
                 .await?;
                 fields.extend(old.filter_schema.fields().iter().cloned());
@@ -278,12 +280,11 @@ impl AssembleIndexes {
             BloomIndexState::from_bloom_index(&bloom, (path.clone(), BlockFilter::VERSION))?;
         block.bloom_filter_index_size = state.size();
         block.ngram_filter_index_size = state.ngram_size();
-        BlockWriter::write_down_bloom_index_state(&self.operator, Some(state)).await?;
-        let caches = FuseCaches::instance();
-        caches.index_metas.bloom.evict(&path);
-        for name in old_ngram_names {
-            caches.bloom_filters.evict(&format!("{path}-{name}"));
-        }
+        let old_filter_keys = old_ngram_names
+            .iter()
+            .map(|name| format!("{path}-{name}"))
+            .collect();
+        BlockWriter::rewrite_bloom_index_state(&self.operator, state, old_filter_keys).await?;
         Ok(())
     }
 
@@ -342,6 +343,7 @@ impl AssembleIndexes {
                 &ReadSettings::from_ctx(&self.ctx)?,
                 &names,
                 &location.0,
+                self.ctx.cache_policy(),
             )
             .await?;
             for (name, column) in names.into_iter().zip(kept) {
@@ -402,6 +404,7 @@ async fn legacy_serves_other_index(
     path: &str,
     active_versions: &BTreeMap<String, String>,
     metas: &[BlockIndexMeta],
+    policy: CachePolicy,
 ) -> Result<bool> {
     let unmigrated = {
         let mut indexes = Vec::new();
@@ -418,7 +421,7 @@ async fn legacy_serves_other_index(
     if unmigrated.is_empty() {
         return Ok(false);
     }
-    let meta = load_vector_index_meta(operator.clone(), path).await?;
+    let meta = load_vector_index_meta(operator.clone(), path, policy).await?;
     let VectorIndexMeta::Legacy(meta) = meta.as_ref() else {
         return Ok(false);
     };

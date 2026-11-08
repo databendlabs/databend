@@ -132,7 +132,10 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let Some(snapshot) = self.read_table_snapshot().await? else {
+        let Some(snapshot) = self
+            .read_table_snapshot_with_policy(ctx.cache_policy())
+            .await?
+        else {
             // no snapshot, no recluster.
             return Ok(None);
         };

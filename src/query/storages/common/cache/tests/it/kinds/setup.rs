@@ -15,9 +15,9 @@
 //! Managers with every kind enabled, as the full and the small configurations of each backend.
 
 use databend_common_config::CacheConfig;
-use databend_common_config::CacheStorageTypeInnerConfig;
+use databend_storages_common_cache::CacheDef;
 use databend_storages_common_cache::CacheManager;
-use tempfile::TempDir;
+use databend_storages_common_cache::kinds::column;
 
 const MIB: u64 = 1 << 20;
 
@@ -36,15 +36,17 @@ impl Backend {
         match self {
             Backend::Legacy => CacheConfig {
                 segment_block_metas_count: 64,
-                data_cache_storage: CacheStorageTypeInnerConfig::Disk,
-                data_cache_in_memory_bytes: room,
                 table_data_deserialized_data_bytes: room,
                 ..CacheConfig::default()
             },
             Backend::Shared => CacheConfig {
                 shared_memory_enabled: true,
                 // Off by default.
-                kind_max_bytes: [("memory_cache_column_data".to_string(), room)].into(),
+                kind_max_bytes: [
+                    ("memory_cache_column_data".to_string(), room),
+                    ("memory_cache_segment_block_metas".to_string(), room),
+                ]
+                .into(),
                 ..CacheConfig::default()
             },
         }
@@ -74,7 +76,6 @@ impl Backend {
                 inverted_index_lookup_size: 256 << 10,
                 inverted_index_payload_size: 256 << 10,
                 spatial_index_filter_size: 256 << 10,
-                data_cache_in_memory_bytes: 256 << 10,
                 table_data_deserialized_data_bytes: 256 << 10,
                 ..config
             },
@@ -82,28 +83,17 @@ impl Backend {
     }
 }
 
-/// Every disk tier enabled, of 1 MiB, under `dir`.
-pub fn with_disk(config: CacheConfig, dir: &TempDir) -> CacheConfig {
-    let mut config = CacheConfig {
-        data_cache_storage: CacheStorageTypeInnerConfig::Disk,
-        disk_cache_table_bloom_index_data_size: MIB,
-        disk_cache_table_bloom_index_meta_size: MIB,
-        disk_cache_inverted_index_meta_size: MIB,
-        disk_cache_inverted_index_lookup_size: MIB,
-        disk_cache_inverted_index_payload_size: MIB,
-        disk_cache_vector_index_meta_size: MIB,
-        disk_cache_vector_index_data_size: MIB,
-        disk_cache_spatial_index_meta_size: MIB,
-        disk_cache_spatial_index_data_size: MIB,
-        disk_cache_virtual_column_meta_size: MIB,
-        ..config
-    };
-    config.disk_cache_config.max_bytes = MIB;
-    config.disk_cache_config.path = dir.path().to_string_lossy().to_string();
-    config
-}
-
-/// Disk tiers exist only in EE mode.
+/// Every kind enabled. The legacy backend has no option for raw column data in memory any
+/// more; it is enabled at runtime, sized like the decoded columns.
 pub fn manager(config: &CacheConfig, memory: u64, ee_mode: bool) -> CacheManager {
-    CacheManager::try_new(config, &memory, "test_tenant", ee_mode).unwrap()
+    let manager = CacheManager::try_new(config, &memory, "test_tenant", ee_mode).unwrap();
+    if !config.shared_memory_enabled {
+        manager
+            .set_cache_capacity(
+                column::Data::NAME,
+                config.table_data_deserialized_data_bytes,
+            )
+            .unwrap();
+    }
+    manager
 }

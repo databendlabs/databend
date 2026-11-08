@@ -39,6 +39,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::LvtUpdate;
 use databend_common_meta_app::schema::TableInfo;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Location;
@@ -227,6 +228,7 @@ impl FuseTable {
         root_snapshot_location: &str,
         snapshot_files_to_gc: &mut Vec<String>,
         protected_segments: &mut HashSet<Location>,
+        policy: CachePolicy,
     ) -> Result<()> {
         let now = Utc::now();
         let tags = catalog
@@ -261,9 +263,12 @@ impl FuseTable {
 
             let tag_snapshot_loc = seq_tag.data.snapshot_loc;
             if tag_snapshot_loc.as_str() < root_snapshot_location {
-                if let Some(snapshot) =
-                    SnapshotsIO::read_snapshot_for_vacuum(self.get_operator(), &tag_snapshot_loc)
-                        .await?
+                if let Some(snapshot) = SnapshotsIO::read_snapshot_for_vacuum(
+                    self.get_operator(),
+                    &tag_snapshot_loc,
+                    policy,
+                )
+                .await?
                 {
                     protected_segments.extend(snapshot.segments.iter().cloned());
                 }
@@ -363,7 +368,7 @@ impl FuseTable {
         let location_gen = self.meta_location_generator();
         let previous = match head.0.prev_snapshot_id {
             Some((id, version)) => snapshot_history(
-                &caches.snapshots,
+                &caches.snapshots.with_policy(ctx.cache_policy()),
                 self.get_operator(),
                 location_gen.gen_snapshot_location(&id, version)?,
                 version,
@@ -412,6 +417,7 @@ impl FuseTable {
         table_id: u64,
         operator: Operator,
         catalog: Arc<dyn Catalog>,
+        policy: CachePolicy,
     ) -> Result<HashSet<Location>> {
         let tags = catalog
             .list_table_tags(ListTableTagsReq {
@@ -425,9 +431,12 @@ impl FuseTable {
             // expire before this read, allowing another GC to remove its snapshot. Tolerate
             // NotFound without revalidating the tag: this scan is not a strongly consistent
             // tag view. Other storage errors still abort GC.
-            if let Some(snapshot) =
-                SnapshotsIO::read_snapshot_for_vacuum(operator.clone(), &seq_tag.data.snapshot_loc)
-                    .await?
+            if let Some(snapshot) = SnapshotsIO::read_snapshot_for_vacuum(
+                operator.clone(),
+                &seq_tag.data.snapshot_loc,
+                policy,
+            )
+            .await?
             {
                 segments.extend(snapshot.segments.iter().cloned());
             }
@@ -529,7 +538,7 @@ impl FuseTable {
             }
             let version = TableMetaLocationGenerator::snapshot_version(&location);
             let head = descendant
-                .read_table_snapshot()
+                .read_table_snapshot_with_policy(ctx.cache_policy())
                 .await?
                 .ok_or_else(|| ErrorCode::StorageNotFound("clone head disappeared during mark"))?;
             if is_non_local {
@@ -780,13 +789,13 @@ impl FuseTable {
         descendant_ids: &HashSet<u64>,
         concurrency: usize,
         segments: &mut HashSet<Location>,
+        policy: CachePolicy,
     ) -> Result<()> {
         let operator = self.get_operator();
-        let mut scans =
-            stream::iter(descendant_ids.iter().copied().map(|table_id| {
-                Self::table_tag_segments(table_id, operator.clone(), catalog.clone())
-            }))
-            .buffer_unordered(concurrency.max(1));
+        let mut scans = stream::iter(descendant_ids.iter().copied().map(|table_id| {
+            Self::table_tag_segments(table_id, operator.clone(), catalog.clone(), policy)
+        }))
+        .buffer_unordered(concurrency.max(1));
         // Merge each table's tag segments as it completes instead of holding every per-table set.
         while let Some(tag_segments) = scans.try_next().await? {
             segments.extend(tag_segments);
@@ -873,6 +882,7 @@ impl FuseTable {
         let Some(root_snapshot) = SnapshotsIO::read_snapshot_for_vacuum(
             self.get_operator(),
             root_snapshot_location.as_str(),
+            ctx.cache_policy(),
         )
         .await?
         else {
@@ -908,7 +918,13 @@ impl FuseTable {
         // Protect tags on base table as well.
         let catalog = ctx.get_catalog(self.get_table_info().catalog()).await?;
         segments.extend(
-            Self::table_tag_segments(self.get_id(), self.get_operator(), catalog.clone()).await?,
+            Self::table_tag_segments(
+                self.get_id(),
+                self.get_operator(),
+                catalog.clone(),
+                ctx.cache_policy(),
+            )
+            .await?,
         );
 
         // 3. Protect clone descendants without advancing their LVTs.
@@ -927,6 +943,7 @@ impl FuseTable {
             &mark.descendant_ids,
             max_threads,
             &mut segments,
+            ctx.cache_policy(),
         )
         .await?;
         Ok(Some(segments))
@@ -940,7 +957,10 @@ impl FuseTable {
         respect_flash_back: bool,
         observed_lvt: &LeastVisibleTime,
     ) -> Result<Option<SnapshotGcSelection>> {
-        let Some(latest_snapshot) = self.read_table_snapshot().await? else {
+        let Some(latest_snapshot) = self
+            .read_table_snapshot_with_policy(ctx.cache_policy())
+            .await?
+        else {
             info!(
                 "Table {} has no snapshot, stopping vacuum",
                 self.table_info.desc
@@ -1114,9 +1134,12 @@ impl FuseTable {
                 info!("no snapshots before lvt, stop vacuuming");
                 return Ok(None);
             };
-            let (anchor, _) =
-                SnapshotsIO::read_snapshot(anchor_entry.path().to_owned(), op.clone(), false)
-                    .await?;
+            let (anchor, _) = SnapshotsIO::read_snapshot(
+                anchor_entry.path().to_owned(),
+                op.clone(),
+                CachePolicy::READ_ONLY.at_most(ctx.cache_policy()),
+            )
+            .await?;
             let Some((gc_root_id, gc_root_ver)) = anchor.prev_snapshot_id else {
                 info!("anchor has no prev_snapshot_id, stop vacuuming");
                 return Ok(None);
@@ -1134,7 +1157,14 @@ impl FuseTable {
         let dal = self.get_operator_ref();
         let gc_root = match selected_root {
             Some(root) => Ok(root),
-            None => SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await,
+            None => {
+                SnapshotsIO::read_snapshot(
+                    gc_root_path.clone(),
+                    op.clone(),
+                    CachePolicy::READ_ONLY.at_most(ctx.cache_policy()),
+                )
+                .await
+            }
         };
         let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
             Ok(v) => v.last_modified().ok_or_else(|| {
