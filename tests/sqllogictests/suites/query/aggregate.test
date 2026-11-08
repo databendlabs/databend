@@ -523,5 +523,98 @@ settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregat
 0 3 16 24568
 0 4 16 23384
 
+## Over UNION ALL, the boundary bounds every branch. The NOT NULL branch key is only cast to
+## the nullable union type, so both branch scans are pruned; the BIGINT union type widens the
+## INT branch key, so only the other branch is pruned.
+statement ok
+CREATE OR REPLACE TABLE rank_limit_multi_key_not_null (k1 INT NOT NULL, k2 VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_limit_multi_key_not_null SELECT number % 45, (number % 4)::STRING, number FROM numbers(2000)
+
+statement ok
+CREATE OR REPLACE TABLE rank_limit_multi_key_wide (k1 BIGINT NULL, k2 VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_limit_multi_key_wide SELECT (number % 50)::BIGINT - 5, (number % 2)::STRING, number FROM numbers(2000)
+
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM (SELECT k1, k2, v FROM rank_limit_multi_key UNION ALL SELECT k1, k2, v FROM rank_limit_multi_key_not_null) u GROUP BY k1, k2 ORDER BY k1, k2 LIMIT 6
+----
+0 0 56 76973
+0 1 54 75303
+0 2 55 78610
+0 3 27 35953
+0 4 16 23384
+0 x 67 101270
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM (SELECT k1, k2, v FROM rank_limit_multi_key UNION ALL SELECT k1, k2, v FROM rank_limit_multi_key_not_null) u GROUP BY k1, k2 ORDER BY k1, k2 LIMIT 6
+----
+0 0 56 76973
+0 1 54 75303
+0 2 55 78610
+0 3 27 35953
+0 4 16 23384
+0 x 67 101270
+
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM (SELECT k1, k2, v FROM rank_limit_multi_key UNION ALL SELECT k1, k2, v FROM rank_limit_multi_key_not_null) u GROUP BY k1, k2 ORDER BY k1 DESC NULLS LAST, k2 DESC LIMIT 5
+----
+44 3 11 11869
+44 2 11 11374
+44 1 11 10879
+44 0 11 10384
+43 3 11 10373
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM (SELECT k1, k2, v FROM rank_limit_multi_key UNION ALL SELECT k1, k2, v FROM rank_limit_multi_key_not_null) u GROUP BY k1, k2 ORDER BY k1 DESC NULLS LAST, k2 DESC LIMIT 5
+----
+44 3 11 11869
+44 2 11 11374
+44 1 11 10879
+44 0 11 10384
+43 3 11 10373
+
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM (SELECT k1, k2, v FROM rank_limit_multi_key UNION ALL SELECT k1, k2, v FROM rank_limit_multi_key_not_null) u GROUP BY k1, k2 ORDER BY k1 NULLS FIRST, k2 LIMIT 4
+----
+NULL x 273 408408
+0 0 56 76973
+0 1 54 75303
+0 2 55 78610
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM (SELECT k1, k2, v FROM rank_limit_multi_key UNION ALL SELECT k1, k2, v FROM rank_limit_multi_key_not_null) u GROUP BY k1, k2 ORDER BY k1 NULLS FIRST, k2 LIMIT 4
+----
+NULL x 273 408408
+0 0 56 76973
+0 1 54 75303
+0 2 55 78610
+
+query ITII
+settings (max_block_size = 128) SELECT k1, k2, count(*), sum(v) FROM (SELECT k1, k2, v FROM rank_limit_multi_key UNION ALL SELECT k1, k2, v FROM rank_limit_multi_key_wide) u GROUP BY k1, k2 ORDER BY k1, k2 LIMIT 5
+----
+-5 0 40 39000
+-4 1 40 39040
+-3 0 40 39080
+-2 1 40 39120
+-1 0 40 39160
+
+query ITII
+settings (max_block_size = 128, optimizer_skip_list = 'PushDownRankLimitAggregate') SELECT k1, k2, count(*), sum(v) FROM (SELECT k1, k2, v FROM rank_limit_multi_key UNION ALL SELECT k1, k2, v FROM rank_limit_multi_key_wide) u GROUP BY k1, k2 ORDER BY k1, k2 LIMIT 5
+----
+-5 0 40 39000
+-4 1 40 39040
+-3 0 40 39080
+-2 1 40 39120
+-1 0 40 39160
+
+statement ok
+DROP TABLE rank_limit_multi_key_not_null
+
+statement ok
+DROP TABLE rank_limit_multi_key_wide
+
 statement ok
 DROP TABLE rank_limit_multi_key
