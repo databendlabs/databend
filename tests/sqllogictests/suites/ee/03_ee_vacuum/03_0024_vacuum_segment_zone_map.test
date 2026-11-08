@@ -33,6 +33,13 @@ set enable_compact_after_write = 0;
 statement ok
 set segment_zone_map_full_segment_threshold = 0;
 
+# The stage lists the table's storage root; clear what an earlier run left there.
+statement ok
+create or replace stage stage_zm url = 'fs:///tmp/vacuum2_zm/';
+
+statement ok
+remove @stage_zm;
+
 statement ok
 create or replace table t (c int) 'fs:///tmp/vacuum2_zm/' cluster by (c) block_per_segment = 1;
 
@@ -66,9 +73,6 @@ insert into t values(22), (24);
 statement ok
 optimize table t recluster;
 
-statement ok
-create or replace stage stage_zm url = 'fs:///tmp/vacuum2_zm/';
-
 query I
 select count() from list_stage(location => '@stage_zm') where name like '%/_zm/%';
 ----
@@ -86,7 +90,7 @@ select count() from list_stage(location => '@stage_zm') where name like '%/_zm/%
 1
 
 query B
-select ends_with((select segment_zone_map_location from fuse_snapshot('vacuum2_zm', 't') order by timestamp desc limit 1), name) from list_stage(location => '@stage_zm') where name like '%/_zm/%';
+select right((select segment_zone_map_location from fuse_snapshot('vacuum2_zm', 't') order by timestamp desc limit 1), length(name)) = name from list_stage(location => '@stage_zm') where name like '%/_zm/%';
 ----
 1
 
