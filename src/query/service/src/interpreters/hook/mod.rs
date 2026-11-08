@@ -13,9 +13,8 @@
 // limitations under the License.
 
 pub(crate) mod analyze_hook;
-pub(crate) mod compact_hook;
-pub(crate) mod refresh_hook;
 pub(crate) mod table_hook_scheduler;
+pub(crate) mod table_hook_task;
 pub(crate) mod vacuum_hook;
 
 #[allow(clippy::module_inception)]
@@ -25,6 +24,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 pub use hook::HookOperator;
+pub(crate) use hook::execute_deferred_table_hooks;
 use log::info;
 use log::warn;
 pub use table_hook_scheduler::TableHookScheduler;
