@@ -24,6 +24,7 @@ use crate::kinds::spatial;
 use crate::kinds::table;
 use crate::kinds::vector;
 use crate::kinds::virtual_column;
+use crate::kinds::zone_map;
 
 impl CacheRegistry {
     /// Every cache kind of a query node, in the order of `system.caches`.
@@ -36,6 +37,7 @@ impl CacheRegistry {
             .register::<segment::ColumnOriented>()
             .register::<segment::BlockMetas>()
             .register::<segment::Stats>()
+            .register::<zone_map::Meta>()
             .register::<bloom::IndexMeta>()
             .register::<inverted::Meta>()
             .register::<vector::Meta>()
@@ -45,6 +47,7 @@ impl CacheRegistry {
             .register::<iceberg::Table>()
             .register::<table::PruneResult>()
             .register::<bloom::Filter>()
+            .register::<zone_map::Chunk>()
             .register::<vector::Index>()
             .register::<vector::Refine>()
             .register::<inverted::Lookup>()

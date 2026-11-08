@@ -59,6 +59,8 @@ use databend_storages_common_cache::kinds::spatial;
 use databend_storages_common_cache::kinds::table;
 use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_cache::kinds::virtual_column;
+use databend_storages_common_cache::kinds::zone_map;
+use databend_storages_common_cache::kinds::zone_map::SegmentZoneMapChunk;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::BundleOpenSlice;
 use databend_storages_common_index::DistanceType;
@@ -335,16 +337,32 @@ impl Sample for virtual_column::Meta {
 
 impl Sample for parquet::Meta {
     fn sample(seed: u32) -> Arc<::parquet::file::metadata::ParquetMetaData> {
-        let column: ArrayRef = Arc::new(Int32Array::from(vec![seed as i32; 64]));
-        let batch = RecordBatch::try_from_iter([("a", column)]).unwrap();
-        let mut file = Vec::new();
-        let mut writer = ArrowWriter::try_new(&mut file, batch.schema(), None).unwrap();
-        writer.write(&batch).unwrap();
-        writer.close().unwrap();
-        let meta = ParquetMetaDataReader::new()
-            .parse_and_finish(&Bytes::from(file))
-            .unwrap();
-        Arc::new(meta)
+        parquet_meta(seed)
+    }
+}
+
+fn parquet_meta(seed: u32) -> Arc<::parquet::file::metadata::ParquetMetaData> {
+    let column: ArrayRef = Arc::new(Int32Array::from(vec![seed as i32; 64]));
+    let batch = RecordBatch::try_from_iter([("a", column)]).unwrap();
+    let mut file = Vec::new();
+    let mut writer = ArrowWriter::try_new(&mut file, batch.schema(), None).unwrap();
+    writer.write(&batch).unwrap();
+    writer.close().unwrap();
+    let meta = ParquetMetaDataReader::new()
+        .parse_and_finish(&Bytes::from(file))
+        .unwrap();
+    Arc::new(meta)
+}
+
+impl Sample for zone_map::Meta {
+    fn sample(seed: u32) -> Arc<::parquet::file::metadata::ParquetMetaData> {
+        parquet_meta(seed)
+    }
+}
+
+impl Sample for zone_map::Chunk {
+    fn sample(seed: u32) -> SegmentZoneMapChunk {
+        SegmentZoneMapChunk::new(bytes(seed, 4096))
     }
 }
 

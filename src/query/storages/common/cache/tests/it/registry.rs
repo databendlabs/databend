@@ -37,6 +37,7 @@ fn test_builtin_kinds() {
         "memory_cache_column_oriented_segment_info",
         "memory_cache_segment_block_metas",
         "memory_cache_segment_statistics",
+        "memory_cache_segment_zone_map_meta_data",
         "memory_cache_bloom_index_file_meta_data",
         "memory_cache_inverted_index_meta_data",
         "memory_cache_vector_index_file_meta_data",
@@ -46,6 +47,7 @@ fn test_builtin_kinds() {
         "memory_cache_iceberg_table",
         "memory_cache_prune_partitions",
         "memory_cache_bloom_index_filter",
+        "memory_cache_segment_zone_map_chunk",
         "memory_cache_vector_index_file",
         "memory_cache_vector_index_refine",
         "memory_cache_inverted_index_lookup",
@@ -73,7 +75,7 @@ fn test_pools_and_shared_defaults() {
             .map(CacheKind::name)
             .collect::<Vec<_>>()
     };
-    assert_eq!(in_pool(Pool::Meta).len(), 14);
+    assert_eq!(in_pool(Pool::Meta).len(), 15);
     assert_eq!(in_pool(Pool::Index).len(), 8);
     assert_eq!(in_pool(Pool::Data), [
         "memory_cache_column_data",
@@ -113,6 +115,7 @@ fn test_disk_kinds() {
         "disk_cache_spatial_index_file_meta_data",
         "disk_cache_virtual_column_file_meta_data",
         "disk_cache_bloom_index_filter",
+        "disk_cache_segment_zone_map_chunk",
         "disk_cache_vector_index_refine",
         "disk_cache_inverted_index_lookup",
         "disk_cache_inverted_index_payload",

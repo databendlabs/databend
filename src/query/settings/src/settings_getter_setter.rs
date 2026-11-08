@@ -1136,6 +1136,18 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
 
+    pub fn get_enable_segment_zone_map(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_segment_zone_map")? == 1)
+    }
+
+    pub fn get_enable_segment_zone_map_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_segment_zone_map_pruning")? == 1)
+    }
+
+    pub fn get_segment_zone_map_full_segment_threshold(&self) -> Result<u64> {
+        self.try_get_u64("segment_zone_map_full_segment_threshold")
+    }
+
     pub fn get_persist_materialized_cte(&self) -> Result<bool> {
         Ok(self.try_get_u64("persist_materialized_cte")? != 0)
     }

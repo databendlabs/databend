@@ -588,6 +588,120 @@ async fn test_vacuum_table_preserves_tagged_snapshot() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Segment zone map files are swept like segments: the gc root's and tagged
+/// snapshots' files stay, older ones go, and nothing stays once no snapshot
+/// points at a zone map. Each recluster round builds one zone map.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_table_keeps_referenced_segment_zone_map() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    RealTableRefHandler::init()?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_data_retention_time_in_days(0)?;
+    for (name, value) in [
+        ("enable_compact_after_write", "0"),
+        // With one block per segment every segment is full, and threshold 0
+        // refreshes the zone map after every recluster round.
+        ("segment_zone_map_full_segment_threshold", "0"),
+        ("enable_experimental_table_ref", "1"),
+    ] {
+        settings.set_setting(name.to_string(), value.to_string())?;
+    }
+
+    // Two overlapping inserts give each recluster round one block to merge.
+    let database = "vacuum_zm_db";
+    let table = "t";
+    for statement in [
+        format!("create database {database}"),
+        format!("create table {database}.{table} (c int) cluster by (c) block_per_segment = 1"),
+        format!("insert into {database}.{table} values (1), (3)"),
+        format!("insert into {database}.{table} values (2), (4)"),
+        format!("optimize table {database}.{table} recluster"),
+        format!("insert into {database}.{table} values (11), (13)"),
+        format!("insert into {database}.{table} values (12), (14)"),
+        format!("optimize table {database}.{table} recluster"),
+        format!("alter table {database}.{table} create tag eight_rows"),
+        format!("insert into {database}.{table} values (21), (23)"),
+        format!("insert into {database}.{table} values (22), (24)"),
+        format!("optimize table {database}.{table} recluster"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let storage_root = fixture.storage_root();
+    let segment_zone_map_files = |files: Vec<std::path::PathBuf>| {
+        files
+            .into_iter()
+            .filter(|path| path.to_string_lossy().contains("/_zm/"))
+            .collect::<Vec<_>>()
+    };
+    let current_zone_map = || async {
+        let stream = fixture
+            .execute_query(&format!(
+                "select segment_zone_map_location from fuse_snapshot('{database}', '{table}') \
+                 order by timestamp desc limit 1"
+            ))
+            .await?;
+        let blocks: Vec<DataBlock> = stream.try_collect().await?;
+        let location = blocks[0].get_by_offset(0).index(0).unwrap().to_owned();
+        Ok::<_, ErrorCode>(location.as_string().cloned())
+    };
+
+    // One zone map per recluster round.
+    let files = table_storage_files(&ctx, storage_root, database, table).await?;
+    assert_eq!(segment_zone_map_files(files).len(), 3);
+    let head_zone_map = current_zone_map()
+        .await?
+        .expect("head points at a zone map");
+
+    fixture
+        .execute_command(&format!("vacuum table {database}.{table}"))
+        .await?;
+    // The head's and the tagged snapshot's zone maps survive.
+    let files =
+        segment_zone_map_files(table_storage_files(&ctx, storage_root, database, table).await?);
+    assert_eq!(files.len(), 2);
+    assert!(
+        files
+            .iter()
+            .any(|path| path.to_string_lossy().ends_with(&head_zone_map))
+    );
+    assert_eq!(
+        current_zone_map().await?.as_deref(),
+        Some(head_zone_map.as_str())
+    );
+
+    // The surviving zone maps still prune correctly.
+    let stream = fixture
+        .execute_query(&format!(
+            "select c from {database}.{table} where c >= 12 order by c"
+        ))
+        .await?;
+    let blocks: Vec<DataBlock> = stream.try_collect().await?;
+    assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 7);
+    let stream = fixture
+        .execute_query(&format!(
+            "select c from {database}.{table} at (tag => \"eight_rows\") where c >= 12"
+        ))
+        .await?;
+    let blocks: Vec<DataBlock> = stream.try_collect().await?;
+    assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 3);
+
+    // Without the tag and after a truncate, no snapshot points at a zone map.
+    for statement in [
+        format!("alter table {database}.{table} drop tag eight_rows"),
+        format!("truncate table {database}.{table}"),
+        format!("vacuum table {database}.{table}"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+    assert_eq!(current_zone_map().await?, None);
+    let files = table_storage_files(&ctx, storage_root, database, table).await?;
+    assert!(segment_zone_map_files(files).is_empty());
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum_all_command() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;

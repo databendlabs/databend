@@ -1251,6 +1251,8 @@ async fn rewrite_decimal_stats_and_commit(
     )?;
     new_snapshot.schema = new_schema.as_ref().clone();
     new_snapshot.segments = new_segment_locations;
+    // Every segment was rewritten, so no row of the segment zone map is live.
+    new_snapshot.segment_zone_map = None;
     for rewrite in column_rewrites {
         new_snapshot
             .summary

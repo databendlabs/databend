@@ -111,6 +111,21 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
         .unwrap();
     }
 
+    // segment zone map pruning status.
+    if info.pruning_stats.segments_zone_map_pruning_before > 0 {
+        if !segments_pruning_description.is_empty() {
+            segments_pruning_description.push_str(", ");
+        }
+        write!(
+            segments_pruning_description,
+            "zone map pruning: {} to {}{}",
+            info.pruning_stats.segments_zone_map_pruning_before,
+            info.pruning_stats.segments_zone_map_pruning_after,
+            format_pruning_cost_suffix(info.pruning_stats.segments_zone_map_pruning_cost)
+        )
+        .unwrap();
+    }
+
     // segment range pruning status.
     if info.pruning_stats.segments_range_pruning_before > 0 {
         if !segments_pruning_description.is_empty() {

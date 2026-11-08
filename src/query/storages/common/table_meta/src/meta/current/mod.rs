@@ -47,6 +47,7 @@ pub use v4::CompactSegmentInfo;
 pub use v4::LogicalChangeCounters;
 pub use v4::RawBlockMeta;
 pub use v4::SegmentInfo;
+pub use v4::SegmentZoneMapMeta;
 pub use v4::TableSnapshot;
 pub use v4::TableSnapshotLite;
 pub use v4::TableSnapshotStatistics;

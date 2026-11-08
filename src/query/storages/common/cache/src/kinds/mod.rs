@@ -28,3 +28,4 @@ pub mod spatial;
 pub mod table;
 pub mod vector;
 pub mod virtual_column;
+pub mod zone_map;

@@ -862,6 +862,11 @@ impl FusePruner {
         let segments_read_cost = stats.get_segments_read_cost();
         let segments_decompress_cost = stats.get_segments_decompress_cost();
 
+        let segments_zone_map_pruning_before =
+            stats.get_segments_zone_map_pruning_before() as usize;
+        let segments_zone_map_pruning_after = stats.get_segments_zone_map_pruning_after() as usize;
+        let segments_zone_map_pruning_cost = stats.get_segments_zone_map_pruning_cost();
+
         let segments_range_pruning_before = stats.get_segments_range_pruning_before() as usize;
         let segments_range_pruning_after = stats.get_segments_range_pruning_after() as usize;
         let segments_range_pruning_cost = stats.get_segments_range_pruning_cost();
@@ -903,6 +908,9 @@ impl FusePruner {
         PruningStatistics {
             segments_read_cost,
             segments_decompress_cost,
+            segments_zone_map_pruning_before,
+            segments_zone_map_pruning_after,
+            segments_zone_map_pruning_cost,
             segments_range_pruning_before,
             segments_range_pruning_after,
             segments_range_pruning_cost,

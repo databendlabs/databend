@@ -27,6 +27,7 @@ pub use cache::FuseCaches;
 pub use cache::IndexMetaCache;
 pub use cache::InvertedIndexCache;
 pub use cache::SegmentCache;
+pub use cache::SegmentZoneMapCache;
 pub use cache::SnapshotCache;
 pub use cache::SnapshotKey;
 pub use inverted_index_user_dictionary::InvertedIndexUserDictionary;

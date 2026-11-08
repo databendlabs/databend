@@ -110,6 +110,8 @@ struct GcRootSnapshotCtx {
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
     protected_segments: HashSet<Location>,
+    /// Segment zone map files referenced by the gc root or by tagged snapshots.
+    protected_segment_zone_maps: HashSet<String>,
     snapshots_to_gc: Vec<String>,
 }
 
@@ -139,6 +141,7 @@ pub async fn do_vacuum2(
         gc_root_timestamp,
         gc_root_meta_ts,
         protected_segments,
+        protected_segment_zone_maps,
         snapshots_to_gc,
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
@@ -195,6 +198,29 @@ pub async fn do_vacuum2(
         start.elapsed(),
         slice_summary(&segments_to_gc),
         slice_summary(&stats_to_gc)
+    ));
+
+    // Segment zone map files are named like segments (UUID v7 under a vacuum2
+    // prefix) and referenced only by snapshots, so the same selection applies:
+    // everything before the gc root that no protected snapshot points to.
+    let start = std::time::Instant::now();
+    let prefix = fuse_table
+        .meta_location_generator()
+        .segment_zone_map_location_prefix();
+    let mut segment_zone_maps_to_gc = Vec::new();
+    for entry in fuse_table
+        .list_files_until_timestamp(prefix, gc_root_timestamp, false, Some(gc_root_meta_ts))
+        .await?
+    {
+        if !protected_segment_zone_maps.contains(entry.path()) {
+            segment_zone_maps_to_gc.push(entry.path().to_owned());
+        }
+    }
+    ctx.set_status_info(&format!(
+        "Listed segment zone maps before gc_root for table {}, elapsed: {:?}, segment_zone_maps_to_gc: {:?}",
+        table_info.desc,
+        start.elapsed(),
+        slice_summary(&segment_zone_maps_to_gc)
     ));
 
     let start = std::time::Instant::now();
@@ -417,6 +443,12 @@ pub async fn do_vacuum2(
         file_remover.remove_file_in_batch(&segments_to_gc).await?;
     }
 
+    if !segment_zone_maps_to_gc.is_empty() {
+        file_remover
+            .remove_file_in_batch(&segment_zone_maps_to_gc)
+            .await?;
+    }
+
     // Evict snapshot caches from the local node.
     //
     // Note:
@@ -447,6 +479,7 @@ pub async fn do_vacuum2(
         + orphan_granule_files
         + stats_to_gc.len()
         + segments_to_gc.len()
+        + segment_zone_maps_to_gc.len()
         + snapshots_to_gc.len();
     ctx.set_status_info(&format!(
         "Removed files for table {}, elapsed: {:?}, files removed: {}",
@@ -923,6 +956,15 @@ async fn vacuum_base_snapshot_phase(
         return Ok(None);
     };
     protected_segments.extend(selection.gc_root.segments.iter().cloned());
+    // Snapshots after the gc root only point at its zone map or at ones built
+    // later, so protecting it covers every live reference.
+    let mut protected_segment_zone_maps = HashSet::new();
+    protected_segment_zone_maps.extend(
+        selection
+            .gc_root
+            .segment_zone_map_path()
+            .map(str::to_string),
+    );
     let mut updates = std::mem::take(&mut mark.lvt_updates);
     // Validate the owner's original fence too: FLASHBACK can change its head while descendants
     // are being marked. Existing clone bindings always use this one LVT publication protocol.
@@ -969,6 +1011,7 @@ async fn vacuum_base_snapshot_phase(
             &selection.gc_root_path,
             &mut selection.snapshots_to_gc,
             &mut protected_segments,
+            &mut protected_segment_zone_maps,
             ctx.cache_policy(),
         )
         .await?;
@@ -982,6 +1025,7 @@ async fn vacuum_base_snapshot_phase(
         gc_root_timestamp: selection.gc_root_lvt.time,
         gc_root_meta_ts: selection.gc_root_meta_ts,
         protected_segments,
+        protected_segment_zone_maps,
         snapshots_to_gc: selection.snapshots_to_gc,
     }))
 }

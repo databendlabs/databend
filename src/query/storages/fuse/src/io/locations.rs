@@ -20,6 +20,7 @@ use databend_storages_common_index::VECTOR_BUNDLE_VERSION;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
+use databend_storages_common_table_meta::meta::SegmentZoneMapMeta;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
@@ -38,6 +39,7 @@ use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX_V2;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
 use crate::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
+use crate::FUSE_TBL_SEGMENT_ZONE_MAP_PREFIX;
 use crate::FUSE_TBL_SPATIAL_INDEX_PREFIX;
 use crate::FUSE_TBL_VECTOR_INDEX_PREFIX;
 use crate::FUSE_TBL_VECTOR_INDEX_PREFIX_V2;
@@ -84,6 +86,7 @@ pub struct TableMetaLocationGenerator {
     spatial_index_location_prefix: String,
     granule_index_location_prefix: String,
     segment_statistics_location_prefix: String,
+    segment_zone_map_location_prefix: String,
     // legacy ref prefix.
     ref_snapshot_location_prefix: String,
 }
@@ -111,6 +114,8 @@ impl TableMetaLocationGenerator {
             format!("{}/{}/", prefix, FUSE_TBL_GRANULE_INDEX_PREFIX);
         let segment_statistics_location_prefix =
             format!("{}/{}/", prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
+        let segment_zone_map_location_prefix =
+            format!("{}/{}/", prefix, FUSE_TBL_SEGMENT_ZONE_MAP_PREFIX);
         let ref_snapshot_location_prefix = format!("{}/{}/", prefix, LEGACY_FUSE_TBL_REF_PREFIX);
         Self {
             prefix,
@@ -127,6 +132,7 @@ impl TableMetaLocationGenerator {
             spatial_index_location_prefix,
             granule_index_location_prefix,
             segment_statistics_location_prefix,
+            segment_zone_map_location_prefix,
             ref_snapshot_location_prefix,
         }
     }
@@ -174,6 +180,10 @@ impl TableMetaLocationGenerator {
 
     pub fn segment_statistics_location_prefix(&self) -> &str {
         &self.segment_statistics_location_prefix
+    }
+
+    pub fn segment_zone_map_location_prefix(&self) -> &str {
+        &self.segment_zone_map_location_prefix
     }
 
     pub fn ref_snapshot_location_prefix(&self) -> &str {
@@ -328,6 +338,22 @@ impl TableMetaLocationGenerator {
                 SegmentInfo::VERSION,
             ),
         }
+    }
+
+    pub fn gen_segment_zone_map_location(
+        &self,
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Location {
+        let uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
+        let version = SegmentZoneMapMeta::VERSION;
+        let prefix = &self.segment_zone_map_location_prefix;
+        (
+            format!(
+                "{prefix}{VACUUM2_OBJECT_KEY_PREFIX}{}_v{version}.parquet",
+                uuid.as_simple()
+            ),
+            version,
+        )
     }
 
     pub fn gen_snapshot_location(&self, id: &Uuid, version: u64) -> Result<String> {

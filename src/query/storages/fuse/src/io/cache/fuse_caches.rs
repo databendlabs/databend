@@ -32,6 +32,8 @@ use databend_storages_common_cache::kinds::spatial;
 use databend_storages_common_cache::kinds::table;
 use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_cache::kinds::virtual_column;
+use databend_storages_common_cache::kinds::zone_map;
+use databend_storages_common_cache::kinds::zone_map::SegmentZoneMapChunk;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
@@ -42,6 +44,7 @@ use databend_storages_common_index::VectorIndexFile;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::filters::FilterImpl;
+use parquet::file::metadata::ParquetMetaData;
 
 use crate::io::cache::SegmentCache;
 use crate::io::cache::SnapshotCache;
@@ -66,6 +69,25 @@ pub struct FuseCaches {
     pub column_arrays: MemCache<SizedColumnArray>,
     /// Decoded granule index marks, keyed by `{file_path}-{mark_name}`.
     pub granule_marks: MemCache<GranuleMarkArray>,
+    pub segment_zone_maps: SegmentZoneMapCache,
+}
+
+/// Segment zone map files: the footer and the column chunks read from it.
+#[derive(Clone)]
+pub struct SegmentZoneMapCache {
+    /// Footers, keyed by file location.
+    pub meta: MemCache<Arc<ParquetMetaData>>,
+    /// Compressed column chunks, keyed by `{location}#{row_group}#{field}`.
+    pub chunks: MemCache<SegmentZoneMapChunk>,
+}
+
+impl SegmentZoneMapCache {
+    pub fn with_policy(&self, policy: CachePolicy) -> Self {
+        SegmentZoneMapCache {
+            meta: self.meta.with_policy(policy),
+            chunks: self.chunks.with_policy(policy),
+        }
+    }
 }
 
 /// Inverted index bundles: the footer, then whole lookup files or 64 KiB pages.
@@ -144,6 +166,10 @@ impl FuseCaches {
             vector_indexes: manager.cache::<vector::Index>(),
             column_arrays: manager.cache::<column::Array>(),
             granule_marks: manager.cache::<granule::Marks>(),
+            segment_zone_maps: SegmentZoneMapCache {
+                meta: manager.cache::<zone_map::Meta>(),
+                chunks: manager.cache::<zone_map::Chunk>(),
+            },
         })
     }
 
@@ -168,6 +194,7 @@ impl FuseCaches {
             vector_indexes: self.vector_indexes.with_policy(policy),
             column_arrays: self.column_arrays.with_policy(policy),
             granule_marks: self.granule_marks.with_policy(policy),
+            segment_zone_maps: self.segment_zone_maps.with_policy(policy),
         })
     }
 

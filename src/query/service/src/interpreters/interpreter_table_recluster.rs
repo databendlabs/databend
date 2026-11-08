@@ -46,6 +46,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
+use databend_common_storages_fuse::segment_zone_map::RefreshOutcome;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::error;
@@ -81,6 +82,9 @@ use crate::sessions::TableContextTableManagement;
 use crate::sessions::TableContextTelemetry;
 
 const MAX_SEGMENT_CLAIM_RETRIES: usize = 3;
+/// Committed FINAL rounds between two segment zone map refreshes; the rounds
+/// after the last refresh are covered once the statement ends.
+const ZONE_MAP_REFRESH_ROUNDS: usize = 10;
 
 #[derive(Debug, PartialEq, Eq)]
 enum ReclusterRoundOutcome {
@@ -172,6 +176,7 @@ impl Interpreter for ReclusterTableInterpreter {
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
             let mut committed_rounds = 0;
+            let mut zone_map_rounds = 0;
             let (result, stop_reason) = loop {
                 if let Err(err) = ctx.check_aborting() {
                     error!(
@@ -206,6 +211,12 @@ impl Interpreter for ReclusterTableInterpreter {
                         };
                         if task_count.is_some() {
                             committed_rounds += 1;
+                            // A FINAL recluster may run for a long time, so the segment
+                            // zone map is refreshed along the way, not only at the end.
+                            if committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
+                                self.refresh_segment_zone_map().await;
+                                zone_map_rounds = committed_rounds;
+                            }
                         }
                         if is_vertical {
                             match vertical_round {
@@ -316,6 +327,9 @@ impl Interpreter for ReclusterTableInterpreter {
                 "Recluster finished"
             );
 
+            if committed_rounds > zone_map_rounds {
+                self.refresh_segment_zone_map().await;
+            }
             if committed_rounds > 0 {
                 self.vacuum_table_history().await;
             }
@@ -345,6 +359,48 @@ impl ReclusterTableInterpreter {
         } else {
             warn!("recluster: disable distributed vertical execution during mixed-version upgrade");
             Ok(1)
+        }
+    }
+
+    /// Refresh the segment zone map on the snapshot the last round committed,
+    /// subject to its start decision. Recluster is the only writer that builds
+    /// it; every other commit carries the pointer along. Failures never fail
+    /// the recluster.
+    async fn refresh_segment_zone_map(&self) {
+        let result = async {
+            let settings = self.ctx.get_settings();
+            if !settings.get_enable_segment_zone_map()? {
+                return Ok(RefreshOutcome::Skipped);
+            }
+            // The round's on-finished hook evicted the table from the cache, so this
+            // is the snapshot the round committed.
+            self.ctx.clear_table_meta_timestamps_cache();
+            let table = self
+                .ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let threshold = settings.get_segment_zone_map_full_segment_threshold()?;
+            let ctx = self.ctx.clone();
+            fuse_table.refresh_segment_zone_map(ctx, threshold).await
+        }
+        .await;
+        match result {
+            Ok(RefreshOutcome::Skipped) => {}
+            Ok(outcome) => {
+                info!("recluster: segment zone map refresh finished: {outcome:?}");
+                // The refresh committed a snapshot; the next round must not plan on
+                // the cached table and pay a version-mismatch retry at commit.
+                let evicted = self.ctx.evict_table_from_cache(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                );
+                if let Err(e) = evicted {
+                    warn!("recluster: failed to evict table from cache: {e}");
+                }
+            }
+            Err(e) => warn!("recluster: segment zone map refresh failed: {e}"),
         }
     }
 
