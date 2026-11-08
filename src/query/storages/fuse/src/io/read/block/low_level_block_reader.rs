@@ -1545,13 +1545,26 @@ impl ChunkReader for ForwardChunkReader {
     }
 
     fn get_bytes(&self, start: u64, length: usize) -> ParquetResult<bytes::Bytes> {
-        self.check_position(start)?;
-        let mut read = ForwardRead {
-            state: self.state.clone(),
-        };
-        let mut data = vec![0; length];
-        read.read_exact(&mut data)?;
-        Ok(data.into())
+        let mut state = self.state.lock();
+        if start != state.position {
+            return Err(ParquetError::General(format!(
+                "forward Parquet reader requested offset {start}, current offset is {}",
+                state.position
+            )));
+        }
+        let remaining = state.len.saturating_sub(state.position);
+        if u64::try_from(length).is_ok_and(|length| length <= remaining) {
+            // A page payload inside one window is a slice of that window; only a
+            // payload spanning windows is copied, once, into one allocation.
+            let buffer = state.input.read_buffer(length)?;
+            state.position += buffer.len() as u64;
+            if buffer.len() == length {
+                return Ok(buffer.to_bytes());
+            }
+        }
+        Err(ParquetError::EOF(format!(
+            "forward Parquet reader requested {length} bytes at offset {start}, only {remaining} remain"
+        )))
     }
 }
 

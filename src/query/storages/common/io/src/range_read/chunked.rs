@@ -20,6 +20,7 @@ use std::collections::VecDeque;
 use std::io;
 use std::ops::Range;
 
+use bytes::Buf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use opendal::Buffer;
@@ -144,6 +145,37 @@ impl io::Read for ChunkedRangeReader {
     }
 }
 
+impl ChunkedRangeReader {
+    /// Take the next `len` bytes without copying them out of their windows.
+    ///
+    /// Bytes inside the current window come back as one O(1) slice of it. Bytes that
+    /// span windows come back as a non-contiguous buffer over the window pieces, still
+    /// without copying. Fewer bytes are returned only at the end of the range. The
+    /// stream position advances exactly like [`io::Read::read`] would.
+    pub fn read_buffer(&mut self, len: usize) -> io::Result<Buffer> {
+        let mut pieces = Vec::new();
+        let mut remaining = len;
+        while remaining > 0 {
+            let current = match self.current.as_mut() {
+                Some(current) if !current.is_empty() => current,
+                _ => match self.load_next().map_err(io::Error::other)? {
+                    Some(data) => self.current.insert(data),
+                    None => break,
+                },
+            };
+            let take = remaining.min(current.len());
+            pieces.push(current.slice(..take));
+            current.advance(take);
+            remaining -= take;
+        }
+        Ok(match pieces.len() {
+            0 => Buffer::new(),
+            1 => pieces.pop().expect("one window piece"),
+            _ => pieces.into_iter().flatten().collect(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Read;
@@ -217,5 +249,45 @@ mod tests {
         init_test_runtime();
         let chain = OperatorRangeReader::new(memory_operator(), "z".into(), 1);
         assert!(ChunkedRangeReader::with_range(Box::new(chain), 0..8, 0, 1).is_err());
+    }
+
+    #[test]
+    fn test_read_buffer_slices_windows_and_mixes_with_read() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(CONTENT, false);
+        let chain = OperatorRangeReader::new(recording_operator(accessor.clone()), "b".into(), 2);
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 0..26, 8, 1).unwrap();
+
+        // Inside the first window: one contiguous piece.
+        let head = reader.read_buffer(5).unwrap();
+        assert_eq!(head.to_bytes().as_ref(), &CONTENT[0..5]);
+        assert_eq!(head.count(), 1);
+
+        // Spanning two windows: the pieces are kept, nothing is copied.
+        let span = reader.read_buffer(6).unwrap();
+        assert_eq!(span.to_bytes().as_ref(), &CONTENT[5..11]);
+        assert_eq!(span.count(), 2);
+
+        // `io::Read` continues from the same position.
+        let mut copied = [0u8; 3];
+        reader.read_exact(&mut copied).unwrap();
+        assert_eq!(&copied, &CONTENT[11..14]);
+
+        // Past the end of the range the buffer is short, then empty.
+        let tail = reader.read_buffer(100).unwrap();
+        assert_eq!(tail.to_bytes().as_ref(), &CONTENT[14..26]);
+        assert!(reader.read_buffer(1).unwrap().is_empty());
+        let mut seen = accessor.read_ranges();
+        seen.sort_by_key(|range| range.start);
+        assert_eq!(seen, vec![0..8, 8..16, 16..24, 24..26]);
+    }
+
+    #[test]
+    fn test_read_buffer_propagates_errors() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(CONTENT, true);
+        let chain = OperatorRangeReader::new(recording_operator(accessor), "err".into(), 2);
+        let mut reader = ChunkedRangeReader::with_range(Box::new(chain), 0..16, 8, 2).unwrap();
+        assert!(reader.read_buffer(4).is_err());
     }
 }
