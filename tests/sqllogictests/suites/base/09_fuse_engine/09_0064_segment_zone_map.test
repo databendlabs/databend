@@ -1,0 +1,438 @@
+# Segment zone map: a snapshot-level parquet file with the per-segment min/max of
+# every column, used to skip segments before reading any segment info. Recluster
+# builds it after each committed round when enough full segments are missing
+# from it; every other commit carries the pointer along. Building and pruning
+# are on by default; the settings and the table option are the switches to
+# turn them off.
+
+statement ok
+create or replace database db_segment_zone_map;
+
+statement ok
+use db_segment_zone_map;
+
+# Inserts stay as written: no compaction or reclustering behind the scenes.
+statement ok
+set enable_compact_after_write = 0;
+
+# With block_per_segment = 1 every segment counts as full, and the threshold 0
+# refreshes the zone map as soon as any live segment is missing from it.
+statement ok
+set segment_zone_map_full_segment_threshold = 0;
+
+statement ok
+create or replace table t (ts int, v string) cluster by (ts) block_per_segment = 1;
+
+# A round merges the overlapping blocks of two inserts into one block.
+statement ok
+insert into t values (1, 'a'), (20, 'b');
+
+statement ok
+insert into t values (2, 'c'), (10, 'd');
+
+query B
+select segment_zone_map_location is null from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+statement ok
+optimize table t recluster;
+
+# The round committed one segment, then a second commit pointed at the zone map.
+query IB
+select segment_count, segment_zone_map_location is not null from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 2;
+----
+1 1
+1 0
+
+# Nothing to recluster: no round commits, so nothing is built either.
+statement ok
+set variable zm_before = (select segment_zone_map_location from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1);
+
+statement ok
+optimize table t recluster;
+
+query B
+select segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+# A second pair, disjoint from the first segment, gives the next round one
+# more block; the zone map then covers both segments.
+statement ok
+insert into t values (100, 'e'), (2000, 'f');
+
+statement ok
+insert into t values (200, 'g'), (1000, 'h');
+
+statement ok
+optimize table t recluster;
+
+query IB
+select segment_count, segment_zone_map_location != $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+2 1
+
+# The zone map excludes a segment before any segment is read.
+query T
+explain select ts, v from t where ts >= 1000;
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>zone map pruning: 2 to 1<slt:ignore>
+
+query IT
+select ts, v from t where ts >= 1000 order by ts;
+----
+1000 h
+2000 f
+
+query T
+explain select ts, v from t where v = 'c';
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>zone map pruning: 2 to 1<slt:ignore>
+
+query IT
+select ts, v from t where v = 'c';
+----
+2 c
+
+# A filter nothing matches drops every segment.
+query T
+explain select ts from t where ts > 2000;
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 0<slt:ignore>zone map pruning: 2 to 0<slt:ignore>
+
+query I
+select count(*) from t where ts > 2000;
+----
+0
+
+# Results are identical with the zone map switched off on the query side.
+statement ok
+set enable_segment_zone_map_pruning = 0;
+
+query T
+explain select ts, v from t where ts >= 1000;
+----
+<slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
+
+query I
+select count(*) from t where ts >= 1000;
+----
+2
+
+statement ok
+unset enable_segment_zone_map_pruning;
+
+# Below the threshold a round does not refresh: the pointer is carried along,
+# and whatever the round rewrote is simply not covered.
+statement ok
+set variable zm_before = (select segment_zone_map_location from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1);
+
+statement ok
+set segment_zone_map_full_segment_threshold = 1000;
+
+statement ok
+insert into t values (3000, 'i'), (6000, 'j');
+
+statement ok
+insert into t values (4000, 'k'), (5000, 'l');
+
+statement ok
+optimize table t recluster;
+
+query IB
+select segment_count, segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+3 1
+
+query IT
+select ts, v from t where ts >= 1000 order by ts;
+----
+1000 h
+2000 f
+3000 i
+4000 k
+5000 l
+6000 j
+
+statement ok
+set segment_zone_map_full_segment_threshold = 0;
+
+# Schema evolution: a new column has no zone map entry, so it never prunes; a
+# renamed column keeps its id and stays covered; a dropped column is no longer
+# covered. These commits carry the pointer along.
+statement ok
+alter table t add column n int default 7;
+
+statement ok
+alter table t rename column v to label;
+
+query I
+select count(*) from t where n = 7;
+----
+12
+
+query I
+select count(*) from t where n = 8;
+----
+0
+
+query IT
+select ts, label from t where label = 'c';
+----
+2 c
+
+statement ok
+alter table t drop column n;
+
+query B
+select segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+# Time travel reads the snapshot's own pointer.
+statement ok
+set variable snap2 = (select snapshot_id from fuse_snapshot('db_segment_zone_map', 't') where segment_count = 2 order by timestamp desc limit 1);
+
+query I
+select count(*) from t at (snapshot => $snap2) where ts >= 1000;
+----
+2
+
+# The setting stops building everywhere; the pointer is carried along and the
+# existing zone map stays usable.
+statement ok
+set enable_segment_zone_map = 0;
+
+statement ok
+insert into t values (10000, 'q'), (12000, 'r');
+
+statement ok
+insert into t values (11000, 's'), (13000, 't');
+
+statement ok
+optimize table t recluster;
+
+query B
+select segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+query IT
+select ts, label from t where ts >= 10000 order by ts;
+----
+10000 q
+11000 s
+12000 r
+13000 t
+
+statement ok
+unset enable_segment_zone_map;
+
+# The table option opts one table out; unsetting it restores the default.
+statement ok
+alter table t set options (enable_segment_zone_map = 0);
+
+statement ok
+insert into t values (20000, 'u'), (22000, 'v');
+
+statement ok
+insert into t values (21000, 'w'), (23000, 'x');
+
+statement ok
+optimize table t recluster;
+
+query B
+select segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+statement ok
+alter table t unset options (enable_segment_zone_map);
+
+statement ok
+insert into t values (30000, 'y'), (32000, 'z');
+
+statement ok
+insert into t values (31000, 'aa'), (33000, 'ab');
+
+statement ok
+optimize table t recluster;
+
+query B
+select segment_zone_map_location != $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+query T
+explain select ts from t where ts >= 30000;
+----
+<slt:ignore>zone map pruning: <slt:ignore>
+
+query IT
+select ts, label from t where ts >= 30000 order by ts;
+----
+30000 y
+31000 aa
+32000 z
+33000 ab
+
+# Mutations and metadata-only commits carry the pointer along. With building
+# off, only inheritance can keep it. The zone map goes stale but stays correct:
+# its rows of rewritten segments are ignored, new segments are not covered.
+statement ok
+set variable zm_before = (select segment_zone_map_location from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1);
+
+statement ok
+set enable_segment_zone_map = 0;
+
+statement ok
+delete from t where ts = 3000;
+
+statement ok
+update t set label = 'ac' where ts = 10000;
+
+statement ok
+analyze table t;
+
+statement ok
+alter table t cluster by (ts, label);
+
+query B
+select segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+query IT
+select ts, label from t where ts >= 4000 and ts <= 10000 order by ts;
+----
+4000 k
+5000 l
+6000 j
+10000 ac
+
+statement ok
+optimize table t compact;
+
+query B
+select segment_zone_map_location = $zm_before from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+query I
+select count(*) from t where ts >= 30000;
+----
+4
+
+statement ok
+unset enable_segment_zone_map;
+
+# A clone starts without a zone map and builds its own.
+statement ok
+set enable_experimental_clone_table = 1;
+
+statement ok
+create table t_clone clone t;
+
+query B
+select segment_zone_map_location is null from fuse_snapshot('db_segment_zone_map', 't_clone') order by timestamp desc limit 1;
+----
+1
+
+query I
+select count(*) from t_clone where ts >= 30000;
+----
+4
+
+statement ok
+insert into t_clone values (40000, 'ad'), (42000, 'ae');
+
+statement ok
+insert into t_clone values (41000, 'af'), (43000, 'ag');
+
+statement ok
+optimize table t_clone recluster;
+
+query B
+select segment_zone_map_location like '%/_zm/%' from fuse_snapshot('db_segment_zone_map', 't_clone') order by timestamp desc limit 1;
+----
+1
+
+query I
+select count(*) from t_clone where ts >= 30000;
+----
+8
+
+# INSERT OVERWRITE replaces every segment, so the overwrite commit drops the
+# pointer; the next recluster builds a zone map over the new segments only.
+# FINAL refreshes after each committed round as well.
+statement ok
+insert overwrite t values (50000, 'ah'), (52000, 'ai');
+
+query B
+select segment_zone_map_location is null from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+statement ok
+insert into t values (51000, 'aj'), (53000, 'ak');
+
+statement ok
+optimize table t recluster final;
+
+query IB
+select segment_count, segment_zone_map_location is not null from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1 1
+
+query IT
+select ts, label from t where ts >= 52000 order by ts;
+----
+52000 ai
+53000 ak
+
+# Truncate drops the pointer.
+statement ok
+truncate table t;
+
+query B
+select segment_zone_map_location is null from fuse_snapshot('db_segment_zone_map', 't') order by timestamp desc limit 1;
+----
+1
+
+query I
+select count(*) from t;
+----
+0
+
+# A table that opted out never builds a zone map.
+statement ok
+create or replace table plain (c int) cluster by (c) block_per_segment = 1 enable_segment_zone_map = 0;
+
+statement ok
+insert into plain values (1), (3);
+
+statement ok
+insert into plain values (2), (4);
+
+statement ok
+optimize table plain recluster;
+
+query IB
+select segment_count, segment_zone_map_location is null from fuse_snapshot('db_segment_zone_map', 'plain') order by timestamp desc limit 1;
+----
+1 1
+
+query I
+select sum(c) from plain where c > 1;
+----
+9
+
+statement ok
+unset segment_zone_map_full_segment_threshold;
+
+statement ok
+unset enable_compact_after_write;
+
+statement ok
+unset enable_experimental_clone_table;

@@ -1,0 +1,39 @@
+# Written by an old query, before the segment zone map existed. The table carries
+# every type that has min/max statistics, including decimals that old writers
+# stored as 128-bit values regardless of precision, and NULLs; the current reader
+# reclusters it and builds a zone map over the result.
+
+statement ok
+set global timezone = 'UTC';
+
+statement ok
+DROP TABLE IF EXISTS compat_segment_zone_map_old;
+
+statement ok
+CREATE TABLE compat_segment_zone_map_old (
+        id INT,
+        label VARCHAR,
+        d64 DECIMAL(8, 4),
+        d128 DECIMAL(28, 4),
+        d256 DECIMAL(72, 4),
+        ts TIMESTAMP,
+        dt DATE,
+        n INT NULL
+) Engine = Fuse CLUSTER BY (id) block_per_segment = 1;
+
+statement ok
+INSERT INTO compat_segment_zone_map_old VALUES (1, 'alpha', 1.5, 1000.25, 100000.125, '2024-01-01 00:00:00', '2024-01-01', 10);
+
+statement ok
+INSERT INTO compat_segment_zone_map_old VALUES (2, 'bravo', 2.5, 2000.25, 200000.125, '2024-02-01 00:00:00', '2024-02-01', NULL);
+
+statement ok
+INSERT INTO compat_segment_zone_map_old VALUES (3, 'charlie', 3.5, 3000.25, 300000.125, '2024-03-01 00:00:00', '2024-03-01', 30);
+
+statement ok
+INSERT INTO compat_segment_zone_map_old VALUES (4, 'delta', 4.5, 4000.25, 400000.125, '2024-04-01 00:00:00', '2024-04-01', NULL);
+
+query I
+SELECT count(*) FROM compat_segment_zone_map_old;
+----
+4

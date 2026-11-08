@@ -39,6 +39,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
@@ -106,6 +107,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
+    r.insert(FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
@@ -160,6 +162,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
         r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
         r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
+        r.insert(FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP);
         r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
         r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
         r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
@@ -233,6 +236,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
+    r.insert(FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
