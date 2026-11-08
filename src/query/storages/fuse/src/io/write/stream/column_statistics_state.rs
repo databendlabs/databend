@@ -15,9 +15,14 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_expression::types::DataType;
@@ -29,11 +34,15 @@ use crate::io::write::stream::ColumnStatisticsBuilder;
 use crate::io::write::stream::ColumnStatsOps;
 use crate::io::write::stream::create_column_ndv_estimator;
 use crate::io::write::stream::create_column_stats_builder;
+use crate::statistics::calc_column_distinct_of_values;
 use crate::statistics::traverse_values_dfs;
 
 pub struct ColumnStatisticsState {
     col_stats: HashMap<ColumnId, ColumnStatisticsBuilder>,
     distinct_columns: HashMap<ColumnId, ColumnNDVEstimator>,
+    /// Columns counted from their whole column at `finalize` instead of by the estimators:
+    /// their fragments, kept until then. See [`Self::with_exact_distinct`].
+    whole_distinct_columns: Option<HashMap<ColumnId, Vec<Column>>>,
 }
 
 impl ColumnStatisticsState {
@@ -58,6 +67,29 @@ impl ColumnStatisticsState {
         Self {
             col_stats,
             distinct_columns,
+            whole_distinct_columns: None,
+        }
+    }
+
+    /// Count the distinct values of the `distinct_columns` from their whole columns at
+    /// `finalize`, with `approx_count_distinct` at the error rate of the batch statistics, as
+    /// `gen_columns_statistics` does: exact at the cardinalities a block holds, where the
+    /// streaming estimators may be off by one. For writers that hold the block in memory, as
+    /// the fragments are kept until `finalize`.
+    pub fn with_exact_distinct(mut self) -> Self {
+        let columns = self.distinct_columns.keys().map(|id| (*id, Vec::new()));
+        self.whole_distinct_columns = Some(columns.collect());
+        self.distinct_columns.clear();
+        self
+    }
+
+    fn keep_fragment(&mut self, column_id: ColumnId, column: &Column) {
+        if let Some(fragments) = self
+            .whole_distinct_columns
+            .as_mut()
+            .and_then(|columns| columns.get_mut(&column_id))
+        {
+            fragments.push(column.clone());
         }
     }
 
@@ -75,6 +107,10 @@ impl ColumnStatisticsState {
                     if let Some(estimator) = self.distinct_columns.get_mut(&column_id) {
                         estimator.update_scalar(&s.as_ref(), rows as u64);
                     }
+                    if self.whole_distinct_columns.is_some() {
+                        let column = ColumnBuilder::repeat(&s.as_ref(), rows, &data_type).build();
+                        self.keep_fragment(column_id, &column);
+                    }
                 }
                 Value::Column(col) => {
                     self.col_stats
@@ -85,18 +121,15 @@ impl ColumnStatisticsState {
                     if let Some(estimator) = self.distinct_columns.get_mut(&column_id) {
                         estimator.update_column(&col);
                     }
+                    self.keep_fragment(column_id, &col);
                 }
             }
         }
         Ok(())
     }
 
-    pub fn add_column(
-        &mut self,
-        field: &databend_common_expression::TableField,
-        column: &databend_common_expression::Column,
-    ) -> Result<()> {
-        let entry = databend_common_expression::BlockEntry::Column(column.clone());
+    pub fn add_column(&mut self, field: &TableField, column: &Column) -> Result<()> {
+        let entry = BlockEntry::Column(column.clone());
         let leaves =
             traverse_values_dfs(std::slice::from_ref(&entry), std::slice::from_ref(field))?;
         for (column_id, value, data_type) in leaves {
@@ -104,7 +137,7 @@ impl ColumnStatisticsState {
                 unreachable!("column traversal cannot produce a scalar")
             };
             let Some(stats) = self.col_stats.get_mut(&column_id) else {
-                return Err(databend_common_exception::ErrorCode::Internal(format!(
+                return Err(ErrorCode::Internal(format!(
                     "missing statistics builder for column {column_id}"
                 )));
             };
@@ -112,6 +145,7 @@ impl ColumnStatisticsState {
             if let Some(estimator) = self.distinct_columns.get_mut(&column_id) {
                 estimator.update_column(&column);
             }
+            self.keep_fragment(column_id, &column);
             debug_assert_eq!(column.data_type(), data_type);
         }
         Ok(())
@@ -130,6 +164,15 @@ impl ColumnStatisticsState {
     ) -> Result<StatisticsOfColumns> {
         for (column_id, estimator) in &self.distinct_columns {
             column_distinct_count.insert(*column_id, estimator.finalize());
+        }
+        for (column_id, mut fragments) in self.whole_distinct_columns.unwrap_or_default() {
+            let column = match fragments.len() {
+                0 => continue,
+                1 => fragments.pop().unwrap(),
+                _ => Column::concat_columns(fragments)?,
+            };
+            let count = calc_column_distinct_of_values(&column, column.len())?;
+            column_distinct_count.insert(column_id, count as usize);
         }
 
         let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());
@@ -157,6 +200,7 @@ mod tests {
 
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
@@ -258,6 +302,74 @@ mod tests {
                 .unwrap()
                 .in_memory_size,
             string_column.memory_size(true) as u64
+        );
+        Ok(())
+    }
+
+    /// The exact mode counts what `gen_columns_statistics` counts, whole or in fragments, and
+    /// counts constant columns too.
+    #[test]
+    fn test_exact_distinct_matches_batch_statistics() -> Result<()> {
+        let field = TableField::new("d", TableDataType::Number(NumberDataType::Int64));
+        let schema = Arc::new(TableSchema::new(vec![field]));
+        // 11 distinct values, 100 rows, as the decimal column of the stale-stats regression.
+        let values = (0..100i64)
+            .map(|row| if row < 90 { 1 } else { row - 88 })
+            .collect::<Vec<_>>();
+        let block = DataBlock::new_from_columns(vec![Int64Type::from_data(values)]);
+        let expected =
+            gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())?;
+        let expected = expected.get(&0).unwrap().distinct_of_values;
+        assert_eq!(expected, Some(11));
+        let stats_columns = vec![(0, DataType::Number(NumberDataType::Int64))];
+
+        let mut whole =
+            ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new())
+                .with_exact_distinct();
+        whole.add_block(&schema, &block)?;
+        assert_eq!(
+            whole
+                .finalize(HashMap::new())?
+                .get(&0)
+                .unwrap()
+                .distinct_of_values,
+            expected
+        );
+
+        let mut fragmented =
+            ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new())
+                .with_exact_distinct();
+        let column = block.get_by_offset(0).to_column();
+        fragmented.add_column(schema.field(0), &column.slice(0..95))?;
+        fragmented.add_column(schema.field(0), &column.slice(95..100))?;
+        assert_eq!(
+            fragmented
+                .finalize(HashMap::new())?
+                .get(&0)
+                .unwrap()
+                .distinct_of_values,
+            expected
+        );
+
+        let constant = DataBlock::new(
+            vec![BlockEntry::new_const_column(
+                DataType::Number(NumberDataType::Int64),
+                Scalar::Number(7i64.into()),
+                3,
+            )],
+            3,
+        );
+        let mut state =
+            ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new())
+                .with_exact_distinct();
+        state.add_block(&schema, &constant)?;
+        assert_eq!(
+            state
+                .finalize(HashMap::new())?
+                .get(&0)
+                .unwrap()
+                .distinct_of_values,
+            Some(1)
         );
         Ok(())
     }

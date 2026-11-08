@@ -150,11 +150,14 @@ impl FuseBlockWriter {
             BlockColumnSketchesBuilder::new(&properties.ndv_columns_map, top_n, None)?;
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
-        let column_stats_state = ColumnStatisticsState::new(
+        let mut column_stats_state = ColumnStatisticsState::new(
             &properties.stats_columns,
             &properties.distinct_columns,
             &properties.write_settings.col_stats_truncate_lens,
         );
+        if properties.exact_distinct {
+            column_stats_state = column_stats_state.with_exact_distinct();
+        }
         Ok(FuseBlockWriter {
             properties,
             block_location,
@@ -510,6 +513,10 @@ pub struct FuseBlockWriteOptions {
     granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
     granule_cluster_keys: Option<Vec<Column>>,
     serialize_hll: bool,
+    /// Whether the distinct counts of the columns without a bloom filter or HLL come from the
+    /// whole column (`ColumnStatisticsState::with_exact_distinct`): the batch path, which
+    /// holds the block in memory. The streaming path estimates them.
+    exact_distinct: bool,
     cluster_stats_override: Option<ClusterStatistics>,
     // Exact PARTITION BY values for the block being written; extracted by the caller
     // before serialization since all rows of one block share one partition.
@@ -630,6 +637,7 @@ impl FuseBlockWriteOptions {
             granule_index_specs,
             granule_cluster_keys: None,
             serialize_hll: false,
+            exact_distinct: false,
             cluster_stats_override: None,
             partition_stats_override: None,
         }))
@@ -828,6 +836,7 @@ impl FuseBlockWriteOptions {
                 None => None,
             },
             serialize_hll,
+            exact_distinct: true,
             cluster_stats_override,
             partition_stats_override,
         }))
