@@ -243,7 +243,6 @@ compression-codecs = { version = "=0.4.39", features = [
 concurrent-queue = "2.5.0"
 convert_case = "0.6.0"
 cookie = "0.18.1"
-crc32c = "0.6.8"
 crc32fast = "1.3.2"
 cron = "0.12.0"
 crossbeam-channel = "0.5.6"
@@ -268,7 +267,6 @@ enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.2", features = ["serde", "macros"] }
 feistel-permutation-rs = "0.1.1"
 flatbuffers = "25" # Must use the same version with arrow-ipc
-flate2 = "1"
 foreign_vec = "0.1.0"
 form_urlencoded = { version = "1" }
 futures = "0.3.24"

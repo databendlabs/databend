@@ -77,7 +77,6 @@ pub enum FileFormatParams {
     Lance(LanceFileFormatParams),
     Arrow(ArrowFileFormatParams),
     ArrowStream(ArrowFileFormatParams),
-    Loki(LokiFileFormatParams),
 }
 
 impl FileFormatParams {
@@ -94,7 +93,6 @@ impl FileFormatParams {
             FileFormatParams::Lance(_) => StageFileFormatType::Lance,
             FileFormatParams::Arrow(_) => StageFileFormatType::Arrow,
             FileFormatParams::ArrowStream(_) => StageFileFormatType::ArrowStream,
-            FileFormatParams::Loki(_) => StageFileFormatType::Loki,
         }
     }
 
@@ -111,7 +109,6 @@ impl FileFormatParams {
             FileFormatParams::Lance(_) => ".lance",
             FileFormatParams::Arrow(_) => ".arrow",
             FileFormatParams::ArrowStream(_) => ".arrow_stream",
-            FileFormatParams::Loki(_) => ".loki",
         }
     }
 
@@ -149,9 +146,6 @@ impl FileFormatParams {
             StageFileFormatType::Lance => {
                 Ok(FileFormatParams::Lance(LanceFileFormatParams::default()))
             }
-            StageFileFormatType::Loki => {
-                Ok(FileFormatParams::Loki(LokiFileFormatParams::default()))
-            }
             StageFileFormatType::Arrow => {
                 Ok(FileFormatParams::Arrow(ArrowFileFormatParams::default()))
             }
@@ -174,7 +168,7 @@ impl FileFormatParams {
             FileFormatParams::Xml(v) => v.compression,
             FileFormatParams::Parquet(v) => v.compression,
             FileFormatParams::Orc(_) => StageFileCompression::None,
-            FileFormatParams::Avro(_) | FileFormatParams::Loki(_) => StageFileCompression::None,
+            FileFormatParams::Avro(_) => StageFileCompression::None,
             FileFormatParams::Lance(_) => StageFileCompression::None,
             FileFormatParams::Arrow(_) | FileFormatParams::ArrowStream(_) => {
                 StageFileCompression::None
@@ -185,7 +179,7 @@ impl FileFormatParams {
     pub fn check_copy_options(&self, options: &mut CopyIntoTableOptions) -> Result<()> {
         if let Some(m) = &options.column_match_mode {
             match self {
-                FileFormatParams::Parquet(_) | FileFormatParams::Loki(_) => {
+                FileFormatParams::Parquet(_) => {
                     if let ColumnMatchMode::Position = m {
                         return Err(ErrorCode::BadArguments(
                             "COLUMN_MATCH_MODE=POSITION not supported yet.",
@@ -194,7 +188,7 @@ impl FileFormatParams {
                 }
                 _ => {
                     return Err(ErrorCode::BadArguments(
-                        "COLUMN_MATCH_MODE can only apply to Parquet and Loki.",
+                        "COLUMN_MATCH_MODE can only apply to Parquet for now.",
                     ));
                 }
             }
@@ -205,7 +199,6 @@ impl FileFormatParams {
     pub fn need_field_default(&self) -> bool {
         match self {
             FileFormatParams::Parquet(v) => v.missing_field_as == NullAs::FieldDefault,
-            FileFormatParams::Loki(v) => v.missing_field_as == NullAs::FieldDefault,
             FileFormatParams::Csv(v) => {
                 v.empty_field_as == EmptyFieldAs::FieldDefault
                     || v.quoted_empty_field_as == EmptyFieldAs::FieldDefault
@@ -280,12 +273,6 @@ impl FileFormatParams {
                 )?)
             }
             StageFileFormatType::Lance => FileFormatParams::Lance(LanceFileFormatParams::default()),
-            StageFileFormatType::Loki => {
-                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
-                FileFormatParams::Loki(LokiFileFormatParams::try_create(
-                    missing_field_as.as_deref(),
-                )?)
-            }
             StageFileFormatType::Arrow => {
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
                 FileFormatParams::Arrow(ArrowFileFormatParams::try_create(
@@ -1083,19 +1070,6 @@ impl ArrowFileFormatParams {
     }
 }
 
-/// Parameters for reading Loki object-store log chunks. Compression is encoded in each chunk.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LokiFileFormatParams {
-    pub missing_field_as: NullAs,
-}
-
-impl LokiFileFormatParams {
-    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
-        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
-        Ok(Self { missing_field_as })
-    }
-}
-
 impl Display for FileFormatParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -1186,13 +1160,6 @@ impl Display for FileFormatParams {
             }
             FileFormatParams::Lance(_) => {
                 write!(f, "TYPE = LANCE")
-            }
-            FileFormatParams::Loki(params) => {
-                write!(
-                    f,
-                    "TYPE = LOKI MISSING_FIELD_AS = {}",
-                    params.missing_field_as
-                )
             }
             FileFormatParams::Arrow(params) => {
                 write!(

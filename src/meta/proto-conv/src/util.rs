@@ -223,7 +223,6 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (191, "2026-10-22: Add: table.proto/TableMeta.masking_where_use_unmasked_value"),
     (192, "2026-10-29: Add: Python script UDF external access integrations"),
     (193, "2026-11-02: Add: CsvFileFormatParams quote_non_numeric quote style"),
-    (194, "2026-10-10: Add: file_format.proto Loki file format"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

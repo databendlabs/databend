@@ -16,7 +16,6 @@ pub mod arrow;
 pub mod avro;
 mod error_handler;
 pub(crate) mod load_context;
-pub mod loki;
 pub mod row_based;
 
 pub(crate) mod block_builder_state;
