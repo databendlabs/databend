@@ -37,6 +37,7 @@ use databend_storages_common_cache::kinds::spatial;
 use databend_storages_common_cache::kinds::table;
 use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_cache::kinds::virtual_column;
+use databend_storages_common_cache::kinds::zone_map;
 use futures::executor::block_on;
 use rand::Rng;
 use rand::rngs::SmallRng;
@@ -78,6 +79,7 @@ pub fn cases() -> Vec<Box<dyn KindCase>> {
         case::<segment::ColumnOriented>(),
         case::<segment::BlockMetas>(),
         case::<segment::Stats>(),
+        case::<zone_map::Meta>(),
         case::<bloom::IndexMeta>(),
         case::<inverted::Meta>(),
         case::<vector::Meta>(),
@@ -87,6 +89,7 @@ pub fn cases() -> Vec<Box<dyn KindCase>> {
         case::<iceberg::Table>(),
         case::<table::PruneResult>(),
         case::<bloom::Filter>(),
+        case::<zone_map::Chunk>(),
         case::<vector::Index>(),
         case::<vector::Refine>(),
         case::<inverted::Lookup>(),

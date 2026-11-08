@@ -33,4 +33,5 @@ mod format;
 mod prune;
 
 pub use build::RefreshOutcome;
+pub use format::SegmentZoneMapReader;
 pub use prune::prune_segments_by_zone_map;

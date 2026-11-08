@@ -29,10 +29,10 @@ use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentZoneMapMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
-use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use crate::segment_zone_map::format::SegmentZoneMapFile;
+use crate::segment_zone_map::format::SegmentZoneMapReader;
 use crate::segment_zone_map::format::ZoneMapColumn;
 
 type SharedRangePruner = Arc<dyn RangePruner + Send + Sync>;
@@ -47,7 +47,7 @@ type SharedRangePruner = Arc<dyn RangePruner + Send + Sync>;
 /// Row groups are read and evaluated on their own tasks, `concurrency` at a
 /// time, so memory is bounded by that many row groups rather than the file.
 pub async fn prune_segments_by_zone_map(
-    operator: &Operator,
+    reader: &SegmentZoneMapReader,
     meta: &SegmentZoneMapMeta,
     func_ctx: FunctionContext,
     schema: &TableSchemaRef,
@@ -55,7 +55,7 @@ pub async fn prune_segments_by_zone_map(
     segments: &[(usize, Location)],
     concurrency: usize,
 ) -> Result<Vec<(usize, Location)>> {
-    let file = SegmentZoneMapFile::open(operator, meta).await?;
+    let file = reader.open(meta).await?;
     let column_ids = usable_column_ids(file.columns(), schema, filter);
     if column_ids.is_empty() {
         return Ok(segments.to_vec());
@@ -161,8 +161,11 @@ mod tests {
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_functions::BUILTIN_FUNCTIONS;
+    use databend_storages_common_cache::CachePolicy;
+    use databend_storages_common_io::ReadSettings;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::Statistics;
+    use opendal::Operator;
     use opendal::services::Memory;
     use rand::Rng;
     use rand::SeedableRng;
@@ -306,7 +309,7 @@ mod tests {
             (0..total).map(|i| (i, (format!("seg_{i}"), 4))).collect();
         // The last ten segments are not covered.
         let covered = total - 10;
-        let location = ("zm.parquet".to_string(), SegmentZoneMapMeta::VERSION);
+        let location = ("prune/zm.parquet".to_string(), SegmentZoneMapMeta::VERSION);
         let columns = zone_map_columns(&schema);
         let writer = SegmentZoneMapWriter::create(&op, location, columns, 1.0).await?;
         let mut writer = writer.with_row_group_rows(group_rows);
@@ -315,11 +318,18 @@ mod tests {
         }
         let meta = writer.finish().await?;
 
+        crate::test_utils::init_test_globals()?;
+        let settings = ReadSettings {
+            max_gap_size: 48,
+            max_range_size: 512 * 1024,
+            parquet_fast_read_bytes: 0,
+        };
+        let reader = SegmentZoneMapReader::new(op.clone(), CachePolicy::DEFAULT, settings);
         let mut dropped_any = false;
         for round in 0..300 {
             let filter = check(&random_predicate(&mut rng, 2), &BUILTIN_FUNCTIONS)?;
             let kept = prune_segments_by_zone_map(
-                &op,
+                &reader,
                 &meta,
                 func_ctx.clone(),
                 &schema,

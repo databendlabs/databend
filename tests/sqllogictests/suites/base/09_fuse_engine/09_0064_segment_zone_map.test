@@ -106,6 +106,18 @@ select count(*) from t where ts > 2000;
 ----
 0
 
+# Repeated reads of one zone map are served from memory: its footer and the
+# chunks of the columns read so far are cached by file location.
+query B
+select sum(hit) > 0 and sum(num_items) > 0 from system.caches where name = 'memory_cache_segment_zone_map_meta_data';
+----
+1
+
+query B
+select sum(hit) > 0 and sum(num_items) >= 6 from system.caches where name = 'memory_cache_segment_zone_map_chunk';
+----
+1
+
 # Results are identical with the zone map switched off on the query side.
 statement ok
 set enable_segment_zone_map_pruning = 0;

@@ -62,6 +62,7 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::NgramHashAlgorithm;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -124,6 +125,7 @@ use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
 use crate::pruning_pipeline::VectorIndexPruneTransform;
 use crate::segment_format_from_location;
+use crate::segment_zone_map::SegmentZoneMapReader;
 use crate::segment_zone_map::prune_segments_by_zone_map;
 
 const DEFAULT_GRAM_SIZE: usize = 3;
@@ -317,13 +319,16 @@ impl FuseTable {
         let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
         let func_ctx = ctx.get_function_context().ok()?;
         let concurrency = ctx.get_settings().get_max_threads().ok()? as usize;
+        let read_settings = ReadSettings::from_ctx(ctx).ok()?;
+        let reader =
+            SegmentZoneMapReader::new(self.operator.clone(), ctx.cache_policy(), read_settings);
 
         let start = Instant::now();
         let before = read_info.segment_locations.len();
         let schema = self.schema_with_stream();
         let segments = &read_info.segment_locations;
         let pruned = prune_segments_by_zone_map(
-            &self.operator,
+            &reader,
             meta,
             func_ctx,
             &schema,

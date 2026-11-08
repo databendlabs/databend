@@ -35,11 +35,10 @@
 //! types and the admission ratio the build used. The snapshot only points at
 //! the footer; readers fetch it first and then the column chunks they need.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
-use std::future::IntoFuture;
-use std::ops::Range;
 use std::sync::Arc;
 
 use arrow_schema::Schema;
@@ -56,6 +55,13 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::Reader;
+use databend_storages_common_cache::kinds::zone_map;
+use databend_storages_common_cache::kinds::zone_map::SegmentZoneMapChunk;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
@@ -64,7 +70,6 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::supported_stat_type;
 use databend_storages_common_table_meta::table::TableCompression;
-use futures::future::try_join_all;
 use opendal::Operator;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ArrowWriter;
@@ -73,7 +78,6 @@ use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::ParquetMetaDataReader;
-use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::statistics::Statistics as ParquetStatistics;
@@ -81,6 +85,8 @@ use parquet::schema::types::SchemaDescriptor;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::io::FuseCaches;
+use crate::io::SegmentZoneMapCache;
 use crate::io::read::DataItem;
 use crate::io::read::column_chunks_to_record_batch;
 
@@ -463,33 +469,35 @@ struct StatColumns {
     null_count: Column,
 }
 
-/// An opened zone map file: its footer, parsed. Rows are read per row group.
-pub struct SegmentZoneMapFile {
-    operator: Operator,
-    path: String,
-    schema: TableSchema,
-    parquet: ParquetMetaData,
-    columns: Vec<ZoneMapColumn>,
-    ratio: f64,
+/// Reads zone map files through the caches, under one cache policy: footers
+/// and column chunks are kept by file location, which every build renews, so
+/// nothing needs invalidating.
+#[derive(Clone)]
+pub struct SegmentZoneMapReader {
+    storage: DiskCachedStorage,
+    caches: SegmentZoneMapCache,
+    settings: ReadSettings,
 }
 
-impl SegmentZoneMapFile {
-    pub async fn open(operator: &Operator, meta: &SegmentZoneMapMeta) -> Result<Self> {
+impl SegmentZoneMapReader {
+    pub fn new(operator: Operator, policy: CachePolicy, settings: ReadSettings) -> Self {
+        Self {
+            storage: DiskCachedStorage::new(operator),
+            caches: FuseCaches::instance().segment_zone_maps.with_policy(policy),
+            settings,
+        }
+    }
+
+    pub async fn open(&self, meta: &SegmentZoneMapMeta) -> Result<SegmentZoneMapFile> {
         let (path, version) = meta.location.clone();
         let invalid = |what: String| invalid(&path, what);
         // A file of another format version may lay its fields out differently.
         if version != SegmentZoneMapMeta::VERSION {
             return Err(invalid(format!("unsupported format version {version}")));
         }
-        // One read to the end of the file: footer metadata, its length, magic.
-        let tail = operator.read_with(&path).range(meta.footer_offset..);
-        let tail = tail.await?.to_bytes();
-        let footer_len = tail.len().saturating_sub(PARQUET_FOOTER_TAIL);
-        if parse_footer_tail(&tail[footer_len..]) != Some(footer_len) {
-            return Err(invalid("footer offset does not match the file".into()));
-        }
-        let parquet = ParquetMetaDataReader::decode_metadata(&tail[..footer_len])
-            .map_err(|e| invalid(format!("footer: {e}")))?;
+        let footer = FooterReader(self.storage.operator().clone());
+        let parquet = self.caches.meta.get(&footer, meta.clone()).await?;
+        let parquet = Arc::clone(&parquet);
 
         let json = kv_value(&parquet, KV_COLUMNS).ok_or_else(|| invalid("no columns".into()))?;
         let columns: Vec<ZoneMapColumn> =
@@ -504,8 +512,8 @@ impl SegmentZoneMapFile {
             let found = format!("{groups} row groups of {fields} fields");
             return Err(invalid(format!("{found}, want 1 or more of {expected}")));
         }
-        Ok(Self {
-            operator: operator.clone(),
+        Ok(SegmentZoneMapFile {
+            reader: self.clone(),
             path,
             schema: file_schema(&columns),
             parquet,
@@ -513,7 +521,50 @@ impl SegmentZoneMapFile {
             ratio,
         })
     }
+}
 
+/// Reads and decodes the footer a pointer names, for the footer cache.
+struct FooterReader(Operator);
+
+impl Reader for FooterReader {
+    type Key = SegmentZoneMapMeta;
+    type Item = Arc<ParquetMetaData>;
+
+    fn cache_key<'a>(&self, meta: &'a SegmentZoneMapMeta) -> Cow<'a, str> {
+        Cow::Borrowed(&meta.location.0)
+    }
+
+    /// One read to the end of the file: footer metadata, its length, magic.
+    async fn read(
+        &self,
+        meta: &SegmentZoneMapMeta,
+        _: &CachePolicy,
+    ) -> Result<Arc<ParquetMetaData>> {
+        let path = &meta.location.0;
+        let tail = self.0.read_with(path).range(meta.footer_offset..).await?;
+        let tail = tail.to_bytes();
+        let footer_len = tail.len().saturating_sub(PARQUET_FOOTER_TAIL);
+        if parse_footer_tail(&tail[footer_len..]) != Some(footer_len) {
+            return Err(invalid(path, "footer offset does not match the file"));
+        }
+        let parquet = ParquetMetaDataReader::decode_metadata(&tail[..footer_len]);
+        Ok(Arc::new(
+            parquet.map_err(|e| invalid(path, format!("footer: {e}")))?,
+        ))
+    }
+}
+
+/// An opened zone map file: its footer, parsed. Rows are read per row group.
+pub struct SegmentZoneMapFile {
+    reader: SegmentZoneMapReader,
+    path: String,
+    schema: TableSchema,
+    parquet: Arc<ParquetMetaData>,
+    columns: Vec<ZoneMapColumn>,
+    ratio: f64,
+}
+
+impl SegmentZoneMapFile {
     pub fn columns(&self) -> &[ZoneMapColumn] {
         &self.columns
     }
@@ -621,7 +672,7 @@ impl SegmentZoneMapFile {
         }
 
         let row_group = self.parquet.row_group(group);
-        let chunks = self.read_fields(row_group, &field_ids).await?;
+        let chunks = self.read_fields(group, &field_ids).await?;
         let (schema, rows, compression) = (&self.schema, row_group.num_rows(), &READ_COMPRESSION);
         let rows = usize::try_from(rows)?;
         let batch = column_chunks_to_record_batch(schema, rows, &chunks, compression, None, None)?;
@@ -651,50 +702,49 @@ impl SegmentZoneMapFile {
         })
     }
 
-    /// Fetch the chunks of `field_ids` (ascending) of a row group. Adjacent
-    /// fields are adjacent in the file: one request per run of them, all issued
-    /// concurrently.
+    /// The chunks of `field_ids` of row group `group`, from the chunk cache or
+    /// storage; adjacent chunks missing from the cache are fetched in one read.
     async fn read_fields(
         &self,
-        row_group: &RowGroupMetaData,
+        group: usize,
         field_ids: &[usize],
     ) -> Result<HashMap<ColumnId, DataItem<'_>>> {
-        let bytes_of = |field_id: usize| -> Range<u64> {
-            let (offset, len) = row_group.column(field_id).byte_range();
-            offset..offset + len
-        };
-        // Runs of adjacent fields, each with the byte range covering them.
-        let mut runs: Vec<(Range<usize>, Range<u64>)> = Vec::new();
+        let row_group = self.parquet.row_group(group);
+        let caches = &self.reader.caches.chunks;
+        let mut chunks = HashMap::with_capacity(field_ids.len());
+        let mut misses = Vec::new();
         for &field_id in field_ids {
-            let bytes = bytes_of(field_id);
-            match runs.last_mut() {
-                Some((fields, run)) if fields.end == field_id => {
-                    fields.end += 1;
-                    run.start = run.start.min(bytes.start);
-                    run.end = run.end.max(bytes.end);
+            let (offset, len) = row_group.column(field_id).byte_range();
+            match caches.lookup_sized(&self.chunk_key(group, field_id), len) {
+                Some(hit) => {
+                    chunks.insert(field_id as ColumnId, DataItem::RawData(hit.bytes().into()));
                 }
-                _ => runs.push((field_id..field_id + 1, bytes)),
+                None => misses.push((field_id as ColumnId, offset..offset + len)),
             }
         }
-        let read = |run: &Range<u64>| self.operator.read_with(&self.path).range(run.clone());
-        let buffers = try_join_all(runs.iter().map(|(_, run)| read(run).into_future())).await?;
-
-        let mut chunks = HashMap::with_capacity(field_ids.len());
-        for ((fields, run), buffer) in runs.iter().zip(buffers) {
-            for field_id in fields.clone() {
-                let bytes = bytes_of(field_id);
-                let start = (bytes.start - run.start) as usize;
-                let end = (bytes.end - run.start) as usize;
-                if end > buffer.len() {
-                    return Err(invalid(&self.path, format!("truncated field {field_id}")));
-                }
-                chunks.insert(
-                    field_id as ColumnId,
-                    DataItem::RawData(buffer.slice(start..end)),
-                );
-            }
+        if misses.is_empty() {
+            return Ok(chunks);
+        }
+        let kind = CacheKind::of::<zone_map::Chunk>();
+        let (fill, settings) = (caches.policy().disk, &self.reader.settings);
+        let storage = &self.reader.storage;
+        let read = storage
+            .read_units(kind, &self.path, &misses, fill, settings)
+            .await?;
+        for (field_id, _) in misses {
+            let truncated = || invalid(&self.path, format!("truncated field {field_id}"));
+            let bytes = read.unit(field_id).ok_or_else(truncated)?;
+            caches.fill(
+                &self.chunk_key(group, field_id as usize),
+                SegmentZoneMapChunk::new(bytes.clone()),
+            );
+            chunks.insert(field_id, DataItem::RawData(bytes.into()));
         }
         Ok(chunks)
+    }
+
+    fn chunk_key(&self, group: usize, field_id: usize) -> String {
+        format!("{}#{group}#{field_id}", self.path)
     }
 }
 
@@ -816,9 +866,25 @@ mod tests {
         SegmentZoneMapWriter::create(op, location, columns, ratio).await
     }
 
+    /// The caches are process-wide and keyed by path: each test names its files
+    /// after itself.
+    fn reader(op: &Operator) -> Result<SegmentZoneMapReader> {
+        crate::test_utils::init_test_globals()?;
+        let settings = ReadSettings {
+            max_gap_size: 48,
+            max_range_size: 512 * 1024,
+            parquet_fast_read_bytes: 0,
+        };
+        Ok(SegmentZoneMapReader::new(
+            op.clone(),
+            CachePolicy::DEFAULT,
+            settings,
+        ))
+    }
+
     /// Open and read every covered column of the only row group.
     async fn read_all(op: &Operator, meta: &SegmentZoneMapMeta) -> Result<SegmentZoneMapData> {
-        let file = SegmentZoneMapFile::open(op, meta).await?;
+        let file = reader(op)?.open(meta).await?;
         assert_eq!(file.num_row_groups(), 1);
         file.read_row_group(0, &all_column_ids(file.columns()))
             .await
@@ -858,7 +924,7 @@ mod tests {
         // Missing statistics and statistics of the wrong type are both unknown.
         let seg_c = StatisticsOfColumns::from([(0, string_stats("1", "2", 0))]);
 
-        let mut writer = new_writer(&op, "zm_1.parquet", columns.clone(), 0.75).await?;
+        let mut writer = new_writer(&op, "round_trip/zm_1.parquet", columns.clone(), 0.75).await?;
         writer
             .push_summary("seg_a", &summary(1000, seg_a.clone()))
             .await?;
@@ -868,7 +934,7 @@ mod tests {
         writer.push_summary("seg_c", &summary(1, seg_c)).await?;
         let meta = writer.finish().await?;
 
-        let file = SegmentZoneMapFile::open(&op, &meta).await?;
+        let file = reader(&op)?.open(&meta).await?;
         assert_eq!(file.columns(), &columns[..]);
         assert_eq!(file.ratio(), 0.75);
         assert_eq!((file.num_rows(), file.num_row_groups()), (3, 1));
@@ -903,7 +969,7 @@ mod tests {
         let columns = zone_map_columns(&schema());
         let seg_a =
             StatisticsOfColumns::from([(0, int_stats(1, 10)), (1, string_stats("x", "y", 2))]);
-        let mut writer = new_writer(&op, "zm_1.parquet", columns.clone(), 1.0).await?;
+        let mut writer = new_writer(&op, "copy_rows/zm_1.parquet", columns.clone(), 1.0).await?;
         writer
             .push_summary("seg_a", &summary(1000, seg_a.clone()))
             .await?;
@@ -917,7 +983,7 @@ mod tests {
             data_type: TableDataType::Date,
         });
         let seg_b = StatisticsOfColumns::from([(0, int_stats(20, 30))]);
-        let mut writer = new_writer(&op, "zm_2.parquet", changed.clone(), 0.5).await?;
+        let mut writer = new_writer(&op, "copy_rows/zm_2.parquet", changed.clone(), 0.5).await?;
         let sources = writer.copy_sources(&previous);
         assert_eq!(sources.0, vec![Some(0), None, None]);
         writer
@@ -1037,12 +1103,18 @@ mod tests {
         assert_eq!(columns.len(), col_stats.len());
 
         let op = Operator::new(Memory::default())?.finish();
-        let mut writer = new_writer(&op, "zm.parquet", columns.clone(), 1.0).await?;
+        let mut writer = new_writer(
+            &op,
+            "round_trip_all_stat_types/zm.parquet",
+            columns.clone(),
+            1.0,
+        )
+        .await?;
         writer
             .push_summary("seg", &summary(1, col_stats.clone()))
             .await?;
         let meta = writer.finish().await?;
-        let file = SegmentZoneMapFile::open(&op, &meta).await?;
+        let file = reader(&op)?.open(&meta).await?;
         let data = file.read_row_group(0, &all_column_ids(&columns)).await?;
         assert_eq!(read_stats(&data, "seg"), col_stats);
 
@@ -1086,7 +1158,13 @@ mod tests {
         let col_stats = StatisticsOfColumns::from([(0, stats(wide(-15000), wide(25000), 1))]);
 
         let op = Operator::new(Memory::default())?.finish();
-        let mut writer = new_writer(&op, "zm.parquet", zone_map_columns(&schema), 1.0).await?;
+        let mut writer = new_writer(
+            &op,
+            "narrows_wide_decimal_stats/zm.parquet",
+            zone_map_columns(&schema),
+            1.0,
+        )
+        .await?;
         writer.push_summary("seg", &summary(1, col_stats)).await?;
         let data = read_all(&op, &writer.finish().await?).await?;
         let expected = StatisticsOfColumns::from([(0, stats(narrow(-15000), narrow(25000), 1))]);
@@ -1097,7 +1175,13 @@ mod tests {
     #[tokio::test]
     async fn test_segment_zone_map_open_rejects_corrupt_pointer() -> Result<()> {
         let op = Operator::new(Memory::default())?.finish();
-        let mut writer = new_writer(&op, "zm_1.parquet", zone_map_columns(&schema()), 1.0).await?;
+        let mut writer = new_writer(
+            &op,
+            "open_rejects_corrupt_pointer/zm_1.parquet",
+            zone_map_columns(&schema()),
+            1.0,
+        )
+        .await?;
         writer
             .push_summary("seg_a", &summary(1, StatisticsOfColumns::new()))
             .await?;
@@ -1113,10 +1197,7 @@ mod tests {
             corrupt(|m| m.location.1 += 1),
             corrupt(|m| m.location.0 = "missing.parquet".to_string()),
         ] {
-            assert!(
-                SegmentZoneMapFile::open(&op, &meta).await.is_err(),
-                "{meta:?}"
-            );
+            assert!(reader(&op)?.open(&meta).await.is_err(), "{meta:?}");
         }
         Ok(())
     }
@@ -1128,7 +1209,7 @@ mod tests {
         let op = Operator::new(Memory::default())?.finish();
         let columns = zone_map_columns(&schema());
         let rows = 2 * ROW_GROUP_ROWS + 5;
-        let mut writer = new_writer(&op, "zm.parquet", columns.clone(), 1.0).await?;
+        let mut writer = new_writer(&op, "row_groups/zm.parquet", columns.clone(), 1.0).await?;
         for row in 0..rows {
             let group = row / ROW_GROUP_ROWS;
             let value = row as i32;
@@ -1147,7 +1228,7 @@ mod tests {
         }
         let meta = writer.finish().await?;
 
-        let file = SegmentZoneMapFile::open(&op, &meta).await?;
+        let file = reader(&op)?.open(&meta).await?;
         assert_eq!((file.num_rows(), file.num_row_groups()), (rows, 3));
         let group_rows = [ROW_GROUP_ROWS, ROW_GROUP_ROWS, 5];
         for (group, expected) in group_rows.into_iter().enumerate() {
@@ -1181,6 +1262,43 @@ mod tests {
         assert!(!group_stats[1].contains_key(&1));
         // A row that is entirely NULL makes the group nullable.
         assert_eq!(group_stats[2][&1], string_stats("k", "k", 9));
+        Ok(())
+    }
+
+    /// A second open and read of the same file is served by the caches: the
+    /// footer and the chunks are keyed by path, which every build renews.
+    #[tokio::test]
+    async fn test_segment_zone_map_reads_are_cached() -> Result<()> {
+        let op = Operator::new(Memory::default())?.finish();
+        let columns = zone_map_columns(&schema());
+        let mut writer = new_writer(&op, "cached/zm.parquet", columns.clone(), 1.0).await?;
+        writer
+            .push_summary("seg_a", &summary(1, StatisticsOfColumns::new()))
+            .await?;
+        let meta = writer.finish().await?;
+
+        let reader = reader(&op)?;
+        let file = reader.open(&meta).await?;
+        let data = file.read_row_group(0, &HashSet::from([0])).await?;
+        assert_eq!(data.path(0), "seg_a");
+        let chunk_key = |field: usize| format!("cached/zm.parquet#0#{field}");
+        let caches = FuseCaches::instance();
+        assert!(caches.segment_zone_maps.meta.contains("cached/zm.parquet"));
+        // The segment fields and the three fields of column 0, not those of column 1.
+        for field in 0..6 {
+            assert!(
+                caches.segment_zone_maps.chunks.contains(&chunk_key(field)),
+                "{field}"
+            );
+        }
+        assert!(!caches.segment_zone_maps.chunks.contains(&chunk_key(6)));
+
+        // With the file gone, the cached footer and chunks still serve the read.
+        op.delete("cached/zm.parquet").await?;
+        let file = reader.open(&meta).await?;
+        let data = file.read_row_group(0, &HashSet::from([0])).await?;
+        assert_eq!(data.path(0), "seg_a");
+        assert!(file.read_row_group(0, &HashSet::from([1])).await.is_err());
         Ok(())
     }
 }

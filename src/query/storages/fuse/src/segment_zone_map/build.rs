@@ -48,6 +48,7 @@ use databend_common_expression::ColumnId;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CompactSegmentInfo;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentZoneMapMeta;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -61,6 +62,7 @@ use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::operations::set_backoff;
 use crate::segment_zone_map::format::SegmentZoneMapFile;
+use crate::segment_zone_map::format::SegmentZoneMapReader;
 use crate::segment_zone_map::format::SegmentZoneMapWriter;
 use crate::segment_zone_map::format::zone_map_columns;
 
@@ -202,7 +204,9 @@ impl FuseTable {
         // The previous zone map; a missing or unreadable one only costs a full rebuild.
         let mut previous = None;
         if let Some(meta) = pointer {
-            match SegmentZoneMapFile::open(&self.operator, meta).await {
+            let settings = ReadSettings::from_ctx(&ctx)?;
+            let reader = SegmentZoneMapReader::new(self.operator.clone(), policy, settings);
+            match reader.open(meta).await {
                 Ok(file) => previous = Some(file),
                 Err(e) => warn!(
                     "ignore unreadable segment zone map {}: {e}",
