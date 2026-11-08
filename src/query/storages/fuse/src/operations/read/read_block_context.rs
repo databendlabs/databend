@@ -181,6 +181,7 @@ impl ReadBlockContext {
                 .values()
                 .map(|(column_id, ..)| *column_id)
                 .filter(|id| !ignore_column_ids.is_some_and(|ignored| ignored.contains(id))),
+            self.block_read_ctx.policy(),
         )?;
         GranuleDataReader::create(
             &self.block_read_ctx,
@@ -243,6 +244,7 @@ impl ReadBlockContext {
                         crate::io::virtual_offset_mark(&meta.virtual_block_location, slot.offset),
                     )
                 }),
+            self.block_read_ctx.policy(),
         )?;
         let schema = VirtualColumnReader::read_schema(meta).ok_or_else(|| {
             ErrorCode::Internal(format!(

@@ -1520,6 +1520,7 @@ mod tests {
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::VariantType;
+    use databend_storages_common_cache::CachePolicy;
 
     use super::*;
 
@@ -1697,6 +1698,7 @@ mod tests {
                     virtual_offset_mark(virtual_location, meta.offset_length().0),
                 )
             }),
+            CachePolicy::BYPASS,
         )
         .unwrap();
         // Simulate segment-local/query ids unrelated to the file's leaf ordinals.
@@ -1716,6 +1718,7 @@ mod tests {
                     virtual_offset_mark(virtual_location, meta.offset_length().0),
                 )
             }),
+            CachePolicy::BYPASS,
         )
         .unwrap();
         for (id, meta) in &metas {

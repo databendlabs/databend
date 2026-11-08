@@ -39,6 +39,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::eliminate_cast;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -57,6 +58,7 @@ const GRANULE_KEY_COLUMN_PREFIX: &str = "__granule_cluster_key_";
 pub struct SparseGranuleIndexPruner {
     evaluator: GranulePredicateEvaluator,
     dal: Operator,
+    policy: CachePolicy,
     cluster_key_types: Vec<DataType>,
     table_cluster_key_id: u32,
 }
@@ -81,6 +83,7 @@ impl SparseGranuleIndexPruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         dal: Operator,
+        policy: CachePolicy,
     ) -> Result<Option<Arc<SparseGranuleIndexPruner>>> {
         let Some(cluster_key_meta) = cluster_key_meta else {
             return Ok(None);
@@ -109,6 +112,7 @@ impl SparseGranuleIndexPruner {
         Ok(Some(Arc::new(SparseGranuleIndexPruner {
             evaluator,
             dal,
+            policy,
             cluster_key_types,
             table_cluster_key_id: cluster_key_meta.0,
         })))
@@ -158,6 +162,7 @@ impl SparseGranuleIndexPruner {
             mins_layout,
             self.cluster_key_types.len(),
             num_granules,
+            self.policy,
         )?;
         Ok(Some(SparsePrunePrefetch {
             mins,

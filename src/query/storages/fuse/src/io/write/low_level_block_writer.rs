@@ -1499,6 +1499,7 @@ mod tests {
     use databend_common_expression::types::number::Int32Type;
     use databend_common_expression::types::string::StringType;
     use databend_storages_common_blocks::build_parquet_writer_properties;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_table_meta::meta::StatisticsOfColumns;
     use databend_storages_common_table_meta::table::TableCompression;
     use opendal::services::Memory;
@@ -2008,7 +2009,9 @@ mod tests {
         assert_eq!(actual.get_by_offset(0).to_column(), keys);
         assert_eq!(actual.get_by_offset(1).to_column(), strings);
 
-        let mins = PrefetchedGranuleMins::prefetch(&operator, granule.mins.as_ref().unwrap(), 2, 3)
+        let policy = CachePolicy::BYPASS;
+        let mins_layout = granule.mins.as_ref().unwrap();
+        let mins = PrefetchedGranuleMins::prefetch(&operator, mins_layout, 2, 3, policy)
             .unwrap()
             .read(&[
                 DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
@@ -2033,6 +2036,7 @@ mod tests {
             result.block_meta.row_count as usize,
             &result.block_meta.col_metas,
             result.block_meta.col_metas.keys().copied(),
+            policy,
         )
         .unwrap();
     }

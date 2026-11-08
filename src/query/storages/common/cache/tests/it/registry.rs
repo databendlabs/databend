@@ -52,6 +52,7 @@ fn test_builtin_kinds() {
         "memory_cache_inverted_index_payload",
         "memory_cache_inverted_index_full_payload",
         "memory_cache_spatial_index_file",
+        "memory_cache_granule_index_marks",
         "memory_cache_column_data",
         "memory_cache_table_data",
     ]);
@@ -73,7 +74,7 @@ fn test_pools_and_shared_defaults() {
             .collect::<Vec<_>>()
     };
     assert_eq!(in_pool(Pool::Meta).len(), 14);
-    assert_eq!(in_pool(Pool::Index).len(), 7);
+    assert_eq!(in_pool(Pool::Index).len(), 8);
     assert_eq!(in_pool(Pool::Data), [
         "memory_cache_column_data",
         "memory_cache_table_data"

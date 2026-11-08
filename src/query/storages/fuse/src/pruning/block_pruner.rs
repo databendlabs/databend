@@ -897,6 +897,7 @@ impl BlockPruner {
                 &granule_index.offsets,
                 &mark_names,
                 num_granules,
+                pruning_ctx.ctx.cache_policy(),
             ) {
                 Ok(ctx) => {
                     diagnostics.marks_load += marks_start.elapsed();

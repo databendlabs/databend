@@ -260,6 +260,7 @@ impl PruningContext {
                 cluster_key_meta,
                 cluster_keys,
                 dal.clone(),
+                ctx.cache_policy(),
             )?
         };
 
