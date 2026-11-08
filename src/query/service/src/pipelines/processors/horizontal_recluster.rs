@@ -61,7 +61,6 @@ use databend_common_pipeline_transforms::sorts::core::RowsTypeVisitor;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
-use databend_common_pipeline_transforms::sorts::try_add_multi_sort_merge_with_flush_before_refill;
 use databend_common_pipeline_transforms::traits::SortSpiller;
 use databend_common_pipeline_transforms::traits::SpillReader;
 use databend_common_storages_fuse::FuseBlockPartInfo;
@@ -256,11 +255,16 @@ impl<R: Rows> ReclusterMergeStream<R> {
                 "recluster input is not ordered across batches",
             ));
         }
-        for row in 1..rows.len() {
-            if rows.row(row - 1) > rows.row(row) {
-                return Err(ErrorCode::ParquetFileInvalid(
-                    "recluster input batch is not ordered",
-                ));
+        // Source blocks are planner-verified ordered runs and spill chunks are merger
+        // output, so release builds keep only the batch-boundary check above. The
+        // per-row pass costs one key comparison per input row.
+        if cfg!(debug_assertions) {
+            for row in 1..rows.len() {
+                if rows.row(row - 1) > rows.row(row) {
+                    return Err(ErrorCode::ParquetFileInvalid(
+                        "recluster input batch is not ordered",
+                    ));
+                }
             }
         }
         self.last_key = Some(R::owned_item(rows.last()));
@@ -668,7 +672,6 @@ impl HorizontalReclusterSource {
                 merge_keys,
                 output_rows,
                 max_groups,
-                settings.get_enable_parallel_multi_merge_sort()?,
                 settings.get_enable_loser_tree_merge_sort()?,
                 fixed,
             )?;
@@ -677,34 +680,27 @@ impl HorizontalReclusterSource {
     }
 }
 
-/// Merge the ordered group outputs into one stream.
+/// Merge the ordered group outputs into one stream with the k-way merge of the
+/// regular sort pipeline.
 ///
-/// The parallel path reuses the k-way merge of the regular sort pipeline: one
-/// partitioner holds a single head block per group, cuts every head at
+/// One partitioner holds a single head block per group, cuts every head at
 /// `upper_bound(key)` for a key no greater than the smallest head tail, and
 /// hands the slices of one key range to one of `workers` mergers; a combiner
 /// replays the finished ranges in order. Row comparison and gather therefore
 /// run on the workers, while each stage still buffers only one block per
 /// input or one task per worker, so the task size does not change the memory
-/// bound. `enable_parallel_multi_merge_sort = 0` keeps the single merger.
+/// bound.
 fn add_second_stage_merge(
     pipeline: &mut Pipeline,
     keys: SortKeyDescription,
     batch_rows: usize,
     workers: usize,
-    parallel: bool,
     loser_tree: bool,
     fixed: bool,
 ) -> Result<()> {
-    if parallel {
-        add_k_way_merge_sort(
-            pipeline, keys, workers, batch_rows, None, true, loser_tree, fixed,
-        )
-    } else {
-        try_add_multi_sort_merge_with_flush_before_refill(
-            pipeline, keys, batch_rows, None, true, loser_tree, fixed,
-        )
-    }
+    add_k_way_merge_sort(
+        pipeline, keys, workers, batch_rows, None, true, loser_tree, fixed,
+    )
 }
 
 impl ReclusterMergeFactory {
@@ -945,7 +941,6 @@ mod tests {
         fan_in: usize,
         spill_enabled: bool,
         groups: usize,
-        parallel_merge: bool,
     ) -> anyhow::Result<()>
     where
         R::Converter: Send + 'static,
@@ -1054,7 +1049,12 @@ mod tests {
             Int32Type::from_data(vec![0, 1]),
         ]);
         let keys = probe.converter.convert(&unsorted)?.to_column();
-        assert!(probe.validate_batch(unsorted, keys).is_err());
+        // In-batch order is only verified with debug assertions; release builds accept
+        // the batch and remember its last key (1) for the boundary check below.
+        assert_eq!(
+            probe.validate_batch(unsorted, keys).is_err(),
+            cfg!(debug_assertions)
+        );
         // Check ordering across batches, including restored spill chunks.
         let high = DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![2]),
@@ -1165,7 +1165,7 @@ mod tests {
                 ));
             }
             pipeline.add_pipe(Pipe::create(0, groups, items));
-            add_second_stage_merge(&mut pipeline, keys, 3, 2, parallel_merge, true, false)?;
+            add_second_stage_merge(&mut pipeline, keys, 3, 2, true, false)?;
             pipeline.set_max_threads(1);
             let mut result = PipelineBuildResult::create();
             result.main_pipeline = pipeline;
@@ -1770,15 +1770,8 @@ mod tests {
             .ok()
             .and_then(|value| value.parse::<usize>().ok())
             .unwrap_or(256);
-        // (multiway merge, parallel second stage): the first entry is the regular sort
-        // pipeline, the second the multiway merge with its single-threaded second stage,
-        // the third the multiway merge with the k-way second stage.
-        for (enabled, parallel) in [(false, true), (true, false), (true, true)] {
-            let table = match (enabled, parallel) {
-                (false, _) => "merge_old",
-                (true, false) => "merge_new_single",
-                (true, true) => "merge_new_kway",
-            };
+        for enabled in [false, true] {
+            let table = if enabled { "merge_new" } else { "merge_old" };
             let create = format!(
                 "create table default.{table}(k bigint, payload string) cluster by(k) row_per_block=1000000 block_per_segment=2"
             );
@@ -1794,10 +1787,6 @@ mod tests {
             settings.set_setting(
                 "enable_recluster_multiway_merge".into(),
                 u8::from(enabled).to_string(),
-            )?;
-            settings.set_setting(
-                "enable_parallel_multi_merge_sort".into(),
-                u8::from(parallel).to_string(),
             )?;
             settings.set_setting("max_threads".into(), "4".into())?;
             let memory = MemStat::create("recluster benchmark".into());
@@ -1825,14 +1814,14 @@ mod tests {
                 reference_result = Some(result.clone());
             }
             println!(
-                "multiway={enabled}, parallel_second_stage={parallel}, elapsed={elapsed:?}, query_peak={peak:?}, result={result}"
+                "multiway={enabled}, elapsed={elapsed:?}, query_peak={peak:?}, result={result}"
             );
         }
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_second_stage_merge_variants_cut_heads_in_key_order() -> anyhow::Result<()> {
+    async fn test_second_stage_merge_cuts_heads_in_key_order() -> anyhow::Result<()> {
         use databend_common_pipeline::sources::BlocksSource;
 
         use crate::pipelines::PipelineBuildResult;
@@ -1846,93 +1835,81 @@ mod tests {
         // whose first key exceeds the smallest tail, and refill one input at a time.
         let first = vec![block(vec![1, 2, 3]), block(vec![7, 8, 9])];
         let second = vec![block(vec![2, 4, 6]), block(vec![10, 11, 12])];
-        let inputs = [first, second];
-        for parallel in [true, false] {
-            let mut pipeline = Pipeline::create();
-            let sources = Arc::new(Mutex::new(
-                inputs
-                    .iter()
-                    .map(|blocks| VecDeque::from(blocks.clone()))
-                    .collect::<Vec<_>>(),
-            ));
-            pipeline.add_source(
-                |output| {
-                    let blocks = sources.lock().unwrap().remove(0);
-                    BlocksSource::create(
-                        ctx.get_scan_progress(),
-                        output,
-                        Arc::new(Mutex::new(blocks)),
-                    )
-                },
-                inputs.len(),
-            )?;
-            let keys = SortKeyDescription::new(
-                vec![SortColumnDescription {
-                    offset: 0,
-                    asc: true,
-                    nulls_first: false,
-                }]
-                .into(),
-                DataSchemaRefExt::create(vec![DataField::new(
-                    "key",
-                    DataType::Number(NumberDataType::Int32),
-                )]),
-                false,
-            )?;
-            add_second_stage_merge(&mut pipeline, keys, 3, 2, parallel, true, false)?;
-            pipeline.set_max_threads(1);
-            let mut result = PipelineBuildResult::create();
-            result.main_pipeline = pipeline;
-            let mut executor_settings = ExecutorSettings::try_create(ctx.clone())?;
-            executor_settings.max_threads = 1;
-            let mut executor = PipelinePullingExecutor::from_pipelines(result, executor_settings)?;
-            executor.start();
-            let mut output = Vec::new();
-            while let Some(block) = executor.pull_data().await? {
-                assert!(!block.is_empty(), "parallel={parallel}");
-                output.push(block);
-            }
-            let actual = DataBlock::concat(&output)?;
-            assert_eq!(
-                actual.get_by_offset(0).to_column(),
-                Int32Type::from_data(vec![1, 2, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12]),
-                "parallel={parallel}"
-            );
+        let sources = Arc::new(Mutex::new(vec![
+            VecDeque::from(first),
+            VecDeque::from(second),
+        ]));
+        let mut pipeline = Pipeline::create();
+        pipeline.add_source(
+            |output| {
+                let blocks = sources.lock().unwrap().remove(0);
+                BlocksSource::create(
+                    ctx.get_scan_progress(),
+                    output,
+                    Arc::new(Mutex::new(blocks)),
+                )
+            },
+            2,
+        )?;
+        let keys = SortKeyDescription::new(
+            vec![SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            }]
+            .into(),
+            DataSchemaRefExt::create(vec![DataField::new(
+                "key",
+                DataType::Number(NumberDataType::Int32),
+            )]),
+            false,
+        )?;
+        add_second_stage_merge(&mut pipeline, keys, 3, 2, true, false)?;
+        pipeline.set_max_threads(1);
+        let mut result = PipelineBuildResult::create();
+        result.main_pipeline = pipeline;
+        let mut executor_settings = ExecutorSettings::try_create(ctx)?;
+        executor_settings.max_threads = 1;
+        let mut executor = PipelinePullingExecutor::from_pipelines(result, executor_settings)?;
+        executor.start();
+        let mut output = Vec::new();
+        while let Some(block) = executor.pull_data().await? {
+            assert!(!block.is_empty());
+            output.push(block);
         }
+        let actual = DataBlock::concat(&output)?;
+        assert_eq!(
+            actual.get_by_offset(0).to_column(),
+            Int32Type::from_data(vec![1, 2, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12])
+        );
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_two_level_merge_variable_keys_spill_and_original_lineage() -> anyhow::Result<()> {
-        check_external_merge::<VariableRows>(true, true, 2, true, 3, true).await
+        check_external_merge::<VariableRows>(true, true, 2, true, 3).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_two_level_merge_simple_keys_without_spill() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 32, false, 3, true).await
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_two_level_merge_single_merger_fallback() -> anyhow::Result<()> {
-        check_external_merge::<VariableRows>(false, true, 32, false, 3, false).await
+        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 32, false, 3).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_without_local_memory_threshold() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, true, 1, false).await
+        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, true, 1).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_without_spill() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, false, 1, false).await
+        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, false, 1).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_rejects_required_spill_when_disabled() {
-        let err =
-            check_external_merge::<SimpleRowsAsc<Int32Type>>(false, false, 2, false, 1, false)
-                .await
-                .unwrap_err();
+        let err = check_external_merge::<SimpleRowsAsc<Int32Type>>(false, false, 2, false, 1)
+            .await
+            .unwrap_err();
         assert_eq!(
             err.downcast_ref::<ErrorCode>().unwrap().code(),
             ErrorCode::MEMORY_EXCEEDS_LIMIT
@@ -1941,11 +1918,11 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_multiple_rounds_and_lineage() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 2, true, 1, false).await
+        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 2, true, 1).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_forced_spill_variable_rows() -> anyhow::Result<()> {
-        check_external_merge::<VariableRows>(true, false, 2, true, 1, false).await
+        check_external_merge::<VariableRows>(true, false, 2, true, 1).await
     }
 }
