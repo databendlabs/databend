@@ -31,10 +31,12 @@ use log::info;
 use log::warn;
 pub use table_hook_scheduler::TableHookScheduler;
 
+use crate::interpreters::common::check_expected_table_id;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
 
+/// Adapt the shared identity check to the hooks' log-and-skip behavior.
 pub(crate) fn table_id_matches_target(
     hook_name: &str,
     expected_table_id: Option<u64>,
@@ -47,7 +49,7 @@ pub(crate) fn table_id_matches_target(
         return true;
     };
 
-    if expected_table_id == actual_table_id {
+    if check_expected_table_id(actual_table_id, Some(expected_table_id)).is_ok() {
         return true;
     }
 
@@ -186,7 +188,8 @@ async fn table_id_exists_in_database(
         .get_table(catalog_name, database, current_table_name)
         .await
     {
-        Ok(table) => Ok(table.get_id() == expected_table_id),
+        // A mismatch is a failed name candidate, not a resolver error.
+        Ok(table) => Ok(check_expected_table_id(table.get_id(), Some(expected_table_id)).is_ok()),
         Err(_) => Ok(false),
     }
 }

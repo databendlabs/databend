@@ -175,6 +175,7 @@ async fn compact_table(
             catalog: compact_target.catalog.clone(),
             database: compact_target.database.clone(),
             table: compact_target.table.clone(),
+            expected_table_id: Some(compact_target.table_id),
             limit: compaction_limits.clone(),
         });
         let s_expr = SExpr::create_leaf(Arc::new(compact_block));
@@ -232,7 +233,14 @@ async fn compact_table(
                 &compact_target.table,
             )
             .await?;
-        if !resolved_table_id_matches(compact_target, table.get_id()) {
+        if !table_id_matches_target(
+            "compact",
+            Some(compact_target.table_id),
+            table.get_id(),
+            &compact_target.catalog,
+            &compact_target.database,
+            &compact_target.table,
+        ) {
             return Ok(());
         }
         // do recluster.
@@ -261,6 +269,7 @@ async fn compact_table(
                     database: compact_target.database.clone(),
                     table: compact_target.table.clone(),
                     target,
+                    expected_table_id: Some(compact_target.table_id),
                     limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
                     selection: None,
                     is_final: false,
@@ -324,17 +333,6 @@ fn move_compaction_hint_to_resolved_table(
     let resolved_hint = ctx.get_compaction_num_block_hint(resolved_table);
     ctx.set_compaction_num_block_hint(resolved_table, resolved_hint.saturating_add(original_hint));
     ctx.set_compaction_num_block_hint(original_table, 0);
-}
-
-fn resolved_table_id_matches(compact_target: &TableHookTarget, actual_table_id: u64) -> bool {
-    table_id_matches_target(
-        "compact",
-        Some(compact_target.table_id),
-        actual_table_id,
-        &compact_target.catalog,
-        &compact_target.database,
-        &compact_target.table,
-    )
 }
 
 #[cfg(test)]
