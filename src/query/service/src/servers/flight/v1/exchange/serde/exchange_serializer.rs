@@ -20,11 +20,8 @@ use arrow_array::RecordBatch;
 use arrow_array::RecordBatchOptions;
 use arrow_flight::FlightData;
 use arrow_flight::SchemaAsIpc;
-use arrow_ipc::CompressionType;
 use arrow_ipc::writer::CompressionContext;
 use arrow_ipc::writer::DictionaryTracker;
-use arrow_ipc::writer::IpcDataGenerator;
-use arrow_ipc::writer::IpcWriteOptions;
 use arrow_schema::ArrowError;
 use arrow_schema::Schema as ArrowSchema;
 use bytes::Bytes;
@@ -51,6 +48,7 @@ use databend_common_settings::FlightCompression;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::MergeExchangeParams;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
+use crate::servers::flight::v1::ipc_compression::FlightIpcOptions;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
@@ -80,7 +78,7 @@ local_block_meta_serde!(ExchangeSerializeMeta);
 impl BlockMetaInfo for ExchangeSerializeMeta {}
 
 pub struct TransformExchangeSerializer {
-    options: IpcWriteOptions,
+    options: FlightIpcOptions,
 }
 
 impl TransformExchangeSerializer {
@@ -90,19 +88,11 @@ impl TransformExchangeSerializer {
         _params: &MergeExchangeParams,
         compression: Option<FlightCompression>,
     ) -> Result<ProcessorPtr> {
-        let compression = match compression {
-            None => None,
-            Some(compression) => match compression {
-                FlightCompression::Lz4 => Some(CompressionType::LZ4_FRAME),
-                FlightCompression::Zstd => Some(CompressionType::ZSTD),
-            },
-        };
-
         Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
             TransformExchangeSerializer {
-                options: IpcWriteOptions::default().try_with_compression(compression)?,
+                options: FlightIpcOptions::new(compression)?,
             },
         )))
     }
@@ -119,7 +109,7 @@ impl Transform for TransformExchangeSerializer {
 
 pub struct TransformScatterExchangeSerializer {
     local_pos: usize,
-    options: IpcWriteOptions,
+    options: FlightIpcOptions,
 }
 
 impl TransformScatterExchangeSerializer {
@@ -130,19 +120,11 @@ impl TransformScatterExchangeSerializer {
         params: &ShuffleExchangeParams,
     ) -> Result<ProcessorPtr> {
         let local_id = &params.executor_id;
-        let compression = match compression {
-            None => None,
-            Some(compression) => match compression {
-                FlightCompression::Lz4 => Some(CompressionType::LZ4_FRAME),
-                FlightCompression::Zstd => Some(CompressionType::ZSTD),
-            },
-        };
-
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
             TransformScatterExchangeSerializer {
-                options: IpcWriteOptions::default().try_with_compression(compression)?,
+                options: FlightIpcOptions::new(compression)?,
                 local_pos: params
                     .destination_ids
                     .iter()
@@ -175,7 +157,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
 pub fn serialize_block(
     block_num: isize,
     data_block: DataBlock,
-    options: &IpcWriteOptions,
+    options: &FlightIpcOptions,
 ) -> Result<DataBlock> {
     if data_block.is_empty() && data_block.get_meta().is_none() {
         return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
@@ -233,23 +215,18 @@ pub fn serialize_block(
 pub fn batches_to_flight_data_with_options(
     schema: &ArrowSchema,
     batches: Vec<RecordBatch>,
-    options: &IpcWriteOptions,
+    options: &FlightIpcOptions,
 ) -> std::result::Result<(FlightData, Vec<FlightData>, Vec<FlightData>), ArrowError> {
-    let schema_flight_data: FlightData = SchemaAsIpc::new(schema, options).into();
+    let schema_flight_data: FlightData = SchemaAsIpc::new(schema, options.arrow_options()).into();
     let mut dictionaries = Vec::with_capacity(batches.len());
     let mut flight_data = Vec::with_capacity(batches.len());
 
-    let data_gen = IpcDataGenerator::default();
     let mut dictionary_tracker = DictionaryTracker::new(false);
     let mut compression_context = CompressionContext::default();
 
     for batch in batches.iter() {
-        let (encoded_dictionaries, encoded_batch) = data_gen.encode(
-            batch,
-            &mut dictionary_tracker,
-            options,
-            &mut compression_context,
-        )?;
+        let (encoded_dictionaries, encoded_batch) =
+            options.encode(batch, &mut dictionary_tracker, &mut compression_context)?;
 
         dictionaries.extend(encoded_dictionaries.into_iter().map(Into::into));
         flight_data.push(encoded_batch.into());

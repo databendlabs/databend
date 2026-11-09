@@ -30,11 +30,8 @@ use arrow_array::RecordBatchOptions;
 use arrow_flight::FlightData;
 use arrow_flight::FlightDescriptor;
 use arrow_flight::utils::flight_data_to_arrow_batch;
-use arrow_ipc::CompressionType;
 use arrow_ipc::writer::CompressionContext;
 use arrow_ipc::writer::DictionaryTracker;
-use arrow_ipc::writer::IpcDataGenerator;
-use arrow_ipc::writer::IpcWriteOptions;
 use arrow_schema::Schema as ArrowSchema;
 use bytes::Buf;
 use bytes::BufMut;
@@ -49,6 +46,8 @@ use databend_common_io::prelude::BinaryWrite;
 use databend_common_io::prelude::bincode_deserialize_from_stream;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
+
+use crate::servers::flight::v1::ipc_compression::FlightIpcOptions;
 
 /// Marker of a block whose IPC body is sent as Arrow encodes it.
 pub(crate) const FRAGMENT_MARKER: u8 = 0x01;
@@ -100,31 +99,18 @@ pub(crate) fn strip_tid(mut data: FlightData) -> FlightData {
 // Encoding
 // ---------------------------------------------------------------------------
 
-fn flight_compression(compression: Option<FlightCompression>) -> Option<CompressionType> {
-    match compression {
-        None => None,
-        Some(FlightCompression::Lz4) => Some(CompressionType::LZ4_FRAME),
-        Some(FlightCompression::Zstd) => Some(CompressionType::ZSTD),
-    }
-}
-
-pub(crate) fn make_ipc_options(compression: Option<FlightCompression>) -> Result<IpcWriteOptions> {
-    Ok(IpcWriteOptions::default().try_with_compression(flight_compression(compression))?)
+pub(crate) fn make_ipc_options(compression: Option<FlightCompression>) -> Result<FlightIpcOptions> {
+    Ok(FlightIpcOptions::new(compression)?)
 }
 
 fn encode_batch(
     batch: &RecordBatch,
-    ipc_options: &IpcWriteOptions,
+    ipc_options: &FlightIpcOptions,
 ) -> Result<(Vec<FlightData>, FlightData)> {
-    let data_gen = IpcDataGenerator::default();
     let mut dictionary_tracker = DictionaryTracker::new(false);
     let mut compression_context = CompressionContext::default();
-    let (encoded_dictionaries, encoded_batch) = data_gen.encode(
-        batch,
-        &mut dictionary_tracker,
-        ipc_options,
-        &mut compression_context,
-    )?;
+    let (encoded_dictionaries, encoded_batch) =
+        ipc_options.encode(batch, &mut dictionary_tracker, &mut compression_context)?;
     let dictionaries: Vec<FlightData> = encoded_dictionaries.into_iter().map(Into::into).collect();
     let batch_data: FlightData = encoded_batch.into();
     Ok((dictionaries, batch_data))
@@ -132,7 +118,7 @@ fn encode_batch(
 
 fn serialize_to_batches(
     block: DataBlock,
-    ipc_options: &IpcWriteOptions,
+    ipc_options: &FlightIpcOptions,
 ) -> Result<(Vec<FlightData>, Vec<FlightData>)> {
     if block.is_empty() {
         let empty_batch = RecordBatch::try_new_with_options(
@@ -156,7 +142,7 @@ fn serialize_to_batches(
 /// The `descriptor` is attached to each FlightData for routing.
 pub(crate) fn serialize_block(
     block: DataBlock,
-    ipc_options: &IpcWriteOptions,
+    ipc_options: &FlightIpcOptions,
     descriptor: Option<FlightDescriptor>,
 ) -> Result<Vec<FlightData>> {
     if block.is_empty() && block.get_meta().is_none() {
@@ -200,7 +186,7 @@ pub(crate) fn serialize_block(
 pub(crate) fn serialize_block_for_thread(
     block: DataBlock,
     tid: usize,
-    ipc_options: &IpcWriteOptions,
+    ipc_options: &FlightIpcOptions,
 ) -> Result<Vec<FlightData>> {
     let tid_prefix = (tid as u16).to_le_bytes();
     let flight_data_list = serialize_block(block, ipc_options, None)?;
@@ -228,7 +214,7 @@ pub(crate) fn encode_block_for_thread(
     tid: usize,
     block: DataBlock,
     arrow_schema: &Arc<ArrowSchema>,
-    ipc_options: &IpcWriteOptions,
+    ipc_options: &FlightIpcOptions,
     compression: Option<FlightCompression>,
 ) -> Result<FlightData> {
     let mut app_metadata = Vec::with_capacity(16);
@@ -515,6 +501,119 @@ fn decode_compressed_body(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ipc_lz4_general_and_aggregate_state_blocks() {
+        use databend_common_expression::BlockMetaInfoDowncast;
+        use databend_common_expression::FromData;
+        use databend_common_expression::types::Int32Type;
+        use databend_common_expression::types::StringType;
+
+        use crate::pipelines::processors::transforms::aggregator::AggregateStatesMeta;
+
+        let block = DataBlock::new_from_columns(vec![
+            StringType::from_data(vec!["fern".repeat(24); 48]),
+            Int32Type::from_data(vec![5; 48]),
+        ]);
+        let schema = Arc::new(block.infer_schema());
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        let expected = block
+            .clone()
+            .to_record_batch_with_dataschema(&schema)
+            .unwrap();
+        for aggregate in [false, true] {
+            let input = if aggregate {
+                block
+                    .clone()
+                    .add_meta(Some(AggregateStatesMeta::create(
+                        schema.clone(),
+                        vec![0],
+                        vec![48],
+                    )))
+                    .unwrap()
+            } else {
+                block.clone()
+            };
+            let options = make_ipc_options(Some(FlightCompression::Lz4)).unwrap();
+            let mut packets = serialize_block_for_thread(input, 2, &options).unwrap();
+            assert_eq!(packets.len(), 1);
+            let packet = packets.pop().unwrap();
+            assert_eq!(extract_tid(&packet), 2);
+            assert_eq!(packet.app_metadata.last(), Some(&FRAGMENT_MARKER));
+            let packet = strip_tid(packet);
+            let message = arrow_ipc::root_as_message(&packet.data_header).unwrap();
+            assert_eq!(
+                message
+                    .header_as_record_batch()
+                    .unwrap()
+                    .compression()
+                    .unwrap()
+                    .codec(),
+                arrow_ipc::CompressionType::LZ4_FRAME
+            );
+            assert_eq!(
+                flight_data_to_arrow_batch(&packet, arrow_schema.clone(), &HashMap::new()).unwrap(),
+                expected
+            );
+            // Aggregate states must override an unrelated raw-row schema.
+            let (decode_schema, decode_arrow_schema) = if aggregate {
+                (
+                    Arc::new(databend_common_expression::DataSchema::empty()),
+                    Arc::new(ArrowSchema::empty()),
+                )
+            } else {
+                (schema.clone(), arrow_schema.clone())
+            };
+            let decoded =
+                deserialize_flight_data(packet, &decode_schema, &decode_arrow_schema).unwrap();
+            if aggregate {
+                let meta =
+                    AggregateStatesMeta::downcast_ref_from(decoded.get_meta().unwrap()).unwrap();
+                assert_eq!(meta.buckets, vec![0]);
+                assert_eq!(meta.payload_row_counts, vec![48]);
+            }
+            assert_eq!(
+                decoded.to_record_batch_with_dataschema(&schema).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_hash_shuffle_whole_body_lz4_is_unchanged() {
+        use databend_common_expression::FromData;
+        use databend_common_expression::types::Int32Type;
+
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![6; 48])]);
+        let schema = Arc::new(block.infer_schema());
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        let expected = block
+            .clone()
+            .to_record_batch_with_dataschema(&schema)
+            .unwrap();
+        let packet = encode_block_for_thread(
+            1,
+            block,
+            &arrow_schema,
+            &make_ipc_options(None).unwrap(),
+            Some(FlightCompression::Lz4),
+        )
+        .unwrap();
+        assert_eq!(packet.app_metadata.last(), Some(&LZ4_BODY_MARKER));
+        let message = arrow_ipc::root_as_message(&packet.data_header).unwrap();
+        assert!(
+            message
+                .header_as_record_batch()
+                .unwrap()
+                .compression()
+                .is_none()
+        );
+        let decoded = deserialize_flight_data(strip_tid(packet), &schema, &arrow_schema).unwrap();
+        assert_eq!(
+            decoded.to_record_batch_with_dataschema(&schema).unwrap(),
+            expected
+        );
+    }
 
     /// Build a FlightData with tid prefix in app_metadata.
     fn make_item(tid: u16, inner_meta: &[u8], header: &[u8], body: &[u8]) -> FlightData {

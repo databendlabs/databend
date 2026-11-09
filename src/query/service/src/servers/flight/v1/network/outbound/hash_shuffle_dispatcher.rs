@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use arrow_ipc::writer::IpcWriteOptions;
 use arrow_schema::Schema as ArrowSchema;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -28,6 +27,7 @@ use super::super::wire_format::make_ipc_options;
 use super::block_sender::BlockSender;
 use super::block_sender::LocalBlockSender;
 use super::exchange_send_buffer::ExchangeSendBuffer;
+use crate::servers::flight::v1::ipc_compression::FlightIpcOptions;
 
 /// Organizes delivery of already-partitioned blocks to one node's threads.
 #[derive(Clone)]
@@ -40,7 +40,7 @@ pub enum HashShuffleDispatcher {
         dest_idx: usize,
         /// Release this writer's buffer reference when it stops sending to the node.
         buffer: Option<Arc<ExchangeSendBuffer>>,
-        ipc_options: IpcWriteOptions,
+        ipc_options: FlightIpcOptions,
         compression: Option<FlightCompression>,
         arrow_schema: Arc<ArrowSchema>,
     },

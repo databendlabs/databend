@@ -5764,6 +5764,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
+ "lz4",
  "lz4_flex 0.13.0",
  "maplit",
  "match-template",
@@ -9645,6 +9646,25 @@ checksum = "813bd31f2759443affa687c0d9c5eb5cf6cb0e898810ab197408431d746054bf"
 dependencies = [
  "cc",
  "which 7.0.3",
+]
+
+[[package]]
+name = "lz4"
+version = "1.28.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a20b523e860d03443e98350ceaac5e71c6ba89aea7d960769ec3ce37f4de5af4"
+dependencies = [
+ "lz4-sys",
+]
+
+[[package]]
+name = "lz4-sys"
+version = "1.11.1+lz4-1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bd8c0d6c6ed0cd30b3652886bb8711dc4bb01d637a68105a3d5158039b418e6"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
