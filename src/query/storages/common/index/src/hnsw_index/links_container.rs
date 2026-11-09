@@ -133,37 +133,8 @@ impl LinksContainer {
 
     /// Append one point to the container. If the container is full, run the heuristic.
     ///
-    /// This is a reference implementation for testing.
-    #[cfg(test)]
-    fn connect_with_heuristic_simple(
-        &mut self,
-        new_point_id: PointOffsetType,
-        target_point_id: PointOffsetType,
-        level_m: usize,
-        mut score: impl FnMut(PointOffsetType, PointOffsetType) -> ScoreType,
-    ) {
-        if self.links.len() < level_m {
-            self.links.push(new_point_id);
-        } else {
-            let mut candidates = Vec::with_capacity(level_m + 1);
-            for &idx in &self.links {
-                candidates.push(ScoredPointOffset {
-                    idx,
-                    score: score(target_point_id, idx),
-                });
-            }
-            candidates.push(ScoredPointOffset {
-                idx: new_point_id,
-                score: score(target_point_id, new_point_id),
-            });
-            candidates.sort_unstable_by(|a, b| b.score.total_cmp(&a.score));
-            self.fill_from_sorted_with_heuristic(candidates.into_iter(), level_m, score);
-        }
-    }
-
-    /// Append one point to the container. If the container is full, run the heuristic.
-    ///
-    /// The result is exactly the same as [`Self::connect_with_heuristic_simple`],
+    /// The result is exactly the same as `connect_with_heuristic_simple`, the
+    /// reference implementation in the tests module,
     /// but this implementation cuts some corners given that some of the links
     /// are already processed by the heuristic.
     pub fn connect_with_heuristic(
@@ -292,6 +263,37 @@ mod tests {
 
     use super::*;
     use crate::hnsw_index::common::fixed_length_priority_queue::FixedLengthPriorityQueue;
+
+    impl LinksContainer {
+        /// Append one point to the container. If the container is full, run the heuristic.
+        ///
+        /// This is a reference implementation for testing.
+        fn connect_with_heuristic_simple(
+            &mut self,
+            new_point_id: PointOffsetType,
+            target_point_id: PointOffsetType,
+            level_m: usize,
+            mut score: impl FnMut(PointOffsetType, PointOffsetType) -> ScoreType,
+        ) {
+            if self.links.len() < level_m {
+                self.links.push(new_point_id);
+            } else {
+                let mut candidates = Vec::with_capacity(level_m + 1);
+                for &idx in &self.links {
+                    candidates.push(ScoredPointOffset {
+                        idx,
+                        score: score(target_point_id, idx),
+                    });
+                }
+                candidates.push(ScoredPointOffset {
+                    idx: new_point_id,
+                    score: score(target_point_id, new_point_id),
+                });
+                candidates.sort_unstable_by(|a, b| b.score.total_cmp(&a.score));
+                self.fill_from_sorted_with_heuristic(candidates.into_iter(), level_m, score);
+            }
+        }
+    }
 
     #[test]
     fn test_connect_new_point() {
