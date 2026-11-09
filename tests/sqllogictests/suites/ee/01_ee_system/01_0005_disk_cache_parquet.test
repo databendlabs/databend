@@ -1,0 +1,132 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+## -------------------------------------------------------
+## Parquet files outside fuse tables, with the disk cache on
+##
+## Stage tables read with the cache off, as on main (`ParquetSourceType::StageTable`), and
+## bypass the disk cache: a file overwritten under its name is read as rewritten, and two
+## stages holding a file under one relative path read their own. Projections of one file
+## return the same values. Result cache reads go through the parquet reader with the cache on.
+## -------------------------------------------------------
+
+statement ok
+create or replace stage test_disk_cache_parquet_a;
+
+statement ok
+create or replace stage test_disk_cache_parquet_b;
+
+statement ok
+copy into @test_disk_cache_parquet_a/f.parquet from (select number as n, concat('a', number::string) as s from numbers(1000)) file_format = (type = parquet) single = true include_query_id = false use_raw_path = true overwrite = true;
+
+statement ok
+copy into @test_disk_cache_parquet_b/f.parquet from (select number + 10000 as n, concat('b', number::string) as s from numbers(1000)) file_format = (type = parquet) single = true include_query_id = false use_raw_path = true overwrite = true;
+
+query IIT
+select count(), sum(n), max(s) from @test_disk_cache_parquet_a/f.parquet (file_format => 'parquet');
+----
+1000 499500 a999
+
+query IIT
+select count(), sum(n), max(s) from @test_disk_cache_parquet_b/f.parquet (file_format => 'parquet');
+----
+1000 10499500 b999
+
+# Another projection of the same file.
+query I
+select sum(n) from @test_disk_cache_parquet_a/f.parquet (file_format => 'parquet') where s = 'a42';
+----
+42
+
+query T
+select max(s) from @test_disk_cache_parquet_a/f.parquet (file_format => 'parquet');
+----
+a999
+
+query I
+select sleep(1);
+----
+0
+
+# Overwritten under its name: read as rewritten, whichever projection.
+statement ok
+copy into @test_disk_cache_parquet_a/f.parquet from (select number * 2 as n, concat('c', number::string) as s from numbers(1000)) file_format = (type = parquet) single = true include_query_id = false use_raw_path = true overwrite = true;
+
+query IIT
+select count(), sum(n), max(s) from @test_disk_cache_parquet_a/f.parquet (file_format => 'parquet');
+----
+1000 999000 c999
+
+query I
+select sum(n) from @test_disk_cache_parquet_a/f.parquet (file_format => 'parquet') where s = 'c42';
+----
+84
+
+query IIT
+select count(), sum(n), max(s) from @test_disk_cache_parquet_b/f.parquet (file_format => 'parquet');
+----
+1000 10499500 b999
+
+# A table loaded from the stage reads it as rewritten too.
+statement ok
+create or replace table test_disk_cache_parquet_t(n bigint, s string);
+
+statement ok
+copy into test_disk_cache_parquet_t from @test_disk_cache_parquet_a/f.parquet file_format = (type = parquet);
+
+query II
+select count(), sum(n) from test_disk_cache_parquet_t;
+----
+1000 999000
+
+# Result cache entries, parquet files read back with the cache on, return the results cached
+# for their query, and a changed table is read anew.
+statement ok
+set enable_query_result_cache = 1;
+
+statement ok
+set query_result_cache_min_execute_secs = 0;
+
+query II
+select count(), sum(n) from test_disk_cache_parquet_t;
+----
+1000 999000
+
+query II
+select count(), sum(n) from test_disk_cache_parquet_t;
+----
+1000 999000
+
+statement ok
+insert into test_disk_cache_parquet_t values (1, 'x');
+
+query II
+select count(), sum(n) from test_disk_cache_parquet_t;
+----
+1001 999001
+
+statement ok
+unset enable_query_result_cache;
+
+statement ok
+unset query_result_cache_min_execute_secs;
+
+statement ok
+drop table test_disk_cache_parquet_t;
+
+statement ok
+drop stage test_disk_cache_parquet_a;
+
+statement ok
+drop stage test_disk_cache_parquet_b;

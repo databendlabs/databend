@@ -202,107 +202,6 @@ pub fn into_conjunctions(scalar: ScalarExpr) -> impl Iterator<Item = ScalarExpr>
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn bool_constant(value: bool) -> ScalarExpr {
-        ScalarExpr::ConstantExpr(ConstantExpr {
-            span: None,
-            value: Scalar::Boolean(value),
-        })
-    }
-
-    fn and(lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
-        ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "and".to_string(),
-            params: vec![],
-            arguments: vec![lhs, rhs],
-            return_type: Box::new(DataType::Boolean),
-        })
-    }
-
-    #[test]
-    fn test_conjunctions_handles_deep_and_chain() {
-        let mut expr = bool_constant(true);
-        for _ in 0..1024 {
-            expr = and(expr, bool_constant(true));
-        }
-
-        assert_eq!(conjunctions(&expr).count(), 1025);
-    }
-
-    #[test]
-    fn test_conjunctions_handles_and_filters() {
-        let expr = ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "and_filters".to_string(),
-            params: vec![],
-            arguments: vec![
-                bool_constant(true),
-                and(bool_constant(true), bool_constant(true)),
-                bool_constant(false),
-            ],
-            return_type: Box::new(DataType::Boolean),
-        });
-
-        assert_eq!(conjunctions(&expr).count(), 4);
-        assert_eq!(into_conjunctions(expr).count(), 4);
-    }
-
-    #[test]
-    fn test_finder_borrows_matches() {
-        let expr = and(
-            bool_constant(false),
-            and(bool_constant(false), bool_constant(true)),
-        );
-        let ScalarExpr::FunctionCall(function) = &expr else {
-            unreachable!();
-        };
-        let expected = &function.arguments[0];
-
-        let predicate = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::ConstantExpr(ConstantExpr {
-                    value: Scalar::Boolean(false),
-                    ..
-                })
-            )
-        };
-        let mut finder = Finder::new(&predicate);
-        finder.visit(&expr).unwrap();
-        let found = finder.scalars()[0];
-
-        assert!(std::ptr::eq(found, expected));
-    }
-
-    #[test]
-    fn test_any_stops_after_first_match() {
-        let expr = and(
-            bool_constant(false),
-            and(bool_constant(false), bool_constant(true)),
-        );
-        let visits = std::cell::Cell::new(0);
-        let predicate = |scalar: &ScalarExpr| {
-            visits.set(visits.get() + 1);
-            matches!(
-                scalar,
-                ScalarExpr::ConstantExpr(ConstantExpr {
-                    value: Scalar::Boolean(false),
-                    ..
-                })
-            )
-        };
-        let mut any = Any::new(&predicate);
-        any.visit(&expr).unwrap();
-
-        assert!(any.result());
-        assert_eq!(visits.get(), 2);
-    }
-}
-
 pub fn split_equivalent_predicate(scalar: &ScalarExpr) -> Option<(ScalarExpr, ScalarExpr)> {
     match scalar {
         ScalarExpr::FunctionCall(func) if func.func_name == "eq" => {
@@ -459,11 +358,15 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
     }
 }
 
-/// check if the scalar could be constructed by the columns
+/// check if the scalar could be constructed by the columns and constants, using at least one
+/// of the columns (a constant alone is not pruned), and is deterministic (`a + rand()` is not
+/// determined by `a`). The columns it uses must group by their values: grouping equates values
+/// that functions can tell apart for some types, e.g. `+0.0` and `-0.0` of a float for `atan2`.
 pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> bool {
     struct PruneVisitor<'a> {
         columns: &'a HashSet<ScalarExpr>,
         can_prune: bool,
+        uses_columns: bool,
     }
 
     impl<'a> PruneVisitor<'a> {
@@ -471,6 +374,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             Self {
                 columns,
                 can_prune: true,
+                uses_columns: false,
             }
         }
     }
@@ -478,6 +382,8 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
     impl<'a> Visitor<'a> for PruneVisitor<'a> {
         fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
             if self.columns.contains(expr) {
+                self.can_prune &= expr.data_type().groups_by_exact_value();
+                self.uses_columns = true;
                 return Ok(());
             }
 
@@ -493,17 +399,12 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             self.can_prune = false;
             Ok(())
         }
-
-        fn visit_constant(&mut self, _constant: &'a crate::plans::ConstantExpr) -> Result<()> {
-            self.can_prune = false;
-            Ok(())
-        }
     }
 
     let mut visitor = PruneVisitor::new(columns);
     visitor.visit(scalar).unwrap();
 
-    visitor.can_prune
+    visitor.can_prune && visitor.uses_columns && scalar.is_deterministic()
 }
 
 /// Wrap a cast expression with given target type
@@ -527,5 +428,106 @@ pub fn wrap_nullable(scalar: ScalarExpr, source_type: &DataType) -> ScalarExpr {
             argument: Box::new(scalar),
             target_type: Box::new(target_type),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bool_constant(value: bool) -> ScalarExpr {
+        ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Boolean(value),
+        })
+    }
+
+    fn and(lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "and".to_string(),
+            params: vec![],
+            arguments: vec![lhs, rhs],
+            return_type: Box::new(DataType::Boolean),
+        })
+    }
+
+    #[test]
+    fn test_conjunctions_handles_deep_and_chain() {
+        let mut expr = bool_constant(true);
+        for _ in 0..1024 {
+            expr = and(expr, bool_constant(true));
+        }
+
+        assert_eq!(conjunctions(&expr).count(), 1025);
+    }
+
+    #[test]
+    fn test_conjunctions_handles_and_filters() {
+        let expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "and_filters".to_string(),
+            params: vec![],
+            arguments: vec![
+                bool_constant(true),
+                and(bool_constant(true), bool_constant(true)),
+                bool_constant(false),
+            ],
+            return_type: Box::new(DataType::Boolean),
+        });
+
+        assert_eq!(conjunctions(&expr).count(), 4);
+        assert_eq!(into_conjunctions(expr).count(), 4);
+    }
+
+    #[test]
+    fn test_finder_borrows_matches() {
+        let expr = and(
+            bool_constant(false),
+            and(bool_constant(false), bool_constant(true)),
+        );
+        let ScalarExpr::FunctionCall(function) = &expr else {
+            unreachable!();
+        };
+        let expected = &function.arguments[0];
+
+        let predicate = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Boolean(false),
+                    ..
+                })
+            )
+        };
+        let mut finder = Finder::new(&predicate);
+        finder.visit(&expr).unwrap();
+        let found = finder.scalars()[0];
+
+        assert!(std::ptr::eq(found, expected));
+    }
+
+    #[test]
+    fn test_any_stops_after_first_match() {
+        let expr = and(
+            bool_constant(false),
+            and(bool_constant(false), bool_constant(true)),
+        );
+        let visits = std::cell::Cell::new(0);
+        let predicate = |scalar: &ScalarExpr| {
+            visits.set(visits.get() + 1);
+            matches!(
+                scalar,
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Boolean(false),
+                    ..
+                })
+            )
+        };
+        let mut any = Any::new(&predicate);
+        any.visit(&expr).unwrap();
+
+        assert!(any.result());
+        assert_eq!(visits.get(), 2);
     }
 }

@@ -11,3 +11,10 @@ sql: number NOT IN (1, 2, 3, 4)
 status: ok
 scalar: not(SUBQUERY)
 type: Boolean NULL
+
+=== typed_constants_of_common_type_convert_to_subquery ===
+description: Folded explicit casts that already have the common type are read as values, not rejected.
+sql: number IN (try_to_int64('1'), try_to_int64('2'), try_to_int64('3'), try_to_int64('4'))
+status: ok
+scalar: SUBQUERY
+type: Boolean NULL

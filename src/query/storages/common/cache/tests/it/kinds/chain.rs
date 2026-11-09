@@ -21,14 +21,12 @@ use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
-use tempfile::TempDir;
 
 use super::case::cases;
 use super::samples::Accuracy;
 use super::samples::Sample;
 use super::setup::Backend;
 use super::setup::manager;
-use super::setup::with_disk;
 
 const MEMORY: u64 = 1 << 30;
 
@@ -56,17 +54,6 @@ fn test_handles_share_loads() {
         let manager = manager(&backend.config(MEMORY), MEMORY, false);
         for case in cases() {
             case.shared_loads(&manager);
-        }
-    }
-}
-
-#[test]
-fn test_disk_round_trip() {
-    for backend in Backend::ALL {
-        let dir = TempDir::new().unwrap();
-        let manager = manager(&with_disk(backend.config(MEMORY), &dir), MEMORY, true);
-        for case in cases() {
-            case.disk_round_trip(&manager);
         }
     }
 }

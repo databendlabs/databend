@@ -16519,17 +16519,35 @@ DropRole {
 
 
 ---------- Input ----------
-OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
+OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
+OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
-        catalog: None,
-        database: None,
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    15..22,
+                ),
+                name: "catalog",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    23..25,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
         table: Identifier {
             span: Some(
-                15..16,
+                26..27,
             ),
             name: "t",
             quote: None,
@@ -17650,36 +17668,21 @@ CreateTable(
 ---------- Input ----------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
+OPTIMIZE TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
 ---------- AST ------------
-AlterTable(
-    AlterTableStmt {
-        if_exists: false,
-        table_reference: Table {
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
             span: Some(
                 12..13,
             ),
-            table: TableRef {
-                catalog: None,
-                database: None,
-                table: Identifier {
-                    span: Some(
-                        12..13,
-                    ),
-                    name: "t",
-                    quote: None,
-                    ident_type: None,
-                },
-                branch: None,
-            },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
+            name: "t",
+            quote: None,
+            ident_type: None,
         },
-        action: ReclusterTable {
+        action: Recluster {
             is_final: true,
             selection: Some(
                 BinaryOp {
@@ -17716,10 +17719,10 @@ AlterTable(
                     },
                 },
             ),
-            limit: Some(
-                10,
-            ),
         },
+        limit: Some(
+            10,
+        ),
     },
 )
 
@@ -35263,6 +35266,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35307,6 +35311,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35431,6 +35436,7 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -35548,6 +35554,7 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: NameWithTypes(
                 [
                     (
@@ -35619,6 +35626,7 @@ AlterUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,

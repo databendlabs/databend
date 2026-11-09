@@ -1311,7 +1311,7 @@ impl LiteTableContext {
 
     pub async fn register_udf(self: &Arc<Self>, udf: UserDefinedFunction) -> Result<()> {
         UserApiProvider::instance()
-            .add_udf(&self.tenant, udf, &CreateOption::CreateOrReplace)
+            .add_udf_with_owner(&self.tenant, udf, true, None)
             .await?;
         Ok(())
     }
@@ -1340,7 +1340,12 @@ impl LiteTableContext {
                 match binder.bind(&extras.statement).await? {
                     Plan::CreateUDF(plan) => {
                         UserApiProvider::instance()
-                            .add_udf(&self.tenant, plan.udf.clone(), &plan.create_option)
+                            .add_udf_with_owner(
+                                &self.tenant,
+                                plan.udf.clone(),
+                                plan.create_option.is_overriding(),
+                                None,
+                            )
                             .await?;
                         Ok(())
                     }
@@ -1582,6 +1587,8 @@ impl TableContextSettings for LiteTableContext {
         self.shared_settings.clone()
     }
 }
+
+impl TableContextCachePolicy for LiteTableContext {}
 
 impl TableContextLicense for LiteTableContext {
     fn get_license_key(&self) -> String {

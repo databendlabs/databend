@@ -498,6 +498,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_aggregate_final_top_n", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Lets the final aggregation of a GROUP BY ordered by aggregate results with a LIMIT of at most max_push_down_limit output only the first rows of each hash table.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
@@ -842,6 +849,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["before_partial".into(), "before_merge".into()])),
                 }),
+                ("partial_aggregate_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("auto")),
+                    desc: "Partial aggregation mode. 'auto' adapts per thread at runtime; 'bypass' forwards every row to the final aggregation.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["auto".into(), "bypass".into()])),
+                }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
@@ -937,7 +951,7 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enables distributed execution of table compaction.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1014,7 +1028,7 @@ impl DefaultSettings {
                     desc: "The maximum number of segments that can be reclustered automatically triggered after write.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(2..=128)),
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1098,7 +1112,7 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enable distributed execution of table recluster.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1188,13 +1202,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["rounding".into(), "truncating".into()])),
                 }),
-                ("enable_experimental_rbac_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting enable stage and udf privilege check(enable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_table_snapshot_stats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable analyze table statistics for snapshots",
@@ -1212,20 +1219,6 @@ impl DefaultSettings {
                 ("enable_experimental_row_access_policy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting enable row access policy(disable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_connection_privilege_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting enable connection object privilege check(disable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_sequence_privilege_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting enable sequence object privilege check(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1267,14 +1260,14 @@ impl DefaultSettings {
                 }),
                 ("hash_shuffle_send_buffer_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256 * 1024 * 1024),
-                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share. Each destination thread then gets about this value / (nodes x threads^2) bytes per send, so raise it on clusters with many nodes and threads: the memory of a node grows with it, but not with the number of nodes.",
+                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share, and buffers up to its share again while they are sending. Each destination thread then gets about this value / (nodes x threads^2) bytes per send, so raise it on clusters with many nodes and threads: the memory of a node grows with it, but not with the number of nodes.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("exchange_frame_bytes", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(4 * 1024 * 1024),
-                    desc: "Sets the maximum bytes of one network frame sent to a node by broadcast and hash shuffle exchanges. Frames are smaller when exchange_send_queue_bytes is shared by many nodes.",
+                    value: UserSettingValue::UInt64(1024 * 1024),
+                    desc: "Sets the maximum bytes of one network frame sent to a node by broadcast and hash shuffle exchanges, at most 4 MiB; up to 4 frames are in flight to a node. Frames are smaller when exchange_send_queue_bytes is shared by many nodes.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u32::MAX as u64)),
@@ -1563,6 +1556,27 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_segment_zone_map", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Maintain segment zone maps (per-segment min/max of every column) after each committed recluster round. Turn off to stop building them; existing zone maps stay usable. A table opts out with the table option enable_segment_zone_map = 0.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_segment_zone_map_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use a table's segment zone map, if it has one, to skip segments before reading segment info. Turn off to read every segment as before.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("segment_zone_map_full_segment_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(50),
+                    desc: "Refresh a table's segment zone map after a recluster round once more than this many full segments are estimated to be missing from it.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_prune_pipeline", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable pruning pipeline",
@@ -1804,13 +1818,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("force_aggregate_shuffle_mode", DefaultSettingValue {
-                    value: UserSettingValue::String(String::from("auto")),
-                    desc: "For testing only. Shuffle mode for aggregation. Options are 'auto', 'row', 'bucket'. Default is 'auto'.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
                 }),
             ]);
 

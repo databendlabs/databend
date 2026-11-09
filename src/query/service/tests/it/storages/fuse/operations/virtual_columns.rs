@@ -32,6 +32,7 @@ use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::Table;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -159,7 +160,9 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
     let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema.clone());
 
     for (location, ver) in &snapshot.segments {
-        let segment_info = segment_reader.read(&(location.to_string(), *ver)).await?;
+        let segment_info = segment_reader
+            .read(&(location.to_string(), *ver), &CachePolicy::BYPASS)
+            .await?;
 
         let block_metas = segment_info.block_metas()?;
         for block_meta in block_metas {
@@ -231,7 +234,9 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let reader = SegmentInfoReader::new(fuse_table.get_operator(), table.schema());
     let (seg_loc, seg_ver) = snapshot.segments[0].clone();
 
-    let seg = reader.read(&(seg_loc.clone(), seg_ver)).await?;
+    let seg = reader
+        .read(&(seg_loc.clone(), seg_ver), &CachePolicy::BYPASS)
+        .await?;
 
     let mut seg_info = SegmentInfo::try_from(seg.as_ref())?;
     let original_virtual_segment_schema = seg_info
@@ -301,7 +306,10 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let reader = SegmentInfoReader::new(fuse_table.get_operator(), table.schema());
     let tampered_segment = reader
-        .read(&(new_seg_loc.clone(), SegmentInfo::VERSION))
+        .read(
+            &(new_seg_loc.clone(), SegmentInfo::VERSION),
+            &CachePolicy::BYPASS,
+        )
         .await?;
     assert_eq!(
         tampered_segment.summary.virtual_segment_schema.as_ref(),
@@ -311,7 +319,9 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let snap = fuse_table.read_table_snapshot().await?.unwrap();
     let mut legacy_ref_count = 0;
     for (loc, ver) in &snap.segments {
-        let seg = reader.read(&(loc.to_string(), *ver)).await?;
+        let seg = reader
+            .read(&(loc.to_string(), *ver), &CachePolicy::BYPASS)
+            .await?;
         for bm in seg.block_metas()? {
             if let Some(vbm) = &bm.virtual_block_meta
                 && TableMetaLocationGenerator::is_legacy_virtual_block_location(

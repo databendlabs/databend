@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartStatistics;
@@ -185,21 +186,17 @@ impl Table for InferSchemaTable {
         let (stage_info, path) = stage_resolver
             .resolve_data_file_location(&file_location, StagePathAccess::Read, file_format)
             .await?;
-        let enable_experimental_rbac_check =
-            ctx.get_settings().get_enable_experimental_rbac_check()?;
-        if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
-            if !(stage_info.is_temporary
-                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-                || stage_info.stage_type == StageType::User
-                    && stage_info.stage_name == ctx.get_current_user()?.name)
-            {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege READ is required on stage {} for user {}",
-                    stage_info.stage_name.clone(),
-                    ctx.get_current_user()?.identity().display(),
-                )));
-            }
+        let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
+        if !(stage_info.is_temporary
+            || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+            || stage_info.stage_type == StageType::User
+                && stage_info.stage_name == ctx.get_current_user()?.name)
+        {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied: privilege READ is required on stage {} for user {}",
+                stage_info.stage_name.clone(),
+                ctx.get_current_user()?.identity().display(),
+            )));
         }
         let files_info = StageFilesInfo {
             path: path.clone(),
@@ -252,7 +249,7 @@ impl Table for InferSchemaTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let Some(part) = ctx.get_partition() else {
             return Ok(());

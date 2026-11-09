@@ -21,6 +21,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_ast::ast::Engine;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +34,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
@@ -195,6 +197,10 @@ impl Interpreter for SetOptionsInterpreter {
             is_valid_option_of_type::<u32>(
                 &self.plan.set_options,
                 FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER,
+            )?;
+            is_valid_option_of_type::<u32>(
+                &self.plan.set_options,
+                FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP,
             )?;
             is_valid_option_of_type::<u64>(
                 &self.plan.set_options,
@@ -379,7 +385,11 @@ async fn set_segment_format(
                     projection.insert(field.name.clone());
                 }
                 let segments = segments_io
-                    .generic_read_segments::<RowOrientedSegmentReader>(chunk, false, &projection)
+                    .generic_read_segments::<RowOrientedSegmentReader>(
+                        chunk,
+                        CachePolicy::READ_ONLY,
+                        &projection,
+                    )
                     .await?;
                 for segment in segments {
                     let segment = segment?;
@@ -411,7 +421,7 @@ async fn set_segment_format(
             }
         }
     }
-    let new_snapshot = TableSnapshot::try_new(
+    let mut new_snapshot = TableSnapshot::try_new(
         Some(fuse_table.get_table_info().ident.seq),
         Some(table_snapshot.clone()),
         table.schema().as_ref().clone(),
@@ -421,6 +431,8 @@ async fn set_segment_format(
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;
+    // Every segment was rewritten, so no row of the segment zone map is live.
+    new_snapshot.segment_zone_map = None;
     let location = fuse_table
         .meta_location_generator()
         .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;

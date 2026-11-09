@@ -407,6 +407,24 @@ impl SessionManager {
         )))
     }
 
+    pub fn get_query_perf_token(&self, query_id: &str) -> Option<u64> {
+        for weak_ptr in self.active_sessions_snapshot() {
+            let Some(arc_session) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_session.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                if query_id == *context_shared.init_query_id.as_ref().read() {
+                    return Some(context_shared.get_perf_query_token());
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn get_running_graph_dump(&self, query_id: &str) -> Result<String> {
         for weak_ptr in self.active_sessions_snapshot() {
             let Some(arc_session) = weak_ptr.upgrade() else {

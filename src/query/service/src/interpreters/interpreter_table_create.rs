@@ -56,6 +56,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
@@ -850,7 +851,12 @@ impl CreateTableInterpreter {
             req.table_meta.drop_on = Some(Utc::now());
         }
         let reply = catalog.create_table(req.clone()).await?;
-        if staged && !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+        // IF NOT EXISTS on an existing table creates nothing: keep its owner and skip setup.
+        if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+            // Keep the previous idempotent registration/TTL refresh for temporary tables.
+            if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
+                self.register_temp_table(prefix).await?;
+            }
             return Ok(PipelineBuildResult::create());
         }
         if let Err(e) = self
@@ -1094,6 +1100,7 @@ impl CreateTableInterpreter {
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
         // check enable auto analyze.
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE)?;
+        is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP)?;
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER)?;
         is_valid_option_of_type::<u64>(
             &table_meta.options,

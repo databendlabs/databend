@@ -144,12 +144,12 @@ impl AggregateNumberQuantileContState {
     }
 
     fn compute_result(&mut self, whole: usize, frac: f64, value_len: usize) -> f64 {
-        self.value.as_mut_slice().select_nth_unstable(whole);
+        self.value.select_nth_unstable(whole);
         let value = self.value.get(whole).unwrap().0;
         let value1 = if whole + 1 >= value_len {
             value
         } else {
-            self.value.as_mut_slice().select_nth_unstable(whole + 1);
+            self.value.select_nth_unstable(whole + 1);
             self.value.get(whole + 1).unwrap().0
         };
 
@@ -351,12 +351,12 @@ where
     }
 
     fn compute_result(&mut self, whole: usize, frac: f64, value_len: usize) -> Result<T::Scalar> {
-        self.value.as_mut_slice().select_nth_unstable(whole);
+        self.value.select_nth_unstable(whole);
         let value = *self.value.get(whole).unwrap();
         let value1 = if whole + 1 >= value_len {
             value
         } else {
-            self.value.as_mut_slice().select_nth_unstable(whole + 1);
+            self.value.select_nth_unstable(whole + 1);
             *self.value.get(whole + 1).unwrap()
         };
 

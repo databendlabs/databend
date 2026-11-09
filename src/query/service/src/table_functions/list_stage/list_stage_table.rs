@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -137,7 +138,7 @@ impl Table for ListStageTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         pipeline.add_source(
             |output| ListStagesSource::create(ctx.clone(), output, self.args_parsed.clone()),
@@ -192,26 +193,20 @@ impl ListStagesSource {
         )?
         .resolve_stage_location(&self.args_parsed.location, StagePathAccess::Read)
         .await?;
-        let enable_experimental_rbac_check = self
+        let visibility_checker = self
             .ctx
-            .get_settings()
-            .get_enable_experimental_rbac_check()?;
-        if enable_experimental_rbac_check {
-            let visibility_checker = self
-                .ctx
-                .get_visibility_checker(false, Object::Stage)
-                .await?;
-            if !(stage_info.is_temporary
-                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-                || stage_info.stage_type == StageType::User
-                    && stage_info.stage_name == self.ctx.get_current_user()?.name)
-            {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege READ is required on stage {} for user {}",
-                    stage_info.stage_name.clone(),
-                    self.ctx.get_current_user()?.identity().display(),
-                )));
-            }
+            .get_visibility_checker(false, Object::Stage)
+            .await?;
+        if !(stage_info.is_temporary
+            || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+            || stage_info.stage_type == StageType::User
+                && stage_info.stage_name == self.ctx.get_current_user()?.name)
+        {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied: privilege READ is required on stage {} for user {}",
+                stage_info.stage_name.clone(),
+                self.ctx.get_current_user()?.identity().display(),
+            )));
         }
         let op = init_stage_operator(&stage_info)?;
         let thread_num = self.ctx.get_settings().get_max_threads()? as usize;

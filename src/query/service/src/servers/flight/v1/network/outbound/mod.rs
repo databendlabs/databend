@@ -26,7 +26,8 @@
 //!
 //! [`ExchangeSendBuffer`] applies shared byte quota and batches queued items into
 //! frames. It uses the shared [`PingPongTransport`](super::PingPongTransport) to
-//! send frames and receive acknowledgements, allowing one request in flight per
+//! send frames and receive acknowledgements, allowing up to
+//! [`MAX_FRAMES_IN_FLIGHT`](super::MAX_FRAMES_IN_FLIGHT) requests in flight per
 //! connection. Incoming data is handled by [`inbound`](super::inbound).
 //!
 //! Sending completes at queue admission, not downstream consumption. Send-buffer
@@ -46,6 +47,7 @@ pub use block_sender::LOCAL_CHANNEL_MAX_BYTES;
 pub use block_sender::LocalBlockSender;
 pub use block_sender::RemoteBlockSender;
 pub use block_sender::RoundRobinBlockSender;
+pub use block_sender::block_owned_bytes;
 pub use block_sender::create_local_block_senders;
 pub use exchange_send_buffer::ExchangeSendBuffer;
 pub use exchange_send_buffer::ExchangeSendBufferConfig;

@@ -29,6 +29,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::DecimalSize;
@@ -954,4 +955,505 @@ fn test_select_if_then_else_non_strict_decimal() {
             Int16Type::from_data(expected.iter().map(|v| *v as i16).collect::<Vec<_>>())
         );
     }
+}
+
+#[test]
+fn test_filter_by_mask_word() {
+    use databend_common_expression::Value;
+    use databend_common_expression::types::BooleanType;
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    /// Row `j` of `result` is row `rows[j]` of `column`; for a nullable column
+    /// the inner values are compared too, also at NULL rows.
+    fn assert_rows(result: &Column, column: &Column, rows: &[usize], context: &str) {
+        assert_eq!(result.data_type(), column.data_type(), "{context}");
+        assert_eq!(result.len(), rows.len(), "{context}");
+        for (j, row) in rows.iter().enumerate() {
+            assert_eq!(
+                result.index(j).unwrap(),
+                column.index(*row).unwrap(),
+                "{context} row {row}"
+            );
+        }
+        if let (Column::Nullable(result), Column::Nullable(column)) = (result, column) {
+            assert_rows(&result.column, &column.column, rows, context);
+        }
+    }
+
+    let mut rng = StdRng::seed_from_u64(20904);
+    let mut data_types = get_all_test_data_types(DataTypeFilter::All);
+    data_types.extend([
+        DataType::Decimal(DecimalSize::new_unchecked(50, 5)),
+        DataType::Tuple(vec![
+            DataType::Number(NumberDataType::Int16),
+            DataType::String,
+        ]),
+    ]);
+    data_types.extend(
+        [
+            DataType::Boolean,
+            DataType::Number(NumberDataType::Int64),
+            DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
+            DataType::Date,
+            DataType::String,
+            DataType::Binary,
+            DataType::Variant,
+            DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
+            DataType::Opaque(1),
+        ]
+        .map(|ty| DataType::Nullable(Box::new(ty))),
+    );
+
+    for len in [0, 1, 63, 64, 65, 130, 700] {
+        for shape in [
+            "random_50",
+            "random_1",
+            "random_99",
+            "runs",
+            "all_set",
+            "all_unset",
+        ] {
+            // Both the mask and the columns start at random bit offsets, so the
+            // mask words and the value words are not aligned with each other.
+            let offset = rng.gen_range(0..64);
+            let mut run_left = 0;
+            let mut bit = false;
+            let bits = (0..offset + len)
+                .map(|_| match shape {
+                    "random_50" => rng.gen_bool(0.5),
+                    "random_1" => rng.gen_bool(0.01),
+                    "random_99" => rng.gen_bool(0.99),
+                    "runs" => {
+                        if run_left == 0 {
+                            run_left = rng.gen_range(1..200);
+                            bit = !bit;
+                        }
+                        run_left -= 1;
+                        bit
+                    }
+                    "all_set" => true,
+                    _ => false,
+                })
+                .collect::<Vec<_>>();
+            let mut mask = Bitmap::from(bits.as_slice());
+            mask.slice(offset, len);
+            let rows = (0..len)
+                .filter(|row| mask.get_bit(*row))
+                .collect::<Vec<_>>();
+
+            for data_type in &data_types {
+                let column_offset = rng.gen_range(0..10);
+                let column = Column::random(data_type, column_offset + len, None)
+                    .slice(column_offset..column_offset + len);
+                let context = format!("{data_type} {shape} len {len}");
+                for strategy in [
+                    IterationStrategy::SlicesIterator,
+                    IterationStrategy::IndexIterator,
+                ] {
+                    let mut visitor = FilterVisitor::new(&mask).with_strategy(strategy);
+                    visitor.visit_value(Value::Column(column.clone())).unwrap();
+                    let result = visitor.take_result().unwrap().into_column().unwrap();
+                    assert_rows(&result, &column, &rows, &context);
+                }
+                assert_rows(&column.filter(&mask), &column, &rows, &context);
+            }
+
+            // A boolean column whose bits are all set takes the fast path.
+            let column = BooleanType::from_data(vec![true; len]);
+            assert_rows(&column.filter(&mask), &column, &rows, shape);
+        }
+    }
+
+    // Strings longer than 12 bytes live in the data buffers: the slices strategy
+    // keeps them, the index strategy copies the selected strings.
+    let column = StringType::from_data(
+        (0..200)
+            .map(|row| format!("a string longer than twelve bytes {row}"))
+            .collect::<Vec<_>>(),
+    );
+    let input = column.as_string().unwrap();
+    let mask = Bitmap::from_iter((0..200).map(|row| row % 3 != 0));
+    for (strategy, keeps_buffers) in [
+        (IterationStrategy::SlicesIterator, true),
+        (IterationStrategy::IndexIterator, false),
+    ] {
+        let mut visitor = FilterVisitor::new(&mask).with_strategy(strategy);
+        visitor.visit_value(Value::Column(column.clone())).unwrap();
+        let result = visitor.take_result().unwrap().into_column().unwrap();
+        let result = result.as_string().unwrap();
+        assert_eq!(
+            std::sync::Arc::ptr_eq(result.data_buffers(), input.data_buffers()),
+            keeps_buffers
+        );
+        assert_eq!(result.len(), 133);
+    }
+}
+
+/// Data types for the take tests: every test type, a tuple, a nested array and
+/// nullable variants of the types with their own take paths.
+fn take_test_data_types() -> Vec<DataType> {
+    let mut data_types = get_all_test_data_types(DataTypeFilter::All);
+    let tuple = DataType::Tuple(vec![
+        DataType::Number(NumberDataType::Int16),
+        DataType::String,
+    ]);
+    data_types.extend([
+        DataType::Decimal(DecimalSize::new_unchecked(50, 5)),
+        tuple.clone(),
+        DataType::Array(Box::new(DataType::Array(Box::new(DataType::String)))),
+    ]);
+    data_types.extend(
+        [
+            DataType::Boolean,
+            DataType::Number(NumberDataType::Int64),
+            DataType::Decimal(DecimalSize::new_unchecked(10, 2)),
+            DataType::Binary,
+            DataType::Variant,
+            DataType::Bitmap,
+            DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                DataType::Number(NumberDataType::UInt64),
+                DataType::String,
+            ]))),
+            tuple,
+        ]
+        .map(|ty| DataType::Nullable(Box::new(ty))),
+    );
+    data_types
+}
+
+/// A block with a random column of every take test type, constant Boolean
+/// columns (the Boolean fast paths), a nullable column without NULLs and a
+/// constant column.
+fn take_test_block(len: usize) -> DataBlock {
+    let mut entries = take_test_data_types()
+        .iter()
+        .map(|ty| BlockEntry::from(Column::random(ty, len, None)))
+        .collect::<Vec<_>>();
+    entries.extend([
+        BooleanType::from_data(vec![true; len]).into(),
+        BooleanType::from_data(vec![false; len]).into(),
+        Int64Type::from_data_with_validity((0..len as i64).collect(), vec![true; len]).into(),
+        BlockEntry::new_const_column(
+            DataType::String,
+            Scalar::String("constant".to_string()),
+            len,
+        ),
+    ]);
+    DataBlock::new(entries, len)
+}
+
+/// Splits `indices` into runs of consecutive rows in their order.
+fn index_runs(indices: &[u32]) -> Vec<Range<u32>> {
+    let mut runs: Vec<Range<u32>> = Vec::new();
+    for &index in indices {
+        match runs.last_mut() {
+            Some(run) if run.end == index => run.end += 1,
+            _ => runs.push(index..index + 1),
+        }
+    }
+    runs
+}
+
+/// Row indices of several shapes for a block of `len` rows.
+fn take_index_shapes(rng: &mut impl rand::Rng, len: usize) -> Vec<(&'static str, Vec<u32>)> {
+    use rand::seq::SliceRandom;
+
+    if len == 0 {
+        return vec![("empty", vec![])];
+    }
+    let len = len as u32;
+    // Runs of random lengths in row order, with random gaps between them.
+    let mut runs = Vec::new();
+    let mut start = rng.gen_range(0..len.min(8));
+    while start < len {
+        let end = (start + rng.gen_range(1..100)).min(len);
+        runs.push(start..end);
+        start = end + rng.gen_range(0..50);
+    }
+    let mut shuffled_runs = runs.clone();
+    shuffled_runs.shuffle(rng);
+    let repeated_runs = runs.iter().flat_map(|run| [run.clone(), run.clone()]);
+
+    vec![
+        // Unordered, with duplicates.
+        ("random", (0..len).map(|_| rng.gen_range(0..len)).collect()),
+        (
+            "sorted_random",
+            (0..len).filter(|_| rng.gen_bool(0.5)).collect(),
+        ),
+        ("long_runs", runs.iter().cloned().flatten().collect()),
+        (
+            "unordered_runs",
+            shuffled_runs.iter().cloned().flatten().collect(),
+        ),
+        ("repeated_runs", repeated_runs.flatten().collect()),
+        // Runs of 8 rows: the variable-length columns of `take_test_block`
+        // copy the runs, the fixed-width and bitmap columns gather rows.
+        (
+            "short_runs",
+            (0..len).filter(|row| (row / 8) % 2 == 0).collect(),
+        ),
+        ("single_rows", (0..len).step_by(2).collect()),
+        ("all", (0..len).collect()),
+        ("one_row", vec![rng.gen_range(0..len)]),
+    ]
+}
+
+/// Checks that row `row` of every column of `result` is row `indices[row]`
+/// of the same column of `block`, and that the data types are kept.
+fn assert_taken_rows(block: &DataBlock, result: &DataBlock, indices: &[u32], case: &str) {
+    assert_eq!(result.num_rows(), indices.len(), "{case}");
+    assert_eq!(result.num_columns(), block.num_columns(), "{case}");
+    for (source, taken) in block.columns().iter().zip(result.columns()) {
+        let data_type = source.data_type();
+        assert_eq!(data_type, taken.data_type(), "{case}");
+        let (source, taken) = (source.value(), taken.value());
+        for (row, &index) in indices.iter().enumerate() {
+            assert_eq!(
+                taken.index(row),
+                source.index(index as usize),
+                "{case} {data_type} row {row} index {index}"
+            );
+        }
+    }
+}
+
+fn assert_same_columns(left: &DataBlock, right: &DataBlock, case: &str) {
+    assert_eq!(left.num_rows(), right.num_rows(), "{case}");
+    for (l, r) in left.columns().iter().zip(right.columns()) {
+        assert_eq!(l.data_type(), r.data_type(), "{case}");
+        assert_eq!(l.value(), r.value(), "{case}");
+    }
+}
+
+/// `take_ranges`, `take_with_optimize_size_by_runs` and
+/// `take_compacted_indices` against row-by-row references, for random,
+/// long-run, unordered, repeated and single-row indices.
+#[test]
+fn test_take_by_runs_and_ranges() -> databend_common_exception::Result<()> {
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    let mut rng = StdRng::seed_from_u64(20904);
+    for len in [0, 1, 7, 63, 64, 65, 130, 700, 2100] {
+        let all_types = take_test_block(len);
+        // `take_with_optimize_size_by_runs` finds the runs for some columns
+        // only: from 4 rows per run on average with variable-length columns,
+        // from 32 with fixed-width or bitmap columns only, and never for one
+        // fixed-width column.
+        let fixed_types = DataBlock::new_from_columns(
+            [
+                DataType::Number(NumberDataType::Int64),
+                DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
+                DataType::Date,
+                DataType::Timestamp,
+                DataType::Boolean,
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+            ]
+            .iter()
+            .map(|ty| Column::random(ty, len, None))
+            .collect(),
+        );
+        let one_fixed_type = DataBlock::new_from_columns(vec![Column::random(
+            &DataType::Number(NumberDataType::Int64),
+            len,
+            None,
+        )]);
+        for (block, (shape, indices)) in [all_types, fixed_types, one_fixed_type]
+            .iter()
+            .flat_map(|block| {
+                take_index_shapes(&mut rng, len)
+                    .into_iter()
+                    .map(move |shape| (block, shape))
+            })
+            .collect::<Vec<_>>()
+        {
+            let case = format!("len {len} {shape} columns {}", block.num_columns());
+
+            let by_runs = block.take_with_optimize_size_by_runs(&indices)?;
+            assert_taken_rows(block, &by_runs, &indices, &case);
+            assert_same_columns(
+                &by_runs,
+                &block.take_with_optimize_size(indices.as_slice())?,
+                &case,
+            );
+
+            // Ranges split at random points (adjacent ranges) and with empty
+            // ranges in between.
+            let mut ranges = Vec::new();
+            for run in index_runs(&indices) {
+                if rng.gen_bool(0.3) {
+                    ranges.push(run.start..run.start);
+                }
+                if run.len() > 1 && rng.gen_bool(0.5) {
+                    let mid = rng.gen_range(run.start + 1..run.end);
+                    ranges.extend([run.start..mid, mid..run.end]);
+                } else {
+                    ranges.push(run);
+                }
+            }
+            let by_ranges = block.clone().take_ranges(&ranges, indices.len())?;
+            assert_taken_rows(block, &by_ranges, &indices, &case);
+            assert_same_columns(&by_ranges, &block.take(indices.as_slice())?, &case);
+
+            if indices.is_empty() {
+                continue;
+            }
+            // Each index repeated 1 to 4 times, or 100 times.
+            let repeats = indices
+                .iter()
+                .map(|&row| RepeatIndex {
+                    row,
+                    count: if rng.gen_bool(0.1) {
+                        100
+                    } else {
+                        rng.gen_range(1..5)
+                    },
+                })
+                .collect::<Vec<_>>();
+            let expanded = repeats
+                .iter()
+                .flat_map(|repeat| std::iter::repeat_n(repeat.row, repeat.count as usize))
+                .collect::<Vec<_>>();
+            let compacted = block.take_compacted_indices(&repeats, expanded.len())?;
+            assert_taken_rows(block, &compacted, &expanded, &case);
+            assert_same_columns(&compacted, &block.take(expanded.as_slice())?, &case);
+        }
+    }
+    Ok(())
+}
+
+/// `take_with_optimize_size_by_runs` copies the selected `String` values like
+/// `take_with_optimize_size`, while `take_ranges` shares the data buffers. A
+/// top-level `String` column keeps the row gather; a `Nullable(String)`
+/// column with runs of 32 rows or more takes the runs path.
+#[test]
+fn test_take_by_runs_copies_strings() -> databend_common_exception::Result<()> {
+    use databend_common_expression::types::NullableColumn;
+    use databend_common_expression::types::StringColumn;
+
+    let values = (0..1000)
+        .map(|i| format!("a string longer than a view: {i:06}"))
+        .collect::<Vec<_>>();
+    let strings = StringType::from_data(values);
+    let validity = Bitmap::from_iter((0..1000).map(|row| row % 7 != 0));
+    let nullable_strings = NullableColumn::new_column(strings.clone(), validity.clone());
+    let ranges = [100..400, 600..700];
+    let indices = ranges.iter().cloned().flatten().collect::<Vec<u32>>();
+
+    let inner_strings = |column: &Column| -> StringColumn {
+        match column {
+            Column::Nullable(nullable) => nullable.column.as_string().unwrap().clone(),
+            column => column.as_string().unwrap().clone(),
+        }
+    };
+    for column in [strings, nullable_strings] {
+        let block = DataBlock::new_from_columns(vec![column.clone()]);
+        let source = inner_strings(&column);
+        let shares_buffers = |taken: &DataBlock| {
+            let taken = inner_strings(taken.get_by_offset(0).as_column().unwrap());
+            taken.data_buffers().iter().any(|buffer| {
+                source
+                    .data_buffers()
+                    .iter()
+                    .any(|s| s.as_ptr() == buffer.as_ptr())
+            })
+        };
+        let case = column.data_type().to_string();
+
+        let by_runs = block.take_with_optimize_size_by_runs(&indices)?;
+        assert_taken_rows(&block, &by_runs, &indices, &case);
+        assert!(!shares_buffers(&by_runs), "{case}");
+        let taken = inner_strings(by_runs.get_by_offset(0).as_column().unwrap());
+        assert!(
+            taken.total_buffer_len() < source.total_buffer_len() / 2,
+            "{case}"
+        );
+        if let Column::Nullable(taken) = by_runs.get_by_offset(0).as_column().unwrap() {
+            let expected = indices.iter().map(|&row| validity.get_bit(row as usize));
+            assert!(taken.validity.iter().eq(expected), "{case}");
+        }
+
+        let by_ranges = block.clone().take_ranges(&ranges, indices.len())?;
+        assert_taken_rows(&block, &by_ranges, &indices, &case);
+        assert!(shares_buffers(&by_ranges), "{case}");
+    }
+    Ok(())
+}
+
+/// A non-strict decimal inside a tuple (e.g. `Decimal(10, 2)` carried by
+/// `Decimal128`) is converted to the strict width by the row-by-row take; the
+/// range takes keep that result.
+#[test]
+fn test_take_ranges_non_strict_nested_decimal() -> databend_common_exception::Result<()> {
+    use databend_common_expression::types::DecimalColumn;
+    use databend_common_expression::types::NullableColumn;
+
+    let size = DecimalSize::new_unchecked(10, 2);
+    let len = 200;
+    let tuple = Column::Tuple(vec![
+        Column::Decimal(DecimalColumn::Decimal128((0..len as i128).collect(), size)),
+        Int16Type::from_data((0..len as i16).collect::<Vec<_>>()),
+    ]);
+    let nullable_tuple = NullableColumn::new_column(
+        tuple.clone(),
+        Bitmap::from_iter((0..len).map(|row| row % 3 != 0)),
+    );
+    let block = DataBlock::new_from_columns(vec![tuple, nullable_tuple]);
+    let ranges = [10..100, 150..190];
+    let indices = ranges.iter().cloned().flatten().collect::<Vec<u32>>();
+
+    let expected = block.take(indices.as_slice())?;
+    let strict = Column::Decimal(DecimalColumn::Decimal64(
+        indices.iter().map(|&row| row as i64).collect(),
+        size,
+    ));
+    let expected_tuple = expected.get_by_offset(0).as_column().unwrap();
+    assert_eq!(expected_tuple.as_tuple().unwrap()[0], strict);
+
+    let by_ranges = block.clone().take_ranges(&ranges, indices.len())?;
+    assert_same_columns(&by_ranges, &expected, "take_ranges");
+    let by_runs = block.take_with_optimize_size_by_runs(&indices)?;
+    assert_same_columns(&by_runs, &expected, "take_with_optimize_size_by_runs");
+    Ok(())
+}
+
+/// `scatter` with partition ids in long runs (the bulk path) and in random
+/// order (the gather path), against a row-by-row reference.
+#[test]
+fn test_scatter_by_runs() -> databend_common_exception::Result<()> {
+    use rand::Rng;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    let mut rng = StdRng::seed_from_u64(20927);
+    let len = 1000;
+    let block = take_test_block(len);
+    for scatter_size in [1, 2, 7] {
+        for run in [1, 37, 300] {
+            let partitions = (0..len)
+                .map(|row| ((row / run) + rng.gen_range(0..2) * (run == 1) as usize) as u32)
+                .map(|id| id % scatter_size as u32)
+                .collect::<Vec<_>>();
+            let scattered = block.scatter(&partitions, scatter_size)?;
+            assert_eq!(scattered.len(), scatter_size);
+            for (partition, taken) in scattered.iter().enumerate() {
+                let indices = (0..len as u32)
+                    .filter(|&row| partitions[row as usize] == partition as u32)
+                    .collect::<Vec<_>>();
+                let case = format!("scatter {scatter_size} run {run} partition {partition}");
+                assert_taken_rows(&block, taken, &indices, &case);
+                assert_same_columns(
+                    taken,
+                    &block.take_with_optimize_size(indices.as_slice())?,
+                    &case,
+                );
+            }
+        }
+    }
+    Ok(())
 }
