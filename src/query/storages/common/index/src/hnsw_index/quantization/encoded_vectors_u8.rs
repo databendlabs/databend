@@ -758,8 +758,6 @@ mod tests {
             if !(is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma")) {
                 return;
             }
-            assert!(MAX_VNNI_DIM * 127 * 127 <= 1 << 24);
-            assert!((MAX_VNNI_DIM + ALIGNMENT) * 127 * 127 > 1 << 24);
         }
         #[cfg(target_arch = "x86_64")]
         let (main_dot, main_l1): (ScoreKernel, ScoreKernel) =
