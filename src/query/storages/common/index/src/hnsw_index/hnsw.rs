@@ -91,9 +91,11 @@ fn hnsw_build_pool() -> &'static ThreadPool {
     })
 }
 
-/// Whether the points left after the single-threaded prefix are worth spreading
-/// over [`hnsw_build_pool`]. Spreading a handful of points costs more than the
-/// insertions themselves.
+/// Whether the points left after the single-threaded prefix go to
+/// [`hnsw_build_pool`]. The pool finishes the work it has started before it
+/// takes a new build, so a small block sent there would wait behind the large
+/// blocks being built. It is inserted on the calling thread instead, which would
+/// otherwise sit blocked until the pool returns.
 fn builds_in_parallel(points_left: usize) -> bool {
     points_left > SINGLE_THREADED_HNSW_BUILD_THRESHOLD
 }
@@ -647,7 +649,8 @@ mod tests {
 
         for row in (0..num_points).step_by(64) {
             let found = index.search_with_ef(1, Some(num_points), &vectors[row], false)?;
-            assert_eq!(found[0].idx as usize, row, "nearest row of {row}");
+            let nearest = found.first().map(|point| point.idx as usize);
+            assert_eq!(nearest, Some(row), "nearest row of {row}");
         }
         Ok(())
     }
