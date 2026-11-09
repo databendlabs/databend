@@ -109,13 +109,23 @@ pub async fn load_bundle_footer(
     Ok(footer)
 }
 
-/// Reads whole components by name, without caching the bytes.
+/// The caches a bundle read goes through: the disk cache of object bytes, as `kind` with
+/// `disk`, and the memory cache of decoded bytes, if any.
+pub struct BundleReadCache {
+    pub kind: CacheKind,
+    pub disk: CacheFill,
+    pub memory: Option<MemCache<VectorIndexFile>>,
+}
+
+/// Reads whole HNSW components by name. They are decoded into the HNSW cache, so their bytes
+/// are not kept in memory, but they are kept in the disk cache.
 pub async fn load_bundle_components(
     operator: Operator,
     settings: &ReadSettings,
     location: &str,
     footer: &VectorBundleFooter,
     names: &[String],
+    policy: CachePolicy,
 ) -> Result<Vec<Bytes>> {
     let requests = names
         .iter()
@@ -128,17 +138,23 @@ pub async fn load_bundle_components(
             Ok((name.clone(), entry.component_read()))
         })
         .collect::<Result<Vec<_>>>()?;
-    load_bundle_reads(operator, settings, location, requests, None).await
+    let cache = BundleReadCache {
+        kind: CacheKind::of::<vector::Index>(),
+        disk: policy.disk,
+        memory: None,
+    };
+    let storage = DiskCachedStorage::new(operator);
+    load_bundle_reads(storage, settings, location, requests, cache).await
 }
 
-/// Reads byte ranges (whole components or pages), named for the cache key. With a
-/// `cache`, decoded bytes are looked up and stored there.
+/// Reads byte ranges (whole components or pages), named for the memory cache key,
+/// through the caches of `cache`.
 pub async fn load_bundle_reads(
-    operator: Operator,
+    storage: DiskCachedStorage,
     settings: &ReadSettings,
     location: &str,
     requests: Vec<(String, VectorBundlePageRead)>,
-    cache: Option<MemCache<VectorIndexFile>>,
+    cache: BundleReadCache,
 ) -> Result<Vec<Bytes>> {
     if requests.is_empty() {
         return Ok(Vec::new());
@@ -147,7 +163,7 @@ pub async fn load_bundle_reads(
     let settings = *settings;
     GlobalIORuntime::instance()
         .spawn(async move {
-            load_bundle_reads_inner(operator, &settings, &location, &requests, cache).await
+            load_bundle_reads_inner(&storage, &settings, &location, &requests, cache).await
         })
         .await
         .map_err(|error| {
@@ -156,17 +172,17 @@ pub async fn load_bundle_reads(
 }
 
 async fn load_bundle_reads_inner(
-    operator: Operator,
+    storage: &DiskCachedStorage,
     settings: &ReadSettings,
     location: &str,
     requests: &[(String, VectorBundlePageRead)],
-    cache: Option<MemCache<VectorIndexFile>>,
+    cache: BundleReadCache,
 ) -> Result<Vec<Bytes>> {
     let start = std::time::Instant::now();
     let mut output = vec![None; requests.len()];
     let mut ranges = Vec::new();
     for (i, (name, entry)) in requests.iter().enumerate() {
-        let hit = cache.as_ref().and_then(|cache| {
+        let hit = cache.memory.as_ref().and_then(|cache| {
             cache.lookup_sized(&component_cache_key(location, name), entry.raw_length)
         });
         if entry.length == 0 {
@@ -178,19 +194,8 @@ async fn load_bundle_reads_inner(
         }
     }
     if !ranges.is_empty() {
-        // Pages go through the disk cache like the refine pages kind; whole components read
-        // without a memory cache (decoded into the HNSW cache) do not.
-        let fill = cache
-            .as_ref()
-            .map_or(CacheFill::Bypass, |cache| cache.policy().disk);
-        let read = DiskCachedStorage::new(operator)
-            .read_units(
-                CacheKind::of::<vector::Refine>(),
-                location,
-                &ranges,
-                fill,
-                settings,
-            )
+        let read = storage
+            .read_units(cache.kind, location, &ranges, cache.disk, settings)
             .await?;
         metrics_inc_block_vector_index_read_bytes(
             ranges
@@ -206,7 +211,8 @@ async fn load_bundle_reads_inner(
             let index = *i as usize;
             let (name, entry) = &requests[index];
             let raw = entry.decode(bytes)?;
-            let raw = if let Some(cache) = cache.as_ref().filter(|cache| cache.is_enabled()) {
+            let raw = if let Some(cache) = cache.memory.as_ref().filter(|cache| cache.is_enabled())
+            {
                 // The cache accounts for the page's byte length, not the merged
                 // buffer backing a Bytes slice. Detach before caching so a single
                 // retained page cannot pin the entire merged read. Return the same
@@ -228,4 +234,112 @@ async fn load_bundle_reads_inner(
         .into_iter()
         .map(|bytes| bytes.ok_or_else(|| ErrorCode::StorageOther("Missing vector range result")))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Column;
+    use databend_common_expression::types::F32;
+    use databend_common_expression::types::VectorColumn;
+    use databend_storages_common_cache::DiskCache;
+    use databend_storages_common_index::VectorBundleBuilder;
+    use databend_storages_common_index::vector_fp16_data_name;
+
+    use super::*;
+    use crate::test_utils::init_test_globals;
+
+    const ROWS: usize = 100;
+    const DIM: usize = 4;
+    const LINKS: &str = "0-l2_graph_links";
+
+    fn bundle() -> Result<Vec<u8>> {
+        let values = (0..ROWS * DIM)
+            .map(|i| F32::from(i as f32 * 0.25))
+            .collect::<Vec<_>>();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), DIM)));
+        let mut builder = VectorBundleBuilder::new("vi".to_owned(), "v1".to_owned(), ROWS as u64);
+        builder.add_hnsw(LINKS.to_owned(), &[3u8; 4096])?;
+        builder.add_fp16_data(0, &column)?;
+        builder.finish()
+    }
+
+    async fn read(
+        storage: &DiskCachedStorage,
+        path: &str,
+        requests: &[(String, VectorBundlePageRead)],
+        kind: CacheKind,
+        disk: CacheFill,
+    ) -> Result<Vec<Bytes>> {
+        let settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: 0,
+            parquet_fast_read_bytes: 0,
+        };
+        let cache = BundleReadCache {
+            kind,
+            disk,
+            memory: None,
+        };
+        load_bundle_reads(storage.clone(), &settings, path, requests.to_vec(), cache).await
+    }
+
+    /// HNSW components and FP16 pages read without a memory cache are kept in the disk cache
+    /// under their kinds: once read, they are served from disk when storage no longer has
+    /// them. A read that bypasses the disk cache keeps nothing there.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_reads_without_memory_cache_fill_disk() -> Result<()> {
+        init_test_globals()?;
+        let bundle = bundle()?;
+        let footer = VectorBundleFooter::from_bundle(&bundle)?;
+        let operator = Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let dir = tempfile::TempDir::new()?;
+        let disk = DiskCache::new(dir.path(), 1 << 30, [1 << 20, 1 << 20, 1 << 20], false)?;
+        let storage = DiskCachedStorage::with_disk(operator.clone(), Some(Arc::new(disk)));
+        let hnsw = CacheKind::of::<vector::Index>();
+        let refine = CacheKind::of::<vector::Refine>();
+
+        let links = footer.components[LINKS].component_read();
+        let fp16 = &footer.components[&vector_fp16_data_name(0)];
+        let components = vec![(LINKS.to_owned(), links.clone())];
+        let pages = [0..50, 50..ROWS as u64]
+            .into_iter()
+            .map(|rows| {
+                Ok((
+                    format!("page {rows:?}"),
+                    fp16.row_range_read(rows, ROWS as u64)?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        // Bypassing the disk cache keeps nothing.
+        let bypassed = "bypassed/h0.index";
+        operator.write(bypassed, bundle.clone()).await?;
+        read(&storage, bypassed, &components, hnsw, CacheFill::Bypass).await?;
+        assert!(!storage.holds(hnsw, bypassed, Some(links.range()?), CacheFill::ReadWrite));
+
+        let path = "cached/h0.index";
+        operator.write(path, bundle).await?;
+        let first = read(&storage, path, &components, hnsw, CacheFill::ReadWrite).await?;
+        let first_pages = read(&storage, path, &pages, refine, CacheFill::ReadWrite).await?;
+        assert!(storage.holds(hnsw, path, Some(links.range()?), CacheFill::ReadWrite));
+        for (_, page) in &pages {
+            assert!(storage.holds(refine, path, Some(page.range()?), CacheFill::ReadWrite));
+        }
+
+        // Served from disk once storage has lost the object.
+        operator.delete(path).await?;
+        let again = read(&storage, path, &components, hnsw, CacheFill::ReadWrite).await?;
+        assert_eq!(again, first);
+        assert_eq!(&again[0][..], &[3u8; 4096][..]);
+        let again_pages = read(&storage, path, &pages, refine, CacheFill::ReadWrite).await?;
+        assert_eq!(again_pages, first_pages);
+        // The pages join into the whole FP16 data, checked against its checksum.
+        assert_eq!(fp16.join_rows(again_pages)?.len() as u64, fp16.raw_length);
+        assert!(
+            read(&storage, path, &components, hnsw, CacheFill::Bypass)
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
 }

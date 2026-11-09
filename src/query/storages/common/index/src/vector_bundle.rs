@@ -187,6 +187,31 @@ impl VectorBundleEntry {
             checksum: None,
         })
     }
+
+    /// The whole component from the reads of all its rows, in row order, as
+    /// `row_range_read` gives them: checked against the component's size and checksum,
+    /// which no single page read is.
+    pub fn join_rows(&self, reads: Vec<Bytes>) -> Result<Bytes> {
+        let length = reads.iter().map(Bytes::len).sum::<usize>();
+        if length as u64 != self.raw_length {
+            return Err(invalid("FP16 rows do not cover the component"));
+        }
+        let joined = match <[Bytes; 1]>::try_from(reads) {
+            // A single read is the component: no copy.
+            Ok([read]) => read,
+            Err(reads) => {
+                let mut joined = Vec::with_capacity(length);
+                for read in &reads {
+                    joined.extend_from_slice(read);
+                }
+                Bytes::from(joined)
+            }
+        };
+        if crc32fast::hash(&joined) != self.checksum {
+            return Err(invalid("Vector component checksum or size mismatch"));
+        }
+        Ok(joined)
+    }
 }
 
 /// Byte range plus decoding information for one read (a whole component or a page).
@@ -576,6 +601,21 @@ mod tests {
         assert!(fp16.row_range_read(64..101, ROWS as u64).is_err());
         assert!(fp16.row_range_read(64..64, ROWS as u64).is_err());
         assert!(data.row_range_read(0..1, ROWS as u64).is_err());
+
+        // The reads of all rows, by page, join into the whole component, checked against
+        // its checksum; reads that miss rows or hold other bytes are rejected.
+        let whole = read(&bytes, fp16.component_read())?;
+        let pages = [0..30, 30..64, 64..100]
+            .into_iter()
+            .map(|rows| read(&bytes, fp16.row_range_read(rows, ROWS as u64)?))
+            .collect::<Result<Vec<_>>>()?;
+        assert_eq!(fp16.join_rows(pages.clone())?, whole);
+        assert_eq!(fp16.join_rows(vec![whole.clone()])?, whole);
+        assert!(fp16.join_rows(pages[..2].to_vec()).is_err());
+        let mut corrupt = pages[1].to_vec();
+        corrupt[0] ^= 1;
+        let corrupt = vec![pages[0].clone(), Bytes::from(corrupt), pages[2].clone()];
+        assert!(fp16.join_rows(corrupt).is_err());
 
         // The disk-tier codec of the meta cache keeps a bundle footer a bundle.
         let meta = VectorIndexMeta::Bundle(Arc::new(footer));
