@@ -1919,26 +1919,14 @@ impl TableContextTableAccess for LiteTableContext {
             .await
     }
 
-    async fn get_table_with_branch(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        _branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table(catalog, database, table).await
-    }
-
     async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        self.get_table_with_branch(catalog, database, table, branch)
-            .await
+        self.get_table(catalog, database, table).await
     }
 
     async fn acquire_table_lock(

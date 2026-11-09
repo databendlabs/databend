@@ -114,21 +114,15 @@ impl Binder {
         self.init_cte(bind_context, with)?;
 
         let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
-        let (catalog_name, database_name, table_name, branch_name) = (
+        let (catalog_name, database_name, table_name) = (
             table_identifier.catalog_name(),
             table_identifier.database_name(),
             table_identifier.table_name(),
-            table_identifier.branch_name(),
         );
 
         let table = self
             .ctx
-            .get_table_with_branch(
-                &catalog_name,
-                &database_name,
-                &table_name,
-                branch_name.as_deref(),
-            )
+            .get_table(&catalog_name, &database_name, &table_name)
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;
 
@@ -161,13 +155,6 @@ impl Binder {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
                 match self.ctx.get_stage_attachment() {
                     Some(attachment) => {
-                        // TODO(zhyass): Support INSERT INTO table branch FROM stage.
-                        // Planned to be implemented in the next PR.
-                        if branch_name.is_some() {
-                            return Err(ErrorCode::Unimplemented(
-                                "Insert into branch from stage is not supported yet",
-                            ));
-                        }
                         return self
                             .bind_copy_from_attachment(
                                 bind_context,
@@ -240,13 +227,6 @@ impl Binder {
                         }))
                     }
                     loc => {
-                        // TODO(zhyass): Support INSERT INTO table branch FROM stage.
-                        // Planned to be implemented in the next PR.
-                        if branch_name.is_some() {
-                            return Err(ErrorCode::Unimplemented(
-                                "Insert into branch from stage is not supported yet",
-                            ));
-                        }
                         let (stage_info, path) = StageResolver::from_table_context(
                             self.ctx.clone(),
                             databend_common_users::UserApiProvider::instance(),
@@ -303,7 +283,6 @@ impl Binder {
             catalog: catalog_name,
             database: database_name,
             table: table_name,
-            branch: branch_name,
             schema: required_values_schema,
             overwrite: *overwrite,
             source: input_source?,

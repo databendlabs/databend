@@ -3012,7 +3012,6 @@ dependencies = [
 name = "databend-common-base"
 version = "0.1.0"
 dependencies = [
- "anyerror",
  "anyhow",
  "async-backtrace",
  "borsh",
@@ -3757,7 +3756,6 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-schema-api-test-suite",
  "databend-common-meta-store",
- "databend-common-version",
  "databend-meta-client 260205.13.5",
  "databend-meta-runtime",
  "databend-meta-test-harness",
@@ -3790,9 +3788,7 @@ dependencies = [
 name = "databend-common-metrics"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "databend-common-base",
- "procfs",
  "prometheus-client 0.22.3",
 ]
 
@@ -3955,13 +3951,10 @@ dependencies = [
  "databend-common-expression",
  "databend-common-expression-test-support",
  "databend-common-functions",
- "databend-common-grpc",
- "databend-common-io",
  "databend-common-license",
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-meta-store",
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-script",
@@ -3976,9 +3969,7 @@ dependencies = [
  "databend-enterprise-materialized-view",
  "databend-enterprise-row-access-policy-feature",
  "databend-meta-client 260205.13.5",
- "databend-meta-runtime",
  "databend-storages-common-cache",
- "databend-storages-common-session",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "databend_educe",
@@ -3991,7 +3982,6 @@ dependencies = [
  "indexmap 2.14.0",
  "itertools 0.13.0",
  "jsonb",
- "jwt-simple",
  "log",
  "num-derive",
  "num-traits",
@@ -4057,7 +4047,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4479,7 +4468,6 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-sql",
  "databend-common-storage",
@@ -4735,13 +4723,11 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-index",
  "databend-storages-common-io",
- "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "fastrace",
  "futures",
  "futures-util",
  "http 1.3.1",
- "jsonb",
  "jsonwebtoken",
  "jwt-simple",
  "log",
@@ -4749,7 +4735,6 @@ dependencies = [
  "parking_lot 0.12.3",
  "reqsign",
  "reqwest",
- "serde",
  "serde_json",
  "siphasher 0.3.11",
  "tempfile",
@@ -5796,7 +5781,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_stacker",
- "serde_yaml",
  "sha2",
  "socket2 0.5.9",
  "sqlx",
@@ -5945,7 +5929,6 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "async-backtrace",
- "async-trait",
  "bytes",
  "chrono",
  "crc32fast",

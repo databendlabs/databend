@@ -578,7 +578,6 @@ impl Binder {
             table.get_table_info().catalog().to_string(),
             database.to_string(),
             table,
-            None,
             table_alias_name,
             false,
             false,

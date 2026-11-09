@@ -77,7 +77,6 @@ use crate::plans::CreateSequencePlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
-use crate::plans::CreateTableBranchPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
@@ -119,7 +118,6 @@ use crate::plans::DropSequencePlan;
 use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
-use crate::plans::DropTableBranchPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
@@ -349,9 +347,7 @@ pub enum Plan {
     AddTableRowAccessPolicy(Box<AddTableRowAccessPolicyPlan>),
     DropTableRowAccessPolicy(Box<DropTableRowAccessPolicyPlan>),
     DropAllTableRowAccessPolicies(Box<DropAllTableRowAccessPoliciesPlan>),
-    CreateTableBranch(Box<CreateTableBranchPlan>),
     CreateTableTag(Box<CreateTableTagPlan>),
-    DropTableBranch(Box<DropTableBranchPlan>),
     DropTableTag(Box<DropTableTagPlan>),
 
     // Optimize

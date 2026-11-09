@@ -351,21 +351,11 @@ impl TableRefVisitor {
             let catalog_name = normalize_identifier(&catalog, &self.name_resolution_ctx).name;
             let database_name = normalize_identifier(&database, &self.name_resolution_ctx).name;
             let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
-            let branch = table
-                .branch
-                .as_ref()
-                .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name);
 
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table) = self
                     .ctx
-                    .resolve_data_source(
-                        &catalog_name,
-                        &database_name,
-                        &table_name,
-                        branch.as_deref(),
-                        None,
-                    )
+                    .resolve_data_source(&catalog_name, &database_name, &table_name, None)
                     .await
                 {
                     if table.engine() == MATERIALIZED_VIEW_ENGINE {

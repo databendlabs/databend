@@ -468,7 +468,6 @@ impl ModifyTableColumnInterpreter {
                     }
                 }
 
-                // Ignore column comment modify for table branch.
                 if table_info.meta.field_comments[i] != *comment {
                     table_info.meta.field_comments[i] = comment.to_string();
                     modify_comment = true;
@@ -764,14 +763,7 @@ impl ModifyTableColumnInterpreter {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let table_ref = if let Some(branch) = &self.plan.branch {
-            format!(
-                "`{}`.`{}`/`{}`",
-                self.plan.database, self.plan.table, branch
-            )
-        } else {
-            format!("`{}`.`{}`", self.plan.database, self.plan.table)
-        };
+        let table_ref = format!("`{}`.`{}`", self.plan.database, self.plan.table);
         let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
         table_info.meta.schema = new_schema;
 
@@ -939,10 +931,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             // Preserve the version against which the new column definitions were bound.
-            let table = self
-                .ctx
-                .get_table_with_branch(catalog_name, db_name, tbl_name, self.plan.branch.as_deref())
-                .await?;
+            let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
             table.check_mutable()?;
 

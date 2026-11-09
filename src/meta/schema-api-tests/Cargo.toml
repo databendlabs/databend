@@ -17,7 +17,6 @@ async-trait = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-schema-api-test-suite = { workspace = true }
 databend-common-meta-store = { workspace = true }
-databend-common-version = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-meta-test-harness = { workspace = true }

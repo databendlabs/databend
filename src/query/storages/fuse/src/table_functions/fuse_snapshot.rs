@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_args::parse_table_name;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -200,14 +199,12 @@ impl SimpleTableFunc for FuseSnapshotFunc {
         ctx: &Arc<dyn TableContext>,
         plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
-        let (table_name, branch_name) = parse_table_name(self.args.table_name.as_str())?;
         let current_catalog = ctx.get_current_catalog();
         let tbl = ctx
-            .get_table_with_branch(
+            .get_table(
                 &current_catalog,
                 &self.args.database_name,
-                &table_name,
-                branch_name.as_deref(),
+                &self.args.table_name,
             )
             .await?;
         check_shared_table_select(
