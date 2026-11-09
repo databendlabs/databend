@@ -19,14 +19,16 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorScalarRef;
 
 use crate::DistanceType;
+use crate::hnsw_index::common::prefetch::MAX_UNPREFETCHED_BATCH;
+use crate::hnsw_index::common::prefetch::prefetch_whole_slice;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoreType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
-use crate::hnsw_index::common::utils::MAX_UNPREFETCHED_BATCH;
 use crate::hnsw_index::common::utils::is_dense_batch;
 use crate::hnsw_index::quantization::EncodedQueryU8;
 use crate::hnsw_index::quantization::EncodedVectorsU8;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
+use crate::hnsw_index::spaces::simple::similarity;
 
 pub enum RawScorer<'a> {
     Original(OriginalRawScorer<'a>),
@@ -61,8 +63,27 @@ impl RawScorer<'_> {
     /// Hints the CPU to load the vector of `point_id` ahead of scoring it.
     #[inline]
     pub fn prefetch(&self, point_id: PointOffsetType) {
-        if let RawScorer::Quantized(quantized) = self {
-            quantized.vector.prefetch(point_id);
+        match self {
+            // The build scores the original vectors, which do not fit in the
+            // cache. They are hinted whole.
+            RawScorer::Original(original) => {
+                let bytes = match unsafe { original.column.index_unchecked(point_id as usize) } {
+                    // SAFETY: `F32` and `i8` have no padding, so the bytes of the
+                    // vector are initialized and live as long as `values`.
+                    ScalarRef::Vector(VectorScalarRef::Float32(values)) => unsafe {
+                        std::slice::from_raw_parts(
+                            values.as_ptr().cast::<u8>(),
+                            std::mem::size_of_val(values),
+                        )
+                    },
+                    ScalarRef::Vector(VectorScalarRef::Int8(values)) => unsafe {
+                        std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), values.len())
+                    },
+                    _ => return,
+                };
+                prefetch_whole_slice(bytes);
+            }
+            RawScorer::Quantized(quantized) => quantized.vector.prefetch(point_id),
         }
     }
 
@@ -78,7 +99,9 @@ impl RawScorer<'_> {
     /// `None` when prefetch does not help.
     pub fn prefetch_windows(&self) -> Option<(usize, usize)> {
         match self {
-            RawScorer::Original(_) => None,
+            // The next original vector is hinted into L1 while the current one
+            // is scored, with no L2 window.
+            RawScorer::Original(_) => Some((1, 0)),
             RawScorer::Quantized(quantized) => quantized.vector.prefetch_windows(),
         }
     }
@@ -184,11 +207,7 @@ fn calculate_score(distance_type: DistanceType, lhs: ScalarRef, rhs: ScalarRef) 
         ) => {
             let l: Vec<_> = lhs.iter().map(|v| *v as f32).collect();
             let r: Vec<_> = rhs.iter().map(|v| *v as f32).collect();
-            match distance_type {
-                DistanceType::Dot => dot_similarity(&l, &r),
-                DistanceType::L1 => manhattan_similarity(&l, &r),
-                DistanceType::L2 => euclid_similarity(&l, &r),
-            }
+            similarity(distance_type, &l, &r)
         }
         (
             ScalarRef::Vector(VectorScalarRef::Float32(lhs)),
@@ -196,31 +215,17 @@ fn calculate_score(distance_type: DistanceType, lhs: ScalarRef, rhs: ScalarRef) 
         ) => {
             let l = unsafe { std::mem::transmute::<&[F32], &[f32]>(lhs) };
             let r = unsafe { std::mem::transmute::<&[F32], &[f32]>(rhs) };
-            match distance_type {
-                DistanceType::Dot => dot_similarity(l, r),
-                DistanceType::L1 => manhattan_similarity(l, r),
-                DistanceType::L2 => euclid_similarity(l, r),
-            }
+            similarity(distance_type, l, r)
         }
         (_, _) => 0.0,
     }
 }
 
-fn dot_similarity(v1: &[f32], v2: &[f32]) -> f32 {
-    v1.iter().zip(v2).map(|(a, b)| a * b).sum()
-}
-
-fn euclid_similarity(v1: &[f32], v2: &[f32]) -> f32 {
-    -v1.iter().zip(v2).map(|(a, b)| (a - b).powi(2)).sum::<f32>()
-}
-
-fn manhattan_similarity(v1: &[f32], v2: &[f32]) -> f32 {
-    -v1.iter().zip(v2).map(|(a, b)| (a - b).abs()).sum::<f32>()
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::AtomicBool;
+
+    use databend_common_expression::types::VectorColumn;
 
     use super::*;
     use crate::hnsw_index::quantization::VectorParameters;
@@ -267,5 +272,37 @@ mod tests {
             assert_eq!(scorer.score_points(&mut ids, limit), expected.as_slice());
         }
         Ok(())
+    }
+
+    /// The build scores original vectors through the same prefetch loop, and
+    /// every point still gets the score it has alone.
+    #[test]
+    fn test_score_points_original_with_prefetch() {
+        let (dim, count) = (768, 600);
+        let values: Vec<F32> = (0..dim * count)
+            .map(|i| F32::from(((i * 37 % 101) as f32 - 50.0) / 25.0))
+            .collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
+        for distance_type in [DistanceType::Dot, DistanceType::L1, DistanceType::L2] {
+            let raw_scorer = RawScorer::Original(OriginalRawScorer {
+                distance_type,
+                index: 7,
+                column: &column,
+            });
+            assert_eq!(raw_scorer.prefetch_windows(), Some((1, 0)));
+            let mut scorer = FilteredScorer::new(&raw_scorer);
+            for (len, limit) in [(0, 0), (2, 0), (3, 0), (40, 0), (40, 16), (10, 32)] {
+                let mut ids: Vec<u32> = (0..len).map(|i| (i * 977 % count) as u32).collect();
+                let expected: Vec<ScoredPointOffset> = ids
+                    .iter()
+                    .take(if limit == 0 { len } else { limit })
+                    .map(|&idx| ScoredPointOffset {
+                        idx,
+                        score: raw_scorer.score_point(idx),
+                    })
+                    .collect();
+                assert_eq!(scorer.score_points(&mut ids, limit), expected.as_slice());
+            }
+        }
     }
 }
