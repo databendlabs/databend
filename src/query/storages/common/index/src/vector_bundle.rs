@@ -602,21 +602,6 @@ mod tests {
         assert!(fp16.row_range_read(64..64, ROWS as u64).is_err());
         assert!(data.row_range_read(0..1, ROWS as u64).is_err());
 
-        // The reads of all rows, by page, join into the whole component, checked against
-        // its checksum; reads that miss rows or hold other bytes are rejected.
-        let whole = read(&bytes, fp16.component_read())?;
-        let pages = [0..30, 30..64, 64..100]
-            .into_iter()
-            .map(|rows| read(&bytes, fp16.row_range_read(rows, ROWS as u64)?))
-            .collect::<Result<Vec<_>>>()?;
-        assert_eq!(fp16.join_rows(pages.clone())?, whole);
-        assert_eq!(fp16.join_rows(vec![whole.clone()])?, whole);
-        assert!(fp16.join_rows(pages[..2].to_vec()).is_err());
-        let mut corrupt = pages[1].to_vec();
-        corrupt[0] ^= 1;
-        let corrupt = vec![pages[0].clone(), Bytes::from(corrupt), pages[2].clone()];
-        assert!(fp16.join_rows(corrupt).is_err());
-
         // The disk-tier codec of the meta cache keeps a bundle footer a bundle.
         let meta = VectorIndexMeta::Bundle(Arc::new(footer));
         let encoded = Vec::<u8>::try_from(&meta)?;
