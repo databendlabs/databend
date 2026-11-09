@@ -25,6 +25,7 @@ use crate::hnsw_index::common::types::ScoredPointOffset;
 use crate::hnsw_index::quantization::EncodedQueryU8;
 use crate::hnsw_index::quantization::EncodedVectorsU8;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
+use crate::hnsw_index::spaces::prefetch::prefetch_slice;
 use crate::hnsw_index::spaces::simple::similarity;
 
 pub enum RawScorer<'a> {
@@ -53,6 +54,19 @@ impl RawScorer<'_> {
             }
             RawScorer::Quantized(quantized) => {
                 quantized.vector.score_point(&quantized.query, point_id)
+            }
+        }
+    }
+
+    /// Starts loading the vector of `point_id`, which is about to be scored.
+    /// Only the original vectors are prefetched: they are what the build
+    /// scores and do not fit in the cache.
+    pub fn prefetch_point(&self, point_id: PointOffsetType) {
+        if let RawScorer::Original(original) = self {
+            match unsafe { original.column.index_unchecked(point_id as usize) } {
+                ScalarRef::Vector(VectorScalarRef::Float32(values)) => prefetch_slice(values),
+                ScalarRef::Vector(VectorScalarRef::Int8(values)) => prefetch_slice(values),
+                _ => {}
             }
         }
     }
@@ -107,18 +121,18 @@ impl<'a> FilteredScorer<'a> {
             self.points_buffer
                 .resize_with(limit, ScoredPointOffset::default);
         }
-        let mut size: usize = 0;
-        for point_id in point_ids.iter().copied() {
+        let size = point_ids.len().min(self.points_buffer.len());
+        for i in 0..size {
+            // Load the next vector while this one is scored.
+            if i + 1 < size {
+                self.raw_scorer.prefetch_point(point_ids[i + 1]);
+            }
+            let point_id = point_ids[i];
             let score = self.score_point(point_id);
-            self.points_buffer[size] = ScoredPointOffset {
+            self.points_buffer[i] = ScoredPointOffset {
                 idx: point_id,
                 score,
             };
-
-            size += 1;
-            if size == self.points_buffer.len() {
-                break;
-            }
         }
         &self.points_buffer[0..size]
     }

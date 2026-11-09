@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod prefetch;
 pub mod simple;
 #[cfg(target_arch = "x86_64")]
 mod simple_avx;
