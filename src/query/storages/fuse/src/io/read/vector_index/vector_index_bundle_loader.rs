@@ -109,13 +109,39 @@ pub async fn load_bundle_footer(
     Ok(footer)
 }
 
-/// Reads whole components by name, without caching the bytes.
+/// The cached bytes a storage read within a full read of a component may span: one request
+/// costs about as much as reading a few MiB from object storage.
+const FULL_READ_MAX_GAP: u64 = 4 << 20;
+
+/// Read settings for the pages of a whole component of `length` bytes. The pages missing
+/// from the disk cache are merged like a read of the whole component: not limited to
+/// `max_range_size`, which a single page may reach, and across up to `FULL_READ_MAX_GAP`
+/// bytes of cached pages.
+pub fn full_read_settings(settings: &ReadSettings, length: u64) -> ReadSettings {
+    ReadSettings {
+        max_gap_size: settings.max_gap_size.max(FULL_READ_MAX_GAP),
+        max_range_size: settings.max_range_size.max(length),
+        ..*settings
+    }
+}
+
+/// The caches a bundle read goes through: the disk cache of object bytes, as `kind` with
+/// `disk`, and the memory cache of decoded bytes, if any.
+pub struct BundleReadCache {
+    pub kind: CacheKind,
+    pub disk: CacheFill,
+    pub memory: Option<MemCache<VectorIndexFile>>,
+}
+
+/// Reads whole HNSW components by name. They are decoded into the HNSW cache, so their bytes
+/// are not kept in memory, but they are kept in the disk cache.
 pub async fn load_bundle_components(
     operator: Operator,
     settings: &ReadSettings,
     location: &str,
     footer: &VectorBundleFooter,
     names: &[String],
+    policy: CachePolicy,
 ) -> Result<Vec<Bytes>> {
     let requests = names
         .iter()
@@ -128,17 +154,23 @@ pub async fn load_bundle_components(
             Ok((name.clone(), entry.component_read()))
         })
         .collect::<Result<Vec<_>>>()?;
-    load_bundle_reads(operator, settings, location, requests, None).await
+    let cache = BundleReadCache {
+        kind: CacheKind::of::<vector::Index>(),
+        disk: policy.disk,
+        memory: None,
+    };
+    let storage = DiskCachedStorage::new(operator);
+    load_bundle_reads(storage, settings, location, requests, cache).await
 }
 
-/// Reads byte ranges (whole components or pages), named for the cache key. With a
-/// `cache`, decoded bytes are looked up and stored there.
+/// Reads byte ranges (whole components or pages), named for the memory cache key,
+/// through the caches of `cache`.
 pub async fn load_bundle_reads(
-    operator: Operator,
+    storage: DiskCachedStorage,
     settings: &ReadSettings,
     location: &str,
     requests: Vec<(String, VectorBundlePageRead)>,
-    cache: Option<MemCache<VectorIndexFile>>,
+    cache: BundleReadCache,
 ) -> Result<Vec<Bytes>> {
     if requests.is_empty() {
         return Ok(Vec::new());
@@ -147,7 +179,7 @@ pub async fn load_bundle_reads(
     let settings = *settings;
     GlobalIORuntime::instance()
         .spawn(async move {
-            load_bundle_reads_inner(operator, &settings, &location, &requests, cache).await
+            load_bundle_reads_inner(&storage, &settings, &location, &requests, cache).await
         })
         .await
         .map_err(|error| {
@@ -156,17 +188,17 @@ pub async fn load_bundle_reads(
 }
 
 async fn load_bundle_reads_inner(
-    operator: Operator,
+    storage: &DiskCachedStorage,
     settings: &ReadSettings,
     location: &str,
     requests: &[(String, VectorBundlePageRead)],
-    cache: Option<MemCache<VectorIndexFile>>,
+    cache: BundleReadCache,
 ) -> Result<Vec<Bytes>> {
     let start = std::time::Instant::now();
     let mut output = vec![None; requests.len()];
     let mut ranges = Vec::new();
     for (i, (name, entry)) in requests.iter().enumerate() {
-        let hit = cache.as_ref().and_then(|cache| {
+        let hit = cache.memory.as_ref().and_then(|cache| {
             cache.lookup_sized(&component_cache_key(location, name), entry.raw_length)
         });
         if entry.length == 0 {
@@ -178,19 +210,8 @@ async fn load_bundle_reads_inner(
         }
     }
     if !ranges.is_empty() {
-        // Pages go through the disk cache like the refine pages kind; whole components read
-        // without a memory cache (decoded into the HNSW cache) do not.
-        let fill = cache
-            .as_ref()
-            .map_or(CacheFill::Bypass, |cache| cache.policy().disk);
-        let read = DiskCachedStorage::new(operator)
-            .read_units(
-                CacheKind::of::<vector::Refine>(),
-                location,
-                &ranges,
-                fill,
-                settings,
-            )
+        let read = storage
+            .read_units(cache.kind, location, &ranges, cache.disk, settings)
             .await?;
         metrics_inc_block_vector_index_read_bytes(
             ranges
@@ -206,7 +227,8 @@ async fn load_bundle_reads_inner(
             let index = *i as usize;
             let (name, entry) = &requests[index];
             let raw = entry.decode(bytes)?;
-            let raw = if let Some(cache) = cache.as_ref().filter(|cache| cache.is_enabled()) {
+            let raw = if let Some(cache) = cache.memory.as_ref().filter(|cache| cache.is_enabled())
+            {
                 // The cache accounts for the page's byte length, not the merged
                 // buffer backing a Bytes slice. Detach before caching so a single
                 // retained page cannot pin the entire merged read. Return the same

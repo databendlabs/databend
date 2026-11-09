@@ -23,6 +23,5 @@ trybuild = "1.0"
 
 [package.metadata.cargo-machete]
 ignored = ["hex", "proc-macro2", "quote", "sha2", "syn"]
-
 [lints]
 workspace = true
