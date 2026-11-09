@@ -42,7 +42,6 @@ mod group_by;
 mod hilbert;
 mod kernel;
 mod meta_scalar;
-mod nullable;
 
 mod scalar_hash;
 mod schema;

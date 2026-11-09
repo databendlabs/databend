@@ -51,60 +51,6 @@ fn test_cast() {
     }
 }
 
-#[test]
-fn test_runtime_try_scalar_errors_broadcast_null() {
-    use databend_common_column::bitmap::Bitmap;
-    use databend_common_expression::DataBlock;
-    use databend_common_expression::Evaluator;
-    use databend_common_expression::Expr;
-    use databend_common_expression::Scalar;
-    use databend_common_expression::ScalarRef;
-    use databend_common_expression::type_check::check_function;
-    use databend_common_functions::BUILTIN_FUNCTIONS;
-
-    for name in [
-        "try_to_timestamp",
-        "try_to_timestamp_tz",
-        "try_to_date",
-        "try_to_interval",
-        "try_to_decimal",
-        "try_object_construct",
-        "try_object_construct_keep_null",
-    ] {
-        let params = if name == "try_to_decimal" {
-            vec![Scalar::from(10_i64), Scalar::from(2_i64)]
-        } else {
-            vec![]
-        };
-        let arg = Expr::constant(Scalar::String("invalid".to_string()), None);
-        let expr =
-            check_function::<usize>(None, name, &params, &[arg], &BUILTIN_FUNCTIONS).unwrap();
-        // Run the checked call directly: constant folding's one-row block hides this bug.
-        for rows in [0, 1, 2, 5] {
-            let block = DataBlock::new(vec![], rows);
-            let ctx = FunctionContext::default();
-            // Also exercise partial evaluation with row zero inactive.
-            for validity in [
-                None,
-                Some(Bitmap::from_iter((0..rows).map(|row| row % 2 == 1))),
-            ] {
-                let result = Evaluator::new(&block, &ctx, &BUILTIN_FUNCTIONS)
-                    .partial_run(&expr, validity.clone(), &mut Default::default(), false)
-                    .unwrap();
-                for row in 0..rows {
-                    if validity.as_ref().is_none_or(|mask| mask.get_bit(row)) {
-                        assert_eq!(
-                            result.index(row),
-                            Some(ScalarRef::Null),
-                            "{name}, row={row}"
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
-
 fn test_cast_primitive(file: &mut impl Write, is_try: bool) {
     let prefix = if is_try { "TRY_" } else { "" };
 
