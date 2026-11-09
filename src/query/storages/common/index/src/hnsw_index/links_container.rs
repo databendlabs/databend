@@ -20,7 +20,6 @@
 
 use std::cell::Cell;
 use std::iter::Copied;
-use std::num::NonZeroU32;
 
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoreType;
@@ -133,6 +132,12 @@ impl LinksContainer {
 
     /// Append one point to the container. If the container is full, run the heuristic.
     ///
+    /// Candidates are considered from the closest to the target. Among
+    /// candidates at the same score, the new point comes first and the links
+    /// keep their order, as with the heap the builder used before: considering
+    /// the new point last would let a full list of tied links keep all of them
+    /// and leave the new point without this backlink.
+    ///
     /// The result is exactly the same as `connect_with_heuristic_simple`, the
     /// reference implementation in the tests module,
     /// but this implementation cuts some corners given that some of the links
@@ -157,31 +162,30 @@ impl LinksContainer {
 
         items.0.clear();
         items.0.reserve(level_m + 1);
-        for (order, &link) in self.links.iter().enumerate() {
-            items.0.push(Item {
-                idx: link,
-                score: Cell::new(None),
-                // `+ 1`: `NonZeroU32::new(0)` would leave the first link unmarked.
-                order: if order < self.processed_by_heuristic as usize {
-                    NonZeroU32::new(order as u32 + 1)
-                } else {
-                    None
-                },
-            });
-        }
         items.0.push(Item {
             idx: new_point_id,
             score: Cell::new(None),
-            order: None,
+            position: 0,
+            processed: false,
         });
+        for (i, &link) in self.links.iter().enumerate() {
+            items.0.push(Item {
+                idx: link,
+                score: Cell::new(None),
+                position: i as u32 + 1,
+                processed: i < self.processed_by_heuristic as usize,
+            });
+        }
+        // Sorted by score, then by position, a total order even with ties.
         items.0.sort_unstable_by(|a, b| {
-            if let (Some(a_order), Some(b_order)) = (a.order, b.order) {
-                // Both items processed by the heuristic, compare their order
-                // to avoid recomputing the score.
-                return a_order.cmp(&b_order);
+            if a.processed && b.processed {
+                // The previous run left both in this order, so their positions
+                // compare them without computing the scores.
+                return a.position.cmp(&b.position);
             }
             b.cached_score(target_point_id, &mut score)
                 .total_cmp(&a.cached_score(target_point_id, &mut score))
+                .then(a.position.cmp(&b.position))
         });
 
         self.links.clear();
@@ -203,7 +207,7 @@ impl LinksContainer {
         'outer: for read in 0..items.0.len() {
             let candidate = items.0[read].clone();
             for existing in &items.0[0..write] {
-                if candidate.order.is_some() && existing.order.is_some() {
+                if candidate.processed && existing.processed {
                     continue; // See (A).
                 }
                 if is_redundant(
@@ -233,8 +237,12 @@ pub struct ItemsBuffer(Vec<Item>);
 struct Item {
     idx: PointOffsetType,
     score: Cell<Option<ScoreType>>,
-    /// Order is used to avoid recomputing the score for items known be sorted.
-    order: Option<NonZeroU32>,
+    /// Breaks ties between scores: 0 for the new point, then the links in their
+    /// order in the container.
+    position: u32,
+    /// Selected by the previous run of the heuristic, so sorted and compatible
+    /// with the other processed links without computing their scores.
+    processed: bool,
 }
 
 impl Item {
@@ -279,17 +287,19 @@ mod tests {
                 self.links.push(new_point_id);
             } else {
                 let mut candidates = Vec::with_capacity(level_m + 1);
+                candidates.push(ScoredPointOffset {
+                    idx: new_point_id,
+                    score: score(target_point_id, new_point_id),
+                });
                 for &idx in &self.links {
                     candidates.push(ScoredPointOffset {
                         idx,
                         score: score(target_point_id, idx),
                     });
                 }
-                candidates.push(ScoredPointOffset {
-                    idx: new_point_id,
-                    score: score(target_point_id, new_point_id),
-                });
-                candidates.sort_unstable_by(|a, b| b.score.total_cmp(&a.score));
+                // Stable: at the same score the new point stays first and the
+                // links keep their order.
+                candidates.sort_by(|a, b| b.score.total_cmp(&a.score));
                 self.fill_from_sorted_with_heuristic(candidates.into_iter(), level_m, score);
             }
         }
@@ -506,5 +516,76 @@ mod tests {
             checked += 1;
         }
         assert!(checked > 0);
+    }
+
+    /// A full list of links tied with the new point keeps the new point: it is
+    /// considered before the tied links, whether or not they were processed.
+    #[test]
+    fn test_connect_with_heuristic_keeps_tied_new_point() {
+        // The target 0 and three points at distance 1 from it. Links 1 and 2
+        // do not prune each other, so considered first they would fill the list.
+        let points: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [-1.0, 0.0], [0.0, 1.0]];
+        let score = |a: u32, b: u32| {
+            let (a, b) = (points[a as usize], points[b as usize]);
+            -((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2))
+        };
+        let (target, new_point, m) = (0, 3, 2);
+        let links = [1, 2].map(|idx| ScoredPointOffset {
+            idx,
+            score: score(target, idx),
+        });
+
+        let mut processed = LinksContainer::with_capacity(m);
+        processed.fill_from_sorted_with_heuristic(links.into_iter(), m, score);
+        assert_eq!(processed.links(), &[1, 2]);
+        let mut unprocessed = LinksContainer::with_capacity(m);
+        unprocessed.fill_from([1, 2].into_iter());
+        let mut reference = LinksContainer::with_capacity(m);
+        reference.fill_from([1, 2].into_iter());
+
+        let mut items = ItemsBuffer::default();
+        processed.connect_with_heuristic(new_point, target, m, score, &mut items);
+        unprocessed.connect_with_heuristic(new_point, target, m, score, &mut items);
+        reference.connect_with_heuristic_simple(new_point, target, m, score);
+        assert_eq!(processed.links(), &[3, 1]);
+        assert_eq!(unprocessed.links(), &[3, 1]);
+        assert_eq!(reference.links(), &[3, 1]);
+    }
+
+    /// With vectors on a small integer grid most scores tie, and
+    /// `connect_with_heuristic` still selects the links of the reference.
+    #[test]
+    fn test_connect_with_heuristic_with_ties() {
+        let mut rng = StdRng::seed_from_u64(11);
+
+        const NUM_VECTORS: usize = 24;
+        const DIM: usize = 4;
+        const M: usize = 4;
+
+        for _ in 0..1000 {
+            let vectors: Vec<Vec<f32>> = (0..NUM_VECTORS)
+                .map(|_| (0..DIM).map(|_| rng.gen_range(0..3) as f32).collect())
+                .collect();
+            let score = |a: u32, b: u32| {
+                -vectors[a as usize]
+                    .iter()
+                    .zip(&vectors[b as usize])
+                    .map(|(x, y)| (x - y).powi(2))
+                    .sum::<f32>()
+            };
+
+            let mut ids: Vec<u32> = (0..NUM_VECTORS as u32).collect();
+            ids.shuffle(&mut rng);
+            let target = ids.pop().unwrap();
+
+            let mut container = LinksContainer::with_capacity(M);
+            let mut reference = LinksContainer::with_capacity(M);
+            let mut items = ItemsBuffer::default();
+            for &id in &ids {
+                container.connect_with_heuristic(id, target, M, score, &mut items);
+                reference.connect_with_heuristic_simple(id, target, M, score);
+                assert_eq!(container.links, reference.links);
+            }
+        }
     }
 }
