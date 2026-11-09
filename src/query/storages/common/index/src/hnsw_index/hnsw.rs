@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 
 use databend_common_column::bitmap::TrueIdxIter;
@@ -33,6 +34,7 @@ use databend_common_expression::types::VectorColumnBuilder;
 use databend_common_expression::types::VectorScalar;
 use log::error;
 use rand::thread_rng;
+use rayon::ThreadPool;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
@@ -60,6 +62,41 @@ const SINGLE_THREADED_HNSW_BUILD_THRESHOLD: usize = 256;
 /// with a non-power-of-two thread count one thread can be left with up to half the points while
 /// the others idle. Capping the job length keeps the work stealable to the end (qdrant#10686).
 const HNSW_BUILD_MAX_PAR_LEN: usize = 64;
+
+/// Threads for HNSW builds in this process.
+///
+/// The write pipeline builds the indexes of several blocks at the same time. A
+/// pool per block multiplied the threads by the number of blocks being built (16
+/// pipeline threads of 16 threads each on a 16-core machine), and those blocks
+/// fought for the last level cache. One shared pool keeps the threads bounded and
+/// lets the scheduler spread them over however many blocks are being built.
+fn hnsw_build_pool() -> &'static ThreadPool {
+    static POOL: OnceLock<ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let parallelism = match std::thread::available_parallelism() {
+            Ok(degree) => degree.get(),
+            Err(e) => {
+                error!(
+                    "failed to detect the number of parallelism: {}, fallback to 8",
+                    e
+                );
+                8
+            }
+        };
+        ThreadPoolBuilder::new()
+            .thread_name(|index| format!("hnsw-build-{}", index))
+            .num_threads(parallelism)
+            .build()
+            .expect("failed to build hnsw build thread pool")
+    })
+}
+
+/// Whether the points left after the single-threaded prefix are worth spreading
+/// over [`hnsw_build_pool`]. Spreading a handful of points costs more than the
+/// insertions themselves.
+fn builds_in_parallel(points_left: usize) -> bool {
+    points_left > SINGLE_THREADED_HNSW_BUILD_THRESHOLD
+}
 
 /// Name suffixes of the four HNSW components, in the order `HNSWIndex::build`
 /// produces and `HNSWIndex::open` expects them.
@@ -272,23 +309,6 @@ impl HNSWIndex {
             graph_layers_builder.set_levels(vector_id, level);
         }
 
-        let parallelism = match std::thread::available_parallelism() {
-            Ok(degree) => degree.get(),
-            Err(e) => {
-                error!(
-                    "failed to detect the number of parallelism: {}, fallback to 8",
-                    e
-                );
-                8
-            }
-        };
-
-        let pool = ThreadPoolBuilder::new()
-            .thread_name(|index| format!("hnsw-build-{}", index))
-            .num_threads(parallelism)
-            .build()
-            .expect("failed to build hnsw build thread pool");
-
         let mut ids: Vec<usize> = TrueIdxIter::new(column.len(), validity.as_ref()).collect();
         let first_few_ids: Vec<usize> = ids
             .drain(..SINGLE_THREADED_HNSW_BUILD_THRESHOLD.min(ids.len()))
@@ -319,12 +339,14 @@ impl HNSWIndex {
         for vector_id in first_few_ids {
             insert_point(vector_id)?;
         }
-        if !ids.is_empty() {
-            pool.install(|| {
+        if builds_in_parallel(ids.len()) {
+            hnsw_build_pool().install(|| {
                 ids.into_par_iter()
                     .with_max_len(HNSW_BUILD_MAX_PAR_LEN)
                     .try_for_each(insert_point)
             })?;
+        } else {
+            ids.into_iter().try_for_each(insert_point)?;
         }
 
         let (graph_links, graph_data) =
@@ -545,6 +567,88 @@ mod tests {
         let one = search(1, false)?;
         assert!(one == [3] || one == [9], "{one:?}");
         assert_eq!(search(2, false)?, [3, 9]);
+        Ok(())
+    }
+
+    /// Blocks with few points build serially, without going through the pool.
+    #[test]
+    fn test_builds_in_parallel() {
+        assert!(!builds_in_parallel(0));
+        assert!(!builds_in_parallel(1));
+        assert!(!builds_in_parallel(
+            SINGLE_THREADED_HNSW_BUILD_THRESHOLD - 1
+        ));
+        assert!(!builds_in_parallel(SINGLE_THREADED_HNSW_BUILD_THRESHOLD));
+        assert!(builds_in_parallel(SINGLE_THREADED_HNSW_BUILD_THRESHOLD + 1));
+        assert!(builds_in_parallel(100_000));
+    }
+
+    /// One pool serves every build, whatever the number of blocks being built.
+    #[test]
+    fn test_build_pool_is_shared() {
+        let pool = hnsw_build_pool();
+        assert!(std::ptr::eq(pool, hnsw_build_pool()));
+        assert_eq!(
+            pool.current_num_threads(),
+            std::thread::available_parallelism().map_or(8, |degree| degree.get())
+        );
+        let name = pool.install(|| std::thread::current().name().map(str::to_string));
+        assert!(
+            name.as_deref()
+                .is_some_and(|name| name.starts_with("hnsw-build-")),
+            "{name:?}"
+        );
+    }
+
+    /// A block large enough to insert through the shared pool stays searchable:
+    /// every row is reachable, and a stored vector is its own nearest row.
+    #[test]
+    fn test_build_with_many_points() -> Result<()> {
+        // 256 points are inserted first, serially, and 512 more go through the pool.
+        let num_points = 3 * SINGLE_THREADED_HNSW_BUILD_THRESHOLD;
+        let dim = 4;
+        // A coarse grid: SQ8 fits one alpha and offset to the whole column, so the
+        // rows must stay apart by more than one quantization step to keep distinct
+        // codes. Then a stored vector is its own nearest row.
+        let vectors: Vec<[f32; 4]> = (0..num_points)
+            .map(|i| {
+                [
+                    ((i % 16) * 16) as f32,
+                    (((i / 16) % 16) * 16) as f32,
+                    (((i / 256) % 4) * 16) as f32,
+                    0.0,
+                ]
+            })
+            .collect();
+        let values: Vec<F32> = vectors.iter().flatten().map(|&v| F32::from(v)).collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
+        let (_, entries) = HNSWIndex::build(16, 64, 0, column, DistanceType::L2)?;
+        let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
+        let components: Vec<_> = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect();
+        let index = HNSWIndex::open(DistanceType::L2, dim, num_points, &components, None)?;
+
+        // An ef of every row visits the whole graph, so a row that is not returned
+        // was never linked, or linked where the entry points do not reach.
+        let reached: Vec<usize> = index
+            .search_with_ef(num_points, Some(num_points), &vectors[0], false)?
+            .iter()
+            .map(|row| row.idx as usize)
+            .collect();
+        let missing: Vec<usize> = (0..num_points).filter(|id| !reached.contains(id)).collect();
+        assert!(
+            missing.is_empty(),
+            "{} of {num_points} rows unreachable, first missing {:?}",
+            missing.len(),
+            &missing[..missing.len().min(20)],
+        );
+
+        for row in (0..num_points).step_by(64) {
+            let found = index.search_with_ef(1, Some(num_points), &vectors[row], false)?;
+            assert_eq!(found[0].idx as usize, row, "nearest row of {row}");
+        }
         Ok(())
     }
 }
