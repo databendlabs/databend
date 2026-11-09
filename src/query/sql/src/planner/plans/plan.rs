@@ -182,6 +182,7 @@ use crate::plans::SetSecondaryRolesPlan;
 use crate::plans::SetWorkloadGroupQuotasPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
+use crate::plans::ShowCreateConnectionPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateMaterializedViewPlan;
 use crate::plans::ShowCreateTablePlan;
@@ -449,6 +450,7 @@ pub enum Plan {
     CreateConnection(Box<CreateConnectionPlan>),
     DescConnection(Box<DescConnectionPlan>),
     DropConnection(Box<DropConnectionPlan>),
+    ShowCreateConnection(Box<ShowCreateConnectionPlan>),
     ShowConnections(Box<ShowConnectionsPlan>),
 
     // Presign
@@ -646,6 +648,7 @@ impl Plan {
             Plan::DescRowAccessPolicy(plan) => plan.schema(),
             Plan::DescNotification(plan) => plan.schema(),
             Plan::DescConnection(plan) => plan.schema(),
+            Plan::ShowCreateConnection(plan) => plan.schema(),
             Plan::ShowConnections(plan) => plan.schema(),
             Plan::ExecuteImmediate(plan) => plan.schema(),
             Plan::CallProcedure(plan) => plan.schema(),

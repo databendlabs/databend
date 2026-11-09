@@ -62,3 +62,17 @@ impl DescConnectionPlan {
         ])
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShowCreateConnectionPlan {
+    pub name: String,
+}
+
+impl ShowCreateConnectionPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("Connection", DataType::String),
+            DataField::new("Create Connection", DataType::String),
+        ])
+    }
+}

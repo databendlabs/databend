@@ -2865,6 +2865,10 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
                     .await?;
             }
+            Plan::ShowCreateConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
             Plan::DropConnection(plan) => {
                 self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
                     .await?;

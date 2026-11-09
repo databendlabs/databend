@@ -2593,6 +2593,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, name)| Statement::DescribeConnection(DescribeConnectionStmt { name }),
     );
 
+    let show_create_connection = map(
+        rule! {
+            SHOW ~ CREATE ~ CONNECTION ~ #ident
+        },
+        |(_, _, _, name)| Statement::ShowCreateConnection(ShowCreateConnectionStmt { name }),
+    );
+
     let show_connections = map(
         rule! {
             SHOW ~ CONNECTIONS
@@ -3253,6 +3260,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_roles : "`SHOW ROLES`"
                 | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
                 | #show_connections: "`SHOW CONNECTIONS`"
+                | #show_create_connection: "`SHOW CREATE CONNECTION <connection_name>`"
                 | #show_file_formats: "`SHOW FILE FORMATS`"
                 | #show_network_policies: "`SHOW NETWORK POLICIES`"
                 | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"

@@ -40,6 +40,7 @@ use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
+use crate::parser::mask::mask_url;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -483,6 +484,37 @@ impl Connection {
         for (k, v) in &self.conns {
             conns.insert(k.to_string(), mask_string(v));
         }
+        Self {
+            visited_keys: self.visited_keys.clone(),
+            conns,
+        }
+    }
+
+    /// Mask credentials only, keeping options such as `endpoint_url` and
+    /// `region` readable. Only options known to be safe are kept, so an option
+    /// added later is masked until it is listed here.
+    pub fn mask_secrets(&self) -> Self {
+        let conns = self
+            .conns
+            .iter()
+            .map(|(k, v)| {
+                let v = match k.to_lowercase().as_str() {
+                    // URLs may embed userinfo or query credentials.
+                    "endpoint_url" | "name_node" => mask_url(v, false),
+                    "region"
+                    | "role_arn"
+                    | "aws_role_arn"
+                    | "enable_virtual_host_style"
+                    | "disable_list_batch"
+                    | "https"
+                    | "user_name"
+                    | "repo_type"
+                    | "revision" => v.clone(),
+                    _ => mask_string(v),
+                };
+                (k.clone(), v)
+            })
+            .collect();
         Self {
             visited_keys: self.visited_keys.clone(),
             conns,
