@@ -150,6 +150,8 @@ impl TableHookTask {
 /// compact the target table, will do optimize table actions, including:
 ///  - compact blocks
 ///  - re-cluster if the cluster keys are defined
+///
+/// `compact_target` must already be resolved by `execute_compact`.
 async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: &TableHookTarget,
@@ -157,9 +159,6 @@ async fn compact_table(
     lock_opt: LockTableOption,
 ) -> Result<()> {
     let settings = ctx.get_settings();
-    let Some(compact_target) = compact_target.resolve_compact(&ctx).await? else {
-        return Ok(());
-    };
 
     // evict the table from cache
     ctx.evict_table_from_cache(
@@ -233,7 +232,7 @@ async fn compact_table(
                 &compact_target.table,
             )
             .await?;
-        if !resolved_table_id_matches(&compact_target, table.get_id()) {
+        if !resolved_table_id_matches(compact_target, table.get_id()) {
             return Ok(());
         }
         // do recluster.
