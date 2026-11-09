@@ -399,11 +399,16 @@ async fn test_unsupported_alias_materialization_is_rejected() -> Result<()> {
     // return anything) would lose that row once the outer input is materialized below it, and
     // a join whose kept rows come from an uncorrelated input cannot carry the outer columns for
     // every row. Reject these queries instead of returning wrong results.
-    let statements: [(&str, &[&str], &str); 5] = [
+    let statements: [(&str, &[&str], &str); 6] = [
         (
             "count_alias",
             &[],
             "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n=t1.a)",
+        ),
+        (
+            "count_alias_with_non_equality_predicate",
+            &[],
+            "SELECT * FROM (VALUES (0,2),(1,1)) t1(a,b) WHERE EXISTS (SELECT 1 FROM (SELECT count(*) AS n FROM (VALUES (1,1)) t2(a,b) WHERE t2.b=t1.b) s WHERE s.n > t1.b AND s.n=t1.a)",
         ),
         (
             "count_alias_under_window",

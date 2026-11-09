@@ -599,27 +599,45 @@ EvalScalar
 optimized_plan:
 Exchange(Merge)
 └── EvalScalar
-    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#7) AS (#8)]
+    ├── scalars: [a (#0) AS (#0), b (#1) AS (#1), marker (#9) AS (#13)]
     └── Filter
-        ├── filters: [is_true(marker (#7))]
+        ├── filters: [is_true(marker (#9))]
         └── Join(RightMark)
-            ├── build keys: [a (#5), b (#3)]
+            ├── build keys: [a (#7), b (#8)]
             ├── probe keys: [a (#0), b (#1)]
             ├── other filters: []
             ├── Exchange(Broadcast)
             │   └── EvalScalar
-            │       ├── scalars: [b (#3) AS (#3), plus(a (#2), 1) AS (#5), 1 AS (#6)]
-            │       └── Join(Cross)
-            │           ├── build keys: []
-            │           ├── probe keys: []
-            │           ├── other filters: []
-            │           ├── Exchange(Broadcast)
-            │           │   └── ConstantTableScan
-            │           │       ├── columns: [c (#4)]
-            │           │       └── num_rows: [1]
-            │           └── ConstantTableScan
-            │               ├── columns: [a (#2), b (#3)]
-            │               └── num_rows: [2]
+            │       ├── scalars: [1 AS (#6), a (#7) AS (#7), b (#8) AS (#8), b (#10) AS (#11), a (#5) AS (#12)]
+            │       └── EvalScalar
+            │           ├── scalars: [plus(a (#2), 1) AS (#5), a (#7) AS (#7), b (#8) AS (#8), b (#3) AS (#10)]
+            │           └── Join(Cross)
+            │               ├── build keys: []
+            │               ├── probe keys: []
+            │               ├── other filters: []
+            │               ├── Exchange(Broadcast)
+            │               │   └── ConstantTableScan
+            │               │       ├── columns: [c (#4)]
+            │               │       └── num_rows: [1]
+            │               └── Join(Inner)
+            │                   ├── build keys: [b (#3), plus(a (#2), 1)]
+            │                   ├── probe keys: [b (#8), a (#7)]
+            │                   ├── other filters: []
+            │                   ├── Exchange(Broadcast)
+            │                   │   └── ConstantTableScan
+            │                   │       ├── columns: [a (#2), b (#3)]
+            │                   │       └── num_rows: [2]
+            │                   └── Aggregate(Final)
+            │                       ├── group items: [a (#7) AS (#7), b (#8) AS (#8)]
+            │                       ├── aggregate functions: []
+            │                       └── Aggregate(Partial)
+            │                           ├── group items: [a (#7) AS (#7), b (#8) AS (#8)]
+            │                           ├── aggregate functions: []
+            │                           └── Exchange(Hash)
+            │                               ├── Exchange(Hash): keys: [a (#7)]
+            │                               └── ConstantTableScan
+            │                                   ├── columns: [a (#7), b (#8)]
+            │                                   └── num_rows: [2]
             └── ConstantTableScan
                 ├── columns: [a (#0), b (#1)]
                 └── num_rows: [2]

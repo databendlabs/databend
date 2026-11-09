@@ -118,6 +118,13 @@ impl SubqueryDecorrelatorOptimizer {
             .iter()
             .filter_map(|old| derived_columns.resolve(*old))
             .collect::<ColumnSet>();
+        Self::filter_alias_columns_action(subquery, &aliases)
+    }
+
+    fn filter_alias_columns_action(
+        subquery: &SExpr,
+        aliases: &ColumnSet,
+    ) -> Result<FilterAliasAction> {
         if aliases.is_empty() || subquery.arity() == 0 {
             return Ok(FilterAliasAction::Keep);
         }
@@ -155,7 +162,7 @@ impl SubqueryDecorrelatorOptimizer {
         {
             return Ok(FilterAliasAction::Hide(defined_here));
         }
-        Self::check_scalar_aggregate_alias(subquery, &aliases)?;
+        Self::check_scalar_aggregate_alias(subquery, aliases)?;
         Ok(FilterAliasAction::Materialize)
     }
 
@@ -569,10 +576,27 @@ impl SubqueryDecorrelatorOptimizer {
         need_cross_join: bool,
         derived_columns: &DerivedColumnScope,
     ) -> Result<FlattenPlanResult> {
-        let (join_outer_inner, sub_derived_columns) =
+        let (join_outer_inner, sub_derived_columns, aliases) =
             self.join_outer_inner_table(filter, correlated_columns)?;
         let need_cross_join = need_cross_join || join_outer_inner;
         let child_scope = if join_outer_inner {
+            // An incompatible alias type forces materialization too. It must
+            // not bypass the empty-input aggregate checks normally reached
+            // when an alias is reusable and propagated into the child scope.
+            if !aliases.is_empty() {
+                let mut pending = vec![subquery.unary_child()];
+                while let Some(input) = pending.pop() {
+                    if input.derive_relational_prop()?.outer_columns.is_empty() {
+                        continue;
+                    }
+                    if matches!(
+                        Self::filter_alias_columns_action(input, &aliases)?,
+                        FilterAliasAction::Keep
+                    ) {
+                        pending.extend(input.children());
+                    }
+                }
+            }
             DerivedColumnScope::default()
         } else {
             derived_columns.child_scope_for_filter(sub_derived_columns)
