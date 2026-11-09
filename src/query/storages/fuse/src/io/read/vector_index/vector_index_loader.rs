@@ -278,7 +278,7 @@ impl RefineData {
     }
 
     /// Reads the whole FP16 data, checked against its checksum. It is read as the pages
-    /// `read_pages` reads, merged into large storage requests, and kept in the disk cache
+    /// `read_pages` reads, merged into one storage request, and kept in the disk cache
     /// page by page, so that later full reads and TopN refinement of the block read them
     /// from local disk. It is not kept in memory: a full scan would evict the pages that TopN
     /// refinement reuses.
@@ -292,8 +292,14 @@ impl RefineData {
             disk: self.policy.disk,
             memory: None,
         };
+        // The pages are contiguous: the pages missing from the disk cache are read like the
+        // whole component, not limited to `max_range_size`, which a single page may reach.
+        let settings = ReadSettings {
+            max_range_size: settings.max_range_size.max(self.entry.length),
+            ..*settings
+        };
         let storage = DiskCachedStorage::new(self.operator.clone());
-        let data = load_bundle_reads(storage, settings, &self.path, requests, cache).await?;
+        let data = load_bundle_reads(storage, &settings, &self.path, requests, cache).await?;
         self.entry.join_rows(data)
     }
 
