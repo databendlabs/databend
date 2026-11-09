@@ -30,6 +30,7 @@ use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_index::VectorBundleEntry;
@@ -44,6 +45,8 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS;
 use opendal::Operator;
 
+use super::vector_index_bundle_loader::BundleReadCache;
+use super::vector_index_bundle_loader::full_read_settings;
 use super::vector_index_bundle_loader::load_bundle_components;
 use super::vector_index_bundle_loader::load_bundle_footer;
 use super::vector_index_bundle_loader::load_bundle_reads;
@@ -199,9 +202,15 @@ pub(super) async fn load_hnsw(
                 .filter(|name| footer.components.contains_key(name));
             let mut selected = names.to_vec();
             selected.extend(validity.iter().cloned());
-            let mut data =
-                load_bundle_components(operator.clone(), settings, path, &footer, &selected)
-                    .await?;
+            let mut data = load_bundle_components(
+                operator.clone(),
+                settings,
+                path,
+                &footer,
+                &selected,
+                policy,
+            )
+            .await?;
             // The validity was requested last.
             let validity = validity.and_then(|_| data.pop());
             if validity
@@ -269,14 +278,26 @@ impl RefineData {
         Ok(start..start.saturating_add(rows_per_page).min(self.row_count))
     }
 
-    /// Reads the whole FP16 data in one request, checked against its checksum and
-    /// not cached: a full scan would evict the pages that TopN refinement reuses.
-    pub async fn read_all(&self, settings: &ReadSettings) -> Result<Bytes> {
-        let requests = vec![(self.name.clone(), self.entry.component_read())];
-        let mut data =
-            load_bundle_reads(self.operator.clone(), settings, &self.path, requests, None).await?;
-        data.pop()
-            .ok_or_else(|| ErrorCode::Internal("Missing FP16 component read"))
+    /// Reads the whole FP16 data as its pages, in order, checked together against the
+    /// component checksum; the pages are not joined. They are the pages `read_pages` reads,
+    /// merged into one storage request, and kept in the disk cache page by page, so that
+    /// later full reads and TopN refinement of the block read them from local disk. They are
+    /// not kept in memory: a full scan would evict the pages that TopN refinement reuses.
+    pub async fn read_all(&self, settings: &ReadSettings) -> Result<Vec<Bytes>> {
+        let pages = self.row_count.div_ceil(self.rows_per_page as u64) as usize;
+        let requests = (0..pages)
+            .map(|page| self.page_request(page))
+            .collect::<Result<Vec<_>>>()?;
+        let cache = BundleReadCache {
+            kind: CacheKind::of::<vector::Refine>(),
+            disk: self.policy.disk,
+            memory: None,
+        };
+        let settings = full_read_settings(settings, self.entry.length);
+        let storage = DiskCachedStorage::new(self.operator.clone());
+        let pages = load_bundle_reads(storage, &settings, &self.path, requests, cache).await?;
+        self.entry.check_rows(&pages)?;
+        Ok(pages)
     }
 
     /// The read of `page`, named for the cache by its byte range in the file, so
@@ -300,17 +321,16 @@ impl RefineData {
             .iter()
             .map(|&page| self.page_request(page))
             .collect::<Result<Vec<_>>>()?;
-        let cache = FuseCaches::instance()
+        let memory = FuseCaches::instance()
             .vector_refine_pages
             .with_policy(self.policy);
-        load_bundle_reads(
-            self.operator.clone(),
-            settings,
-            &self.path,
-            requests,
-            Some(cache),
-        )
-        .await
+        let cache = BundleReadCache {
+            kind: CacheKind::of::<vector::Refine>(),
+            disk: memory.policy().disk,
+            memory: Some(memory),
+        };
+        let storage = DiskCachedStorage::new(self.operator.clone());
+        load_bundle_reads(storage, settings, &self.path, requests, cache).await
     }
 }
 

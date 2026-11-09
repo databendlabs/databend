@@ -115,6 +115,7 @@ fn test_disk_kinds() {
         "disk_cache_virtual_column_file_meta_data",
         "disk_cache_bloom_index_filter",
         "disk_cache_segment_zone_map_chunk",
+        "disk_cache_vector_index_file",
         "disk_cache_vector_index_refine",
         "disk_cache_inverted_index_lookup",
         "disk_cache_inverted_index_payload",
@@ -126,7 +127,6 @@ fn test_disk_kinds() {
     // and maintenance read.
     for kind in [
         CacheKind::of::<column::Array>(),
-        CacheKind::of::<vector::Index>(),
         CacheKind::of::<segment::Stats>(),
     ] {
         assert!(!kind.on_disk(), "{kind:?}");
