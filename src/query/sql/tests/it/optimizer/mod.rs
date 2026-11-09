@@ -44,6 +44,7 @@ mod push_down_rank_limit_aggregate;
 mod push_down_top_n_union_scan;
 mod selectivity;
 mod selectivity_smoke;
+mod shuffle_keys;
 mod stat_derivation;
 mod type_consistency;
 mod union_all;
