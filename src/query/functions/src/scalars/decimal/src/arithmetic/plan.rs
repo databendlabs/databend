@@ -19,6 +19,12 @@ use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
 
 use super::ArithmeticOp;
+use super::decision;
+use super::decision::AddSubtractPlan;
+use super::decision::Alignment;
+pub(super) use super::decision::BinaryBinding;
+use super::decision::DividePlan;
+use super::decision::MultiplyPlan;
 use super::encoded::EncodedFastPath;
 use super::encoded::Op as EncodedOp;
 use super::kernel::*;
@@ -30,33 +36,14 @@ use crate::decimal::DecimalExt;
 use crate::decimal_to_decimal;
 use crate::other_to_decimal;
 
-/// Sizes of one bound decimal binary operation, derived once by the factory.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct BinaryBinding {
-    /// Argument sizes as declared by the signature.
-    pub(super) original: [DecimalSize; 2],
-    /// Operand sizes the computation is bound to.
-    pub(super) left: DecimalSize,
-    pub(super) right: DecimalSize,
-    pub(super) result: DecimalSize,
-}
-
 impl BinaryBinding {
     pub(super) fn new(op: ArithmeticOp, original: &[DecimalSize; 2]) -> Self {
-        let (left, right, result) = op.result_size(&original[0], &original[1]);
-        debug_assert_eq!(left.precision(), right.precision());
-        Self {
-            original: *original,
-            left,
-            right,
-            result,
+        match op {
+            ArithmeticOp::Plus | ArithmeticOp::Minus => decision::add_subtract_size(original),
+            ArithmeticOp::Multiply => decision::multiply_size(original),
+            ArithmeticOp::Divide => decision::divide_size(original),
+            ArithmeticOp::Modulo => decision::modulo_size(original),
         }
-    }
-
-    /// Both converted operands share one precision, hence one computation
-    /// storage type.
-    pub(super) fn compute(&self) -> DecimalSize {
-        self.left
     }
 }
 
@@ -143,109 +130,6 @@ fn debug_assert_storage(value: &Value<AnyType>, size: DecimalSize) {
         Some(size.data_kind()),
         "decimal operand storage does not match its declared {size:?}"
     );
-}
-
-fn max_precision(kind: DecimalDataKind) -> u8 {
-    match kind {
-        DecimalDataKind::Decimal64 => i64::MAX_PRECISION,
-        DecimalDataKind::Decimal128 => i128::MAX_PRECISION,
-        DecimalDataKind::Decimal256 => i256::MAX_PRECISION,
-    }
-}
-
-/// Which operand is scaled up to the result scale, and by how many digits.
-/// The result scale is the larger operand scale, so the other operand never
-/// moves.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Alignment {
-    Left(u32),
-    Right(u32),
-}
-
-impl Alignment {
-    fn new(binding: &BinaryBinding) -> Option<Self> {
-        let scale = binding.result.scale();
-        match (scale - binding.left.scale(), scale - binding.right.scale()) {
-            (0, 0) => None,
-            (shift, 0) => Some(Self::Left(shift as u32)),
-            (0, shift) => Some(Self::Right(shift as u32)),
-            _ => unreachable!("internal alignment scales both operands of {binding:?}"),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum AddSubtractPlan {
-    /// The unclamped result precision has room for the carry.
-    Native,
-    /// Same-scale operands whose result precision was clamped.
-    Checked,
-    Aligned(Alignment),
-}
-
-impl AddSubtractPlan {
-    pub(super) fn new(binding: &BinaryBinding) -> Self {
-        let [a, b] = binding.original;
-        let result = binding.result;
-        if a.leading_digits().max(b.leading_digits()) + result.scale() < result.precision() {
-            return Self::Native;
-        }
-        match Alignment::new(binding) {
-            None => Self::Checked,
-            Some(alignment) => Self::Aligned(alignment),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum MultiplyPlan {
-    Integral,
-    Rounded(u32),
-    CheckedIntegral,
-    CheckedRounded(u32),
-}
-
-impl MultiplyPlan {
-    pub(super) fn new(binding: &BinaryBinding) -> Self {
-        let [a, b] = binding.original;
-        let result = binding.result;
-        let shift = a.scale() + b.scale() - result.scale();
-        let product = a.precision() + b.precision();
-        let direct =
-            product <= max_precision(result.data_kind()) && product - shift <= result.precision();
-        match (shift as u32, direct) {
-            (0, true) => Self::Integral,
-            (0, false) => Self::CheckedIntegral,
-            (shift, true) => Self::Rounded(shift),
-            (shift, false) => Self::CheckedRounded(shift),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum DividePlan {
-    Native64 { shift: u32 },
-    Native128 { shift: u32 },
-    Checked { shift: u32 },
-}
-
-impl DividePlan {
-    pub(super) fn new(binding: &BinaryBinding) -> Self {
-        let [a, b] = binding.original;
-        let result = binding.result;
-        let shift = b.scale() + result.scale() - a.scale();
-        // An unclamped quotient precision is exactly a.precision + shift, so
-        // only a clamped (38 or 76 digit) result is ever protected.
-        let direct = a.precision() + shift <= result.precision();
-        let shift = shift as u32;
-        if direct && result.data_kind() == DecimalDataKind::Decimal64 {
-            Self::Native64 { shift }
-        } else if direct && binding.compute().data_kind() != DecimalDataKind::Decimal256 {
-            Self::Native128 { shift }
-        } else {
-            Self::Checked { shift }
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -485,6 +369,30 @@ mod tests {
             for op in OPS {
                 let binding = BinaryBinding::new(op, &original);
                 let context = format!("{op:?} {x} {y} -> {binding:?}");
+                // Check the metadata preconditions of the verified decisions at
+                // the real sizing/binding boundary (not an alternate selector).
+                let [a, b] = binding.original;
+                let result = binding.result;
+                let compute = binding.compute();
+                for size in [a, b, result] {
+                    assert!(compute.precision() >= size.precision(), "{context}");
+                }
+                match op {
+                    ArithmeticOp::Plus | ArithmeticOp::Minus => {
+                        assert_eq!(result.scale(), a.scale().max(b.scale()), "{context}");
+                        assert_eq!(
+                            result.scale(),
+                            binding.left.scale().max(binding.right.scale()),
+                            "{context}"
+                        );
+                    }
+                    ArithmeticOp::Multiply => {
+                        assert!(result.scale() >= a.scale().max(b.scale()), "{context}");
+                        assert!(result.scale() <= a.scale() + b.scale(), "{context}");
+                    }
+                    ArithmeticOp::Divide => assert!(result.scale() >= a.scale(), "{context}"),
+                    ArithmeticOp::Modulo => {}
+                }
                 for size in [binding.left, binding.right, binding.result] {
                     DecimalSize::new(size.precision(), size.scale()).expect(&context);
                 }

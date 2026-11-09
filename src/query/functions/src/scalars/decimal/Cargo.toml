@@ -11,9 +11,14 @@ match-template = { workspace = true }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
 uuid = { workspace = true }
+verus_builtin_macros = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]
+
+[lints.rust]
+# Set by the standalone Verus driver when verifying src/arithmetic/verify.rs.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(verus_keep_ghost)"] }
