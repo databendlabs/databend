@@ -46,6 +46,7 @@ use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS;
 use opendal::Operator;
 
 use super::vector_index_bundle_loader::BundleReadCache;
+use super::vector_index_bundle_loader::full_read_settings;
 use super::vector_index_bundle_loader::load_bundle_components;
 use super::vector_index_bundle_loader::load_bundle_footer;
 use super::vector_index_bundle_loader::load_bundle_reads;
@@ -292,12 +293,7 @@ impl RefineData {
             disk: self.policy.disk,
             memory: None,
         };
-        // The pages are contiguous: the pages missing from the disk cache are read like the
-        // whole component, not limited to `max_range_size`, which a single page may reach.
-        let settings = ReadSettings {
-            max_range_size: settings.max_range_size.max(self.entry.length),
-            ..*settings
-        };
+        let settings = full_read_settings(settings, self.entry.length);
         let storage = DiskCachedStorage::new(self.operator.clone());
         let data = load_bundle_reads(storage, &settings, &self.path, requests, cache).await?;
         self.entry.join_rows(data)

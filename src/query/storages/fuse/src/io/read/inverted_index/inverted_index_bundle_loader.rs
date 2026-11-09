@@ -1054,80 +1054,10 @@ mod tests {
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_index::BundleOpenSlice;
-    use opendal::raw::Access;
-    use opendal::raw::Layer;
-    use opendal::raw::LayeredAccess;
-    use opendal::raw::OpList;
-    use opendal::raw::OpRead;
-    use opendal::raw::OpWrite;
-    use opendal::raw::RpDelete;
-    use opendal::raw::RpList;
-    use opendal::raw::RpRead;
-    use opendal::raw::RpWrite;
     use opendal::services::Memory;
 
     use super::*;
-
-    #[derive(Clone, Debug, Default)]
-    struct RecordingLayer {
-        ranges: Arc<Mutex<Vec<Range<u64>>>>,
-    }
-
-    impl<A: Access> Layer<A> for RecordingLayer {
-        type LayeredAccess = RecordingAccessor<A>;
-
-        fn layer(&self, inner: A) -> Self::LayeredAccess {
-            RecordingAccessor {
-                inner,
-                ranges: self.ranges.clone(),
-            }
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    struct RecordingAccessor<A: Access> {
-        inner: A,
-        ranges: Arc<Mutex<Vec<Range<u64>>>>,
-    }
-
-    impl<A: Access> LayeredAccess for RecordingAccessor<A> {
-        type Inner = A;
-        type Reader = A::Reader;
-        type Writer = A::Writer;
-        type Lister = A::Lister;
-        type Deleter = A::Deleter;
-
-        fn inner(&self) -> &Self::Inner {
-            &self.inner
-        }
-
-        async fn read(&self, path: &str, args: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
-            let range = args.range();
-            if let Some(size) = range.size() {
-                self.ranges
-                    .lock()
-                    .unwrap()
-                    .push(range.offset()..range.offset() + size);
-            }
-            self.inner.read(path, args).await
-        }
-
-        async fn write(
-            &self,
-            path: &str,
-            args: OpWrite,
-        ) -> opendal::Result<(RpWrite, Self::Writer)> {
-            self.inner.write(path, args).await
-        }
-
-        async fn list(&self, path: &str, args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
-            self.inner.list(path, args).await
-        }
-
-        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
-            self.inner.delete().await
-        }
-    }
+    use crate::test_utils::RecordingLayer;
 
     /// A cache of its own, so tests do not share process-wide state.
     fn local_cache<T: CachedItem>(kind: CacheKind, capacity: LegacyCapacity) -> MemCache<T> {

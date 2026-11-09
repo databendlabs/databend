@@ -109,6 +109,22 @@ pub async fn load_bundle_footer(
     Ok(footer)
 }
 
+/// The cached bytes a storage read within a full read of a component may span: one request
+/// costs about as much as reading a few MiB from object storage.
+const FULL_READ_MAX_GAP: u64 = 4 << 20;
+
+/// Read settings for the pages of a whole component of `length` bytes. The pages missing
+/// from the disk cache are merged like a read of the whole component: not limited to
+/// `max_range_size`, which a single page may reach, and across up to `FULL_READ_MAX_GAP`
+/// bytes of cached pages.
+pub fn full_read_settings(settings: &ReadSettings, length: u64) -> ReadSettings {
+    ReadSettings {
+        max_gap_size: settings.max_gap_size.max(FULL_READ_MAX_GAP),
+        max_range_size: settings.max_range_size.max(length),
+        ..*settings
+    }
+}
+
 /// The caches a bundle read goes through: the disk cache of object bytes, as `kind` with
 /// `disk`, and the memory cache of decoded bytes, if any.
 pub struct BundleReadCache {
@@ -246,6 +262,7 @@ mod tests {
     use databend_storages_common_index::vector_fp16_data_name;
 
     use super::*;
+    use crate::test_utils::RecordingLayer;
     use crate::test_utils::init_test_globals;
 
     const ROWS: usize = 100;
@@ -263,6 +280,13 @@ mod tests {
         builder.finish()
     }
 
+    /// No merging: one storage request per range.
+    const UNMERGED: ReadSettings = ReadSettings {
+        max_gap_size: 0,
+        max_range_size: 0,
+        parquet_fast_read_bytes: 0,
+    };
+
     async fn read(
         storage: &DiskCachedStorage,
         path: &str,
@@ -270,17 +294,23 @@ mod tests {
         kind: CacheKind,
         disk: CacheFill,
     ) -> Result<Vec<Bytes>> {
-        let settings = ReadSettings {
-            max_gap_size: 0,
-            max_range_size: 0,
-            parquet_fast_read_bytes: 0,
-        };
+        read_with(storage, &UNMERGED, path, requests, kind, disk).await
+    }
+
+    async fn read_with(
+        storage: &DiskCachedStorage,
+        settings: &ReadSettings,
+        path: &str,
+        requests: &[(String, VectorBundlePageRead)],
+        kind: CacheKind,
+        disk: CacheFill,
+    ) -> Result<Vec<Bytes>> {
         let cache = BundleReadCache {
             kind,
             disk,
             memory: None,
         };
-        load_bundle_reads(storage.clone(), &settings, path, requests.to_vec(), cache).await
+        load_bundle_reads(storage.clone(), settings, path, requests.to_vec(), cache).await
     }
 
     /// HNSW components and FP16 pages read without a memory cache are kept in the disk cache
@@ -340,6 +370,61 @@ mod tests {
                 .await
                 .is_err()
         );
+        Ok(())
+    }
+
+    /// A full read of a component with every other page on disk reads the missing pages
+    /// with one storage request; with the default merge settings, each is one request.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_full_read_merges_missing_pages() -> Result<()> {
+        init_test_globals()?;
+        let bundle = bundle()?;
+        let footer = VectorBundleFooter::from_bundle(&bundle)?;
+        let fp16 = &footer.components[&vector_fp16_data_name(0)];
+        let layer = RecordingLayer::default();
+        let ranges = layer.ranges.clone();
+        let operator = Operator::new(opendal::services::Memory::default())?
+            .layer(layer)
+            .finish();
+        let dir = tempfile::TempDir::new()?;
+        let disk = DiskCache::new(dir.path(), 1 << 30, [1 << 20, 1 << 20, 1 << 20], false)?;
+        let storage = DiskCachedStorage::with_disk(operator.clone(), Some(Arc::new(disk)));
+        let refine = CacheKind::of::<vector::Refine>();
+        let pages = (0..ROWS as u64)
+            .step_by(10)
+            .map(|start| {
+                let read = fp16.row_range_read(start..start + 10, ROWS as u64)?;
+                Ok((format!("page {start}"), read))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let cached = pages.iter().step_by(2).cloned().collect::<Vec<_>>();
+        let defaults = ReadSettings {
+            max_gap_size: 48,
+            max_range_size: 512 * 1024,
+            parquet_fast_read_bytes: 0,
+        };
+
+        let mut requests = Vec::new();
+        for (path, settings) in [
+            ("pages/h0.index", defaults),
+            ("full/h0.index", full_read_settings(&defaults, fp16.length)),
+        ] {
+            operator.write(path, bundle.clone()).await?;
+            read(&storage, path, &cached, refine, CacheFill::ReadWrite).await?;
+            ranges.lock().unwrap().clear();
+            let data = read_with(
+                &storage,
+                &settings,
+                path,
+                &pages,
+                refine,
+                CacheFill::ReadWrite,
+            )
+            .await?;
+            assert_eq!(fp16.join_rows(data)?.len() as u64, fp16.raw_length);
+            requests.push(ranges.lock().unwrap().len());
+        }
+        assert_eq!(requests, [pages.len() - cached.len(), 1]);
         Ok(())
     }
 }
