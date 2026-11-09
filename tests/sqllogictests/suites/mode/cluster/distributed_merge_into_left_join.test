@@ -29,12 +29,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 6000 12000
@@ -53,12 +53,12 @@ create or replace table s (id bigint not null, game bigint not null, room bigint
 statement ok
 insert into s select number, number % 16, number % 1000, number * 10 from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id and t.game = s.game and t.room = s.room when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, game, room, val, note) values (s.id, s.game, s.room, s.val, 'new');
 ----
 12120 5880
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18120 18120 18000 162705000 18120 1620267000 19441224130000 120 5880 12120
@@ -77,12 +77,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select if(number % 7 = 0, null, number), number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 13886 4114
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 19886 16114 16114 142964580 19886 1625565861 16677483593730 1886 4114 13886
@@ -101,12 +101,12 @@ create or replace table s (id bigint not null, val bigint not null, note string)
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 13200 4800
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 19200 18000 18000 161991000 19200 1623507000 19438380030000 1200 4800 13200
@@ -125,17 +125,17 @@ create or replace table s (k string null, val bigint);
 statement ok
 insert into s select if(number % 7 = 0, null, if(number = 1, '', concat('k', number::string))), number * 10 from numbers(18000);
 
-query ??
+query II
 merge into t using (select *, val / 10 as src from s) as s on t.k = s.k when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (k, id, val, note) values (s.k, s.src::bigint, s.val, 'new');
 ----
 13886 4114
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 19886 19886 15943 155305723 19886 1625565861 18473778499155 1886 4114 13886
 
-query ???
+query III
 select count(k), count(distinct k), sum(length(k)) from t;
 ----
 16114 16114 86526
@@ -154,12 +154,12 @@ create or replace table s (k string not null, id bigint not null, val bigint);
 statement ok
 insert into s select concat('g', (number % 8)::string), number, number * 10 from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.k = s.k and t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (k, id, val, note) values (s.k, s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 6000 12000
@@ -178,12 +178,12 @@ create or replace table s (id smallint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(6000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 4000 2000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 6000 6000 6000 17997000 6000 179970000 719820010000 0 2000 4000
@@ -202,12 +202,12 @@ create or replace table s (d date, amt decimal(38, 2), id bigint, val bigint);
 statement ok
 insert into s select to_date(number), number::decimal(38, 2) / 100, number, number * 10 from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.d = s.d and t.amt = s.amt when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (d, amt, id, val, note) values (s.d, s.amt, s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 6000 12000
@@ -226,12 +226,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ???
+query III
 merge into t using s on t.id = s.id when matched and s.val % 20 = 0 then update set t.val = s.val, t.note = 'upd' when matched and s.val % 30 = 0 then delete when not matched and s.id % 5 <> 0 then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 9600 6000 0
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 15600 15600 15600 136794000 15600 1367940000 16127280080000 0 6000 9600
@@ -250,12 +250,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then delete when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 12000 12000 12000 125997000 12000 1259970000 16559099990000 0 0 12000
@@ -274,12 +274,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ?
+query I
 merge into t using s on t.id = s.id when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1277967000 16703063992000 6000 0 12000
@@ -298,12 +298,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ?
+query I
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd';
 ----
 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 6000 6000 6000 35994000 6000 359940000 2879280040000 0 6000 0
@@ -322,12 +322,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, if(number % 4 = 0, number, number * 10), 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id and t.val < s.val when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 15000 3000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 21000 21000 18000 179985000 21000 1282482000 15281729934000 3000 3000 15000
@@ -346,12 +346,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, if(number % 3 = 0, null, number * 10), 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = t.val + s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 12000 1092000000 13055999936000 0 6000 12000
@@ -373,7 +373,7 @@ insert into s select number, number * 10, 'src' from numbers(18000) union all se
 statement error 4001
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 6000 6000 6000 35994000 6000 17997000 143964002000 6000 0 0
@@ -392,12 +392,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000) union all select 15, -1, 'src';
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12001 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18001 18001 18000 161991015 18001 1619909999 19438380029985 0 6000 12001
@@ -419,12 +419,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6001
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18001 18001 18000 161991014 18001 1619910140 19438380031960 0 6001 12000
@@ -440,12 +440,12 @@ insert into t select number * 2, number, 'old' from numbers(6000);
 statement ok
 create or replace table s (id bigint, val bigint, note string);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 0 0
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 6000 6000 6000 35994000 6000 17997000 143964002000 6000 0 0
@@ -461,12 +461,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 18000 0
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 0 18000
@@ -485,12 +485,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number * 2 + 1, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 18000 0
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 24000 24000 24000 359994000 24000 1637907000 39022343972000 6000 0 18000
@@ -509,12 +509,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number * 2, number * 10, 'src' from numbers(6000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 0 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 6000 6000 6000 35994000 6000 179970000 1439640020000 0 6000 0
@@ -533,12 +533,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(1000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 900 100
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 1000 1000 1000 499500 1000 4995000 3328335000 0 100 900
@@ -557,12 +557,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(6000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 3000 3000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 21000 21000 21000 332982000 21000 337462500 4589505015000 15000 3000 3000
@@ -602,22 +602,22 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 6000 12000
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 0 18000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 18000 0
@@ -636,12 +636,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number % 9000, number, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using (select id, sum(val)::bigint as val from s group by id) as s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 4500 4500
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 10500 10500 10500 56244000 10500 169865250 933612753500 1500 4500 4500
@@ -666,12 +666,12 @@ create or replace table dim (k bigint, v bigint);
 statement ok
 insert into dim select number % 10, number from numbers(20);
 
-query ??
+query II
 merge into t using (select a.id, a.val + d.v as val from s as a left join dim as d on a.id % 10 = d.k qualify row_number() over (partition by a.id order by d.v) = 1) as s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619991000 19439109138000 0 6000 12000
@@ -693,12 +693,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update * when not matched then insert *;
 ----
 12000 6000
 
-query ??????
+query IIIIII
 select count(*), count(distinct id), sum(id), sum(val), count_if(note = 'src'), count_if(note = 'old') from t;
 ----
 18000 18000 161991000 1619910000 18000 0
@@ -717,12 +717,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 6000 12000
@@ -744,12 +744,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 6000 12000
@@ -771,12 +771,12 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 6000 12000
@@ -795,17 +795,17 @@ create or replace table s (id bigint, val bigint, pad string);
 statement ok
 insert into s select number, number * 10, repeat('y', 300) from numbers(6000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note, pad) values (s.id, s.val, 'new', s.pad);
 ----
 4000 2000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 6000 6000 6000 17997000 6000 179970000 719820010000 0 2000 4000
 
-query ???
+query III
 select sum(length(pad)), count_if(pad = repeat('x', 500)), count_if(pad = repeat('y', 300)) from t;
 ----
 2200000 2000 4000
@@ -824,17 +824,17 @@ create or replace table s (id bigint, val bigint, note string);
 statement ok
 insert into s select number, number * 10, 'src' from numbers(18000);
 
-query ??
+query II
 merge into t using s on t.id = s.id when matched then update set t.val = s.val, t.note = 'upd' when not matched then insert (id, val, note) values (s.id, s.val, 'new');
 ----
 12000 6000
 
-query ??????????
+query IIIIIIIIII
 select count(*), count(id), count(distinct id), sum(id), count(val), sum(val), sum(id * val), count_if(note = 'old'), count_if(note = 'upd'), count_if(note = 'new') from t;
 ----
 18000 18000 18000 161991000 18000 1619910000 19438380030000 0 6000 12000
 
-query ???
+query III
 select sum(d), count_if(d = 42), count_if(d = 7) from t;
 ----
 546000 12000 6000
