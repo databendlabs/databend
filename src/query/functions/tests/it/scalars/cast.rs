@@ -83,32 +83,22 @@ fn test_runtime_try_scalar_errors_broadcast_null() {
         for rows in [0, 1, 2, 5] {
             let block = DataBlock::new(vec![], rows);
             let ctx = FunctionContext::default();
-            let evaluator = Evaluator::new(&block, &ctx, &BUILTIN_FUNCTIONS);
-            let result = evaluator.run(&expr).unwrap();
-            for row in 0..rows {
-                assert_eq!(
-                    result.index(row),
-                    Some(ScalarRef::Null),
-                    "{name}, row={row}"
-                );
-            }
-            // Row zero is inactive, but the scalar call still fails for every active row.
-            let validity = Bitmap::from_iter((0..rows).map(|row| row % 2 == 1));
-            let result = evaluator
-                .partial_run(
-                    &expr,
-                    Some(validity.clone()),
-                    &mut Default::default(),
-                    false,
-                )
-                .unwrap();
-            for (row, active) in validity.iter().enumerate() {
-                if active {
-                    assert_eq!(
-                        result.index(row),
-                        Some(ScalarRef::Null),
-                        "{name}, row={row}"
-                    );
+            // Also exercise partial evaluation with row zero inactive.
+            for validity in [
+                None,
+                Some(Bitmap::from_iter((0..rows).map(|row| row % 2 == 1))),
+            ] {
+                let result = Evaluator::new(&block, &ctx, &BUILTIN_FUNCTIONS)
+                    .partial_run(&expr, validity.clone(), &mut Default::default(), false)
+                    .unwrap();
+                for row in 0..rows {
+                    if validity.as_ref().is_none_or(|mask| mask.get_bit(row)) {
+                        assert_eq!(
+                            result.index(row),
+                            Some(ScalarRef::Null),
+                            "{name}, row={row}"
+                        );
+                    }
                 }
             }
         }

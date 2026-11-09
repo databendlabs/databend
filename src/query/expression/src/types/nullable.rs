@@ -341,6 +341,7 @@ impl<T: AccessType> NullableColumn<T> {
     /// Constructs a nullable column from a non-nullable inner column.
     /// Use `Column::wrap_nullable` for dynamically typed columns that may already be nullable.
     pub fn new(column: T::Column, validity: Bitmap) -> Self {
+        // len() reports the validity length; unchecked access must also be valid in column.
         assert_eq!(T::column_len(&column), validity.len());
         assert!(
             !T::column_is_nullable_or_null(&column),
@@ -363,7 +364,8 @@ impl<T: AccessType> NullableColumn<T> {
 
     /// Intersects the row validity without changing the inner column or adding a layer.
     pub fn merge_validity(&mut self, validity: &Bitmap) {
-        assert_eq!(self.len(), validity.len());
+        // Bitmap AND below also rejects unequal lengths in release builds.
+        debug_assert_eq!(self.len(), validity.len());
         self.validity = &self.validity & validity;
     }
 

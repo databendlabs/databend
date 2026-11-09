@@ -374,67 +374,46 @@ fn test_convert_types() {
 }
 
 #[test]
-fn test_wrap_nullable_non_nullable() {
+fn test_wrap_nullable() {
     for len in [0, 4] {
         let column = Int64Type::from_data(vec![1; len]);
-        for validity in [
-            None,
-            Some(Bitmap::new_constant(true, len)),
-            Some(Bitmap::new_constant(false, len)),
-            Some((0..len).map(|i| i % 2 == 0).collect::<Bitmap>()),
-        ] {
-            let wrapped = column.clone().wrap_nullable(validity.clone());
-            assert_eq!(wrapped.data_type(), column.data_type().wrap_nullable());
-            let Column::Nullable(wrapped) = wrapped else {
-                panic!("expected nullable column");
-            };
-            assert_eq!(wrapped.column(), &column);
-            assert_eq!(
-                wrapped.validity(),
-                &validity.unwrap_or_else(|| Bitmap::new_constant(true, len)),
-            );
-        }
-    }
-}
-
-#[test]
-fn test_wrap_nullable_merges_validity() {
-    for len in [0, 4] {
-        let column = Int64Type::from_data(vec![1; len]);
-        let bitmaps = [
+        let masks = [
             Bitmap::new_constant(true, len),
             Bitmap::new_constant(false, len),
             (0..len).map(|i| i % 2 == 0).collect::<Bitmap>(),
             (0..len).map(|i| i < 2).collect::<Bitmap>(),
         ];
-        for inner in &bitmaps {
-            let nullable = column.clone().wrap_nullable(Some(inner.clone()));
-            assert_eq!(nullable.clone().wrap_nullable(None), nullable);
-            for outer in &bitmaps {
-                let wrapped = nullable.clone().wrap_nullable(Some(outer.clone()));
-                assert_eq!(wrapped.data_type(), nullable.data_type());
-                // Wrapping repeatedly must not add nullable layers or revive null rows.
-                assert_eq!(wrapped.clone().wrap_nullable(Some(outer.clone())), wrapped);
-                let Column::Nullable(wrapped) = wrapped else {
-                    panic!("expected nullable column");
-                };
-                assert_eq!(wrapped.column(), &column);
-                assert_eq!(wrapped.validity(), &(inner & outer));
+        let inputs = std::iter::once(column.clone())
+            .chain(
+                masks
+                    .iter()
+                    .map(|mask| column.clone().wrap_nullable(Some(mask.clone()))),
+            )
+            .chain(std::iter::once(Column::Null { len }));
+        for input in inputs {
+            for validity in std::iter::once(None).chain(masks.iter().cloned().map(Some)) {
+                let wrapped = input.clone().wrap_nullable(validity.clone());
+                // Repeated wrapping must not add layers or revive NULL rows.
+                assert_eq!(wrapped.clone().wrap_nullable(None), wrapped);
+                assert_eq!(wrapped.clone().wrap_nullable(validity.clone()), wrapped);
+                match input {
+                    Column::Null { .. } => assert_eq!(wrapped, input),
+                    _ => {
+                        assert_eq!(wrapped.data_type(), input.data_type().wrap_nullable());
+                        let inner = match &input {
+                            Column::Nullable(c) => c.validity().clone(),
+                            _ => Bitmap::new_constant(true, len),
+                        };
+                        let expected =
+                            validity.map_or_else(|| inner.clone(), |outer| &inner & &outer);
+                        let Column::Nullable(wrapped) = wrapped else {
+                            panic!("expected nullable column");
+                        };
+                        assert_eq!(wrapped.column(), &column);
+                        assert_eq!(wrapped.validity(), &expected);
+                    }
+                }
             }
-        }
-    }
-}
-
-#[test]
-fn test_wrap_nullable_null() {
-    for len in [0, 4] {
-        let column = Column::Null { len };
-        for validity in [
-            None,
-            Some(Bitmap::new_constant(true, len)),
-            Some(Bitmap::new_constant(false, len)),
-        ] {
-            assert_eq!(column.clone().wrap_nullable(validity), column);
         }
     }
 }
