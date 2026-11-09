@@ -793,7 +793,6 @@ impl SubqueryDecorrelatorOptimizer {
                     join_type: join.join_type,
                     marker_index: join.marker_index,
                     from_correlated_subquery: false,
-                    need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
