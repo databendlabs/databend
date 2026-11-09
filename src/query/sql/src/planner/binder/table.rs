@@ -189,6 +189,7 @@ impl Binder {
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: bind_context.cte_context.clone(),
+            recursive_cte_id: bind_context.recursive_cte_id,
             definition_scope: bind_context.definition_scope.clone(),
             in_grouping: false,
             binding_views: bind_context.binding_views.clone(),

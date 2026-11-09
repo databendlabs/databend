@@ -69,6 +69,67 @@ async fn test_window_input_reuse_preserves_nondeterministic_expressions() -> Res
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_recursive_cte_subquery() -> Result<()> {
+    run_binder_cases(
+        "binder_recursive_cte_subquery.txt",
+        &[
+            SqlTestCase {
+                name: "recursive_reference_in_filter",
+                description: "IN subqueries must scan the active recursive CTE, not expand it again.",
+                setup_sqls: &[],
+                sql: "WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL \
+                      SELECT m.n + 1 FROM m WHERE m.n < 3 AND m.n IN (SELECT n FROM m)) \
+                      SELECT count(*) FROM m",
+            },
+            SqlTestCase {
+                name: "recursive_reference_in_projection",
+                description: "Aliased recursive references in CASE/NOT IN inherit the recursive scope.",
+                setup_sqls: &[],
+                sql: "WITH RECURSIVE m(n, v) AS (SELECT 0, 1::BIGINT UNION ALL \
+                      SELECT m.n + 1, CASE WHEN m.v + 1 NOT IN (SELECT m2.v FROM m m2) \
+                      THEN m.v + 2 ELSE m.v + 1 END FROM m WHERE m.n < 3) \
+                      SELECT count(*), max(v) FROM m",
+            },
+            SqlTestCase {
+                name: "recursive_reference_in_derived_table",
+                description: "Derived tables inside scalar subqueries preserve the recursive scope.",
+                setup_sqls: &[],
+                sql: "WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL \
+                      SELECT x.n + 1 FROM (SELECT n FROM m) x WHERE x.n < 3 AND x.n IN \
+                      (SELECT n FROM (SELECT n FROM m) nested)) SELECT count(*) FROM m",
+            },
+            SqlTestCase {
+                name: "recursive_reference_in_cte",
+                description: "A non-recursive CTE inside a scalar subquery can scan the recursive step.",
+                setup_sqls: &[],
+                sql: "WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL \
+                      SELECT n + 1 FROM m WHERE n < 3 AND n IN \
+                      (WITH q AS (SELECT n FROM m) SELECT n FROM q)) SELECT count(*) FROM m",
+            },
+            SqlTestCase {
+                name: "independent_recursive_cte_in_subquery",
+                description: "An independent recursive CTE must bind its own definition and restore the outer scope.",
+                setup_sqls: &[],
+                sql: "WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL \
+                      SELECT n + 1 FROM m WHERE n < 3 AND \
+                      (WITH RECURSIVE other(x) AS (SELECT 1 UNION ALL \
+                      SELECT x + 1 FROM other WHERE x < 2) SELECT max(x) FROM other) = 2 \
+                      AND n IN (SELECT n FROM m)) SELECT count(*) FROM m",
+            },
+            SqlTestCase {
+                name: "recursive_cte_reused_in_main_query",
+                description: "Leaving a recursive member must restore the main query's binding scope.",
+                setup_sqls: &[],
+                sql: "WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL \
+                      SELECT n + 1 FROM m WHERE n < 3 AND n IN (SELECT n FROM m)) \
+                      SELECT (SELECT count(*) FROM m), count(*) FROM m",
+            },
+        ],
+    )
+    .await
+}
+
 const TEST_UDAF_SQL: &str = r#"
 CREATE OR REPLACE FUNCTION weighted_avg (a INT, b INT) STATE { sum INT, weight INT } RETURNS FLOAT
 LANGUAGE javascript AS $$

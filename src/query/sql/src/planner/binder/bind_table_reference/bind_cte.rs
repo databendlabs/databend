@@ -211,6 +211,7 @@ impl Binder {
         }
         let mut cte_bind_context = BindContext {
             binding_depth: bind_context.next_depth()?,
+            recursive_cte_id: bind_context.recursive_cte_id,
             cte_context: CteContext {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,

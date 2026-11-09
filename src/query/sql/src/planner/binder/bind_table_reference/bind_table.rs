@@ -141,11 +141,8 @@ impl Binder {
                 cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
             } else {
                 return if cte_info.recursive {
-                    if self
-                        .bind_recursive_cte
-                        .as_ref()
-                        .map(|name| name == &table_name)
-                        .unwrap_or(false)
+                    if cte_info.logical_recursive_cte_id.is_some()
+                        && bind_context.recursive_cte_id == cte_info.logical_recursive_cte_id
                     {
                         self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
                     } else {
@@ -367,6 +364,7 @@ impl Binder {
                     // CTEs do not leak into sibling/parent contexts.
                     new_bind_context.binding_views = bind_context.binding_views.clone();
                     new_bind_context.cte_context = bind_context.cte_context.clone();
+                    new_bind_context.recursive_cte_id = bind_context.recursive_cte_id;
                     new_bind_context.definition_scope = bind_context.definition_scope.clone();
                     new_bind_context.binding_depth = bind_context.next_depth()?;
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));

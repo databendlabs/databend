@@ -1,0 +1,120 @@
+# Regression for #21003: a recursive reference in a scalar subquery must scan
+# the current recursive step instead of recursively expanding the CTE definition.
+
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT m.n + 1 FROM m WHERE m.n < 3 AND m.n IN (SELECT n FROM m)
+)
+SELECT count(*) FROM m;
+----
+4
+
+query II
+WITH RECURSIVE m(n, v) AS (
+    SELECT 0, 1::BIGINT
+    UNION ALL
+    SELECT m.n + 1,
+           CASE WHEN m.v + 1 NOT IN (SELECT m2.v FROM m m2) THEN m.v + 2 ELSE m.v + 1 END
+    FROM m WHERE m.n < 3
+)
+SELECT count(*), max(v) FROM m;
+----
+4 7
+
+# Multiple rows in a generation must be visible to every recursive reference.
+query II
+WITH RECURSIVE m(n) AS (
+    SELECT n FROM (VALUES (0), (10)) input(n)
+    UNION ALL
+    SELECT m.n + 1 FROM m
+    WHERE m.n % 10 < 3 AND m.n IN (SELECT m2.n FROM m m2)
+)
+SELECT count(*), sum(n) FROM m;
+----
+8 52
+
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT m.n + 1 FROM m
+    WHERE m.n < 3 AND EXISTS (SELECT 1 FROM m m2 WHERE m2.n = m.n)
+)
+SELECT count(*) FROM m;
+----
+4
+
+# A derived table inside the scalar subquery must retain the recursive scope.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT x.n + 1 FROM (SELECT n FROM m) x WHERE x.n < 3 AND x.n IN (
+        SELECT n FROM (SELECT n FROM m) nested
+    )
+)
+SELECT count(*) FROM m;
+----
+4
+
+# CTE expansion inside a scalar subquery must also retain the recursive scope.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND n IN (
+        WITH q AS (SELECT n FROM m) SELECT n FROM q
+    )
+)
+SELECT count(*) FROM m;
+----
+4
+
+# Independent recursion in a subquery must not consume the outer CTE's scope.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND (
+        WITH RECURSIVE other(x) AS (
+            SELECT 1 UNION ALL SELECT x + 1 FROM other WHERE x < 2
+        )
+        SELECT max(x) FROM other
+    ) = 2 AND n IN (SELECT n FROM m)
+)
+SELECT count(*) FROM m;
+----
+4
+
+# Binding a view must restore the caller's recursive scope for nested subqueries.
+statement ok
+CREATE OR REPLACE VIEW r_cte_subquery_scope_view AS SELECT 0 AS n;
+
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND EXISTS (
+        SELECT 1 FROM r_cte_subquery_scope_view v
+        WHERE v.n IN (SELECT n FROM m)
+    )
+)
+SELECT count(*) FROM m;
+----
+2
+
+statement ok
+DROP VIEW r_cte_subquery_scope_view;
+
+# References outside the recursive member must still expand the full CTE.
+query II
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND n IN (SELECT n FROM m)
+)
+SELECT (SELECT count(*) FROM m), count(*) FROM m;
+----
+4 4
