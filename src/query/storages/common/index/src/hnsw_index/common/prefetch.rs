@@ -175,6 +175,41 @@ fn prefetch_read_l2(ptr: *const u8) {
     }
 }
 
+/// Best-effort prefetch (temporal, all cache levels) of every cache line
+/// spanning `bytes`, without the [`NEAR_BYTES`] cap of [`prefetch_slice`].
+///
+/// The HNSW build hints each original vector whole, one vector ahead of the one
+/// it scores: the setup its build time was measured with. On aarch64 the
+/// `prfm pldl1keep` is also marked `readonly`, so the compiler keeps values in
+/// registers across it.
+#[inline(always)]
+pub fn prefetch_whole_slice(bytes: &[u8]) {
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    {
+        let ptr = bytes.as_ptr();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            // SAFETY: the computed address lies within a valid borrowed slice.
+            let line = unsafe { ptr.add(offset) };
+            #[cfg(target_arch = "x86_64")]
+            prefetch_read(line);
+            // SAFETY: `prfm` is a non-faulting hint for any address; it does not
+            // write memory, touch the stack, or clobber flags.
+            #[cfg(target_arch = "aarch64")]
+            unsafe {
+                core::arch::asm!(
+                    "prfm pldl1keep, [{ptr}]",
+                    ptr = in(reg) line,
+                    options(nostack, preserves_flags, readonly),
+                )
+            }
+            offset += CACHE_LINE;
+        }
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    let _ = bytes;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,19 +280,21 @@ mod tests {
         }
     }
 
+    /// The windows of 768-dimension vectors and others, and hints over empty,
+    /// short, unaligned and long slices.
     #[test]
-    fn test_prefetch_windows() {
+    fn test_prefetch_windows_and_slices() {
         // 772-byte vectors (768 dimensions): 1 ahead into L1, 5 into L2.
         assert_eq!(prefetch_windows(772), (1, 5));
         assert_eq!(prefetch_windows(36), (8, 0));
         assert_eq!(prefetch_windows(4096), (1, 3));
         assert_eq!(prefetch_windows(0), (8, 0));
 
-        // Empty, short, unaligned and long slices.
         let data = vec![0u8; 3 * NEAR_BYTES];
         for range in [0..0, 0..1, 3..70, 0..data.len()] {
             prefetch_slice(&data[range.clone()]);
-            prefetch_slice_l2(&data[range]);
+            prefetch_slice_l2(&data[range.clone()]);
+            prefetch_whole_slice(&data[range]);
         }
     }
 }

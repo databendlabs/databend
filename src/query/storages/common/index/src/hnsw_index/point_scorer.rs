@@ -20,7 +20,7 @@ use databend_common_expression::types::VectorScalarRef;
 
 use crate::DistanceType;
 use crate::hnsw_index::common::prefetch::MAX_UNPREFETCHED_BATCH;
-use crate::hnsw_index::common::prefetch::prefetch_slice;
+use crate::hnsw_index::common::prefetch::prefetch_whole_slice;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoreType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
@@ -64,7 +64,8 @@ impl RawScorer<'_> {
     #[inline]
     pub fn prefetch(&self, point_id: PointOffsetType) {
         match self {
-            // The build scores the original vectors, which do not fit in the cache.
+            // The build scores the original vectors, which do not fit in the
+            // cache. They are hinted whole.
             RawScorer::Original(original) => {
                 let bytes = match unsafe { original.column.index_unchecked(point_id as usize) } {
                     // SAFETY: `F32` and `i8` have no padding, so the bytes of the
@@ -80,7 +81,7 @@ impl RawScorer<'_> {
                     },
                     _ => return,
                 };
-                prefetch_slice(bytes);
+                prefetch_whole_slice(bytes);
             }
             RawScorer::Quantized(quantized) => quantized.vector.prefetch(point_id),
         }
