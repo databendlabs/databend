@@ -19,15 +19,15 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorScalarRef;
 
 use crate::DistanceType;
+use crate::hnsw_index::common::prefetch::MAX_UNPREFETCHED_BATCH;
+use crate::hnsw_index::common::prefetch::prefetch_slice;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoreType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
-use crate::hnsw_index::common::utils::MAX_UNPREFETCHED_BATCH;
 use crate::hnsw_index::common::utils::is_dense_batch;
 use crate::hnsw_index::quantization::EncodedQueryU8;
 use crate::hnsw_index::quantization::EncodedVectorsU8;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
-use crate::hnsw_index::spaces::prefetch::prefetch_slice;
 use crate::hnsw_index::spaces::simple::similarity;
 
 pub enum RawScorer<'a> {
@@ -64,12 +64,23 @@ impl RawScorer<'_> {
     #[inline]
     pub fn prefetch(&self, point_id: PointOffsetType) {
         match self {
+            // The build scores the original vectors, which do not fit in the cache.
             RawScorer::Original(original) => {
-                match unsafe { original.column.index_unchecked(point_id as usize) } {
-                    ScalarRef::Vector(VectorScalarRef::Float32(values)) => prefetch_slice(values),
-                    ScalarRef::Vector(VectorScalarRef::Int8(values)) => prefetch_slice(values),
-                    _ => {}
-                }
+                let bytes = match unsafe { original.column.index_unchecked(point_id as usize) } {
+                    // SAFETY: `F32` and `i8` have no padding, so the bytes of the
+                    // vector are initialized and live as long as `values`.
+                    ScalarRef::Vector(VectorScalarRef::Float32(values)) => unsafe {
+                        std::slice::from_raw_parts(
+                            values.as_ptr().cast::<u8>(),
+                            std::mem::size_of_val(values),
+                        )
+                    },
+                    ScalarRef::Vector(VectorScalarRef::Int8(values)) => unsafe {
+                        std::slice::from_raw_parts(values.as_ptr().cast::<u8>(), values.len())
+                    },
+                    _ => return,
+                };
+                prefetch_slice(bytes);
             }
             RawScorer::Quantized(quantized) => quantized.vector.prefetch(point_id),
         }
@@ -87,8 +98,8 @@ impl RawScorer<'_> {
     /// `None` when prefetch does not help.
     pub fn prefetch_windows(&self) -> Option<(usize, usize)> {
         match self {
-            // The build scores the original vectors, which do not fit in the
-            // cache: load the next one while the current one is scored.
+            // The next original vector is hinted into L1 while the current one
+            // is scored, with no L2 window.
             RawScorer::Original(_) => Some((1, 0)),
             RawScorer::Quantized(quantized) => quantized.vector.prefetch_windows(),
         }
@@ -213,6 +224,8 @@ fn calculate_score(distance_type: DistanceType, lhs: ScalarRef, rhs: ScalarRef) 
 mod tests {
     use std::sync::atomic::AtomicBool;
 
+    use databend_common_expression::types::VectorColumn;
+
     use super::*;
     use crate::hnsw_index::quantization::VectorParameters;
 
@@ -258,5 +271,37 @@ mod tests {
             assert_eq!(scorer.score_points(&mut ids, limit), expected.as_slice());
         }
         Ok(())
+    }
+
+    /// The build scores original vectors through the same prefetch loop, and
+    /// every point still gets the score it has alone.
+    #[test]
+    fn test_score_points_original_with_prefetch() {
+        let (dim, count) = (768, 600);
+        let values: Vec<F32> = (0..dim * count)
+            .map(|i| F32::from(((i * 37 % 101) as f32 - 50.0) / 25.0))
+            .collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
+        for distance_type in [DistanceType::Dot, DistanceType::L1, DistanceType::L2] {
+            let raw_scorer = RawScorer::Original(OriginalRawScorer {
+                distance_type,
+                index: 7,
+                column: &column,
+            });
+            assert_eq!(raw_scorer.prefetch_windows(), Some((1, 0)));
+            let mut scorer = FilteredScorer::new(&raw_scorer);
+            for (len, limit) in [(0, 0), (2, 0), (3, 0), (40, 0), (40, 16), (10, 32)] {
+                let mut ids: Vec<u32> = (0..len).map(|i| (i * 977 % count) as u32).collect();
+                let expected: Vec<ScoredPointOffset> = ids
+                    .iter()
+                    .take(if limit == 0 { len } else { limit })
+                    .map(|&idx| ScoredPointOffset {
+                        idx,
+                        score: raw_scorer.score_point(idx),
+                    })
+                    .collect();
+                assert_eq!(scorer.score_points(&mut ids, limit), expected.as_slice());
+            }
+        }
     }
 }
