@@ -1,0 +1,77 @@
+# Keep the same results through Cascades and its distributed fallback.
+# run-with-settings: enable_cbo=0
+# run-with-settings: disable_join_reorder=1
+
+statement ok
+CREATE TABLE mark_rows (k INT)
+
+statement ok
+CREATE TABLE mark_values (k INT)
+
+# Duplicate output rows must survive once each, not once per worker.
+statement ok
+INSERT INTO mark_rows VALUES (1), (2), (2), (4)
+
+# Separate blocks put matches and NULL knowledge on independent scan tasks.
+statement ok
+INSERT INTO mark_values VALUES (2)
+
+statement ok
+INSERT INTO mark_values VALUES (NULL)
+
+query IBB rowsort
+SELECT k, k IN (SELECT k FROM mark_values), k NOT IN (SELECT k FROM mark_values) FROM mark_rows
+----
+1 NULL NULL
+2 1 0
+2 1 0
+4 NULL NULL
+
+# All-NULL is different from empty, even though neither has non-NULL matches.
+statement ok
+DELETE FROM mark_values WHERE k IS NOT NULL
+
+query IBB rowsort
+SELECT k, k IN (SELECT k FROM mark_values), k NOT IN (SELECT k FROM mark_values) FROM mark_rows
+----
+1 NULL NULL
+2 NULL NULL
+2 NULL NULL
+4 NULL NULL
+
+statement ok
+TRUNCATE TABLE mark_values
+
+query IBB rowsort
+SELECT k, k IN (SELECT k FROM mark_values), k NOT IN (SELECT k FROM mark_values) FROM mark_rows
+----
+1 0 1
+2 0 1
+2 0 1
+4 0 1
+
+# A nullable schema alone must not make a miss evaluate to NULL.
+statement ok
+INSERT INTO mark_values VALUES (2), (2)
+
+query IBB rowsort
+SELECT k, k IN (SELECT k FROM mark_values), k NOT IN (SELECT k FROM mark_values) FROM mark_rows
+----
+1 0 1
+2 1 0
+2 1 0
+4 0 1
+
+statement ok
+TRUNCATE TABLE mark_rows
+
+query I
+SELECT count() FROM (SELECT k IN (SELECT k FROM mark_values) AS present FROM mark_rows)
+----
+0
+
+statement ok
+DROP TABLE mark_rows
+
+statement ok
+DROP TABLE mark_values

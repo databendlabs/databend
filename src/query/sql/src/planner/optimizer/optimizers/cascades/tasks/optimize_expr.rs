@@ -373,6 +373,15 @@ impl OptimizeExprTask {
         let rel_expr = RelExpr::with_opt_context(m_expr, &optimizer.memo, &children_best_props);
         let physical_prop = rel_expr.derive_physical_prop()?;
 
+        // Exchanges repartition copies; they cannot turn replicated output into
+        // single-production output. Reject this candidate and let the group search
+        // select an implementation with a concrete non-broadcast distribution.
+        if self.required_prop.distribution == Distribution::NonBroadcast
+            && !self.required_prop.satisfied_by(&physical_prop)
+        {
+            return Ok(OptimizeExprEvent::OptimizedSelf);
+        }
+
         let should_enforce = {
             let mut should_enforce = true;
 
@@ -380,7 +389,7 @@ impl OptimizeExprTask {
                 && physical_prop.distribution == Distribution::Serial
                 && !matches!(
                     self.required_prop.distribution,
-                    Distribution::Serial | Distribution::Any
+                    Distribution::Serial | Distribution::Any | Distribution::NonBroadcast
                 )
             {
                 should_enforce = false;
@@ -432,5 +441,138 @@ impl OptimizeExprTask {
 
     fn finish(&mut self, _optimizer: &mut CascadesOptimizer) -> Result<OptimizeExprEvent> {
         Ok(OptimizeExprEvent::Finish)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::table_context::TableContextSettings;
+    use databend_common_sql_test_support::LiteTableContext;
+
+    use super::*;
+    use crate::MetadataRef;
+    use crate::optimizer::OptimizerContext;
+    use crate::optimizer::ir::SExpr;
+    use crate::plans::DummyTableScan;
+    use crate::plans::Exchange;
+    use crate::plans::PhysicalRelOperator;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn non_broadcast_search_rejects_replicated_candidate() -> Result<()> {
+        // Isolate LiteTableContext's process-wide singleton initialization, as in
+        // the other scheduler tests. This tests candidate selection, not a rewrite.
+        const CHILD_PROCESS: &str = "DATABEND_NON_BROADCAST_SCHEDULER_TEST";
+        if std::env::var_os(CHILD_PROCESS).is_none() {
+            let name = concat!(
+                module_path!(),
+                "::non_broadcast_search_rejects_replicated_candidate"
+            );
+            let output = std::process::Command::new(std::env::current_exe()?)
+                .env(CHILD_PROCESS, "1")
+                .args(["--exact", name.split_once("::").unwrap().1, "--nocapture"])
+                .output()?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                output.status.success() && stdout.contains("1 passed"),
+                "isolated distribution test failed:\n{stdout}\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Ok(());
+        }
+
+        let ctx = LiteTableContext::create().await?;
+        ctx.set_cluster_node_num(2);
+        let opt_ctx = OptimizerContext::new(
+            ctx.clone(),
+            MetadataRef::default(),
+            ctx.get_function_context()?,
+        );
+        opt_ctx.set_enable_distributed_optimization(true);
+        let mut optimizer = CascadesOptimizer::new(opt_ctx)?;
+        optimizer
+            .memo
+            .init(SExpr::create_leaf(DummyTableScan::new()))?;
+        let group = optimizer.memo.root().unwrap().group_index;
+        let required = RequiredProperty {
+            distribution: Distribution::NonBroadcast,
+        };
+        // Let the scheduler explore the group before generating implementations
+        // and costing them. Do not mark it explored or seed a best choice by hand.
+        let mut scheduler = TaskManager::new();
+        scheduler.add_task(Task::OptimizeGroup(OptimizeGroupTask::new(
+            ctx.clone(),
+            None,
+            group,
+            required.clone(),
+        )));
+        scheduler.run(&mut optimizer)?;
+        assert!(optimizer.memo.group(group)?.state.explored());
+        assert!(scheduler.stat.explore_task_count > 0);
+        assert!(scheduler.stat.optimize_group_expr_count > 0);
+        let selected = optimizer
+            .memo
+            .group(group)?
+            .best_prop(&required)
+            .unwrap()
+            .clone();
+        assert_eq!(selected.physical_prop.distribution, Distribution::Serial);
+        assert!(required.satisfied_by(&selected.physical_prop));
+
+        // Obtain the Broadcast candidate's child choice through real scheduling
+        // too, so a missing child cost cannot short-circuit the rejection check.
+        let any = RequiredProperty::default();
+        scheduler.add_task(Task::OptimizeGroup(OptimizeGroupTask::new(
+            ctx.clone(),
+            None,
+            group,
+            any.clone(),
+        )));
+        scheduler.run(&mut optimizer)?;
+        let child_prop = optimizer
+            .memo
+            .group(group)?
+            .best_prop(&any)
+            .unwrap()
+            .physical_prop
+            .clone();
+        assert_eq!(child_prop.distribution, Distribution::Serial);
+        optimizer
+            .memo
+            .insert_physical(group, Exchange::Broadcast, vec![group])?;
+        let broadcast_index = optimizer.memo.group(group)?.num_exprs() - 1;
+        let broadcast = optimizer.memo.group(group)?.m_expr(broadcast_index)?;
+        let delivered = RelExpr::with_opt_context(broadcast, &optimizer.memo, &[child_prop])
+            .derive_physical_prop()?;
+        assert_eq!(delivered.distribution, Distribution::Broadcast);
+        assert!(!required.satisfied_by(&delivered));
+
+        let mut task = OptimizeExprTask::new(
+            ctx,
+            &optimizer,
+            group,
+            broadcast_index,
+            required.clone(),
+            vec![any],
+        )?;
+        let before = optimizer.memo.group(group)?.num_exprs();
+        assert!(matches!(
+            task.add_enforcers(&mut optimizer)?,
+            OptimizeExprEvent::OptimizedSelf
+        ));
+        assert_eq!(optimizer.memo.group(group)?.num_exprs(), before);
+        let best = optimizer.memo.group(group)?.best_prop(&required).unwrap();
+        assert_eq!(best.expr_index, selected.expr_index);
+        assert_eq!(best.cost, selected.cost);
+        assert_eq!(best.physical_prop.distribution, Distribution::Serial);
+        assert!(!matches!(
+            optimizer
+                .memo
+                .group(group)?
+                .m_expr(best.expr_index)?
+                .plan
+                .physical(),
+            Some(PhysicalRelOperator::Exchange(_))
+        ));
+        Ok(())
     }
 }
