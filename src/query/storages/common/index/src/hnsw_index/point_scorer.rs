@@ -22,6 +22,8 @@ use crate::DistanceType;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoreType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
+use crate::hnsw_index::common::utils::MAX_UNPREFETCHED_BATCH;
+use crate::hnsw_index::common::utils::is_dense_batch;
 use crate::hnsw_index::quantization::EncodedQueryU8;
 use crate::hnsw_index::quantization::EncodedVectorsU8;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
@@ -53,6 +55,31 @@ impl RawScorer<'_> {
             RawScorer::Quantized(quantized) => {
                 quantized.vector.score_point(&quantized.query, point_id)
             }
+        }
+    }
+
+    /// Hints the CPU to load the vector of `point_id` ahead of scoring it.
+    #[inline]
+    pub fn prefetch(&self, point_id: PointOffsetType) {
+        if let RawScorer::Quantized(quantized) = self {
+            quantized.vector.prefetch(point_id);
+        }
+    }
+
+    /// Like [`Self::prefetch`], but no deeper than L2.
+    #[inline]
+    pub fn prefetch_l2(&self, point_id: PointOffsetType) {
+        if let RawScorer::Quantized(quantized) = self {
+            quantized.vector.prefetch_l2(point_id);
+        }
+    }
+
+    /// The near and far prefetch windows for scoring a batch, in vectors, or
+    /// `None` when prefetch does not help.
+    pub fn prefetch_windows(&self) -> Option<(usize, usize)> {
+        match self {
+            RawScorer::Original(_) => None,
+            RawScorer::Quantized(quantized) => quantized.vector.prefetch_windows(),
         }
     }
 
@@ -106,20 +133,38 @@ impl<'a> FilteredScorer<'a> {
             self.points_buffer
                 .resize_with(limit, ScoredPointOffset::default);
         }
-        let mut size: usize = 0;
-        for point_id in point_ids.iter().copied() {
-            let score = self.score_point(point_id);
-            self.points_buffer[size] = ScoredPointOffset {
-                idx: point_id,
-                score,
-            };
-
-            size += 1;
-            if size == self.points_buffer.len() {
-                break;
+        let count = point_ids.len().min(self.points_buffer.len());
+        let point_ids = &point_ids[..count];
+        // Prefetch `near` vectors ahead into L1 and `far` vectors ahead into L2,
+        // so that a bounded number of loads overlap with scoring. Tiny batches and
+        // nearly consecutive ids gain nothing from hints.
+        let windows = self
+            .raw_scorer
+            .prefetch_windows()
+            .filter(|_| count > MAX_UNPREFETCHED_BATCH && !is_dense_batch(point_ids));
+        if let Some((near, far)) = windows {
+            for &point_id in point_ids.iter().take(far).skip(near) {
+                self.raw_scorer.prefetch_l2(point_id);
+            }
+            for &point_id in point_ids.iter().take(near) {
+                self.raw_scorer.prefetch(point_id);
             }
         }
-        &self.points_buffer[0..size]
+        for (i, &point_id) in point_ids.iter().enumerate() {
+            if let Some((near, far)) = windows {
+                if let Some(&upcoming) = point_ids.get(i + far).filter(|_| far > 0) {
+                    self.raw_scorer.prefetch_l2(upcoming);
+                }
+                if let Some(&upcoming) = point_ids.get(i + near) {
+                    self.raw_scorer.prefetch(upcoming);
+                }
+            }
+            self.points_buffer[i] = ScoredPointOffset {
+                idx: point_id,
+                score: self.raw_scorer.score_point(point_id),
+            };
+        }
+        &self.points_buffer[..count]
     }
 
     pub fn score_point(&self, point_id: PointOffsetType) -> ScoreType {
@@ -171,4 +216,56 @@ fn euclid_similarity(v1: &[f32], v2: &[f32]) -> f32 {
 
 fn manhattan_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     -v1.iter().zip(v2).map(|(a, b)| (a - b).abs()).sum::<f32>()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+
+    use super::*;
+    use crate::hnsw_index::quantization::VectorParameters;
+
+    /// Scoring a batch with prefetch scores every point as alone, and keeps at
+    /// most `limit` points.
+    #[test]
+    fn test_score_points_with_prefetch() -> databend_common_exception::Result<()> {
+        // 4,200 vectors of 260 bytes: over 1 MiB, so prefetch is used.
+        let (dim, count) = (256, 4200);
+        let data: Vec<f32> = (0..dim * count)
+            .map(|i| ((i * 37 % 101) as f32 - 50.0) / 25.0)
+            .collect();
+        let params = VectorParameters {
+            dim,
+            count,
+            distance_type: DistanceType::L2,
+            invert: true,
+        };
+        let vectors = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+        assert!(vectors.prefetch_windows().is_some());
+        let query: Vec<f32> = (0..dim).map(|i| (i as f32 - 128.0) / 64.0).collect();
+        let raw_scorer = RawScorer::Quantized(QuantizedRawScorer {
+            query: vectors.encode_query(&query),
+            vector: &vectors,
+        });
+        let mut scorer = FilteredScorer::new(&raw_scorer);
+        for (len, limit) in [(0, 0), (2, 0), (40, 0), (40, 16), (10, 32)] {
+            let mut ids: Vec<u32> = (0..len).map(|i| (i * 977 % count) as u32).collect();
+            let expected: Vec<ScoredPointOffset> = ids
+                .iter()
+                .take(if limit == 0 { len } else { limit })
+                .map(|&idx| ScoredPointOffset {
+                    idx,
+                    score: raw_scorer.score_point(idx),
+                })
+                .collect();
+            assert_eq!(scorer.score_points(&mut ids, limit), expected.as_slice());
+        }
+        Ok(())
+    }
 }
