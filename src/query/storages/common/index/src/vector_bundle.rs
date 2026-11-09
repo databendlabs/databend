@@ -188,29 +188,22 @@ impl VectorBundleEntry {
         })
     }
 
-    /// The whole component from the reads of all its rows, in row order, as
-    /// `row_range_read` gives them: checked against the component's size and checksum,
-    /// which no single page read is.
-    pub fn join_rows(&self, reads: Vec<Bytes>) -> Result<Bytes> {
-        let length = reads.iter().map(Bytes::len).sum::<usize>();
-        if length as u64 != self.raw_length {
+    /// Checks the reads of all rows of the component, in row order, as `row_range_read`
+    /// gives them, against its size and checksum, which no single page read is. The
+    /// reads are not joined.
+    pub fn check_rows(&self, reads: &[Bytes]) -> Result<()> {
+        let length = reads.iter().map(|read| read.len() as u64).sum::<u64>();
+        if length != self.raw_length {
             return Err(invalid("FP16 rows do not cover the component"));
         }
-        let joined = match <[Bytes; 1]>::try_from(reads) {
-            // A single read is the component: no copy.
-            Ok([read]) => read,
-            Err(reads) => {
-                let mut joined = Vec::with_capacity(length);
-                for read in &reads {
-                    joined.extend_from_slice(read);
-                }
-                Bytes::from(joined)
-            }
-        };
-        if crc32fast::hash(&joined) != self.checksum {
-            return Err(invalid("Vector component checksum or size mismatch"));
+        let mut hasher = crc32fast::Hasher::new();
+        for read in reads {
+            hasher.update(read);
         }
-        Ok(joined)
+        if hasher.finalize() != self.checksum {
+            return Err(invalid("Vector component checksum mismatch"));
+        }
+        Ok(())
     }
 }
 

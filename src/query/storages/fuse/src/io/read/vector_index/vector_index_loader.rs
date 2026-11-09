@@ -278,12 +278,12 @@ impl RefineData {
         Ok(start..start.saturating_add(rows_per_page).min(self.row_count))
     }
 
-    /// Reads the whole FP16 data, checked against its checksum. It is read as the pages
-    /// `read_pages` reads, merged into one storage request, and kept in the disk cache
-    /// page by page, so that later full reads and TopN refinement of the block read them
-    /// from local disk. It is not kept in memory: a full scan would evict the pages that TopN
-    /// refinement reuses.
-    pub async fn read_all(&self, settings: &ReadSettings) -> Result<Bytes> {
+    /// Reads the whole FP16 data as its pages, in order, checked together against the
+    /// component checksum; the pages are not joined. They are the pages `read_pages` reads,
+    /// merged into one storage request, and kept in the disk cache page by page, so that
+    /// later full reads and TopN refinement of the block read them from local disk. They are
+    /// not kept in memory: a full scan would evict the pages that TopN refinement reuses.
+    pub async fn read_all(&self, settings: &ReadSettings) -> Result<Vec<Bytes>> {
         let pages = self.row_count.div_ceil(self.rows_per_page as u64) as usize;
         let requests = (0..pages)
             .map(|page| self.page_request(page))
@@ -295,8 +295,9 @@ impl RefineData {
         };
         let settings = full_read_settings(settings, self.entry.length);
         let storage = DiskCachedStorage::new(self.operator.clone());
-        let data = load_bundle_reads(storage, &settings, &self.path, requests, cache).await?;
-        self.entry.join_rows(data)
+        let pages = load_bundle_reads(storage, &settings, &self.path, requests, cache).await?;
+        self.entry.check_rows(&pages)?;
+        Ok(pages)
     }
 
     /// The read of `page`, named for the cache by its byte range in the file, so

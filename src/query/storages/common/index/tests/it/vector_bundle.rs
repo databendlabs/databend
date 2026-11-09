@@ -32,10 +32,10 @@ fn read(bundle: &[u8], read: VectorBundlePageRead) -> Result<Bytes> {
     ))
 }
 
-/// The reads of all FP16 rows, by page, join into the whole component, checked against its
-/// size and checksum; reads that miss rows or hold other bytes are rejected.
+/// The reads of all FP16 rows, by page, are checked against the component's size and
+/// checksum; reads that miss rows or hold other bytes are rejected.
 #[test]
-fn test_join_rows() -> Result<()> {
+fn test_check_rows() -> Result<()> {
     let values = (0..ROWS as usize * DIM)
         .map(|i| F32::from(i as f32 * 0.25))
         .collect::<Vec<_>>();
@@ -51,13 +51,14 @@ fn test_join_rows() -> Result<()> {
         .into_iter()
         .map(|rows| read(&bundle, fp16.row_range_read(rows, ROWS)?))
         .collect::<Result<Vec<_>>>()?;
-    assert_eq!(fp16.join_rows(pages.clone())?, whole);
-    assert_eq!(fp16.join_rows(vec![whole.clone()])?, whole);
-    assert!(fp16.join_rows(pages[..2].to_vec()).is_err());
+    assert_eq!(pages.concat(), whole.to_vec());
+    fp16.check_rows(&pages)?;
+    fp16.check_rows(&[whole])?;
+    assert!(fp16.check_rows(&pages[..2]).is_err());
 
     let mut corrupt = pages[1].to_vec();
     corrupt[0] ^= 1;
     let corrupt = vec![pages[0].clone(), Bytes::from(corrupt), pages[2].clone()];
-    assert!(fp16.join_rows(corrupt).is_err());
+    assert!(fp16.check_rows(&corrupt).is_err());
     Ok(())
 }

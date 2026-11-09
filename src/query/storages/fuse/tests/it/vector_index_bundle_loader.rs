@@ -216,8 +216,8 @@ async fn test_reads_without_memory_cache_fill_disk() -> Result<()> {
     assert_eq!(&again[0][..], &[3u8; 4096][..]);
     let again_pages = read(&storage, path, &pages, refine, CacheFill::ReadWrite).await?;
     assert_eq!(again_pages, first_pages);
-    // The pages join into the whole FP16 data, checked against its checksum.
-    assert_eq!(fp16.join_rows(again_pages)?.len() as u64, fp16.raw_length);
+    // The pages are the whole FP16 data, checked against its checksum.
+    fp16.check_rows(&again_pages)?;
     assert!(
         read(&storage, path, &components, hnsw, CacheFill::Bypass)
             .await
@@ -274,7 +274,7 @@ async fn test_full_read_merges_missing_pages() -> Result<()> {
             CacheFill::ReadWrite,
         )
         .await?;
-        assert_eq!(fp16.join_rows(data)?.len() as u64, fp16.raw_length);
+        fp16.check_rows(&data)?;
         requests.push(ranges.lock().unwrap().len());
     }
     assert_eq!(requests, [pages.len() - cached.len(), 1]);

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use bytes::Bytes;
 use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -112,8 +113,8 @@ impl VectorIndexReader {
     }
 
     /// FP16 scores of every valid row, for paths that output the scores of all rows
-    /// with refinement enabled. Reads the whole FP16 data of the block in one
-    /// request, bypassing the refine data cache.
+    /// with refinement enabled. Reads the whole FP16 data of the block page by page
+    /// (`RefineData::read_all`), bypassing the memory cache of refine pages.
     #[fastrace::trace]
     pub async fn generate_refined_scores(
         &self,
@@ -129,12 +130,22 @@ impl VectorIndexReader {
         }
         let start = Instant::now();
         let (scorer, refine) = self.open_refine(row_count, location).await?;
-        let data = refine.read_all(&self.settings).await?;
-        let scores = scorer.score_page(&data, 0, &offsets)?;
+        let pages = refine.read_all(&self.settings).await?;
+        // `offsets` ascend: each page scores the run of them in its rows.
+        let mut scores = Vec::with_capacity(offsets.len());
+        let mut rest = offsets.as_slice();
+        for (ordinal, page) in pages.iter().enumerate() {
+            let rows = refine.page_row_range(ordinal)?;
+            let len = rest.partition_point(|&offset| (offset as u64) < rows.end);
+            let (in_page, after) = rest.split_at(len);
+            scores.extend(scorer.score_page(page, rows.start as usize, in_page)?);
+            rest = after;
+        }
         debug!(
-            "Vector FP16 full read: rows={}, bytes={}, elapsed_ms={}",
+            "Vector FP16 full read: rows={}, pages={}, bytes={}, elapsed_ms={}",
             offsets.len(),
-            data.len(),
+            pages.len(),
+            pages.iter().map(Bytes::len).sum::<usize>(),
             start.elapsed().as_millis()
         );
         Ok(scores)
