@@ -24,7 +24,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::utils::sort_key_order::compare_sort_key_rows;
-use databend_common_expression::utils::sort_key_order::sample_rows;
 
 use crate::DataTypeFilter;
 use crate::rand_block_for_all_types;
@@ -242,21 +241,6 @@ fn sort_concat() {
             assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
-}
-
-#[test]
-fn test_sample_rows() {
-    assert_eq!(sample_rows(1, 4, 0), vec![0]);
-    assert_eq!(sample_rows(5, 4, 7), vec![0, 1, 2, 3, 4]);
-
-    for seed in 0..16 {
-        let rows = sample_rows(1000, 4, seed);
-        assert_eq!(rows.len(), 6);
-        assert_eq!(rows[0], 0);
-        assert_eq!(rows[5], 999);
-        assert!(rows.windows(2).all(|pair| pair[0] < pair[1]));
-    }
-    assert_ne!(sample_rows(1000, 4, 1), sample_rows(1000, 4, 2));
 }
 
 #[test]

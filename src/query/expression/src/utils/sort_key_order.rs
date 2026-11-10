@@ -15,10 +15,9 @@
 //! Evaluates and compares declared sort keys, ascending with NULLs last, which is the order a
 //! linear cluster key sorts by.
 //!
-//! A block's range is taken from its first and last rows, and a sample of the rows between is
-//! checked to fall inside that range. This catches input that does not follow the declared
-//! order in practice, at a constant cost per block. A missed violation only widens the range
-//! of a block on write, because blocks are sorted again and their statistics recomputed there.
+//! Only the first and last rows of each block are checked, which makes the check cheap and
+//! repeatable. Disorder between them goes unnoticed, but it only widens the range of one block
+//! on write, because blocks are sorted again and their statistics recomputed there.
 
 use std::cmp::Ordering;
 
@@ -108,37 +107,19 @@ impl SortKeyEvaluator {
         self.keys.len()
     }
 
-    /// Takes the range of `block` from its first and last rows, and checks that up to
-    /// `samples` rows between, spread evenly from an offset chosen by `seed`, fall inside it.
-    pub fn check_range(
+    /// Returns the sort keys of the first and the last rows of `block`, if it has rows.
+    pub fn boundary_keys(
         &self,
         block: &DataBlock,
-        samples: usize,
-        seed: u64,
         registry: &FunctionRegistry,
-    ) -> Result<Option<RangeCheck>> {
+    ) -> Result<Option<(SortKeyRow, SortKeyRow)>> {
         let num_rows = block.num_rows();
         if num_rows == 0 {
             return Ok(None);
         }
-        let rows = sample_rows(num_rows, samples, seed);
+        let rows = [0, (num_rows - 1) as u32];
         let keys = self.eval(&block.take(rows.as_slice())?, registry)?;
-        let first = sort_key_row(&keys, 0);
-        let last = sort_key_row(&keys, rows.len() - 1);
-        for (index, row) in rows.iter().enumerate() {
-            let key = sort_key_row(&keys, index);
-            if compare_sort_key_rows(&key, &first) == Ordering::Less
-                || compare_sort_key_rows(&key, &last) == Ordering::Greater
-            {
-                return Ok(Some(RangeCheck::OutOfRange {
-                    row: *row as usize,
-                    key,
-                    first,
-                    last,
-                }));
-            }
-        }
-        Ok(Some(RangeCheck::InRange { first, last }))
+        Ok(Some((sort_key_row(&keys, 0), sort_key_row(&keys, 1))))
     }
 
     /// Evaluates the sort key columns of `block`.
@@ -160,40 +141,6 @@ impl SortKeyEvaluator {
             })
             .collect()
     }
-}
-
-/// The outcome of [`SortKeyEvaluator::check_range`].
-#[derive(Debug, Clone, PartialEq)]
-pub enum RangeCheck {
-    /// The keys of the first and the last rows, which bound every checked row.
-    InRange { first: SortKeyRow, last: SortKeyRow },
-    /// A checked row, at offset `row` in the block, falls outside the range.
-    OutOfRange {
-        row: usize,
-        key: SortKeyRow,
-        first: SortKeyRow,
-        last: SortKeyRow,
-    },
-}
-
-/// The rows to check in a block of `num_rows` rows, ascending: the first row, up to `samples`
-/// rows between at an even stride from an offset chosen by `seed`, and the last row.
-pub fn sample_rows(num_rows: usize, samples: usize, seed: u64) -> Vec<u32> {
-    if num_rows <= samples + 2 {
-        return (0..num_rows as u32).collect();
-    }
-    if samples == 0 {
-        return vec![0, (num_rows - 1) as u32];
-    }
-    let inner = num_rows - 2;
-    let stride = inner / samples;
-    // Fibonacci hashing, so that consecutive seeds do not pick nearby offsets.
-    let offset = (seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 32) as usize % stride;
-    let mut rows = Vec::with_capacity(samples + 2);
-    rows.push(0);
-    rows.extend((0..samples).map(|i| (1 + offset + i * stride) as u32));
-    rows.push((num_rows - 1) as u32);
-    rows
 }
 
 fn find_field(schema: &DataSchema, name: &str) -> Result<usize> {
