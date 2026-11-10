@@ -202,28 +202,15 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
-/// Special shapes of a constant LIKE pattern that can be lowered to a cheaper
-/// expression than a full `like` call.
 enum LikePatternKind {
-    /// Only `%` characters: matches every non-NULL string.
     Percent,
-    /// No wildcard and no escape: equivalent to an equality against the literal.
     Const(String),
-    /// Literal prefix followed by trailing `%` only: equivalent to a half-open range
-    /// `[prefix, prefix_plus)`.
     PrefixRange(String, String),
-    /// Anything else. Falls back to the `like` function.
     Other,
 }
 
-/// Classify a pattern that already uses `\` as the escape character (see
-/// `convert_escape_pattern`).
-///
-/// Any pattern containing `\` is left to the runtime `like` function. The runtime
-/// treats `\%`, `\_` and `\\` as escapes, so rewriting such a pattern to `eq` or a
-/// range against the raw text would compare against the wrong literal. The runtime
-/// also keeps a VARIANT-specific rule where escaped patterns traverse nested
-/// values, which an `eq` rewrite would not reproduce.
+// Patterns containing `\` are left to the `like` function, which owns the
+// escape semantics (including the VARIANT traversal rule for escaped patterns).
 fn classify_like_pattern(like_str: &str) -> LikePatternKind {
     if like_str.is_empty() {
         return LikePatternKind::Const(String::new());

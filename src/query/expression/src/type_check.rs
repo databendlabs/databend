@@ -1214,13 +1214,8 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast<'_> {
     }
 }
 
-/// Rewrite a LIKE pattern that uses `escape_char` as its escape character into the
-/// equivalent pattern using the runtime's default escape character `\`.
-///
-/// With a custom escape character, `\` loses its escape meaning and is a plain
-/// literal, so it is re-escaped as `\\`. A character following `escape_char` is a
-/// literal: `%`, `_` and `\` need the `\` prefix for the runtime to treat them as
-/// literals, any other character (including `escape_char` itself) is emitted as is.
+/// Rewrite a LIKE pattern using `escape_char` into one using the default `\`.
+/// With a custom escape character, a bare `\` is a plain literal.
 pub fn convert_escape_pattern(pattern: &str, escape_char: char) -> String {
     let mut result = String::with_capacity(pattern.len() + 2);
     let mut chars = pattern.chars();
@@ -1233,7 +1228,6 @@ pub fn convert_escape_pattern(pattern: &str, escape_char: char) -> String {
                     result.push(next_char);
                 }
                 Some(next_char) => result.push(next_char),
-                // A trailing escape character has nothing to escape and is a literal.
                 None => {
                     if escape_char == '\\' {
                         result.push_str("\\\\");
