@@ -346,6 +346,22 @@ fn test_connection_mask_secrets() {
     assert_eq!(masked["endpoint_url"], "https://***:***@s3.example.com/");
     assert_eq!(masked["region"], "us-east-1");
     assert_eq!(masked["role_arn"], "arn:aws:iam::123456789012:role/r");
+
+    // Binders accept endpoints without a scheme by prepending `https://`.
+    for (endpoint, expected) in [
+        (
+            "s3.amazonaws.com?token=secret",
+            "s3.amazonaws.com/?token=***",
+        ),
+        ("user:pass@s3.example.com", "***:***@s3.example.com/"),
+        ("s3.amazonaws.com", "s3.amazonaws.com"),
+        ("http://127.0.0.1:9900/", "http://127.0.0.1:9900/"),
+        ("http://[bad?token=secret", "ht***et"),
+    ] {
+        let conns = [("endpoint_url".to_string(), endpoint.to_string())].into();
+        let masked = Connection::new(conns).mask_secrets().conns;
+        assert_eq!(masked["endpoint_url"], expected, "{endpoint}");
+    }
 }
 
 #[test]

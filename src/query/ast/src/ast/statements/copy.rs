@@ -500,7 +500,7 @@ impl Connection {
             .map(|(k, v)| {
                 let v = match k.to_lowercase().as_str() {
                     // URLs may embed userinfo or query credentials.
-                    "endpoint_url" | "name_node" => mask_url(v, false),
+                    "endpoint_url" | "name_node" => mask_endpoint(v),
                     "region"
                     | "role_arn"
                     | "aws_role_arn"
@@ -572,6 +572,30 @@ fn mask_string(s: &str) -> String {
         let head: String = chars[..2].iter().collect();
         let tail: String = chars[chars.len() - 2..].iter().collect();
         format!("{}***{}", head, tail)
+    }
+}
+
+/// Mask the credentials of an endpoint, which may omit its scheme: binders
+/// accept `host?token=...` by prepending `https://`. Endpoints that still do
+/// not parse as URLs are masked as a whole.
+fn mask_endpoint(s: &str) -> String {
+    const SCHEME: &str = "https://";
+    let prefixed = !s.contains("://");
+    let url = if prefixed {
+        format!("{SCHEME}{s}")
+    } else {
+        s.to_string()
+    };
+    if Url::parse(&url).is_err() {
+        return mask_string(s);
+    }
+    let masked = mask_url(&url, false);
+    if !prefixed {
+        masked
+    } else if masked == url {
+        s.to_string()
+    } else {
+        masked.strip_prefix(SCHEME).unwrap_or(&masked).to_string()
     }
 }
 
