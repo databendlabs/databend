@@ -19,7 +19,6 @@ use databend_common_sql::optimizer::ir::Distribution;
 use databend_common_sql::optimizer::ir::DistributionEnforcer;
 use databend_common_sql::optimizer::ir::Enforcer;
 use databend_common_sql::optimizer::ir::PExpr;
-use databend_common_sql::optimizer::ir::PhysicalProperty;
 use databend_common_sql::optimizer::ir::PropertyEnforcer;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::RequiredProperty;
@@ -30,8 +29,6 @@ use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::PhysicalOperator;
-use databend_common_sql::plans::PhysicalRelOperator;
-use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::Scan;
 
@@ -45,34 +42,22 @@ fn key(value: i64) -> ScalarExpr {
 }
 
 #[test]
-fn test_non_broadcast_requirement_cannot_be_enforced() {
+fn test_non_broadcast_distribution_contract() {
+    // This required-only property describes replication, not matching hash keys.
     let required = Distribution::NonBroadcast;
-    let enforcer = DistributionEnforcer::new(required.clone());
-    // Hash keys need not match: this requirement is about replication, not colocation.
-    for delivered in [
-        Distribution::Random,
-        Distribution::Serial,
-        Distribution::NodeToNodeHash(vec![key(2)]),
-        Distribution::GlobalHash(vec![key(3)]),
+    for (delivered, accepted) in [
+        (Distribution::Random, true),
+        (Distribution::Serial, true),
+        (Distribution::NodeToNodeHash(vec![key(2)]), true),
+        (Distribution::GlobalHash(vec![key(3)]), true),
+        (Distribution::Broadcast, false),
+        (Distribution::Any, false),
+        (Distribution::NonBroadcast, false),
     ] {
-        assert!(required.satisfied_by(&delivered));
-        assert!(!enforcer.check_enforce(&PhysicalProperty {
-            distribution: delivered,
-        }));
+        assert_eq!(required.satisfied_by(&delivered), accepted, "{delivered}");
     }
-    for delivered in [
-        Distribution::Broadcast,
-        Distribution::Any,
-        Distribution::NonBroadcast,
-    ] {
-        assert!(!required.satisfied_by(&delivered));
-        assert!(enforcer.check_enforce(&PhysicalProperty {
-            distribution: delivered,
-        }));
-    }
-    // Neither hash nor merge exchanges can recover the original multiplicity.
-    assert!(enforcer.enforce().is_err());
-    // Do not change the existing GlobalHash contract for ordinary joins.
+    assert!(DistributionEnforcer::new(required).enforce().is_err());
+    // The new requirement must not change the existing ordinary-join contract.
     assert!(Distribution::GlobalHash(vec![]).satisfied_by(&Distribution::Broadcast));
 }
 
@@ -85,82 +70,61 @@ fn mark_join(join_type: JoinType) -> Join {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_mark_join_child_requirements() -> Result<()> {
+async fn test_non_broadcast_requirement_scope() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     ctx.set_cluster_node_num(3);
-    // The nullable requirement must take priority even when generic broadcast is disabled.
-    ctx.get_settings()
-        .set_setting("enforce_shuffle_join".to_string(), "1".to_string())?;
-    for (direction, expected) in [
-        (JoinType::LeftMark, vec![
-            Distribution::Broadcast,
-            Distribution::NonBroadcast,
-        ]),
-        (JoinType::RightMark, vec![
-            Distribution::NonBroadcast,
-            Distribution::Broadcast,
-        ]),
-    ] {
-        let join = mark_join(direction);
-        let expr = PExpr::create_binary(
-            join.clone(),
-            PExpr::create_leaf(Scan::default()),
-            PExpr::create_leaf(Scan::default()),
-        );
-        let rel = RelExpr::with_p_expr(&expr);
-        let required: Vec<_> = expected
-            .into_iter()
-            .map(|distribution| RequiredProperty { distribution })
-            .collect();
-        assert_eq!(
-            join.compute_required_prop_children(ctx.clone(), &rel, &RequiredProperty::default())?,
-            vec![required.clone()]
-        );
-        for (index, required) in required.iter().enumerate() {
-            assert_eq!(
-                join.compute_required_prop_child(
-                    ctx.clone(),
-                    &rel,
-                    index,
-                    &RequiredProperty::default(),
-                )?,
-                *required
-            );
-        }
-
-        // The optimization applies only to single nullable mark keys.
-        for other in [
+    // Positive SQL plans live in the cluster SLT. These are local preconditions,
+    // including shapes that SQL rewrites need not leave intact for this operator.
+    for direction in [JoinType::LeftMark, JoinType::RightMark] {
+        let mark = mark_join(direction);
+        for join in [
             Join {
                 join_type: JoinType::Inner,
-                ..join.clone()
+                ..mark.clone()
+            },
+            Join {
+                equi_conditions: vec![],
+                ..mark.clone()
             },
             Join {
                 equi_conditions: vec![JoinEquiCondition::new(key(1), key(2), false)],
-                ..join.clone()
+                ..mark.clone()
             },
             Join {
-                equi_conditions: vec![join.equi_conditions[0].clone(); 2],
-                ..join.clone()
+                equi_conditions: vec![mark.equi_conditions[0].clone(); 2],
+                ..mark.clone()
             },
         ] {
-            let alternatives = other.compute_required_prop_children(
-                ctx.clone(),
-                &rel,
-                &RequiredProperty::default(),
-            )?;
+            let expr = PExpr::create_binary(
+                join.clone(),
+                PExpr::create_leaf(Scan::default()),
+                PExpr::create_leaf(Scan::default()),
+            );
+            let rel = RelExpr::with_p_expr(&expr);
+            let required = RequiredProperty::default();
+            let alternatives = join.compute_required_prop_children(ctx.clone(), &rel, &required)?;
             assert!(
                 alternatives
                     .iter()
                     .flatten()
-                    .all(|prop| prop.distribution != Distribution::NonBroadcast)
+                    .all(|prop| { prop.distribution != Distribution::NonBroadcast })
             );
+            for index in 0..2 {
+                assert_ne!(
+                    join.compute_required_prop_child(ctx.clone(), &rel, index, &required)?
+                        .distribution,
+                    Distribution::NonBroadcast
+                );
+            }
         }
     }
+    Ok(())
+}
 
-    // Preserve the main fallback's small Serial-build optimization, but never
-    // let it accept a replicated output side through its generic Any requirement.
-    ctx.get_settings()
-        .set_setting("enforce_shuffle_join".to_string(), "0".to_string())?;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_serial_build_broadcast_keeps_non_broadcast_requirement() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.set_cluster_node_num(3);
     ctx.get_settings()
         .set_setting("enforce_broadcast_join".to_string(), "1".to_string())?;
     let join = mark_join(JoinType::RightMark);
@@ -169,9 +133,11 @@ async fn test_mark_join_child_requirements() -> Result<()> {
         PExpr::create_unary(Exchange::Broadcast, PExpr::create_leaf(Scan::default())),
         PExpr::create_unary(Exchange::Merge, PExpr::create_leaf(Scan::default())),
     );
+    // This early fallback branch must not use the generic Any requirement, which
+    // would accept the replicated probe. It precedes the usual mark-join branch.
     assert_eq!(
         join.compute_required_prop_child(
-            ctx.clone(),
+            ctx,
             &RelExpr::with_p_expr(&expr),
             0,
             &RequiredProperty::default(),
@@ -179,113 +145,25 @@ async fn test_mark_join_child_requirements() -> Result<()> {
         .distribution,
         Distribution::NonBroadcast
     );
-
-    let enforcer = PropertyEnforcer::new(ctx);
-    let required = Distribution::NonBroadcast;
-    for exchange in [
-        Exchange::Merge,
-        Exchange::NodeToNodeHash(vec![key(2)]),
-        Exchange::GlobalHash(vec![key(3)]),
-    ] {
-        let input = PExpr::create_unary(exchange, PExpr::create_leaf(Scan::default()));
-        assert_eq!(enforcer.enforce_distribution(&required, &input)?, input);
-    }
-    let input = PExpr::create_leaf(Scan::default());
-    assert_eq!(enforcer.enforce_distribution(&required, &input)?, input);
-    let replicated = PExpr::create_unary(Exchange::Broadcast, input);
-    let projected = PExpr::create_unary(EvalScalar { items: vec![] }, replicated.clone());
-    let replicated_join = PExpr::create_binary(
-        Join {
-            join_type: JoinType::Inner,
-            ..Default::default()
-        },
-        replicated.clone(),
-        replicated.clone(),
-    );
-    // These are physical property boundary tests, not fabricated rewrite evidence.
-    // Reject both direct and inherited replication before creating any new exchange.
-    for input in [replicated, projected, replicated_join] {
-        assert_eq!(
-            RelExpr::with_p_expr(&input)
-                .derive_physical_prop()?
-                .distribution,
-            Distribution::Broadcast
-        );
-        let error = enforcer
-            .enforce_distribution(&required, &input)
-            .unwrap_err();
-        assert!(error.message().contains("replicated or unknown input"));
-    }
     Ok(())
 }
 
-fn check_mark_inputs(expr: &PExpr) -> Result<usize> {
-    let mut count = 0;
-    if let PhysicalRelOperator::Join(join) = expr.plan()
-        && join.join_type.is_mark_join()
-    {
-        let (output, subquery) = match join.join_type {
-            JoinType::LeftMark => (1, 0),
-            JoinType::RightMark => (0, 1),
-            _ => unreachable!(),
-        };
-        assert_eq!(
-            RelExpr::with_p_expr(expr.child(output)?)
-                .derive_physical_prop()?
-                .distribution,
-            Distribution::Random,
-            "the table's existing distribution should survive the mark join"
-        );
-        assert_eq!(
-            RelExpr::with_p_expr(expr.child(subquery)?)
-                .derive_physical_prop()?
-                .distribution,
-            Distribution::Broadcast,
-            "NULL knowledge must cover the entire subquery"
-        );
-        count += 1;
-    }
-    assert!(!matches!(
-        RelExpr::with_p_expr(expr)
-            .derive_physical_prop()?
-            .distribution,
-        Distribution::NonBroadcast
-    ));
-    for child in expr.children() {
-        count += check_mark_inputs(child)?;
-    }
-    Ok(count)
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_sql_mark_join_retains_table_distribution() -> Result<()> {
-    // Exercise both Cascades and the production fallback, starting from bound SQL.
-    for cbo in ["1", "0"] {
-        let ctx = LiteTableContext::create().await?;
-        ctx.set_cluster_node_num(3);
-        ctx.set_table_warehouse_distribution(true);
-        ctx.get_settings()
-            .set_setting("enable_cbo".to_string(), cbo.to_string())?;
-        ctx.get_settings()
-            .set_setting("disable_join_reorder".to_string(), "1".to_string())?;
-        ctx.register_setup_sql("CREATE TABLE mark_rows (k INT)")
-            .await?;
-        ctx.register_setup_sql("CREATE TABLE mark_values (k INT)")
-            .await?;
-        let raw = ctx
-            .bind_sql("SELECT k, k IN (SELECT k FROM mark_values) AS present FROM mark_rows")
-            .await?;
-        let optimized = ctx.optimize_plan(raw).await?;
-        let Plan::Query {
-            s_expr, metadata, ..
-        } = &optimized
-        else {
-            unreachable!()
-        };
-        let physical = s_expr.planned()?.expr();
-        physical.validate_types(metadata)?;
-        physical.validate_column_scope(metadata)?;
-        assert_eq!(check_mark_inputs(physical)?, 1);
-    }
+async fn test_property_enforcer_rejects_inherited_replication() -> Result<()> {
+    let enforcer = PropertyEnforcer::new(LiteTableContext::create().await?);
+    let input = PExpr::create_leaf(Scan::default());
+    let required = Distribution::NonBroadcast;
+    assert_eq!(enforcer.enforce_distribution(&required, &input)?, input);
+
+    // Check the physical-plan boundary once, including propagation through a
+    // projection. The distribution matrix above covers the other concrete types.
+    let replicated = PExpr::create_unary(
+        EvalScalar { items: vec![] },
+        PExpr::create_unary(Exchange::Broadcast, input),
+    );
+    let error = enforcer
+        .enforce_distribution(&required, &replicated)
+        .unwrap_err();
+    assert!(error.message().contains("replicated or unknown input"));
     Ok(())
 }

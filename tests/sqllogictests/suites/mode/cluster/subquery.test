@@ -1,3 +1,14 @@
+# Plan coverage for nullable mark joins, also through the distributed fallback.
+# run-with-settings: enable_cbo=0
+
+# Join commutation follows the table cardinalities below. The nullable mark
+# requirement must take priority even when generic broadcast joins are disabled.
+statement ok
+SET disable_join_reorder=0
+
+statement ok
+SET enforce_shuffle_join=1
+
 statement ok
 create or replace database d_subquery;
 
@@ -111,76 +122,76 @@ Exchange
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 3.00
 
+# RightMark: preserve the probe scan through both nested mark joins.
+# The compact optimized plan records exchanges without physical scan statistics.
 query T
-explain SELECT
+EXPLAIN (logical, optimized) SELECT
       t1.a,
       t1.a IN (SELECT a FROM t2) AS in_match,
       t1.a NOT IN (SELECT a FROM t2) AS not_in_match
-FROM t1;
+FROM t1
 ----
-Exchange
-├── output columns: [t1.a (#0), in_match (#3), not_in_match (#4)]
-├── exchange type: Merge
+Exchange(Merge)
 └── EvalScalar
-    ├── output columns: [t1.a (#0), in_match (#3), not_in_match (#4)]
-    ├── expressions: [NOT 5 (#5)]
-    ├── estimated rows: 3.00
-    └── HashJoin
-        ├── output columns: [t1.a (#0), in_match (#3), marker (#5)]
-        ├── join type: RIGHT MARK
-        ├── build keys: [subquery_2 (#2)]
+    ├── scalars: [t1.a (#0) AS (#0), in_match (#3) AS (#3), not(marker (#5)) AS (#4)]
+    └── Join(RightMark)
+        ├── build keys: [t2.a (#2)]
         ├── probe keys: [t1.a (#0)]
-        ├── keys is null equal: [true]
-        ├── filters: []
-        ├── estimated rows: 3.00
-        ├── Exchange(Build)
-        │   ├── output columns: [t2.a (#2)]
-        │   ├── exchange type: Broadcast
-        │   └── TableScan
-        │       ├── table: default.d_subquery.t2
-        │       ├── scan id: 2
-        │       ├── output columns: [a (#2)]
-        │       ├── read rows: 2
-        │       ├── read size: < 1 KiB
-        │       ├── partitions total: 1
-        │       ├── partitions scanned: 1
-        │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        │       ├── push downs: [filters: [], limit: NONE]
-        │       └── estimated rows: 2.00
-        └── HashJoin(Probe)
-            ├── output columns: [t1.a (#0), in_match (#3)]
-            ├── join type: RIGHT MARK
-            ├── build keys: [subquery_1 (#1)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Scan
+        │       ├── table: d_subquery.t2 (#2)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Join(RightMark)
+            ├── build keys: [t2.a (#1)]
             ├── probe keys: [t1.a (#0)]
-            ├── keys is null equal: [true]
-            ├── filters: []
-            ├── estimated rows: 3.00
-            ├── Exchange(Build)
-            │   ├── output columns: [t2.a (#1)]
-            │   ├── exchange type: Broadcast
-            │   └── TableScan
-            │       ├── table: default.d_subquery.t2
-            │       ├── scan id: 1
-            │       ├── output columns: [a (#1)]
-            │       ├── read rows: 2
-            │       ├── read size: < 1 KiB
-            │       ├── partitions total: 1
-            │       ├── partitions scanned: 1
-            │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-            │       ├── push downs: [filters: [], limit: NONE]
-            │       └── estimated rows: 2.00
-            └── TableScan(Probe)
-                ├── table: default.d_subquery.t1
-                ├── scan id: 0
-                ├── output columns: [a (#0)]
-                ├── read rows: 3
-                ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 3.00
+            ├── other filters: []
+            ├── Exchange(Broadcast)
+            │   └── Scan
+            │       ├── table: d_subquery.t2 (#1)
+            │       ├── filters: []
+            │       ├── order by: []
+            │       └── limit: NONE
+            └── Scan
+                ├── table: d_subquery.t1 (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
+# A larger subquery makes join commutation choose LeftMark. Both inputs remain
+# distributed: this exercises NonBroadcast, not the scalar-aggregate Serial path.
+statement ok
+INSERT INTO t2 SELECT 2 FROM numbers(8)
+
+# LeftMark: preserve the build scan; broadcast the probe-side subquery.
+query T
+EXPLAIN (logical, optimized) SELECT a, a IN (SELECT a FROM t2) AS present FROM t1
+----
+Exchange(Merge)
+└── Join(LeftMark)
+    ├── build keys: [t1.a (#0)]
+    ├── probe keys: [t2.a (#1)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: d_subquery.t1 (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Exchange(Broadcast)
+        └── Scan
+            ├── table: d_subquery.t2 (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+query IBB rowsort
+SELECT a, a IN (SELECT a FROM t2), a NOT IN (SELECT a FROM t2) FROM t1
+----
+1 NULL NULL
+2 1 0
+NULL 1 0
 
 statement ok
 drop database d_subquery
