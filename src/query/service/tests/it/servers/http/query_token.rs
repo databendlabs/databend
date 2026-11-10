@@ -1,0 +1,773 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::io::Cursor;
+use std::time::Duration;
+
+use arrow_ipc::reader::StreamReader;
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE;
+use databend_common_base::headers::HEADER_AUTH_METHOD;
+use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
+use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_SESSION;
+use databend_common_base::headers::HEADER_TENANT;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestFixture;
+use headers::HeaderMapExt;
+use http::HeaderMap;
+use http::HeaderValue;
+use http::Method;
+use http::StatusCode;
+use poem::Endpoint;
+use poem::Request;
+use poem::Response;
+use poem::Route;
+use serde_json::json;
+
+use super::http_query_handlers::TestQueryResponse;
+use super::http_query_handlers::create_endpoint;
+use super::http_query_handlers::post_sql_to_endpoint_new_session;
+
+fn basic_headers(user: &str, password: &str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.typed_insert(headers::Authorization::basic(user, password));
+    headers
+}
+
+fn token_headers(token: &str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(HEADER_AUTH_METHOD, HeaderValue::from_static("query"));
+    headers.insert(
+        http::header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+    );
+    headers
+}
+
+async fn request(
+    ep: &Route,
+    method: Method,
+    uri: &str,
+    headers: HeaderMap,
+    body: serde_json::Value,
+) -> Response {
+    let mut req = Request::builder()
+        .method(method)
+        .uri(uri.parse().unwrap())
+        .header(http::header::CONTENT_TYPE, "application/json")
+        .body(serde_json::to_vec(&body).unwrap());
+    req.headers_mut().extend(headers);
+    ep.call(req).await.unwrap_or_else(|err| err.into_response())
+}
+
+fn client_session_header(id: &str) -> HeaderValue {
+    let json = json!({"id": id, "last_refresh_time": 1}).to_string();
+    HeaderValue::from_str(&URL_SAFE.encode(json)).unwrap()
+}
+
+async fn start(ep: &Route, headers: HeaderMap) -> anyhow::Result<TestQueryResponse> {
+    start_with_timeout(ep, headers, 60).await
+}
+
+async fn start_with_timeout(
+    ep: &Route,
+    headers: HeaderMap,
+    timeout_secs: u64,
+) -> anyhow::Result<TestQueryResponse> {
+    start_query(ep, headers, timeout_secs, "SELECT * FROM numbers(5)").await
+}
+
+async fn start_query(
+    ep: &Route,
+    mut headers: HeaderMap,
+    timeout_secs: u64,
+    sql: &str,
+) -> anyhow::Result<TestQueryResponse> {
+    headers
+        .entry(http::header::AUTHORIZATION)
+        .or_insert_with(|| basic_headers("root", "")[http::header::AUTHORIZATION].clone());
+    let response = request(
+        ep,
+        Method::POST,
+        "/v1/query",
+        headers,
+        json!({
+            "sql": sql,
+            "pagination": {"wait_time_secs": 5, "max_rows_per_page": 1},
+            "session": {"settings": {"http_handler_result_timeout_secs": timeout_secs.to_string()}}
+        }),
+    )
+    .await;
+    let status = response.status();
+    let body = response.into_body().into_string().await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let result: TestQueryResponse = serde_json::from_str(&body)?;
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert_eq!(result.data.len(), 1);
+    assert_eq!(result.query_token.as_ref().unwrap().len(), 64);
+    Ok(result)
+}
+
+async fn admin_sql(ep: &Route, sql: &str) -> anyhow::Result<()> {
+    let (status, result) =
+        post_sql_to_endpoint_new_session(ep, sql, 5, HeaderMap::default()).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert_eq!(result.state.to_string(), "Succeeded");
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_followups_and_retries() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let result = start(&ep, HeaderMap::new()).await?;
+    let token = result.query_token.as_ref().unwrap();
+    let headers = token_headers(token);
+
+    // Authenticate using the path ID, never a caller-supplied query ID header.
+    let mut state_headers = headers.clone();
+    state_headers.insert(
+        HEADER_QUERY_ID,
+        HeaderValue::from_static("unrelated-header-id"),
+    );
+    let state = request(
+        &ep,
+        Method::GET,
+        &format!("/v1/query/{}", result.id),
+        state_headers,
+        json!(null),
+    )
+    .await;
+    assert_eq!(state.status(), StatusCode::OK);
+
+    let page = result.next_uri.as_ref().unwrap();
+    for _ in 0..2 {
+        let response = request(&ep, Method::GET, page, headers.clone(), json!(null)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let response: TestQueryResponse = response.into_body().into_json().await?;
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.query_token.as_ref(), Some(token));
+    }
+
+    // Retain the capability for the same closed-query period as legacy final
+    // retries, rather than inventing a separate token expiration/refresh timer.
+    for method in [Method::POST, Method::GET] {
+        let response = request(
+            &ep,
+            method,
+            result.final_uri.as_ref().unwrap(),
+            headers.clone(),
+            json!(null),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+    let closed = request(&ep, Method::GET, page, headers, json!(null)).await;
+    assert_eq!(closed.status(), StatusCode::BAD_REQUEST);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_scope_and_auth_dispatch() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let first = start(&ep, HeaderMap::new()).await?;
+    let second = start(&ep, HeaderMap::new()).await?;
+    let token = first.query_token.as_ref().unwrap();
+    assert_ne!(first.query_token, second.query_token);
+
+    for uri in [
+        format!("/v1/query/{}", second.id),
+        second.next_uri.clone().unwrap(),
+        second.final_uri.clone().unwrap(),
+        second.kill_uri.clone().unwrap(),
+        "/v1/query/nonexistent/page/1".to_string(),
+    ] {
+        let response = request(&ep, Method::GET, &uri, token_headers(token), json!(null)).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(!response.into_body().into_string().await?.contains(token));
+    }
+    for bad in ["", "not-hex", &"0".repeat(64)] {
+        let response = request(
+            &ep,
+            Method::GET,
+            first.next_uri.as_ref().unwrap(),
+            token_headers(bad),
+            json!(null),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+    for uri in [
+        "/v1/query",
+        "/v1/session/login",
+        "/v1/session/refresh",
+        "/v1/session/logout",
+        "/v1/session/heartbeat",
+        "/v1/verify",
+    ] {
+        let response = request(
+            &ep,
+            Method::POST,
+            uri,
+            token_headers(token),
+            json!({"sql": "SELECT 1"}),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+    // This token is not a JWT or a native session/refresh token; dispatch is
+    // explicit, and Basic authentication cannot masquerade as a query token.
+    let mut no_method = token_headers(token);
+    no_method.remove(HEADER_AUTH_METHOD);
+    let response = request(
+        &ep,
+        Method::GET,
+        first.next_uri.as_ref().unwrap(),
+        no_method,
+        json!(null),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    for invalid in ["Basic cm9vdDo=", "", "B", "Bearer", "BearerX token"] {
+        let mut headers = token_headers(token);
+        headers.insert(
+            http::header::AUTHORIZATION,
+            HeaderValue::from_static(invalid),
+        );
+        let response = request(
+            &ep,
+            Method::GET,
+            first.next_uri.as_ref().unwrap(),
+            headers,
+            json!(null),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+    let mut mixed_case = token_headers(token);
+    mixed_case.insert(
+        http::header::AUTHORIZATION,
+        format!("bEaReR {token}").parse()?,
+    );
+    let response = request(
+        &ep,
+        Method::GET,
+        first.stats_uri.as_ref().unwrap(),
+        mixed_case,
+        json!(null),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut spoofed_id = token_headers(token);
+    spoofed_id.insert(HEADER_QUERY_ID, first.id.parse()?);
+    let response = request(
+        &ep,
+        Method::GET,
+        second.next_uri.as_ref().unwrap(),
+        spoofed_id,
+        json!(null),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let mut duplicate = token_headers(token);
+    duplicate.append(HEADER_AUTH_METHOD, HeaderValue::from_static("keypair"));
+    let response = request(
+        &ep,
+        Method::GET,
+        first.next_uri.as_ref().unwrap(),
+        duplicate,
+        json!(null),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let mut missing_auth = token_headers(token);
+    missing_auth.remove(http::header::AUTHORIZATION);
+    let mut duplicate_auth = token_headers(token);
+    duplicate_auth.append(
+        http::header::AUTHORIZATION,
+        basic_headers("root", "")[http::header::AUTHORIZATION].clone(),
+    );
+    for headers in [missing_auth, duplicate_auth] {
+        let response = request(
+            &ep,
+            Method::GET,
+            first.next_uri.as_ref().unwrap(),
+            headers,
+            json!(null),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    for _ in 0..2 {
+        let response = request(
+            &ep,
+            Method::POST,
+            first.kill_uri.as_ref().unwrap(),
+            token_headers(token),
+            json!(null),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_after_password_change_and_user_deletion() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    admin_sql(&ep, "CREATE USER query_token_user IDENTIFIED BY 'before'").await?;
+    admin_sql(&ep, "GRANT ROLE account_admin TO query_token_user").await?;
+    let basic = basic_headers("query_token_user", "before");
+    let result = start(&ep, basic.clone()).await?;
+    let token = result.query_token.as_ref().unwrap();
+    admin_sql(&ep, "ALTER USER query_token_user IDENTIFIED BY 'after'").await?;
+    let old = request(
+        &ep,
+        Method::GET,
+        result.next_uri.as_ref().unwrap(),
+        basic.clone(),
+        json!(null),
+    )
+    .await;
+    assert_eq!(old.status(), StatusCode::UNAUTHORIZED);
+    let page = request(
+        &ep,
+        Method::GET,
+        result.next_uri.as_ref().unwrap(),
+        token_headers(token),
+        json!(null),
+    )
+    .await;
+    assert_eq!(page.status(), StatusCode::OK);
+
+    // Stronger than simply changing the password: even when user lookup can
+    // no longer succeed, this already-authorized query remains accessible.
+    admin_sql(&ep, "DROP USER query_token_user").await?;
+    let state = request(
+        &ep,
+        Method::GET,
+        &format!("/v1/query/{}", result.id),
+        token_headers(token),
+        json!(null),
+    )
+    .await;
+    assert_eq!(state.status(), StatusCode::OK);
+    let page = request(
+        &ep,
+        Method::GET,
+        result.next_uri.as_ref().unwrap(),
+        token_headers(token),
+        json!(null),
+    )
+    .await;
+    assert_eq!(page.status(), StatusCode::OK);
+    let final_response = request(
+        &ep,
+        Method::POST,
+        result.final_uri.as_ref().unwrap(),
+        token_headers(token),
+        json!(null),
+    )
+    .await;
+    assert_eq!(final_response.status(), StatusCode::OK);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_self_password_change_result() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    admin_sql(&ep, "CREATE USER self_change_user IDENTIFIED BY 'before'").await?;
+    admin_sql(&ep, "GRANT ROLE account_admin TO self_change_user").await?;
+    let response = request(
+        &ep,
+        Method::POST,
+        "/v1/query",
+        basic_headers("self_change_user", "before"),
+        json!({
+            "sql": "ALTER USER USER() IDENTIFIED BY 'after'",
+            "pagination": {"wait_time_secs": 0}
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut result: TestQueryResponse = response.into_body().into_json().await?;
+    let token = result.query_token.clone().unwrap();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !result.state.is_stopped() {
+            let page = request(
+                &ep,
+                Method::GET,
+                result.next_uri.as_ref().unwrap(),
+                token_headers(&token),
+                json!(null),
+            )
+            .await;
+            assert_eq!(page.status(), StatusCode::OK);
+            result = page.into_body().into_json().await?;
+        }
+        anyhow::Ok(())
+    })
+    .await??;
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert_eq!(result.state.to_string(), "Succeeded");
+    let final_response = request(
+        &ep,
+        Method::POST,
+        result.final_uri.as_ref().unwrap(),
+        token_headers(&token),
+        json!(null),
+    )
+    .await;
+    assert_eq!(final_response.status(), StatusCode::OK);
+    let body = json!({"sql": "SELECT 1", "pagination": {"wait_time_secs": 5}});
+    let old = request(
+        &ep,
+        Method::POST,
+        "/v1/query",
+        basic_headers("self_change_user", "before"),
+        body.clone(),
+    )
+    .await;
+    assert_eq!(old.status(), StatusCode::UNAUTHORIZED);
+    let new = request(
+        &ep,
+        Method::POST,
+        "/v1/query",
+        basic_headers("self_change_user", "after"),
+        body,
+    )
+    .await;
+    assert_eq!(new.status(), StatusCode::OK);
+    let new: TestQueryResponse = new.into_body().into_json().await?;
+    assert!(new.error.is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_tenant_and_session_isolation() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().build();
+    config.query.common.management_mode = true;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+    let ep = create_endpoint()?;
+    let session = client_session_header("query-token-session");
+    let mut headers = basic_headers("root", "");
+    headers.insert(
+        HEADER_TENANT,
+        HeaderValue::from_static("query-token-tenant"),
+    );
+    headers.insert(
+        HEADER_CLIENT_CAPABILITIES,
+        HeaderValue::from_static("session_header"),
+    );
+    headers.insert(HEADER_SESSION, session.clone());
+    headers.insert(
+        HEADER_QUERY_ID,
+        HeaderValue::from_static("query-token-fixed-id"),
+    );
+    let result = start_query(&ep, headers.clone(), 60, "SHOW SETTINGS").await?;
+    let token = result.query_token.as_ref().unwrap();
+    let mut auth = token_headers(token);
+    auth.insert(
+        HEADER_CLIENT_CAPABILITIES,
+        HeaderValue::from_static("session_header"),
+    );
+    auth.insert(HEADER_SESSION, session);
+    // Retry a lost submission response before advancing to the next page: only
+    // the most recent result page is retained for response retries.
+    let body = json!({"sql": "SELECT 1"});
+    let retry = request(
+        &ep,
+        Method::POST,
+        "/v1/query",
+        headers.clone(),
+        body.clone(),
+    )
+    .await;
+    assert_eq!(retry.status(), StatusCode::OK);
+    let retry: TestQueryResponse = retry.into_body().into_json().await?;
+    assert_eq!(retry.query_token.as_ref(), Some(token));
+    let page = result.next_uri.as_ref().unwrap();
+    // Tenant comes from the validated query capability when omitted.
+    assert_eq!(
+        request(&ep, Method::GET, page, auth.clone(), json!(null))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    let mut wrong_tenant = auth.clone();
+    wrong_tenant.insert(HEADER_TENANT, HeaderValue::from_static("another-tenant"));
+    assert_eq!(
+        request(&ep, Method::GET, page, wrong_tenant, json!(null))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let mut wrong_session = auth.clone();
+    wrong_session.insert(HEADER_SESSION, client_session_header("another-session"));
+    assert_eq!(
+        request(&ep, Method::GET, page, wrong_session, json!(null))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(&ep, Method::GET, page, token_headers(token), json!(null))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    // Submission retries must not disclose the capability to a different
+    // tenant or client session, even after the original page has advanced.
+    let mut wrong_session = headers.clone();
+    wrong_session.insert(HEADER_SESSION, client_session_header("another-session"));
+    let retry = request(&ep, Method::POST, "/v1/query", wrong_session, body.clone()).await;
+    assert_eq!(retry.status(), StatusCode::BAD_REQUEST);
+    headers.insert(HEADER_TENANT, HeaderValue::from_static("another-tenant"));
+    let retry = request(&ep, Method::POST, "/v1/query", headers, body).await;
+    assert_eq!(retry.status(), StatusCode::BAD_REQUEST);
+
+    // Legacy Basic authentication must not disclose the new capability or
+    // operate on this query from another tenant either.
+    let mut wrong_tenant = auth;
+    wrong_tenant.insert(
+        http::header::AUTHORIZATION,
+        basic_headers("root", "")[http::header::AUTHORIZATION].clone(),
+    );
+    wrong_tenant.remove(HEADER_AUTH_METHOD);
+    wrong_tenant.insert(HEADER_TENANT, HeaderValue::from_static("another-tenant"));
+    for uri in [
+        result.stats_uri.as_ref().unwrap(),
+        result.final_uri.as_ref().unwrap(),
+        result.kill_uri.as_ref().unwrap(),
+    ] {
+        let response = request(&ep, Method::GET, uri, wrong_tenant.clone(), json!(null)).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_restores_sandbox_tenant() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().build();
+    config.query.common.internal_enable_sandbox_tenant = true;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+    let ep = create_endpoint()?;
+    let response = request(
+        &ep,
+        Method::POST,
+        "/v1/query",
+        basic_headers("root", ""),
+        json!({
+            "sql": "SELECT * FROM numbers(5)",
+            "pagination": {"wait_time_secs": 5, "max_rows_per_page": 1},
+            "session": {"settings": {"sandbox_tenant": "query-token-sandbox"}}
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let result: TestQueryResponse = response.into_body().into_json().await?;
+    assert!(result.error.is_none(), "{:?}", result.error);
+    let token = result.query_token.as_ref().unwrap();
+    let mut headers = token_headers(token);
+    headers.insert(
+        HEADER_TENANT,
+        HeaderValue::from_static("query-token-sandbox"),
+    );
+    for headers in [headers, token_headers(token)] {
+        let page = request(
+            &ep,
+            Method::GET,
+            result.next_uri.as_ref().unwrap(),
+            headers,
+            json!(null),
+        )
+        .await;
+        assert_eq!(page.status(), StatusCode::OK);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_not_disclosed_to_other_user() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let result = start(&ep, HeaderMap::new()).await?;
+    admin_sql(&ep, "CREATE USER another_query_user IDENTIFIED BY 'test'").await?;
+    let basic = basic_headers("another_query_user", "test");
+    for uri in [
+        result.stats_uri.unwrap(),
+        result.next_uri.unwrap(),
+        result.final_uri.unwrap(),
+        result.kill_uri.unwrap(),
+    ] {
+        let response = request(&ep, Method::GET, &uri, basic.clone(), json!(null)).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert!(
+            !response
+                .into_body()
+                .into_string()
+                .await?
+                .contains(result.query_token.as_ref().unwrap())
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_query_token_expires_with_query_state() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let result = start_with_timeout(&ep, HeaderMap::new(), 1).await?;
+    let token = result.query_token.as_ref().unwrap();
+    let uri = result.final_uri.as_ref().unwrap();
+    assert_eq!(
+        request(&ep, Method::POST, uri, token_headers(token), json!(null))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    // Finalized queries are retained for min(result_timeout_secs, 30s), then
+    // both their result state and their authentication capability disappear.
+    for _ in 0..200 {
+        let response = request(
+            &ep,
+            Method::GET,
+            &format!("/v1/query/{}", result.id),
+            token_headers(token),
+            json!(null),
+        )
+        .await;
+        if response.status() == StatusCode::UNAUTHORIZED {
+            return Ok(());
+        }
+        assert_eq!(response.status(), StatusCode::OK);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    anyhow::bail!("query token outlived the finalized query retention period")
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_in_arrow_metadata() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let mut headers = basic_headers("root", "");
+    headers.insert(
+        http::header::ACCEPT,
+        HeaderValue::from_static("application/vnd.apache.arrow.stream"),
+    );
+    let body = json!({
+        "sql": "SELECT * FROM numbers(5)",
+        "pagination": {"wait_time_secs": 5, "max_rows_per_page": 1},
+        "arrow_result_version_max": 2
+    });
+    let response = request(&ep, Method::POST, "/v1/query", headers, body).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = response.into_body().into_vec().await?;
+    let reader = StreamReader::try_new(Cursor::new(bytes), None)?;
+    let result: TestQueryResponse =
+        serde_json::from_str(&reader.schema().metadata()["response_header"])?;
+    let token = result.query_token.as_ref().unwrap();
+    let mut headers = token_headers(token);
+    headers.insert(
+        http::header::ACCEPT,
+        HeaderValue::from_static("application/vnd.apache.arrow.stream"),
+    );
+    let page = request(
+        &ep,
+        Method::GET,
+        result.next_uri.as_ref().unwrap(),
+        headers,
+        json!(null),
+    )
+    .await;
+    assert_eq!(page.status(), StatusCode::OK);
+    let bytes = page.into_body().into_vec().await?;
+    let reader = StreamReader::try_new(Cursor::new(bytes), None)?;
+    let page: TestQueryResponse =
+        serde_json::from_str(&reader.schema().metadata()["response_header"])?;
+    assert_eq!(page.query_token.as_ref(), Some(token));
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_invalid_after_query_manager_reset() -> anyhow::Result<()> {
+    let config = ConfigBuilder::create().build();
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+    let ep = create_endpoint()?;
+    let mut headers = HeaderMap::new();
+    headers.insert(HEADER_QUERY_ID, HeaderValue::from_static("reused-query-id"));
+    let result = start(&ep, headers.clone()).await?;
+    // A separately initialized node has no copy of the original node's query
+    // state, just like a restarted node. Keep global fixtures on separate named
+    // threads rather than replacing the registry of a running server fixture.
+    std::thread::Builder::new()
+        .name("query-token-fresh-node".to_string())
+        .spawn(move || -> anyhow::Result<()> {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            runtime.block_on(async move {
+                let _fixture = TestFixture::setup().await?;
+                let ep = create_endpoint()?;
+                let response = request(
+                    &ep,
+                    Method::GET,
+                    result.next_uri.as_ref().unwrap(),
+                    token_headers(result.query_token.as_ref().unwrap()),
+                    json!(null),
+                )
+                .await;
+                assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+                let replacement = start(&ep, headers).await?;
+                assert_eq!(replacement.id, result.id);
+                assert_ne!(replacement.query_token, result.query_token);
+                for uri in [
+                    replacement.stats_uri.as_ref().unwrap(),
+                    replacement.next_uri.as_ref().unwrap(),
+                    replacement.final_uri.as_ref().unwrap(),
+                    replacement.kill_uri.as_ref().unwrap(),
+                ] {
+                    let response = request(
+                        &ep,
+                        Method::GET,
+                        uri,
+                        token_headers(result.query_token.as_ref().unwrap()),
+                        json!(null),
+                    )
+                    .await;
+                    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+                }
+                let response = request(
+                    &ep,
+                    Method::GET,
+                    replacement.next_uri.as_ref().unwrap(),
+                    token_headers(replacement.query_token.as_ref().unwrap()),
+                    json!(null),
+                )
+                .await;
+                assert_eq!(response.status(), StatusCode::OK);
+                Ok(())
+            })
+        })?
+        .join()
+        .expect("fresh-node query-token test panicked")
+}

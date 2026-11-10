@@ -115,6 +115,7 @@ struct TestHttpQueryRequest {
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestQueryResponse {
     pub id: String,
+    pub query_token: Option<String>,
     pub session_id: Option<String>,
     pub node_id: String,
 
@@ -1208,7 +1209,7 @@ async fn post_sql_to_endpoint(
     post_sql_to_endpoint_new_session(ep, sql, wait_time_secs, HeaderMap::default()).await
 }
 
-async fn post_sql_to_endpoint_new_session(
+pub(super) async fn post_sql_to_endpoint_new_session(
     ep: &EndpointType,
     sql: &str,
     wait_time_secs: u64,

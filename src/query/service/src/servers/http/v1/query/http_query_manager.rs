@@ -33,6 +33,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::time::sleep;
 
+use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::ClientStateClosed;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
@@ -90,13 +91,14 @@ impl Queries {
         query_id: &str,
         reason: CloseReason,
         now: u64,
-        client_session_id: &Option<String>,
-        check_client_session_id: bool,
+        auth_context: Option<&HttpQueryContext>,
     ) -> poem::error::Result<(Option<Arc<HttpQuery>>, Option<ClientStateClosed>)> {
         let q = self.active.get(query_id).cloned();
         if let Some(q) = q {
-            if check_client_session_id {
-                q.check_client_session_id(client_session_id)?;
+            if let Some(ctx) = auth_context {
+                // Revalidate against the query being closed under the map lock:
+                // its ID could have been reused since middleware authenticated.
+                ctx.check_query_access(&q)?;
             }
             let closed_state = q.mark_closed(reason);
             if let Some(st) = closed_state {
@@ -175,7 +177,7 @@ impl HttpQueryManager {
                     match expire_res {
                         TimeoutResult::TimedOut => {
                             _ = self_clone
-                                .close_query(&query_id_clone, CloseReason::TimedOut, &None, false)
+                                .close_query(&query_id_clone, CloseReason::TimedOut, None)
                                 .await
                                 .ok();
                         }
@@ -199,20 +201,16 @@ impl HttpQueryManager {
         self: &Arc<Self>,
         query_id: &str,
         reason: CloseReason,
-        client_session_id: &Option<String>,
-        check_client_session_id: bool,
+        auth_context: Option<&HttpQueryContext>,
     ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let (query, closed_state) = self.queries.write().close(
-            query_id,
-            reason,
-            now,
-            client_session_id,
-            check_client_session_id,
-        )?;
+        let (query, closed_state) =
+            self.queries
+                .write()
+                .close(query_id, reason, now, auth_context)?;
         if let Some(q) = &query {
             if let Some(st) = closed_state {
                 q.kill(st.error_code(q.result_timeout_secs)).await;

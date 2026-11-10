@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::headers::HEADER_AUTH_METHOD;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
@@ -38,6 +39,8 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::NodeInfo;
 use fastrace::func_name;
+use headers::Authorization;
+use headers::HeaderMapExt;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
@@ -206,6 +209,35 @@ fn get_credential(
             AUTHORIZATION
         );
         return Err(ErrorCode::AuthenticateFailure(msg));
+    }
+    let auth_methods: Vec<_> = req.headers().get_all(HEADER_AUTH_METHOD).iter().collect();
+    if auth_methods.len() > 1 {
+        return Err(ErrorCode::AuthenticateFailure(
+            "Authentication error: multiple authentication methods provided",
+        ));
+    }
+    if auth_methods.first().is_some_and(|v| {
+        v.to_str()
+            .is_ok_and(|method| method.eq_ignore_ascii_case("query"))
+    }) {
+        if !matches!(endpoint_kind, EndpointKind::PollQuery) {
+            return Err(ErrorCode::AuthenticateFailure(
+                "Query tokens only authorize query state/page/final/kill requests",
+            ));
+        }
+        let query_id = req.raw_path_param("id").ok_or_else(|| {
+            ErrorCode::AuthenticateFailure("Missing query ID for query authentication")
+        })?;
+        let bearer = req
+            .headers()
+            .typed_get::<Authorization<Bearer>>()
+            .ok_or_else(|| {
+                ErrorCode::AuthenticateFailure("Query authentication requires a Bearer token")
+            })?;
+        return Ok(Credential::QueryToken {
+            query_id: query_id.to_string(),
+            token: bearer.token().to_string(),
+        });
     }
     let client_ip = get_client_ip(req);
     let is_keypair = req
@@ -381,10 +413,20 @@ impl<E> HTTPSessionEndpoint<E> {
 
         let mut session = session_manager.create_session(SessionType::Dummy).await?;
 
-        if let Some(tenant_id) = req.headers().get(HEADER_TENANT) {
-            let tenant_id = tenant_id.to_str().unwrap().to_string();
-            let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
-            session.set_current_tenant(tenant)?;
+        let requested_tenant = req
+            .headers()
+            .get(HEADER_TENANT)
+            .map(|value| -> Result<Tenant> {
+                let name = value
+                    .to_str()
+                    .map_err(|_| ErrorCode::AuthenticateFailure("Invalid tenant header"))?;
+                Ok(Tenant::new_or_err(name, func_name!())?)
+            })
+            .transpose()?;
+        if !matches!(&credential, Credential::QueryToken { .. }) {
+            if let Some(tenant) = &requested_tenant {
+                session.set_current_tenant(tenant.clone())?;
+            }
         }
         let (user_name, authed_client_session_id) = self
             .auth_manager
@@ -395,6 +437,13 @@ impl<E> HTTPSessionEndpoint<E> {
             )
             .await?;
         login_history.user_name = user_name.clone();
+        if matches!(&credential, Credential::QueryToken { .. })
+            && requested_tenant.is_some_and(|tenant| tenant != session.get_current_tenant())
+        {
+            return Err(ErrorCode::AuthenticateFailure(
+                "Query token tenant mismatch",
+            ));
+        }
 
         let mut client_session = if is_worksheet {
             ClientSession::try_decode_for_worksheet(req)
@@ -429,7 +478,9 @@ impl<E> HTTPSessionEndpoint<E> {
                 //     log every request, which can be distinguished by `session_id = ''`
                 login_history.disable_write = true;
             }
-            if ClientSessionType::IDOnly != s.typ {
+            if ClientSessionType::IDOnly != s.typ
+                && !matches!(&credential, Credential::QueryToken { .. })
+            {
                 s.try_refresh_state(session.get_current_tenant(), &user_name, req.cookie())
                     .await?;
             }

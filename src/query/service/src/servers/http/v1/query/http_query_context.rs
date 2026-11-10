@@ -31,6 +31,7 @@ use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
+use crate::servers::http::v1::query::HttpQuery;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
@@ -117,7 +118,29 @@ impl HttpQueryContext {
         Ok(())
     }
 
+    pub(crate) fn check_query_access(&self, query: &HttpQuery) -> poem::Result<()> {
+        let invalid_token = match &self.credential {
+            Credential::QueryToken { token, .. } => !query.query_token.verify(token),
+            _ => false,
+        };
+        if invalid_token
+            || query.tenant != self.session.get_current_tenant()
+            || query.user_name != self.user_name
+        {
+            return Err(poem::Error::from_string(
+                "Query ownership mismatch",
+                StatusCode::UNAUTHORIZED,
+            ));
+        }
+        query.check_client_session_id(&self.client_session_id)
+    }
+
     pub async fn try_refresh_worksheet_session(&self) -> databend_common_exception::Result<()> {
+        // A query capability must not extend session/temporary-table lifetimes
+        // or introduce Meta accesses on the follow-up authentication path.
+        if matches!(&self.credential, Credential::QueryToken { .. }) {
+            return Ok(());
+        }
         if let Some(client_session) = self.client_session.as_ref() {
             if client_session.typ == ClientSessionType::IDOnly {
                 ClientSessionManager::instance()

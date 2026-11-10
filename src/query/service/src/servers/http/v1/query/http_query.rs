@@ -37,6 +37,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::DefaultSettings;
 use databend_common_settings::ScopeLevel;
@@ -63,6 +64,7 @@ use super::ExecuteStateKind;
 use super::Executor;
 use super::HttpQueryContext;
 use super::PageManager;
+use super::QueryToken;
 use super::ResponseData;
 use super::Wait;
 use super::blocks_serializer::BlocksSerializer;
@@ -124,6 +126,7 @@ impl HttpQueryRequest {
         });
         Json(QueryResponse {
             id: "".to_string(),
+            query_token: None,
             stats: QueryStats::default(),
             state: ExecuteStateKind::Failed,
             affect: None,
@@ -573,6 +576,7 @@ pub struct ResponseState {
 }
 
 pub struct HttpQueryResponseInternal {
+    pub query_token: Option<QueryToken>,
     pub data: Option<ResponseData>,
     pub session_id: String,
     pub session: Option<HttpSessionConf>,
@@ -633,6 +637,8 @@ pub enum TimeoutResult {
 
 pub struct HttpQuery {
     pub(crate) id: String,
+    pub(crate) tenant: Tenant,
+    pub(crate) query_token: QueryToken,
     pub(crate) user_name: String,
     pub(crate) client_session_id: Option<String>,
     pagination: PaginationConf,
@@ -742,6 +748,8 @@ impl HttpQuery {
 
         Ok(HttpQuery {
             id: query_id,
+            tenant: session.get_current_tenant(),
+            query_token: QueryToken::new(),
             user_name: http_ctx.user_name.clone(),
             client_session_id: http_ctx.client_session_id.clone(),
             pagination: req.pagination,
@@ -779,6 +787,7 @@ impl HttpQuery {
         };
 
         Ok(HttpQueryResponseInternal {
+            query_token: Some(self.query_token.clone()),
             data,
             state,
             session,
@@ -792,6 +801,7 @@ impl HttpQuery {
         let state = self.get_state();
 
         Ok(HttpQueryResponseInternal {
+            query_token: Some(self.query_token.clone()),
             data: None,
             session_id: self.client_session_id.clone().unwrap_or_default(),
             node_id: HttpQueryManager::instance().server_info.id.clone(),

@@ -462,6 +462,7 @@ strength_reduce = "0.2.4"
 stringslice = "0.2.0"
 strum = "0.24.1"
 sub-cache = "0.2.1"
+subtle = "2.6.1"
 syn = { version = "2.0", features = ["full"] }
 sys-info = "0.9"
 sysinfo = "0.34.2"

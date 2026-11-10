@@ -185,6 +185,9 @@ impl ArrowFeatures {
 #[derive(Serialize, Debug, Clone)]
 pub struct QueryResponse {
     pub id: String,
+    /// Only authorizes follow-up requests for this query, not new SQL.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_token: Option<super::query::QueryToken>,
     pub session_id: Option<String>,
     pub node_id: String,
 
@@ -218,6 +221,7 @@ impl QueryResponse {
     fn from_internal(
         id: String,
         HttpQueryResponseInternal {
+            query_token,
             data,
             session_id,
             session,
@@ -295,6 +299,7 @@ impl QueryResponse {
 
         let mut res = QueryResponse {
             id: id.clone(),
+            query_token,
             session_id: Some(session_id),
             node_id,
             state,
@@ -522,12 +527,7 @@ async fn query_final_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .close_query(
-                &query_id,
-                CloseReason::Finalized,
-                &ctx.client_session_id,
-                true,
-            )
+            .close_query(&query_id, CloseReason::Finalized, Some(ctx))
             .await?
         {
             Some(query) => {
@@ -575,12 +575,7 @@ async fn query_cancel_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .close_query(
-                &query_id,
-                CloseReason::Canceled,
-                &ctx.client_session_id,
-                true,
-            )
+            .close_query(&query_id, CloseReason::Canceled, Some(ctx))
             .await?
         {
             Some(_) => Ok(StatusCode::OK),
@@ -603,6 +598,7 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                ctx.check_query_access(&query)?;
                 if let Some(reason) = query.check_closed() {
                     Ok(StateResponse::closed(&query_id, reason.reason).into_response())
                 } else {
@@ -641,17 +637,7 @@ async fn query_page_handler(
     let query_page_handle = {
         let query_id = query_id.clone();
         async move {
-            if query.user_name != ctx.user_name {
-                return Err(poem::error::Error::from_string(
-                    format!(
-                        "Authentication error: query {} expected user {}, but got {}",
-                        query_id, query.user_name, ctx.user_name
-                    ),
-                    StatusCode::UNAUTHORIZED,
-                ));
-            }
-
-            query.check_client_session_id(&ctx.client_session_id)?;
+            ctx.check_query_access(&query)?;
             if let Some(st) = query.check_closed() {
                 info!(
                     "/query/{}/page/{} - query is close (reason: {:?})",
@@ -749,7 +735,10 @@ pub(crate) async fn query_handler(
         let http_query_manager = HttpQueryManager::instance();
         if ctx.is_query_id_from_client {
             if let Some(query) = http_query_manager.get_query(&ctx.query_id) {
-                return if query.user_name != ctx.user_name {
+                return if query.user_name != ctx.user_name
+                    || query.tenant != ctx.session.get_current_tenant()
+                    || query.client_session_id != ctx.client_session_id
+                {
                     Err(poem::Error::from_string(
                         format!(
                             "fail to start query: query_id {} already exists",

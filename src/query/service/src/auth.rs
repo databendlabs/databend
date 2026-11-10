@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,6 +37,7 @@ use log::info;
 use serde::Serialize;
 
 use crate::servers::http::v1::ClientSessionManager;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::Session;
 
 pub struct AuthMgr {
@@ -45,6 +47,7 @@ pub struct AuthMgr {
 #[derive(Debug, Serialize)]
 pub enum CredentialType {
     DatabendToken,
+    QueryToken,
     Jwt,
     KeyPair,
     Password,
@@ -53,6 +56,10 @@ pub enum CredentialType {
 
 #[derive(Clone)]
 pub enum Credential {
+    QueryToken {
+        query_id: String,
+        token: String,
+    },
     DatabendToken {
         token: String,
     },
@@ -75,6 +82,7 @@ pub enum Credential {
 impl Credential {
     pub fn type_name(&self) -> CredentialType {
         match self {
+            Credential::QueryToken { .. } => CredentialType::QueryToken,
             Credential::DatabendToken { .. } => CredentialType::DatabendToken,
             Credential::Jwt { .. } => CredentialType::Jwt,
             Credential::KeyPair { .. } => CredentialType::KeyPair,
@@ -85,6 +93,7 @@ impl Credential {
 
     pub fn user_name(&self) -> Option<String> {
         match self {
+            Credential::QueryToken { .. } => None,
             Credential::DatabendToken { .. } => None,
             Credential::Jwt { .. } => None,
             Credential::KeyPair { .. } => None,
@@ -124,12 +133,45 @@ impl AuthMgr {
             .unwrap_or_default();
         match credential {
             Credential::NoNeed => Ok(("".to_string(), None)),
+            Credential::QueryToken { query_id, token } => {
+                // Only the HTTP middleware's query-follow-up path may construct
+                // this credential. Never use it to initialize SQL privileges.
+                if need_user_info {
+                    return Err(ErrorCode::AuthenticateFailure(
+                        "Query tokens cannot authenticate this endpoint",
+                    ));
+                }
+                let query = HttpQueryManager::instance()
+                    .get_query(query_id)
+                    .filter(|q| q.query_token.verify(token))
+                    .ok_or_else(|| {
+                        ErrorCode::AuthenticateFailure(
+                            "Invalid query token or query no longer exists",
+                        )
+                    })?;
+                session.set_current_tenant(query.tenant.clone())?;
+                // Sandbox tenants are selected through settings, rather than
+                // current_tenant, in SessionContext::get_current_tenant().
+                if GlobalConfig::instance()
+                    .query
+                    .common
+                    .internal_enable_sandbox_tenant
+                {
+                    session.get_settings().set_setting(
+                        "sandbox_tenant".to_string(),
+                        query.tenant.tenant_name().to_string(),
+                    )?;
+                }
+                Ok((query.user_name.clone(), query.client_session_id.clone()))
+            }
             Credential::DatabendToken { token } => {
                 let claim = ClientSessionManager::instance().verify_token(token).await?;
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
+                // Follow-up requests also need the authenticated tenant for
+                // query ownership checks, even when UserInfo is not loaded.
+                session.set_current_tenant(tenant.clone())?;
                 if need_user_info {
                     let identity = UserIdentity::new(claim.user.clone(), "%");
-                    session.set_current_tenant(tenant.clone())?;
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
