@@ -273,21 +273,24 @@ fn parse_integer(bytes: &[u8]) -> Result<(i64, usize)> {
 }
 
 fn parse_number(bytes: &[u8]) -> Result<(i64, usize)> {
-    let (number, mut pos) = parse_integer(bytes)?;
+    let (mut number, mut pos) = parse_integer(bytes)?;
 
     if pos < bytes.len() && bytes[pos] == b'.' {
         pos += 1;
+        let fraction_start = pos;
         while pos < bytes.len() && bytes[pos].is_ascii_digit() {
-            // Check every digit, including those beyond microsecond precision.
-            if bytes[pos] != b'0' {
-                return Err(ErrorCode::BadArguments(
-                    "Fractional interval quantities are not supported; use integer units or HH:MM:SS.fraction",
-                ));
-            }
             pos += 1;
         }
-    }
-    if pos < bytes.len() && bytes[pos] == b':' {
+        // A fractional quantity rounds to a whole number of its unit, halves away
+        // from zero: `1.3 hour` is 1 hour and `1.5 hour` is 2 hours.
+        // The caller negates the result, so rounding the magnitude up rounds away
+        // from zero for negative quantities too.
+        if pos > fraction_start && bytes[fraction_start] >= b'5' {
+            number = number
+                .checked_add(1)
+                .ok_or(ErrorCode::BadArguments("Number too large"))?;
+        }
+    } else if pos < bytes.len() && bytes[pos] == b':' {
         let time_bytes = &bytes[pos..];
         let mut time_pos = 0;
         let mut total_micros = i128::from(number) * i128::from(MICROS_PER_HOUR);
