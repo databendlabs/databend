@@ -38,12 +38,12 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
 use super::read_state::ReadState;
 use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
+use super::util::selected_row_offsets;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::RowSelection;
@@ -267,14 +267,7 @@ impl Processor for DeserializeDataTransform {
             // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
             // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
             let offsets = if self.block_meta_options.query_internal_columns {
-                bitmap_selection.as_ref().map(|bitmap| {
-                    RoaringTreemap::from_sorted_iter(
-                        (0..bitmap.len())
-                            .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                            .map(|i| i as u64),
-                    )
-                    .unwrap()
-                })
+                bitmap_selection.as_ref().map(selected_row_offsets)
             } else {
                 None
             };
