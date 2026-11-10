@@ -157,25 +157,32 @@ impl<'a> CoreExprArena<'a> {
             None => Cow::Borrowed(like_str),
         };
 
-        if check_percent(&new_like_str) {
-            let left = self.lower_ast_expr(left)?;
-            Ok(self.call(span, "is_not_null", smallvec![left]))
-        } else if check_const(&new_like_str) {
-            self.lower_call_expr(span, "eq", [left, right])
-        } else if let Some((prefix, prefix_plus)) = like_prefix_range(&new_like_str) {
-            let left_gte = self.lower_ast_expr(left)?;
-            let prefix = self.literal(None, Literal::String(prefix.to_owned()));
-            let gte = self.call(span, "gte", smallvec![left_gte, prefix]);
+        match classify_like_pattern(&new_like_str) {
+            LikePatternKind::Percent => {
+                let left = self.lower_ast_expr(left)?;
+                Ok(self.call(span, "is_not_null", smallvec![left]))
+            }
+            LikePatternKind::Const(literal) => {
+                let left = self.lower_ast_expr(left)?;
+                let right = self.literal(None, Literal::String(literal));
+                Ok(self.call(span, "eq", smallvec![left, right]))
+            }
+            LikePatternKind::PrefixRange(prefix, prefix_plus) => {
+                let left_gte = self.lower_ast_expr(left)?;
+                let prefix = self.literal(None, Literal::String(prefix));
+                let gte = self.call(span, "gte", smallvec![left_gte, prefix]);
 
-            let left_lt = self.lower_ast_expr(left)?;
-            let prefix_plus = self.literal(None, Literal::String(prefix_plus));
-            let lt = self.call(span, "lt", smallvec![left_lt, prefix_plus]);
+                let left_lt = self.lower_ast_expr(left)?;
+                let prefix_plus = self.literal(None, Literal::String(prefix_plus));
+                let lt = self.call(span, "lt", smallvec![left_lt, prefix_plus]);
 
-            Ok(self.call(span, "and", smallvec![gte, lt]))
-        } else {
-            let name =
-                like_op_core_function(op).expect("LIKE operator should have a core function");
-            self.lower_like_escape_expr(span, name, left, right, escape)
+                Ok(self.call(span, "and", smallvec![gte, lt]))
+            }
+            LikePatternKind::Other => {
+                let name =
+                    like_op_core_function(op).expect("LIKE operator should have a core function");
+                self.lower_like_escape_expr(span, name, left, right, escape)
+            }
         }
     }
 
@@ -195,32 +202,63 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
-// optimize special cases for like expression
-fn check_percent(like_str: &str) -> bool {
-    !like_str.is_empty() && like_str.chars().all(|c| c == '%')
+/// Special shapes of a constant LIKE pattern that can be lowered to a cheaper
+/// expression than a full `like` call.
+enum LikePatternKind {
+    /// Only `%` characters: matches every non-NULL string.
+    Percent,
+    /// No wildcard and no escape: equivalent to an equality against the literal.
+    Const(String),
+    /// Literal prefix followed by trailing `%` only: equivalent to a half-open range
+    /// `[prefix, prefix_plus)`.
+    PrefixRange(String, String),
+    /// Anything else. Falls back to the `like` function.
+    Other,
 }
 
-// Some check functions for like expression
-fn check_const(like_str: &str) -> bool {
-    for char in like_str.chars() {
-        if char == '_' || char == '%' {
-            return false;
+/// Classify a pattern that already uses `\` as the escape character (see
+/// `convert_escape_pattern`).
+///
+/// Any pattern containing `\` is left to the runtime `like` function. The runtime
+/// treats `\%`, `\_` and `\\` as escapes, so rewriting such a pattern to `eq` or a
+/// range against the raw text would compare against the wrong literal. The runtime
+/// also keeps a VARIANT-specific rule where escaped patterns traverse nested
+/// values, which an `eq` rewrite would not reproduce.
+fn classify_like_pattern(like_str: &str) -> LikePatternKind {
+    if like_str.is_empty() {
+        return LikePatternKind::Const(String::new());
+    }
+    if like_str.chars().all(|c| c == '%') {
+        return LikePatternKind::Percent;
+    }
+
+    let mut literal = String::with_capacity(like_str.len());
+    let mut trailing_percent = false;
+    for c in like_str.chars() {
+        match c {
+            '\\' | '_' => return LikePatternKind::Other,
+            '%' => {
+                if trailing_percent {
+                    return LikePatternKind::Other;
+                }
+                trailing_percent = true;
+            }
+            _ => {
+                if trailing_percent {
+                    return LikePatternKind::Other;
+                }
+                literal.push(c);
+            }
         }
     }
-    true
-}
 
-fn like_prefix_range(like_str: &str) -> Option<(&str, String)> {
-    if like_str.contains("\\%") {
-        return None;
+    if !trailing_percent {
+        return LikePatternKind::Const(literal);
     }
-
-    let prefix = like_str.strip_suffix('%')?;
-    if prefix.is_empty() || prefix.contains('%') || prefix.contains('_') {
-        return None;
-    };
-
-    Some((prefix, next_utf8_prefix(prefix)?))
+    match next_utf8_prefix(&literal) {
+        Some(prefix_plus) => LikePatternKind::PrefixRange(literal, prefix_plus),
+        None => LikePatternKind::Other,
+    }
 }
 
 fn next_utf8_prefix(prefix: &str) -> Option<String> {

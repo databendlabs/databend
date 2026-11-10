@@ -1,0 +1,220 @@
+# LIKE escape handling must be identical no matter whether the pattern is a
+# string literal (planner rewrites it to eq / range) or an expression (runtime
+# like function), and a custom ESCAPE character must replace the default `\`.
+
+statement ok
+CREATE OR REPLACE TABLE like_escape_t (id INT, s VARCHAR)
+
+# Rows after SQL string unescaping:
+#  1 a\b     2 a\\b    3 a%b   4 a_b   5 ab   6 !   7 #   8 %   9 _
+# 10 \      11 a\bc   12 a\\bc 13 \x
+statement ok
+INSERT INTO like_escape_t VALUES
+    (1, 'a\\b'), (2, 'a\\\\b'), (3, 'a%b'), (4, 'a_b'), (5, 'ab'),
+    (6, '!'), (7, '#'), (8, '%'), (9, '_'),
+    (10, '\\'), (11, 'a\\bc'), (12, 'a\\\\bc'), (13, '\\x')
+
+query T
+SELECT hex(s) FROM like_escape_t WHERE id IN (1, 2, 10) ORDER BY id
+----
+615c62
+615c5c62
+5c
+
+# `\\` in a pattern is one literal backslash.
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\\\b' ORDER BY id
+----
+1
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\\\b%' ORDER BY id
+----
+1
+11
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '%a\\\\b' ORDER BY id
+----
+1
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '%a\\\\b%' ORDER BY id
+----
+1
+11
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\\\\\\\b' ORDER BY id
+----
+2
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\\\\\\\b%' ORDER BY id
+----
+2
+12
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '\\\\' ORDER BY id
+----
+10
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '\\\\%' ORDER BY id
+----
+10
+13
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\%b' ORDER BY id
+----
+3
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\_b' ORDER BY id
+----
+4
+
+query I
+SELECT id FROM like_escape_t WHERE s NOT LIKE 'a\\\\b' AND id <= 3 ORDER BY id
+----
+2
+3
+
+# Literal pattern and expression pattern must agree row by row.
+query I
+SELECT count(*) FROM like_escape_t
+WHERE (s LIKE 'a\\\\b') != (s LIKE concat('a', repeat(char(92), 2), 'b'))
+   OR (s LIKE 'a\\\\b%') != (s LIKE concat('a', repeat(char(92), 2), 'b%'))
+   OR (s LIKE '%a\\\\b') != (s LIKE concat('%a', repeat(char(92), 2), 'b'))
+   OR (s LIKE 'a\\\\\\\\b') != (s LIKE concat('a', repeat(char(92), 4), 'b'))
+   OR (s LIKE '\\\\%') != (s LIKE concat(char(92), char(92), '%'))
+----
+0
+
+query IBBBB
+SELECT
+    number + 1,
+    concat('a', repeat(char(92), number + 1), 'b') LIKE 'a\\\\b',
+    concat('a', repeat(char(92), number + 1), 'b') LIKE 'a\\\\b%',
+    concat('a', repeat(char(92), number + 1), 'b') LIKE '%a\\\\b',
+    concat('a', repeat(char(92), number + 1), 'b') LIKE '%a\\\\b%'
+FROM numbers(2) ORDER BY number
+----
+1 1 1 1 1
+2 0 0 0 0
+
+# A custom ESCAPE character replaces `\`: the escape char escapes itself,
+# and a bare `\` becomes a plain literal.
+query BBBBBB
+SELECT
+    '!' LIKE '%!!%' ESCAPE '!',
+    '#' LIKE '%##%' ESCAPE '#',
+    '%' LIKE '!%' ESCAPE '!',
+    '_' LIKE '!_' ESCAPE '!',
+    '%' LIKE concat(char(92), '%') ESCAPE '!',
+    '_' LIKE concat(char(92), '_') ESCAPE '!'
+----
+1 1 1 1 0 0
+
+query BBBBBB
+SELECT
+    '!' LIKE '!!' ESCAPE '!',
+    '#' LIKE '##' ESCAPE '#',
+    '%' LIKE '\\%' ESCAPE '!',
+    '_' LIKE '\\_' ESCAPE '!',
+    '\\' LIKE '\\' ESCAPE '!',
+    '\\x' LIKE '\\_' ESCAPE '!'
+----
+1 1 0 0 1 1
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '%!!%' ESCAPE '!' ORDER BY id
+----
+6
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '%##%' ESCAPE '#' ORDER BY id
+----
+7
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '!%' ESCAPE '!' ORDER BY id
+----
+8
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '!_' ESCAPE '!' ORDER BY id
+----
+9
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '\\%' ESCAPE '!' ORDER BY id
+----
+10
+13
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE concat(char(92), '%') ESCAPE '!' ORDER BY id
+----
+10
+13
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE '\\_' ESCAPE '!' ORDER BY id
+----
+13
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE concat(char(92), '_') ESCAPE '!' ORDER BY id
+----
+13
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\b' ESCAPE '!' ORDER BY id
+----
+1
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a!\\b' ESCAPE '!' ORDER BY id
+----
+1
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\b%' ESCAPE '!' ORDER BY id
+----
+1
+11
+
+query I
+SELECT id FROM like_escape_t WHERE s LIKE 'a\\\\b' ESCAPE '!' ORDER BY id
+----
+2
+
+query I
+SELECT id FROM like_escape_t WHERE s NOT LIKE '%!!%' ESCAPE '!' AND id IN (6, 7) ORDER BY id
+----
+7
+
+# Existing behaviour that must not change.
+query BBBB
+SELECT
+    '100%' LIKE '100!%' ESCAPE '!',
+    'a%b_c\d' LIKE 'a!%b!_c!\\d' ESCAPE '!',
+    '%' LIKE '\\\\%' ESCAPE '',
+    '%' LIKE '\\%'
+----
+1 1 0 1
+
+# Escaped patterns against VARIANT keep traversing nested values.
+query BBB
+SELECT
+    parse_json('{"name":"a\\\\b"}') LIKE 'a\\\\b',
+    parse_json('["a\\\\bc"]') LIKE 'a\\\\b%',
+    parse_json('{"name":"a!b"}') LIKE 'a!!b' ESCAPE '!'
+----
+1 1 0
+
+statement ok
+DROP TABLE like_escape_t
