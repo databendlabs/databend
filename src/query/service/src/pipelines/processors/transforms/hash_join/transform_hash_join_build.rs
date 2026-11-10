@@ -480,3 +480,152 @@ impl TransformHashJoinBuild {
         self.memory_settings.check_spill()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_pipeline::core::OutputPort;
+    use databend_common_pipeline::core::port::connect;
+    use databend_common_sql::plans::JoinType;
+    use parking_lot::RwLock;
+
+    use super::*;
+    use crate::pipelines::processors::HashJoinState;
+    use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
+    use crate::pipelines::processors::transforms::hash_join::desc::MarkJoinDesc;
+    use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFiltersDesc;
+    use crate::test_kits::TestFixture;
+
+    async fn cross_build_state(
+        fixture: &TestFixture,
+        build_projection: BTreeSet<usize>,
+    ) -> Result<Arc<HashJoinBuildState>> {
+        let ctx = fixture.new_query_ctx().await?;
+        let schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "b0",
+            DataType::Number(NumberDataType::Int64),
+        )]));
+        let desc = HashJoinDesc {
+            build_keys: vec![],
+            probe_keys: vec![],
+            is_null_equal: vec![],
+            join_type: JoinType::Cross,
+            single_to_inner: None,
+            other_predicate: None,
+            marker_join_desc: MarkJoinDesc {
+                has_null: RwLock::new(false),
+            },
+            from_correlated_subquery: false,
+            runtime_filter: RuntimeFiltersDesc { filters: vec![] },
+            build_projection: build_projection.clone(),
+            probe_projection: BTreeSet::new(),
+            probe_to_build: vec![],
+            build_schema: schema.clone(),
+            probe_schema: Arc::new(DataSchema::empty()),
+        };
+        let state = HashJoinState::try_create(
+            ctx.clone(),
+            schema,
+            &build_projection,
+            desc,
+            &[],
+            false,
+            false,
+            None,
+        )?;
+        HashJoinBuildState::try_create(
+            ctx.clone(),
+            ctx.get_function_context()?,
+            &[],
+            &build_projection,
+            state,
+            1,
+            None,
+        )
+    }
+
+    /// Drive one build processor through collect: `blocks` input blocks of
+    /// `rows` rows each, then input end.
+    async fn collect(
+        build_state: &Arc<HashJoinBuildState>,
+        blocks: usize,
+        rows: i64,
+    ) -> Result<Vec<DataBlock>> {
+        let input = InputPort::create();
+        let upstream = OutputPort::create();
+        unsafe { connect(&input, &upstream) };
+        let mut processor = TransformHashJoinBuild::try_create(input, build_state.clone())?;
+
+        assert!(matches!(processor.event()?, Event::NeedData));
+        for _ in 0..blocks {
+            upstream.push_data(Ok(DataBlock::new_from_columns(vec![Int64Type::from_data(
+                (0..rows).collect::<Vec<_>>(),
+            )])));
+            assert!(matches!(processor.event()?, Event::NeedData));
+        }
+        let buffered = processor
+            .as_any()
+            .downcast_mut::<TransformHashJoinBuild>()
+            .unwrap()
+            .data_blocks
+            .clone();
+
+        upstream.finish();
+        assert!(matches!(processor.event()?, Event::Async));
+        processor.async_process().await?;
+        assert!(matches!(processor.event()?, Event::Sync));
+        processor.process()?;
+        Ok(buffered)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn row_count_build_drops_unread_input_columns() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        // Without build projections only the row count is kept, both while
+        // buffering input and in the build chunks. A projected column is kept.
+        for (build_projection, num_columns) in [(BTreeSet::new(), 0), (BTreeSet::from([0]), 1)] {
+            let build_state = cross_build_state(&fixture, build_projection).await?;
+            let buffered = collect(&build_state, 3, 4).await?;
+            assert_eq!(buffered.len(), 3);
+            for block in &buffered {
+                assert_eq!(block.num_rows(), 4);
+                assert_eq!(block.num_columns(), num_columns);
+            }
+
+            let state = unsafe { &*build_state.hash_join_state.build_state.get() };
+            assert_eq!(state.generation_state.build_num_rows, 12);
+            let chunks = &state.generation_state.chunks;
+            assert_eq!(chunks.iter().map(DataBlock::num_rows).sum::<usize>(), 12);
+            assert!(
+                chunks
+                    .iter()
+                    .all(|chunk| chunk.num_columns() == num_columns)
+            );
+            assert!(
+                !build_state
+                    .hash_join_state
+                    .fast_return
+                    .load(Ordering::Acquire)
+            );
+        }
+
+        // An empty row-count build still takes the empty-build fast path.
+        let build_state = cross_build_state(&fixture, BTreeSet::new()).await?;
+        collect(&build_state, 1, 0).await?;
+        assert!(
+            build_state
+                .hash_join_state
+                .fast_return
+                .load(Ordering::Acquire)
+        );
+        assert_eq!(build_state.hash_join_state.num_build_chunks(), 0);
+        Ok(())
+    }
+}
