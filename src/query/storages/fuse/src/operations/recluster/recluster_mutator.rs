@@ -536,13 +536,9 @@ impl ReclusterMutator {
                 continue;
             }
             let level = block.stats().level;
-            if level < 0
-                || (level >= MAX_RECLUSTER_LEVEL
-                    && block.meta.block_size as usize
-                        >= self.properties.block_thresholds.min_bytes_per_block)
-            {
+            if level < 0 || (level >= MAX_RECLUSTER_LEVEL && !self.is_terminal_fragment(block)) {
                 // Terminal-level blocks are excluded from further rewrite tasks
-                // unless they stayed small enough to still need consolidation.
+                // unless they are fragments that still need consolidation.
                 continue;
             }
             let partition = if self.properties.partition_key_count == 0 {
@@ -652,7 +648,7 @@ impl ReclusterMutator {
                 9..=31 => stats.level_9_31 += 1,
                 _ => stats.level_ge_32 += 1,
             }
-            if level >= MAX_RECLUSTER_LEVEL {
+            if level >= MAX_RECLUSTER_LEVEL && !self.is_terminal_fragment(block) {
                 stats.skipped_terminal_level_blocks += 1;
                 stats.skipped_terminal_level_bytes += block.meta.block_size;
             } else if level >= 0
@@ -663,6 +659,21 @@ impl ReclusterMutator {
             }
         }
         stats
+    }
+
+    /// Whether a terminal-level block is a fragment that still needs consolidation.
+    ///
+    /// Only blocks below half of the minimum row, byte and compressed thresholds
+    /// qualify. Recluster output blocks are cut at no less than 80% of the task's
+    /// row or byte target, so rewritten blocks stay above this gate and cannot be
+    /// reselected forever. A byte-only gate does not have this property: narrow
+    /// tables reach the row limit long before `min_bytes_per_block`.
+    fn is_terminal_fragment(&self, block: &ReclusterBlock) -> bool {
+        self.properties.block_thresholds.check_too_small(
+            block.meta.row_count as usize,
+            block.meta.block_size as usize,
+            block.meta.file_size as usize,
+        )
     }
 
     fn build_block_reduction_candidates(

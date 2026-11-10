@@ -540,6 +540,47 @@ async fn materialize_segments_by_level_and_size(
     Ok((block_num, parts))
 }
 
+async fn materialize_terminal_blocks(
+    row_count: u64,
+    block_size: u64,
+    file_size: u64,
+    block_count: usize,
+    thresholds: BlockThresholds,
+) -> anyhow::Result<ReclusterParts> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let segment_locations = gen_recluster_segments_by_level(
+        &data_accessor,
+        &location_generator,
+        &[(32, block_count)],
+        row_count,
+        block_size,
+        file_size,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let ctx: Arc<dyn TableContext> = ctx;
+    let (_, _, parts) = materialize_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        1,
+        1000,
+        ReclusterMode::Aggressive,
+    )
+    .await?;
+    Ok(parts)
+}
+
 async fn materialize_segment_locations_with_mode(
     ctx: Arc<dyn TableContext>,
     data_accessor: opendal::Operator,
@@ -2497,6 +2538,35 @@ async fn test_repacks_max_level_without_rewrite() -> anyhow::Result<()> {
     assert!(parts.tasks.is_empty());
     assert_eq!(parts.remained_blocks.len(), 3);
     assert_eq!(parts.removed_segment_indexes.len(), 3);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_max_level_narrow_blocks_are_not_rewritten() -> anyhow::Result<()> {
+    // min_rows_per_block = 800, min_bytes_per_block = 80.
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    // Narrow-table blocks hit the row limit first: rows sit just below
+    // min_rows_per_block and bytes stay far below min_bytes_per_block. Rewriting
+    // them produces blocks of the same shape, so selecting them again would
+    // make RECLUSTER FINAL loop until timeout.
+    let parts = materialize_terminal_blocks(780, 50, 50, 3, thresholds).await?;
+
+    assert!(parts.tasks.is_empty());
+    assert_eq!(parts.remained_blocks.len(), 3);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_max_level_fragments_are_consolidated() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    // Fragments below half of every minimum threshold still merge into one block.
+    let parts = materialize_terminal_blocks(100, 10, 10, 3, thresholds).await?;
+
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(task_part_counts(&parts), vec![3]);
+    assert_eq!(parts.tasks[0].total_rows, 300);
 
     Ok(())
 }
