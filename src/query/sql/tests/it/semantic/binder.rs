@@ -130,6 +130,54 @@ async fn test_recursive_cte_subquery() -> Result<()> {
     .await
 }
 
+#[test]
+fn test_deep_left_join_binding() -> Result<()> {
+    // Leave room for AST cloning without letting the debug query runtime's larger
+    // stack hide unguarded recursion in the binder.
+    std::thread::Builder::new()
+        .name("deep_left_join_binding".to_string())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .enable_all()
+                .build()
+                .expect("create test runtime")
+                .block_on(async {
+                    let case = SqlTestCase {
+                        name: "deep_left_join_binding",
+                        description: "Deep left JOIN chains must not overflow the binder stack.",
+                        setup_sqls: &["CREATE TABLE t(e INTEGER)"],
+                        sql: "SELECT 1",
+                    };
+                    let ctx = setup_context(&case).await?;
+
+                    for count in [60, 512] {
+                        let joins = (0..count)
+                            .map(|i| format!(" LEFT JOIN t a{i}"))
+                            .collect::<String>();
+                        let sql = format!("SELECT * FROM t{joins} ON e{joins}");
+                        let err = ctx.bind_sql(&sql).await.unwrap_err();
+                        assert_eq!(err.code(), 1065);
+                        assert_eq!(err.message(), "outer join should contain join conditions");
+                    }
+
+                    // Valid conditions must still traverse the deep tree, even if missing
+                    // conditions are rejected earlier in the future.
+                    let mut sql = "SELECT a0.e FROM t a0".to_string();
+                    for i in 1..=256 {
+                        sql.push_str(&format!(" LEFT JOIN t a{i} ON a0.e = a{i}.e"));
+                    }
+                    let plan = ctx.bind_sql(&sql).await?;
+                    assert!(matches!(plan, Plan::Query { .. }));
+                    Ok(())
+                })
+        })
+        .expect("spawn small-stack binder thread")
+        .join()
+        .expect("small-stack binder thread panicked")
+}
+
 const TEST_UDAF_SQL: &str = r#"
 CREATE OR REPLACE FUNCTION weighted_avg (a INT, b INT) STATE { sum INT, weight INT } RETURNS FLOAT
 LANGUAGE javascript AS $$

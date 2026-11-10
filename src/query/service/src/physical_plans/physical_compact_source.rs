@@ -43,6 +43,7 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::interpreters::common::check_expected_table_id;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
@@ -241,12 +242,14 @@ impl PhysicalPlanBuilder {
             catalog,
             database,
             table,
+            expected_table_id,
             limit,
         } = compact_block;
 
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;
+        check_expected_table_id(tbl.get_id(), *expected_table_id)?;
         tbl.check_mutable_for_maintenance()?;
 
         let table_info = tbl.get_table_info().clone();

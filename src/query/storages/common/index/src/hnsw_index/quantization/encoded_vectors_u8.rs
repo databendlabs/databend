@@ -21,10 +21,10 @@ use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::hnsw_index::common::utils::MIN_PREFETCH_STORAGE_BYTES;
-use crate::hnsw_index::common::utils::prefetch_bytes;
-use crate::hnsw_index::common::utils::prefetch_bytes_l2;
-use crate::hnsw_index::common::utils::prefetch_windows;
+use crate::hnsw_index::common::prefetch::MIN_PREFETCH_STORAGE_BYTES;
+use crate::hnsw_index::common::prefetch::prefetch_slice;
+use crate::hnsw_index::common::prefetch::prefetch_slice_l2;
+use crate::hnsw_index::common::prefetch::prefetch_windows;
 use crate::hnsw_index::quantization::encoded_storage::EncodedStorage;
 use crate::hnsw_index::quantization::encoded_storage::EncodedStorageBuilder;
 use crate::hnsw_index::quantization::encoded_vectors::DistanceType;
@@ -200,13 +200,13 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
     /// each vector is otherwise read from memory when it is scored.
     #[inline]
     pub fn prefetch(&self, i: u32) {
-        prefetch_bytes(self.vector_data(i));
+        prefetch_slice(self.vector_data(i));
     }
 
     /// Like [`Self::prefetch`], but no deeper than L2.
     #[inline]
     pub fn prefetch_l2(&self, i: u32) {
-        prefetch_bytes_l2(self.vector_data(i));
+        prefetch_slice_l2(self.vector_data(i));
     }
 
     /// The near and far prefetch windows for scoring a batch of vectors (see

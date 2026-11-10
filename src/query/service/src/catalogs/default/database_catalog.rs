@@ -481,26 +481,6 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_branch_with_expire_ctl(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        branch_name: &str,
-        include_expired: bool,
-    ) -> Result<Arc<dyn Table>> {
-        self.mutable_catalog
-            .get_table_branch_with_expire_ctl(
-                tenant,
-                db_name,
-                table_name,
-                branch_name,
-                include_expired,
-            )
-            .await
-    }
-
-    #[async_backtrace::framed]
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
         self.mutable_catalog.create_table_tag(req).await
     }

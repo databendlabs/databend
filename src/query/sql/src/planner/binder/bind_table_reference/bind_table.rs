@@ -48,7 +48,6 @@ use crate::binder::Binder;
 use crate::binder::ViewIdent;
 use crate::binder::lineage_enabled;
 use crate::binder::util::TableIdentifier;
-use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 impl Binder {
     /// A base table is a table that is not a view or CTE.
@@ -67,7 +66,6 @@ impl Binder {
             catalog,
             database,
             table,
-            branch,
         } = table_ref;
         // Qualified names are tables, except inside a legacy stored definition whose
         // rewriter qualified CTE references as well. Never enable that mode for ordinary SQL.
@@ -75,21 +73,11 @@ impl Binder {
             .definition_scope
             .cte_resolution()
             .may_reference_cte(database.is_some());
-        let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, alias);
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
         let mut catalog = table_identifier.catalog_name();
         let mut database = table_identifier.database_name();
         let table_name = table_identifier.table_name();
-        let branch_name = table_identifier.branch_name();
         let table_name_alias = table_identifier.table_name_alias();
-
-        if let Some(branch_name) = branch_name.as_ref() {
-            // Keep parsing `<db>.<table>/<branch>` so the upcoming redesign can
-            // reuse the syntax without reviving the legacy implementation.
-            return Err(legacy_table_ref_removed_error(format!(
-                "table branch reference `{catalog}.{database}.{table_name}/{branch_name}`"
-            ))
-            .set_span(*span));
-        }
 
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
             if may_reference_cte && cte_name == &table_name {
@@ -180,7 +168,6 @@ impl Binder {
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
-                branch_name.as_deref(),
                 navigation.as_ref(),
                 max_batch_size,
             ) {
@@ -231,7 +218,6 @@ impl Binder {
                         catalog,
                         database.clone(),
                         table_meta.clone(),
-                        branch_name,
                         table_name_alias,
                         !bind_context.binding_views.is_empty(),
                         false,
@@ -326,7 +312,6 @@ impl Binder {
                         catalog.clone(),
                         database.clone(),
                         table_meta.clone(),
-                        branch_name.clone(),
                         table_name_alias.clone(),
                         false,
                         false,
@@ -395,7 +380,6 @@ impl Binder {
                     catalog.clone(),
                     database.clone(),
                     table_meta.clone(),
-                    branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
                     false,

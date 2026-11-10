@@ -732,19 +732,8 @@ impl QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        if branch.is_some() {
-            // Legacy experimental table refs were removed. The parser still accepts
-            // `<db>.<table>/<branch>` so the upcoming redesign can reuse the syntax,
-            // but any remaining runtime entry point should still return a user-facing
-            // error instead of looking like an internal server bug.
-            return Err(ErrorCode::Unimplemented(
-                "Legacy experimental table refs were removed: table branch references are reserved for a future redesign and are intentionally rejected.",
-            ));
-        }
-
         let table = self
             .shared
             .get_table(catalog, database, table, max_batch_size)

@@ -760,12 +760,11 @@ impl TableContextTableAccess for CtxDelegation {
         self.ctx.get_application_level_data_operator()
     }
 
-    async fn get_table_with_branch(
+    async fn get_table(
         &self,
         _catalog: &str,
         _database: &str,
         _table: &str,
-        _branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
         todo!()
     }
@@ -775,7 +774,6 @@ impl TableContextTableAccess for CtxDelegation {
         _catalog: &str,
         _database: &str,
         _table: &str,
-        _branch: Option<&str>,
         _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         todo!()

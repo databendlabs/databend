@@ -36,7 +36,6 @@ use crate::binder::JoinPredicate;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::ir::StatContext;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
@@ -45,7 +44,7 @@ use crate::plans::JoinType;
 pub fn outer_join_to_inner_join(
     s_expr: &SExpr,
     metadata: MetadataRef,
-    stat_context: &StatContext,
+    func_ctx: &FunctionContext,
 ) -> Result<(SExpr, bool)> {
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     if !join.join_type.is_outer_join() {
@@ -60,48 +59,62 @@ pub fn outer_join_to_inner_join(
     let mut can_filter_right_null = false;
     let left_prop = join_rel_expr.derive_relational_prop_child(0)?;
     let right_prop = join_rel_expr.derive_relational_prop_child(1)?;
+    // Only a null-supplying side can be filtered. Checking the preserved side would evaluate
+    // its predicates, such as `t1.ts > now()`, and keep the plan out of the planner cache.
+    let (left_supplies_null, right_supplies_null) = match join.join_type {
+        JoinType::Left | JoinType::LeftSingle => (false, true),
+        JoinType::Right | JoinType::RightSingle => (true, false),
+        JoinType::Full | JoinType::FullAsof => (true, true),
+        _ => (false, false),
+    };
     for predicate in &filter.predicates {
         let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
         match pred {
             JoinPredicate::Left(_)
-                if can_filter_null(
-                    predicate,
-                    &left_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                    &stat_context.function_context,
-                )? =>
+                if left_supplies_null
+                    && can_filter_null(
+                        predicate,
+                        &left_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )? =>
             {
                 can_filter_left_null = true;
             }
             JoinPredicate::Right(_)
-                if can_filter_null(
-                    predicate,
-                    &right_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                    &stat_context.function_context,
-                )? =>
+                if right_supplies_null
+                    && can_filter_null(
+                        predicate,
+                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )? =>
             {
                 can_filter_right_null = true;
             }
             JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
-                if can_filter_null(
-                    predicate,
-                    &left_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                    &stat_context.function_context,
-                )? {
+                if left_supplies_null
+                    && can_filter_null(
+                        predicate,
+                        &left_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )?
+                {
                     can_filter_left_null = true;
                 }
-                if can_filter_null(
-                    predicate,
-                    &right_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                    &stat_context.function_context,
-                )? {
+                if right_supplies_null
+                    && can_filter_null(
+                        predicate,
+                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )?
+                {
                     can_filter_right_null = true;
                 }
             }

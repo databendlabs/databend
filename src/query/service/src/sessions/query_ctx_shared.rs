@@ -57,6 +57,7 @@ use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::QuerySpecificValues;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
@@ -144,6 +145,8 @@ pub struct QueryContextShared {
     /// Do not combine it with worker-local wall-clock timestamps to calculate
     /// elapsed time; use `created_time` for local context timing instead.
     pub(super) query_created_time: SystemTime,
+    /// Shared by every function context of this query, for the planner cache.
+    pub(super) query_specific_values: QuerySpecificValues,
     // now it is only set in query_log::log_query_finished
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
@@ -269,6 +272,7 @@ impl QueryContextShared {
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time,
             query_created_time,
+            query_specific_values: QuerySpecificValues::tracked(),
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),

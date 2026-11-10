@@ -42,7 +42,6 @@ use crate::FUSE_TBL_SPATIAL_INDEX_PREFIX;
 use crate::FUSE_TBL_VECTOR_INDEX_PREFIX;
 use crate::FUSE_TBL_VECTOR_INDEX_PREFIX_V2;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
-use crate::LEGACY_FUSE_TBL_REF_PREFIX;
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -84,8 +83,6 @@ pub struct TableMetaLocationGenerator {
     spatial_index_location_prefix: String,
     segment_statistics_location_prefix: String,
     segment_zone_map_location_prefix: String,
-    // legacy ref prefix.
-    ref_snapshot_location_prefix: String,
 }
 
 impl TableMetaLocationGenerator {
@@ -111,7 +108,6 @@ impl TableMetaLocationGenerator {
             format!("{}/{}/", prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
         let segment_zone_map_location_prefix =
             format!("{}/{}/", prefix, FUSE_TBL_SEGMENT_ZONE_MAP_PREFIX);
-        let ref_snapshot_location_prefix = format!("{}/{}/", prefix, LEGACY_FUSE_TBL_REF_PREFIX);
         Self {
             prefix,
             block_location_prefix,
@@ -127,7 +123,6 @@ impl TableMetaLocationGenerator {
             spatial_index_location_prefix,
             segment_statistics_location_prefix,
             segment_zone_map_location_prefix,
-            ref_snapshot_location_prefix,
         }
     }
 
@@ -170,10 +165,6 @@ impl TableMetaLocationGenerator {
 
     pub fn segment_zone_map_location_prefix(&self) -> &str {
         &self.segment_zone_map_location_prefix
-    }
-
-    pub fn ref_snapshot_location_prefix(&self) -> &str {
-        &self.ref_snapshot_location_prefix
     }
 
     pub fn gen_block_location(
