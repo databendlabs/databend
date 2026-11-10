@@ -17,17 +17,17 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::ProbeState;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::aggregate_function::AggregateCallRef;
+use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::Pipeline;
@@ -57,7 +57,7 @@ pub struct TransformReaggregateAggregateStateBlock {
     table_column_count: usize,
     state_indices: Vec<usize>,
     group_indices: Vec<usize>,
-    functions: Vec<AggregateFunctionRef>,
+    functions: Vec<AggregateCallRef>,
     group_types: Vec<DataType>,
 }
 
@@ -69,7 +69,6 @@ impl TransformReaggregateAggregateStateBlock {
             return Ok(None);
         }
 
-        let factory = AggregateFunctionFactory::instance();
         let mut state_indices = Vec::new();
         let mut group_indices = Vec::new();
         let mut functions = Vec::new();
@@ -78,18 +77,19 @@ impl TransformReaggregateAggregateStateBlock {
         for (idx, field) in table_schema.fields().iter().enumerate() {
             let data_type = field.data_type();
             match data_type.remove_nullable() {
-                TableDataType::AggregateState {
-                    function_name,
-                    params,
-                    argument_types,
-                    ..
-                } => {
-                    let function = factory.get(
-                        &function_name,
-                        params.into_iter().map(Scalar::from).collect(),
-                        argument_types.iter().map(DataType::from).collect(),
-                        vec![],
-                    )?;
+                state @ TableDataType::AggregateState { .. } => {
+                    let TableDataType::AggregateState { function_name, .. } = &state else {
+                        unreachable!()
+                    };
+                    let merge_name = format!("{function_name}_merge_state");
+                    let state_type = DataType::from(&state);
+                    let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+                        name: &merge_name,
+                        params: &[],
+                        args_type: std::slice::from_ref(&state_type),
+                        distinct: false,
+                        order_by: &[],
+                    })?;
                     state_indices.push(idx);
                     functions.push(function);
                 }
@@ -204,19 +204,18 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
-    use databend_common_functions::aggregates::AggregateFunctionFactory;
     use databend_common_pipeline_transforms::processors::Transform;
 
     use super::*;
 
     fn sum_state_block(groups: &[&str], values: &[i32]) -> Result<DataBlock> {
-        let factory = AggregateFunctionFactory::instance();
-        let function = factory.get(
-            "sum_state",
-            vec![],
-            vec![DataType::Number(NumberDataType::Int32)],
-            vec![],
-        )?;
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "sum_state",
+            params: &[],
+            args_type: &[DataType::Number(NumberDataType::Int32)],
+            distinct: false,
+            order_by: &[],
+        })?;
         let input = DataBlock::new_from_columns(vec![
             Int32Type::from_data(values.to_vec()),
             StringType::from_data(
@@ -245,14 +244,18 @@ mod tests {
 
     #[test]
     fn reaggregate_merges_duplicate_group_keys() -> Result<()> {
-        let function = AggregateFunctionFactory::instance().get(
-            "sum_state",
-            vec![],
-            vec![DataType::Number(NumberDataType::Int32)],
-            vec![],
-        )?;
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "sum_state",
+            params: &[],
+            args_type: &[DataType::Number(NumberDataType::Int32)],
+            distinct: false,
+            order_by: &[],
+        })?;
         let schema = TableSchema::new(vec![
-            TableField::new("total", infer_schema_type(&function.return_type()?)?),
+            TableField::new(
+                "total",
+                infer_schema_type(&function.signature().return_type)?,
+            ),
             TableField::new("category", TableDataType::String),
         ]);
         let mut transform = TransformReaggregateAggregateStateBlock::try_create(&schema)?
@@ -268,17 +271,48 @@ mod tests {
     }
 
     #[test]
+    fn reaggregate_rejects_unsupported_state_version() -> Result<()> {
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "sum_state",
+            params: &[],
+            args_type: &[DataType::Number(NumberDataType::Int32)],
+            distinct: false,
+            order_by: &[],
+        })?;
+        let DataType::AggregateState(mut state) = function.signature().return_type.clone() else {
+            panic!("sum_state should return AggregateState");
+        };
+        state.state_version = 2;
+        let schema = TableSchema::new(vec![TableField::new(
+            "total",
+            infer_schema_type(&DataType::AggregateState(state))?,
+        )]);
+
+        let error = match TransformReaggregateAggregateStateBlock::try_create(&schema) {
+            Ok(_) => panic!("reaggregate accepted an unsupported aggregate state version"),
+            Err(error) => error,
+        };
+        assert!(error.message().contains("state version 2"));
+        assert!(error.message().contains("expected version 0"));
+        Ok(())
+    }
+
+    #[test]
     fn reaggregate_preserves_column_layout() -> Result<()> {
         // Materialized view physical schemas store aggregate state columns
         // before group columns; the transform output must keep that layout.
-        let function = AggregateFunctionFactory::instance().get(
-            "sum_state",
-            vec![],
-            vec![DataType::Number(NumberDataType::Int32)],
-            vec![],
-        )?;
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "sum_state",
+            params: &[],
+            args_type: &[DataType::Number(NumberDataType::Int32)],
+            distinct: false,
+            order_by: &[],
+        })?;
         let schema = TableSchema::new(vec![
-            TableField::new("total", infer_schema_type(&function.return_type()?)?),
+            TableField::new(
+                "total",
+                infer_schema_type(&function.signature().return_type)?,
+            ),
             TableField::new("category", TableDataType::String),
         ]);
         let mut transform = TransformReaggregateAggregateStateBlock::try_create(&schema)?

@@ -1,0 +1,66 @@
+# The Arrow schema embedded in binary_view.parquet contains FixedSizeList.
+# Both whole-file and row-group readers must preserve the generic ARRAY conversion.
+# run-with-settings: parquet_fast_read_bytes=0
+# run-with-settings: parquet_fast_read_bytes=1048576
+
+query TT
+SELECT * FROM @data/parquet/binary_view.parquet;
+----
+6162 [1,2]
+68656C6C6F [3,4]
+6C61726765207061796C6F6164206F766572203132206279746573 [5,6]
+
+query T
+SELECT fixed_size_list_col FROM @data/parquet/binary_view.parquet;
+----
+[1,2]
+[3,4]
+[5,6]
+
+# Prewhere reads the list separately from the binary output column.
+query T
+SELECT binary_view_col FROM @data/parquet/binary_view.parquet WHERE fixed_size_list_col[1] > 2 ORDER BY fixed_size_list_col[1];
+----
+68656C6C6F
+6C61726765207061796C6F6164206F766572203132206279746573
+
+query I
+SELECT count(*) FROM @data/parquet/binary_view.parquet WHERE fixed_size_list_col[1] > 2;
+----
+2
+
+# Split the list into sliced one-row batches.
+statement ok
+SET max_block_size=1;
+
+query TT
+SELECT * FROM @data/parquet/binary_view.parquet;
+----
+6162 [1,2]
+68656C6C6F [3,4]
+6C61726765207061796C6F6164206F766572203132206279746573 [5,6]
+
+statement ok
+UNSET max_block_size;
+
+statement ok
+DROP TABLE IF EXISTS parquet_fixed_size_list_regression;
+
+statement ok
+CREATE TABLE parquet_fixed_size_list_regression (
+    binary_view_col BINARY,
+    fixed_size_list_col ARRAY(INT32 NULL)
+);
+
+statement ok
+COPY INTO parquet_fixed_size_list_regression FROM @data/parquet/binary_view.parquet FORCE=TRUE;
+
+query TT
+SELECT * FROM parquet_fixed_size_list_regression ORDER BY fixed_size_list_col[1];
+----
+6162 [1,2]
+68656C6C6F [3,4]
+6C61726765207061796C6F6164206F766572203132206279746573 [5,6]
+
+statement ok
+DROP TABLE parquet_fixed_size_list_regression;

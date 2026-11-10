@@ -44,25 +44,25 @@ expression: to_timestamp(value)
 inputs:     value: {"2007-01-01"..="2007-01-02"}
 checked:    to_timestamp(value)
 folded:     to_timestamp(value)
-domain:     {1167609600000000..=1167696000000000}
+domain:     Unknown
 
 expression: CAST(value AS TIMESTAMP NULL)
 inputs:     value: {"2007-01-01"..="2007-01-02"}
 checked:    CAST(value AS Timestamp NULL)
 folded:     CAST(value AS Timestamp NULL)
-domain:     {1167609600000000..=1167696000000000}
+domain:     Unknown
 
 expression: to_timestamp(value)
 inputs:     value: {"2007-01-01"..="2007-01-02"} ∪ {NULL}
 checked:    to_timestamp(value)
 folded:     to_timestamp(value)
-domain:     {1167609600000000..=1167696000000000} ∪ {NULL}
+domain:     Unknown
 
 expression: CAST(value AS TIMESTAMP NULL)
 inputs:     value: {"2007-01-01"..="2007-01-02"} ∪ {NULL}
 checked:    CAST(value AS Timestamp NULL)
 folded:     CAST(value AS Timestamp NULL)
-domain:     {1167609600000000..=1167696000000000} ∪ {NULL}
+domain:     Unknown
 
 expression: identity(value)
 inputs:     value: {10..=20} ∪ {NULL}

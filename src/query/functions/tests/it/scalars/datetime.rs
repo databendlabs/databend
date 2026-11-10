@@ -27,6 +27,7 @@ use databend_common_expression::types::date::DATE_MAX;
 use databend_common_expression::types::date::DATE_MIN;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::SimpleDomain;
+use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
 use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
@@ -48,6 +49,7 @@ fn test_datetime() {
     test_to_date(file);
     test_date_add_subtract(file);
     test_timestamp_add_subtract(file);
+    test_string_time_add_subtract(file);
     test_date_date_add_sub(file);
     test_timestamp_date_add_sub(file);
     test_date_arith(file);
@@ -96,6 +98,101 @@ fn test_to_timestamp(file: &mut impl Write) {
         "b",
         StringType::from_data(vec!["2020-01-01", "2020-01-02", "2020-01-03", "2029-01-01"]),
     )]);
+
+    // Both numeric overloads retain clamp-to-MIN, including TRY. Include valid
+    // interior values so endpoint clamping cannot hide their domains.
+    let inputs = [(
+        "n",
+        Int64Type::from_data(vec![
+            i64::MIN,
+            timestamp::TIMESTAMP_MIN - 1,
+            timestamp::TIMESTAMP_MIN,
+            0,
+            timestamp::TIMESTAMP_MAX,
+            timestamp::TIMESTAMP_MAX + 1,
+            i64::MAX,
+        ]),
+    )];
+    for expression in [
+        "to_timestamp(n)",
+        "to_timestamp(n, 6)",
+        "to_timestamp(n, 0)",
+        "try_to_timestamp(n)",
+        "try_to_timestamp(n, 6)",
+        "try_to_timestamp(n, 0)",
+    ] {
+        run_ast(file, expression, &inputs);
+    }
+    let inputs = [(
+        "s",
+        StringType::from_data(vec![
+            "0000-12-31 00:00:00.000000 +0000",
+            "0001-01-01 00:00:00.000000 +1400",
+            "+10000-01-01 07:59:59.999999 +0800",
+        ]),
+    )];
+    for expression in [
+        "to_timestamp(s)::string::timestamp = to_timestamp(s)",
+        "to_timestamp(s, '%Y-%m-%d %H:%M:%S%.f %z') = to_timestamp(s)",
+        "to_timestamp_tz(to_timestamp_tz(s)::string) = to_timestamp_tz(s)",
+    ] {
+        run_ast(file, expression, &inputs);
+    }
+}
+
+#[test]
+fn test_string_to_timestamp_domain() {
+    use std::collections::HashMap;
+
+    use databend_common_expression::ConstantFolder;
+    use databend_common_expression::expr::ColumnRef;
+    use databend_common_expression::expr::Expr;
+    use databend_common_expression::type_check::check_function;
+
+    let expr = check_function(
+        None,
+        "to_timestamp",
+        &[],
+        &[Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: DataType::String,
+            display_name: "a".to_string(),
+        })],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+
+    for (min, max) in [
+        // An interior value, "2024-01-01 23:00:00", exceeds both parsed endpoints.
+        ("2024-01-01 00:00:00", Some("2024-01-01T01:00:00")),
+        // Offsets can also reverse the ordering of parsed timestamps.
+        (
+            "2024-01-01 00:00:00-12:00",
+            Some("2024-01-01 01:00:00+14:00"),
+        ),
+        // Valid endpoints do not imply that all interior strings can be parsed.
+        ("2024-01-01", Some("2024-01-03")),
+        // Truncated and unbounded statistics must not yield timestamp bounds.
+        ("2024-01-01", Some("2024-01-03 00:0�")),
+        ("2024-01-01", None),
+    ] {
+        let input = HashMap::from([(
+            0,
+            Domain::String(StringDomain {
+                min: min.to_string(),
+                max: max.map(str::to_string),
+            }),
+        )]);
+        let (folded, domain) = ConstantFolder::fold_with_domain(
+            Cow::Borrowed(&expr),
+            &input,
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        );
+        assert_eq!(domain, None, "{min:?}..{max:?} may fail to parse");
+        assert!(!matches!(folded.as_ref(), Expr::Constant(_)));
+    }
 }
 
 fn test_to_date(file: &mut impl Write) {
@@ -241,6 +338,34 @@ fn test_timestamp_add_subtract(file: &mut impl Write) {
     run_ast(file, "subtract_seconds(a, b)", &[
         ("a", TimestampType::from_data(vec![-100, 0, 100])),
         ("b", Int32Type::from_data(vec![1, 2, 3])),
+    ]);
+}
+
+// String inputs for hour/minute/second arithmetic must resolve to the Timestamp
+// overload so the time component is preserved. Day-based arithmetic keeps the
+// Date overload, since its semantics are whole days.
+fn test_string_time_add_subtract(file: &mut impl Write) {
+    run_ast(file, "add_hours('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "add_minutes('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "add_seconds('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "subtract_hours('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "subtract_minutes('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "subtract_seconds('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "subtract_minutes('2026-09-26', 5)", &[]);
+    run_ast(file, "add_days('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "add_hours(a, b)", &[
+        (
+            "a",
+            StringType::from_data(vec!["2026-09-26 08:34:00", "2026-09-26"]),
+        ),
+        ("b", Int32Type::from_data(vec![1, 2])),
+    ]);
+    run_ast(file, "subtract_seconds(a, b)", &[
+        (
+            "a",
+            StringType::from_data(vec!["2026-09-26 08:34:00", "2026-09-26"]),
+        ),
+        ("b", Int32Type::from_data(vec![1, 2])),
     ]);
 }
 

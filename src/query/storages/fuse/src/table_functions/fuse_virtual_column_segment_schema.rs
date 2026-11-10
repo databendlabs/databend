@@ -32,6 +32,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
@@ -87,7 +88,7 @@ impl TableMetaFunc for FuseVirtualColumnSegmentSchema {
 
         'segments: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
             for (location, segment) in chunk.iter().zip(segments) {
                 let segment = segment?;
@@ -134,7 +135,7 @@ fn build_segment_schema(
             .unwrap_or_else(|| column_paths.source_column_id.to_string());
         for path in &column_paths.paths {
             column_ids.push(path.column_id);
-            let path_name = format!("{}.{}", &source_name, &path.path);
+            let path_name = format!("{}.{}", source_name, path.path);
             path_names.push(path_name);
         }
     }

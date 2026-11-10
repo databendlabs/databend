@@ -1,0 +1,2 @@
+name = "Native UDF stage"
+prepare = ["nox", "-f", "tests/nox/noxfile.py", "-s", "sqllogic_hook", "--", "prepare", "stage"]

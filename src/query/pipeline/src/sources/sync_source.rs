@@ -36,6 +36,8 @@ pub trait ProgressCtx {
 ///     - SELECT * FROM numbers_mt(1000)
 pub trait SyncSource: Send {
     const NAME: &'static str;
+    /// Disable when the source already accounts for original input reads.
+    const RECORD_SCAN_PROGRESS: bool = true;
 
     fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
@@ -102,15 +104,17 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
                     // A part was pruned by runtime filter
                     return Ok(());
                 }
-                let progress_values = ProgressValues {
-                    rows: data_block.num_rows(),
-                    bytes: data_block.memory_size(),
-                };
-                self.scan_progress.incr(&progress_values);
-                Profile::record_usize_profile(
-                    ProfileStatisticsName::ScanBytes,
-                    data_block.memory_size(),
-                );
+                if T::RECORD_SCAN_PROGRESS {
+                    let progress_values = ProgressValues {
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytes,
+                        data_block.memory_size(),
+                    );
+                }
                 self.generated_data = Some(data_block)
             }
         };

@@ -13,10 +13,6 @@
 // limitations under the License.
 
 #![feature(likely_unlikely)]
-#![feature(int_roundings)]
-#![feature(iter_map_windows)]
-#![feature(assert_matches)]
-#![feature(debug_closure_helpers)]
 #![feature(try_blocks)]
 
 // Logs from this crate will show up as "...".

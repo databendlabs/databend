@@ -21,6 +21,8 @@ use std::ops::BitAnd;
 use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -104,6 +106,12 @@ pub trait ScalarFunctionDomain: Send + Sync + 'static {
 
 pub trait ScalarFunction: Send + Sync + 'static {
     fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType>;
+
+    /// Whether `eval` accepts [`crate::Column::Encoded`] arguments. Column arguments
+    /// of functions that return `false` are decoded before the call.
+    fn accepts_encoded_args(&self) -> bool {
+        false
+    }
 }
 
 #[derive(EnumAsInner)]
@@ -141,6 +149,8 @@ pub struct FunctionContext {
     pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
+    /// Re-serialize and re-parse VARIANT inputs of `parse_json` to repair legacy invalid JSONB.
+    pub enable_parse_json_variant_reparse: bool,
     pub enable_selector_executor: bool,
 
     pub geometry_output_format: GeometryDataType,
@@ -152,6 +162,50 @@ pub struct FunctionContext {
     pub random_function_seed: bool,
     pub week_start: u8,
     pub date_format_style: String,
+    pub query_specific_values: QuerySpecificValues,
+}
+
+/// Records that a value valid only for the current query was computed, for example by
+/// evaluating `now()` or `rand()`. The planner cache does not store a logical plan built while
+/// such a value was computed.
+///
+/// Clones share one record, and the record is never cleared within a query. Comparisons
+/// ignore it.
+#[derive(Debug, Clone, Default)]
+pub struct QuerySpecificValues(Option<Arc<AtomicBool>>);
+
+impl QuerySpecificValues {
+    pub fn tracked() -> Self {
+        Self(Some(Arc::new(AtomicBool::new(false))))
+    }
+
+    pub fn record(&self) {
+        if let Some(recorded) = &self.0 {
+            recorded.store(true, Ordering::Relaxed);
+        }
+    }
+
+    pub fn recorded(&self) -> bool {
+        self.0
+            .as_ref()
+            .is_some_and(|recorded| recorded.load(Ordering::Relaxed))
+    }
+}
+
+impl PartialEq for QuerySpecificValues {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl FunctionContext {
+    /// A copy whose evaluations are not recorded, for values used only in estimates.
+    pub fn untracked(&self) -> Self {
+        Self {
+            query_specific_values: QuerySpecificValues::default(),
+            ..self.clone()
+        }
+    }
 }
 
 impl Default for FunctionContext {
@@ -161,6 +215,7 @@ impl Default for FunctionContext {
             now: DateTime::UNIX_EPOCH,
             rounding_mode: false,
             disable_variant_check: false,
+            enable_parse_json_variant_reparse: true,
             enable_selector_executor: true,
 
             geometry_output_format: Default::default(),
@@ -172,6 +227,7 @@ impl Default for FunctionContext {
             random_function_seed: false,
             week_start: 0,
             date_format_style: "oracle".to_string(),
+            query_specific_values: QuerySpecificValues::default(),
         }
     }
 }

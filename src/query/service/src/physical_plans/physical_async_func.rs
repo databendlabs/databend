@@ -24,7 +24,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::binder::AsyncFunctionDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use itertools::Itertools;
 
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -111,15 +111,15 @@ impl IPhysicalPlan for AsyncFunction {
         self.input.build_pipeline(builder)?;
 
         let operators = TransformAsyncFunction::init_operators(&self.async_func_descs)?;
-        let sequence_counters =
-            TransformAsyncFunction::create_sequence_counters(self.async_func_descs.len());
+        let async_func_states =
+            TransformAsyncFunction::create_async_func_states(&self.async_func_descs);
 
         builder.main_pipeline.try_add_async_transformer(|| {
             TransformAsyncFunction::new(
                 builder.ctx.clone(),
                 self.async_func_descs.clone(),
                 operators.clone(),
-                sequence_counters.clone(),
+                async_func_states.clone(),
             )
         })?;
 
@@ -130,7 +130,7 @@ impl IPhysicalPlan for AsyncFunction {
 impl PhysicalPlanBuilder {
     pub async fn build_async_func(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         async_func_plan: &databend_common_sql::plans::AsyncFunction,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,

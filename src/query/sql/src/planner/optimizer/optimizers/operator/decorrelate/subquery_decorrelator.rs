@@ -17,10 +17,11 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_functions::aggregates::AggregateCountFunction;
+use databend_common_expression::types::UInt64Type;
 
 use crate::Binder;
 use crate::ColumnBindingBuilder;
@@ -166,7 +167,6 @@ impl SubqueryDecorrelatorOptimizer {
                 | RelOperator::ConstantTableScan(_)
                 | RelOperator::ExpressionScan(_)
                 | RelOperator::CacheScan(_)
-                | RelOperator::Exchange(_)
                 | RelOperator::RecursiveCteScan(_)
                 | RelOperator::Mutation(_)
                 | RelOperator::MutationSource(_)
@@ -334,7 +334,6 @@ impl SubqueryDecorrelatorOptimizer {
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
-            | RelOperator::Exchange(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
@@ -460,7 +459,7 @@ impl SubqueryDecorrelatorOptimizer {
 
                 let data_type = if subquery.typ == SubqueryType::Scalar {
                     Box::new(subquery.data_type.wrap_nullable())
-                } else if matches! {result, UnnestResult::MarkJoin {..}} {
+                } else if matches!(result, UnnestResult::MarkJoin { .. }) {
                     Box::new(DataType::Nullable(Box::new(DataType::Boolean)))
                 } else {
                     subquery.data_type.clone()
@@ -591,8 +590,7 @@ impl SubqueryDecorrelatorOptimizer {
                 // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
-                let count_type = AggregateCountFunction::try_create("", vec![], vec![], vec![])?
-                    .return_type()?;
+                let count_type = UInt64Type::data_type();
                 let metadata = self.ctx.get_metadata();
                 let count_func_index = metadata
                     .write()
@@ -683,6 +681,9 @@ impl SubqueryDecorrelatorOptimizer {
                     UnnestResult::SimpleJoin { output_index },
                 ))
             }
+            SubqueryType::Any if !subquery.row_columns.is_empty() => {
+                self.rewrite_uncorrelated_row_value(outer, subquery, is_conjunctive_predicate)
+            }
             SubqueryType::Any => {
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
@@ -732,16 +733,8 @@ impl SubqueryDecorrelatorOptimizer {
                     )
                 };
 
-                let mut is_null_equal = Vec::new();
-                for (i, (l, r)) in left_conditions
-                    .iter()
-                    .zip(right_conditions.iter())
-                    .enumerate()
-                {
-                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
-                        is_null_equal.push(i);
-                    }
-                }
+                let is_null_equal =
+                    Self::nullable_condition_indexes(&left_conditions, &right_conditions);
 
                 // Consider the sql: select * from t1 where t1.a = any(select t2.a from t2);
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
@@ -783,7 +776,9 @@ pub fn check_child_expr_in_subquery(
             }
             Ok((child_expr.clone(), op != &SubqueryComparisonOp::Equal))
         }
-        ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
+        ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => {
+            Ok((child_expr.clone(), true))
+        }
         ScalarExpr::CastExpr(cast) => {
             let arg = &cast.argument;
             let (_, is_non_equi_condition) = check_child_expr_in_subquery(arg, op)?;

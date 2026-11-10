@@ -8,7 +8,15 @@ evaluation (internal):
 +----------+---------------------------------------------------------------------------------+
 
 
-error: histogram does not support type 'Null'
+ast: histogram(NULL)
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([4, 3, 2, 1])) |
+| Output | Null { len: 2 }             |
++--------+-----------------------------+
+
 
 ast: histogram(x_null)
 evaluation (internal):

@@ -86,7 +86,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let scalar_json_path = match path_arg {
                         Value::Scalar(Scalar::String(ref path)) => {
                             let Ok(json_path) = parse_json_path(path.as_bytes()) else {
-                                ctx.set_error(0, format!("Invalid JSON Path '{}'", &path));
+                                ctx.set_error(0, format!("Invalid JSON Path '{}'", path));
                                 return results;
                             };
                             Some(json_path)
@@ -110,7 +110,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         let Ok(json_path) = parse_json_path(path.as_bytes()) else {
                                             ctx.set_error(
                                                 0,
-                                                format!("Invalid JSON Path '{}'", &path),
+                                                format!("Invalid JSON Path '{}'", path),
                                             );
                                             return results;
                                         };

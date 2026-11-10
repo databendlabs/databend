@@ -38,11 +38,11 @@ use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_reader::topk::BuiltTopK;
 use crate::parquet_reader::topk::ParquetTopK;
-use crate::parquet_reader::utils::FieldPaths;
+use crate::parquet_reader::utils::BatchReadPlan;
 use crate::parquet_reader::utils::bitmap_to_boolean_array;
-use crate::parquet_reader::utils::compute_output_field_paths;
+use crate::parquet_reader::utils::compute_output_read_plan;
 use crate::parquet_reader::utils::transform_record_batch;
-use crate::transformer::RecordBatchTransformer;
+use crate::read_schema::ParquetReadSchema;
 
 pub struct PredicateAndTopkPolicyBuilder {
     predicate: Arc<ParquetPredicate>,
@@ -51,10 +51,11 @@ pub struct PredicateAndTopkPolicyBuilder {
     // Remain columns
     remain_projection: ProjectionMask,
     remain_field_levels: FieldLevels,
-    remain_field_paths: Arc<Option<FieldPaths>>,
+    remain_read_plan: Arc<Option<BatchReadPlan>>,
 
     src_schema: DataSchemaRef,
     dst_schema: DataSchemaRef,
+    remain_schema: DataSchemaRef,
 
     /// Record which prefetched columns are needed to be output.
     /// Other prefetched columns can be released immediately.
@@ -62,6 +63,7 @@ pub struct PredicateAndTopkPolicyBuilder {
 }
 
 impl PredicateAndTopkPolicyBuilder {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         schema_desc: &SchemaDescriptor,
         arrow_schema: Option<&arrow_schema::Schema>,
@@ -70,9 +72,10 @@ impl PredicateAndTopkPolicyBuilder {
         output_leaves: &[usize],
         remain_schema: &TableSchema,
         output_schema: &TableSchema,
+        read_schema: Option<&ParquetReadSchema>,
     ) -> Result<Box<dyn ReadPolicyBuilder>> {
         let (predicate, predicate_leaves) = predicate;
-        let inner_projection = predicate.field_paths().is_some();
+        let inner_projection = predicate.is_inner_projection();
 
         // Compute projections to read columns for each stage (prefetch and remain).
         let mut prefetch_leaves = predicate_leaves.iter().cloned().collect::<HashSet<_>>();
@@ -126,13 +129,16 @@ impl PredicateAndTopkPolicyBuilder {
             arrow_schema.map(|s| &s.fields),
         )?;
         let remain_schema = TableSchema::new(remain_fields);
-        let remain_field_paths = Arc::new(compute_output_field_paths(
+        let remain_read_plan = Arc::new(compute_output_read_plan(
             schema_desc,
             &remain_projection,
             &remain_schema,
             inner_projection,
+            read_schema,
+            arrow_schema,
         )?);
 
+        let remain_data_schema = Arc::new(DataSchema::from(&remain_schema));
         let mut src_schema = remain_schema;
         src_schema.fields.extend(output_prefetched_field);
 
@@ -144,9 +150,10 @@ impl PredicateAndTopkPolicyBuilder {
             topk,
             remain_projection,
             remain_field_levels,
-            remain_field_paths,
+            remain_read_plan,
             src_schema,
             dst_schema,
+            remain_schema: remain_data_schema,
             output_prefetched_field_indices,
         }))
     }
@@ -159,7 +166,6 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
         mut row_group: InMemoryRowGroup<'_>,
         mut selection: Option<RowSelection>,
         sorter: &mut Option<TopKSorter>,
-        transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
         _filter: Option<Arc<ParquetPredicate>>,
     ) -> Result<Option<ReadPolicyImpl>> {
@@ -175,13 +181,12 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
             row_group
                 .fetch(topk.projection(), selection.as_ref())
                 .await?;
-            // Topk column **must** not be in a nested column.
             let block = read_all(
-                self.src_schema.as_ref(),
+                topk.data_schema(),
                 &row_group,
                 topk.field_levels(),
                 selection.clone(),
-                topk.field_paths(),
+                topk.read_plan(),
                 num_rows,
             )?;
             debug_assert_eq!(block.num_columns(), 1);
@@ -199,11 +204,11 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 .fetch(self.predicate.projection(), selection.as_ref())
                 .await?;
             let block = read_all(
-                self.src_schema.as_ref(),
+                &DataSchema::from(self.predicate.schema()),
                 &row_group,
                 self.predicate.field_levels(),
                 selection.clone(),
-                self.predicate.field_paths(),
+                self.predicate.read_plan(),
                 num_rows,
             )?;
             let filter = self.predicate.evaluate_block(&block)?;
@@ -269,10 +274,10 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
         Ok(Some(Box::new(PredicateAndTopkPolicy {
             prefetched: prefetched_blocks,
             reader,
-            transformer,
-            remain_field_paths: self.remain_field_paths.clone(),
+            remain_read_plan: self.remain_read_plan.clone(),
             src_schema: self.src_schema.clone(),
             dst_schema: self.dst_schema.clone(),
+            remain_schema: self.remain_schema.clone(),
         })))
     }
 }
@@ -284,27 +289,26 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
 pub struct PredicateAndTopkPolicy {
     prefetched: VecDeque<DataBlock>,
     reader: ParquetRecordBatchReader,
-    transformer: Option<RecordBatchTransformer>,
-
-    /// See the comments of `field_paths` in [`super::NoPrefetchPolicy`].
-    remain_field_paths: Arc<Option<FieldPaths>>,
+    /// Cached conversion for remaining columns, before merging prefetch output.
+    remain_read_plan: Arc<Option<BatchReadPlan>>,
     /// The schema of remain block + prefetched block.
     src_schema: DataSchemaRef,
     /// The final output schema.
     dst_schema: DataSchemaRef,
+    remain_schema: DataSchemaRef,
 }
 
 impl ReadPolicy for PredicateAndTopkPolicy {
     fn read_block(&mut self) -> Result<Option<DataBlock>> {
         let batch = self.reader.next().transpose()?;
-        if let Some(mut batch) = batch {
-            if let Some(transformer) = &mut self.transformer {
-                batch = transformer.process_record_batch(batch)?;
-            }
+        if let Some(batch) = batch {
             debug_assert!(!self.prefetched.is_empty());
             let prefetched = self.prefetched.pop_front().unwrap();
-            let mut block =
-                transform_record_batch(self.src_schema.as_ref(), &batch, &self.remain_field_paths)?;
+            let mut block = transform_record_batch(
+                self.remain_schema.as_ref(),
+                &batch,
+                &self.remain_read_plan,
+            )?;
             block.merge_block(prefetched);
             let block = block.resort(&self.src_schema, &self.dst_schema)?;
             Ok(Some(block))

@@ -34,6 +34,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -63,7 +64,6 @@ use crate::plans::ExecuteImmediatePlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::SubqueryType;
-use crate::resolve_type_name;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -85,6 +85,20 @@ impl Binder {
             }
         };
 
+        let (masked_script, secrets) =
+            databend_common_ast::parser::mask_raw_sql_with_secrets(&script);
+        // Errors are returned as is; query history and logs scrub them.
+        self.ctx.add_query_secrets(secrets);
+        // Record the evaluated SQL, not a concat()/variable expression which
+        // may split a password across multiple literals. Attach before parsing
+        // so malformed inner scripts are safe too.
+        self.ctx.attach_query_str(
+            databend_common_catalog::query_kind::QueryKind::Other,
+            format!(
+                "EXECUTE IMMEDIATE {}",
+                databend_common_ast::ast::quote::QuotedString(&masked_script, '\'')
+            ),
+        );
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(&script)?;
@@ -265,7 +279,7 @@ impl Binder {
 
         let args = arguments
             .iter()
-            .zip(casts_to_apply.into_iter())
+            .zip(casts_to_apply)
             .map(|(expr, cast)| match cast {
                 Some(target_type) => Expr::Cast {
                     span: expr.span(),

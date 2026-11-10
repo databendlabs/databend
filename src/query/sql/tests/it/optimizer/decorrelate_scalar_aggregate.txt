@@ -1,0 +1,354 @@
+=== count_plus_one_is_filled ===
+description: count(*) + 1 is evaluated above a LEFT join, after count is filled with 0 for outer values without input rows.
+sql: SELECT o.id, (SELECT count(*) + 1 FROM sa_inner i WHERE i.k = o.k) FROM sa_outer o
+raw_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), SUBQUERY AS (#5) AS (#6)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: COUNT(*) + 1 (#5)
+│       └── EvalScalar
+│           ├── scalars: [plus(COUNT(*) (#4), 1) AS (#5)]
+│           └── Aggregate(Initial)
+│               ├── group items: []
+│               ├── aggregate functions: [count() AS (#4)]
+│               └── Filter
+│                   ├── filters: [eq(sa_inner.k (#2), sa_outer.k (#1))]
+│                   └── Scan
+│                       ├── table: default.sa_inner (#1)
+│                       ├── filters: []
+│                       ├── order by: []
+│                       └── limit: NONE
+└── Scan
+    ├── table: default.sa_outer (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), COUNT(*) + 1 (#8) AS (#6)]
+└── EvalScalar
+    ├── scalars: [CAST(COUNT(*) + 1 (#5) AS UInt64 NULL) AS (#8)]
+    └── EvalScalar
+        ├── scalars: [plus(COUNT(*) (#4), 1) AS (#5)]
+        └── EvalScalar
+            ├── scalars: [CAST(if(is_not_null(COUNT(*) (#7)), COUNT(*) (#7), CAST(0 AS UInt64 NULL)) AS UInt64) AS (#4)]
+            └── Join(Right)
+                ├── build keys: [sa_outer.k (#1)]
+                ├── probe keys: [sa_inner.k (#2)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.sa_outer (#0)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Aggregate(Final)
+                    ├── group items: [sa_inner.k (#2) AS (#2)]
+                    ├── aggregate functions: [count() AS (#7)]
+                    └── Aggregate(Partial)
+                        ├── group items: [sa_inner.k (#2) AS (#2)]
+                        ├── aggregate functions: [count() AS (#7)]
+                        └── Filter
+                            ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                            └── Scan
+                                ├── table: default.sa_inner (#1)
+                                ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                                ├── order by: []
+                                └── limit: NONE
+
+
+=== having_rejection_keeps_outer_row ===
+description: A HAVING that rejects the aggregate row becomes a match flag; the subquery result is NULL instead of the outer row being removed.
+sql: SELECT o.id, (SELECT count(*) FROM sa_inner i WHERE i.k = o.k HAVING count(*) = 0) FROM sa_outer o
+raw_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), SUBQUERY AS (#4) AS (#5)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: COUNT(*) (#4)
+│       └── EvalScalar
+│           ├── scalars: [COUNT(*) (#4) AS (#4)]
+│           └── Filter
+│               ├── filters: [eq(COUNT(*) (#4), 0)]
+│               └── Aggregate(Initial)
+│                   ├── group items: []
+│                   ├── aggregate functions: [count() AS (#4)]
+│                   └── Filter
+│                       ├── filters: [eq(sa_inner.k (#2), sa_outer.k (#1))]
+│                       └── Scan
+│                           ├── table: default.sa_inner (#1)
+│                           ├── filters: []
+│                           ├── order by: []
+│                           └── limit: NONE
+└── Scan
+    ├── table: default.sa_outer (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), COUNT(*) (#8) AS (#5)]
+└── EvalScalar
+    ├── scalars: [if(subquery_matched (#7), COUNT(*) (#4), CAST(NULL AS UInt64 NULL)) AS (#8)]
+    └── EvalScalar
+        ├── scalars: [COUNT(*) (#4) AS (#4), is_true(eq(COUNT(*) (#4), 0)) AS (#7)]
+        └── EvalScalar
+            ├── scalars: [CAST(if(is_not_null(COUNT(*) (#6)), COUNT(*) (#6), CAST(0 AS UInt64 NULL)) AS UInt64) AS (#4)]
+            └── Join(Right)
+                ├── build keys: [sa_outer.k (#1)]
+                ├── probe keys: [sa_inner.k (#2)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.sa_outer (#0)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Aggregate(Final)
+                    ├── group items: [sa_inner.k (#2) AS (#2)]
+                    ├── aggregate functions: [count() AS (#6)]
+                    └── Aggregate(Partial)
+                        ├── group items: [sa_inner.k (#2) AS (#2)]
+                        ├── aggregate functions: [count() AS (#6)]
+                        └── Filter
+                            ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                            └── Scan
+                                ├── table: default.sa_inner (#1)
+                                ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                                ├── order by: []
+                                └── limit: NONE
+
+
+=== filled_count_in_filter_becomes_inner_join ===
+description: A filter that rejects the filled value still lets the LEFT join be converted to an INNER join.
+sql: SELECT o.id FROM sa_outer o WHERE (SELECT count(*) FROM sa_inner i WHERE i.k = o.k) > 0
+raw_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(SUBQUERY AS (#4), 0)]
+    ├── subquerys
+    │   └── Subquery (Scalar)
+    │       ├── output_column: COUNT(*) (#4)
+    │       └── EvalScalar
+    │           ├── scalars: [COUNT(*) (#4) AS (#4)]
+    │           └── Aggregate(Initial)
+    │               ├── group items: []
+    │               ├── aggregate functions: [count() AS (#4)]
+    │               └── Filter
+    │                   ├── filters: [eq(sa_inner.k (#2), sa_outer.k (#1))]
+    │                   └── Scan
+    │                       ├── table: default.sa_inner (#1)
+    │                       ├── filters: []
+    │                       ├── order by: []
+    │                       └── limit: NONE
+    └── Scan
+        ├── table: default.sa_outer (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), COUNT(*) (#6) AS (#7)]
+└── EvalScalar
+    ├── scalars: [CAST(COUNT(*) (#4) AS UInt64 NULL) AS (#6)]
+    └── EvalScalar
+        ├── scalars: [CAST(if(is_not_null(COUNT(*) (#5)), COUNT(*) (#5), CAST(0 AS UInt64 NULL)) AS UInt64) AS (#4)]
+        └── Join(Inner)
+            ├── build keys: [sa_outer.k (#1)]
+            ├── probe keys: [sa_inner.k (#2)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.sa_outer (#0)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Filter
+                ├── filters: [gt(CAST(CAST(if(is_not_null(COUNT(*) (#5)), COUNT(*) (#5), CAST(0 AS UInt64 NULL)) AS UInt64) AS UInt64 NULL), 0)]
+                └── Aggregate(Final)
+                    ├── group items: [sa_inner.k (#2) AS (#2)]
+                    ├── aggregate functions: [count() AS (#5)]
+                    └── Aggregate(Partial)
+                        ├── group items: [sa_inner.k (#2) AS (#2)]
+                        ├── aggregate functions: [count() AS (#5)]
+                        └── Filter
+                            ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                            └── Scan
+                                ├── table: default.sa_inner (#1)
+                                ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                                ├── order by: []
+                                └── limit: NONE
+
+
+=== null_on_empty_input_keeps_generic_plan ===
+description: 0.2 * avg(..) is NULL on empty input, so the generic plan is already correct and is kept.
+sql: SELECT o.id FROM sa_outer o WHERE o.id > (SELECT 0.2 * avg(v) FROM sa_inner i WHERE i.k = o.k)
+raw_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(sa_outer.id (#0), SUBQUERY AS (#6))]
+    ├── subquerys
+    │   └── Subquery (Scalar)
+    │       ├── output_column: 0.2 * (sum(v) / if(count(v) = 0, 1, count(v))) (#6)
+    │       └── EvalScalar
+    │           ├── scalars: [multiply(0.2, divide(sum(v) (#4), if(eq(count(v) (#5), 0), 1, count(v) (#5)))) AS (#6)]
+    │           └── Aggregate(Initial)
+    │               ├── group items: []
+    │               ├── aggregate functions: [sum(sa_inner.v (#3)) AS (#4), count(sa_inner.v (#3)) AS (#5)]
+    │               └── EvalScalar
+    │                   ├── scalars: [sa_inner.v (#3) AS (#3)]
+    │                   └── Filter
+    │                       ├── filters: [eq(sa_inner.k (#2), sa_outer.k (#1))]
+    │                       └── Scan
+    │                           ├── table: default.sa_inner (#1)
+    │                           ├── filters: []
+    │                           ├── order by: []
+    │                           └── limit: NONE
+    └── Scan
+        ├── table: default.sa_outer (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), 0.2 * (sum(v) / if(count(v) = 0, 1, count(v))) (#6) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [sa_outer.k (#1)]
+    ├── probe keys: [sa_inner.k (#2)]
+    ├── other filters: [gt(sa_outer.id (#0), 0.2 * (sum(v) / if(count(v) = 0, 1, count(v))) (#6))]
+    ├── Scan
+    │   ├── table: default.sa_outer (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [sa_inner.k (#2) AS (#2), multiply(0.2, divide(sum(v) (#4), if(eq(count(v) (#5), 0), 1, count(v) (#5)))) AS (#6)]
+        └── Aggregate(Final)
+            ├── group items: [sa_inner.k (#2) AS (#2)]
+            ├── aggregate functions: [sum(sa_inner.v (#3)) AS (#4), count(sa_inner.v (#3)) AS (#5)]
+            └── Aggregate(Partial)
+                ├── group items: [sa_inner.k (#2) AS (#2)]
+                ├── aggregate functions: [sum(sa_inner.v (#3)) AS (#4), count(sa_inner.v (#3)) AS (#5)]
+                └── Filter
+                    ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                    └── Scan
+                        ├── table: default.sa_inner (#1)
+                        ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== limit_zero_keeps_generic_plan_without_count_fixup ===
+description: Under LIMIT 0 the subquery never returns a row, so the generic plan is kept and count is not fixed up to 0.
+sql: SELECT o.id, (SELECT count(*) FROM sa_inner i WHERE i.k = o.k LIMIT 0) FROM sa_outer o
+raw_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), SUBQUERY AS (#4) AS (#5)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: COUNT(*) (#4)
+│       └── Limit
+│           ├── limit: [0]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [COUNT(*) (#4) AS (#4)]
+│               └── Aggregate(Initial)
+│                   ├── group items: []
+│                   ├── aggregate functions: [count() AS (#4)]
+│                   └── Filter
+│                       ├── filters: [eq(sa_inner.k (#2), sa_outer.k (#1))]
+│                       └── Scan
+│                           ├── table: default.sa_inner (#1)
+│                           ├── filters: []
+│                           ├── order by: []
+│                           └── limit: NONE
+└── Scan
+    ├── table: default.sa_outer (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), COUNT(*) (#4) AS (#5)]
+└── Join(Left)
+    ├── build keys: [sa_inner.k (#2)]
+    ├── probe keys: [sa_outer.k (#1)]
+    ├── other filters: []
+    ├── EmptyResultScan
+    └── Scan
+        ├── table: default.sa_outer (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== nested_correlated_scalar_aggregate_keeps_generic_plan ===
+description: A correlated scalar aggregate nested in the aggregate input isn't rewritten, because its groups also disappear for outer values without input.
+sql: SELECT o.id, (SELECT count(*) FROM (SELECT count(*) c FROM sa_inner i WHERE i.k = o.k) s) FROM sa_outer o
+raw_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), SUBQUERY AS (#5) AS (#6)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: COUNT(*) (#5)
+│       └── EvalScalar
+│           ├── scalars: [COUNT(*) (#5) AS (#5)]
+│           └── Aggregate(Initial)
+│               ├── group items: []
+│               ├── aggregate functions: [count() AS (#5)]
+│               └── EvalScalar
+│                   ├── scalars: [COUNT(*) (#4) AS (#4)]
+│                   └── Aggregate(Initial)
+│                       ├── group items: []
+│                       ├── aggregate functions: [count() AS (#4)]
+│                       └── Filter
+│                           ├── filters: [eq(sa_inner.k (#2), sa_outer.k (#1))]
+│                           └── Scan
+│                               ├── table: default.sa_inner (#1)
+│                               ├── filters: []
+│                               ├── order by: []
+│                               └── limit: NONE
+└── Scan
+    ├── table: default.sa_outer (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [sa_outer.id (#0) AS (#0), CAST(if(is_not_null(COUNT(*) (#5)), CAST(COUNT(*) (#5) AS UInt64 NULL), 0) AS UInt64 NULL) AS (#6)]
+└── Join(Right)
+    ├── build keys: [sa_outer.k (#1)]
+    ├── probe keys: [sa_inner.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.sa_outer (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Aggregate(Final)
+        ├── group items: [sa_inner.k (#2) AS (#2)]
+        ├── aggregate functions: [count() AS (#5)]
+        └── Aggregate(Partial)
+            ├── group items: [sa_inner.k (#2) AS (#2)]
+            ├── aggregate functions: [count() AS (#5)]
+            └── Aggregate(Final)
+                ├── group items: [sa_inner.k (#2) AS (#2)]
+                ├── aggregate functions: [count() AS (#4)]
+                └── Aggregate(Partial)
+                    ├── group items: [sa_inner.k (#2) AS (#2)]
+                    ├── aggregate functions: [count() AS (#4)]
+                    └── Filter
+                        ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                        └── Scan
+                            ├── table: default.sa_inner (#1)
+                            ├── filters: [eq(sa_inner.k (#2), sa_inner.k (#2))]
+                            ├── order by: []
+                            └── limit: NONE
+
+

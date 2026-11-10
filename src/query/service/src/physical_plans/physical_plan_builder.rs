@@ -13,25 +13,31 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::optimizer::ir::PlannedQuery;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
-use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::Exchange;
+use databend_common_sql::plans::PhysicalRelOperator;
+use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::optimize_distributed_fuse_pruning;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::sessions::TableContext;
 
@@ -43,8 +49,12 @@ pub struct PhysicalPlanBuilder {
     // DataMutation info, used to build MergeInto physical plan
     pub mutation_build_info: Option<MutationBuildInfo>,
     pub cte_required_columns: HashMap<String, ColumnSet>,
+    pub cte_schemas: HashMap<String, DataSchemaRef>,
     pub is_cte_required_columns_collected: bool,
     pub build_depth: usize,
+    /// Scan IDs that can use the post-pruning block metadata exchange if their finalized
+    /// physical-plan fragment runs on all executors.
+    pub distributed_fuse_pruning_scans: HashSet<usize>,
 }
 
 impl PhysicalPlanBuilder {
@@ -57,14 +67,16 @@ impl PhysicalPlanBuilder {
             dry_run,
             mutation_build_info: None,
             cte_required_columns: HashMap::new(),
+            cte_schemas: HashMap::new(),
             is_cte_required_columns_collected: false,
             build_depth: 0,
+            distributed_fuse_pruning_scans: HashSet::new(),
         }
     }
 
-    pub fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
-        let rel_expr = RelExpr::with_s_expr(s_expr);
-        let stat_context = StatContext::new(self.func_ctx.clone());
+    pub fn build_plan_stat_info(&self, s_expr: &PExpr) -> Result<PlanStatsInfo> {
+        let rel_expr = RelExpr::with_p_expr(s_expr);
+        let stat_context = StatContext::new(self.func_ctx.clone(), &self.ctx.get_settings());
         let stat_info = rel_expr.derive_cardinality(&stat_context)?;
 
         Ok(PlanStatsInfo {
@@ -72,10 +84,20 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+    /// Build a planned query; recursive operator builders consume its physical expression.
+    pub async fn build_query(
+        &mut self,
+        query: &PlannedQuery,
+        required: ColumnSet,
+    ) -> Result<PhysicalPlan> {
+        self.build(query.expr(), required).await
+    }
+
+    pub async fn build(&mut self, s_expr: &PExpr, required: ColumnSet) -> Result<PhysicalPlan> {
         let is_root_build = self.build_depth == 0;
         if is_root_build {
             self.ctx.clear_pruned_partitions_stats();
+            self.distributed_fuse_pruning_scans.clear();
         }
 
         if !self.is_cte_required_columns_collected {
@@ -91,6 +113,7 @@ impl PhysicalPlanBuilder {
 
         let mut plan = build_result?;
         if is_root_build {
+            plan = optimize_distributed_fuse_pruning(&plan, &self.distributed_fuse_pruning_scans);
             plan.adjust_plan_id(&mut 0);
             self.publish_synchronous_pruning_stats(&plan);
         }
@@ -103,7 +126,12 @@ impl PhysicalPlanBuilder {
         plan.get_all_data_source(&mut sources);
 
         for (plan_id, source) in sources {
-            if source.statistics.pruning_stats != Default::default() {
+            // Lazy sources are pruned by a pipeline later, which publishes the
+            // complete statistics then; what they carry now (such as zone map
+            // pruning numbers) is an input to that pipeline, not a result.
+            let first = source.parts.partitions.first();
+            let is_lazy = first.is_some_and(|p| p.as_any().is::<FuseLazyPartInfo>());
+            if !is_lazy && source.statistics.pruning_stats != Default::default() {
                 self.ctx
                     .set_pruned_partitions_stats(plan_id, source.statistics);
             }
@@ -113,78 +141,88 @@ impl PhysicalPlanBuilder {
     #[async_recursion::async_recursion(#[recursive::recursive])]
     pub async fn build_physical_plan(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         // Build stat info.
         let stat_info = self.build_plan_stat_info(s_expr)?;
         match s_expr.plan() {
-            RelOperator::Scan(scan) => self.build_table_scan(scan, required, stat_info).await,
-            RelOperator::DummyTableScan(dummy_scan) => {
+            PhysicalRelOperator::Scan(scan) => {
+                self.build_table_scan(scan, required, stat_info).await
+            }
+            PhysicalRelOperator::DummyTableScan(dummy_scan) => {
                 self.build_dummy_table_scan(dummy_scan).await
             }
-            RelOperator::Join(join) => self.build_join(s_expr, join, required, stat_info).await,
-            RelOperator::EvalScalar(eval_scalar) => {
+            PhysicalRelOperator::Join(join) => {
+                self.build_join(s_expr, join, required, stat_info).await
+            }
+            PhysicalRelOperator::EvalScalar(eval_scalar) => {
                 self.build_eval_scalar(s_expr, eval_scalar, required, stat_info)
                     .await
             }
-            RelOperator::Filter(filter) => {
+            PhysicalRelOperator::Filter(filter) => {
                 self.build_filter(s_expr, filter, required, stat_info).await
             }
-            RelOperator::Aggregate(agg) => {
+            PhysicalRelOperator::Aggregate(agg) => {
                 self.build_aggregate(s_expr, agg, required, stat_info).await
             }
-            RelOperator::Window(window) => {
+            PhysicalRelOperator::Window(window) => {
                 self.build_window(s_expr, window, required, stat_info).await
             }
-            RelOperator::WindowGroup(window_group) => {
+            PhysicalRelOperator::WindowGroup(window_group) => {
                 self.build_window_group(s_expr, window_group, required, stat_info)
                     .await
             }
-            RelOperator::Sort(sort) => self.build_sort(s_expr, sort, required, stat_info).await,
-            RelOperator::TopN(top_n) => self.build_top_n(s_expr, top_n, required, stat_info).await,
-            RelOperator::Limit(limit) => self.build_limit(s_expr, limit, required, stat_info).await,
-            RelOperator::Exchange(exchange) => {
+            PhysicalRelOperator::Sort(sort) => {
+                self.build_sort(s_expr, sort, required, stat_info).await
+            }
+            PhysicalRelOperator::TopN(top_n) => {
+                self.build_top_n(s_expr, top_n, required, stat_info).await
+            }
+            PhysicalRelOperator::Limit(limit) => {
+                self.build_limit(s_expr, limit, required, stat_info).await
+            }
+            PhysicalRelOperator::Exchange(exchange) => {
                 self.build_exchange(s_expr, exchange, required).await
             }
-            RelOperator::UnionAll(union_all) => {
+            PhysicalRelOperator::UnionAll(union_all) => {
                 self.build_union_all(s_expr, union_all, required, stat_info)
                     .await
             }
-            RelOperator::ProjectSet(project_set) => {
+            PhysicalRelOperator::ProjectSet(project_set) => {
                 self.build_project_set(s_expr, project_set, required, stat_info)
                     .await
             }
-            RelOperator::ConstantTableScan(scan) => {
+            PhysicalRelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await
             }
-            RelOperator::ExpressionScan(scan) => {
+            PhysicalRelOperator::ExpressionScan(scan) => {
                 self.build_expression_scan(s_expr, scan, required).await
             }
-            RelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
-            RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
-            RelOperator::RecursiveCteScan(scan) => {
+            PhysicalRelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
+            PhysicalRelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
+            PhysicalRelOperator::RecursiveCteScan(scan) => {
                 self.build_recursive_cte_scan(scan, stat_info).await
             }
-            RelOperator::AsyncFunction(async_func) => {
+            PhysicalRelOperator::AsyncFunction(async_func) => {
                 self.build_async_func(s_expr, async_func, required, stat_info)
                     .await
             }
-            RelOperator::Mutation(mutation) => {
+            PhysicalRelOperator::Mutation(mutation) => {
                 self.build_mutation(s_expr, mutation, required).await
             }
-            RelOperator::MutationSource(mutation_source) => {
+            PhysicalRelOperator::MutationSource(mutation_source) => {
                 self.build_mutation_source(mutation_source).await
             }
-            RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
-            RelOperator::MaterializedCTE(materialized_cte) => {
+            PhysicalRelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
+            PhysicalRelOperator::MaterializedCTE(materialized_cte) => {
                 self.build_materialized_cte(s_expr, materialized_cte, stat_info)
                     .await
             }
-            RelOperator::MaterializedCTERef(cte_consumer) => {
+            PhysicalRelOperator::MaterializedCTERef(cte_consumer) => {
                 self.build_cte_consumer(cte_consumer, stat_info).await
             }
-            RelOperator::Sequence(sequence) => {
+            PhysicalRelOperator::Sequence(sequence) => {
                 self.build_sequence(s_expr, sequence, stat_info, required)
                     .await
             }
@@ -201,7 +239,7 @@ impl PhysicalPlanBuilder {
 
     pub(crate) fn derive_children_required_columns(
         &self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         parent_required: &ColumnSet,
     ) -> Result<Vec<ColumnSet>> {
         let arity = s_expr.arity();
@@ -213,7 +251,7 @@ impl PhysicalPlanBuilder {
             (0..arity).map(|_| parent_required.clone()).collect();
 
         match s_expr.plan() {
-            RelOperator::EvalScalar(eval_scalar) => {
+            PhysicalRelOperator::EvalScalar(eval_scalar) => {
                 let req = &mut child_required[0];
                 for item in &eval_scalar.items {
                     if parent_required.contains(&item.index) {
@@ -221,13 +259,14 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::Filter(filter) => {
+            PhysicalRelOperator::Filter(filter) => {
                 let req = &mut child_required[0];
                 for predicate in &filter.predicates {
                     predicate.collect_used_columns(req);
                 }
             }
-            RelOperator::Aggregate(agg) => {
+            PhysicalRelOperator::Aggregate(physical) => {
+                let agg = &physical.aggregate;
                 let req = &mut child_required[0];
                 for item in &agg.group_items {
                     req.insert(item.index);
@@ -239,7 +278,7 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::Window(window) => {
+            PhysicalRelOperator::Window(window) => {
                 let req = &mut child_required[0];
                 for item in &window.arguments {
                     item.scalar.collect_used_columns(req);
@@ -254,7 +293,7 @@ impl PhysicalPlanBuilder {
                     req.insert(item.order_by_item.index);
                 }
             }
-            RelOperator::WindowGroup(window_group) => {
+            PhysicalRelOperator::WindowGroup(window_group) => {
                 let req = &mut child_required[0];
                 for window in &window_group.windows {
                     req.remove(&window.index);
@@ -278,19 +317,19 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::Sort(sort) => {
+            PhysicalRelOperator::Sort(sort) => {
                 let req = &mut child_required[0];
                 for item in &sort.items {
                     req.insert(item.index);
                 }
             }
-            RelOperator::TopN(top_n) => {
+            PhysicalRelOperator::TopN(top_n) => {
                 let req = &mut child_required[0];
                 for item in &top_n.items {
                     req.insert(item.index);
                 }
             }
-            RelOperator::Join(join) => {
+            PhysicalRelOperator::Join(join) => {
                 let mut others_required = parent_required.clone();
                 for condition in &join.non_equi_conditions {
                     condition.collect_used_columns(&mut others_required);
@@ -311,7 +350,7 @@ impl PhysicalPlanBuilder {
                 child_required[0] = left_required;
                 child_required[1] = right_required;
             }
-            RelOperator::UnionAll(union_all) => {
+            PhysicalRelOperator::UnionAll(union_all) => {
                 let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
                     let left: ColumnSet = union_all
                         .left_outputs
@@ -349,19 +388,19 @@ impl PhysicalPlanBuilder {
                 child_required[0] = left_required;
                 child_required[1] = right_required;
             }
-            RelOperator::Exchange(databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)) => {
+            PhysicalRelOperator::Exchange(Exchange::NodeToNodeHash(exprs)) => {
                 let req = &mut child_required[0];
                 for expr in exprs {
                     expr.collect_used_columns(req);
                 }
             }
-            RelOperator::ProjectSet(project_set) => {
+            PhysicalRelOperator::ProjectSet(project_set) => {
                 let req = &mut child_required[0];
                 for item in &project_set.srfs {
                     item.scalar.collect_used_columns(req);
                 }
             }
-            RelOperator::Udf(udf) => {
+            PhysicalRelOperator::Udf(udf) => {
                 let req = &mut child_required[0];
                 for item in &udf.items {
                     if parent_required.contains(&item.index) {
@@ -369,7 +408,7 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::AsyncFunction(async_func) => {
+            PhysicalRelOperator::AsyncFunction(async_func) => {
                 let req = &mut child_required[0];
                 for item in &async_func.items {
                     if parent_required.contains(&item.index) {
@@ -378,36 +417,36 @@ impl PhysicalPlanBuilder {
                 }
             }
 
-            RelOperator::Scan(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::CacheScan(_)
-            | RelOperator::RecursiveCteScan(_)
-            | RelOperator::CompactBlock(_)
-            | RelOperator::MutationSource(_)
-            | RelOperator::MaterializedCTERef(_)
-            | RelOperator::Sequence(_)
-            | RelOperator::MaterializedCTE(_)
-            | RelOperator::Mutation(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::Limit(_)
-            | RelOperator::Exchange(_) => {}
+            PhysicalRelOperator::Scan(_)
+            | PhysicalRelOperator::DummyTableScan(_)
+            | PhysicalRelOperator::ConstantTableScan(_)
+            | PhysicalRelOperator::CacheScan(_)
+            | PhysicalRelOperator::RecursiveCteScan(_)
+            | PhysicalRelOperator::CompactBlock(_)
+            | PhysicalRelOperator::MutationSource(_)
+            | PhysicalRelOperator::MaterializedCTERef(_)
+            | PhysicalRelOperator::Sequence(_)
+            | PhysicalRelOperator::MaterializedCTE(_)
+            | PhysicalRelOperator::Mutation(_)
+            | PhysicalRelOperator::ExpressionScan(_)
+            | PhysicalRelOperator::Limit(_)
+            | PhysicalRelOperator::Exchange(_) => {}
         }
 
         Ok(child_required)
     }
 
     #[recursive::recursive]
-    fn requires_cte_column_collection(s_expr: &SExpr) -> bool {
+    fn requires_cte_column_collection(s_expr: &PExpr) -> bool {
         matches!(
             s_expr.plan(),
-            RelOperator::Sequence(_) | RelOperator::MaterializedCTERef(_)
+            PhysicalRelOperator::Sequence(_) | PhysicalRelOperator::MaterializedCTERef(_)
         ) || s_expr.children().any(Self::requires_cte_column_collection)
     }
 
-    fn collect_cte_required_columns(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<()> {
+    fn collect_cte_required_columns(&mut self, s_expr: &PExpr, required: ColumnSet) -> Result<()> {
         match s_expr.plan() {
-            RelOperator::MaterializedCTERef(cte_ref) => {
+            PhysicalRelOperator::MaterializedCTERef(cte_ref) => {
                 let mut required_mapped = ColumnSet::new();
                 for col in required {
                     if let Some(mapped) = cte_ref.column_mapping.get(&col) {
@@ -422,12 +461,12 @@ impl PhysicalPlanBuilder {
                     .or_insert(required_mapped);
                 Ok(())
             }
-            RelOperator::Sequence(_) => {
+            PhysicalRelOperator::Sequence(_) => {
                 // The right child contains all consumers for the left CTE definition.
                 self.collect_cte_required_columns(s_expr.child(1)?, required.clone())?;
 
                 let left_child = s_expr.child(0)?;
-                let RelOperator::MaterializedCTE(cte) = left_child.plan() else {
+                let PhysicalRelOperator::MaterializedCTE(cte) = left_child.plan() else {
                     return Err(ErrorCode::Internal(
                         "Sequence left child is expected to be MaterializedCTE".to_string(),
                     ));
@@ -470,7 +509,7 @@ pub struct MutationBuildInfo {
 mod tests {
     use std::collections::HashMap;
 
-    use databend_common_sql::optimizer::ir::SExpr;
+    use databend_common_sql::optimizer::ir::PExpr;
     use databend_common_sql::plans::DummyTableScan;
     use databend_common_sql::plans::Limit;
     use databend_common_sql::plans::MaterializedCTERef;
@@ -480,28 +519,28 @@ mod tests {
 
     #[test]
     fn test_requires_cte_column_collection() {
-        let leaf = SExpr::create_leaf(DummyTableScan::new());
+        let leaf = PExpr::create_leaf(DummyTableScan::new());
         let limit = Limit {
             before_exchange: false,
             limit: Some(1),
             offset: 0,
             lazy_columns: Default::default(),
         };
-        let ordinary_plan = SExpr::create_unary(limit.clone(), leaf.clone());
+        let ordinary_plan = PExpr::create_unary(limit.clone(), leaf.clone());
         assert!(!PhysicalPlanBuilder::requires_cte_column_collection(
             &ordinary_plan
         ));
 
-        let sequence = SExpr::create_binary(Sequence, leaf.clone(), leaf.clone());
-        let nested_sequence = SExpr::create_unary(limit, sequence);
+        let sequence = PExpr::create_binary(Sequence, leaf.clone(), leaf.clone());
+        let nested_sequence = PExpr::create_unary(limit, sequence);
         assert!(PhysicalPlanBuilder::requires_cte_column_collection(
             &nested_sequence
         ));
 
-        let cte_ref = SExpr::create_leaf(MaterializedCTERef {
+        let cte_ref = PExpr::create_leaf(MaterializedCTERef {
             cte_name: "cte".to_string(),
             output_columns: vec![],
-            def: leaf,
+            def: databend_common_sql::optimizer::ir::SExpr::create_leaf(DummyTableScan::new()),
             column_mapping: HashMap::new(),
             stat_info: None,
         });

@@ -407,6 +407,23 @@ select array_reduce([],(x,y)->x+y), array_reduce([null],(x,y)->x+y), array_reduc
 ----
 [] NULL NULL
 
+# Equivalent-constant rewrites must preserve the array's element type. An empty
+# Array(Int32) reduces to NULL, rather than becoming an untyped empty array.
+statement ok
+create or replace table equivalent_empty_lambda(a nullable(array(int)));
+
+statement ok
+insert into equivalent_empty_lambda values ([]), ([1]), (null);
+
+query I
+select count(*) from equivalent_empty_lambda
+where a = [] and is_null(array_reduce(a, (x, y) -> x + y));
+----
+1
+
+statement ok
+drop table equivalent_empty_lambda;
+
 query II
 select array_reduce([1,2,3],(x,y)->x+y-1), array_reduce([3,4,5],(x,y)->x-y)
 ----

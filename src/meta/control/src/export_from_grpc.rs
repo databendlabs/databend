@@ -28,12 +28,12 @@ use tokio::net::TcpSocket;
 use tokio_stream::StreamExt;
 
 use crate::args::ExportArgs;
-use crate::grpc_client_auth::GrpcClientAuth;
+use crate::grpc_client_config::GrpcClientConfig;
 
 /// Dump metasrv data, raft-log, state machine etc in json to stdout.
 pub async fn export_from_running_node(
     args: &ExportArgs,
-    auth: &GrpcClientAuth,
+    client_config: &GrpcClientConfig,
 ) -> Result<(), anyhow::Error> {
     eprintln!();
     eprintln!("Export:");
@@ -43,7 +43,13 @@ pub async fn export_from_running_node(
 
     let grpc_api_addr = get_available_socket_addr(args.grpc_api_address.as_str()).await?;
     let addr = grpc_api_addr.to_string();
-    export_from_grpc(addr.as_str(), args.db.clone(), args.chunk_size, auth).await?;
+    export_from_grpc(
+        addr.as_str(),
+        args.db.clone(),
+        args.chunk_size,
+        client_config,
+    )
+    .await?;
     Ok(())
 }
 
@@ -71,15 +77,15 @@ pub async fn export_from_grpc(
     addr: &str,
     save: String,
     chunk_size: Option<u64>,
-    auth: &GrpcClientAuth,
+    client_config: &GrpcClientConfig,
 ) -> anyhow::Result<()> {
     let client = MetaGrpcClient::<DatabendRuntime>::try_create_with_features(
         vec![addr.to_string()],
-        auth.username(),
-        auth.expose_password(),
+        client_config.auth.username(),
+        client_config.auth.expose_password(),
         None,
         None,
-        None,
+        client_config.tls.clone(),
         DEFAULT_GRPC_MESSAGE_SIZE,
     )?;
 

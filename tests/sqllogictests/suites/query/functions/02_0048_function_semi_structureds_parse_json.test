@@ -259,6 +259,46 @@ select to_variant(a), to_variant(b), to_variant(c) from t3
 1 "ab" {"id":10,"name":"v1"}
 2 "cd" {"id":20,"name":"v2"}
 
+# parse_json / try_parse_json on VARIANT input, with and without the legacy re-parse path.
+statement ok
+CREATE TABLE IF NOT EXISTS t4(v Variant null) Engine = Fuse
+
+statement ok
+insert into t4 values ('{"a":[1,2,null],"b":"x"}'), ('"{\"a\":1}"'), ('1.5e3'), ('null'), (NULL)
+
+# The legacy re-parse path goes through JSON text, so a DOUBLE comes back as DECIMAL.
+query TTTT
+select parse_json(v), try_parse_json(v), typeof(v), typeof(parse_json(v)) from t4 order by v
+----
+1500.0 1500.0 DOUBLE DECIMAL
+"{\"a\":1}" "{\"a\":1}" STRING STRING
+{"a":[1,2,null],"b":"x"} {"a":[1,2,null],"b":"x"} OBJECT OBJECT
+null null NULL_VALUE NULL_VALUE
+NULL NULL NULL NULL
+
+statement ok
+set enable_parse_json_variant_reparse = 0
+
+query TTTT
+select parse_json(v), try_parse_json(v), typeof(v), typeof(parse_json(v)) from t4 order by v
+----
+1500.0 1500.0 DOUBLE DOUBLE
+"{\"a\":1}" "{\"a\":1}" STRING STRING
+{"a":[1,2,null],"b":"x"} {"a":[1,2,null],"b":"x"} OBJECT OBJECT
+null null NULL_VALUE NULL_VALUE
+NULL NULL NULL NULL
+
+query B
+select parse_json(v) = v and try_parse_json(v) = v from t4 where v is not null
+----
+1
+1
+1
+1
+
+statement ok
+unset enable_parse_json_variant_reparse
+
 statement ok
 DROP DATABASE db1
 

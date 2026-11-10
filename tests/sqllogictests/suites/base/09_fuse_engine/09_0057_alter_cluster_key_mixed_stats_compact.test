@@ -1,0 +1,118 @@
+## Compact / recluster after ALTER TABLE ... CLUSTER BY must handle blocks with stale cluster stats.
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0057
+
+statement ok
+CREATE DATABASE db_09_0057
+
+statement ok
+USE db_09_0057
+
+statement ok
+SET enable_compact_after_write = 0
+
+statement ok
+CREATE TABLE t(a INT, b INT) CLUSTER BY (a)
+
+# Each INSERT creates one block; the values and order matter for reproducing the old panic.
+statement ok
+INSERT INTO t VALUES(70, 70)
+
+statement ok
+INSERT INTO t VALUES(31, 30)
+
+statement ok
+INSERT INTO t VALUES(37, 8)
+
+statement ok
+INSERT INTO t VALUES(19, 24)
+
+statement ok
+INSERT INTO t VALUES(99, 20)
+
+statement ok
+INSERT INTO t VALUES(1, 11)
+
+statement ok
+ALTER TABLE t CLUSTER BY (b)
+
+statement ok
+INSERT INTO t VALUES(62, 60)
+
+statement ok
+INSERT INTO t VALUES(82, 91)
+
+statement ok
+INSERT INTO t VALUES(51, 25)
+
+statement ok
+INSERT INTO t VALUES(61, 57)
+
+statement ok
+INSERT INTO t VALUES(12, 85)
+
+statement ok
+INSERT INTO t VALUES(98, 5)
+
+statement ok
+INSERT INTO t VALUES(41, 27)
+
+statement ok
+INSERT INTO t VALUES(93, 57)
+
+statement ok
+INSERT INTO t VALUES(77, 57)
+
+statement ok
+INSERT INTO t VALUES(17, 49)
+
+statement ok
+INSERT INTO t VALUES(65, 66)
+
+statement ok
+INSERT INTO t VALUES(17, 57)
+
+statement ok
+INSERT INTO t VALUES(31, 99)
+
+statement ok
+INSERT INTO t VALUES(23, 48)
+
+statement ok
+INSERT INTO t VALUES(5, 31)
+
+statement ok
+INSERT INTO t VALUES(28, 85)
+
+query I
+SELECT count() FROM fuse_block('db_09_0057', 't')
+----
+22
+
+statement ok
+OPTIMIZE TABLE t COMPACT
+
+query II
+SELECT count(), sum(a + b) FROM t
+----
+22 2082
+
+statement ok
+ALTER TABLE t RECLUSTER FINAL
+
+query II
+SELECT count(), sum(a + b) FROM t
+----
+22 2082
+
+query T
+SELECT cluster_key FROM clustering_information('db_09_0057', 't')
+----
+(b)
+
+statement ok
+SET enable_compact_after_write = 1
+
+statement ok
+DROP DATABASE db_09_0057

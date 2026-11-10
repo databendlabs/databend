@@ -43,6 +43,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 // Constant table is a table with constant values.
@@ -156,12 +157,6 @@ impl Operator for ConstantTableScan {
         }))
     }
 
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
-        })
-    }
-
     fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
@@ -225,6 +220,7 @@ impl Operator for ConstantTableScan {
                 self.num_rows as u64,
                 Some((min.clone(), max.clone())),
                 DEFAULT_HISTOGRAM_BUCKETS,
+                crate::plans::Statistics::histogram_spacing_unit(&value.data_type()),
             )
             .ok();
             let bounds = StatBounds::new(min, max)?;
@@ -246,6 +242,14 @@ impl Operator for ConstantTableScan {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+}
+
+impl PhysicalOperator for ConstantTableScan {
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
     }
 
     fn compute_required_prop_child(

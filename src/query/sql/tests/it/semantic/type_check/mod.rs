@@ -26,9 +26,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
@@ -182,6 +183,7 @@ impl UdfAdapter for TestUdfAdapter {
             ..
         } = udf_definition;
         Ok(UDFServer {
+            external_access_integrations: vec![],
             address: "http://127.0.0.1:8815".to_string(),
             handler,
             headers: Default::default(),
@@ -201,12 +203,32 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         Ok(self.func_ctx.clone())
     }
 
-    fn settings(&self) -> Arc<Settings> {
-        self.settings.clone()
+    fn sql_dialect(&self) -> Result<databend_common_ast::parser::Dialect> {
+        self.settings.get_sql_dialect()
     }
 
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
-        AggregateFunctionFactory::instance()
+    fn inlist_to_join_threshold(&self) -> Result<usize> {
+        self.settings.get_inlist_to_join_threshold()
+    }
+
+    fn max_inlist_to_or(&self) -> Result<u64> {
+        self.settings.get_max_inlist_to_or()
+    }
+
+    fn enable_decimal_sum_widening(&self) -> Result<bool> {
+        self.settings.get_enable_decimal_sum_widening()
+    }
+
+    fn timezone(&self) -> Result<String> {
+        self.settings.get_timezone()
+    }
+
+    fn default_nulls_first(&self, asc: bool) -> Result<bool> {
+        Ok(self.settings.get_nulls_first()(asc))
+    }
+
+    fn aggregate_function_registry(&self) -> &'static AggregateRegistry {
+        &AGGR_REGISTRY
     }
 
     fn udf_adapter(&self) -> Result<Self::UdfAdapter> {
@@ -294,6 +316,7 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
                 serde_json::json!({ "roles": "", "value": "ALL" }).to_string(),
             )),
             AuthFunction::CurrentAvailableRoles => Ok(Scalar::String("[]".to_string())),
+            AuthFunction::CurrentTenantId => Ok(Scalar::String("test_tenant".to_string())),
         }
     }
 
@@ -358,10 +381,10 @@ fn resolve_type_check_sql_with_aliases(
 ) -> Result<(ScalarExpr, DataType)> {
     init_testing_globals();
     let tokens = tokenize_sql(sql)?;
-    let dialect = adapter.settings().get_sql_dialect()?;
+    let dialect = adapter.sql_dialect()?;
     let expr = parse_expr(&tokens, dialect)?;
 
-    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
+    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings.as_ref())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut type_checker = TypeChecker::try_create_with_adapter(
         bind_context,
@@ -371,6 +394,43 @@ fn resolve_type_check_sql_with_aliases(
         aliases,
     )?;
     type_checker.resolve(&expr).map(|resolved| *resolved)
+}
+
+/// The outcome of binding `case`. The type returned with a bound expression,
+/// the type it records, and the type it has once lowered must agree, so that
+/// planning and execution see the same type.
+fn type_check_outcome(
+    case: &SqlTestCase,
+    result: Result<(ScalarExpr, DataType)>,
+) -> SqlTestOutcome {
+    let (scalar, data_type) = match result {
+        Ok(bound) => bound,
+        Err(err) => {
+            return SqlTestOutcome::Error {
+                code: err.code(),
+                message: err.message(),
+            };
+        }
+    };
+    assert_eq!(
+        scalar.data_type().as_ref(),
+        &data_type,
+        "{}: recorded type differs from the returned type",
+        case.name
+    );
+    if let Ok(expr) = scalar.as_expr() {
+        assert_eq!(
+            expr.data_type(),
+            &data_type,
+            "{}: lowered type differs from the returned type",
+            case.name
+        );
+    }
+    SqlTestOutcome::Plan(format!(
+        "scalar: {}\ntype: {}",
+        format_scalar(&scalar),
+        data_type
+    ))
 }
 
 async fn type_check_case_in_context(
@@ -386,18 +446,8 @@ async fn type_check_case_in_context(
     let adapter = TestTypeCheckAdapter::new(settings);
     let mut bind_context = test_bind_context(expr_context);
 
-    let outcome = match resolve_type_check_sql(case.sql, adapter, &mut bind_context) {
-        Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
-            "scalar: {}\ntype: {}",
-            format_scalar(&scalar),
-            data_type
-        )),
-        Err(err) => SqlTestOutcome::Error {
-            code: err.code(),
-            message: err.message(),
-        },
-    };
-    Ok(outcome)
+    let result = resolve_type_check_sql(case.sql, adapter, &mut bind_context);
+    Ok(type_check_outcome(case, result))
 }
 
 async fn type_check_case_with_settings(
@@ -412,18 +462,8 @@ async fn type_check_case_with_settings(
     let adapter = TestTypeCheckAdapter::new(settings);
     let mut bind_context = test_bind_context(expr_context);
 
-    let outcome = match resolve_type_check_sql(case.sql, adapter, &mut bind_context) {
-        Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
-            "scalar: {}\ntype: {}",
-            format_scalar(&scalar),
-            data_type
-        )),
-        Err(err) => SqlTestOutcome::Error {
-            code: err.code(),
-            message: err.message(),
-        },
-    };
-    Ok(outcome)
+    let result = resolve_type_check_sql(case.sql, adapter, &mut bind_context);
+    Ok(type_check_outcome(case, result))
 }
 
 async fn run_type_check_cases_in_context(
@@ -478,13 +518,17 @@ mod in_list;
 mod lambda;
 mod literal;
 mod rewrite_function;
+mod scalar_constant;
+mod scalar_fold;
 mod scalar_function;
 mod scalar_rewrite;
 mod search;
 mod set_returning;
 mod special_function;
 mod string;
+mod traversal;
 mod udf;
 mod variant;
+mod variant_paths;
 mod vector;
 mod window;

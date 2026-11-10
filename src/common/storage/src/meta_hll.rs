@@ -117,6 +117,10 @@ impl MetaHLL {
     pub fn num_empty_registers(&self) -> usize {
         self.registers.iter().filter(|x| **x == 0).count()
     }
+
+    pub fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.registers.capacity()
+    }
 }
 
 /// Helper function sigma as defined in
@@ -202,7 +206,7 @@ impl From<MetaHLLVariant> for MetaHLL {
             MetaHLLVariant::Empty => MetaHLL::new(),
             MetaHLLVariant::Sparse { indices, values } => {
                 let mut registers = vec![0; 1 << P];
-                for (i, v) in indices.into_iter().zip(values.into_iter()) {
+                for (i, v) in indices.into_iter().zip(values) {
                     registers[i as usize] = v;
                 }
                 MetaHLL { registers }

@@ -28,6 +28,7 @@ use crate::ColumnIndex;
 use crate::ConstantFolder;
 use crate::DynamicCastRules;
 use crate::ExprVisitor;
+use crate::FoldRules;
 use crate::FunctionContext;
 use crate::Scalar;
 use crate::cast_scalar;
@@ -181,6 +182,26 @@ pub fn check_cast<Index: ColumnIndex>(
     {
         return Ok(expr);
     }
+    let source_aggregate_state = match expr.data_type().remove_nullable() {
+        DataType::AggregateState(state) => Some(state),
+        _ => None,
+    };
+    let destination_aggregate_state = match wrapped_dest_type.remove_nullable() {
+        DataType::AggregateState(state) => Some(state),
+        _ => None,
+    };
+    if let (Some(source), Some(destination)) = (source_aggregate_state, destination_aggregate_state)
+        && source != destination
+    {
+        return Err(ErrorCode::BadArguments(format!(
+            "aggregate state metadata does not match: source {} version {}, destination {} version {}",
+            source.function_name,
+            source.state_version,
+            destination.function_name,
+            destination.state_version,
+        ))
+        .set_span(span));
+    }
     if expr.data_type() == &wrapped_dest_type
         || expr.data_type().matches_physical_type(&wrapped_dest_type)
     {
@@ -238,27 +259,19 @@ pub fn check_string<Index: ColumnIndex>(
     expr: Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<String> {
-    let (expr, _) = if expr.data_type() != &DataType::String {
-        ConstantFolder::fold(
-            Cow::Owned(Expr::Cast(Cast {
-                span,
-                is_try: false,
-                expr: Box::new(expr),
-                dest_type: DataType::String,
-            })),
-            func_ctx,
-            fn_registry,
-        )
+    let expr = if expr.data_type() != &DataType::String {
+        Expr::Cast(Cast {
+            span,
+            is_try: false,
+            expr: Box::new(expr),
+            dest_type: DataType::String,
+        })
     } else {
-        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
+        expr
     };
-    let expr = expr.into_owned();
 
-    match expr {
-        Expr::Constant(Constant {
-            scalar: Scalar::String(string),
-            ..
-        }) => Ok(string),
+    match FoldRules::eval_constant(func_ctx, fn_registry, &expr) {
+        Some(Scalar::String(string)) => Ok(string),
         _ => Err(
             ErrorCode::from_string_no_backtrace("expected string literal".to_string())
                 .set_span(span),
@@ -273,27 +286,19 @@ pub fn check_number<T: Number, Index: ColumnIndex>(
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
     let origin_ty = expr.data_type().clone();
-    let (expr, _) = if origin_ty != DataType::Number(T::data_type()) {
-        ConstantFolder::fold(
-            Cow::Owned(Expr::Cast(Cast {
-                span,
-                is_try: false,
-                expr: Box::new(expr),
-                dest_type: DataType::Number(T::data_type()),
-            })),
-            func_ctx,
-            fn_registry,
-        )
+    let expr = if origin_ty != DataType::Number(T::data_type()) {
+        Expr::Cast(Cast {
+            span,
+            is_try: false,
+            expr: Box::new(expr),
+            dest_type: DataType::Number(T::data_type()),
+        })
     } else {
-        ConstantFolder::fold(Cow::Owned(expr), func_ctx, fn_registry)
+        expr
     };
-    let expr = expr.into_owned();
 
-    match expr {
-        Expr::Constant(Constant {
-            scalar: Scalar::Number(num),
-            ..
-        }) => T::try_downcast_scalar(&num).ok_or_else(|| {
+    match FoldRules::eval_constant(func_ctx, fn_registry, &expr) {
+        Some(Scalar::Number(num)) => T::try_downcast_scalar(&num).ok_or_else(|| {
             ErrorCode::InvalidArgument(format!("Expect {}, but got {}", T::data_type(), origin_ty))
                 .set_span(span)
         }),
@@ -1045,10 +1050,12 @@ pub(crate) fn check_cast_function(
         display_name: String::new(),
     });
 
+    // Params are typed as literals are, so that the call is the one written
+    // in SQL, e.g. `to_decimal(10, 2)(x)`.
     let params = if let DataType::Decimal(ty) = dest_type.remove_nullable_ref() {
         vec![
-            Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-            Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
+            Scalar::Number(NumberScalar::UInt8(ty.precision())),
+            Scalar::Number(NumberScalar::UInt8(ty.scale())),
         ]
     } else {
         vec![]

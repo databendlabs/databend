@@ -19,6 +19,7 @@ pub use databend_common_catalog::catalog::StorageDescription;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::S3StorageClass;
@@ -27,7 +28,6 @@ use databend_common_storages_basic::NullTable;
 use databend_common_storages_basic::RandomTable;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_common_storages_basic::view_table::ViewTable;
-use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_paimon::PaimonTable;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -119,8 +119,12 @@ impl StorageFactory {
             descriptor: Arc::new(FuseTable::description),
         });
         new_creators.insert(MATERIALIZED_VIEW_ENGINE.to_string(), Storage {
-            creator: fuse_creator,
+            creator: fuse_creator.clone(),
             descriptor: Arc::new(materialized_view_description),
+        });
+        new_creators.insert(DYNAMIC_TABLE_ENGINE.to_string(), Storage {
+            creator: fuse_creator,
+            descriptor: Arc::new(dynamic_table_description),
         });
 
         Self {
@@ -153,8 +157,12 @@ impl StorageFactory {
         });
 
         creators.insert(MATERIALIZED_VIEW_ENGINE.to_string(), Storage {
-            creator: fuse_creator,
+            creator: fuse_creator.clone(),
             descriptor: Arc::new(materialized_view_description),
+        });
+        creators.insert(DYNAMIC_TABLE_ENGINE.to_string(), Storage {
+            creator: fuse_creator,
+            descriptor: Arc::new(dynamic_table_description),
         });
 
         // Register VIEW table engine
@@ -179,12 +187,6 @@ impl StorageFactory {
         creators.insert("ICEBERG".to_string(), Storage {
             creator: Arc::new(IcebergTable::try_create),
             descriptor: Arc::new(IcebergTable::description),
-        });
-
-        // Register DELTA table engine
-        creators.insert("DELTA".to_string(), Storage {
-            creator: Arc::new(DeltaTable::try_create),
-            descriptor: Arc::new(DeltaTable::description),
         });
 
         // Register PAIMON table engine
@@ -212,7 +214,17 @@ impl StorageFactory {
     fn get_storage_factory(&self, table_info: &TableInfo) -> Result<&Storage> {
         let engine = table_info.engine().to_uppercase();
         self.storages.get(&engine).ok_or_else(|| {
-            ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
+            // Include the table identity so users can locate tables left behind by
+            // engines that are no longer supported.
+            let table = if table_info.desc.is_empty() {
+                &table_info.name
+            } else {
+                &table_info.desc
+            };
+            ErrorCode::UnknownTableEngine(format!(
+                "Unknown table engine {} for table {} (id: {})",
+                engine, table, table_info.ident.table_id
+            ))
         })
     }
 
@@ -231,5 +243,57 @@ fn materialized_view_description() -> StorageDescription {
         engine_name: MATERIALIZED_VIEW_ENGINE.to_string(),
         comment: "Materialized View (Fuse-backed)".to_string(),
         support_cluster_key: true,
+    }
+}
+
+fn dynamic_table_description() -> StorageDescription {
+    StorageDescription {
+        engine_name: DYNAMIC_TABLE_ENGINE.to_string(),
+        comment: "Dynamic Table (Fuse-backed)".to_string(),
+        support_cluster_key: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::ErrorCode;
+    use databend_common_meta_app::schema::TableIdent;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_meta_app::schema::TableMeta;
+
+    use super::StorageFactory;
+
+    fn table_info_with_engine(desc: &str, name: &str, table_id: u64, engine: &str) -> TableInfo {
+        TableInfo {
+            ident: TableIdent::new(table_id, 1),
+            desc: desc.to_string(),
+            name: name.to_string(),
+            meta: TableMeta {
+                engine: engine.to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_unknown_engine_error_identifies_table() {
+        let factory = StorageFactory::default();
+
+        let table_info = table_info_with_engine("'deltatable'.'t1'", "t1", 42, "delta");
+        let err = factory.get_table(&table_info, false).err().unwrap();
+        assert_eq!(err.code(), ErrorCode::UNKNOWN_TABLE_ENGINE);
+        assert_eq!(
+            err.message(),
+            "Unknown table engine DELTA for table 'deltatable'.'t1' (id: 42)"
+        );
+
+        // Fall back to the table name when the description is not populated.
+        let table_info = table_info_with_engine("", "t2", 43, "DELTA");
+        let err = factory.get_table(&table_info, false).err().unwrap();
+        assert_eq!(
+            err.message(),
+            "Unknown table engine DELTA for table t2 (id: 43)"
+        );
     }
 }

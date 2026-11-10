@@ -38,7 +38,15 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
 
 
-error: stddev_pop does not support type 'Null'
+ast: stddev_pop(NULL)
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([4, 3, 2, 1])) |
+| Output | Null { len: 2 }             |
++--------+-----------------------------+
+
 
 ast: stddev_pop(x_null)
 evaluation (internal):
@@ -56,7 +64,7 @@ evaluation (internal):
 | Column   | Data                                                                            |
 +----------+---------------------------------------------------------------------------------+
 | all_null | Column(NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____0000] }) |
-| Output   | NullableColumn { column: Float64([NaN, NaN]), validity: [0b______11] }          |
+| Output   | NullableColumn { column: Float64([0, 0]), validity: [0b______00] }              |
 +----------+---------------------------------------------------------------------------------+
 
 
@@ -80,7 +88,15 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------+
 
 
-error: stddev_samp does not support type 'Null'
+ast: stddev_samp(NULL)
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([4, 3, 2, 1])) |
+| Output | Null { len: 2 }             |
++--------+-----------------------------+
+
 
 ast: stddev_samp(dec)
 evaluation (internal):

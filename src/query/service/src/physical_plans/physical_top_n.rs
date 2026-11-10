@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
@@ -34,7 +34,7 @@ use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_storages_parquet::ReadSettings;
 use itertools::Itertools;
 
@@ -351,7 +351,7 @@ struct PartialTopNParams {
     writer_pool_bytes: usize,
     read_settings: ReadSettings,
     enable_fixed_rows: bool,
-    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
+    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
 }
 
 impl PartialTopNParams {
@@ -466,7 +466,7 @@ impl FinalTopNParams {
 impl PhysicalPlanBuilder {
     pub async fn build_top_n(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         top_n: &databend_common_sql::plans::TopN,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,

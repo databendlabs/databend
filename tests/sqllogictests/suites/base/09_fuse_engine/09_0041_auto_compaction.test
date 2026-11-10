@@ -1,8 +1,15 @@
+# run-with-settings: enable_block_stream_write=0
+
 statement ok
 create or replace database i15760;
 
 statement ok
 use i15760;
+
+# Exact compacted block counts depend on block order. Keep append serialization
+# single-threaded so this test exercises auto-compaction deterministically.
+statement ok
+set max_threads = 1;
 
 statement ok
 set auto_compaction_imperfect_blocks_threshold = 3;
@@ -107,8 +114,10 @@ create table t2(a int) row_per_block=5;
 statement ok
 insert into t2 values(0);
 
+# VALUES provides one input block on both standalone and cluster deployments;
+# numbers() can partition these rows into different blocks across nodes.
 statement ok
-insert into t2 select number from numbers(12);
+insert into t2 values(0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11);
 
 statement ok
 insert into t2 select number from numbers(2);
@@ -140,7 +149,7 @@ statement ok
 insert into t3 values(0);
 
 statement ok
-insert into t3 select number from numbers(12);
+insert into t3 values(0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11);
 
 statement ok
 insert into t3 select number from numbers(2);
@@ -163,7 +172,7 @@ statement ok
 insert into t4 values(0);
 
 statement ok
-insert into t4 select number from numbers(12);
+insert into t4 values(0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11);
 
 statement ok
 insert into t4 select number from numbers(2);
@@ -186,7 +195,7 @@ statement ok
 insert into t5 values(0);
 
 statement ok
-insert into t5 select number from numbers(12);
+insert into t5 values(0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(10),(11);
 
 statement ok
 insert into t5 select number from numbers(2);
@@ -198,6 +207,183 @@ query B
 select count() > 1 from fuse_segment('i15760', 't5');
 ----
 1
+
+# Every ASYNC index must be published in one refresh snapshot, both without
+# Compact and after Compact replaces the original write segments. Checking each
+# refresh returns zero also detects a missing sibling hidden by total index size.
+statement ok
+set enable_compact_after_write = 0;
+
+statement ok
+create table t_refresh_multi(content string, other string, v1 vector(4), v2 vector(4), g1 geometry, g2 geometry) row_per_block=1000 block_per_segment=1000;
+
+statement ok
+create async inverted index idx_content on t_refresh_multi(content);
+
+statement ok
+create async inverted index idx_other on t_refresh_multi(other);
+
+statement ok
+create async ngram index ng_content on t_refresh_multi(content);
+
+statement ok
+create async ngram index ng_other on t_refresh_multi(other);
+
+statement ok
+create async vector index vec1 on t_refresh_multi(v1) distance='l2';
+
+statement ok
+create async vector index vec2 on t_refresh_multi(v2) distance='l2';
+
+statement ok
+create async spatial index geo1 on t_refresh_multi(g1);
+
+statement ok
+create async spatial index geo2 on t_refresh_multi(g2);
+
+statement ok
+insert into t_refresh_multi values
+('alpha', 'gamma', [1,2,3,4], [4,3,2,1], to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)')),
+('beta', 'delta', [4,3,2,1], [1,2,3,4], to_geometry('POINT(3 3)'), to_geometry('POINT(4 4)'));
+
+query I
+refresh inverted index idx_content on t_refresh_multi;
+----
+0
+
+query I
+refresh inverted index idx_other on t_refresh_multi;
+----
+0
+
+query I
+refresh ngram index ng_content on t_refresh_multi;
+----
+0
+
+query I
+refresh ngram index ng_other on t_refresh_multi;
+----
+0
+
+query I
+refresh vector index vec1 on t_refresh_multi;
+----
+0
+
+query I
+refresh vector index vec2 on t_refresh_multi;
+----
+0
+
+query I
+refresh spatial index geo1 on t_refresh_multi;
+----
+0
+
+query I
+refresh spatial index geo2 on t_refresh_multi;
+----
+0
+
+query I
+select count() from t_refresh_multi where match(content, 'alpha');
+----
+1
+
+query I
+select count() from t_refresh_multi where match(other, 'gamma');
+----
+1
+
+query T
+select content from t_refresh_multi order by l2_distance(v1, [1,2,3,4]::vector(4)) limit 1;
+----
+alpha
+
+query I
+select count() from t_refresh_multi where st_intersects(g1, to_geometry('POINT(0 0)'));
+----
+1
+
+query I
+select count() from fuse_snapshot('i15760', 't_refresh_multi');
+----
+2
+
+statement ok
+set enable_compact_after_write = 1;
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 1;
+
+statement ok
+insert into t_refresh_multi values ('alpha', 'gamma', [1,2,3,4], [4,3,2,1], to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'));
+
+query I
+refresh inverted index idx_content on t_refresh_multi;
+----
+0
+
+query I
+refresh inverted index idx_other on t_refresh_multi;
+----
+0
+
+query I
+refresh ngram index ng_content on t_refresh_multi;
+----
+0
+
+query I
+refresh ngram index ng_other on t_refresh_multi;
+----
+0
+
+query I
+refresh vector index vec1 on t_refresh_multi;
+----
+0
+
+query I
+refresh vector index vec2 on t_refresh_multi;
+----
+0
+
+query I
+refresh spatial index geo1 on t_refresh_multi;
+----
+0
+
+query I
+refresh spatial index geo2 on t_refresh_multi;
+----
+0
+
+query III
+select segment_count, block_count, row_count
+from fuse_snapshot('i15760', 't_refresh_multi') limit 1;
+----
+1 1 3
+
+# Append, Compact and the one batch refresh add three snapshots to the first two.
+query I
+select count() from fuse_snapshot('i15760', 't_refresh_multi');
+----
+5
+
+query I
+select count() from t_refresh_multi where match(content, 'alpha');
+----
+2
+
+query I
+select count() from t_refresh_multi where match(other, 'gamma');
+----
+2
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 0;
 
 statement ok
 drop database i15760;

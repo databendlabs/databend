@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,7 +27,7 @@ use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::Symbol;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -137,7 +138,7 @@ impl IPhysicalPlan for Limit {
 impl PhysicalPlanBuilder {
     pub async fn build_limit(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         limit: &databend_common_sql::plans::Limit,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
@@ -212,7 +213,13 @@ impl PhysicalPlanBuilder {
             plan: &PhysicalPlan,
             sources: &mut HashMap<IndexType, DataSourcePlan>,
         ) {
-            if let Some(scan) = crate::physical_plans::TableScan::from_physical_plan(plan) {
+            if let Some(scan) = crate::physical_plans::FuseBlockRead::from_physical_plan(plan) {
+                if let Some(table_index) = scan.table_index {
+                    sources
+                        .entry(table_index)
+                        .or_insert_with(|| (*scan.source).clone());
+                }
+            } else if let Some(scan) = crate::physical_plans::TableScan::from_physical_plan(plan) {
                 if let Some(table_index) = scan.table_index {
                     sources
                         .entry(table_index)
@@ -305,7 +312,7 @@ impl PhysicalPlanBuilder {
                 cols_to_fetch,
                 fetched_fields,
                 need_wrap_nullable: false,
-                populate_cache: true,
+                cache_policy: CachePolicy::DEFAULT,
                 enable_block_id_repartition: false,
                 stat_info: Some(stat_info.clone()),
             });

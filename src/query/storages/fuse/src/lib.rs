@@ -21,16 +21,10 @@
     clippy::uninlined_format_args
 )]
 #![allow(clippy::useless_asref)]
-#![feature(type_alias_impl_trait)]
-#![feature(iter_order_by)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(int_roundings)]
-#![feature(iterator_try_reduce)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
-#![feature(try_blocks)]
 
 mod constants;
 mod fuse_column;
@@ -54,7 +48,9 @@ pub(crate) mod test_utils {
         INIT.get_or_init(|| {
             GlobalInstance::init_production();
             GlobalIORuntime::init(1)?;
-            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)
+            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
+            crate::io::FuseCaches::init(&CacheManager::instance());
+            Ok(())
         })
         .clone()
     }
@@ -64,6 +60,7 @@ pub mod io;
 pub mod operations;
 pub mod pruning;
 mod pruning_pipeline;
+pub mod segment_zone_map;
 pub mod statistics;
 pub mod table_functions;
 

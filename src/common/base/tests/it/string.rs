@@ -76,35 +76,6 @@ fn test_unescape_string() {
 }
 
 #[test]
-fn test_mask_connection_info() {
-    let sql = r#"COPY INTO table1
-        FROM 's3://xx/yy
-        CONNECTION = (
-            ACCESS_KEY_ID = 'aaa' ,
-            SECRET_ACCESS_KEY = 'sss' ,
-            REGION = 'us-east-2'
-        )
-        PATTERN = '.*[.]csv'
-            FILE_FORMAT = (
-            TYPE = CSV,
-            FIELD_DELIMITER = '\t',
-            RECORD_DELIMITER = '\n',
-            SKIP_HEADER = 1
-        );"#;
-
-    let actual = mask_connection_info(sql);
-    // ACCESS_KEY_ID and SECRET_ACCESS_KEY are sensitive keys, their values get masked
-    // 'aaa' and 'sss' are <= 4 chars so fully masked
-    assert!(actual.contains("ACCESS_KEY_ID = '***'"));
-    assert!(actual.contains("SECRET_ACCESS_KEY = '***'"));
-    // REGION is not a sensitive key, should remain unchanged
-    assert!(actual.contains("REGION = 'us-east-2'"));
-    // Original secrets should not appear
-    assert!(!actual.contains("= 'aaa'"));
-    assert!(!actual.contains("= 'sss'"));
-}
-
-#[test]
 fn test_short_sql() {
     let max_length: u64 = 128;
     // Test case 1: SQL query shorter than 128 characters
@@ -159,4 +130,13 @@ fn test_short_sql() {
         short_sql(emoji_sql.clone(), max_length),
         expected_emoji_result
     );
+
+    // Test case 7: the keyword matches in any case
+    let lower_sql_insert = long_sql_insert.replacen("INSERT", "insert", 1);
+    assert!(short_sql(lower_sql_insert, max_length).ends_with("more characters]"));
+
+    // Test case 8: more bytes than `max_length`, but not more graphemes
+    let multibyte_sql = "INSERT INTO t VALUES ('".to_string() + &"😊".repeat(100) + "')";
+    assert!(multibyte_sql.len() > 128 && multibyte_sql.graphemes(true).count() <= 128);
+    assert_eq!(short_sql(multibyte_sql.clone(), max_length), multibyte_sql);
 }

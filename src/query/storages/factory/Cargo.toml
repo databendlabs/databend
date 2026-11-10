@@ -12,7 +12,6 @@ databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-storages-basic = { workspace = true }
-databend-common-storages-delta = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-paimon = { workspace = true }

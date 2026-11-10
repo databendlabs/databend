@@ -21,10 +21,11 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_base::base::mask_connection_info;
+use databend_common_ast::parser::mask_log_sql_secrets;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
+use databend_common_base::runtime::IoStats;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
@@ -37,7 +38,9 @@ use databend_common_exception::ResultExt;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
+use databend_common_settings::DefaultSettings;
 use databend_common_settings::ScopeLevel;
+use databend_common_settings::SettingMode;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnState;
 use fastrace::future::FutureExt;
@@ -102,43 +105,18 @@ pub struct HttpQueryRequest {
 impl HttpQueryRequest {
     pub(crate) fn fail_to_start_sql(&self, err: ErrorCode) -> impl IntoResponse {
         metrics_incr_http_response_errors_count(err.name(), err.code());
-        let session = self.session.as_ref().map(|s| {
-            let txn_state = if matches!(s.txn_state, Some(TxnState::Active)) {
-                Some(TxnState::Fail)
-            } else {
-                s.txn_state.clone()
-            };
-            let need_sticky = match &s.internal {
-                Some(internal) => internal.has_temp_table,
-                None => false,
-            };
-            HttpSessionConf {
-                txn_state,
-                need_sticky,
-                need_keep_alive: need_sticky,
-                ..s.clone()
-            }
-        });
-        Json(QueryResponse {
-            id: "".to_string(),
-            stats: QueryStats::default(),
-            state: ExecuteStateKind::Failed,
-            affect: None,
-            data: Arc::new(BlocksSerializer::empty()),
-            schema: vec![],
-            session_id: None,
-            warnings: vec![],
-            node_id: "".to_string(),
-            session,
-            next_uri: None,
-            stats_uri: None,
-            final_uri: None,
-            kill_uri: None,
-            error: Some(QueryError::from_error_code(err)),
-            has_result_set: None,
-            result_timeout_secs: None,
-            settings: None,
-        })
+        // `SessionTimeout` here means the server checked for the temporary
+        // tables this session claims to own and found none: they expired on
+        // this node. Tell the client, otherwise it keeps replaying the stale
+        // state and every statement on the connection fails. `SessionLost` is
+        // deliberately not handled: it also covers misroutes, where the tables
+        // still exist on the original node.
+        let temp_tables_gone = err.code() == ErrorCode::SESSION_TIMEOUT;
+        let session = self
+            .session
+            .as_ref()
+            .map(|s| s.after_failed_start(temp_tables_gone));
+        Json(QueryResponse::failed_to_start(session, err))
     }
 
     pub fn set_settings(&mut self, settings: BTreeMap<String, String>) {
@@ -161,11 +139,13 @@ impl Debug for HttpQueryRequest {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
-            .field("sql", &short_sql(self.sql.clone(), 1000))
+            // Mask before Debug escapes quotes and line breaks, and before truncation.
+            .field("sql", &short_sql(mask_log_sql_secrets(&self.sql), 1000))
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
-            .field("params", &self.params)
+            // Bound values may contain credentials even when SQL uses placeholders.
+            .field("params", &self.params.as_ref().map(|_| "<redacted>"))
             .field("arrow_result_version_max", &self.arrow_result_version_max)
             .field("arrow_features", &self.arrow_features)
             .finish()
@@ -229,7 +209,7 @@ fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     *t == T::default()
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
     #[serde(default)]
@@ -328,7 +308,7 @@ where D: Deserializer<'de> {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog: Option<String>,
@@ -357,6 +337,114 @@ pub struct HttpSessionConf {
         deserialize_with = "deserialize_from_json_string"
     )]
     pub internal: Option<HttpSessionStateInternal>,
+}
+
+impl HttpSessionConf {
+    /// The state a client should carry on with after a statement was rejected
+    /// before it started. Client-side state (database, role, settings,
+    /// variables) is kept; an active transaction is marked failed. With
+    /// `temp_tables_gone` the server has established that the temporary tables
+    /// this session claims no longer exist, so the session also stops being
+    /// sticky.
+    pub(crate) fn after_failed_start(&self, temp_tables_gone: bool) -> Self {
+        let txn_state = if matches!(self.txn_state, Some(TxnState::Active)) {
+            Some(TxnState::Fail)
+        } else {
+            self.txn_state.clone()
+        };
+        let internal = self.internal.clone().map(|mut internal| {
+            if temp_tables_gone {
+                internal.has_temp_table = false;
+            }
+            internal
+        });
+        let need_sticky = match &internal {
+            Some(internal) => internal.has_temp_table,
+            None => false,
+        };
+        HttpSessionConf {
+            txn_state,
+            need_sticky,
+            need_keep_alive: need_sticky,
+            internal,
+            ..self.clone()
+        }
+    }
+}
+
+impl QueryResponse {
+    /// Response for a statement rejected before a query existed, so there is
+    /// no id, node or uri. `session` is the state the client should carry on
+    /// with, see [`HttpSessionConf::after_failed_start`].
+    pub(crate) fn failed_to_start(session: Option<HttpSessionConf>, err: ErrorCode) -> Self {
+        QueryResponse {
+            id: "".to_string(),
+            stats: QueryStats::default(),
+            state: ExecuteStateKind::Failed,
+            affect: None,
+            data: Arc::new(BlocksSerializer::empty()),
+            schema: vec![],
+            session_id: None,
+            warnings: vec![],
+            node_id: "".to_string(),
+            session,
+            next_uri: None,
+            stats_uri: None,
+            final_uri: None,
+            kill_uri: None,
+            error: Some(QueryError::from_error_code(err)),
+            has_result_set: None,
+            result_timeout_secs: None,
+            settings: None,
+        }
+    }
+}
+
+impl Debug for HttpSessionStateInternal {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("HttpSessionStateInternal")
+            // Variables may hold credentials, e.g. for dynamic SQL.
+            .field(
+                "variables",
+                &self.variables.iter().map(|(k, _)| k).collect::<Vec<_>>(),
+            )
+            .field(
+                "last_query_result_cache_key",
+                &self.last_query_result_cache_key,
+            )
+            .field("has_temp_table", &self.has_temp_table)
+            .field("last_node_id", &self.last_node_id)
+            .field("last_query_ids", &self.last_query_ids)
+            .finish()
+    }
+}
+
+impl Debug for HttpSessionConf {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // Write-only settings, such as `enterprise_license`, are never shown.
+        let settings = self.settings.as_ref().map(|settings| {
+            settings
+                .iter()
+                .map(
+                    |(k, v)| match DefaultSettings::check_setting_mode(k, SettingMode::Read) {
+                        Ok(_) => (k, v.as_str()),
+                        Err(_) => (k, "***"),
+                    },
+                )
+                .collect::<BTreeMap<_, _>>()
+        });
+        f.debug_struct("HttpSessionConf")
+            .field("catalog", &self.catalog)
+            .field("database", &self.database)
+            .field("role", &self.role)
+            .field("secondary_roles", &self.secondary_roles)
+            .field("settings", &settings)
+            .field("txn_state", &self.txn_state)
+            .field("need_sticky", &self.need_sticky)
+            .field("need_keep_alive", &self.need_keep_alive)
+            .field("internal", &self.internal)
+            .finish()
+    }
 }
 
 impl HttpSessionConf {
@@ -439,7 +527,7 @@ impl HttpSessionConf {
                     session.restore_query_ids_results(id.to_owned(), key);
                 }
             }
-            let has_temp_table = !session.temp_tbl_mgr().lock().is_empty();
+            let has_temp_table = session.temp_tbl_mgr().lock().has_session_scoped_tables();
             if state.has_temp_table {
                 if let Some(id) = &state.last_node_id {
                     if http_query_manager.server_info.id != *id {
@@ -588,6 +676,7 @@ pub struct HttpQuery {
     // refs
     pub(crate) temp_tbl_mgr: TempTblMgrRef,
     pub(crate) query_mem_stat: Option<Arc<MemStat>>,
+    pub(crate) query_io_stats: Arc<IoStats>,
 
     // cache only
     pub(crate) result_timeout_secs: u64,
@@ -654,7 +743,7 @@ impl HttpQuery {
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
         let sql = &req.sql;
         let node_id = &GlobalConfig::instance().query.node_id;
-        let masked_sql = mask_connection_info(sql);
+        let masked_sql = mask_log_sql_secrets(sql);
         info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = masked_sql.as_str(); "Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
@@ -703,6 +792,7 @@ impl HttpQuery {
             })),
             temp_tbl_mgr: session.temp_tbl_mgr().clone(),
             query_mem_stat: ctx.get_query_memory_tracking(),
+            query_io_stats: ctx.get_local_io_stats(),
             is_txn_mgr_saved: Default::default(),
             last_session_conf: Default::default(),
         })
@@ -782,7 +872,7 @@ impl HttpQuery {
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
-        let has_temp_table = !self.temp_tbl_mgr.lock().is_empty();
+        let has_temp_table = self.temp_tbl_mgr.lock().has_session_scoped_tables();
 
         let internal = HttpSessionStateInternal::new(
             &session_state.variables,
@@ -864,6 +954,8 @@ impl HttpQuery {
         let query_state = self.execute_state.clone();
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
+        tracking_payload.io_stats = Some(query_context.get_local_io_stats());
+        tracking_payload.perf_query_token = query_context.get_perf_query_token();
 
         GlobalQueryRuntime::instance().runtime().spawn(
             tracking_payload.tracking(
@@ -900,7 +992,11 @@ impl HttpQuery {
                             warnings: query_context.pop_warnings(),
                         };
 
-                        error!("Query state changed to Stopped, failed to start: {:?}", e);
+                        // The error is returned as is; its excerpt may quote credentials.
+                        error!(
+                            "Query state changed to Stopped, failed to start: {}",
+                            query_context.query_secrets().scrub(&format!("{e:?}"))
+                        );
                         Executor::start_to_stop(
                             &query_state,
                             ExecuteState::Stopped(Box::new(state)),
@@ -1016,11 +1112,43 @@ impl HttpQuery {
             return Err(poem::error::Error::from_string(
                 format!(
                     "Authentication error: wrong client_session_id, expected {:?}, got {id:?}",
-                    &self.client_session_id
+                    self.client_session_id
                 ),
                 StatusCode::UNAUTHORIZED,
             ));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HttpQueryRequest;
+
+    #[test]
+    fn debug_masks_sql_and_hides_parameters() {
+        let request: HttpQueryRequest = serde_json::from_value(serde_json::json!({
+            "sql": "CREATE USER u IDENTIFIED BY 'request_secret'",
+            "params": ["parameter_secret"],
+        }))
+        .unwrap();
+        let logged = format!("{request:?}");
+        assert!(!logged.contains("request_secret"), "{logged}");
+        assert!(!logged.contains("parameter_secret"), "{logged}");
+
+        let internal = r#"{"variables":[["p","{\"String\":\"variable_secret\"}"]]}"#;
+        let request: HttpQueryRequest = serde_json::from_value(serde_json::json!({
+            "sql": "SELECT 1",
+            "session": {
+                "settings": {"enterprise_license": "license_secret", "max_threads": "8"},
+                "internal": internal,
+            },
+        }))
+        .unwrap();
+        let logged = format!("{request:?}");
+        assert!(!logged.contains("license_secret"), "{logged}");
+        assert!(!logged.contains("variable_secret"), "{logged}");
+        assert!(logged.contains(r#""max_threads": "8""#), "{logged}");
+        assert!(logged.contains(r#"variables: ["p"]"#), "{logged}");
     }
 }

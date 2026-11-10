@@ -14,13 +14,9 @@
 // limitations under the License.
 
 #[cfg(feature = "simd")]
-use std::simd::LaneCount;
-#[cfg(feature = "simd")]
 use std::simd::Mask;
 #[cfg(feature = "simd")]
 use std::simd::MaskElement;
-#[cfg(feature = "simd")]
-use std::simd::SupportedLaneCount;
 
 use crate::bitmap::Bitmap;
 
@@ -160,14 +156,12 @@ impl<'a> BitMask<'a> {
     #[allow(dead_code)]
     #[inline]
     pub fn get_simd<T, const N: usize>(&self, idx: usize) -> Mask<T, N>
-    where
-        T: MaskElement,
-        LaneCount<N>: SupportedLaneCount,
-    {
+    where T: MaskElement {
         // We don't support 64-lane masks because then we couldn't load our
         // bitwise mask as a u64 and then do the byteshift on it.
 
-        let lanes = LaneCount::<N>::BITMASK_LEN;
+        const { assert!(N >= 1 && N <= 64) };
+        let lanes = N.div_ceil(8);
         assert!(lanes < 64);
 
         let start_byte_idx = (self.offset + idx) / 8;

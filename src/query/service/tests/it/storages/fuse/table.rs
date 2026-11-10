@@ -14,12 +14,19 @@
 
 use std::default::Default;
 
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
+use databend_common_config::GlobalConfig;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::Planner;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -147,5 +154,93 @@ fn test_parse_storage_prefix() -> anyhow::Result<()> {
         .insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
     let prefix = FuseTable::parse_storage_prefix_from_table_info(&tbl_info)?;
     assert_eq!(format!("{}/{}", db_id, tbl_id), prefix);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_derived_table_maintenance_permissions() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+    let table = fixture.latest_default_table().await?;
+
+    for engine in ["FUSE", "MATERIALIZED_VIEW", "DYNAMIC_TABLE"] {
+        let mut info = table.get_table_info().clone();
+        info.meta.engine = engine.to_string();
+        let owned = FuseTable::try_create(info.clone(), None, true)?;
+        assert_eq!(owned.check_mutable().is_ok(), engine == "FUSE");
+        assert!(owned.check_mutable_for_maintenance().is_ok());
+        assert!(!owned.is_read_only_for_maintenance());
+
+        // The engine must never override shared/attached storage ownership restrictions.
+        info.meta.storage_params = Some(GlobalConfig::instance().storage.params.clone());
+        info.db_type = DatabaseType::SharedDB;
+        let shared = FuseTable::try_create(info.clone(), None, true)?;
+        assert!(shared.check_mutable().is_err());
+        assert!(shared.check_mutable_for_maintenance().is_err());
+        assert!(shared.is_read_only_for_maintenance());
+
+        info.db_type = DatabaseType::NormalDB;
+        info.meta.options.insert(
+            OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
+            "attached".to_string(),
+        );
+        let attached = FuseTable::try_create(info, None, true)?;
+        assert!(attached.check_mutable().is_err());
+        assert!(attached.check_mutable_for_maintenance().is_err());
+        assert!(attached.is_read_only_for_maintenance());
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_dynamic_table_published_after_materialization() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!("CREATE TABLE {db}.dt_source(id INT)"))
+        .await?;
+    fixture
+        .execute_command(&format!("INSERT INTO {db}.dt_source VALUES (7)"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql(&format!(
+            "CREATE DYNAMIC TABLE {db}.derived AS SELECT id FROM {db}.dt_source"
+        ))
+        .await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let pipeline = interpreter.execute2().await?;
+
+    // Initialization is staged, but its data pipeline has not run. A separate query
+    // context must not be able to resolve an empty table under the public name.
+    let select = format!("SELECT id FROM {db}.derived");
+    let error = fixture
+        .execute_query(&select)
+        .await
+        .err()
+        .expect("staged table must be hidden");
+    assert_eq!(
+        error.code(),
+        databend_common_exception::ErrorCode::UNKNOWN_TABLE
+    );
+
+    execute_pipeline(ctx, pipeline).await?;
+    let blocks = fixture
+        .execute_query(&select)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    databend_common_expression::block_debug::assert_blocks_eq(
+        vec![
+            "+----------+",
+            "| Column 0 |",
+            "+----------+",
+            "| 7        |",
+            "+----------+",
+        ],
+        &blocks,
+    );
     Ok(())
 }

@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::optimizer::ir::StatContext;
+use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::plans::PhysicalRelOperator;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::SortItem;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
@@ -30,17 +33,40 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     writeln!(
         file,
         "{}",
-        raw_plan.format_indent(Default::default(), &StatContext::default())?
+        raw_plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default(), &StatContext::default())?
+        optimized_plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
+    // The plan formatter does not show rank limit keys, so print them separately.
+    let Plan::Query { s_expr, .. } = &optimized_plan else {
+        unreachable!("test optimizer should return Plan::Query");
+    };
+    match find_rank_limit(s_expr.planned().unwrap().expr()) {
+        Some((items, limit)) => {
+            let keys = items
+                .iter()
+                .map(|item| format!("#{} {}", item.index, if item.asc { "ASC" } else { "DESC" }))
+                .collect::<Vec<_>>();
+            writeln!(file, "rank_limit: [{}] limit {}", keys.join(", "), limit)?;
+        }
+        None => writeln!(file, "rank_limit: NONE")?,
+    }
     writeln!(file)?;
 
     Ok(())
+}
+
+fn find_rank_limit(s_expr: &PExpr) -> Option<&(Vec<SortItem>, usize)> {
+    match s_expr.plan() {
+        PhysicalRelOperator::Aggregate(agg) if agg.aggregate.rank_limit.is_some() => {
+            agg.aggregate.rank_limit.as_ref()
+        }
+        _ => s_expr.children().find_map(find_rank_limit),
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -73,6 +99,18 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
             sql: "SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY category LIMIT 3",
         },
         SqlTestCase {
+            name: "rank_limit_follows_order_by_key_order",
+            description: "When ORDER BY lists the group keys in a different order, the rank limit keys must follow the ORDER BY order.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY value DESC, category LIMIT 3",
+        },
+        SqlTestCase {
+            name: "repeated_order_key_keeps_single_rank_key",
+            description: "A repeated ORDER BY column keeps only its first occurrence, so the single-key rank limit still pushes scan ordering.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, count(*) FROM events GROUP BY category ORDER BY category ASC, category DESC LIMIT 3",
+        },
+        SqlTestCase {
             name: "join_input_does_not_push_scan_order",
             description: "A row-changing Join below the aggregate must prevent rank-limit ordering from reaching either scan.",
             setup_sqls: &[EVENTS_TABLE, CATEGORIES_TABLE],
@@ -83,6 +121,18 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
             description: "A scan already ordered by a subquery must keep that ordering instead of being overwritten by the outer aggregate rank limit.",
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, count(*) FROM (SELECT category, value FROM events ORDER BY value) ordered_events GROUP BY category ORDER BY category LIMIT 3",
+        },
+        SqlTestCase {
+            name: "union_all_input_pushes_order_to_branch_scans",
+            description: "An aggregate over UNION ALL should push the group-key ordering to every branch scan, translated into the branch columns.",
+            setup_sqls: &[EVENTS_TABLE, CATEGORIES_TABLE],
+            sql: "SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM categories) u GROUP BY k ORDER BY k LIMIT 3",
+        },
+        SqlTestCase {
+            name: "union_all_widened_branch_keeps_no_order",
+            description: "A UNION ALL branch cast to a wider type must not receive the ordering, while the uncast branch still does.",
+            setup_sqls: &[EVENTS_TABLE, WIDE_EVENTS_TABLE],
+            sql: "SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM wide_events) u GROUP BY k ORDER BY k DESC LIMIT 3",
         },
     ];
 
@@ -95,3 +145,4 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
 
 const EVENTS_TABLE: &str = "CREATE TABLE events(category INT, value INT)";
 const CATEGORIES_TABLE: &str = "CREATE TABLE categories(category INT, name STRING)";
+const WIDE_EVENTS_TABLE: &str = "CREATE TABLE wide_events(category BIGINT)";

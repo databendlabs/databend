@@ -14,7 +14,6 @@
 
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(try_blocks)]
 
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -34,16 +33,22 @@ mod constant_folder;
 mod conversion;
 mod decimal;
 mod display;
+mod encoded;
 mod evaluator;
 mod fill_field_default_value;
+mod filter_executor;
+mod fold_rules;
+mod function_factory;
 mod group_by;
 mod hilbert;
 mod kernel;
 mod meta_scalar;
 
+mod scalar_hash;
 mod schema;
 mod serde;
 mod sort;
+mod stream_partition;
 mod types;
 
 mod like_pattern_escape;

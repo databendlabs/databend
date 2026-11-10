@@ -424,6 +424,7 @@ impl From<&Column> for ArrayData {
     fn from(value: &Column) -> Self {
         let arrow_type = ArrowDataType::from(&value.data_type());
         match value {
+            Column::Encoded(encoded) => ArrayData::from(&encoded.decode()),
             Column::Null { len } => {
                 let builder = ArrayDataBuilder::new(arrow_type).len(*len);
                 unsafe { builder.build_unchecked() }

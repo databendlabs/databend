@@ -42,8 +42,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
@@ -59,7 +59,8 @@ use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -179,7 +180,7 @@ fn make_recluster_block(
 
 fn with_partition(mut block: Arc<BlockMeta>, partition: i32) -> Arc<BlockMeta> {
     Arc::make_mut(&mut block).partition_stats =
-        Some(PartitionStatistics::new(vec![Scalar::from(partition)]));
+        Some(PartitionStatistics::new(0, vec![Scalar::from(partition)]));
     block
 }
 
@@ -1008,8 +1009,6 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
         .await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(1)?;
-    ctx.get_settings()
-        .set_setting("enable_distributed_recluster".to_owned(), "0".to_owned())?;
     execute_command(ctx, &format!("alter table {name} recluster")).await?;
 
     let table = fixture.latest_default_table().await?;
@@ -1019,13 +1018,8 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     let mut ordered = 0;
     let mut unordered = 0;
     for location in &snapshot.segments {
-        let segment = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema())
-            .read(&LoadParams {
-                location: location.0.clone(),
-                len_hint: None,
-                ver: location.1,
-                put_cache: false,
-            })
+        let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
+            .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)
             .await?;
         for block in segment.block_metas()?.iter() {
             if block
@@ -1053,13 +1047,8 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     let snapshot = fuse.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.summary.row_count, 6);
     for location in &snapshot.segments {
-        let segment = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema())
-            .read(&LoadParams {
-                location: location.0.clone(),
-                len_hint: None,
-                ver: location.1,
-                put_cache: false,
-            })
+        let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
+            .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)
             .await?;
         assert!(segment.block_metas()?.iter().all(|block| {
             block
@@ -1660,11 +1649,50 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
     // Cover both the vector overlap strategy and the shared small-block shortcut,
     // with current and obsolete cluster-key statistics. Vector inputs must never
     // be split into scalar singleton sort tasks.
-    for (current_key_id, thresholds) in [
-        (cluster_key_id, thresholds),
-        (cluster_key_id + 1, thresholds),
-        (cluster_key_id, BlockThresholds::new(10000, 10000, 10000, 1)),
+    for (current_key_id, thresholds, disjoint) in [
+        (cluster_key_id, thresholds, false),
+        (cluster_key_id + 1, thresholds, false),
+        (
+            cluster_key_id,
+            BlockThresholds::new(10000, 10000, 10000, 1),
+            false,
+        ),
+        (cluster_key_id, thresholds, true),
     ] {
+        ctx.get_settings().set_setting(
+            "enable_recluster_task_selection_v2".to_string(),
+            u8::from(disjoint).to_string(),
+        )?;
+        let case_segments = if disjoint {
+            // Same scalar range, disjoint vector spheres in ONE segment:
+            // enabled v2 must not bypass the vector strategy.
+            let locations = gen_recluster_segments_by_vector_stats(
+                &data_accessor,
+                &location_generator,
+                &[vec![
+                    (1, 1, [0.0, 0.0], 1.0),
+                    (1, 1, [10.0, 0.0], 1.0),
+                    (1, 1, [20.0, 0.0], 1.0),
+                ]],
+                None,
+                true,
+                1000,
+                100,
+                100,
+                thresholds,
+                cluster_key_id,
+            )
+            .await?;
+            segment_pruning(
+                &ctx,
+                schema.clone(),
+                data_accessor.clone(),
+                create_segment_location_vector(locations, None),
+            )
+            .await?
+        } else {
+            compact_segments.clone()
+        };
         let vector_cluster_info = VectorClusterInfo {
             key_index: 1,
             column_id: 1,
@@ -1682,26 +1710,39 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
             ClusterKeyInfo::new((current_key_id, "(c0)".to_string()), ClusterType::Linear),
             0,
             1,
-            ReclusterMode::Conservative,
+            if disjoint {
+                ReclusterMode::Aggressive
+            } else {
+                ReclusterMode::Conservative
+            },
             Some(vector_cluster_info),
         );
 
-        let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+        let segment_windows = mutator.select_segments(&case_segments, 8)?;
         let vector_window = segment_windows
             .into_iter()
             .find(|window| {
-                window
-                    .iter()
-                    .map(|segment| segment.loc.segment_idx)
-                    .collect::<HashSet<_>>()
-                    == HashSet::from([0, 1])
+                if disjoint {
+                    window.len() == 1
+                } else {
+                    window
+                        .iter()
+                        .map(|segment| segment.loc.segment_idx)
+                        .collect::<HashSet<_>>()
+                        == HashSet::from([0, 1])
+                }
             })
             .unwrap();
         let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
-        assert_eq!(block_num, 2);
-        assert_eq!(parts.tasks.len(), 1);
-        assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
-        assert_eq!(task_part_counts(&parts), vec![2]);
+        if disjoint {
+            assert_eq!(block_num, 0);
+            assert!(parts.is_empty());
+        } else {
+            assert_eq!(block_num, 2);
+            assert_eq!(parts.tasks.len(), 1);
+            assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
+            assert_eq!(task_part_counts(&parts), vec![2]);
+        }
     }
 
     Ok(())
@@ -2606,7 +2647,7 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
                 remained_blocks.len()
             );
             for remain in remained_blocks {
-                blocks.push(remain.0.location.0.clone());
+                blocks.push(remain.block_meta.location.0.clone());
             }
 
             let block_ids_after_recluster = HashSet::from_iter(blocks.into_iter());

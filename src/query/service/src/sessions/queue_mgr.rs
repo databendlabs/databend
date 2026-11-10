@@ -52,13 +52,11 @@ use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
 use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
 use databend_common_metrics::session::set_session_queued_queries;
-use databend_common_sql::PlanExtras;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_meta_plugin_semaphore::acquirer::Permit;
 use databend_meta_plugin_semaphore::errors::AcquireError;
-use databend_meta_runtime::DatabendRuntime;
 use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
@@ -124,12 +122,9 @@ impl<Data: QueueData> QueueManager<Data> {
         let metastore = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider
-                .create_meta_store::<DatabendRuntime>()
-                .await
-                .map_err(|e| {
-                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-                })?
+            provider.create_default_meta_store().await.map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?
         };
 
         info!("Queue manager initialized with permits: {:?}", permits);
@@ -491,6 +486,19 @@ where T: Future<Output =  std::result::Result<std::result::Result<Permit, E>, El
     key: Option<Data::Key>,
     manager: Arc<QueueManager<Data>>,
 }
+
+impl<Data: QueueData, T, Permit, E> PinnedDrop for AcquireQueueFuture<Data, T, Permit, E>
+where T: Future<Output = std::result::Result<std::result::Result<Permit, E>, Elapsed>>
+{
+    fn drop(this: Pin<&mut Self>) {
+        let this = this.project();
+        // Cancellation can drop the future without polling it to completion.
+        // Release the registered entry and the query context it owns in that case.
+        if let Some(key) = this.key.take() {
+            this.manager.remove_entity(&key);
+        }
+    }
+}
 }
 
 impl<Data: QueueData, T, Permit, E> AcquireQueueFuture<Data, T, Permit, E>
@@ -568,7 +576,6 @@ pub struct QueryEntry {
     ctx: Arc<QueryContext>,
     pub query_id: String,
     pub create_time: SystemTime,
-    pub sql: String,
     pub user_info: UserInfo,
     pub timeout: Duration,
     pub lock_ttl: Duration,
@@ -580,7 +587,6 @@ pub struct QueryEntry {
 impl QueryEntry {
     pub fn create_entry(
         ctx: &Arc<QueryContext>,
-        plan_extras: &PlanExtras,
         need_acquire_to_queue: bool,
     ) -> Result<QueryEntry> {
         let settings = ctx.get_settings();
@@ -595,7 +601,6 @@ impl QueryEntry {
             need_acquire_to_queue,
             query_id: ctx.get_id(),
             create_time: ctx.get_query_created_time(),
-            sql: plan_extras.statement.to_mask_sql(),
             user_info: ctx.get_current_user()?,
             timeout: match settings.get_statement_queued_timeout()? {
                 0 => Duration::from_secs(60 * 60 * 24 * 365 * 35),
@@ -606,13 +611,9 @@ impl QueryEntry {
         })
     }
 
-    pub fn create(
-        ctx: &Arc<QueryContext>,
-        plan: &Plan,
-        plan_extras: &PlanExtras,
-    ) -> Result<QueryEntry> {
+    pub fn create(ctx: &Arc<QueryContext>, plan: &Plan) -> Result<QueryEntry> {
         let need_add_to_queue = Self::is_heavy_action(plan);
-        QueryEntry::create_entry(ctx, plan_extras, need_add_to_queue)
+        QueryEntry::create_entry(ctx, need_add_to_queue)
     }
 
     /// Check a plan is heavy action or not.
@@ -673,7 +674,6 @@ impl QueryEntry {
             | Plan::VacuumAll(_)
             | Plan::VacuumDropTable(_)
             | Plan::VacuumTemporaryFiles(_)
-            | Plan::RefreshIndex(_)
             | Plan::ReclusterTable(_)
             | Plan::TruncateTable(_) => {
                 return true;

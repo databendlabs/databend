@@ -1,0 +1,34 @@
+# Keep JavaScript UDF conversion, exception propagation and runtime reuse covered
+# when updating the Rust toolchain and its rquickjs compatibility patch.
+statement ok
+CREATE OR REPLACE FUNCTION js_runtime_next (BIGINT) RETURNS BIGINT
+LANGUAGE javascript HANDLER = 'next' AS $$
+export function next(value) {
+    if (value < 0) {
+        throw new Error('js runtime regression');
+    }
+    return value + 1;
+}
+$$
+
+query II
+SELECT count(), sum(js_runtime_next(number)) FROM numbers(4097)
+----
+4097 8394753
+
+query I
+SELECT js_runtime_next(NULL)
+----
+NULL
+
+statement error (?s)1810.*JavaScript UDF "js_runtime_next" execution failed
+SELECT js_runtime_next(-1)
+
+# An exception must not prevent subsequent calls from completing.
+query I
+SELECT js_runtime_next(41)
+----
+42
+
+statement ok
+DROP FUNCTION js_runtime_next

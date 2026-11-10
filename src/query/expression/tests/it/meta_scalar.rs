@@ -108,7 +108,7 @@ pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
             bincode_serialize_into_buf(&mut data, &v3_scalars).unwrap();
             let new_scalars: Vec<LegacyScalar> = bincode_deserialize_from_slice(&data).unwrap();
 
-            for (a, b) in v3_scalars.into_iter().zip(new_scalars.into_iter()) {
+            for (a, b) in v3_scalars.into_iter().zip(new_scalars) {
                 let a: Scalar = a.into();
                 let b: Scalar = b.into();
 

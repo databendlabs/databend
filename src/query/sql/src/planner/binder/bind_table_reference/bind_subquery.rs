@@ -39,17 +39,23 @@ impl Binder {
         } else {
             let mut new_bind_context =
                 BindContext::with_opt_parent(bind_context.parent.as_ref().map(|c| c.as_ref()))?;
+            // Hiding sibling columns must not reset the binding depth.
+            new_bind_context.binding_depth = bind_context.next_depth()?;
             new_bind_context
                 .cte_context
                 .set_cte_context_and_name(bind_context.cte_context.clone());
+            // The parent may be outside the current view scope; keep the
+            // current view expansion path for loop detection.
+            new_bind_context
+                .binding_views
+                .clone_from(&bind_context.binding_views);
             self.bind_query(&mut new_bind_context, subquery)?
         };
 
         if let Some(alias) = alias {
             result_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             // Reset column name as alias column name
-            for i in 0..alias.columns.len() {
-                let column = &result_bind_context.columns[i];
+            for column in &result_bind_context.columns[..alias.columns.len()] {
                 self.metadata
                     .write()
                     .change_derived_column_alias(column.index, column.column_name.clone());

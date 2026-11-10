@@ -28,7 +28,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use itertools::Itertools;
 
 use crate::physical_plans::Exchange;
@@ -43,10 +43,11 @@ use crate::physical_plans::physical_plan::PhysicalPlanCast;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformRecursiveCteSource;
+use crate::sessions::QueryContext;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {
-    meta: PhysicalPlanMeta,
+    pub(crate) meta: PhysicalPlanMeta,
     pub left: PhysicalPlan,
     pub right: PhysicalPlan,
     pub left_outputs: Vec<(Symbol, Option<RemoteExpr>)>,
@@ -120,11 +121,11 @@ impl IPhysicalPlan for UnionAll {
             return self.build_recursive_cte_source(builder);
         }
 
-        self.left.build_pipeline(builder)?;
+        build_branch_with_sub_ctx(&self.left, builder)?;
         self.project_input(self.left.output_schema()?, &self.left_outputs, builder)?;
         let left_sinks = builder.main_pipeline.take_sinks();
 
-        self.right.build_pipeline(builder)?;
+        build_branch_with_sub_ctx(&self.right, builder)?;
         self.project_input(self.right.output_schema()?, &self.right_outputs, builder)?;
         let right_sinks = builder.main_pipeline.take_sinks();
 
@@ -143,6 +144,18 @@ impl IPhysicalPlan for UnionAll {
                 .sequence_group(sequence_groups, outputs),
         }
     }
+}
+
+/// Builds a UNION ALL branch with its own `QueryContext`, as the hash join does
+/// for its build side. A scan stores its partitions in the context's partition
+/// queue and some sources only take them when the pipeline runs, so a branch
+/// built later on the same context would replace the partitions of an earlier one.
+fn build_branch_with_sub_ctx(branch: &PhysicalPlan, builder: &mut PipelineBuilder) -> Result<()> {
+    let mut branch_ctx = QueryContext::create_from(&builder.ctx);
+    std::mem::swap(&mut builder.ctx, &mut branch_ctx);
+    let result = branch.build_pipeline(builder);
+    std::mem::swap(&mut builder.ctx, &mut branch_ctx);
+    result
 }
 
 impl UnionAll {
@@ -209,7 +222,7 @@ impl UnionAll {
 impl PhysicalPlanBuilder {
     pub async fn build_union_all(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         union_all: &databend_common_sql::plans::UnionAll,
         required: ColumnSet,
         stat_info: PlanStatsInfo,

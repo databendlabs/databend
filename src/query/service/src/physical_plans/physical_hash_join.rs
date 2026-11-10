@@ -43,7 +43,7 @@ use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
 use tokio::sync::Barrier;
@@ -433,16 +433,15 @@ impl HashJoin {
         // as we will inject some runtime filter information into the context for the child nodes to use.
         let rf_desc = RuntimeFiltersDesc::create(&builder.ctx, self)?;
 
-        // After common subexpression elimination is completed, we can delete this type of code.
-        {
-            let state = factory.create_basic_state(0)?;
+        // States shared by all join processors at spill level 0.
+        let level_states = factory.create_level_states(0)?;
 
-            if let Some((build_cache_index, column_map)) = &self.build_side_cache_info {
-                builder.hash_join_states.insert(
-                    *build_cache_index,
-                    HashJoinStateRef::NewHashJoinState(state.clone(), column_map.clone()),
-                );
-            }
+        // After common subexpression elimination is completed, we can delete this type of code.
+        if let Some((build_cache_index, column_map)) = &self.build_side_cache_info {
+            builder.hash_join_states.insert(
+                *build_cache_index,
+                HashJoinStateRef::NewHashJoinState(level_states.basic.clone(), column_map.clone()),
+            );
         }
 
         let mut sub_query_ctx = QueryContext::create_from(&builder.ctx);
@@ -471,7 +470,7 @@ impl HashJoin {
         let stage_sync_barrier = Arc::new(barrier);
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
-        for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {
+        for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks) {
             join_sinks.push(build_sink);
             join_sinks.push(probe_sink);
 
@@ -483,7 +482,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                factory.create_hash_join(self.join_type, 0)?,
+                factory.create_hash_join(self.join_type, level_states.clone())?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
@@ -540,7 +539,7 @@ impl PhysicalPlanBuilder {
     /// left-child then right-child order.
     pub async fn build_join_sides(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<(PhysicalPlan, PhysicalPlan)> {
@@ -680,7 +679,7 @@ impl PhysicalPlanBuilder {
             .ok_or_else(|| {
                 ErrorCode::IllegalDataType(format!(
                     "Cannot find common type for probe key {:?} and build key {:?}",
-                    &probe_expr, &build_expr
+                    probe_expr, build_expr
                 ))
             })?;
             *probe_key = check_cast(
@@ -1283,7 +1282,7 @@ impl PhysicalPlanBuilder {
     pub async fn build_hash_join(
         &mut self,
         join: &Join,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         mut required: ColumnSet,
         mut others_required: ColumnSet,
         left_required: ColumnSet,

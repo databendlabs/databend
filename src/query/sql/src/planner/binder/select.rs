@@ -402,6 +402,42 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
+        self.bind_where_impl(bind_context, aliases, None, expr, child)
+    }
+
+    pub(crate) fn bind_select_where(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        alias_exprs: impl Iterator<Item = (String, Expr)>,
+        expr: &Expr,
+        child: SExpr,
+    ) -> Result<(SExpr, ScalarExpr)> {
+        let has_original_where = self.metadata.read().tables().iter().any(|table| {
+            !table
+                .table()
+                .get_table_info()
+                .meta
+                .masking_where_use_unmasked_value
+                .is_empty()
+        });
+        self.bind_where_impl(
+            bind_context,
+            aliases,
+            has_original_where.then(|| alias_exprs.collect()),
+            expr,
+            child,
+        )
+    }
+
+    fn bind_where_impl(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        alias_exprs: Option<Vec<(String, Expr)>>,
+        expr: &Expr,
+        child: SExpr,
+    ) -> Result<(SExpr, ScalarExpr)> {
         bind_context.with_expr_context(
             ExprContext::WhereClause,
             |bind_context| -> Result<(SExpr, ScalarExpr)> {
@@ -412,6 +448,9 @@ impl Binder {
                     self.metadata.clone(),
                     aliases,
                 );
+                if let Some(alias_exprs) = alias_exprs {
+                    scalar_binder.set_masking_where_aliases(alias_exprs);
+                }
                 let (scalar, _) = scalar_binder.bind(expr)?;
                 let f = |scalar: &ScalarExpr| {
                     scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
@@ -696,7 +735,7 @@ impl Binder {
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
-        let s_expr = self.bind_join_with_type(
+        let (s_expr, replacements) = self.bind_join_with_type(
             join_type,
             join_conditions,
             (left_expr, &mut left_context),
@@ -704,6 +743,9 @@ impl Binder {
             is_null_equal,
             None,
         )?;
+        // INTERSECT / EXCEPT output only the left side, and their NULL-safe keys keep them off
+        // the lateral path that replaces right side columns.
+        debug_assert!(replacements.is_empty());
         left_context
             .cte_context
             .set_cte_context(right_context.cte_context);

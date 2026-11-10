@@ -41,6 +41,10 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
         "OptimizeCompactSegmentInterpreter"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         true
     }
@@ -67,7 +71,7 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
                     &self.plan.table,
                 )
                 .await?;
-            table.check_mutable_or_materialized_view()?;
+            table.check_mutable_for_maintenance()?;
 
             let mut build_res = PipelineBuildResult::create();
             table

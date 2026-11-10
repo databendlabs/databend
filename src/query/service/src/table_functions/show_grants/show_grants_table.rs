@@ -17,7 +17,10 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::cache_policy::CachePolicy;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -48,6 +51,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -186,7 +190,7 @@ impl Table for ShowGrants {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         pipeline.add_source(
             |output| {
@@ -342,7 +346,9 @@ async fn show_account_grants(
     name: &str,
 ) -> Result<Option<DataBlock>> {
     let tenant = ctx.get_tenant();
-    let expand_roles = ctx.get_settings().get_enable_expand_roles()?;
+    let settings = ctx.get_settings();
+    let expand_roles = settings.get_enable_expand_roles()?;
+    let ident_quote = settings.get_sql_dialect()?.default_ident_quote();
     let current_user = ctx.get_current_user()?;
     let has_grant_priv = ctx
         .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
@@ -370,7 +376,7 @@ async fn show_account_grants(
 
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
-                    &current_user.identity().display(),
+                    current_user.identity().display(),
                     roles.join(",")
                 )));
             }
@@ -393,7 +399,7 @@ async fn show_account_grants(
                 roles.sort();
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege [Grant] is required on *.* for user {} with roles [{}]",
-                    &current_user.identity().display(),
+                    current_user.identity().display(),
                     roles.join(",")
                 )));
             }
@@ -551,7 +557,7 @@ async fn show_account_grants(
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
-                GrantObject::Connection(connection) => {
+                GrantObject::Integration(connection) | GrantObject::Connection(connection) => {
                     object_name.push(connection.to_string());
                     object_id.push(None);
                     privileges.push(get_priv_str(grant_entry));
@@ -780,7 +786,7 @@ async fn show_account_grants(
         let db_names = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
         let db_map = db_ids
             .into_iter()
-            .zip(db_names.into_iter())
+            .zip(db_names)
             .filter(|(_, db_name)| db_name.is_some())
             .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
             .collect::<HashMap<_, _>>();
@@ -809,7 +815,7 @@ async fn show_account_grants(
         let db_names = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
         let db_map = db_ids
             .into_iter()
-            .zip(db_names.into_iter())
+            .zip(db_names)
             .filter(|(_, db_name)| db_name.is_some())
             .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
             .collect::<HashMap<_, _>>();
@@ -823,9 +829,25 @@ async fn show_account_grants(
         let table_names = catalog
             .mget_table_names_by_ids(&tenant, &table_ids, false)
             .await?;
+        // MV grants share TableById storage with table grants, but their SQL must
+        // retain the explicit object type required by GRANT/REVOKE. MV objects are
+        // restricted to the default catalog; other catalogs need no extra lookup.
+        let mv_ids = if catalog_name == CATALOG_DEFAULT {
+            catalog
+                .mget_table_metas_by_ids(&table_ids)
+                .await?
+                .into_iter()
+                .filter_map(|(id, meta)| {
+                    meta.filter(|meta| is_materialized_view_engine(&meta.data.engine))
+                        .map(|_| id)
+                })
+                .collect::<HashSet<_>>()
+        } else {
+            HashSet::new()
+        };
         let table_map = table_ids
             .into_iter()
-            .zip(table_names.into_iter())
+            .zip(table_names)
             .filter(|(_, table_name)| table_name.is_some())
             .map(|(table_id, table_name)| (table_id, table_name.unwrap()))
             .collect::<HashMap<_, _>>();
@@ -833,10 +855,20 @@ async fn show_account_grants(
         for (db_id, table_id, privilege_str) in tables_priv_id.into_iter() {
             if let Some(db_name) = db_map.get(&db_id) {
                 if let Some(table_name) = table_map.get(&table_id) {
-                    let grant_str = format!(
-                        "GRANT {} ON '{}'.'{}'.'{}' TO {}",
-                        &privilege_str, catalog_name, db_name, table_name, identity
-                    );
+                    let grant_str = if mv_ids.contains(&table_id) {
+                        format!(
+                            "GRANT {} ON MATERIALIZED VIEW {}.{} TO {}",
+                            privilege_str,
+                            QuotedIdent(db_name, ident_quote),
+                            QuotedIdent(table_name, ident_quote),
+                            identity
+                        )
+                    } else {
+                        format!(
+                            "GRANT {} ON '{}'.'{}'.'{}' TO {}",
+                            privilege_str, catalog_name, db_name, table_name, identity
+                        )
+                    };
                     object_name.push(format!("{}.{}.{}", catalog_name, db_name, table_name));
                     object_id.push(Some(table_id.to_string()));
                     privileges.push(privilege_str);

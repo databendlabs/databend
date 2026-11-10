@@ -37,9 +37,9 @@ echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inve
 
 echo "== number of invert index files (expects 2) =="
 # NOTE: since there are 1 block, 2 inverted indexes.
-echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root | wc -l
+echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root | wc -l
 # uncomment this line to show the details (for local diagnostic only)
-#echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root
+#echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root
 
 
 echo "###################"
@@ -58,9 +58,9 @@ echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inve
 
 echo "== number of invert index files (expects 4) =="
 # NOTE: since there are 2 blocks now, each of them will have 2 inverted indexes.
-echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root | wc -l
+echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root | wc -l
 # uncomment this line to show the details (for local diagnostic only)
-#echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root
+#echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root
 
 
 echo "###################"
@@ -77,9 +77,9 @@ echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inve
 
 echo "== number of invert index files (expects 6) =="
 # NOTE: since there are 3 blocks now, each of them will have 2 inverted indexes.
-echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root | wc -l
+echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root | wc -l
 # uncomment this line to show the details (for local diagnostic only)
-#echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root
+#echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root
 
 
 echo "###################"
@@ -93,9 +93,9 @@ echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inve
 
 echo "== number of invert index files (expects 2) =="
 # NOTE: inverted index is refreshed after compaction
-echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root | wc -l
+echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root | wc -l
 # uncomment this line to show the details (for local diagnostic only)
-#echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root
+#echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root
 
 echo "###################"
 echo "####new insertion##"
@@ -106,9 +106,9 @@ echo "== number of snapshots (expects 1) =="
 echo "select snapshot_id, previous_snapshot_id from fuse_snapshot('db_purge_inverted_index', 'customer_feedback') limit 100" | bendsql_connect_root | wc -l
 echo "== number of invert index files (expects 4) =="
 # NOTE: the inverted index refreshment will create new indexes for the new blocks, and there is one new block and 2 indexes
-echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root | wc -l
+echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root | wc -l
 # for local diagnostic only
-#echo "list @test_purge_ii PATTERN = '.*/_i_i/.*.index';" | bendsql_connect_root
+#echo "list @test_purge_ii PATTERN = '.*/_i_i_v2/.*.index';" | bendsql_connect_root
 
 
 echo "drop table ${TEST_DB}.customer_feedback" | bendsql_connect_root

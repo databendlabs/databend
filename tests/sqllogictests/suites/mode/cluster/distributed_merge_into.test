@@ -239,3 +239,120 @@ drop stream if exists t2_s;
 
 statement ok
 drop table if exists t2;
+
+# Hash-distributed MERGE: matched, unmatched and delete branches must all produce
+# partition-pure blocks and correct data.
+statement ok
+create table merge_hash_target(id int, p int)
+partition by (p % 16) write_distribution_mode='hash' change_tracking=true
+row_per_block=1000 block_per_segment=1000;
+
+statement ok
+insert into merge_hash_target
+select number::int, (number % 16)::int from numbers(24);
+
+statement ok
+merge into merge_hash_target t
+using (select number::int as id, (number % 16)::int as p from numbers(2400)) s
+on t.id = s.id
+when not matched then insert (id, p) values (s.id, s.p);
+
+query II
+select count(*), sum(p) from merge_hash_target;
+----
+2400 18000
+
+statement ok
+merge into merge_hash_target t
+using (
+    select number::int as id, ((number + 1) % 16)::int as p from numbers(24)
+    union all select 2400, 0
+) s
+on t.id = s.id
+when matched then update set t.p = s.p
+when not matched then insert (id, p) values (s.id, s.p);
+
+query II
+select count(*), sum(p) from merge_hash_target;
+----
+2401 18008
+
+statement ok
+merge into merge_hash_target t
+using (
+    select 0::int as id, 0::int as p
+    union all select 1, 2
+    union all select 2401, 3
+) s
+on t.id = s.id
+when matched and s.id = 0 then delete
+when matched then update set t.p = s.p
+when not matched then insert (id, p) values (s.id, s.p);
+
+query II
+select count(*), sum(p) from merge_hash_target;
+----
+2401 18010
+
+statement ok
+merge into merge_hash_target t
+using (select number::int as id, ((number + 2) % 16)::int as p from numbers(24)) s
+on t.id = s.id
+when matched then update set t.p = s.p;
+
+query I
+select count(*) from merge_hash_target;
+----
+2401
+
+query I
+select count(*) from (
+  select _block_name from merge_hash_target group by _block_name
+  having min(p % 16) != max(p % 16)
+);
+----
+0
+
+statement ok
+drop table merge_hash_target;
+
+# Interleaved partition values become one block per row run unless the hash write layout
+# regroups them, so the hash table must end up with fewer blocks.
+statement ok
+create or replace table merge_layout_src(a int) row_per_block=128 block_per_segment=1000;
+
+statement ok
+insert into merge_layout_src select number::int from numbers(4096);
+
+statement ok
+create or replace table merge_layout_hash(a int, p int)
+partition by (p % 2) write_distribution_mode='hash'
+row_per_block=1000 block_per_segment=1000;
+
+statement ok
+create or replace table merge_layout_none(a int, p int)
+partition by (p % 2) row_per_block=1000 block_per_segment=1000;
+
+statement ok
+merge into merge_layout_hash t using (select a, a as p from merge_layout_src) s on t.a = s.a
+when not matched then insert (a, p) values (s.a, s.p);
+
+statement ok
+merge into merge_layout_none t using (select a, a as p from merge_layout_src) s on t.a = s.a
+when not matched then insert (a, p) values (s.a, s.p);
+
+query II
+select to_int64(h.row_count = n.row_count), to_int64(h.block_count < n.block_count)
+from (select row_count, block_count from fuse_snapshot('default', 'merge_layout_hash') order by timestamp desc limit 1) h
+cross join (select row_count, block_count from fuse_snapshot('default', 'merge_layout_none') order by timestamp desc limit 1) n;
+----
+1 1
+
+statement ok
+drop table merge_layout_src;
+
+statement ok
+drop table merge_layout_hash;
+
+statement ok
+drop table merge_layout_none;

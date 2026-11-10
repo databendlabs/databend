@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
+
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
@@ -36,6 +40,21 @@ use crate::with_number_mapped_type;
 use crate::with_number_type;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
+
+/// Maps a group hash to one of `n` routing targets, such as the nodes or channels of
+/// a hash shuffle.
+///
+/// Local consumers read raw bits of the same group hash: the aggregate hash index uses
+/// the low bits as the slot and the top 7 bits as the tag, aggregate radix partitions use
+/// bits below 48, and window partitioning uses `hash % num_partitions`. Routing with
+/// `hash % n` would fix the low bits of every row a target receives, so each target
+/// would only see a fraction of the slots and window partitions. Remixing before the
+/// range reduction keeps the routing independent of those bits.
+#[inline(always)]
+pub fn group_hash_route_index(hash: u64, n: u64) -> u64 {
+    let mixed = hash.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    ((mixed as u128 * n as u128) >> 64) as u64
+}
 
 pub fn group_hash_entries(entries: ProjectedBlock, values: &mut [u64]) {
     debug_assert!(!entries.is_empty());
@@ -77,7 +96,9 @@ fn combine_group_hash_const<const IS_FIRST: bool>(
     values: &mut [u64],
 ) {
     match data_type {
-        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {}
+        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {
+            apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
+        }
         DataType::Nullable(inner) => {
             if scalar.is_null() {
                 apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
@@ -257,9 +278,36 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
         Ok(())
     }
 
+    fn visit_encoded(&mut self, column: Box<EncodedColumn>) -> Result<()> {
+        // Hashing once per dictionary value only pays when there are fewer values than rows:
+        // aggregation hashes batches of a block, and each batch carries the whole dictionary.
+        let EncodedColumn::Dict(dict) = column.as_ref() else {
+            return self.visit_column(column.decode());
+        };
+        if dict.values.len() > dict.len() {
+            return self.visit_column(column.decode());
+        }
+        let mut hashes = vec![0; dict.values.len()];
+        HashVisitor::<true> {
+            values: &mut hashes,
+        }
+        .visit_column(dict.values.clone())?;
+        for (val, key) in self.values.iter_mut().zip(dict.keys.iter()) {
+            let hash = hashes[key as usize];
+            *val = if IS_FIRST {
+                hash
+            } else {
+                (*val).wrapping_mul(NULL_HASH_VAL) ^ hash
+            };
+        }
+        Ok(())
+    }
+
     fn visit_column(&mut self, column: Column) -> Result<()> {
         match column {
-            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => (),
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
+                apply_const_hash::<IS_FIRST>(self.values, NULL_HASH_VAL);
+            }
             _ => {
                 Self::default_visit_column(column, self)?;
             }
@@ -337,8 +385,7 @@ where I: Index
 {
     fn visit_scalar(&mut self, scalar: Scalar) -> Result<()> {
         let hash = match scalar {
-            Scalar::EmptyArray | Scalar::EmptyMap => return Ok(()),
-            Scalar::Null => NULL_HASH_VAL,
+            Scalar::Null | Scalar::EmptyArray | Scalar::EmptyMap => NULL_HASH_VAL,
             Scalar::Number(v) => with_number_type!(|NUM_TYPE| match v {
                 NumberScalar::NUM_TYPE(v) => v.agg_hash(),
             }),
@@ -362,15 +409,15 @@ where I: Index
     }
 
     fn visit_null(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_empty_array(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_empty_map(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_any_number(&mut self, column: crate::types::NumberColumn) -> Result<()> {
@@ -601,25 +648,20 @@ impl AggHash for i256 {
     }
 }
 
+// Float keys hash the bits of the canonical class representative so that
+// `-0.0`/`+0.0` and every NaN payload share one hash. See
+// `OrderedFloat::canonicalize`.
 impl AggHash for OrderedFloat<f32> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        if self.is_nan() {
-            f32::NAN.to_bits().agg_hash()
-        } else {
-            self.to_bits().agg_hash()
-        }
+        self.canonicalize().to_bits().agg_hash()
     }
 }
 
 impl AggHash for OrderedFloat<f64> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        if self.is_nan() {
-            f64::NAN.to_bits().agg_hash()
-        } else {
-            self.to_bits().agg_hash()
-        }
+        self.canonicalize().to_bits().agg_hash()
     }
 }
 
@@ -632,7 +674,9 @@ impl AggHash for OpaqueScalarRef<'_> {
 impl AggHash for ScalarRef<'_> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        self.to_string().as_bytes().agg_hash()
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
     }
 }
 
@@ -689,6 +733,60 @@ mod tests {
             );
             assert_eq!(const_hashes, col_hashes);
         }
+    }
+
+    #[test]
+    fn test_singleton_group_hash_ignores_previous_hashes() {
+        let num_rows = 3;
+        let block = sample_block(num_rows);
+        let full_block = block.convert_to_full();
+
+        // Null, EmptyArray and EmptyMap have only one possible value. Each must
+        // initialize the first key even when the hash buffer is reused.
+        for singleton in 0..3 {
+            for projection in [vec![singleton], vec![singleton, 6], vec![6, singleton]] {
+                let mut expected = vec![0; num_rows];
+                group_hash_entries(ProjectedBlock::project(&projection, &block), &mut expected);
+
+                for input in [&block, &full_block] {
+                    let entries = ProjectedBlock::project(&projection, input);
+                    let mut hashes = vec![u64::MAX; num_rows];
+                    group_hash_entries(entries, &mut hashes);
+                    assert_eq!(hashes, expected, "projection: {projection:?}");
+                    group_hash_entries(entries, &mut hashes);
+                    assert_eq!(hashes, expected, "reused buffer: {projection:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_singleton_group_hash_value_spread_matches_entries() -> Result<()> {
+        let num_rows = 3;
+        let block = sample_block(num_rows);
+        let full_block = block.convert_to_full();
+        let indices = [0_u32, 2];
+
+        for singleton in 0..3 {
+            for projection in [vec![singleton], vec![singleton, 6], vec![6, singleton]] {
+                let mut expected = vec![0; num_rows];
+                group_hash_entries(ProjectedBlock::project(&projection, &block), &mut expected);
+
+                for input in [&block, &full_block] {
+                    let mut hashes = vec![u64::MAX; num_rows];
+                    for (i, entry) in ProjectedBlock::project(&projection, input)
+                        .iter()
+                        .enumerate()
+                    {
+                        group_hash_value_spread(&indices, entry.value(), i == 0, &mut hashes)?;
+                    }
+                    assert_eq!(hashes[0], expected[0], "projection: {projection:?}");
+                    assert_eq!(hashes[1], u64::MAX, "unselected row must be unchanged");
+                    assert_eq!(hashes[2], expected[2], "projection: {projection:?}");
+                }
+            }
+        }
+        Ok(())
     }
 
     #[test]

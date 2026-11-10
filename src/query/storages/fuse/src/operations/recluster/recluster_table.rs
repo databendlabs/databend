@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::plan::ReclusterTaskBudget;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -129,6 +130,61 @@ fn select_task_candidates(
     selected_task_indices
 }
 
+/// Select complete joint-gain winners only when their union has a resource-feasible
+/// executor placement. Never split a winner merely to fill the remaining capacity.
+fn select_batched_task_candidates(
+    windows: &[ReclusterCandidateWindow],
+    ranked: &[RankedTaskCandidate],
+    budget: ReclusterTaskBudget,
+) -> Vec<Vec<usize>> {
+    let mut selected = vec![Vec::new(); windows.len()];
+    let mut tasks = Vec::new();
+    let mut segments = HashSet::new();
+    let mut selected_repack = false;
+    for &(window_idx, task_idx, _, _) in ranked {
+        let window = &windows[window_idx];
+        if window.atomic_tasks && !selected[window_idx].is_empty() {
+            continue;
+        }
+        let indices = if window.atomic_tasks {
+            (0..window.tasks.len()).collect::<Vec<_>>()
+        } else {
+            vec![task_idx]
+        };
+        let repack = indices
+            .iter()
+            .any(|&idx| window.tasks[idx].is_repack_only());
+        if repack && selected_repack {
+            continue;
+        }
+        let placement = budget.assign(
+            tasks
+                .iter()
+                .copied()
+                .chain(indices.iter().map(|&idx| &window.tasks[idx]))
+                .filter(|task| !task.is_repack_only())
+                .map(|task| (task.score.selected_total_bytes, task.kind)),
+        );
+        if placement.is_none() {
+            continue;
+        }
+        let task_segments = indices
+            .iter()
+            .flat_map(|&idx| window.task_segment_locations(idx))
+            .collect::<HashSet<_>>();
+        if segments.len() + task_segments.difference(&segments).count()
+            > MAX_SEGMENT_LOCATIONS_PER_CLAIM
+        {
+            continue;
+        }
+        segments.extend(task_segments);
+        selected_repack |= repack;
+        tasks.extend(indices.iter().map(|&idx| &window.tasks[idx]));
+        selected[window_idx].extend(indices);
+    }
+    selected
+}
+
 impl FuseTable {
     #[async_backtrace::framed]
     pub async fn do_recluster(
@@ -153,7 +209,10 @@ impl FuseTable {
             return Ok(None);
         }
 
-        let Some(snapshot) = self.read_table_snapshot().await? else {
+        let Some(snapshot) = self
+            .read_table_snapshot_with_policy(ctx.cache_policy())
+            .await?
+        else {
             // no snapshot, no recluster.
             return Ok(None);
         };
@@ -209,13 +268,18 @@ impl FuseTable {
             let valid_carry = std::mem::take(&mut carry.pending)
                 .into_iter()
                 .filter(|window| {
-                    let valid = window.segments.iter().all(|(location, _)| {
-                        live_segments.contains_key(location)
-                            && !claimed_segments.contains(location.0.as_str())
+                    let within_budget = mutator.task_budget.is_none_or(|budget| {
+                        budget.assign(window.tasks.iter().filter(|task| !task.is_repack_only())
+                            .map(|task| (task.score.selected_total_bytes, task.kind))).is_some()
                     });
+                    let valid = within_budget
+                        && window.segments.iter().all(|(location, _)| {
+                            live_segments.contains_key(location)
+                                && !claimed_segments.contains(location.0.as_str())
+                        });
                     if !valid {
                         debug!(
-                            "recluster: carried window invalidated locations={} skip_reason=carried_location_missing",
+                            "recluster: carried window invalidated locations={} skip_reason=carried_location_missing_or_over_budget",
                             window.segments.len(),
                         );
                     }
@@ -351,13 +415,14 @@ impl FuseTable {
                     let decode_semaphore = decode_semaphore
                         .get_or_insert_with(|| Arc::new(Semaphore::new(max_threads * 2)))
                         .clone();
-                    let mut segment_windows = segment_windows.into_iter().enumerate();
+                    let mut segment_windows = segment_windows.into_iter();
                     while early_accept_count < mutator.max_tasks {
-                        let remaining_task_budget =
-                            mutator.max_tasks.saturating_sub(early_accept_count);
-                        if remaining_task_budget == 0 {
-                            break;
-                        }
+                        // Early accepts are competitors, not resource reservations.
+                        // Each v2 window may propose a complete executor-feasible set.
+                        let window_task_limit = mutator.task_budget.map_or_else(
+                            || mutator.max_tasks.saturating_sub(early_accept_count),
+                            |budget| budget.max_tasks(),
+                        );
 
                         let batch = segment_windows
                             .by_ref()
@@ -368,7 +433,7 @@ impl FuseTable {
                         }
 
                         let batch_parallelism = probe_parallelism.min(batch.len());
-                        let futures = batch.into_iter().map(|(_, selected_segs)| {
+                        let futures = batch.into_iter().map(|selected_segs| {
                             let mutator = mutator.clone();
                             let decode_runtime = decode_runtime.clone();
                             let decode_semaphore = decode_semaphore.clone();
@@ -376,7 +441,7 @@ impl FuseTable {
                                 mutator
                                     .probe_candidate_window(
                                         selected_segs,
-                                        remaining_task_budget,
+                                        window_task_limit,
                                         decode_runtime,
                                         decode_semaphore,
                                     )
@@ -421,10 +486,9 @@ impl FuseTable {
             let (_, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
             } else {
-                // Step 3: choose task candidates. Preserve score-only ranking unless
-                // early accepts fill the task budget. In that case early candidates
-                // rank first, while other probed tasks remain available to fill budget
-                // left by candidates skipped due to the segment-claim limit.
+                // Step 3: choose task candidates. Reaching the legacy early-accept
+                // probe target prioritizes deep candidates, but does not reserve v2
+                // execution slots. Placement below checks the full shared resources.
                 let prioritize_early_accept = early_accept_count >= mutator.max_tasks;
                 let mut sorted_tasks = Vec::new();
                 for (window_idx, window) in pending_windows.iter().enumerate() {
@@ -439,8 +503,14 @@ impl FuseTable {
                 }
                 sort_task_candidates(&mut sorted_tasks);
 
-                let mut selected_task_indices =
-                    select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks);
+                let mut selected_task_indices = match mutator.task_budget {
+                    Some(budget) => {
+                        select_batched_task_candidates(&pending_windows, &sorted_tasks, budget)
+                    }
+                    None => {
+                        select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks)
+                    }
+                };
 
                 let mut selected = Vec::new();
                 let mut remaining_windows = Vec::with_capacity(pending_windows.len());
@@ -592,6 +662,7 @@ impl FuseTable {
         // Keep segment metadata pruning bounded for large snapshot ranges. Results are accumulated
         // in input order so strategy tie-breaking remains deterministic across pruning waves.
         let wave_size = max_concurrency.saturating_mul(4).max(1);
+        let pruning_runtime = pruning_ctx.pruning_runtime()?;
         let mut metas = Vec::new();
         let mut segment_locs = segment_locs.into_iter();
         loop {
@@ -603,7 +674,7 @@ impl FuseTable {
             let worker_count = max_concurrency.min(wave.len()).max(1);
             let batch_size = wave.len().div_ceil(worker_count);
             let works = wave.chunks(batch_size).map(|batch| {
-                pruning_ctx.pruning_runtime.spawn({
+                pruning_runtime.spawn({
                     let segment_pruner = segment_pruner.clone();
                     let batch = batch.to_vec();
                     async move {

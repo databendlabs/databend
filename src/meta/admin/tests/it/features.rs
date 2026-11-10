@@ -55,12 +55,12 @@ async fn test_features() -> anyhow::Result<()> {
     assert_eq!(metrics.current_leader, Some(0));
 
     let list_features_url =
-        |i: usize| format!("http://{}/v1/features/list", &tcs[i].admin.api_address);
+        |i: usize| format!("http://{}/v1/features/list", tcs[i].admin.api_address);
 
     let set_feature_url = |i: usize, feature: &str, enable: bool| {
         format!(
             "http://{}/v1/features/set?feature={}&enable={}",
-            &tcs[i].admin.api_address, feature, enable
+            tcs[i].admin.api_address, feature, enable
         )
     };
 

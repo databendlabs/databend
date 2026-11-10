@@ -36,12 +36,14 @@ def event(
     created_at=ENFORCEMENT_START,
     login="bohutang",
     account_type="User",
+    draft=False,
 ):
     return {
         "repository": {"full_name": "databendlabs/databend"},
         "pull_request": {
             "body": body,
             "created_at": created_at,
+            "draft": draft,
             "user": {"login": login, "type": account_type},
         },
     }
@@ -168,6 +170,14 @@ class ValidatorTests(unittest.TestCase):
 
         self.rendered_html = rendered_declaration(human="your-github-id")
         self.assertFalse(self.validate().valid)
+
+    def test_skips_validation_for_draft_prs(self):
+        self.rendered_html = "<p>missing</p>"
+        draft = event(body="missing", draft=True)
+        result = self.validate(draft)
+        self.assertTrue(result.valid)
+        self.assertEqual(result.migration, "draft-pr")
+        self.assertEqual(self.render_calls, [])
 
     def test_cutoff_does_not_retroactively_block_legacy_prs(self):
         legacy = event(body="missing", created_at="2026-07-29T14:33:05Z")

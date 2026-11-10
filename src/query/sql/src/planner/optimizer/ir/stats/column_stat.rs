@@ -155,16 +155,10 @@ impl ColumnStat {
         Ok(stat)
     }
 
-    fn refine_ndv_estimate(
-        ndv: &mut NdvEstimate,
-        histogram_ndv: NdvEstimate,
-        histogram_is_accurate: bool,
-    ) {
-        if histogram_is_accurate {
-            *ndv = ndv.min(histogram_ndv);
-            return;
-        }
-
+    /// Narrow a column NDV after its histogram was restricted or scaled. The
+    /// histogram's expected NDV reflects that change, so it replaces the
+    /// column's expected value; both upper bounds still cap the result.
+    fn refine_ndv_estimate(ndv: &mut NdvEstimate, histogram_ndv: NdvEstimate) {
         let upper = ndv.upper.min(histogram_ndv.upper);
         *ndv = match histogram_ndv.expected {
             Some(expected) => NdvEstimate::new(expected.min(upper), upper),
@@ -306,7 +300,7 @@ impl ColumnStat {
                     .as_ref()
                     .and_then(|histogram| histogram.restrict_discrete_buckets(new_min, new_max));
                 if let Some(histogram) = histogram {
-                    Self::refine_ndv_estimate(ndv, histogram.ndv(), histogram.accuracy);
+                    Self::refine_ndv_estimate(ndv, histogram.ndv());
                 }
                 *min = new_min;
                 *max = new_max;
@@ -328,7 +322,7 @@ impl ColumnStat {
                     .as_ref()
                     .and_then(|histogram| histogram.restrict_discrete_buckets(new_min, new_max));
                 if let Some(histogram) = histogram {
-                    Self::refine_ndv_estimate(ndv, histogram.ndv(), histogram.accuracy);
+                    Self::refine_ndv_estimate(ndv, histogram.ndv());
                 }
                 *min = new_min;
                 *max = new_max;
@@ -350,7 +344,7 @@ impl ColumnStat {
                     .as_ref()
                     .and_then(|histogram| histogram.restrict_float_buckets(new_min, new_max));
                 if let Some(histogram) = histogram {
-                    Self::refine_ndv_estimate(ndv, histogram.ndv(), histogram.accuracy);
+                    Self::refine_ndv_estimate(ndv, histogram.ndv());
                 }
                 *min = new_min;
                 *max = new_max;
@@ -372,7 +366,7 @@ impl ColumnStat {
                     .as_ref()
                     .and_then(|histogram| histogram.restrict_bytes_buckets(&new_min, &new_max));
                 if let Some(histogram) = histogram {
-                    Self::refine_ndv_estimate(ndv, histogram.ndv(), histogram.accuracy);
+                    Self::refine_ndv_estimate(ndv, histogram.ndv());
                 }
                 *min = new_min;
                 *max = new_max;
@@ -404,7 +398,7 @@ impl ColumnStat {
         if num_values > max_num_values && num_values > 0.0 {
             histogram.scale_counts(max_num_values / num_values);
         }
-        Self::refine_ndv_estimate(ndv, histogram.ndv(), histogram.accuracy);
+        Self::refine_ndv_estimate(ndv, histogram.ndv());
     }
 
     fn scale_typed_histogram_to<T>(
@@ -420,7 +414,7 @@ impl ColumnStat {
             return false;
         }
         histogram.scale_counts(num_values / current_num_values);
-        Self::refine_ndv_estimate(ndv, histogram.ndv(), histogram.accuracy);
+        Self::refine_ndv_estimate(ndv, histogram.ndv());
         true
     }
 
@@ -702,10 +696,8 @@ mod tests {
 
     #[test]
     fn test_column_stat_selects_variant_from_bounds() {
-        let histogram = TypedHistogram::new(
-            vec![TypedHistogramBucket::new(1_u64, 3_u64, 3.0, 3.0)],
-            true,
-        );
+        let histogram =
+            TypedHistogram::new(vec![TypedHistogramBucket::new(1_u64, 3_u64, 3.0, 3.0)]);
         let stat = ColumnStat::new(
             StatBounds::UInt { min: 1, max: 3 },
             NdvEstimate::exact(30.0),
@@ -741,15 +733,12 @@ mod tests {
 
     #[test]
     fn test_column_stat_rejects_mismatched_histogram_type() {
-        let histogram = TypedHistogram::new(
-            vec![TypedHistogramBucket::new(
-                F64::from(1.0),
-                F64::from(3.0),
-                3.0,
-                3.0,
-            )],
-            true,
-        );
+        let histogram = TypedHistogram::new(vec![TypedHistogramBucket::new(
+            F64::from(1.0),
+            F64::from(3.0),
+            3.0,
+            3.0,
+        )]);
 
         let stat = ColumnStat::new(
             StatBounds::UInt { min: 1, max: 3 },
@@ -769,13 +758,10 @@ mod tests {
             max: 9,
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(2),
-            histogram: Some(TypedHistogram::new(
-                vec![
-                    TypedHistogramBucket::new(0, 4, 5.0, 5.0),
-                    TypedHistogramBucket::new(5, 9, 5.0, 5.0),
-                ],
-                true,
-            )),
+            histogram: Some(TypedHistogram::new(vec![
+                TypedHistogramBucket::new(0, 4, 5.0, 5.0),
+                TypedHistogramBucket::new(5, 9, 5.0, 5.0),
+            ])),
         };
 
         stat.restrict_to_bounds(StatBounds::UInt { min: 2, max: 6 })
@@ -786,13 +772,10 @@ mod tests {
             max: 6,
             ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(2),
-            histogram: Some(TypedHistogram::new(
-                vec![
-                    TypedHistogramBucket::new(2, 4, 3.0, 3.0),
-                    TypedHistogramBucket::new(5, 6, 2.0, 2.0),
-                ],
-                true,
-            )),
+            histogram: Some(TypedHistogram::new(vec![
+                TypedHistogramBucket::new(2, 4, 3.0, 3.0),
+                TypedHistogramBucket::new(5, 6, 2.0, 2.0),
+            ])),
         });
     }
 

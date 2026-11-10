@@ -244,7 +244,7 @@ impl ActiveIntervals {
             } else {
                 self.endpoints[pos][endpoint] -= delta.unsigned_abs();
             }
-            pos += pos & pos.wrapping_neg();
+            pos += pos.isolate_lowest_one();
         }
     }
 

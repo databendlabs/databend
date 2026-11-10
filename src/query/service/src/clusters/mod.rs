@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod cluster;
+mod control_channel;
 
 pub use cluster::Cluster;
 pub use cluster::ClusterDiscovery;

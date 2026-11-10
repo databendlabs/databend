@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use educe::Educe;
 use nom::Parser;
+use nom::branch::permutation;
 use nom_rule::rule;
 
 use super::sequence::sequence;
@@ -1291,6 +1292,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( #uri_location )?
             ~ #create_table_partition_by?
             ~ ( CLUSTER ~ ^BY ~ ^#cluster_option )?
+            ~ ( TTL ~ ^#expr )?
             ~ ( #table_option )?
             ~ ( PROPERTIES ~  #connection_options )?
             ~ ( AS ~ ^#query )?
@@ -1307,6 +1309,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             uri_location,
             opt_partition_by,
             opt_cluster_by,
+            opt_ttl,
             opt_table_options,
             opt_table_properties,
             opt_as_query,
@@ -1332,6 +1335,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 engine,
                 uri_location,
                 cluster_by: opt_cluster_by.map(|(_, _, cluster_by)| cluster_by),
+                ttl: opt_ttl.map(|(_, ttl)| ttl),
                 table_options,
                 partition_by,
                 table_properties: opt_table_properties.map(|(_, properties)| properties),
@@ -1366,18 +1370,27 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
-    let alter_table = map(
-        rule! {
-            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only_with_branch ~ #alter_table_action
-        },
-        |(_, _, opt_if_exists, table_reference, action)| {
-            Statement::AlterTable(AlterTableStmt {
-                if_exists: opt_if_exists.is_some(),
-                table_reference,
-                action,
-            })
-        },
-    );
+    let alter_table = alt((
+        // Deprecated RECLUSTER syntax directly produces the canonical OPTIMIZE AST.
+        map(
+            rule! {
+                ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #recluster_table
+            },
+            |(_, _, _, stmt)| Statement::OptimizeTable(stmt),
+        ),
+        map(
+            rule! {
+                ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only ~ #alter_table_action
+            },
+            |(_, _, opt_if_exists, table_reference, action)| {
+                Statement::AlterTable(AlterTableStmt {
+                    if_exists: opt_if_exists.is_some(),
+                    table_reference,
+                    action,
+                })
+            },
+        ),
+    ));
     let rename_table = map(
         rule! {
             RENAME ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
@@ -1424,11 +1437,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ),
         map(
             rule! {
-                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
+                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
             },
-            |(_, _, (database, table), action, opt_limit)| {
+            |(_, _, (catalog, database, table), action, opt_limit)| {
                 Statement::OptimizeTable(OptimizeTableStmt {
-                    catalog: None,
+                    catalog,
                     database,
                     table,
                     action,
@@ -1467,9 +1480,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let vacuum_all = value(Statement::VacuumAll(VacuumAllStmt), rule! { VACUUM ~ ALL });
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(_, _, _, database_option)| {
+        // `LIMIT` is accepted for compatibility with clients that still send the
+        // legacy `VACUUM DROP TABLE [FROM db] LIMIT n` syntax; the value is ignored.
+        |(_, _, _, database_option, _limit)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
                 database: database_option.map(|(_, database)| database),
             })
@@ -1819,19 +1834,28 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ))
         },
     );
-    let alter_materialized_view = map(
-        rule! {
-            ALTER ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ #alter_table_action
-        },
-        |(_, _, _, (catalog, database, view), action)| {
-            Statement::AlterMaterializedView(AlterMaterializedViewStmt {
-                catalog,
-                database,
-                view,
-                action,
-            })
-        },
-    );
+    let alter_materialized_view = alt((
+        // Keep ALTER MATERIALIZED VIEW ... RECLUSTER as the same compatibility alias.
+        map(
+            rule! {
+                ALTER ~ MATERIALIZED ~ ^VIEW ~ #recluster_table
+            },
+            |(_, _, _, stmt)| Statement::OptimizeTable(stmt),
+        ),
+        map(
+            rule! {
+                ALTER ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ #alter_table_action
+            },
+            |(_, _, _, (catalog, database, view), action)| {
+                Statement::AlterMaterializedView(AlterMaterializedViewStmt {
+                    catalog,
+                    database,
+                    view,
+                    action,
+                })
+            },
+        ),
+    ));
     let drop_materialized_view = map(
         rule! {
             DROP ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
@@ -1855,6 +1879,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 database,
                 view,
                 limit: limit.map(|(_, value)| value),
+            })
+        },
+    );
+    let refresh_dynamic_table = map(
+        rule! {
+            REFRESH ~ DYNAMIC ~ TABLE ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, table))| {
+            Statement::RefreshDynamicTable(RefreshDynamicTableStmt {
+                catalog,
+                database,
+                table,
             })
         },
     );
@@ -2206,7 +2242,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let revoke = map(
         rule! {
-            REVOKE ~ #grant_source ~ FROM ~ #grant_option
+            REVOKE ~ #revoke_source ~ FROM ~ #grant_option
         },
         |(_, source, _, grant_option)| {
             Statement::Revoke(RevokeStmt {
@@ -2442,6 +2478,86 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, stage_name)| Statement::DescribeStage {
             stage_name: stage_name.to_string(),
+        },
+    );
+
+    let network_rule_options = permutation((
+        map(rule! { TYPE ~ "=" ~ #ident }, |(_, _, rule_type)| rule_type),
+        map(rule! { MODE ~ "=" ~ #ident }, |(_, _, mode)| mode),
+        map(
+            rule! { VALUE_LIST ~ "=" ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
+            |(_, _, _, values, _)| values,
+        ),
+    ));
+    let create_network_rule = map_res(
+        rule! { CREATE ~ (OR ~ REPLACE)? ~ NETWORK ~ RULE ~ (IF ~ NOT ~ EXISTS)? ~ #ident ~ #network_rule_options },
+        |(_, replace, _, _, exists, name, (rule_type, mode, values))| {
+            Ok(Statement::ExternalAccess(
+                ExternalAccessStmt::CreateNetworkRule {
+                    name,
+                    create_option: parse_create_option(replace.is_some(), exists.is_some())?,
+                    rule_type,
+                    mode,
+                    values,
+                },
+            ))
+        },
+    );
+    let alter_network_rule = map(
+        rule! { ALTER ~ NETWORK ~ RULE ~ (IF ~ EXISTS)? ~ #ident ~ SET ~ VALUE_LIST ~ "=" ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
+        |(_, _, _, exists, name, _, _, _, _, values, _)| {
+            Statement::ExternalAccess(ExternalAccessStmt::AlterNetworkRule {
+                name,
+                if_exists: exists.is_some(),
+                values,
+            })
+        },
+    );
+    let drop_network_rule = map(
+        rule! { DROP ~ NETWORK ~ RULE ~ (IF ~ EXISTS)? ~ #ident },
+        |(_, _, _, exists, name)| {
+            Statement::ExternalAccess(ExternalAccessStmt::DropNetworkRule {
+                name,
+                if_exists: exists.is_some(),
+            })
+        },
+    );
+    let create_external_access = map_res(
+        rule! { CREATE ~ (OR ~ REPLACE)? ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ (IF ~ NOT ~ EXISTS)? ~ #ident ~ #external_access_options },
+        |(_, replace, _, _, _, exists, name, (rules, enabled))| {
+            let (Some(rules), Some(enabled)) = (rules, enabled) else {
+                return Err(nom::Err::Failure(ErrorKind::other(
+                    "Expected ALLOWED_NETWORK_RULES and ENABLED",
+                )));
+            };
+            Ok(Statement::ExternalAccess(
+                ExternalAccessStmt::CreateIntegration {
+                    name,
+                    create_option: parse_create_option(replace.is_some(), exists.is_some())?,
+                    rules,
+                    enabled,
+                },
+            ))
+        },
+    );
+    let alter_external_access = map(
+        rule! { ALTER ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ (IF ~ EXISTS)? ~ #ident ~ SET ~ #external_access_options },
+        |(_, _, _, _, exists, name, _, (rules, enabled))| {
+            Statement::ExternalAccess(ExternalAccessStmt::AlterIntegration {
+                name,
+                if_exists: exists.is_some(),
+                rules,
+                enabled,
+            })
+        },
+    );
+    let drop_external_access = map(
+        rule! { DROP ~ (EXTERNAL ~ ACCESS)? ~ INTEGRATION ~ (IF ~ EXISTS)? ~ #ident },
+        |(_, _, _, exists, name)| {
+            Statement::ExternalAccess(ExternalAccessStmt::DropIntegration {
+                name,
+                if_exists: exists.is_some(),
+            })
         },
     );
 
@@ -2839,6 +2955,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ TYPE ~ "=" ~ #ident
             ~ ENABLED ~ "=" ~ #literal_bool
             ~ #notification_webhook_clause?
+            ~ ( WEBHOOK_BODY_TEMPLATE ~ ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -2854,6 +2971,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             enabled,
             webhook,
+            body_template,
             comment,
         )| {
             Statement::CreateNotification(CreateNotificationStmt {
@@ -2862,6 +2980,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 notification_type: notification_type.to_string(),
                 enabled,
                 webhook_opts: webhook,
+                webhook_body_template: body_template.map(|(_, _, template)| template),
                 comments: comment.map(|(_, _, comments)| comments),
             })
         },
@@ -3196,7 +3315,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ABORT | ROLLBACK => rule!(#abort).parse(i),
         TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             ).parse(i),
-        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (PURGE | COMPACT [SEGMENT])`"
+        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE <table> (PURGE | (COMPACT [SEGMENT] | RECLUSTER [FINAL] [WHERE <expr>]) [LIMIT <n>])`"
             ).parse(i),
         VACUUM => rule!(
             #vacuum_all : "`VACUUM ALL`"
@@ -3220,6 +3339,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         REFRESH => rule!(
             #refresh_lineage: "`REFRESH LINEAGE FOR ALL VIEWS [DRY RUN]`"
             | #refresh_materialized_view: "`REFRESH MATERIALIZED VIEW [<database>.]<view> [LIMIT <rows>]`"
+            | #refresh_dynamic_table: "`REFRESH DYNAMIC TABLE [<database>.]<table>`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ).parse(i),
@@ -3306,6 +3426,8 @@ AS
     ENABLED = <bool>
     [ WEBHOOK = ( url = <string_literal>, method = <string_literal>, authorization_header = <string_literal> ) ]
     [ COMMENT = '<string_literal>' ]`"
+                | #create_network_rule: "CREATE NETWORK RULE"
+                | #create_external_access: "CREATE EXTERNAL ACCESS INTEGRATION"
                 | #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
                 | #create_row_access : "`CREATE ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
                 | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
@@ -3344,6 +3466,8 @@ AS
                 | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
                 | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
                 | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"
+                | #drop_network_rule: "DROP NETWORK RULE"
+                | #drop_external_access: "DROP EXTERNAL ACCESS INTEGRATION"
                 | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
                 | #drop_row_access : "`DROP ROW ACCESS POLICY [ IF EXISTS ] <name>`"
                 | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
@@ -3384,7 +3508,11 @@ AS
             | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
             | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
             | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
-            | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            | (
+                #alter_network_rule: "ALTER NETWORK RULE"
+                | #alter_external_access: "ALTER EXTERNAL ACCESS INTEGRATION"
+                | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
+            )
         ).parse(i),
         RENAME => rule!(
             #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
@@ -3409,6 +3537,34 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             format: opt_format.map(|(_, format)| format.name),
         },
     )
+    .parse(i)
+}
+
+fn external_access_options(i: Input) -> IResult<(Option<Vec<Identifier>>, Option<bool>)> {
+    let rules = map(
+        rule! { ALLOWED_NETWORK_RULES ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")" },
+        |(_, _, _, rules, _)| (Some(rules), None),
+    );
+    let enabled = map(
+        rule! { ENABLED ~ "=" ~ #literal_bool },
+        |(_, _, enabled)| (None, Some(enabled)),
+    );
+    map_res(rule! { (#rules | #enabled)+ }, |options| {
+        let mut rules = None;
+        let mut enabled = None;
+        for (new_rules, new_enabled) in options {
+            if (rules.is_some() && new_rules.is_some())
+                || (enabled.is_some() && new_enabled.is_some())
+            {
+                return Err(nom::Err::Failure(ErrorKind::other(
+                    "Duplicate external access integration option",
+                )));
+            }
+            rules = rules.or(new_rules);
+            enabled = enabled.or(new_enabled);
+        }
+        Ok((rules, enabled))
+    })
     .parse(i)
 }
 
@@ -4088,6 +4244,13 @@ pub fn role_name(i: Input) -> IResult<String> {
 }
 
 pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
+    let materialized_view_select = map(
+        rule! { SELECT ~ ON ~ MATERIALIZED ~ VIEW ~ #materialized_view_grant_level },
+        |(_, _, _, _, level)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Select],
+            level,
+        },
+    );
     let role = map(
         rule! {
             ROLE ~ #role_name
@@ -4108,6 +4271,20 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
+    let integration_all_privs = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ INTEGRATION ~ #ident },
+        |(_, _, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Integration(name),
+        },
+    );
+    let integration_privs = map(
+        rule! { USAGE ~ ON ~ INTEGRATION ~ #ident },
+        |(_, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Integration(name),
+        },
+    );
     let udf_privs = map(
         rule! {
             USAGE ~ ON ~ UDF ~ #ident
@@ -4266,9 +4443,12 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
+        | #materialized_view_select : "SELECT ON MATERIALIZED VIEW [<database>.]<view>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
         | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
+        | #integration_all_privs: "ALL [ PRIVILEGES ] ON INTEGRATION <name>"
+        | #integration_privs: "USAGE ON INTEGRATION <name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
         | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
         | #connection_privs: "ACCESS CONNECTION ON CONNECTION <connection_name>"
@@ -4287,6 +4467,25 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
     .parse(i)
 }
 
+fn materialized_view_grant_level(i: Input) -> IResult<AccountMgrLevel> {
+    map_res(grant_level, |level| match level {
+        AccountMgrLevel::Table(database, table) => {
+            Ok(AccountMgrLevel::MaterializedView(database, table))
+        }
+        _ => Err(nom::Err::Error(ErrorKind::other(
+            "expected a materialized view name, not a wildcard or another object type",
+        ))),
+    })(i)
+}
+
+fn revoke_source(i: Input) -> IResult<AccountMgrSource> {
+    let materialized_view_all = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ MATERIALIZED ~ VIEW ~ #materialized_view_grant_level },
+        |(_, _, _, _, _, level)| AccountMgrSource::ALL { level },
+    );
+    rule!(#materialized_view_all | #grant_source).parse(i)
+}
+
 pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
     let usage = value(UserPrivilegeType::Usage, rule! { USAGE });
     let select = value(UserPrivilegeType::Select, rule! { SELECT });
@@ -4295,6 +4494,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
     let delete = value(UserPrivilegeType::Delete, rule! { DELETE });
     let alter = value(UserPrivilegeType::Alter, rule! { ALTER });
     let super_priv = value(UserPrivilegeType::Super, rule! { SUPER });
+    let attach_table = value(UserPrivilegeType::AttachTable, rule! { ATTACH ~ TABLE });
     let create_user = value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER });
     let create_database = value(
         UserPrivilegeType::CreateDatabase,
@@ -4362,6 +4562,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             | #delete
             | #alter
             | #super_priv
+            | #attach_table
             | #create_user
             | #create_database
             | #create_warehouse
@@ -4784,10 +4985,22 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
             table,
         },
     );
+    let clone = map(
+        rule! {
+            CLONE ~ #dot_separated_idents_1_to_3 ~ (AT ~ ^#travel_point)?
+        },
+        |(_, (catalog, database, table), travel_point)| CreateTableSource::Clone {
+            catalog,
+            database,
+            table,
+            travel_point: travel_point.map(|(_, point)| point),
+        },
+    );
 
     rule!(
         #columns
         | #like
+        | #clone
     )
     .parse(i)
 }
@@ -5072,16 +5285,28 @@ pub fn modify_column_comment(i: Input) -> IResult<ColumnComment> {
 
 pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
     // Parse: <column> SET MASKING POLICY <policy_name> [USING (masked_col_name, cond_col_1, ...)]
-    let set_mask_policy = map(
+    let set_mask_policy = map_res(
         rule! {
             #ident ~ SET ~ MASKING ~ POLICY ~ #ident ~ (USING ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
+                ~ (OPTIONS ~ "(" ~ #ident ~ "=" ~ #literal_bool ~ ")")?
         },
-        |(column, _, _, _, mask_name, opt_using)| {
-            ModifyColumnAction::SetMaskingPolicy(
+        |(column, _, _, _, mask_name, opt_using, options)| {
+            let where_use_unmasked_value = if let Some((_, _, name, _, value, _)) = options {
+                if !name.name.eq_ignore_ascii_case("where_use_unmasked_value") {
+                    return Err(nom::Err::Error(ErrorKind::Other(
+                        "Unknown masking policy option".to_string(),
+                    )));
+                }
+                Some(value)
+            } else {
+                None
+            };
+            Ok(ModifyColumnAction::SetMaskingPolicy(
                 column,
                 mask_name.to_string(),
                 opt_using.map(|(_, _, using_columns, _)| using_columns),
-            )
+                where_use_unmasked_value,
+            ))
         },
     );
 
@@ -5239,6 +5464,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _, partition_by, _)| AlterTableAction::AlterTablePartitionBy { partition_by },
     );
 
+    let drop_table_partition_key = map(
+        rule! {
+            DROP ~ PARTITION ~ KEY
+        },
+        |(_, _, _)| AlterTableAction::DropTablePartitionKey,
+    );
+
     let drop_table_cluster_key = map(
         rule! {
             DROP ~ CLUSTER ~ KEY
@@ -5246,15 +5478,25 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _)| AlterTableAction::DropTableClusterKey,
     );
 
-    let recluster_table = map(
+    let set_table_ttl = map(
         rule! {
-            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ #literal_u64 )?
+            SET ~ TTL ~ ^#expr
         },
-        |(_, opt_is_final, opt_selection, opt_limit)| AlterTableAction::ReclusterTable {
-            is_final: opt_is_final.is_some(),
-            selection: opt_selection.map(|(_, selection)| selection),
-            limit: opt_limit.map(|(_, limit)| limit),
+        |(_, _, ttl)| AlterTableAction::SetTableTtl { ttl },
+    );
+
+    let remove_table_ttl = map(
+        rule! {
+            REMOVE ~ TTL
         },
+        |(_, _)| AlterTableAction::RemoveTableTtl,
+    );
+
+    let materialize_table_ttl = map(
+        rule! {
+            MATERIALIZE ~ TTL
+        },
+        |(_, _)| AlterTableAction::MaterializeTableTtl,
     );
 
     let revert_table = map(
@@ -5294,19 +5536,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    let create_table_branch = map(
-        rule! {
-            CREATE ~ BRANCH ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
-        },
-        |(_, _, name, opt_travel_point, retain)| AlterTableAction::CreateTableBranch {
-            spec: CreateTableRefSpec {
-                name,
-                travel_point: opt_travel_point.map(|(_, point)| point),
-                retain: retain.map(|(_, retain)| retain),
-            },
-        },
-    );
-
     let create_table_tag = map(
         rule! {
             CREATE ~ TAG ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
@@ -5320,13 +5549,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    let drop_table_branch = map(
-        rule! {
-            DROP ~ BRANCH ~ #ident
-        },
-        |(_, _, branch_name)| AlterTableAction::DropTableBranch { branch_name },
-    );
-
     let drop_table_tag = map(
         rule! {
             DROP ~ TAG ~ #ident
@@ -5336,11 +5558,10 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     // The action list is split to avoid the trait bound limit in `alt(...)`.
     let alter_table_action_primary = rule!(
-        #create_table_branch
-            | #create_table_tag
-            | #drop_table_branch
+        #create_table_tag
             | #drop_table_tag
             | #alter_table_partition_by
+            | #drop_table_partition_key
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint
@@ -5351,13 +5572,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #add_column
             | #drop_column
             | #modify_column
-            | #recluster_table
             | #revert_table
             | #set_table_options
     );
 
     let alter_table_action_secondary = rule!(
         #unset_table_options
+            | #set_table_ttl
+            | #remove_table_ttl
+            | #materialize_table_ttl
             | #refresh_cache
             | #modify_table_connection
             | #drop_all_row_access_polices
@@ -5477,12 +5700,47 @@ pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
     .parse(i)
 }
 
+fn recluster_table(i: Input) -> IResult<OptimizeTableStmt> {
+    map(
+        rule! {
+            #dot_separated_idents_1_to_3 ~ #recluster_clause ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |((catalog, database, table), (is_final, selection), opt_limit)| OptimizeTableStmt {
+            catalog,
+            database,
+            table,
+            action: OptimizeTableAction::Recluster {
+                is_final,
+                selection: selection.map(Box::new),
+            },
+            limit: opt_limit.map(|(_, limit)| limit),
+        },
+    )
+    .parse(i)
+}
+
+fn recluster_clause(i: Input) -> IResult<(bool, Option<Expr>)> {
+    map(
+        rule! { RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? },
+        |(_, is_final, selection)| (is_final.is_some(), selection.map(|(_, expr)| expr)),
+    )
+    .parse(i)
+}
+
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
-    map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
-        OptimizeTableAction::Compact {
-            target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
-        }
-    })
+    alt((
+        map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
+            OptimizeTableAction::Compact {
+                target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
+            }
+        }),
+        map(recluster_clause, |(is_final, selection)| {
+            OptimizeTableAction::Recluster {
+                is_final,
+                selection: selection.map(Box::new),
+            }
+        }),
+    ))
     .parse(i)
 }
 
@@ -5509,15 +5767,10 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 }
 
 pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
-    let single_statement = map(
-        rule! {
-            #statement
-        },
-        |stmt| {
-            let sql = format!("{}", stmt.stmt);
-            TaskSql::SingleStatement(sql)
-        },
-    );
+    // Leave the semicolon and end-of-input check to the enclosing statement parser.
+    let single_statement = map(statement_body, |stmt| {
+        TaskSql::SingleStatement(stmt.to_string())
+    });
     let task_block = map(
         rule! {
             BEGIN
@@ -5532,7 +5785,8 @@ pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
             TaskSql::ScriptBlock(sql)
         },
     );
-    alt((single_statement, task_block)).parse(i)
+    // Try the block first because BEGIN also parses as a transaction statement.
+    alt((task_block, single_statement)).parse(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
@@ -5946,7 +6200,6 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
         value(Engine::Iceberg, rule! { ICEBERG }),
-        value(Engine::Delta, rule! { DELTA }),
         value(Engine::Paimon, rule! { PAIMON }),
     ));
 
@@ -6329,6 +6582,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ HANDLER ~ ^"=" ~ ^#literal_string
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
+            ~ (EXTERNAL_ACCESS_INTEGRATIONS ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
         },
         |(
             arg_types,
@@ -6344,9 +6598,13 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             handler,
             headers,
             address_or_code,
+            external_access_integrations,
         )| {
             if address_or_code.1 {
                 Ok(UDFDefinition::UDFScript {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     return_type,
                     code: address_or_code.0,
@@ -6365,6 +6623,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                 })
             } else {
                 Ok(UDFDefinition::UDFServer {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     return_type,
                     address: address_or_code.0,
@@ -6435,6 +6696,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
+            ~ (EXTERNAL_ACCESS_INTEGRATIONS ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
         },
         |(
             arg_types,
@@ -6450,9 +6712,13 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             packages,
             headers,
             address_or_code,
+            external_access_integrations,
         )| {
             if address_or_code.1 {
                 Ok(UDFDefinition::UDAFScript {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     state_fields: state_types,
                     return_type,
@@ -6469,6 +6735,11 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     runtime_version: "".to_string(),
                 })
             } else {
+                if external_access_integrations.is_some() {
+                    return Err(nom::Err::Failure(ErrorKind::other(
+                        "Remote aggregate UDF integrations are not supported",
+                    )));
+                }
                 Ok(UDFDefinition::UDAFServer {
                     arg_types,
                     state_fields: state_types,
@@ -6915,6 +7186,16 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
         },
     );
+    let webhook_body_template = map(
+        rule! {
+            SET ~ WEBHOOK_BODY_TEMPLATE ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, template)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_body_template(
+                template,
+            ))
+        },
+    );
     let comment = map(
         rule! {
             SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
@@ -6923,11 +7204,23 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
         },
     );
+    let unset_webhook_body_template = map(
+        rule! {
+            UNSET ~ WEBHOOK_BODY_TEMPLATE
+        },
+        |(_, _)| {
+            AlterNotificationOptions::Unset(AlterNotificationUnsetOptions {
+                webhook_body_template: true,
+            })
+        },
+    );
     map(
         rule! {
             #enabled
             | #webhook
+            | #webhook_body_template
             | #comment
+            | #unset_webhook_body_template
         },
         |opts| opts,
     )

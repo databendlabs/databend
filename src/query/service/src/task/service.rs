@@ -30,8 +30,6 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
-use databend_common_ast::ast::DeclareItem;
-use databend_common_ast::ast::ScriptStatement;
 use databend_common_ast::parser::ParseMode;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block;
@@ -60,7 +58,7 @@ use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_script::Executor;
-use databend_common_script::compile;
+use databend_common_script::compile_block;
 use databend_common_sql::Planner;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
@@ -68,7 +66,6 @@ use databend_common_version::BUILD_INFO;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::WatchResponse;
-use databend_meta_runtime::DatabendRuntime;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use futures_util::stream::BoxStream;
@@ -172,7 +169,7 @@ impl TaskService {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
         let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf())
-            .create_meta_store::<DatabendRuntime>()
+            .create_default_meta_store()
             .await
             .map_err(|e| {
                 ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
@@ -228,13 +225,11 @@ impl TaskService {
                     ..
                 }) = task_message.warehouse_options()
                 {
-                    if warehouse
-                        != &self
-                            .create_context(None)
-                            .await?
-                            .get_cluster()
-                            .get_warehouse_id()?
-                    {
+                    let current_warehouse = ClusterDiscovery::instance()
+                        .single_node_cluster(&GlobalConfig::instance())
+                        .await?
+                        .get_warehouse_id()?;
+                    if warehouse != &current_warehouse {
                         continue;
                     }
                 }
@@ -1210,28 +1205,20 @@ WHERE ta.task_name = {task_name}
         let sql_dialect = context.get_settings().get_sql_dialect()?;
         let script = Self::script_sql_to_block(sqls);
         let tokens = tokenize_sql(&script)?;
-        let mut ast = run_parser(
+        let ast = run_parser(
             &tokens,
             sql_dialect,
             ParseMode::Template,
             false,
             script_block,
         )?;
-
-        let mut src = vec![];
-        for declare in ast.declares {
-            match declare {
-                DeclareItem::Var(declare) => src.push(ScriptStatement::LetVar { declare }),
-                DeclareItem::Set(declare) => src.push(ScriptStatement::LetStatement { declare }),
-            }
-        }
-        src.append(&mut ast.body);
-        let compiled = compile(&src)?;
+        let span = ast.span;
+        let compiled = compile_block(ast)?;
 
         let client = ScriptClient {
             ctx: context.clone(),
         };
-        let mut executor = Executor::load(ast.span, client, compiled);
+        let mut executor = Executor::load(span, client, compiled);
         let settings = context.get_settings();
         let script_max_steps = settings.get_script_max_steps()?;
         executor.run(script_max_steps as usize).await?;

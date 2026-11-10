@@ -3,10 +3,10 @@ use std::io::Write;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_json_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -108,14 +108,14 @@ fn run_json_array_agg_cases(file: &mut impl Write, simulator: impl AggregationSi
 fn test_json_array_agg() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("json_array_agg.txt").unwrap();
-    run_json_array_agg_cases(file, eval_legacy_aggregate);
+    run_json_array_agg_cases(file, eval_aggregate);
 }
 
 #[test]
 fn test_json_array_agg_group_by_golden_preserves_single_group_order() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("json_array_agg_group_by.txt").unwrap();
-    run_json_array_agg_cases(file, eval_legacy_aggregate);
+    run_json_array_agg_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -125,4 +125,87 @@ fn test_json_array_agg_two_groups() {
         .new_goldenfile("json_array_agg_two_groups.txt")
         .unwrap();
     run_json_array_agg_cases(file, simulate_two_groups_group_by);
+}
+
+// json_array_agg.rs: one native Variant state; scalar, JSON and nested input
+// values plus nullable samples represent conversion and SQL/JSON null handling.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "json_array_agg(x0)",
+            arguments: vec!["Int64"],
+            result: "Variant",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "json_array_agg(x0)",
+            arguments: vec!["Variant"],
+            result: "Variant",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "json_array_agg(x0)",
+            arguments: vec!["Array(Int64)"],
+            result: "Variant",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "json_array_agg(x0)",
+            arguments: vec!["Nullable(Int64)"],
+            result: "Variant",
+            state: "Tuple(Binary)",
+        },
+    ]);
+}
+
+#[test]
+fn test_json_array_agg_null_specialization() -> databend_common_exception::Result<()> {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::ArgType;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+
+    use super::support::eval_aggregate_for_test;
+
+    for name in ["json_array_agg", "json_agg"] {
+        for rows in [0, 4] {
+            for data_type in [DataType::Null, Int32Type::data_type().wrap_nullable()] {
+                let entry = BlockEntry::new_const_column(data_type, Scalar::Null, rows);
+                for each_row in [false, true] {
+                    for with_serialize in [false, true] {
+                        let (result, return_type) = eval_aggregate_for_test(
+                            name,
+                            vec![],
+                            std::slice::from_ref(&entry),
+                            rows,
+                            each_row,
+                            with_serialize,
+                            vec![],
+                        )?;
+                        assert_eq!(return_type, DataType::Variant);
+                        let ScalarRef::Variant(value) = result.index(0).unwrap() else {
+                            panic!("expected Variant");
+                        };
+                        assert_eq!(jsonb::RawJsonb::new(value).to_string(), "[]");
+                    }
+                }
+                if rows > 0 {
+                    let (result, _) =
+                        simulate_two_groups_group_by(name, vec![], &[entry], rows, vec![])?;
+                    for row in 0..2 {
+                        let ScalarRef::Variant(value) = result.index(row).unwrap() else {
+                            panic!("expected Variant");
+                        };
+                        assert_eq!(jsonb::RawJsonb::new(value).to_string(), "[]");
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }

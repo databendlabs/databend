@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod executor;
+mod external_access;
 mod filter;
 mod transforms;
 mod udf_transport;

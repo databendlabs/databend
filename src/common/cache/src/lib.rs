@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(write_all_vectored)]
 #![allow(clippy::uninlined_format_args)]
 
 mod cache;
+mod ghost;
 mod mem_sized;
+mod s3fifo;
 
 pub use cache::Cache;
 pub use cache::lru::LruCache;
 pub use hashbrown::DefaultHashBuilder;
+pub use hashbrown::Equivalent;
 pub use mem_sized::MemSized;
+pub use s3fifo::S3Fifo;
+pub use s3fifo::S3FifoConfig;

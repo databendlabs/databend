@@ -19,7 +19,6 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use databend_common_exception::Result;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use serde::Deserialize;
 
@@ -728,7 +727,7 @@ impl AliasMatrixYamlCase {
             writeln!(file, "sql: {}", run.sql)?;
             let outcome = match ctx.bind_sql(&run.sql).await {
                 Ok(plan) => SqlTestOutcome::Plan(
-                    plan.format_indent(Default::default(), &StatContext::default())?,
+                    plan.format_indent(Default::default(), &ctx.stat_context()?)?,
                 ),
                 Err(err) => SqlTestOutcome::Error {
                     code: err.code(),
@@ -907,7 +906,7 @@ fn assert_main_coordinate(main: &str, matrix: &str) {
         main.len() == 6,
         "alias matrix yaml {matrix} main coordinate must be six characters: {main}"
     );
-    for segment in main.as_bytes().chunks_exact(2) {
+    for segment in main.as_bytes().as_chunks::<2>().0 {
         let segment = std::str::from_utf8(segment).expect("main coordinate should be ASCII");
         assert_coordinate_segment(segment, matrix, "main coordinate");
     }

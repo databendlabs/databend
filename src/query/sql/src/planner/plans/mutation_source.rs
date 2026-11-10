@@ -36,6 +36,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, Default)]
@@ -94,12 +95,6 @@ impl Operator for MutationSource {
         }))
     }
 
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
-        })
-    }
-
     fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: 0.0,
@@ -110,6 +105,14 @@ impl Operator for MutationSource {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+}
+
+impl PhysicalOperator for MutationSource {
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
     }
 
     // Won't be invoked at all, since `PhysicalScan` is leaf node

@@ -23,12 +23,12 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::optimizers::rule::scan_order::push_down_scan_order;
 use crate::plans::Aggregate;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::TopN;
@@ -47,10 +47,12 @@ use crate::plans::TopN;
 pub struct RulePushDownRankLimitAggregate {
     matchers: Vec<Matcher>,
     max_limit: usize,
+    // Whether ordering by aggregate results also pushes the limit down, see `apply_sort`.
+    enable_final_top_n: bool,
 }
 
 impl RulePushDownRankLimitAggregate {
-    pub fn new(max_limit: usize) -> Self {
+    pub fn new(max_limit: usize, enable_final_top_n: bool) -> Self {
         Self {
             matchers: vec![
                 match_op!(Limit -> Aggregate -> *),
@@ -60,28 +62,7 @@ impl RulePushDownRankLimitAggregate {
                 match_op!(TopN -> EvalScalar -> Aggregate -> *),
             ],
             max_limit,
-        }
-    }
-
-    fn push_down_scan_order(input: &SExpr, order_by: &[SortItem]) -> SExpr {
-        match input.plan() {
-            RelOperator::Scan(scan) => {
-                let mut scan: Scan = scan.clone();
-                if scan
-                    .order_by
-                    .as_ref()
-                    .is_some_and(|current| current != order_by)
-                {
-                    return input.clone();
-                }
-                scan.order_by = Some(order_by.to_vec());
-                input.replace_plan(RelOperator::Scan(scan))
-            }
-            RelOperator::Filter(_) | RelOperator::EvalScalar(_) => {
-                let child = Self::push_down_scan_order(input.unary_child(), order_by);
-                input.replace_children([Arc::new(child)])
-            }
-            _ => input.clone(),
+            enable_final_top_n,
         }
     }
 
@@ -188,40 +169,50 @@ impl RulePushDownRankLimitAggregate {
         let is_order_subset = order_items
             .iter()
             .all(|k| agg_limit.group_items.iter().any(|g| g.index == k.index));
-        if !is_order_subset {
+        // Ordered by aggregate results too: only the final aggregation can rank the groups, and
+        // it keeps the first `limit` rows while producing them, so `limit` must be small.
+        let is_order_output = self.enable_final_top_n
+            && limit <= self.max_limit
+            && !agg_limit.group_items.is_empty()
+            && agg_limit.grouping_sets.is_none()
+            && order_items.iter().all(|k| {
+                agg_limit.group_items.iter().any(|g| g.index == k.index)
+                    || agg_limit
+                        .aggregate_functions
+                        .iter()
+                        .any(|f| f.index == k.index)
+            });
+        if !is_order_subset && !is_order_output {
             return Ok(());
         }
 
-        let mut sort_items = Vec::with_capacity(agg_limit.group_items.len());
-        let mut not_found_sort_items = vec![];
-        for i in 0..agg_limit.group_items.len() {
-            let group_item = &agg_limit.group_items[i];
-            if let Some(sort_item) = order_items.iter().find(|k| k.index == group_item.index) {
+        // The rank limit must follow the ORDER BY key order, then append the remaining
+        // group keys so that each rank identifies exactly one group. A repeated ORDER BY
+        // column is redundant after its first occurrence, so keep only the first one.
+        let mut sort_items: Vec<SortItem> = Vec::with_capacity(agg_limit.group_items.len());
+        for order_item in &order_items {
+            if !sort_items.iter().any(|k| k.index == order_item.index) {
+                sort_items.push(order_item.clone());
+            }
+        }
+        for group_item in &agg_limit.group_items {
+            if !sort_items.iter().any(|k| k.index == group_item.index) {
                 sort_items.push(SortItem {
-                    index: group_item.index,
-                    asc: sort_item.asc,
-                    nulls_first: sort_item.nulls_first,
-                });
-            } else {
-                not_found_sort_items.push(SortItem {
                     index: group_item.index,
                     asc: true,
                     nulls_first: false,
                 });
             }
         }
-        sort_items.extend(not_found_sort_items);
 
         agg_limit.rank_limit = Some((sort_items.clone(), limit));
 
-        let aggregate_input = if sort_items.len() == 1 {
-            Arc::new(Self::push_down_scan_order(
-                agg_limit_expr.unary_child(),
-                &sort_items,
-            ))
-        } else {
-            agg_limit_expr.unary_child_arc()
-        };
+        // A single group key also lets the scans below, including every branch
+        // of a UNION ALL, prune by the runtime rank-limit boundary.
+        let aggregate_input = (is_order_subset && sort_items.len() == 1)
+            .then(|| push_down_scan_order(agg_limit_expr.unary_child(), &sort_items))
+            .flatten()
+            .map_or_else(|| agg_limit_expr.unary_child_arc(), Arc::new);
         let agg = aggregate_input.ref_build_unary(agg_limit);
         let mut result = if has_eval_scalar {
             let eval_scalar = s_expr.unary_child().replace_children(vec![Arc::new(agg)]);

@@ -1239,7 +1239,7 @@ async fn test_rename_warehouses() -> anyhow::Result<()> {
 
     let warehouse_node_key = format!(
         "__fd_clusters_v6/test%2dtenant%2did/online_clusters/test_warehouse/default/{}",
-        &nodes[0]
+        nodes[0]
     );
 
     let create_warehouse = warehouse_manager

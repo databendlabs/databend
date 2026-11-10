@@ -191,7 +191,8 @@ async fn variant_cast_pushdown_and_non_column_fallback() -> Result<()> {
         ),
         ("get(v, 'e')", false, false, Some(6), nullable_variant),
         (
-            "parse_json('{\"k\":1}')['k']::Int64",
+            // The base is not a constant, otherwise the whole cast folds.
+            "parse_json(a::String)['k']::Int64",
             true,
             false,
             None,
@@ -308,7 +309,7 @@ async fn variant_cast_pushdown_and_non_column_fallback() -> Result<()> {
     Ok(())
 }
 
-fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindContext> {
+pub(super) fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindContext> {
     let table = NullTable::try_create(TableInfo {
         desc: "'default'.'t2'".into(),
         name: "t2".into(),
@@ -351,7 +352,6 @@ fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindCo
         "default".to_string(),
         "default".to_string(),
         table.into(),
-        None,
         None,
         false,
         false,

@@ -67,7 +67,6 @@ impl ParquetTable {
                 self.leaf_fields.clone(),
                 &plan.push_downs,
                 self.read_options,
-                vec![],
             )?)
         } else {
             None

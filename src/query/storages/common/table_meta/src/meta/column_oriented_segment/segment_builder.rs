@@ -97,6 +97,7 @@ pub struct ColumnOrientedSegmentBuilder {
     bloom_filter_index_location: LocationsWithOption,
     bloom_filter_index_size: Vec<u64>,
     inverted_index_size: Vec<Option<u64>>,
+    inverted_index_metas: Vec<Option<Vec<u8>>>,
     virtual_block_meta: Vec<Option<VirtualBlockMeta>>,
     compression: Vec<u8>,
     create_on: Vec<Option<i64>>,
@@ -165,6 +166,13 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             .push(block_meta.bloom_filter_index_size);
         self.inverted_index_size
             .push(block_meta.inverted_index_size);
+        self.inverted_index_metas.push(
+            block_meta
+                .inverted_index_metas
+                .as_ref()
+                .map(|metas| encode(&MetaEncoding::MessagePack, metas))
+                .transpose()?,
+        );
         self.virtual_block_meta.push(block_meta.virtual_block_meta);
         self.compression.push(block_meta.compression.to_u8());
         self.create_on
@@ -224,6 +232,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             ))),
             UInt64Type::from_data(this.bloom_filter_index_size),
             UInt64Type::from_opt_data(this.inverted_index_size),
+            BinaryType::from_opt_data(this.inverted_index_metas),
             UInt8Type::from_data(this.compression),
             Int64Type::from_opt_data(this.create_on),
         ];
@@ -286,6 +295,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             bloom_filter_index_location: LocationsWithOption::new_with_capacity(block_per_segment),
             bloom_filter_index_size: Vec::with_capacity(block_per_segment),
             inverted_index_size: Vec::with_capacity(block_per_segment),
+            inverted_index_metas: Vec::with_capacity(block_per_segment),
             virtual_block_meta: Vec::with_capacity(block_per_segment),
             compression: Vec::with_capacity(block_per_segment),
             create_on: Vec::with_capacity(block_per_segment),

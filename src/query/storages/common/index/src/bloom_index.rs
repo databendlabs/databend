@@ -63,6 +63,7 @@ use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -503,6 +504,41 @@ impl BloomIndex {
         hasher.finish()
     }
 
+    fn is_float_nan(target: &Scalar) -> bool {
+        match target {
+            Scalar::Number(NumberScalar::Float32(value)) => value.is_nan(),
+            Scalar::Number(NumberScalar::Float64(value)) => value.is_nan(),
+            _ => false,
+        }
+    }
+
+    /// Probe set for a zero-class float target on V3/V4 filters.
+    ///
+    /// Writers hash the canonical class representative (`+0.0`), but indexes
+    /// written before canonicalization hold the digest of the raw IEEE bits,
+    /// which for `-0.0` differs. Probing the raw digests of both signs keeps
+    /// those indexes sound. The raw-bit digest is only ever used for reading
+    /// persisted filters, never for building them.
+    fn zero_class_raw_digests(target: &Scalar) -> Option<[u64; 2]> {
+        match target {
+            Scalar::Number(NumberScalar::Float32(value)) if value.0 == 0.0 => Some([
+                Self::raw_bits_digest(&0.0_f32.to_bits()),
+                Self::raw_bits_digest(&(-0.0_f32).to_bits()),
+            ]),
+            Scalar::Number(NumberScalar::Float64(value)) if value.0 == 0.0 => Some([
+                Self::raw_bits_digest(&0.0_f64.to_bits()),
+                Self::raw_bits_digest(&(-0.0_f64).to_bits()),
+            ]),
+            _ => None,
+        }
+    }
+
+    /// Digest of a float's raw IEEE-754 bit pattern, as persisted by writers
+    /// before float keys were canonicalized.
+    pub fn raw_bits_digest<T: DFHash>(bits: &T) -> u64 {
+        Self::hash_one(bits)
+    }
+
     fn calculate_nullable_column_digests<T: ValueType>(column: &Column) -> Result<Vec<u64>>
     where for<'a> T::ScalarRef<'a>: DFHash {
         let (column, validity) = if let Column::Nullable(deref!(inner)) = column {
@@ -801,22 +837,46 @@ impl BloomIndex {
             // The column doesn't have a filter.
             return Ok(FilterEvalResult::Uncertain);
         }
+        if Self::is_float_nan(target) {
+            // Indexes written before float keys were canonicalized hold the
+            // digest of whatever NaN payload the row carried, so no finite
+            // probe set covers them. Leave NaN pruning to range statistics.
+            return Ok(FilterEvalResult::Uncertain);
+        }
 
         let idx = self.filter_schema.index_of(&filter_column)?;
         let filter = &self.filters[idx];
 
         let contains = if self.version == V2BloomBlock::VERSION {
-            let data_value = scalar_to_datavalue(target);
-            filter.contains(&data_value)
+            let mut data_value = scalar_to_datavalue(target);
+            if filter.contains(&data_value) {
+                true
+            } else if let Some(value) = data_value.as_float64_mut()
+                && *value == 0.0
+            {
+                // V2 hashed the original Float64 bits for both float types, so
+                // probe the other sign of zero as well.
+                *value = -*value;
+                filter.contains(&data_value)
+            } else {
+                false
+            }
         } else if is_like {
             ngram_arg_index
                 .and_then(|index| like_scalar_map.get(&index))
                 .and_then(|digests| digests.get(target))
                 .is_none_or(|digests| digests.iter().all(|digest| filter.contains_digest(*digest)))
         } else {
-            eq_scalar_map
-                .get(target)
-                .is_none_or(|digest| filter.contains_digest(*digest))
+            eq_scalar_map.get(target).is_none_or(|digest| {
+                match Self::zero_class_raw_digests(target) {
+                    Some(digests) => {
+                        // The canonical digest is the raw `+0.0` digest.
+                        debug_assert!(digests.contains(digest));
+                        digests.iter().any(|digest| filter.contains_digest(*digest))
+                    }
+                    None => filter.contains_digest(*digest),
+                }
+            })
         };
 
         if contains {

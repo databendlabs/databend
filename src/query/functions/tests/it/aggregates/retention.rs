@@ -1,12 +1,19 @@
 use std::io::Write;
 
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::eval_v2_aggr;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_retention_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
@@ -83,7 +90,7 @@ fn run_retention_cases(file: &mut impl Write, simulator: impl AggregationSimulat
 fn test_retention() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("retention.txt").unwrap();
-    run_retention_cases(file, eval_legacy_aggregate);
+    run_retention_cases(file, eval_aggregate);
 }
 
 #[test]
@@ -91,4 +98,132 @@ fn test_retention_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("retention_group_by.txt").unwrap();
     run_retention_cases(file, simulate_two_groups_group_by);
+}
+
+/// `retention` is variadic, so a NULL argument in any position must resolve to
+/// the fixed NULL-result function. Routing it to the real implementation panics
+/// when the boolean downcast fails, so this pins the guard for NULLs that are
+/// not the sole argument.
+#[test]
+fn test_v2_retention_null_argument_in_any_position_returns_null() -> Result<()> {
+    let conditions: BlockEntry = BooleanType::from_data(vec![true, true, false, true]).into();
+    let null_arg = || BlockEntry::new_const_column(DataType::Null, Scalar::Null, 4);
+
+    for entries in [
+        vec![null_arg()],
+        vec![null_arg(), conditions.clone()],
+        vec![conditions.clone(), null_arg()],
+        vec![conditions.clone(), null_arg(), conditions.clone()],
+    ] {
+        let arity = entries.len();
+        let (column, _) = eval_v2_aggr("retention", &entries, 4, false)?;
+        assert_eq!(
+            unsafe { column.index_unchecked(0) },
+            ScalarRef::Null,
+            "retention with {arity} arguments and a NULL argument should return NULL"
+        );
+    }
+
+    // Without any NULL argument the real implementation still runs.
+    let entries = [conditions.clone(), conditions];
+    let (column, _) = eval_v2_aggr("retention", &entries, 4, false)?;
+    assert_ne!(unsafe { column.index_unchecked(0) }, ScalarRef::Null);
+    Ok(())
+}
+
+// retention.rs: variable Boolean arity and nullable filtering are the branches;
+// keep the small existing set instead of expanding argument combinations.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "retention(x0, x1, x2)",
+            arguments: vec!["Boolean", "Boolean", "Boolean"],
+            result: "Nullable(Array(UInt8))",
+            state: "Tuple(UInt32, Boolean)",
+        },
+        Case::Metadata {
+            expression: "retention(x0, x1)",
+            arguments: vec!["Boolean", "Boolean"],
+            result: "Nullable(Array(UInt8))",
+            state: "Tuple(UInt32, Boolean)",
+        },
+        Case::Metadata {
+            expression: "retention(x0, x1)",
+            arguments: vec!["Nullable(Boolean)", "Boolean"],
+            result: "Nullable(Array(UInt8))",
+            state: "Tuple(UInt32, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "retention(x0, x1)",
+            arguments: vec!["Nullable(Boolean)", "Nullable(Boolean)"],
+            result: "Nullable(Array(UInt8))",
+            state: "Tuple(UInt32, Boolean, Boolean)",
+        },
+    ]);
+}
+
+#[test]
+fn test_retention_distinct_arities() -> Result<()> {
+    use databend_common_expression::types::UInt8Type;
+
+    use super::support::eval_aggregate_for_test;
+
+    for arity in [1, 2] {
+        let entries =
+            vec![BlockEntry::from(BooleanType::from_data(vec![true, false, true])); arity];
+        for each_row in [false, true] {
+            for with_serialize in [false, true] {
+                let (result, _) = eval_aggregate_for_test(
+                    "retention_distinct",
+                    vec![],
+                    &entries,
+                    3,
+                    each_row,
+                    with_serialize,
+                    vec![],
+                )?;
+                let expected = UInt8Type::from_data(vec![1u8; arity]);
+                assert_eq!(result.index(0).unwrap(), ScalarRef::Array(expected));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_retention_distinct_null_filtering() -> Result<()> {
+    use databend_common_expression::types::UInt8Type;
+
+    use super::support::eval_aggregate_for_test;
+
+    let entries = [
+        BlockEntry::from(BooleanType::from_data(vec![true, false, false])),
+        BlockEntry::from(BooleanType::from_data_with_validity(
+            vec![false, true, true],
+            vec![false, true, true],
+        )),
+    ];
+    for name in ["retention", "retention_distinct"] {
+        for each_row in [false, true] {
+            for with_serialize in [false, true] {
+                let (result, _) = eval_aggregate_for_test(
+                    name,
+                    vec![],
+                    &entries,
+                    3,
+                    each_row,
+                    with_serialize,
+                    vec![],
+                )?;
+                assert_eq!(
+                    result.index(0).unwrap(),
+                    ScalarRef::Array(UInt8Type::from_data(vec![0u8, 0]))
+                );
+            }
+        }
+    }
+    Ok(())
 }

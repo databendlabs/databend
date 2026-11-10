@@ -88,7 +88,7 @@ CommitSink
                             ├── read size: < 1 KiB
                             ├── partitions total: 1
                             ├── partitions scanned: 1
-                            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                            ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                             ├── push downs: [filters: [], limit: NONE]
                             └── estimated rows: 1.00
 
@@ -123,7 +123,7 @@ CommitSink
             │   ├── read size: < 1 KiB
             │   ├── partitions total: 1
             │   ├── partitions scanned: 1
-            │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             │   ├── push downs: [filters: [], limit: NONE]
             │   └── estimated rows: 1.00
             └── TableScan(Probe)
@@ -134,7 +134,7 @@ CommitSink
                 ├── read size: < 1 KiB
                 ├── partitions total: 3
                 ├── partitions scanned: 3
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 15.00
 
@@ -164,7 +164,7 @@ CommitSink
             │   ├── read size: < 1 KiB
             │   ├── partitions total: 1
             │   ├── partitions scanned: 1
-            │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             │   ├── push downs: [filters: [], limit: NONE]
             │   └── estimated rows: 1.00
             └── TableScan(Probe)
@@ -175,7 +175,7 @@ CommitSink
                 ├── read size: < 1 KiB
                 ├── partitions total: 3
                 ├── partitions scanned: 3
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 15.00
 
@@ -269,7 +269,7 @@ CommitSink
                     │       ├── table: default.system.stage
                     │       ├── scan id: 0
                     │       ├── output columns: [_$1 (#0)]
-                    │       ├── read rows: 6
+                    │       ├── read rows: 12
                     │       ├── read size: < 1 KiB
                     │       ├── partitions total: 1
                     │       ├── partitions scanned: 1
@@ -286,7 +286,7 @@ CommitSink
                             ├── read size: < 1 KiB
                             ├── partitions total: 1
                             ├── partitions scanned: 1
-                            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                            ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                             ├── push downs: [filters: [], limit: NONE]
                             ├── apply join filters: [#0]
                             └── estimated rows: 2.00

@@ -24,6 +24,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Scan;
@@ -103,7 +104,9 @@ fn set_scan_change_type(plan: Plan, change_type: Option<ChangeType>) -> Plan {
             formatted_ast,
             ignore_result,
         } => Plan::Query {
-            s_expr: Box::new(set_s_expr_scan_change_type(&s_expr, change_type)),
+            s_expr: Box::new(
+                set_s_expr_scan_change_type(s_expr.logical().unwrap(), change_type).into(),
+            ),
             metadata,
             bind_context,
             rewrite_kind,
@@ -132,14 +135,16 @@ fn set_s_expr_scan_change_type(s_expr: &SExpr, change_type: Option<ChangeType>) 
 
 fn find_scan(plan: &Plan) -> &Scan {
     match plan {
-        Plan::Query { s_expr, .. } => find_scan_in_s_expr(s_expr).unwrap(),
+        Plan::Query { s_expr, .. } => {
+            find_scan_in_s_expr(s_expr.planned().unwrap().expr()).unwrap()
+        }
         _ => unreachable!("test optimizer should return Plan::Query"),
     }
 }
 
-fn find_scan_in_s_expr(s_expr: &SExpr) -> Option<&Scan> {
+fn find_scan_in_s_expr(s_expr: &databend_common_sql::optimizer::ir::PExpr) -> Option<&Scan> {
     match s_expr.plan() {
-        RelOperator::Scan(scan) => Some(scan),
+        PhysicalRelOperator::Scan(scan) => Some(scan),
         _ => s_expr.children().find_map(find_scan_in_s_expr),
     }
 }

@@ -75,6 +75,10 @@ pub struct HashJoinProbeState {
     /// When the counter is 0, it means all processors have finished their work.
     pub(crate) wait_probe_counter: AtomicUsize,
     pub(crate) next_round_counter: AtomicUsize,
+    /// Probe processors that have not finished yet, so the last one to finish
+    /// releases the hash table. Kept apart from `wait_probe_counter`, which a
+    /// final scan already counts down to zero before the processors finish.
+    pub(crate) unfinished_counter: AtomicUsize,
     /// The barrier is used to synchronize probe side processors.
     pub(crate) barrier: Barrier,
     /// The schema of probe side.
@@ -135,6 +139,7 @@ impl HashJoinProbeState {
             processor_count,
             wait_probe_counter: AtomicUsize::new(0),
             next_round_counter: AtomicUsize::new(0),
+            unfinished_counter: AtomicUsize::new(0),
             barrier,
             probe_schema,
             probe_projections: probe_projections.clone(),
@@ -397,6 +402,7 @@ impl HashJoinProbeState {
     pub fn probe_attach(&self) {
         self.wait_probe_counter.fetch_add(1, Ordering::AcqRel);
         self.next_round_counter.fetch_add(1, Ordering::AcqRel);
+        self.unfinished_counter.fetch_add(1, Ordering::AcqRel);
     }
 
     pub fn probe_done(&self) -> Result<()> {

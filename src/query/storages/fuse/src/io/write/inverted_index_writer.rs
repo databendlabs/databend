@@ -14,51 +14,50 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::path::Path;
 use std::sync::Arc;
-use std::sync::LazyLock;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndexType;
-use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
-use databend_storages_common_blocks::blocks_to_parquet;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
+use databend_storages_common_index::BundleSizes;
+use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+use databend_storages_common_index::InvertedIndexBundleBuilder;
+use databend_storages_common_index::InvertedIndexOutputDirectory;
+use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
+use databend_storages_common_io::BlockingWrite;
+use databend_storages_common_io::create_blocking_write;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_FILTERS;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_INDEX_RECORD;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_MODE;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_TOKENIZER;
 use jsonb::RawJsonb;
 use jsonb::from_raw_jsonb;
-use lindera::dictionary::Dictionary;
-use lindera::dictionary::load_dictionary;
+use lindera::dictionary::UserDictionary;
 use lindera::mode::Mode;
+use lindera::mode::Penalty;
 use lindera::segmenter::Segmenter;
 use lindera_analysis::token_filter::BoxTokenFilter;
 use lindera_analysis::token_filter::japanese_base_form::JapaneseBaseFormTokenFilter;
 use lindera_analysis::token_filter::japanese_stop_tags::JapaneseStopTagsTokenFilter;
 use lindera_tantivy::tokenizer::LinderaTokenizer;
 use log::debug;
-use log::info;
-use opendal::Buffer;
-use tantivy::Directory;
+use opendal::Operator;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
-use tantivy::IndexWriter;
-use tantivy::index::SegmentComponent;
-use tantivy::indexer::UserOperation;
+use tantivy::SingleSegmentIndexWriter;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
 use tantivy::schema::JsonObjectOptions;
@@ -74,14 +73,21 @@ use tantivy::tokenizer::Stemmer;
 use tantivy::tokenizer::StopWordFilter;
 use tantivy::tokenizer::TextAnalyzer;
 use tantivy::tokenizer::TokenizerManager;
+use tantivy::tokenizer::WhitespaceTokenizer;
 use tantivy_jieba::JiebaTokenizer;
 
-use crate::index::build_tantivy_footer;
+use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
-
-static JAPANESE_DICTIONARY: LazyLock<Dictionary> = LazyLock::new(|| {
-    load_dictionary("embedded://ipadic").expect("the embedded IPADIC dictionary must be available")
-});
+use crate::io::inverted_index_user_dictionary::JAPANESE_DICTIONARY;
+use crate::io::resolve_inverted_index_user_dictionary_blocking;
+use crate::io::write::block_index::BlockIndexMerge;
+use crate::io::write::block_index::BlockIndexMergeSource;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::WrittenInvertedIndex;
+use crate::io::write::inverted_index_merge::InvertedIndexMerge;
 
 #[derive(Clone)]
 pub struct InvertedIndexBuilder {
@@ -89,19 +95,102 @@ pub struct InvertedIndexBuilder {
     pub(crate) version: String,
     pub(crate) schema: DataSchema,
     pub(crate) options: BTreeMap<String, String>,
+    pub(crate) user_dictionary: Option<Arc<UserDictionary>>,
 }
 
 impl InvertedIndexBuilder {
-    pub fn gen_inverted_index_location(&self, block_location: &Location) -> String {
-        TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-            &block_location.0,
-            &self.name,
-            &self.version,
-        )
+    pub fn gen_inverted_index_location(
+        &self,
+        location_generator: &TableMetaLocationGenerator,
+    ) -> String {
+        location_generator.gen_inverted_index_v2_location(&self.version)
+    }
+
+    pub(crate) fn into_write_spec(self) -> InvertedIndexWriteSpec {
+        InvertedIndexWriteSpec { builder: self }
     }
 }
 
-pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedIndexBuilder> {
+pub(crate) struct InvertedIndexWriteSpec {
+    builder: InvertedIndexBuilder,
+}
+
+impl BlockIndexSpec for InvertedIndexWriteSpec {
+    fn index_name(&self) -> Option<&str> {
+        Some(&self.builder.name)
+    }
+
+    fn prepare_merge(
+        &self,
+        sources: &[BlockIndexMergeSource<'_>],
+    ) -> Result<Option<Arc<dyn BlockIndexMerge>>> {
+        InvertedIndexMerge::try_create(&self.builder, sources)
+    }
+
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        let location = (
+            self.builder
+                .gen_inverted_index_location(&context.meta_locations),
+            INVERTED_INDEX_FILE_FORMAT_VERSION,
+        );
+        Ok(Box::new(InvertedIndexBlockWriter {
+            index_name: self.builder.name.clone(),
+            index_version: self.builder.version.clone(),
+            location: location.clone(),
+            source_schema: context.physical_schema,
+            writer: InvertedIndexWriter::try_create(
+                Arc::new(self.builder.schema.clone()),
+                &self.builder.options,
+                context.operator,
+                location.0,
+                self.builder.user_dictionary.clone(),
+            )?,
+        }))
+    }
+}
+
+struct InvertedIndexBlockWriter {
+    index_name: String,
+    index_version: String,
+    location: Location,
+    source_schema: TableSchemaRef,
+    writer: InvertedIndexWriter,
+}
+
+impl BlockIndexWriter for InvertedIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.writer.add_block(&self.source_schema, block)
+    }
+
+    fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let start = Instant::now();
+        let sizes = self.writer.finalize()?;
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        let total_size = sizes.bundle + sizes.siblings;
+        metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
+        metrics_inc_block_inverted_index_write_nums(1);
+        metrics_inc_block_inverted_index_write_bytes(total_size);
+        metrics_inc_block_inverted_index_write_milliseconds(elapsed_ms);
+        debug!(
+            "Finish build inverted index: location={}, bundle={} bytes, siblings={} bytes in {} ms",
+            self.location.0, sizes.bundle, sizes.siblings, elapsed_ms
+        );
+        let written_index = WrittenInvertedIndex {
+            index_name: self.index_name,
+            index_version: self.index_version,
+            location: self.location,
+            bundle_size: sizes.bundle,
+            total_size,
+        };
+        Ok(PendingBlockIndexOutput {
+            inverted: vec![written_index],
+            ..Default::default()
+        })
+    }
+}
+
+pub fn create_inverted_index_builders(table: &FuseTable) -> Result<Vec<InvertedIndexBuilder>> {
+    let table_meta = &table.table_info.meta;
     let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
     for index in table_meta.indexes.values() {
         if !matches!(index.index_type, TableIndexType::Inverted) {
@@ -128,109 +217,117 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
             continue;
         }
         let index_schema = DataSchema::new(index_fields);
+        let user_dictionary = resolve_inverted_index_user_dictionary_blocking(
+            table.get_operator_ref(),
+            &index.options,
+        )?;
 
         let inverted_index_builder = InvertedIndexBuilder {
             name: index.name.clone(),
             version: index.version.clone(),
             schema: index_schema,
             options: index.options.clone(),
+            user_dictionary,
         };
         inverted_index_builders.push(inverted_index_builder);
     }
-    inverted_index_builders
+    Ok(inverted_index_builders)
 }
 
-#[derive(Debug)]
-pub struct InvertedIndexState {
-    pub(crate) data: Buffer,
-    pub(crate) size: u64,
-    pub(crate) location: Location,
-}
-
-impl InvertedIndexState {
-    pub fn try_create(data: Buffer, location: String) -> Result<Self> {
-        let size = data.len() as u64;
-        Ok(Self {
-            data,
-            size,
-            location: (location, 0),
-        })
-    }
-
-    pub fn from_data_block(
-        source_schema: &TableSchemaRef,
-        block: &DataBlock,
-        block_location: &Location,
-        inverted_index_builder: &InvertedIndexBuilder,
-    ) -> Result<Self> {
-        let start = Instant::now();
-
-        let inverted_index_location =
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &block_location.0,
-                &inverted_index_builder.name,
-                &inverted_index_builder.version,
-            );
-
-        info!(
-            "Start build inverted index for location: {}",
-            inverted_index_location
-        );
-
-        let mut writer = InvertedIndexWriter::try_create(
-            Arc::new(inverted_index_builder.schema.clone()),
-            &inverted_index_builder.options,
-        )?;
-        writer.add_block(source_schema, block)?;
-        let data = writer.finalize()?;
-
-        // Perf.
-        let size = data.len();
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        {
-            metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
-        }
-        info!(
-            "Finish build inverted index: location={}, size={} bytes in {} ms",
-            inverted_index_location, size, elapsed_ms
-        );
-
-        Self::try_create(data, inverted_index_location)
-    }
-}
+/// `SingleSegmentIndexWriter` uses its budget only to size the initial term hash table, capped at
+/// 2^19 entries (4 MiB); anything above ~12 MiB reaches that cap. The arena itself grows on demand.
+const INDEX_WRITER_TABLE_SIZING_HINT: usize = 16 * 1024 * 1024;
 
 pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
-    index_writer: IndexWriter,
-    operations: Vec<UserOperation>,
+    /// Tantivy fields in `schema` order, as assigned by `create_index_schema`.
+    index_fields: Vec<Field>,
+    operator: Operator,
+    location: String,
+    directory: InvertedIndexOutputDirectory,
+    /// Indexes on the calling thread into exactly one segment: no worker or merge threads, and
+    /// no memory-triggered segment split, which matters because Databend reads Tantivy doc ids
+    /// as block row numbers.
+    index_writer: SingleSegmentIndexWriter,
 }
 
 impl InvertedIndexWriter {
     pub fn try_create(
         schema: DataSchemaRef,
         index_options: &BTreeMap<String, String>,
+        operator: Operator,
+        location: String,
+        user_dictionary: Option<Arc<UserDictionary>>,
     ) -> Result<InvertedIndexWriter> {
-        let (index_schema, _) = create_index_schema(schema.clone(), index_options)?;
+        let directory = InvertedIndexOutputDirectory::new(operator.clone(), location.clone());
+        Self::try_create_into(
+            schema,
+            index_options,
+            operator,
+            location,
+            directory,
+            user_dictionary,
+        )
+    }
 
+    #[cfg(test)]
+    pub(crate) fn try_create_with_stream_threshold(
+        schema: DataSchemaRef,
+        index_options: &BTreeMap<String, String>,
+        operator: Operator,
+        location: String,
+        stream_threshold: usize,
+        user_dictionary: Option<Arc<UserDictionary>>,
+    ) -> Result<InvertedIndexWriter> {
+        let directory = InvertedIndexOutputDirectory::with_stream_threshold(
+            operator.clone(),
+            location.clone(),
+            stream_threshold,
+        );
+        Self::try_create_into(
+            schema,
+            index_options,
+            operator,
+            location,
+            directory,
+            user_dictionary,
+        )
+    }
+
+    fn try_create_into(
+        schema: DataSchemaRef,
+        index_options: &BTreeMap<String, String>,
+        operator: Operator,
+        location: String,
+        directory: InvertedIndexOutputDirectory,
+        user_dictionary: Option<Arc<UserDictionary>>,
+    ) -> Result<InvertedIndexWriter> {
+        let (index_schema, index_fields) = create_index_schema(schema.clone(), index_options)?;
+
+        // No field is stored, so the doc store only holds empty documents; compressing them
+        // inline is negligible and avoids one compression thread per block index.
         let index_settings = IndexSettings {
+            docstore_compress_dedicated_thread: false,
             ..Default::default()
         };
 
-        let tokenizer_manager = create_tokenizer_manager(index_options);
+        let tokenizer_manager = create_tokenizer_manager(index_options, user_dictionary);
 
         let index_builder = IndexBuilder::new()
             .settings(index_settings)
             .schema(index_schema.clone())
             .tokenizers(tokenizer_manager.clone());
 
-        let index = index_builder.create_in_ram()?;
-        let index_writer = index.writer(DEFAULT_BLOCK_BUFFER_SIZE)?;
-        let operations = Vec::new();
+        let index = index_builder.open_or_create(directory.clone())?;
+        let index_writer = SingleSegmentIndexWriter::new(index, INDEX_WRITER_TABLE_SIZING_HINT)?;
 
         Ok(Self {
             schema,
+            index_fields,
+            operator,
+            location,
+            directory,
             index_writer,
-            operations,
         })
     }
 
@@ -244,8 +341,8 @@ impl InvertedIndexWriter {
 
         for i in 0..block.num_rows() {
             let mut doc = TantivyDocument::new();
-            for (j, (field_index, ty)) in field_indexes.iter().enumerate() {
-                let field = Field::from_field_id(j as u32);
+            for (field, (field_index, ty)) in self.index_fields.iter().zip(&field_indexes) {
+                let field = *field;
                 let column = block.get_by_offset(*field_index);
                 match unsafe { column.index_unchecked(i) } {
                     ScalarRef::String(text) => doc.add_text(field, text),
@@ -276,104 +373,63 @@ impl InvertedIndexWriter {
                     }
                 }
             }
-            self.operations.push(UserOperation::Add(doc));
+            self.index_writer.add_document(doc)?;
         }
-
         Ok(())
     }
 
     #[async_backtrace::framed]
-    pub fn finalize(mut self) -> Result<Buffer> {
-        let _ = self.index_writer.run(self.operations);
-        let _ = self.index_writer.commit()?;
-        let index = self.index_writer.index();
-        let directory = index.directory();
-
-        let mut index_columns = Vec::with_capacity(8);
-
-        let managed_filepath = Path::new(".managed.json");
-        let managed_bytes = directory.atomic_read(managed_filepath)?;
-        let managed_scalar = Scalar::Binary(managed_bytes);
-        let managed_block_entry = BlockEntry::new_const_column(DataType::Binary, managed_scalar, 1);
-        index_columns.push(managed_block_entry);
-
-        let meta_filepath = Path::new("meta.json");
-        let meta_data = directory.atomic_read(meta_filepath)?;
-        let meta_string = std::str::from_utf8(&meta_data)?;
-        let meta_val: serde_json::Value = serde_json::from_str(meta_string)?;
-        let meta_json: String = serde_json::to_string(&meta_val)?;
-        let meta_scalar = Scalar::Binary(meta_json.into_bytes());
-        let meta_block_entry = BlockEntry::new_const_column(DataType::Binary, meta_scalar, 1);
-        index_columns.push(meta_block_entry);
-
-        let segments = index.searchable_segments()?;
-        let segment = &segments[0];
-        let components = vec![
-            SegmentComponent::FastFields,
-            SegmentComponent::Store,
-            SegmentComponent::FieldNorms,
-            SegmentComponent::Positions,
-            SegmentComponent::Postings,
-            SegmentComponent::Terms,
-        ];
-        for component in components {
-            let component_field = segment.open_read(component)?;
-            let bytes = component_field.read_bytes()?;
-            let mut value = bytes.as_slice().to_vec();
-            let footer = build_tantivy_footer(&value)?;
-            value.extend_from_slice(&footer);
-
-            let scalar = Scalar::Binary(value);
-            let block_entry = BlockEntry::new_const_column(DataType::Binary, scalar, 1);
-            index_columns.push(block_entry);
-        }
-
-        let index_fields = vec![
-            TableField::new(".managed.json", TableDataType::Binary),
-            TableField::new("meta.json", TableDataType::Binary),
-            TableField::new("fast", TableDataType::Binary),
-            TableField::new("store", TableDataType::Binary),
-            TableField::new("fieldnorm", TableDataType::Binary),
-            TableField::new("pos", TableDataType::Binary),
-            TableField::new("idx", TableDataType::Binary),
-            TableField::new("term", TableDataType::Binary),
-        ];
-
-        let index_schema = TableSchemaRefExt::create(index_fields);
-        let index_block = DataBlock::new(index_columns, 1);
-
-        let serialized = blocks_to_parquet(
-            index_schema.as_ref(),
-            vec![index_block],
-            // Zstd has the best compression ratio
-            TableCompression::Zstd,
-            // No dictionary page for inverted index
-            false,
-            None,
-        )?;
-
-        Ok(Buffer::from(serialized.payload))
+    pub fn finalize(self) -> Result<BundleSizes> {
+        let index = self.index_writer.finalize()?;
+        let external_files = self.directory.external_files();
+        let builder =
+            InvertedIndexBundleBuilder::try_create(self.directory, index, external_files)?;
+        let mut sink =
+            create_blocking_write(self.operator, self.location, BLOCKING_WRITE_MAX_CHUNKS);
+        let sizes = builder.write_to(&mut sink)?;
+        sink.close()?;
+        Ok(sizes)
     }
 }
 
 // Create tokenizers for English, Chinese, and Japanese.
+//
+// `user_dictionary` is the dictionary referenced by `index_options`,
+// it only affects the Japanese tokenizer.
 pub(crate) fn create_tokenizer_manager(
     index_options: &BTreeMap<String, String>,
+    user_dictionary: Option<Arc<UserDictionary>>,
 ) -> TokenizerManager {
     let tokenizer_manager = TokenizerManager::new();
     let filters = index_options
-        .get("filters")
+        .get(INVERTED_INDEX_OPT_FILTERS)
         .map(|filters| filters.split(',').collect::<HashSet<_>>())
         .unwrap_or_default();
 
     let tokenizer = index_options
-        .get("tokenizer")
+        .get(INVERTED_INDEX_OPT_TOKENIZER)
         .map(String::as_str)
         .unwrap_or("english");
     match tokenizer {
         "english" => tokenizer_manager.register("english", create_english_analyzer(&filters)),
         "chinese" => tokenizer_manager.register("chinese", create_chinese_analyzer(&filters)),
-        "japanese" => tokenizer_manager.register("japanese", create_japanese_analyzer(&filters)),
+        "whitespace" => {
+            tokenizer_manager.register("whitespace", create_whitespace_analyzer(&filters))
+        }
+        "japanese" => {
+            // Validated by the binder; anything else falls back to the default.
+            let mode = match index_options
+                .get(INVERTED_INDEX_OPT_MODE)
+                .map(String::as_str)
+            {
+                Some("decompose") => Mode::Decompose(Penalty::default()),
+                _ => Mode::Normal,
+            };
+            tokenizer_manager.register(
+                "japanese",
+                create_japanese_analyzer(&filters, mode, user_dictionary),
+            )
+        }
         _ => unreachable!("Invalid tokenizer {}", tokenizer),
     }
 
@@ -382,6 +438,23 @@ pub(crate) fn create_tokenizer_manager(
 
 fn create_english_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
     let mut analyzer = TextAnalyzer::builder(SimpleTokenizer::default()).filter_dynamic(LowerCaser);
+
+    if filters.contains("english_stop") {
+        analyzer = analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
+    }
+    if filters.contains("english_stemmer") {
+        analyzer = analyzer.filter_dynamic(Stemmer::new(Language::English));
+    }
+
+    analyzer.build()
+}
+
+/// For text the user has already tokenized: splits on ASCII whitespace only, so punctuation
+/// and non-ASCII separators stay inside tokens. Case folding still applies so that queries do
+/// not have to reproduce the exact casing of the indexed text.
+fn create_whitespace_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
+    let mut analyzer =
+        TextAnalyzer::builder(WhitespaceTokenizer::default()).filter_dynamic(LowerCaser);
 
     if filters.contains("english_stop") {
         analyzer = analyzer.filter_dynamic(StopWordFilter::new(Language::English).unwrap());
@@ -411,8 +484,14 @@ fn create_chinese_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
     analyzer.build()
 }
 
-fn create_japanese_analyzer(filters: &HashSet<&str>) -> TextAnalyzer {
-    let segmenter = Segmenter::new(Mode::Normal, JAPANESE_DICTIONARY.clone(), None);
+fn create_japanese_analyzer(
+    filters: &HashSet<&str>,
+    mode: Mode,
+    user_dictionary: Option<Arc<UserDictionary>>,
+) -> TextAnalyzer {
+    // `Segmenter` takes the user dictionary by value; the shared copy stays in the process cache.
+    let user_dictionary = user_dictionary.map(|dictionary| (*dictionary).clone());
+    let segmenter = Segmenter::new(mode, JAPANESE_DICTIONARY.clone(), user_dictionary);
     let mut tokenizer = LinderaTokenizer::from_segmenter(segmenter);
 
     // Lindera filters must run before conversion to Tantivy tokens because
@@ -487,7 +566,7 @@ pub(crate) fn create_index_schema(
     index_options: &BTreeMap<String, String>,
 ) -> Result<(Schema, Vec<Field>)> {
     let tokenizer_name = index_options
-        .get("tokenizer")
+        .get(INVERTED_INDEX_OPT_TOKENIZER)
         .cloned()
         .unwrap_or("english".to_string());
 
@@ -499,7 +578,7 @@ pub(crate) fn create_index_schema(
     //    and also can't search for phrase terms, but can give better scoring.
     // 3. `position`: store `DocId`, term frequency, and positions,
     //    take up most space, have better scoring, and can search for phrase terms.
-    let index_record: IndexRecordOption = match index_options.get("index_record") {
+    let index_record: IndexRecordOption = match index_options.get(INVERTED_INDEX_OPT_INDEX_RECORD) {
         Some(v) => serde_json::from_str(v)?,
         None => IndexRecordOption::WithFreqsAndPositions,
     };
@@ -508,9 +587,11 @@ pub(crate) fn create_index_schema(
         .set_tokenizer(&tokenizer_name)
         .set_index_option(index_record);
     let text_options = TextOptions::default().set_indexing_options(text_field_indexing.clone());
+    // Tantivy executes JSON range queries over fast fields. The remote reader warms the segment's
+    // `.fast` file asynchronously before starting synchronous search.
     let json_options = JsonObjectOptions::default()
         .set_indexing_options(text_field_indexing)
-        .set_fast("raw");
+        .set_fast(Some("raw"));
 
     let mut schema_builder = Schema::builder();
     let mut index_fields = Vec::with_capacity(schema.fields.len());
@@ -530,4 +611,472 @@ pub(crate) fn create_index_schema(
     let index_schema = schema_builder.build();
 
     Ok((index_schema, index_fields))
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::StringType;
+    use databend_storages_common_cache::CachePolicy;
+    use databend_storages_common_index::BundleSizes;
+    use opendal::services::Memory;
+    use tantivy::query::QueryParser;
+    use tantivy::query_grammar::parse_query;
+
+    use super::*;
+    use crate::io::read::InvertedIndexReader;
+    use crate::io::read::InvertedIndexWarmupInfo;
+    use crate::test_utils::init_test_globals;
+
+    const ROWS: usize = 4000;
+    const WORDS: [&str; 5] = ["alpha", "bravo", "charlie", "delta", "echo"];
+
+    /// Row `i` mentions `WORDS[i % 5]` and `WORDS[i % 3]`.
+    fn body(i: usize) -> String {
+        format!("row {i} talks about {} and {}", WORDS[i % 5], WORDS[i % 3])
+    }
+
+    fn expected_rows(word: &str) -> Vec<usize> {
+        let mut rows = Vec::new();
+        for i in 0..ROWS {
+            if WORDS[i % 5] == word || WORDS[i % 3] == word {
+                rows.push(i);
+            }
+        }
+        rows
+    }
+
+    fn index_options() -> BTreeMap<String, String> {
+        BTreeMap::from([("tokenizer".to_string(), "english".to_string())])
+    }
+
+    fn build_index(operator: &Operator, location: &str, stream_threshold: usize) -> BundleSizes {
+        let data_schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "body",
+            DataType::String,
+        )]));
+        let source_schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "body",
+            TableDataType::String,
+        )]));
+        let mut writer = InvertedIndexWriter::try_create_with_stream_threshold(
+            data_schema,
+            &index_options(),
+            operator.clone(),
+            location.to_string(),
+            stream_threshold,
+            None,
+        )
+        .unwrap();
+        let mut texts = Vec::with_capacity(ROWS);
+        for i in 0..ROWS {
+            texts.push(body(i));
+        }
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(texts)]);
+        writer.add_block(&source_schema, &block).unwrap();
+        writer.finalize().unwrap()
+    }
+
+    async fn search(
+        operator: &Operator,
+        location: &str,
+        bundle_size: u64,
+        word: &str,
+    ) -> Vec<usize> {
+        let (schema, fields) = create_index_schema(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "body",
+                DataType::String,
+            )])),
+            &index_options(),
+        )
+        .unwrap();
+        let query_text = format!("body:{word}");
+        let parser = QueryParser::new(
+            schema.clone(),
+            fields.clone(),
+            create_tokenizer_manager(&index_options(), None),
+        );
+        let query = parser.parse_query(&query_text).unwrap();
+        let ast = parse_query(&query_text).unwrap();
+        let warmup =
+            InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, &fields, None)
+                .unwrap();
+        let reader = InvertedIndexReader::create(
+            operator.clone(),
+            CachePolicy::DEFAULT,
+            false,
+            create_tokenizer_manager(&index_options(), None),
+            warmup,
+        );
+        let result = reader
+            .do_filter(
+                query,
+                location,
+                INVERTED_INDEX_FILE_FORMAT_VERSION,
+                bundle_size,
+                ROWS as u64,
+            )
+            .await
+            .unwrap();
+        let (mut rows, _) = result.unwrap_or_default();
+        rows.sort_unstable();
+        rows
+    }
+
+    async fn exists(operator: &Operator, path: &str) -> bool {
+        operator.exists(path).await.unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_full_warmup_reads_needed_postings_and_positions() {
+        init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let location = "t/ast-warmup.index";
+        let sizes = build_index(&operator, location, 256);
+        let options = index_options();
+        let (schema, fields) = create_index_schema(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "body",
+                DataType::String,
+            )])),
+            &options,
+        )
+        .unwrap();
+        let field = fields[0];
+        let tokenizers = create_tokenizer_manager(&options, None);
+
+        for (text, fuzziness, expected) in [
+            (
+                "body:\"talks about alp\"*",
+                None,
+                (0..ROWS).filter(|&i| WORDS[i % 5] == "alpha").collect(),
+            ),
+            ("body:alpa", Some(1), expected_rows("alpha")),
+            ("body:[alpha TO alpha]", None, expected_rows("alpha")),
+        ] {
+            let mut parser = QueryParser::new(schema.clone(), fields.clone(), tokenizers.clone());
+            if let Some(distance) = fuzziness {
+                parser.set_field_fuzzy(field, false, distance, true);
+            }
+            let query = parser.parse_query(text).unwrap();
+            let ast = parse_query(text).unwrap();
+            let warmup = InvertedIndexWarmupInfo::try_create(
+                query.as_ref(),
+                &ast,
+                &schema,
+                &fields,
+                fuzziness,
+            )
+            .unwrap();
+            let reader = InvertedIndexReader::create(
+                operator.clone(),
+                CachePolicy::DEFAULT,
+                false,
+                tokenizers.clone(),
+                warmup,
+            );
+            let (mut rows, _) = reader
+                .do_filter(
+                    query,
+                    location,
+                    INVERTED_INDEX_FILE_FORMAT_VERSION,
+                    sizes.bundle,
+                    ROWS as u64,
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            rows.sort_unstable();
+            assert_eq!(rows, expected, "{text}");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_streamed_and_inline_bundles_answer_the_same_queries() {
+        init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+
+        let streamed = build_index(&operator, "t/streamed.index", 256);
+        let inline = build_index(&operator, "t/inline.index", usize::MAX);
+
+        assert!(exists(&operator, "t/streamed.index.idx").await);
+        assert!(exists(&operator, "t/streamed.index.pos").await);
+        assert!(streamed.siblings > 0);
+        assert!(!exists(&operator, "t/inline.index.idx").await);
+        assert!(!exists(&operator, "t/inline.index.pos").await);
+        assert_eq!(inline.siblings, 0);
+        assert!(streamed.bundle < inline.bundle);
+        assert_eq!(
+            operator
+                .stat("t/streamed.index")
+                .await
+                .unwrap()
+                .content_length(),
+            streamed.bundle
+        );
+
+        for word in WORDS {
+            let expected = expected_rows(word);
+            assert_eq!(
+                search(&operator, "t/streamed.index", streamed.bundle, word).await,
+                expected,
+                "streamed {word}"
+            );
+            assert_eq!(
+                search(&operator, "t/inline.index", inline.bundle, word).await,
+                expected,
+                "inline {word}"
+            );
+        }
+        assert!(
+            search(&operator, "t/streamed.index", streamed.bundle, "zulu")
+                .await
+                .is_empty()
+        );
+    }
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use std::ops::Range;
+
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::VariantType;
+    use databend_storages_common_cache::CachePolicy;
+    use databend_storages_common_index::BundleSizes;
+    use databend_storages_common_index::InvertedIndexMerger;
+    use databend_storages_common_index::MergeOutput;
+    use databend_storages_common_index::MergeSource;
+    use databend_storages_common_index::SourceRows;
+    use opendal::services::Memory;
+    use tantivy::query::QueryParser;
+    use tantivy::query_grammar::parse_query;
+
+    use super::*;
+    use crate::io::read::InvertedIndexReader;
+    use crate::io::read::InvertedIndexWarmupInfo;
+    use crate::test_utils::init_test_globals;
+
+    const WORDS: [&str; 4] = ["alpha", "bravo", "charlie", "delta"];
+
+    fn index_options() -> BTreeMap<String, String> {
+        BTreeMap::from([("tokenizer".to_string(), "english".to_string())])
+    }
+
+    fn schemas() -> (DataSchemaRef, TableSchemaRef) {
+        let data_schema = Arc::new(DataSchema::new(vec![
+            DataField::new("body", DataType::String),
+            DataField::new("meta", DataType::Variant),
+        ]));
+        let source_schema = Arc::new(TableSchema::new(vec![
+            TableField::new("body", TableDataType::String),
+            TableField::new("meta", TableDataType::Variant),
+        ]));
+        (data_schema, source_schema)
+    }
+
+    /// Row `id` of the data set: `body` mentions `WORDS[id % 4]`, `meta.n` is `id`.
+    fn block(ids: Range<u32>) -> DataBlock {
+        let mut bodies = Vec::new();
+        let mut metas = Vec::new();
+        for id in ids {
+            bodies.push(format!("row {id} mentions {}", WORDS[id as usize % 4]));
+            let json = format!(r#"{{"n":{id},"tag":"t{}"}}"#, id % 3);
+            metas.push(jsonb::parse_value(json.as_bytes()).unwrap().to_vec());
+        }
+        DataBlock::new_from_columns(vec![
+            StringType::from_data(bodies),
+            VariantType::from_data(metas),
+        ])
+    }
+
+    fn write_source(operator: &Operator, location: &str, ids: Range<u32>) -> MergeSource {
+        let (data_schema, source_schema) = schemas();
+        let mut writer = InvertedIndexWriter::try_create_with_stream_threshold(
+            data_schema,
+            &index_options(),
+            operator.clone(),
+            location.to_string(),
+            4096,
+            None,
+        )
+        .unwrap();
+        writer
+            .add_block(&source_schema, &block(ids.clone()))
+            .unwrap();
+        let sizes = writer.finalize().unwrap();
+        MergeSource {
+            location: location.to_string(),
+            bundle_size: sizes.bundle,
+            num_rows: ids.len() as u32,
+        }
+    }
+
+    async fn filter(
+        operator: &Operator,
+        location: &str,
+        bundle_size: u64,
+        rows: u32,
+        query_text: &str,
+        fields: &[Field],
+    ) -> Vec<usize> {
+        let (schema, _) = create_index_schema(schemas().0, &index_options()).unwrap();
+        let parser = QueryParser::new(
+            schema.clone(),
+            fields.to_vec(),
+            create_tokenizer_manager(&index_options(), None),
+        );
+        let query = parser.parse_query(query_text).unwrap();
+        let ast = parse_query(query_text).unwrap();
+        let warmup =
+            InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, fields, None)
+                .unwrap();
+        let reader = InvertedIndexReader::create(
+            operator.clone(),
+            CachePolicy::DEFAULT,
+            false,
+            create_tokenizer_manager(&index_options(), None),
+            warmup,
+        );
+        let result = reader
+            .do_filter(
+                query,
+                location,
+                INVERTED_INDEX_FILE_FORMAT_VERSION,
+                bundle_size,
+                rows as u64,
+            )
+            .await
+            .unwrap();
+        let (mut matched, _) = result.unwrap_or_default();
+        matched.sort_unstable();
+        matched
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_merged_outputs_answer_term_and_range_queries() {
+        init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let sources = vec![
+            write_source(&operator, "s/a.index", 0..1500),
+            write_source(&operator, "s/b.index", 1500..2600),
+            write_source(&operator, "s/c.index", 2600..3000),
+        ];
+        // Two outputs, each interleaving rows of every source, as a k-way merge would.
+        let outputs = vec![
+            MergeOutput {
+                location: "o/0.index".to_string(),
+                rows: vec![
+                    SourceRows {
+                        source: 0,
+                        rows: 0..700,
+                    },
+                    SourceRows {
+                        source: 1,
+                        rows: 0..500,
+                    },
+                    SourceRows {
+                        source: 2,
+                        rows: 0..100,
+                    },
+                ],
+            },
+            MergeOutput {
+                location: "o/1.index".to_string(),
+                rows: vec![
+                    SourceRows {
+                        source: 0,
+                        rows: 700..1500,
+                    },
+                    SourceRows {
+                        source: 1,
+                        rows: 500..1100,
+                    },
+                    SourceRows {
+                        source: 2,
+                        rows: 100..400,
+                    },
+                ],
+            },
+        ];
+        let sizes: Vec<BundleSizes> = InvertedIndexMerger::try_create_with_stream_threshold(
+            operator.clone(),
+            sources,
+            outputs,
+            4096,
+        )
+        .unwrap()
+        .finish()
+        .unwrap();
+
+        // Output rows in order, as data set ids.
+        let ids_0: Vec<u32> = (0..700).chain(1500..2000).chain(2600..2700).collect();
+        let ids_1: Vec<u32> = (700..1500).chain(2000..2600).chain(2700..3000).collect();
+        for (output, ids, location) in [(0, &ids_0, "o/0.index"), (1, &ids_1, "o/1.index")] {
+            assert!(sizes[output].siblings > 0, "output {output}");
+            let rows = ids.len() as u32;
+            for word in WORDS {
+                let mut expected = Vec::new();
+                for (row, id) in ids.iter().enumerate() {
+                    if WORDS[*id as usize % 4] == word {
+                        expected.push(row);
+                    }
+                }
+                let matched = filter(
+                    &operator,
+                    location,
+                    sizes[output].bundle,
+                    rows,
+                    &format!("body:{word}"),
+                    &[Field::from_field_id(0)],
+                )
+                .await;
+                assert_eq!(matched, expected, "output {output} {word}");
+            }
+            let mut expected = Vec::new();
+            for (row, id) in ids.iter().enumerate() {
+                if (1000..2100).contains(id) {
+                    expected.push(row);
+                }
+            }
+            let matched = filter(
+                &operator,
+                location,
+                sizes[output].bundle,
+                rows,
+                "meta.n:[1000 TO 2100}",
+                &[Field::from_field_id(1)],
+            )
+            .await;
+            assert_eq!(matched, expected, "output {output} range");
+
+            // Warm exact postings and the fast-field range concurrently. The synchronous
+            // search must find both branches after the asynchronous warmup completes.
+            let expected: Vec<usize> = ids
+                .iter()
+                .enumerate()
+                .filter_map(|(row, id)| {
+                    (WORDS[*id as usize % 4] == "alpha" || (1000..2100).contains(id)).then_some(row)
+                })
+                .collect();
+            let matched = filter(
+                &operator,
+                location,
+                sizes[output].bundle,
+                rows,
+                "body:alpha OR meta.n:[1000 TO 2100}",
+                &[Field::from_field_id(0)],
+            )
+            .await;
+            assert_eq!(matched, expected, "output {output} mixed warmup");
+        }
+    }
 }

@@ -95,6 +95,11 @@ impl SimpleType for CoreDate {
         }
     }
 
+    #[inline]
+    fn from_for_raw(raw: i128) -> Self::Scalar {
+        raw as i32
+    }
+
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         domain.as_date().cloned()
     }

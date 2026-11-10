@@ -34,11 +34,16 @@ impl Location {
     }
 }
 
-#[async_trait::async_trait]
+/// A prefetched spill block, decoded on the consuming processor's thread.
+pub trait SpillReader: Send {
+    fn read(self) -> Result<DataBlock>;
+}
+
 pub trait SortSpiller: Clone + Send + Sync + 'static {
-    async fn spill(&self, data_block: DataBlock) -> Result<Location>;
-    async fn restore(&self, location: &Location) -> Result<DataBlock>;
-    fn remove_local_file(&self, local: &TempPath);
+    type Reader: SpillReader;
+
+    fn spill(&self, data_block: DataBlock) -> Result<String>;
+    fn reader(&self, location: &str) -> Result<Self::Reader>;
     fn memory_settings(&self) -> &MemorySettings;
 }
 

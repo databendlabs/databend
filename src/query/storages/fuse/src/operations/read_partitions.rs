@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use async_channel::Receiver;
@@ -45,27 +46,29 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::DEFAULT_NGRAM_FALSE_POSITIVE_RATE;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::NgramHashAlgorithm;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentZoneMapMeta;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
@@ -74,6 +77,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::CLUSTER_
 use databend_storages_common_table_meta::meta::column_oriented_segment::COMPRESSION;
 use databend_storages_common_table_meta::meta::column_oriented_segment::CREATE_ON;
 use databend_storages_common_table_meta::meta::column_oriented_segment::FILE_SIZE;
+use databend_storages_common_table_meta::meta::column_oriented_segment::INVERTED_INDEX_METAS;
 use databend_storages_common_table_meta::meta::column_oriented_segment::INVERTED_INDEX_SIZE;
 use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
 use databend_storages_common_table_meta::meta::column_oriented_segment::NGRAM_FILTER_INDEX_SIZE;
@@ -81,8 +85,13 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUN
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_BLOOM_SIZE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_GRAM_SIZE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_HASH_ALGORITHM;
 use itertools::Itertools;
 use log::info;
+use log::warn;
 use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
@@ -92,12 +101,12 @@ use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexRebuilder;
+use crate::io::FuseCaches;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::pruning::SegmentPruner;
 use crate::pruning::VectorIndexPruner;
-use crate::pruning::create_segment_location_vector;
 use crate::pruning::table_sample;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
@@ -116,14 +125,34 @@ use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
 use crate::pruning_pipeline::VectorIndexPruneTransform;
 use crate::segment_format_from_location;
+use crate::segment_zone_map::SegmentZoneMapReader;
+use crate::segment_zone_map::prune_segments_by_zone_map;
 
 const DEFAULT_GRAM_SIZE: usize = 3;
 const DEFAULT_BLOOM_SIZE: u64 = 1024 * 1024;
 
+/// Result of one segment zone map pruning step, reported in the pruning stats.
+#[derive(Clone, Copy)]
+struct SegmentZoneMapPruning {
+    before: usize,
+    after: usize,
+    cost: Duration,
+}
+
+impl SegmentZoneMapPruning {
+    fn record(&self, stats: &mut PruningStatistics) {
+        stats.segments_zone_map_pruning_before = self.before;
+        stats.segments_zone_map_pruning_after = self.after;
+        stats.segments_zone_map_pruning_cost = self.cost.as_micros().max(1) as u64;
+    }
+}
+
 struct SnapshotReadInfo {
     snapshot_id: SnapshotId,
     snapshot_location: String,
-    segment_locations: Vec<Location>,
+    /// Segments to prune, each with its position in the snapshot.
+    segment_locations: Vec<(usize, Location)>,
+    segment_zone_map: Option<SegmentZoneMapMeta>,
     row_count: usize,
     compressed_byte_size: usize,
     block_count: usize,
@@ -144,7 +173,15 @@ impl SnapshotReadInfo {
     }
 
     fn into_pruning_segments(self) -> Vec<SegmentLocation> {
-        create_segment_location_vector(self.segment_locations, Some(self.snapshot_location))
+        let snapshot_loc = Some(self.snapshot_location);
+        self.segment_locations
+            .into_iter()
+            .map(|(segment_idx, location)| SegmentLocation {
+                segment_idx,
+                location,
+                snapshot_loc: snapshot_loc.clone(),
+            })
+            .collect()
     }
 }
 
@@ -169,20 +206,73 @@ fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -
         })
 }
 
+/// Settings that change vector index pruning results; part of the prune cache key
+/// of vector index queries.
+fn vector_prune_settings(
+    ctx: &Arc<dyn TableContext>,
+    push_downs: &PushDownInfo,
+) -> Result<Option<(u64, u64)>> {
+    if push_downs.vector_index.is_none() {
+        return Ok(None);
+    }
+    let settings = ctx.get_settings();
+    Ok(Some((
+        settings.get_vector_refine_factor()?,
+        settings.get_vector_search_ef()?,
+    )))
+}
+
+/// Builds the key of the global prune cache for a deterministic push-down.
+///
+/// The key must identify everything that decides which blocks survive pruning:
+/// - the segments, by `Debug` (indexes and location strings only);
+/// - the push-down, by bincode. `Debug` is not exact here: it prints float
+///   constants rounded to 10 fractional digits, so `f >= 0` and `f >= 1e-11`
+///   would share a key;
+/// - the function context, because pruning evaluates the filter with it (for
+///   example, `to_date(ts)` depends on the session time zone). `now` is left
+///   out: it differs per query, and functions that read it are
+///   non-deterministic, so their push-downs are not cached;
+/// - the settings that change vector index pruning (`vector_prune_settings`).
+///
+/// Returns `None` (do not cache) for a non-deterministic push-down, or if the
+/// push-down cannot be serialized.
 fn deterministic_prune_cache_key(
+    func_ctx: &FunctionContext,
     segments_location: &[SegmentLocation],
-    push_downs: &Option<PushDownInfo>,
-    pruning_mode: ReadPartitionsPruningMode,
+    push_downs: &PushDownInfo,
+    vector_settings: Option<(u64, u64)>,
 ) -> Option<String> {
-    let mut push_downs = push_downs.as_ref()?.clone();
     if !push_downs.is_deterministic {
         return None;
     }
-    push_downs.read_partitions_pruning_mode = pruning_mode;
-    Some(format!(
-        "{:x}",
-        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
-    ))
+
+    let mut push_downs_bytes = Vec::new();
+    if let Err(cause) = bincode_serialize_into_buf(&mut push_downs_bytes, push_downs) {
+        log::warn!("Skip prune cache, cannot serialize push downs: {}", cause);
+        return None;
+    }
+
+    let func_ctx = FunctionContext {
+        now: Default::default(),
+        ..func_ctx.clone()
+    };
+    let segments = format!("{:?}", segments_location);
+    let func_ctx = format!("{:?}", func_ctx);
+    let vector_settings = format!("{:?}", vector_settings);
+
+    // Prefix each part with its length, so that parts cannot run into each other.
+    let mut hasher = Sha256::new();
+    for part in [
+        segments.as_bytes(),
+        &push_downs_bytes,
+        func_ctx.as_bytes(),
+        vector_settings.as_bytes(),
+    ] {
+        hasher.update((part.len() as u64).to_le_bytes());
+        hasher.update(part);
+    }
+    Some(format!("{:x}", hasher.finalize()))
 }
 
 impl FuseTable {
@@ -192,7 +282,7 @@ impl FuseTable {
             return Ok(None);
         };
 
-        let segment_locations = snapshot.segments.clone();
+        let segment_locations = snapshot.segments.iter().cloned().enumerate().collect();
         let snapshot_location = self
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, snapshot.format_version)?;
@@ -201,10 +291,71 @@ impl FuseTable {
             snapshot_id: snapshot.snapshot_id,
             snapshot_location,
             segment_locations,
+            segment_zone_map: snapshot.segment_zone_map.clone(),
             row_count: snapshot.summary.row_count as usize,
             compressed_byte_size: snapshot.summary.compressed_byte_size as usize,
             block_count: snapshot.summary.block_count as usize,
         }))
+    }
+
+    /// Drop segments the snapshot's segment zone map proves irrelevant to the
+    /// filter, returning the before/after counts. Failures only disable this step;
+    /// regular segment pruning still runs.
+    async fn apply_segment_zone_map(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        push_downs: &Option<PushDownInfo>,
+        read_info: &mut SnapshotReadInfo,
+    ) -> Option<SegmentZoneMapPruning> {
+        let meta = read_info.segment_zone_map.as_ref()?;
+        let enabled = ctx
+            .get_settings()
+            .get_enable_segment_zone_map_pruning()
+            .unwrap_or(false);
+        if !enabled || self.is_column_oriented() {
+            return None;
+        }
+        let filters = push_downs.as_ref()?.effective_filters(&BUILTIN_FUNCTIONS)?;
+        let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+        let func_ctx = ctx.get_function_context().ok()?;
+        let concurrency = ctx.get_settings().get_max_threads().ok()? as usize;
+        let read_settings = ReadSettings::from_ctx(ctx).ok()?;
+        let reader =
+            SegmentZoneMapReader::new(self.operator.clone(), ctx.cache_policy(), read_settings);
+
+        let start = Instant::now();
+        let before = read_info.segment_locations.len();
+        let schema = self.schema_with_stream();
+        let segments = &read_info.segment_locations;
+        let pruned = prune_segments_by_zone_map(
+            &reader,
+            meta,
+            func_ctx,
+            &schema,
+            &filter,
+            segments,
+            concurrency,
+        );
+        match pruned.await {
+            Ok(kept) => read_info.segment_locations = kept,
+            Err(e) => {
+                warn!(
+                    "skip segment zone map {} of table {}: {}",
+                    meta.location.0, self.table_info.desc, e
+                );
+                return None;
+            }
+        }
+        let after = read_info.segment_locations.len();
+        info!(
+            "segment zone map of table {}: {before} to {after} segments",
+            self.table_info.desc
+        );
+        Some(SegmentZoneMapPruning {
+            before,
+            after,
+            cost: start.elapsed(),
+        })
     }
 
     #[fastrace::trace]
@@ -250,7 +401,10 @@ impl FuseTable {
             read_info.as_ref().map(|read_info| read_info.snapshot_id)
         );
         match read_info {
-            Some(read_info) => {
+            Some(mut read_info) => {
+                let zone_map_pruning = self
+                    .apply_segment_zone_map(&ctx, &push_downs, &mut read_info)
+                    .await;
                 let segment_len = read_info.segment_count();
 
                 let mut nodes_num = 1;
@@ -266,20 +420,24 @@ impl FuseTable {
                 {
                     let snapshot_location = read_info.snapshot_location;
                     let mut segments = Vec::with_capacity(read_info.segment_locations.len());
-                    for (idx, segment_location) in
-                        read_info.segment_locations.into_iter().enumerate()
-                    {
+                    for (idx, segment_location) in read_info.segment_locations.into_iter() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
+                    let mut statistics = PartStatistics::new_estimated(
+                        Some(snapshot_location),
+                        read_info.row_count,
+                        read_info.compressed_byte_size,
+                        segment_len,
+                        segment_len,
+                    );
+                    // Carried to the prune pipeline through the plan, see
+                    // `do_build_prune_pipeline`.
+                    if let Some(pruning) = zone_map_pruning {
+                        pruning.record(&mut statistics.pruning_stats);
+                    }
                     return Ok((
-                        PartStatistics::new_estimated(
-                            Some(snapshot_location),
-                            read_info.row_count,
-                            read_info.compressed_byte_size,
-                            segment_len,
-                            segment_len,
-                        ),
+                        statistics,
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
                         None,
                     ));
@@ -289,16 +447,21 @@ impl FuseTable {
                 let summary = read_info.block_count;
                 let segments_location = read_info.into_pruning_segments();
 
-                self.prune_snapshot_blocks(
-                    ctx.clone(),
-                    push_downs.clone(),
-                    table_schema,
-                    segments_location,
-                    summary,
-                    pruning_mode,
-                    reusable_pruned_metas,
-                )
-                .await
+                let (mut statistics, partitions, reusable) = self
+                    .prune_snapshot_blocks(
+                        ctx.clone(),
+                        push_downs.clone(),
+                        table_schema,
+                        segments_location,
+                        summary,
+                        pruning_mode,
+                        reusable_pruned_metas,
+                    )
+                    .await?;
+                if let Some(pruning) = zone_map_pruning {
+                    pruning.record(&mut statistics.pruning_stats);
+                }
+                Ok((statistics, partitions, reusable))
             }
             None => Ok((PartStatistics::default(), Partitions::default(), None)),
         }
@@ -348,18 +511,17 @@ impl FuseTable {
 
         // If we can get the pruning result from cache, we don't need to prune again, but need sent
         // the parts to the next pipeline
-        let derterministic_cache_key =
-            push_downs
-                .as_ref()
-                .filter(|p| p.is_deterministic)
-                .map(|push_downs| {
-                    format!(
-                        "{:x}",
-                        Sha256::digest(format!("{:?}_{:?}", lazy_init_segments, push_downs))
-                    )
-                });
-
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        let derterministic_cache_key = match &push_downs {
+            Some(push_downs) if enable_prune_cache => deterministic_prune_cache_key(
+                &ctx.get_function_context()?,
+                &lazy_init_segments,
+                push_downs,
+                vector_prune_settings(&ctx, push_downs)?,
+            ),
+            _ => None,
+        };
+
         if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
                 ctx.set_pruned_partitions_stats(plan_id, stat);
@@ -397,8 +559,29 @@ impl FuseTable {
         let mut prune_pipeline = Pipeline::create();
         let pruner =
             Arc::new(self.build_fuse_pruner(ctx.clone(), push_downs, table_schema.clone(), dal)?);
+        // Segment zone map pruning ran in `do_read_partitions`, before the lazy
+        // parts were created; its numbers travel in the plan statistics. The
+        // reported total stays the segment count before that step.
+        let plan_stats = &plan.statistics.pruning_stats;
+        let mut partitions_total = lazy_init_segments.len();
+        if plan_stats.segments_zone_map_pruning_before > 0 {
+            pruner
+                .pruning_ctx
+                .pruning_stats
+                .set_segments_zone_map_pruning(
+                    plan_stats.segments_zone_map_pruning_before as u64,
+                    plan_stats.segments_zone_map_pruning_after as u64,
+                    plan_stats.segments_zone_map_pruning_cost,
+                );
+            partitions_total = plan_stats.segments_zone_map_pruning_before;
+        }
 
-        let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
+        // The channel holds every lazy segment location at once, so the whole
+        // list can be handed over synchronously when the pipeline is initialized.
+        // The locations are already materialized in `lazy_init_segments`; this
+        // only moves them, and avoids a dedicated runtime (and its threads) per
+        // table scan just to feed a bounded channel.
+        let (segment_tx, segment_rx) = async_channel::bounded(lazy_init_segments.len());
 
         match segment_format {
             FuseSegmentFormat::Row => {
@@ -410,7 +593,7 @@ impl FuseTable {
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
-                    lazy_init_segments.len(),
+                    partitions_total,
                     plan_id,
                 )?;
             }
@@ -425,29 +608,22 @@ impl FuseTable {
                     derterministic_cache_key.clone(),
                     table_schema.clone(),
                     internal_column_names.clone(),
+                    partitions_total,
                 )?;
             }
         }
         prune_pipeline.set_on_init(move || {
-            // We cannot use the runtime associated with the query to avoid increasing its lifetime.
-            GlobalIORuntime::instance().spawn(async move {
-                // avoid block global io runtime
-                let runtime = Runtime::with_worker_threads(2, Some("prune-pipeline".to_string()))?;
-                let join_handler = runtime.spawn(async move {
-                    for segment in lazy_init_segments {
-                        // the sql may be killed or early stop, ignore the error
-                        if let Err(_e) = segment_tx.send(segment).await {
-                            break;
-                        }
-                    }
-                    Ok::<_, ErrorCode>(())
-                });
-
-                if let Err(cause) = join_handler.await {
-                    log::warn!("Join error in prune pipeline: {:?}", cause);
+            for segment in lazy_init_segments {
+                // Capacity equals the number of segments and this is the only
+                // sender, so the channel is never full here. Closed means the
+                // receivers are gone (query killed or early stopped).
+                if segment_tx.try_send(segment).is_err() {
+                    break;
                 }
-                Ok::<_, ErrorCode>(())
-            });
+            }
+            // Dropping the last sender closes the channel; buffered segments
+            // are still delivered before the sources observe the close.
+            drop(segment_tx);
             Ok(())
         });
 
@@ -476,11 +652,20 @@ impl FuseTable {
 
         let dal = self.operator.clone();
 
-        type CacheItem = (PartStatistics, Partitions);
-
-        let derterministic_cache_key =
-            deterministic_prune_cache_key(&segments_location, &push_downs, pruning_mode);
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
+        let derterministic_cache_key = match &push_downs {
+            Some(push_downs) if enable_prune_cache => {
+                let mut push_downs = push_downs.clone();
+                push_downs.read_partitions_pruning_mode = pruning_mode;
+                deterministic_prune_cache_key(
+                    &ctx.get_function_context()?,
+                    &segments_location,
+                    &push_downs,
+                    vector_prune_settings(&ctx, &push_downs)?,
+                )
+            }
+            _ => None,
+        };
         if enable_prune_cache
             && let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key)
         {
@@ -573,10 +758,11 @@ impl FuseTable {
         };
 
         if enable_prune_cache && let Some(cache_key) = derterministic_cache_key {
-            if let Some(cache) = CacheItem::cache() {
+            let cache = &FuseCaches::instance().prune_results;
+            if cache.is_enabled() {
                 let mut cache_statistics = result.0.clone();
                 cache_statistics.pruning_stats = PruningStatistics::default();
-                cache.insert(cache_key, (cache_statistics, result.1.clone()));
+                cache.fill(&cache_key, (cache_statistics, result.1.clone()));
             }
         }
         Ok(result)
@@ -610,7 +796,11 @@ impl FuseTable {
         partitions_total: usize,
         plan_id: u32,
     ) -> Result<()> {
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        // Every stage of this pipeline works on whole segments, so there is no
+        // point in having more processors than segments to prune on this node
+        // (`partitions_total` bounds the number of lazy segments handed to it):
+        // the surplus would only add processors to the executor graph.
+        let (max_threads, max_io_requests) = self.prune_pipeline_widths(&ctx, partitions_total)?;
         prune_pipeline.add_source(
             |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
             max_threads,
@@ -621,6 +811,11 @@ impl FuseTable {
             Default::default(),
         )?;
 
+        // Segment pruning is dominated by fetching segment files from storage, so
+        // give it the same I/O concurrency as the non-pipeline pruner
+        // (`max_storage_io_requests`) instead of `max_threads`. With a cold
+        // cache and many segments this is otherwise several times slower.
+        prune_pipeline.try_resize(max_io_requests)?;
         prune_pipeline.add_transform(|input, output| {
             SegmentPruneTransform::<PrunedCompactSegmentMeta>::create(
                 input,
@@ -629,6 +824,8 @@ impl FuseTable {
                 pruner.pruning_ctx.clone(),
             )
         })?;
+        // Block-level pruning below is CPU bound; go back to `max_threads`.
+        prune_pipeline.try_resize(max_threads)?;
 
         // Under runtime TopN (`enable_top_n`), schedule the most promising
         // segments first so the shared boundary converges early.
@@ -645,7 +842,7 @@ impl FuseTable {
             ExtractSegmentTransform::create(
                 input,
                 output,
-                true,
+                pruning_ctx.ctx.cache_policy(),
                 pruning_ctx.clone(),
                 pruning_cost.clone(),
             )
@@ -685,32 +882,23 @@ impl FuseTable {
         }
 
         let push_down = pruner.push_down.clone();
-        // The static TopN pruner accumulates every surviving block meta
-        // behind a single-stream barrier before emitting a minimal cover.
-        // The runtime TopN boundary subsumes its value-statistics branch
-        // (skip it to keep the pipeline streaming), but not the
-        // inverted-index based limit prune. Plan-time (eager) pruning always
-        // keeps it: filters are only registered at pipeline build.
+        // Inverted-index based limit / TopN prune. It accumulates every
+        // surviving block meta behind a single-stream barrier, but only runs
+        // when the filter is fully answered by the inverted index, so the exact
+        // matched row counts are known. Value-statistics TopN pruning is left
+        // to the runtime TopN filter, which keeps the pipeline streaming.
         if push_down
             .as_ref()
             .filter(|p| {
-                let value_top_n = !p.order_by.is_empty()
-                    && p.limit.is_some()
-                    && p.filters.is_none()
-                    && p.secure_filters.is_none();
-                let index_limit =
-                    p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index();
-                (value_top_n && runtime_scan_filters.preferred_filter().is_none()) || index_limit
+                p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index()
             })
             .is_some()
         {
-            // if there are ordering + limit clause and no filter, use topn pruner
             let schema = pruner.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let filter_only_use_index = push_down.filter_only_use_index();
-            let topn_pruner = TopNPruner::create(schema, sort, limit, filter_only_use_index);
+            let topn_pruner = TopNPruner::create(schema, sort, limit);
             let pruning_ctx = pruner.pruning_ctx.clone();
             prune_pipeline.resize(1, false)?;
             prune_pipeline.add_transform(move |input, output| {
@@ -746,9 +934,20 @@ impl FuseTable {
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
-        let enable_prune_cache = enable_prune_cache_for_query(&ctx)?
+        // A runtime `LIMIT` scan filter does not by itself make the pruning
+        // result plan-dependent: a point lookup under `LIMIT n` prunes exactly
+        // like the plain query as long as the limit is never reached. The sink
+        // records whether the filter cut the result short and only then skips
+        // the cache, so such queries keep replaying the cached result instead
+        // of re-pruning every segment on every execution. A runtime TopN
+        // boundary is different: `RuntimeTopNSegmentReorder` drops whole
+        // segments before the sink sees them, so that result is never cached.
+        // Without a deterministic key nothing can be cached, so the sink must
+        // not retain the produced parts either.
+        let enable_prune_cache = derterministic_cache_key.is_some()
+            && enable_prune_cache_for_query(&ctx)?
             && runtime_filter_prune_context.is_none()
-            && runtime_scan_filters.is_empty();
+            && runtime_scan_filters.preferred_filter().is_none();
         let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
@@ -787,6 +986,22 @@ impl FuseTable {
         Ok(())
     }
 
+    /// Parallelism of the segment pruning pipeline: `(max_threads, max_io_requests)`,
+    /// both capped by the number of segments this node has to prune.
+    fn prune_pipeline_widths(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        num_segments: usize,
+    ) -> Result<(usize, usize)> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = self.adjust_io_request(ctx)?;
+        let num_segments = num_segments.max(1);
+        Ok((
+            max_threads.min(num_segments).max(1),
+            max_io_requests.min(num_segments).max(1),
+        ))
+    }
+
     fn add_runtime_top_n_segment_reorder<M: PrunedSegmentMeta + BlockMetaInfo>(
         prune_pipeline: &mut Pipeline,
         runtime_scan_filters: &RuntimeScanFilters,
@@ -804,6 +1019,7 @@ impl FuseTable {
         prune_pipeline.try_resize(max_threads)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn prune_column_oriented_segments_with_pipeline(
         &self,
         pruner: Arc<FusePruner>,
@@ -815,8 +1031,9 @@ impl FuseTable {
         _derterministic_cache_key: Option<String>,
         table_schema: TableSchemaRef,
         internal_column_names: HashSet<String>,
+        num_segments: usize,
     ) -> Result<()> {
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let (max_threads, _) = self.prune_pipeline_widths(&ctx, num_segments)?;
         let push_down = &pruner.push_down;
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
         let runtime_filter_prune_context =
@@ -907,6 +1124,7 @@ impl FuseTable {
         segment_column_projection.insert(BLOOM_FILTER_INDEX_SIZE.to_string());
         segment_column_projection.insert(NGRAM_FILTER_INDEX_SIZE.to_string());
         segment_column_projection.insert(INVERTED_INDEX_SIZE.to_string());
+        segment_column_projection.insert(INVERTED_INDEX_METAS.to_string());
         segment_column_projection.insert(COMPRESSION.to_string());
         segment_column_projection.insert(CREATE_ON.to_string());
         let segment_pruner = SegmentPruner::create(
@@ -1013,19 +1231,19 @@ impl FuseTable {
                 continue;
             }
 
-            let gram_size = match index.options.get("gram_size") {
+            let gram_size = match index.options.get(NGRAM_INDEX_OPT_GRAM_SIZE) {
                 None => DEFAULT_GRAM_SIZE,
                 Some(s) => s.parse::<usize>()?,
             };
-            let bloom_size = match index.options.get("bloom_size") {
+            let bloom_size = match index.options.get(NGRAM_INDEX_OPT_BLOOM_SIZE) {
                 None => DEFAULT_BLOOM_SIZE,
                 Some(s) => s.parse::<u64>()?,
             };
-            let false_positive_rate = match index.options.get("false_positive_rate") {
+            let false_positive_rate = match index.options.get(NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE) {
                 None => DEFAULT_NGRAM_FALSE_POSITIVE_RATE,
                 Some(s) => s.parse::<f64>()?,
             };
-            let hash_algorithm = match index.options.get("hash_algorithm") {
+            let hash_algorithm = match index.options.get(NGRAM_INDEX_OPT_HASH_ALGORITHM) {
                 None => NgramHashAlgorithm::City64V0,
                 Some(s) => NgramHashAlgorithm::parse(s)?,
             };
@@ -1069,16 +1287,9 @@ impl FuseTable {
     pub fn check_prune_cache(
         derterministic_cache_key: &Option<String>,
     ) -> Option<(PartStatistics, Partitions)> {
-        type CacheItem = (PartStatistics, Partitions);
-
-        if let Some(cache_key) = derterministic_cache_key.as_ref() {
-            if let Some(cache) = CacheItem::cache() {
-                if let Some(data) = cache.get(cache_key) {
-                    return Some((data.0.clone(), data.1.clone()));
-                }
-            }
-        }
-        None
+        let cache_key = derterministic_cache_key.as_ref()?;
+        let data = FuseCaches::instance().prune_results.lookup(cache_key)?;
+        Some((data.0.clone(), data.1.clone()))
     }
 
     pub fn read_partitions_with_metas(
@@ -1596,5 +1807,110 @@ mod tests {
         let mut changed_segment = original.clone();
         changed_segment[1].location = ("segment-c".to_string(), 1);
         assert!(!same_segment_locations(&original, &changed_segment));
+    }
+
+    /// Push-down with the filter `f >= value`.
+    fn float_filter_push_downs(value: f64) -> PushDownInfo {
+        use databend_common_catalog::plan::Filters;
+        use databend_common_expression::FunctionID;
+        use databend_common_expression::RemoteExpr;
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::NumberScalar;
+
+        let float_type = DataType::Number(NumberDataType::Float64);
+        let filter = |func: &str| RemoteExpr::FunctionCall {
+            span: None,
+            id: Box::new(FunctionID::Builtin {
+                name: func.to_string(),
+                id: 0,
+            }),
+            generics: vec![],
+            args: vec![
+                RemoteExpr::ColumnRef {
+                    span: None,
+                    id: "f".to_string(),
+                    data_type: float_type.clone(),
+                    display_name: "f".to_string(),
+                },
+                RemoteExpr::Constant {
+                    span: None,
+                    scalar: Scalar::Number(NumberScalar::Float64(value.into())),
+                    data_type: float_type.clone(),
+                },
+            ],
+            return_type: DataType::Boolean,
+        };
+        PushDownInfo {
+            filters: Some(Filters {
+                filter: filter("gte"),
+                inverted_filter: filter("lt"),
+            }),
+            is_deterministic: true,
+            ..Default::default()
+        }
+    }
+
+    fn cache_key(func_ctx: &FunctionContext, push_downs: &PushDownInfo) -> String {
+        let segments = vec![segment_location(0, "segment-a", "snapshot-a")];
+        deterministic_prune_cache_key(func_ctx, &segments, push_downs, None).unwrap()
+    }
+
+    // Regression test for https://github.com/databendlabs/databend/issues/20774:
+    // `Debug` prints float constants with 10 fractional digits, so these
+    // filters used to share one prune cache key.
+    #[test]
+    fn test_prune_cache_key_distinguishes_float_constants() {
+        let func_ctx = FunctionContext::default();
+        let values = [0.0, 1e-11, 1e-300, 10.12345678901, 10.123456789055];
+        let keys = values
+            .iter()
+            .map(|value| cache_key(&func_ctx, &float_filter_push_downs(*value)))
+            .collect::<HashSet<_>>();
+        assert_eq!(values.len(), keys.len());
+
+        assert_eq!(
+            cache_key(&func_ctx, &float_filter_push_downs(1e-11)),
+            cache_key(&func_ctx, &float_filter_push_downs(1e-11)),
+        );
+    }
+
+    #[test]
+    fn test_prune_cache_key_depends_on_function_context() {
+        let push_downs = float_filter_push_downs(0.0);
+        let utc = FunctionContext::default();
+        let los_angeles = FunctionContext {
+            tz: "America/Los_Angeles".parse().unwrap(),
+            ..FunctionContext::default()
+        };
+        assert_ne!(
+            cache_key(&utc, &push_downs),
+            cache_key(&los_angeles, &push_downs)
+        );
+
+        // The query start time differs per query; it must not prevent cache hits.
+        let later = FunctionContext {
+            now: chrono::Utc::now(),
+            ..FunctionContext::default()
+        };
+        assert_eq!(cache_key(&utc, &push_downs), cache_key(&later, &push_downs));
+    }
+
+    #[test]
+    fn test_prune_cache_key_skips_non_deterministic_push_downs() {
+        let push_downs = PushDownInfo {
+            is_deterministic: false,
+            ..float_filter_push_downs(0.0)
+        };
+        let segments = vec![segment_location(0, "segment-a", "snapshot-a")];
+        assert!(
+            deterministic_prune_cache_key(
+                &FunctionContext::default(),
+                &segments,
+                &push_downs,
+                None
+            )
+            .is_none()
+        );
     }
 }

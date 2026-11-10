@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::plans::AlterTablePartitionByPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 
 use super::Interpreter;
+use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -75,8 +73,13 @@ impl Interpreter for AlterTablePartitionByInterpreter {
                 }
                 Err(e) => return Err(e),
             };
+            if table.get_id() != table_id {
+                return Err(ErrorCode::TableVersionMismatched(
+                    "PARTITION BY target table changed after binding",
+                ));
+            }
             table.check_mutable()?;
-            FuseTable::try_from_table(table.as_ref())?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
             let partition_by = format!("({})", plan.partition_keys.join(", "));
             if let Some(current) = table.options().get(OPT_KEY_PARTITION_BY) {
@@ -88,15 +91,28 @@ impl Interpreter for AlterTablePartitionByInterpreter {
                 )));
             }
 
-            let req = UpsertTableOptionReq {
-                table_id,
-                seq: MatchSeq::Exact(table.get_table_info().ident.seq),
-                options: HashMap::from([(OPT_KEY_PARTITION_BY.to_owned(), Some(partition_by))]),
-            };
+            let mut new_table_meta = table.get_table_info().meta.clone();
+            // Like cluster keys, every new definition gets a fresh identity.
+            // Do not wrap the sequence and accidentally reuse historical IDs.
+            new_table_meta.partition_key_seq = new_table_meta
+                .partition_key_seq
+                .checked_add(1)
+                .ok_or_else(|| ErrorCode::TableOptionInvalid("partition key sequence exhausted"))?;
+            new_table_meta.partition_key_id = Some(new_table_meta.partition_key_seq);
+            new_table_meta
+                .options
+                .insert(OPT_KEY_PARTITION_BY.to_owned(), partition_by);
+
+            new_table_meta.updated_on = chrono::Utc::now();
             let catalog = self.ctx.get_catalog(&plan.catalog).await?;
-            catalog
-                .upsert_table_option(&self.ctx.get_tenant(), &plan.database, req)
-                .await?;
+            update_table_meta(
+                fuse_table,
+                &new_table_meta,
+                catalog,
+                self.ctx.get_tenant(),
+                None,
+            )
+            .await?;
 
             Ok(PipelineBuildResult::create())
         })

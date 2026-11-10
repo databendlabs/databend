@@ -1,22 +1,29 @@
-# The legacy suite creates one View through the lineage-disabled node. Regular setup Views already
-# have their original CREATE_VIEW edges and are omitted from incremental refresh output.
+# The legacy suite creates one View and one materialized view through the lineage-disabled node.
+# Regular setup objects already have their original definition edges and are omitted from
+# incremental refresh output.
 query I
 SELECT count(*)
 FROM system_history.lineage_history
 WHERE target_database = 'lineage_history_legacy'
-  AND target_name = 'legacy_view'
-  AND lineage_kind = 'CREATE_VIEW'
+  AND target_name IN ('legacy_view', 'legacy_mv')
+  AND lineage_kind IN ('CREATE_VIEW', 'CREATE_MATERIALIZED_VIEW')
 ----
 0
 
+# setup/08 leaves other_mv bound to a source that was dropped and recreated under the same name.
+# Its stored query now resolves to a different table id, so REFRESH must not re-point the edge.
 query TTTTTIIIT rowsort
 REFRESH LINEAGE FOR ALL VIEWS DRY RUN
 ----
+MATERIALIZED_VIEW default lineage_history_legacy legacy_mv DRY_RUN 1 1 0 NULL
+MATERIALIZED_VIEW default lineage_history_mv other_mv SKIPPED 0 0 0 source table was dropped or replaced; existing lineage kept
 VIEW default lineage_history_legacy legacy_view DRY_RUN 1 1 0 NULL
 
 query TTTTTIIIT rowsort
 REFRESH LINEAGE FOR ALL VIEWS
 ----
+MATERIALIZED_VIEW default lineage_history_legacy legacy_mv REFRESHED 1 1 0 NULL
+MATERIALIZED_VIEW default lineage_history_mv other_mv SKIPPED 0 0 0 source table was dropped or replaced; existing lineage kept
 VIEW default lineage_history_legacy legacy_view REFRESHED 1 1 0 NULL
 
 query BB

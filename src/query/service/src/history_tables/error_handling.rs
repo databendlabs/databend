@@ -12,92 +12,69 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
+use std::time::Duration;
 
-use databend_common_exception::ErrorCode;
-
-/// Error counters for tracking persistent and temporary errors during history table operations
+/// Retry state for a history worker. Errors must never exhaust its retry budget:
+/// even schema or resource errors can be resolved while the query process is alive.
 #[derive(Debug, Default)]
-pub struct ErrorCounters {
-    persistent: u32,
-    temporary: u32,
+pub struct RetryBackoff {
+    failures: u64,
+    delay: Duration,
 }
 
-impl ErrorCounters {
-    /// Create a new ErrorCounters instance with zero counts
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Reset both error counters to zero
+impl RetryBackoff {
     pub fn reset(&mut self) {
-        self.persistent = 0;
-        self.temporary = 0;
+        *self = Self::default();
     }
 
-    /// Increment persistent error counter and return the new count
-    pub fn increment_persistent(&mut self) -> u32 {
-        self.persistent += 1;
-        self.persistent
+    pub fn next_delay(&mut self) -> Duration {
+        self.failures = self.failures.saturating_add(1);
+        self.delay = if self.delay.is_zero() {
+            Duration::from_secs(5)
+        } else {
+            self.delay
+                .saturating_mul(2)
+                .min(Duration::from_secs(30 * 60))
+        };
+        self.delay
     }
 
-    /// Increment temporary error counter and return the new count
-    pub fn increment_temporary(&mut self) -> u32 {
-        self.temporary += 1;
-        self.temporary
-    }
-
-    /// Check if persistent error count has exceeded the maximum allowed attempts
-    pub fn persistent_exceeded_limit(&self) -> bool {
-        self.persistent > MAX_PERSISTENT_ERROR_ATTEMPTS
-    }
-
-    /// Calculate backoff duration in seconds for temporary errors using exponential backoff
-    pub fn calculate_temp_backoff(&self) -> u64 {
-        min(
-            2u64.saturating_pow(self.temporary),
-            MAX_TEMP_ERROR_BACKOFF_SECONDS,
-        )
-    }
-
-    /// Get current persistent error count
-    pub fn persistent_count(&self) -> u32 {
-        self.persistent
-    }
-
-    /// Get current temporary error count
-    pub fn temporary_count(&self) -> u32 {
-        self.temporary
+    pub fn failures(&self) -> u64 {
+        self.failures
     }
 }
 
-/// Maximum number of persistent error attempts before giving up
-const MAX_PERSISTENT_ERROR_ATTEMPTS: u32 = 3;
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
 
-/// Maximum backoff time in seconds for temporary errors (10 minutes)
-const MAX_TEMP_ERROR_BACKOFF_SECONDS: u64 = 10 * 60;
+    use super::RetryBackoff;
 
-/// Check if the error is a temporary error that should be retried
-/// We will use this to determine if we should retry the operation.
-pub fn is_temp_error(e: &ErrorCode) -> bool {
-    let code = e.code();
+    #[test]
+    fn retries_remain_bounded_after_prolonged_failure() {
+        let mut backoff = RetryBackoff::default();
+        let first = backoff.next_delay();
+        let mut previous = first;
+        for _ in 0..1000 {
+            let delay = backoff.next_delay();
+            assert!(delay >= previous);
+            assert_eq!(delay, (previous * 2).min(Duration::from_secs(30 * 60)));
+            previous = delay;
+        }
+        assert_eq!(previous, Duration::from_secs(30 * 60));
 
-    // Storage and I/O errors are considered temporary errors
-    let storage = code == ErrorCode::STORAGE_NOT_FOUND
-        || code == ErrorCode::STORAGE_PERMISSION_DENIED
-        || code == ErrorCode::STORAGE_UNAVAILABLE
-        || code == ErrorCode::STORAGE_UNSUPPORTED
-        || code == ErrorCode::STORAGE_INSECURE
-        || code == ErrorCode::INVALID_OPERATION
-        || code == ErrorCode::STORAGE_OTHER;
+        backoff.reset();
+        assert_eq!(backoff.failures(), 0);
+        assert_eq!(backoff.next_delay(), first);
+    }
 
-    let meta = code == ErrorCode::META_SERVICE_ERROR
-        || code == ErrorCode::DUPLICATED_UPSERT_FILES
-        || code == ErrorCode::TABLE_VERSION_MISMATCHED
-        || code == ErrorCode::LEASE_EXPIRED
-        || code == ErrorCode::TABLE_ALREADY_LOCKED;
-
-    let transaction = code == ErrorCode::UNRESOLVABLE_CONFLICT;
-
-    storage || transaction || meta
+    #[test]
+    fn failure_count_saturates_without_stopping_retries() {
+        let mut backoff = RetryBackoff {
+            failures: u64::MAX,
+            delay: Duration::from_secs(30 * 60),
+        };
+        assert_eq!(backoff.next_delay(), Duration::from_secs(30 * 60));
+        assert_eq!(backoff.failures(), u64::MAX);
+    }
 }

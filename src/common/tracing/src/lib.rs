@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #![feature(try_blocks)]
-#![feature(thread_id_value)]
-#![feature(buf_read_has_data_left)]
 #![allow(clippy::uninlined_format_args)]
 
 mod config;

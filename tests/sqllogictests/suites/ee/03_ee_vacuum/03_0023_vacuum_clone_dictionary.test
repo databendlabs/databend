@@ -1,0 +1,119 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+SET enable_experimental_clone_table = 1
+
+statement ok
+SET data_retention_time_in_days = 0
+
+statement ok
+DROP DATABASE IF EXISTS db_03_clone_dictionary
+
+statement ok
+CREATE DATABASE db_03_clone_dictionary
+
+statement ok
+USE db_03_clone_dictionary
+
+# Produce a valid CSV using SQL, without depending on the Stage suite's @data hook.
+statement ok
+CREATE OR REPLACE STAGE clone_dictionary
+
+statement ok
+COPY INTO @clone_dictionary/userdict.csv
+FROM (SELECT 'Open', 'カスタム名詞', 'オープン' UNION ALL SELECT 'AI', 'カスタム名詞', 'エーアイ')
+FILE_FORMAT = (TYPE = CSV COMPRESSION = NONE)
+SINGLE = true INCLUDE_QUERY_ID = false USE_RAW_PATH = true
+
+statement ok
+CREATE TABLE source(c STRING)
+
+statement ok
+CREATE INVERTED INDEX idx ON source(c) tokenizer = 'japanese' user_dictionary = '@clone_dictionary/userdict.csv'
+
+statement ok
+INSERT INTO source VALUES ('OpenAI')
+
+# Clone must use the snapshotted CSV, not reread the original stage.
+statement ok
+DROP STAGE clone_dictionary
+
+statement ok
+CREATE TABLE target CLONE source
+
+statement ok
+CREATE TABLE chained CLONE target
+
+# Drop the owner's reference and advance its GC root past the old CSV before either
+# clone loads its dictionary. Path ownership is covered by the stage suite.
+statement ok
+DROP INVERTED INDEX idx ON source
+
+statement ok
+TRUNCATE TABLE source
+
+statement ok
+INSERT INTO source VALUES ('replacement')
+
+statement ok
+VACUUM TABLE source
+
+query I
+SELECT count() FROM target WHERE match(c, 'AI')
+----
+1
+
+statement ok
+INSERT INTO target VALUES ('OpenAI')
+
+query I
+SELECT count() FROM target WHERE match(c, 'AI')
+----
+2
+
+# Keep chained cold until after vacuuming the intermediate owner as well.
+statement ok
+DROP INVERTED INDEX idx ON target
+
+statement ok
+TRUNCATE TABLE target
+
+statement ok
+INSERT INTO target VALUES ('replacement')
+
+statement ok
+VACUUM TABLE target
+
+query I
+SELECT count() FROM chained WHERE match(c, 'AI')
+----
+1
+
+statement ok
+INSERT INTO chained VALUES ('OpenAI')
+
+query I
+SELECT count() FROM chained WHERE match(c, 'AI')
+----
+2
+
+statement ok
+UNSET data_retention_time_in_days
+
+statement ok
+SET enable_experimental_clone_table = 0
+
+statement ok
+DROP DATABASE db_03_clone_dictionary

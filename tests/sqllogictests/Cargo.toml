@@ -27,16 +27,15 @@ glob = { workspace = true }
 mysql_async = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }
-redis = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqllogictest = { workspace = true }
 testcontainers = { workspace = true }
-testcontainers-modules = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+toml = { workspace = true }
 url = { workspace = true }
 walkdir = { workspace = true }
 

@@ -38,6 +38,7 @@ TopN
             ├── order by: [events.category (#0) ASC]
             └── limit: NONE
 
+rank_limit: [#0 ASC] limit 3
 
 === single_key_filter_scan_pushes_descending_order ===
 description: A row-preserving Filter between the aggregate and scan should allow descending scan ordering to be pushed through.
@@ -83,6 +84,7 @@ TopN
                 ├── order by: [events.category (#0) DESC]
                 └── limit: NONE
 
+rank_limit: [#0 DESC] limit 3
 
 === single_key_eval_scalar_scan_pushes_order ===
 description: An EvalScalar that computes an aggregate argument should allow group-key ordering to reach the scan.
@@ -126,6 +128,7 @@ TopN
                 ├── order by: [events.category (#0) ASC]
                 └── limit: NONE
 
+rank_limit: [#0 ASC] limit 3
 
 === multiple_group_keys_do_not_push_scan_order ===
 description: Rank limits with multiple group keys must not install scan ordering for the runtime single-key filter.
@@ -167,6 +170,91 @@ TopN
             ├── order by: []
             └── limit: NONE
 
+rank_limit: [#0 ASC, #1 ASC] limit 3
+
+=== rank_limit_follows_order_by_key_order ===
+description: When ORDER BY lists the group keys in a different order, the rank limit keys must follow the ORDER BY order.
+sql: SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY value DESC, category LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [events.value (#1) DESC NULLS LAST, events.category (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.category (#0) AS (#0), events.value (#1) AS (#1), COUNT(*) (#2) AS (#2)]
+        └── Aggregate(Initial)
+            ├── group items: [events.category (#0) AS (#0), events.value (#1) AS (#1)]
+            ├── aggregate functions: [count() AS (#2)]
+            └── EvalScalar
+                ├── scalars: [events.category (#0) AS (#0), events.value (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [events.value (#1) DESC NULLS LAST, events.category (#0) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.category (#0) AS (#0), events.value (#1) AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── Aggregate(Partial)
+        ├── group items: [events.category (#0) AS (#0), events.value (#1) AS (#1)]
+        ├── aggregate functions: [count() AS (#2)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+rank_limit: [#1 DESC, #0 ASC] limit 3
+
+=== repeated_order_key_keeps_single_rank_key ===
+description: A repeated ORDER BY column keeps only its first occurrence, so the single-key rank limit still pushes scan ordering.
+sql: SELECT category, count(*) FROM events GROUP BY category ORDER BY category ASC, category DESC LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [events.category (#0) ASC NULLS LAST, events.category (#0) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.category (#0) AS (#0), COUNT(*) (#2) AS (#2)]
+        └── Aggregate(Initial)
+            ├── group items: [events.category (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#2)]
+            └── EvalScalar
+                ├── scalars: [events.category (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [events.category (#0) ASC NULLS LAST, events.category (#0) DESC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.category (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── Aggregate(Partial)
+        ├── group items: [events.category (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#2)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: [events.category (#0) ASC]
+            └── limit: NONE
+
+rank_limit: [#0 ASC] limit 3
 
 === join_input_does_not_push_scan_order ===
 description: A row-changing Join below the aggregate must prevent rank-limit ordering from reaching either scan.
@@ -228,6 +316,7 @@ TopN
                     ├── order by: []
                     └── limit: NONE
 
+rank_limit: [#0 ASC] limit 3
 
 === preordered_scan_keeps_existing_order ===
 description: A scan already ordered by a subquery must keep that ordering instead of being overwritten by the outer aggregate rank limit.
@@ -277,4 +366,141 @@ TopN
                 ├── order by: [events.value (#1) ASC]
                 └── limit: NONE
 
+rank_limit: [#0 ASC] limit 3
+
+=== union_all_input_pushes_order_to_branch_scans ===
+description: An aggregate over UNION ALL should push the group-key ordering to every branch scan, translated into the branch columns.
+sql: SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM categories) u GROUP BY k ORDER BY k LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [k (#4) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [k (#4) AS (#4), COUNT(*) (#5) AS (#5)]
+        └── Aggregate(Initial)
+            ├── group items: [k (#4) AS (#4)]
+            ├── aggregate functions: [count() AS (#5)]
+            └── EvalScalar
+                ├── scalars: [k (#4) AS (#4)]
+                └── UnionAll
+                    ├── output: [k (#4)]
+                    ├── left: [events.category (#0)]
+                    ├── right: [categories.category (#2)]
+                    ├── cte_scan_names: []
+                    ├── logical_recursive_cte_id: None
+                    ├── EvalScalar
+                    │   ├── scalars: [events.category (#0) AS (#0)]
+                    │   └── Scan
+                    │       ├── table: default.events (#0)
+                    │       ├── filters: []
+                    │       ├── order by: []
+                    │       └── limit: NONE
+                    └── EvalScalar
+                        ├── scalars: [categories.category (#2) AS (#2)]
+                        └── Scan
+                            ├── table: default.categories (#1)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [k (#4) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [k (#4) AS (#4)]
+    ├── aggregate functions: [count() AS (#5)]
+    └── Aggregate(Partial)
+        ├── group items: [k (#4) AS (#4)]
+        ├── aggregate functions: [count() AS (#5)]
+        └── UnionAll
+            ├── output: [k (#4)]
+            ├── left: [events.category (#0)]
+            ├── right: [categories.category (#2)]
+            ├── cte_scan_names: []
+            ├── logical_recursive_cte_id: None
+            ├── Scan
+            │   ├── table: default.events (#0)
+            │   ├── filters: []
+            │   ├── order by: [events.category (#0) ASC]
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.categories (#1)
+                ├── filters: []
+                ├── order by: [categories.category (#2) ASC]
+                └── limit: NONE
+
+rank_limit: [#4 ASC] limit 3
+
+=== union_all_widened_branch_keeps_no_order ===
+description: A UNION ALL branch cast to a wider type must not receive the ordering, while the uncast branch still does.
+sql: SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM wide_events) u GROUP BY k ORDER BY k DESC LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [k (#3) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [k (#3) AS (#3), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [k (#3) AS (#3)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [k (#3) AS (#3)]
+                └── UnionAll
+                    ├── output: [k (#3)]
+                    ├── left: [CAST(events.category (#0) AS Int64 NULL)]
+                    ├── right: [wide_events.category (#2)]
+                    ├── cte_scan_names: []
+                    ├── logical_recursive_cte_id: None
+                    ├── EvalScalar
+                    │   ├── scalars: [events.category (#0) AS (#0)]
+                    │   └── Scan
+                    │       ├── table: default.events (#0)
+                    │       ├── filters: []
+                    │       ├── order by: []
+                    │       └── limit: NONE
+                    └── EvalScalar
+                        ├── scalars: [wide_events.category (#2) AS (#2)]
+                        └── Scan
+                            ├── table: default.wide_events (#1)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [k (#3) DESC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [k (#3) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [k (#3) AS (#3)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── UnionAll
+            ├── output: [k (#3)]
+            ├── left: [CAST(events.category (#0) AS Int64 NULL)]
+            ├── right: [wide_events.category (#2)]
+            ├── cte_scan_names: []
+            ├── logical_recursive_cte_id: None
+            ├── Scan
+            │   ├── table: default.events (#0)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.wide_events (#1)
+                ├── filters: []
+                ├── order by: [wide_events.category (#2) DESC]
+                └── limit: NONE
+
+rank_limit: [#3 DESC] limit 3
 

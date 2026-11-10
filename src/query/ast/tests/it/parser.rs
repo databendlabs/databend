@@ -16,8 +16,11 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::LambdaArgument;
+use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -31,6 +34,212 @@ use databend_common_ast::parser::*;
 use goldenfile::Mint;
 use nom::Parser;
 use nom_rule::rule;
+
+#[test]
+fn test_external_access_sql() {
+    for sql in [
+        "CREATE NETWORK RULE video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443', 'other.example.com')",
+        "CREATE NETWORK RULE IF NOT EXISTS video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443')",
+        "ALTER NETWORK RULE video_rule SET VALUE_LIST = ('other.example.com:8443')",
+        "DROP NETWORK RULE IF EXISTS video_rule",
+        "CREATE EXTERNAL ACCESS INTEGRATION video_access ALLOWED_NETWORK_RULES = (video_rule, other_rule) ENABLED = TRUE",
+        "CREATE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS video_access ALLOWED_NETWORK_RULES = (video_rule) ENABLED = FALSE",
+        "ALTER EXTERNAL ACCESS INTEGRATION video_access SET ENABLED = FALSE",
+        "ALTER EXTERNAL ACCESS INTEGRATION video_access SET ALLOWED_NETWORK_RULES = (other_rule) ENABLED = TRUE",
+        "DROP EXTERNAL ACCESS INTEGRATION IF EXISTS video_access",
+        "CREATE OR REPLACE NETWORK RULE video_rule TYPE = HOST_PORT VALUE_LIST = ('video.example.com:443') MODE = EGRESS",
+        "CREATE NETWORK RULE video_rule MODE = EGRESS TYPE = HOST_PORT VALUE_LIST = ('video.example.com:443')",
+        "CREATE NETWORK RULE video_rule VALUE_LIST = ('video.example.com:443') MODE = EGRESS TYPE = HOST_PORT",
+        "CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION video_access ALLOWED_NETWORK_RULES = (video_rule) ENABLED = TRUE",
+        "CREATE EXTERNAL ACCESS INTEGRATION video_access ENABLED = FALSE ALLOWED_NETWORK_RULES = (video_rule)",
+        "ALTER NETWORK RULE IF EXISTS video_rule SET VALUE_LIST = ('other.example.com')",
+        "ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS video_access SET ENABLED = TRUE ALLOWED_NETWORK_RULES = (video_rule)",
+        "DROP INTEGRATION video_access",
+        "DROP INTEGRATION IF EXISTS video_access",
+        "GRANT USAGE ON INTEGRATION video_access TO ROLE developer",
+        "REVOKE USAGE ON INTEGRATION video_access FROM ROLE developer",
+        "GRANT ALL PRIVILEGES ON INTEGRATION video_access TO ROLE developer",
+        "GRANT USAGE ON INTEGRATION \"QuotedAccess\" TO ROLE developer",
+        "CREATE NETWORK RULE \"QuotedRule\" TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com')",
+        "CREATE EXTERNAL ACCESS INTEGRATION \"QuotedAccess\" ALLOWED_NETWORK_RULES = (\"QuotedRule\") ENABLED = TRUE",
+        "CREATE FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access, other_access)",
+        "ALTER FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i, \"MixedCase\")",
+        "ALTER FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+        "CREATE FUNCTION a(INT) STATE {s INT} RETURNS INT LANGUAGE python AS $$class A: pass$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) =
+            parse_sql(&tokens, Dialect::PostgreSQL).unwrap_or_else(|e| panic!("{sql}: {e}"));
+        let displayed = stmt.to_string();
+        let tokens = tokenize_sql(&displayed).unwrap();
+        let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(displayed, reparsed.to_string());
+    }
+    for sql in [
+        "CREATE NETWORK RULE r TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ()",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ALLOWED_NETWORK_RULES = () ENABLED = TRUE",
+        "ALTER EXTERNAL ACCESS INTEGRATION i SET",
+        "CREATE OR REPLACE NETWORK RULE IF NOT EXISTS r TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com')",
+        "CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS i ALLOWED_NETWORK_RULES = (r) ENABLED = TRUE",
+        "CREATE NETWORK RULE r TYPE = HOST_PORT VALUE_LIST = ('example.com')",
+        "CREATE NETWORK RULE r TYPE = HOST_PORT MODE = EGRESS TYPE = HOST_PORT VALUE_LIST = ('example.com')",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ALLOWED_NETWORK_RULES = (r)",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ENABLED = TRUE",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ENABLED = TRUE ENABLED = FALSE ALLOWED_NETWORK_RULES = (r)",
+        "ALTER EXTERNAL ACCESS INTEGRATION i SET ALLOWED_NETWORK_RULES = (r) ALLOWED_NETWORK_RULES = (r2)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = ()",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = ()",
+        "CREATE FUNCTION a(INT) STATE {s INT} RETURNS INT LANGUAGE python ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
+
+#[test]
+fn test_set_ttl_and_modify_column_are_distinct() {
+    use databend_common_ast::ast::AlterTableAction;
+    use databend_common_ast::ast::Statement;
+
+    for expr in ["timestamp", "date", "timestamp + INTERVAL 1 DAY"] {
+        let sql = format!("ALTER TABLE t SET TTL {expr}");
+        let tokens = tokenize_sql(&sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let Statement::AlterTable(stmt) = stmt else {
+            panic!("expected ALTER TABLE: {sql}");
+        };
+        assert!(matches!(stmt.action, AlterTableAction::SetTableTtl { .. }));
+    }
+
+    for sql in [
+        "ALTER TABLE t MODIFY ttl TIMESTAMP",
+        "ALTER TABLE t MODIFY COLUMN ttl TIMESTAMP",
+        "ALTER TABLE t MODIFY \"ttl\" TIMESTAMP",
+        "ALTER TABLE t MODIFY ttl DATE",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let Statement::AlterTable(stmt) = stmt else {
+            panic!("expected ALTER TABLE: {sql}");
+        };
+        assert!(matches!(stmt.action, AlterTableAction::ModifyColumn { .. }));
+    }
+
+    let tokens = tokenize_sql("ALTER TABLE t MATERIALIZE TTL").unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    let Statement::AlterTable(stmt) = stmt else {
+        panic!("expected ALTER TABLE");
+    };
+    assert!(matches!(stmt.action, AlterTableAction::MaterializeTableTtl));
+    assert_eq!(stmt.to_string(), "ALTER TABLE t MATERIALIZE TTL");
+
+    // MATERIALIZE is not reserved and remains usable as an identifier.
+    let tokens = tokenize_sql("SELECT materialize FROM t").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+    let tokens = tokenize_sql("CREATE TABLE materialize (materialize INT)").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+
+    // MODIFY is exclusively column syntax, not an alias for SET TTL.
+    let tokens = tokenize_sql("ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
+}
+
+#[test]
+fn test_task_block_nested_modify_as() {
+    let expected = TaskSql::ScriptBlock(vec![
+        "SELECT 1".to_string(),
+        "ALTER TASK target_a MODIFY AS SELECT 2".to_string(),
+        "ALTER TASK target_b MODIFY AS SELECT 3".to_string(),
+        "SELECT 4".to_string(),
+    ]);
+
+    for prefix in [
+        "CREATE TASK driver SCHEDULE = 60 MINUTE AS",
+        "ALTER TASK driver MODIFY AS",
+    ] {
+        for terminator in ["", ";"] {
+            let sql = format!(
+                "{prefix} BEGIN
+                    SELECT 1;
+                    ALTER TASK target_a MODIFY AS SELECT 2;
+                    ALTER TASK target_b MODIFY AS SELECT 3;
+                    SELECT 4;
+                END{terminator}"
+            );
+            let tokens = tokenize_sql(&sql).unwrap();
+            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            let body = match &stmt {
+                Statement::CreateTask(task) => &task.sql,
+                Statement::AlterTask(task) => match &task.options {
+                    AlterTaskOptions::ModifyAs(body) => body,
+                    _ => panic!("expected MODIFY AS"),
+                },
+                _ => panic!("expected CREATE TASK or ALTER TASK"),
+            };
+            assert_eq!(body, &expected);
+
+            let displayed = stmt.to_string();
+            let tokens = tokenize_sql(&displayed).unwrap();
+            let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            assert_eq!(reparsed, stmt);
+
+            let TaskSql::ScriptBlock(stmts) = body else {
+                panic!("expected script block");
+            };
+            for (index, stored_sql) in stmts.iter().enumerate() {
+                let tokens = tokenize_sql(stored_sql).unwrap();
+                let (stored_stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+                assert_eq!(stored_stmt.to_string(), *stored_sql);
+                if let Statement::AlterTask(task) = stored_stmt {
+                    assert_eq!(
+                        task.options,
+                        AlterTaskOptions::ModifyAs(TaskSql::SingleStatement(format!(
+                            "SELECT {}",
+                            index + 1
+                        )))
+                    );
+                } else {
+                    assert!(matches!(stored_stmt, Statement::Query(_)));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_task_sql_statement_boundaries() {
+    for prefix in [
+        "CREATE TASK driver SCHEDULE = 60 MINUTE AS",
+        "ALTER TASK driver MODIFY AS",
+    ] {
+        // The top-level parser owns the optional final semicolon. A standalone
+        // BEGIN is still a transaction statement, not a task script block.
+        for body in ["SELECT 1", "SELECT 1;", "BEGIN", "BEGIN;"] {
+            let sql = format!("{prefix} {body}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+        }
+
+        for body in [
+            "BEGIN SELECT 1 ALTER TASK target MODIFY AS SELECT 2; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2 SELECT 3; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2 END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2;; SELECT 3; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2; SELECT 3 END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2; END; SELECT 3;",
+            "SELECT 1; SELECT 2;",
+            "SELECT 1;;",
+        ] {
+            let sql = format!("{prefix} {body}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            assert!(
+                parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
+                "unexpectedly accepted: {sql}"
+            );
+        }
+    }
+}
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
 where
@@ -84,6 +293,34 @@ fn run_parser_with_dialect<P, O>(
 }
 
 // UPDATE_GOLDENFILES=1 cargo test --package databend-common-ast --test it -- parser::test_statement
+#[test]
+fn test_masking_where_unmasked_value_option() {
+    for sql in [
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_unmasked_value = true)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (WHERE_USE_UNMASKED_VALUE = false)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask USING (v, role) OPTIONS (where_use_unmasked_value = true)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let formatted = stmt.to_string();
+        assert!(formatted.contains("OPTIONS (where_use_unmasked_value = "));
+        let tokens = tokenize_sql(&formatted).unwrap();
+        let (roundtrip, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(stmt, roundtrip, "{sql}");
+    }
+    for sql in [
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (unknown = true)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_unmasked_value = 'true')",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_unmasked_value = 1)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_unmasked_value = true, where_use_unmasked_value = false)",
+        "ALTER TABLE t MODIFY COLUMN v SET MASKING POLICY mask OPTIONS (where_use_original = true)",
+        "ALTER TABLE t MODIFY COLUMN v['a'] SET MASKING POLICY mask",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
+
 #[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
@@ -151,6 +388,8 @@ fn test_statement() {
         r#"create table if not exists a.b (a string, b string, ngram index idx1 (a,b) gram_size=5);"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
+        r#"create table a.b_clone clone c.d;"#,
+        r#"create table a.b_clone clone c.d at (snapshot => '0123456789abcdef');"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"CREATE WORKER read_env"#,
         r#"CREATE WORKER IF NOT EXISTS read_env"#,
@@ -362,7 +601,7 @@ SELECT * from s;"#,
         r#"create user `a'a` identified by '123'"#,
         r#"drop role if exists test"#,
         r#"drop role if exists 'test'"#,
-        r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
+        r#"OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t COMPACT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t PURGE;"#,
         r#"OPTIMIZE TABLE db.t PURGE;"#,
@@ -371,7 +610,17 @@ SELECT * from s;"#,
         r#"ALTER TABLE t1 swap with t2;"#,
         r#"ALTER TABLE t refresh cache;"#,
         r#"ALTER TABLE t COMMENT='t1-commnet';"#, // typos:disable-line
+        r#"ALTER TABLE t DROP PARTITION KEY;"#,
+        r#"ALTER TABLE IF EXISTS db.t DROP PARTITION KEY;"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
+        r#"ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY;"#,
+        r#"ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY;"#,
+        r#"ALTER TABLE t SET TTL expire_at;"#,
+        r#"ALTER TABLE t REMOVE TTL;"#,
+        r#"CREATE TABLE t (a int, event_time timestamp) TTL event_time + INTERVAL 30 DAY;"#,
+        r#"CREATE TABLE t (a int, expire_at timestamp) TTL expire_at;"#,
+        r#"CREATE TABLE t (a int, event_time timestamp) CLUSTER BY (a) TTL event_time + INTERVAL 1 DAY;"#,
+        r#"CREATE TABLE t (ttl int);"#,
         r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;"#,
         r#"ALTER TABLE t ADD c int null;"#,
         r#"ALTER TABLE t ADD COLUMN c int null;"#,
@@ -402,9 +651,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t ADD CHECK (a != 1);"#,
         r#"ALTER TABLE t DROP CONSTRAINT a_not_1;"#,
         r#"ALTER TABLE t FLASHBACK TO (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5');"#,
-        r#"ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS;"#,
         r#"ALTER TABLE t CREATE TAG tag1 AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) RETAIN 30 SECONDS;"#,
-        r#"ALTER TABLE t DROP BRANCH b1;"#,
         r#"ALTER TABLE t DROP TAG tag1;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
@@ -868,12 +1115,18 @@ SELECT * from s;"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
         r#"SHOW PASSWORD POLICIES LIKE 'p%'"#,
         // dynamic tables
+        r#"CREATE DYNAMIC TABLE `db``name`.`table``name` (`col``name` BIGINT) AS SELECT id FROM src"#,
+        r#"REFRESH DYNAMIC TABLE db.dt"#,
+        r#"CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a JOIN b ON a.id = b.id"#,
+        r#"CREATE DYNAMIC TABLE dt AS SELECT id FROM a"#,
+        r#"CREATE DYNAMIC TABLE dt TARGET_LAG = 10 MINUTE AS SELECT id FROM a"#,
+        r#"CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a"#,
+        // INITIALIZE is a generic table option, not a dynamic table option; the binder rejects it.
+        r#"CREATE DYNAMIC TABLE dt INITIALIZE = ON_CREATE AS SELECT id FROM a"#,
         r#"
             CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
                 TARGET_LAG = 10 SECOND
                 WAREHOUSE = 'MyWarehouse'
-                REFRESH_MODE = FULL
-                INITIALIZE = ON_CREATE
                 COMMENT = 'This is test dynamic table'
             AS
                 SELECT * FROM t
@@ -882,8 +1135,6 @@ SELECT * from s;"#,
             CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a int, b string)
                 TARGET_LAG = 10 MINUTE
                 WAREHOUSE = 'MyWarehouse'
-                REFRESH_MODE = INCREMENTAL
-                INITIALIZE = ON_SCHEDULE
                 COMMENT = 'This is test dynamic table'
             AS
                 SELECT * FROM t
@@ -892,7 +1143,6 @@ SELECT * from s;"#,
             CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
                 CLUSTER BY (a)
                 TARGET_LAG = 10 HOUR
-                REFRESH_MODE = AUTO
                 COMMENT = 'This is test dynamic table'
                 STORAGE_FORMAT = 'native'
             AS
@@ -908,7 +1158,6 @@ SELECT * from s;"#,
         r#"
             CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
                 CLUSTER BY (a)
-                REFRESH_MODE = INCREMENTAL
                 TARGET_LAG = DOWNSTREAM
             AS
                 SELECT avg(a), d FROM db.t GROUP BY d
@@ -1015,6 +1264,10 @@ SELECT * from s;"#,
         r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET enabled = true"#,
         r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET webhook = (url = 'https://example.com')"#,
         r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET comment = '1'"#,
+        r#"CREATE NOTIFICATION INTEGRATION SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com', method = 'POST') webhook_body_template = '{"msg_type":"text","content":{"text":"DATABEND_WEBHOOK_MESSAGE"}}' COMMENT = 'notify'"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"DATABEND_WEBHOOK_MESSAGE"}'"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"it\'s DATABEND_WEBHOOK_MESSAGE","path":"C:\\tmp"}'"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification UNSET WEBHOOK_BODY_TEMPLATE"#,
         r#"DROP NOTIFICATION INTEGRATION SampleNotification"#,
         r#"DESC NOTIFICATION INTEGRATION SampleNotification"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
@@ -1204,6 +1457,15 @@ SELECT * from s;"#,
         let src = src.trim();
         let tokens = tokenize_sql(src).unwrap();
         let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        if matches!(
+            stmt,
+            Statement::CreateDynamicTable(_) | Statement::RefreshDynamicTable(_)
+        ) {
+            let formatted = stmt.to_string();
+            let tokens = tokenize_sql(&formatted).unwrap();
+            let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            assert_eq!(reparsed.to_string(), formatted);
+        }
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", src).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -1226,6 +1488,8 @@ fn test_statement_error() {
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
         r#"SET SECONDARY ROLES"#,
+        // REFRESH_MODE is no longer a dynamic table option.
+        r#"CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a"#,
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
@@ -1272,7 +1536,6 @@ fn test_statement_error() {
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
         r#"show columns from db1.t from ctl.db"#,
-        r#"alter table t1 create branch from_dev at (branch => dev)"#,
         r#"SELECT c a as FROM t"#,
         r#"SELECT c a as b FROM t"#,
         r#"SELECT top -1 c a as b FROM t"#,
@@ -1374,8 +1637,13 @@ fn test_statement_error() {
 }
 
 #[test]
-fn test_removed_vacuum_syntax() {
+fn test_removed_syntax() {
     let cases = [
+        "ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS",
+        "ALTER TABLE t DROP BRANCH b1",
+        "SELECT * FROM db.t/b1",
+        "INSERT INTO db.t/b1 VALUES (1)",
+        "ALTER TABLE db.t/b1 ADD COLUMN a INT",
         "VACUUM TABLE t DRY RUN",
         "VACUUM TABLE t DRY RUN SUMMARY",
         "VACUUM TABLE catalog.db.t",
@@ -1385,7 +1653,6 @@ fn test_removed_vacuum_syntax() {
         "VACUUM ALL LIMIT 10",
         "VACUUM DROP TABLE DRY RUN",
         "VACUUM DROP TABLE DRY RUN SUMMARY",
-        "VACUUM DROP TABLE FROM db LIMIT 10",
         "VACUUM DROP TABLE FROM catalog.db",
         "VACUUM DROPPED OBJECTS FROM db LIMIT 10",
         "VACUUM DROPPED OBJECTS FROM catalog.db",
@@ -1402,6 +1669,24 @@ fn test_removed_vacuum_syntax() {
             parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
             "removed syntax should fail to parse: {case}"
         );
+    }
+}
+
+#[test]
+fn test_vacuum_drop_table_legacy_limit_ignored() {
+    let cases = [
+        ("VACUUM DROP TABLE LIMIT 1000", "VACUUM DROP TABLE"),
+        (
+            "VACUUM DROP TABLE FROM db LIMIT 10",
+            "VACUUM DROP TABLE FROM db",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert!(matches!(stmt, Statement::VacuumDropTable(_)), "{sql}");
+        assert_eq!(stmt.to_string(), expected, "{sql}");
     }
 }
 
@@ -1824,6 +2109,96 @@ fn test_expr() {
 
     for case in cases {
         run_parser(file, expr, case);
+    }
+}
+
+#[test]
+fn test_nested_trailing_vector_argument() {
+    let values = ["0.1973208636045456", "-0.2610067129135132"];
+    let vector = values.repeat(384).join(", ");
+    let cast = format!("CAST([{vector}] AS VECTOR(768))");
+    let mut sql = cast;
+    for depth in 0..=4 {
+        let tokens = tokenize_sql(&sql).unwrap();
+        let mut parsed = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        for _ in 0..depth {
+            let Expr::FunctionCall { mut func, .. } = parsed else {
+                panic!("expected a nested function call");
+            };
+            assert_eq!(func.args.len(), 2);
+            assert_eq!(func.args[0].to_string(), "embedding");
+            assert!(func.lambda.is_none());
+            parsed = func.args.pop().unwrap();
+        }
+        let Expr::Cast {
+            expr, target_type, ..
+        } = parsed
+        else {
+            panic!("expected a vector cast");
+        };
+        assert_eq!(target_type.to_string(), "VECTOR(768)");
+        let Expr::Array { exprs, .. } = *expr else {
+            panic!("expected an array");
+        };
+        assert_eq!(exprs.len(), 768);
+        for (index, value) in exprs.iter().enumerate() {
+            assert_eq!(value.to_string(), values[index % values.len()]);
+        }
+        sql = format!("cosine_distance(embedding, {sql})");
+    }
+}
+
+#[test]
+fn test_trailing_arrow_argument_with_function_suffixes() {
+    for (sql, ambiguous) in [
+        ("f(a, b, doc -> 'key')", true),
+        ("f(a, doc -> 'first', b, doc -> 'key')", true),
+        ("f(a, b, (x, y) -> x + y)", true),
+        ("f(DISTINCT a, b, doc -> 'key')", false),
+        ("f(a, b, doc -> 'key' ORDER BY a)", false),
+        ("f(a, b, doc -> 'key') WITHIN GROUP (ORDER BY a)", false),
+        ("f(a, b, doc -> 'key') FILTER (WHERE ok)", false),
+        ("f(a, b, doc -> 'key') OVER ()", false),
+        ("f(a, b, doc -> 'key')(c)", false),
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let parsed = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        let Expr::FunctionCall { func, .. } = parsed else {
+            panic!("expected a function call: {sql}");
+        };
+        assert_eq!(
+            matches!(func.lambda, Some(LambdaArgument::Ambiguous(_))),
+            ambiguous,
+            "{sql}"
+        );
+        assert_eq!(func.distinct, sql.contains("DISTINCT"), "{sql}");
+        assert_eq!(func.filter.is_some(), sql.contains("FILTER"), "{sql}");
+        assert_eq!(func.window.is_some(), sql.contains("OVER"), "{sql}");
+        assert_eq!(!func.order_by.is_empty(), sql.contains("ORDER BY"), "{sql}");
+        let args = if func.params.is_empty() {
+            &func.args
+        } else {
+            assert_eq!(func.args.len(), 1, "{sql}");
+            &func.params
+        };
+        assert_eq!(
+            args.len(),
+            if sql.contains("'first'") { 4 } else { 3 },
+            "{sql}"
+        );
+        assert_eq!(args[0].to_string(), "a", "{sql}");
+        let ordinary_arg = if sql.contains("(x, y)") {
+            "(x, y) -> x + y"
+        } else {
+            "doc -> 'key'"
+        };
+        let tokens = tokenize_sql(ordinary_arg).unwrap();
+        let ordinary_arg = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(
+            args.last().unwrap().to_string(),
+            ordinary_arg.to_string(),
+            "{sql}"
+        );
     }
 }
 

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::IoStatsSnapshot;
 pub use databend_common_component::BroadcastRegistry;
 pub use databend_common_component::CopyState;
 pub use databend_common_component::FragmentId;
@@ -30,9 +31,9 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFileInfo;
-use databend_common_storage::StorageMetrics;
 
 mod authorization;
+mod cache_policy;
 mod execution;
 mod materialization;
 mod partitions;
@@ -45,6 +46,7 @@ mod table_access;
 mod table_management;
 
 pub use authorization::TableContextAuthorization;
+pub use cache_policy::TableContextCachePolicy;
 pub use databend_common_component::BroadcastChannel;
 pub use execution::TableContextPerf;
 pub use execution::TableContextProgress;
@@ -81,6 +83,7 @@ pub mod prelude {
     pub use super::SegmentLocationsState;
     pub use super::TableContext;
     pub use super::TableContextAuthorization;
+    pub use super::TableContextCachePolicy;
     pub use super::TableContextCluster;
     pub use super::TableContextCopy;
     pub use super::TableContextCte;
@@ -121,7 +124,8 @@ pub struct ProcessInfo {
     pub session_extra_info: Option<String>,
     pub memory_usage: i64,
     /// storage metrics for persisted data reading.
-    pub data_metrics: Option<StorageMetrics>,
+    /// Object-storage IO of the running query (local node plus remote nodes).
+    pub data_metrics: Option<IoStatsSnapshot>,
     pub scan_progress_value: Option<ProgressValues>,
     pub write_progress_value: Option<ProgressValues>,
     pub spill_progress_value: Option<ProgressValues>,
@@ -166,6 +170,7 @@ pub struct FilteredCopyFiles {
 #[async_trait::async_trait]
 pub trait TableContext:
     TableContextAuthorization
+    + TableContextCachePolicy
     + TableContextCluster
     + TableContextCopy
     + TableContextCte

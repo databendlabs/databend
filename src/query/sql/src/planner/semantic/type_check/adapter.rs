@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Query;
+use databend_common_ast::parser::Dialect;
 use databend_common_base::runtime::block_on_with_handle;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
@@ -27,8 +28,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
@@ -37,7 +39,6 @@ use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_settings::Settings;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::security_policy_cache::CachedSecurityPolicy;
@@ -120,7 +121,7 @@ impl FullTypeCheckAdapterDependencies {
 
         Self {
             async_runtime_handle: current_async_runtime_handle,
-            aggregate_function_factory: AggregateFunctionFactory::instance(),
+            aggregate_function_registry: &AGGR_REGISTRY,
             license_manager: LicenseManagerSwitch::instance(),
             catalog_manager: CatalogManager::instance(),
             user_api_provider: UserApiProvider::instance(),
@@ -138,12 +139,32 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.ctx.get_function_context()
     }
 
-    fn settings(&self) -> Arc<Settings> {
-        self.ctx.get_settings()
+    fn sql_dialect(&self) -> Result<Dialect> {
+        self.ctx.get_settings().get_sql_dialect()
     }
 
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
-        self.dependencies.aggregate_function_factory
+    fn inlist_to_join_threshold(&self) -> Result<usize> {
+        self.ctx.get_settings().get_inlist_to_join_threshold()
+    }
+
+    fn max_inlist_to_or(&self) -> Result<u64> {
+        self.ctx.get_settings().get_max_inlist_to_or()
+    }
+
+    fn enable_decimal_sum_widening(&self) -> Result<bool> {
+        self.ctx.get_settings().get_enable_decimal_sum_widening()
+    }
+
+    fn timezone(&self) -> Result<String> {
+        self.ctx.get_settings().get_timezone()
+    }
+
+    fn default_nulls_first(&self, asc: bool) -> Result<bool> {
+        Ok(self.ctx.get_settings().get_nulls_first()(asc))
+    }
+
+    fn aggregate_function_registry(&self) -> &'static AggregateRegistry {
+        self.dependencies.aggregate_function_registry
     }
 
     fn udf_adapter(&self) -> Result<Self::UdfAdapter> {
@@ -164,18 +185,11 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.to_string()),
         };
 
-        let visibility_checker = if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            let ctx = self.ctx.clone();
+        let ctx = self.ctx.clone();
+        let visibility_checker =
             Some(self.block_on(async move {
                 ctx.get_visibility_checker(false, Object::Sequence).await
-            })?)
-        } else {
-            None
-        };
+            })?);
         self.block_on(catalog.get_sequence(req, &visibility_checker))?;
         Ok(())
     }
@@ -283,27 +297,21 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             )?
             .resolve_stage_location(stage_name, StagePathAccess::Read)
             .await?;
-            if self
+            let visibility_checker = self
                 .ctx
-                .get_settings()
-                .get_enable_experimental_rbac_check()?
+                .get_visibility_checker(false, Object::Stage)
+                .await?;
+            if !(stage_info.is_temporary
+                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                || stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == self.ctx.get_current_user()?.name)
             {
-                let visibility_checker = self
-                    .ctx
-                    .get_visibility_checker(false, Object::Stage)
-                    .await?;
-                if !(stage_info.is_temporary
-                    || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-                    || stage_info.stage_type == StageType::User
-                        && stage_info.stage_name == self.ctx.get_current_user()?.name)
-                {
-                    return Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied: privilege READ is required on stage {} for user {}",
-                        stage_info.stage_name.clone(),
-                        &self.ctx.get_current_user()?.identity().display(),
-                    ))
-                    .set_span(span));
-                }
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege READ is required on stage {} for user {}",
+                    stage_info.stage_name.clone(),
+                    self.ctx.get_current_user()?.identity().display(),
+                ))
+                .set_span(span));
             }
             Ok(stage_info)
         })
@@ -388,6 +396,16 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                     .collect::<Vec<_>>();
                 roles.sort();
                 Ok(Scalar::String(to_string(&roles)?))
+            }
+            AuthFunction::CurrentTenantId => {
+                // Resolved from the server-side session tenant (see
+                // `SessionContext::get_current_tenant`), which is fixed at
+                // authentication time and is not affected by switching roles,
+                // databases, or warehouses.
+                let table_access: &dyn TableContextTableAccess = self.ctx.as_ref();
+                Ok(Scalar::String(
+                    table_access.get_tenant().tenant_name().to_string(),
+                ))
             }
         }
     }

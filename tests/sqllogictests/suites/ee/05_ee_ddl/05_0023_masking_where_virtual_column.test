@@ -1,0 +1,172 @@
+statement ok
+SET enable_planner_cache = 1
+
+statement ok
+SET enable_query_result_cache = 0
+
+statement ok
+DROP TABLE IF EXISTS masking_where_virtual
+
+statement ok
+DROP MASKING POLICY IF EXISTS masking_where_virtual_policy
+
+statement ok
+CREATE MASKING POLICY masking_where_virtual_policy AS (val VARIANT) RETURNS VARIANT -> object_delete(val, 'secret')
+
+# Initially no sidecars exist: enabling the table option must use source-column
+# fallback until REFRESH materializes paths. Keep a missing key, JSON null and
+# SQL NULL; the STRING cast maps all three to SQL NULL.
+statement ok
+CREATE TABLE masking_where_virtual(id INT, data VARIANT) enable_virtual_column = false storage_format = 'parquet'
+
+statement ok
+INSERT INTO masking_where_virtual VALUES
+(1, '{"secret":{"email":"alice@example.com","rank":10},"public":"one"}'),
+(2, '{"secret":{"email":"bob@example.com","rank":20},"public":"two"}'),
+(3, '{"public":"three"}'),
+(4, '{"secret":{"email":null,"rank":30},"public":"four"}'),
+(5, NULL)
+
+statement ok
+ALTER TABLE masking_where_virtual SET OPTIONS(enable_virtual_column = true)
+
+statement ok
+ALTER TABLE masking_where_virtual MODIFY COLUMN data SET MASKING POLICY masking_where_virtual_policy OPTIONS (where_use_unmasked_value = true)
+
+# Raw nested paths in WHERE; policy output must never expose secret or its parent.
+query ITT
+SELECT id, data['secret']['email']::STRING, data['public']::STRING FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com'
+----
+1 NULL one
+
+query IT
+SELECT id, data['secret']['email']::STRING FROM masking_where_virtual WHERE data['secret']['rank']::INT >= 20 ORDER BY id
+----
+2 NULL
+4 NULL
+
+query I
+SELECT id FROM masking_where_virtual WHERE data['secret']['email']::STRING IS NULL ORDER BY id
+----
+3
+4
+5
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR masking_where_virtual
+
+# A result-only test could pass without binding any virtual path. Check the
+# physical plan explicitly after sidecar materialization.
+query T
+EXPLAIN SELECT id FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com'
+----
+<slt:ignore>virtual columns: [data['secret']['email']::String]<slt:ignore>
+
+query ITT
+SELECT id, data['secret']['email']::STRING, data['public']::STRING FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com'
+----
+1 NULL one
+
+query IT
+SELECT id, data['secret']['email']::STRING FROM masking_where_virtual WHERE data['secret']['rank']::INT >= 20 ORDER BY id
+----
+2 NULL
+4 NULL
+
+query IT
+SELECT id, data['secret']['email']::STRING FROM masking_where_virtual WHERE data['secret']['email']::STRING IN ('alice@example.com', 'bob@example.com') ORDER BY id
+----
+1 NULL
+2 NULL
+
+query I
+SELECT count(*) FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com'
+----
+1
+
+query I
+SELECT count(*) FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'missing@example.com'
+----
+0
+
+query I
+SELECT id FROM masking_where_virtual WHERE data['secret']['email']::STRING IS NULL ORDER BY id
+----
+3
+4
+5
+
+# An alias cannot reuse the masked SELECT scalar for the raw WHERE predicate.
+query IT
+SELECT id, data['secret']['email']::STRING AS email FROM masking_where_virtual WHERE email = 'alice@example.com'
+----
+1 NULL
+
+# Whole-object projection must still delete the parent key. Check through a
+# derived table: the outer query cannot recover raw input paths from its output.
+query I
+SELECT count(*) FROM (SELECT data FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com') s WHERE data['secret'] IS NOT NULL
+----
+0
+
+# Disable virtual-column optimization, keeping the same policy and predicate.
+# This is the scan baseline for both string and numeric path reads.
+statement ok
+SET enable_experimental_virtual_column = 0
+
+query ITT
+SELECT id, data['secret']['email']::STRING, data['public']::STRING FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com'
+----
+1 NULL one
+
+query IT
+SELECT id, data['secret']['email']::STRING FROM masking_where_virtual WHERE data['secret']['rank']::INT >= 20 ORDER BY id
+----
+2 NULL
+4 NULL
+
+statement ok
+SET enable_experimental_virtual_column = 1
+
+# A new block has no materialized sidecar yet; existing and new blocks must
+# produce the same protected result, then remain equivalent after refresh.
+statement ok
+INSERT INTO masking_where_virtual VALUES (6, '{"secret":{"email":"alice@example.com","rank":40},"public":"six"}')
+
+query ITT
+SELECT id, data['secret']['email']::STRING, data['public']::STRING FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com' ORDER BY id
+----
+1 NULL one
+6 NULL six
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR masking_where_virtual
+
+query ITT
+SELECT id, data['secret']['email']::STRING, data['public']::STRING FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com' ORDER BY id
+----
+1 NULL one
+6 NULL six
+
+# Turning off raw-WHERE authorization must not reuse a raw virtual-column plan.
+statement ok
+ALTER TABLE masking_where_virtual MODIFY COLUMN data SET MASKING POLICY masking_where_virtual_policy OPTIONS (where_use_unmasked_value = false)
+
+query I
+SELECT count(*) FROM masking_where_virtual WHERE data['secret']['email']::STRING = 'alice@example.com'
+----
+0
+
+query I
+SELECT count(*) FROM masking_where_virtual WHERE data['secret']['email'] IS NULL
+----
+6
+
+statement ok
+UNSET enable_experimental_virtual_column
+
+statement ok
+DROP TABLE masking_where_virtual
+
+statement ok
+DROP MASKING POLICY masking_where_virtual_policy

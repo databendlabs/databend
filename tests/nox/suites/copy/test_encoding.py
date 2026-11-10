@@ -12,7 +12,7 @@ def _stage_fs_url(path):
 
 def _expected_unload_bytes(format_name, delimiter):
     if format_name == "csv":
-        return f'"张三"{delimiter}1\n'.encode("gbk")
+        return f'"张三"{delimiter}"1"\n'.encode("gbk")
     return f"张三{delimiter}1\n".encode("gbk")
 
 

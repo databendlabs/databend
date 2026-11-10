@@ -17,6 +17,7 @@ use std::mem::size_of;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
@@ -180,7 +181,7 @@ impl Table for NumbersTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         if plan.parts.partitions.is_empty() {
             pipeline.add_source(EmptySource::create, 1)?;
@@ -189,17 +190,13 @@ impl Table for NumbersTable {
 
         let mut source_builder = SourcePipeBuilder::create();
 
-        for part_index in 0..plan.parts.len() {
+        for part in &plan.parts.partitions {
             let source_ctx = ctx.clone();
             let source_output_port = OutputPort::create();
 
             source_builder.add_source(
                 source_output_port.clone(),
-                NumbersSource::create(
-                    source_output_port,
-                    source_ctx,
-                    &plan.parts.partitions[part_index],
-                )?,
+                NumbersSource::create(source_output_port, source_ctx, part)?,
             );
         }
 

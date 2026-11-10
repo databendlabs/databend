@@ -22,17 +22,21 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::ConstantTableScan;
+use databend_common_sql::plans::GroupingSets;
+use databend_common_sql::plans::PhysicalAggregate;
 use databend_common_sql::plans::ScalarItem;
 use itertools::Itertools;
 
@@ -52,7 +56,6 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
-use crate::sessions::TableContext;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
@@ -65,7 +68,12 @@ pub struct AggregateFinal {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
-    pub shuffle_mode: AggregateShuffleMode,
+    /// The input comes through a global shuffle, which delivers each final aggregate its
+    /// partition, rather than scattered on this node.
+    pub global_shuffled: bool,
+
+    /// Set when the output feeds a top N of `limit` rows ordered by these output columns.
+    pub top_n: Option<(Vec<SortDesc>, usize)>,
 }
 
 #[typetag::serde]
@@ -142,7 +150,8 @@ impl IPhysicalPlan for AggregateFinal {
             before_group_by_schema: self.before_group_by_schema.clone(),
             group_by_display: self.group_by_display.clone(),
             stat_info: self.stat_info.clone(),
-            shuffle_mode: self.shuffle_mode.clone(),
+            global_shuffled: self.global_shuffled,
+            top_n: self.top_n.clone(),
         })
     }
 
@@ -155,7 +164,8 @@ impl IPhysicalPlan for AggregateFinal {
             is_cluster_aggregate = true;
         }
 
-        let params = PipelineBuilder::build_aggregator_params(
+        let mut params = PipelineBuilder::build_aggregator_params(
+            &builder.ctx,
             self.before_group_by_schema.clone(),
             &self.group_by,
             &self.agg_funcs,
@@ -163,6 +173,21 @@ impl IPhysicalPlan for AggregateFinal {
             max_block_rows,
             max_block_bytes,
         )?;
+        if let Some((order_by, limit)) = &self.top_n {
+            let schema = self.output_schema()?;
+            let order_by = order_by
+                .iter()
+                .map(|desc| {
+                    Ok(SortColumnDescription {
+                        offset: schema.index_of(&desc.order_by.to_string())?,
+                        asc: desc.asc,
+                        nulls_first: desc.nulls_first,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            // Just created, so not shared yet.
+            Arc::get_mut(&mut params).unwrap().top_n = Some((order_by, *limit));
+        }
 
         if params.group_columns.is_empty() {
             self.input.build_pipeline(builder)?;
@@ -180,11 +205,8 @@ impl IPhysicalPlan for AggregateFinal {
         let old_inject = builder.exchange_injector.clone();
 
         if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector = AggregateInjector::create(
-                builder.ctx.clone(),
-                params.clone(),
-                self.shuffle_mode.clone(),
-            );
+            builder.exchange_injector =
+                AggregateInjector::create(builder.ctx.clone(), params.clone());
         }
 
         self.input.build_pipeline(builder)?;
@@ -202,7 +224,7 @@ impl IPhysicalPlan for AggregateFinal {
             params.clone(),
             after_group_parallel,
             builder.ctx.clone(),
-            self.shuffle_mode.clone(),
+            self.global_shuffled,
         )
     }
 }
@@ -210,11 +232,13 @@ impl IPhysicalPlan for AggregateFinal {
 impl PhysicalPlanBuilder {
     pub async fn build_aggregate(
         &mut self,
-        s_expr: &SExpr,
-        agg: &Aggregate,
+        s_expr: &PExpr,
+        physical: &PhysicalAggregate,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        let mode = physical.mode;
+        let agg = &physical.aggregate;
         // 1. Prune unused Columns.
         let mut used = vec![];
         for item in &agg.aggregate_functions {
@@ -235,7 +259,7 @@ impl PhysicalPlanBuilder {
             let mut s =
                 ConstantTableScan::new_empty_scan(DataSchemaRef::default(), ColumnSet::new());
             s.num_rows = 1;
-            let expr = SExpr::create_leaf(s);
+            let expr = PExpr::create_leaf(s);
             return self.build(&expr, required).await;
         }
 
@@ -243,7 +267,6 @@ impl PhysicalPlanBuilder {
             group_items: agg.group_items.clone(),
             aggregate_functions: used,
             from_distinct: agg.from_distinct,
-            mode: agg.mode,
             rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
         };
@@ -252,8 +275,20 @@ impl PhysicalPlanBuilder {
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
         let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
+        let rank_limit = agg.rank_limit.map(|(item, limit)| {
+            let desc = item
+                .iter()
+                .map(|v| SortDesc {
+                    asc: v.asc,
+                    nulls_first: v.nulls_first,
+                    order_by: v.index,
+                    display_name: self.metadata.read().column(v.index).name(),
+                })
+                .collect::<Vec<_>>();
+            (desc, limit)
+        });
 
-        let result: PhysicalPlan = match &agg.mode {
+        let result: PhysicalPlan = match mode {
             AggregateMode::Partial => {
                 let group_by_display = agg
                     .group_items
@@ -270,43 +305,36 @@ impl PhysicalPlanBuilder {
                     group_by_shuffle_mode = "before_merge".to_string();
                 }
 
-                let is_cluster_aggregate = Exchange::check_physical_plan(&input);
-                let shuffle_mode = determine_shuffle_mode(self.ctx.clone(), is_cluster_aggregate)?;
-
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
-                    // ignore `_grouping_id`.
-                    // If the aggregation function argument if a group item,
-                    // we cannot use the group item directly.
-                    // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
-                    // which will cause panic while executing aggregation function.
-                    // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
-                    // we should use these columns instead.
+                    // AggregateExpand makes grouping columns nullable and fills in dummy
+                    // NULLs for rolled-up sets. Aggregate arguments and ORDER BY keys must
+                    // use its preserved copies instead, or aggregation can panic or sort
+                    // by the dummy NULLs rather than the original values.
                     for func in agg_funcs.iter_mut() {
                         for arg in func.arg_indices.iter_mut() {
                             if let Some(pos) = group_items.iter().position(|g| g == arg) {
                                 *arg = grouping_sets.dup_group_items[pos].0;
                             }
                         }
+                        remap_grouping_set_order_by(&mut func.sig, &group_items, grouping_sets);
                     }
                 }
 
-                let rank_limit = agg.rank_limit.map(|(item, limit)| {
-                    let desc = item
-                        .iter()
-                        .map(|v| SortDesc {
-                            asc: v.asc,
-                            nulls_first: v.nulls_first,
-                            order_by: v.index,
-                            display_name: self.metadata.read().column(v.index).name(),
-                        })
-                        .collect::<Vec<_>>();
-                    (desc, limit)
-                });
+                // Ranking the input rows needs the order to be by group keys only.
+                let rank_limit = rank_limit
+                    .filter(|(descs, _)| descs.iter().all(|d| group_items.contains(&d.order_by)));
 
                 if group_by_shuffle_mode == "before_merge"
                     && let Some(exchange) = Exchange::from_physical_plan(&input)
                 {
-                    let kind = exchange.kind.clone();
+                    // Partial aggregates shuffle states and raw rows straight to the threads of
+                    // the final aggregates, see `AggregateScatter`.
+                    let kind = match exchange.kind {
+                        FragmentKind::Normal | FragmentKind::GlobalShuffle => {
+                            FragmentKind::GlobalShuffle
+                        }
+                        ref kind => kind.clone(),
+                    };
                     let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
                         let expand = PhysicalPlan::new(AggregateExpand {
                             grouping_sets,
@@ -324,7 +352,6 @@ impl PhysicalPlanBuilder {
                             stat_info: Some(stat_info),
                             rank_limit: None,
                             meta: PhysicalPlanMeta::new("AggregatePartial"),
-                            shuffle_mode: shuffle_mode.clone(),
                         }
                     } else {
                         AggregatePartial {
@@ -335,7 +362,6 @@ impl PhysicalPlanBuilder {
                             group_by: group_items,
                             stat_info: Some(stat_info),
                             meta: PhysicalPlanMeta::new("AggregatePartial"),
-                            shuffle_mode: shuffle_mode.clone(),
                         }
                     };
 
@@ -378,7 +404,6 @@ impl PhysicalPlanBuilder {
                         input: PhysicalPlan::new(expand),
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregatePartial"),
-                        shuffle_mode: shuffle_mode.clone(),
                     })
                 } else {
                     PhysicalPlan::new(AggregatePartial {
@@ -389,7 +414,6 @@ impl PhysicalPlanBuilder {
                         stat_info: Some(stat_info),
                         rank_limit,
                         meta: PhysicalPlanMeta::new("AggregatePartial"),
-                        shuffle_mode: shuffle_mode.clone(),
                     })
                 }
             }
@@ -417,7 +441,8 @@ impl PhysicalPlanBuilder {
                     build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
-                    // The argument types are wrapped nullable due to `AggregateExpand` plan. We should recover them to original types.
+                    // Recover aggregate arguments and ORDER BY keys to the original,
+                    // unmasked columns and types from before `AggregateExpand`.
                     for func in agg_funcs.iter_mut() {
                         for (arg, ty) in func.arg_indices.iter_mut().zip(func.sig.args.iter_mut()) {
                             if let Some(pos) = group_items.iter().position(|g| g == arg) {
@@ -425,13 +450,14 @@ impl PhysicalPlanBuilder {
                                 *ty = grouping_sets.dup_group_items[pos].1.clone();
                             }
                         }
+                        remap_grouping_set_order_by(&mut func.sig, &group_items, grouping_sets);
                     }
                 }
 
+                let top_n = rank_limit.filter(|_| agg.grouping_sets.is_none());
                 if let Some(partial) = AggregatePartial::from_physical_plan(&input) {
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
-                    let shuffle_mode = partial.shuffle_mode.clone();
 
                     PhysicalPlan::new(AggregateFinal {
                         input,
@@ -441,7 +467,8 @@ impl PhysicalPlanBuilder {
                         group_by: group_items,
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
-                        shuffle_mode,
+                        global_shuffled: false,
+                        top_n,
                     })
                 } else {
                     let Some(exchange) = Exchange::from_physical_plan(&input) else {
@@ -461,7 +488,7 @@ impl PhysicalPlanBuilder {
 
                     let group_by_display = partial.group_by_display.clone();
                     let before_group_by_schema = partial.input.output_schema()?;
-                    let shuffle_mode = partial.shuffle_mode.clone();
+                    let global_shuffled = exchange.kind == FragmentKind::GlobalShuffle;
 
                     PhysicalPlan::new(AggregateFinal {
                         input,
@@ -471,12 +498,10 @@ impl PhysicalPlanBuilder {
                         group_by: group_items,
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
-                        shuffle_mode,
+                        global_shuffled,
+                        top_n,
                     })
                 }
-            }
-            AggregateMode::Initial => {
-                return Err(ErrorCode::Internal("Invalid aggregate mode: Initial"));
             }
         };
 
@@ -484,55 +509,19 @@ impl PhysicalPlanBuilder {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum AggregateShuffleMode {
-    // calculate shuffle destination based on hash of rows
-    Row,
-    // calculate shuffle destination based on id of bucket
-    // cpu_nums in cluster stored in it
-    Bucket(u64),
-}
-
-impl AggregateShuffleMode {
-    pub fn determine_radix_bits(&self) -> u64 {
-        match &self {
-            AggregateShuffleMode::Row => 0,
-            AggregateShuffleMode::Bucket(hint) => hint.trailing_zeros() as u64,
+// Use the original grouping columns and types, not AggregateExpand's masked keys.
+fn remap_grouping_set_order_by(
+    signature: &mut AggregateFunctionSignature,
+    group_items: &[Symbol],
+    grouping_sets: &GroupingSets,
+) {
+    for item in &mut signature.order_by {
+        if let Some(pos) = group_items.iter().position(|g| *g == item.index) {
+            let (index, data_type) = &grouping_sets.dup_group_items[pos];
+            item.index = *index;
+            item.data_type = data_type.clone();
         }
     }
-}
-
-// TODO: ROW_SHUFFLE_ENABLE_THRESHOLD need to find
-const ROW_SHUFFLE_ENABLE_THRESHOLD: u64 = 256;
-
-fn determine_shuffle_mode(
-    ctx: Arc<dyn TableContext>,
-    is_cluster_aggregate: bool,
-) -> Result<AggregateShuffleMode> {
-    let settings = ctx.get_settings();
-    let force_shuffle_mode = settings.get_force_aggregate_shuffle_mode()?;
-    let thread_nums = settings.get_max_threads()?;
-
-    let parallelism = if is_cluster_aggregate {
-        (ctx.get_cluster().nodes.len() as u64 * thread_nums).next_power_of_two()
-    } else {
-        thread_nums.next_power_of_two()
-    };
-
-    let use_bucket = match force_shuffle_mode.as_str() {
-        "row" => false,
-        "bucket" => true,
-        "auto" => parallelism <= ROW_SHUFFLE_ENABLE_THRESHOLD,
-        _ => false,
-    };
-
-    let shuffle_mode = if use_bucket {
-        AggregateShuffleMode::Bucket(parallelism)
-    } else {
-        AggregateShuffleMode::Row
-    };
-
-    Ok(shuffle_mode)
 }
 
 fn build_aggregate_function(
@@ -556,20 +545,6 @@ fn build_aggregate_function(
                         }
                     })
                     .collect::<Result<Vec<_>>>()?;
-                let sort_desc_indices = agg
-                    .sort_descs
-                    .iter()
-                    .map(|desc| {
-                        if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
-                            Ok(col.column.index)
-                        } else {
-                            Err(ErrorCode::Internal(
-                                "Aggregate function sort description must be a BoundColumnRef"
-                                    .to_string(),
-                            ))
-                        }
-                    })
-                    .collect::<Result<_>>()?;
                 let args = arg_indices
                     .iter()
                     .map(|i| {
@@ -579,11 +554,6 @@ fn build_aggregate_function(
                             .clone())
                     })
                     .collect::<Result<_>>()?;
-                let sort_descs = agg
-                    .sort_descs
-                    .iter()
-                    .map(|desc| desc.try_into())
-                    .collect::<Result<_>>()?;
                 Ok(AggregateFunctionDesc {
                     sig: AggregateFunctionSignature {
                         name: agg.func_name.clone(),
@@ -591,11 +561,10 @@ fn build_aggregate_function(
                         return_type: *agg.return_type.clone(),
                         args,
                         params: agg.params.clone(),
-                        sort_descs,
+                        order_by: agg.bound_order_by()?,
                     },
                     output_column: v.index,
                     arg_indices,
-                    sort_desc_indices,
                     display: v.scalar.as_expr()?.sql_display(),
                 })
             }
@@ -630,11 +599,10 @@ fn build_aggregate_function(
                         return_type: *udaf.return_type.clone(),
                         args,
                         params: vec![],
-                        sort_descs: vec![],
+                        order_by: vec![],
                     },
                     output_column: v.index,
                     arg_indices,
-                    sort_desc_indices: vec![],
                     display: v.scalar.as_expr()?.sql_display(),
                 })
             }

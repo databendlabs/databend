@@ -1,10 +1,42 @@
-=== CREATE MV requires CREATE on the database and SELECT on the source ===
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Create] is required on 'default'.'default'.* for user 'mv-priv-user'@'%' with roles [mv_priv_role]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_rbac_source_0020' for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]
-=== SELECT, REFRESH, and SHOW CREATE MATERIALIZED VIEW require only SELECT on the source ===
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_rbac_source_0020' for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_rbac_source_0020' for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'mv_rbac_source_0020' for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]
-=== DROP MV requires DROP on the database ===
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'default'.* for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'default'.* for user 'mv-priv-user'@'%' with roles [mv_priv_role,public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+CREATE requires database CREATE: OK
+CREATE requires source SELECT: OK
+Source SELECT does not authorize direct MV SELECT: OK
+Source SELECT does not make the MV visible: OK
+Bare GRANT rejects an MV: OK
+Bare REVOKE rejects an MV: OK
+MV GRANT rejects a base table: OK
+MV REVOKE rejects a regular view: OK
+MV syntax rejects unsupported privileges and wildcards: OK
+LiveFallback reads need only MV SELECT: OK
+MV SELECT does not authorize source SELECT: OK
+MV SELECT makes the MV visible: OK
+SHOW GRANTS round-trips in PostgreSQL: OK
+REVOKE ALL denies MV SELECT in PostgreSQL: OK
+SHOW GRANTS round-trips in MySQL: OK
+REVOKE ALL denies MV SELECT in MySQL: OK
+SHOW GRANTS round-trips in Hive: OK
+REVOKE ALL denies MV SELECT in Hive: OK
+REFRESH still requires source SELECT: OK
+SHOW CREATE still requires source SELECT: OK
+CREATE INDEX still requires source SELECT: OK
+DROP INDEX still requires source SELECT: OK
+Fresh reads need only MV SELECT: OK
+Each joined MV requires its own SELECT: OK
+Hybrid reads need only MV SELECT: OK
+UPDATE fallback needs only MV SELECT: OK
+Caller CTE cannot capture the MV source: OK
+JOIN still checks an explicit source reference: OK
+Subquery still checks an explicit source reference: OK
+UNION still checks an explicit source reference: OK
+CTE still checks an explicit source reference: OK
+JOIN succeeds with both object grants: OK
+REVOKE denies direct MV SELECT even during fallback: OK
+Regular view authorizes fallback MV reads: OK
+Revoked MV SELECT hides the MV: OK
+Source SELECT permits MV rewrite without MV SELECT: OK
+Rewritten source query returns correct results: OK
+Unselected MV candidates require no MV SELECT: OK
+Source SELECT still authorizes existing MV management operations: OK
+SELECT on mv_rbac_db_0020.* authorizes MV reads and visibility: OK
+SELECT on *.* authorizes MV reads and visibility: OK
+DROP still requires database DROP: OK

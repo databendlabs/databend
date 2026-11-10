@@ -64,6 +64,7 @@ pub(crate) struct ReclusterProperties {
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_info: ClusterKeyInfo,
     pub(crate) partition_key_count: usize,
+    pub(crate) partition_key_id: Option<u32>,
     pub(crate) memory_threshold: usize,
     /// Split unordered linear inputs before overlap-based merge selection.
     /// Materialized views retain their re-aggregation selection semantics.
@@ -124,6 +125,7 @@ impl ReclusterProperties {
                 && !is_materialized_view_engine(table.engine()),
             cluster_key_info,
             partition_key_count: table.partition_key_count(),
+            partition_key_id: table.partition_key_id(),
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
@@ -170,6 +172,7 @@ impl ReclusterProperties {
             split_sort_tasks: strategy.supports_ordered_merge(),
             cluster_key_info,
             partition_key_count,
+            partition_key_id: (partition_key_count != 0).then_some(0),
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,

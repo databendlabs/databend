@@ -15,9 +15,9 @@
 use databend_common_exception::Result;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::ScalarExpr;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::SqlTestOutcome;
@@ -27,6 +27,47 @@ use crate::framework::golden::write_case_header;
 use crate::framework::golden::write_case_outcome;
 
 mod alias_resolution;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_window_input_reuse_preserves_nondeterministic_expressions() -> Result<()> {
+    let case = SqlTestCase {
+        name: "window_input_reuse_preserves_nondeterministic_expressions",
+        description: "Only deterministic window inputs may replace SELECT expressions.",
+        setup_sqls: &["CREATE TABLE t(number UInt64)"],
+        sql: "SELECT number + 1 AS n, rand() AS r, \
+              row_number() OVER (PARTITION BY number + 1 ORDER BY rand()) FROM t",
+    };
+    let ctx = setup_context(&case).await?;
+    let Plan::Query {
+        s_expr,
+        bind_context,
+        ..
+    } = ctx.bind_sql(case.sql).await?
+    else {
+        panic!("expected query plan");
+    };
+    let RelOperator::EvalScalar(projection) = s_expr.logical()?.plan() else {
+        panic!("expected SELECT projection");
+    };
+    for (name, reused) in [("n", true), ("r", false)] {
+        let column = bind_context
+            .columns
+            .iter()
+            .find(|column| column.column_name == name)
+            .unwrap();
+        let item = projection
+            .items
+            .iter()
+            .find(|item| item.index == column.index)
+            .unwrap();
+        assert_eq!(
+            matches!(item.scalar, ScalarExpr::BoundColumnRef(_)),
+            reused,
+            "projection {name}"
+        );
+    }
+    Ok(())
+}
 
 const TEST_UDAF_SQL: &str = r#"
 CREATE OR REPLACE FUNCTION weighted_avg (a INT, b INT) STATE { sum INT, weight INT } RETURNS FLOAT
@@ -64,11 +105,17 @@ export function add_one(v) {
 $$
 "#;
 
+const TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL: &str =
+    "CREATE OR REPLACE FUNCTION wrap_add_one AS (x) -> add_one(x)";
+
+const TEST_SCALAR_WRAPPING_SCRIPT_UDF_SQL: &str =
+    "CREATE OR REPLACE FUNCTION scalar_wrap_add_one (x INT) RETURNS INT AS $$ add_one(x) $$";
+
 async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let ctx = setup_context(case).await?;
     let outcome = match ctx.bind_sql(case.sql).await {
         Ok(plan) => {
-            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &StatContext::default())?)
+            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &ctx.stat_context()?)?)
         }
         Err(err) => SqlTestOutcome::Error {
             code: err.code(),
@@ -83,7 +130,7 @@ async fn bind_case_with_commercial_license(case: &SqlTestCase) -> Result<SqlTest
     ctx.enable_commercial_license_for_test();
     let outcome = match ctx.bind_sql(case.sql).await {
         Ok(plan) => {
-            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &StatContext::default())?)
+            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &ctx.stat_context()?)?)
         }
         Err(err) => SqlTestOutcome::Error {
             code: err.code(),
@@ -227,7 +274,7 @@ async fn test_binder_mutation_internal_column_strategy() -> Result<()> {
         let Plan::DataMutation { s_expr, .. } = plan else {
             panic!("expected mutation plan for {sql}");
         };
-        let RelOperator::Mutation(mutation) = s_expr.plan() else {
+        let RelOperator::Mutation(mutation) = s_expr.logical()?.plan() else {
             panic!("expected mutation operator for {sql}");
         };
         assert_eq!(mutation.strategy, expected_strategy, "sql: {sql}");
@@ -274,6 +321,75 @@ async fn test_binder_mutation_udf() -> Result<()> {
     ];
 
     run_binder_cases("binder_mutation_udf.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_nested_udf_rewrite() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_is_rewritten",
+            description: "A script UDF called from a lambda UDF body must still be rewritten into a UdfScript node.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT wrap_add_one(a) FROM t",
+        },
+        SqlTestCase {
+            name: "sql_scalar_udf_wrapping_script_udf_is_rewritten",
+            description: "A script UDF called from a SQL scalar UDF body must still be rewritten into a UdfScript node.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_SCALAR_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT scalar_wrap_add_one(a) FROM t",
+        },
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_in_filter_is_rewritten",
+            description: "A script UDF reached through a lambda UDF inside WHERE must be rewritten before the filter is evaluated.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT a FROM t WHERE wrap_add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "script_udf_inside_sql_lambda_body_is_rejected",
+            description: "A script UDF cannot be lifted out of a SQL lambda body, so it must be rejected with a clear error instead of leaking an internal column id.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "SELECT array_transform([a], x -> add_one(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_inside_sql_lambda_body_is_rejected",
+            description: "The same rejection must apply when the script UDF is reached indirectly through a lambda UDF.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT array_transform([a], x -> wrap_add_one(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "udaf_script_inside_sql_lambda_body_is_rejected",
+            description: "A UDAF script is built outside the aggregate resolution path, so the lambda body check must reject it too.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT array_transform([a], x -> weighted_avg(x, b)) FROM t",
+        },
+        SqlTestCase {
+            name: "pure_sql_lambda_udf_inside_sql_lambda_body_is_allowed",
+            description: "A lambda UDF whose body is pure SQL is inlined, so it must remain usable inside a SQL lambda body.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_add_one AS (x) -> x + 1",
+            ],
+            sql: "SELECT array_transform([a], x -> sql_add_one(x)) FROM t",
+        },
+    ];
+
+    run_binder_cases("binder_nested_udf.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -379,7 +495,7 @@ async fn test_many_window_expressions_bind_as_flat_window_group() -> Result<()> 
     };
 
     let mut stats = WindowPlanStats::default();
-    collect_window_plan_stats(&s_expr, &mut stats);
+    collect_window_plan_stats(s_expr.logical()?, &mut stats);
 
     assert_eq!(stats.window_group_nodes, 1);
     assert_eq!(stats.window_nodes, 0);
@@ -409,7 +525,7 @@ async fn test_mixed_partition_windows_bind_as_partitioned_window_groups() -> Res
     };
 
     let mut stats = WindowPlanStats::default();
-    collect_window_plan_stats(&s_expr, &mut stats);
+    collect_window_plan_stats(s_expr.logical()?, &mut stats);
 
     assert_eq!(stats.window_group_nodes, 2);
     assert_eq!(stats.window_nodes, 0);

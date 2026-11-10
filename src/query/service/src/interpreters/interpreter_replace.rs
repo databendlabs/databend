@@ -47,8 +47,8 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::build_update_stream_reqs;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 #[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::physical_plans::CommitSink;
@@ -105,12 +105,6 @@ impl Interpreter for ReplaceInterpreter {
             let (physical_plan, purge_info) = self.build_physical_plan().await?;
             let mut pipeline =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-            let lock_guard = self
-                .plan
-                .lock_guard
-                .as_ref()
-                .and_then(|holder| holder.try_take());
-            pipeline.main_pipeline.add_lock_guard(lock_guard);
 
             // purge
             if let Some((files, stage_info, options)) = purge_info {
@@ -123,7 +117,9 @@ impl Interpreter for ReplaceInterpreter {
                 )?;
             }
 
-            // Execute hook.
+            // Execute hook. The table lock acquired by the binder is handed over to the hook
+            // chain, which keeps it for the main pipeline and the compact hook and releases it
+            // before analyze.
             {
                 let hook_operator = HookOperator::create(
                     self.ctx.clone(),
@@ -132,7 +128,8 @@ impl Interpreter for ReplaceInterpreter {
                     self.plan.table.clone(),
                     MutationKind::Replace,
                     LockTableOption::NoLock,
-                );
+                )
+                .with_lock_guard(self.plan.lock_guard.clone());
                 hook_operator.execute(&mut pipeline.main_pipeline).await;
             }
 
@@ -313,7 +310,13 @@ impl ReplaceInterpreter {
             .ctx
             .get_settings()
             .get_replace_into_bloom_pruning_max_column_number()?;
-        let bloom_filter_column_indexes = if table.cluster_key_meta().is_some() {
+        // Only the partitioned path computes the input hashes needed for bloom pruning.
+        let bloom_filter_column_indexes = if table.cluster_key_meta().is_some()
+            && self
+                .ctx
+                .get_settings()
+                .get_enable_replace_into_partitioning()?
+        {
             fuse_table
                 .choose_bloom_filter_columns(
                     self.ctx.clone(),
@@ -381,6 +384,7 @@ impl ReplaceInterpreter {
             table_meta_timestamps,
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         });
 
         root.adjust_plan_id(&mut 0);
@@ -484,12 +488,12 @@ impl ReplaceInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
+        let update_stream_meta = build_update_stream_reqs(&self.ctx, false).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             ctx.clone(),
             *(bind_context.clone()),
-            *s_expr.clone(),
+            s_expr.planned()?.clone(),
             metadata.clone(),
             formatted_ast.clone(),
             false,

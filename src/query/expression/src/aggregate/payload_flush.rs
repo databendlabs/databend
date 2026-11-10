@@ -17,8 +17,11 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 
 use super::BATCH_SIZE;
 use super::StateAddr;
+use super::aggregate_function::AggregateStateSet;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
+use super::payload_row::RowTypeVisitor;
+use super::payload_row::visit_row_type;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
 use crate::BlockEntry;
@@ -33,6 +36,7 @@ use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
+use crate::types::IntervalType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ReturnType;
@@ -96,6 +100,52 @@ impl PayloadFlushState {
     }
 }
 
+struct FlushColumn<'a> {
+    payload: &'a Payload,
+    state: &'a mut PayloadFlushState,
+    offset: usize,
+}
+
+impl RowTypeVisitor for FlushColumn<'_> {
+    type Output = Column;
+
+    fn visit_empty(self, data_type: &DataType) -> Column {
+        let len = self.state.probe_state.row_count;
+        match data_type {
+            DataType::Null => Column::Null { len },
+            DataType::EmptyArray => Column::EmptyArray { len },
+            DataType::EmptyMap => Column::EmptyMap { len },
+            _ => unreachable!(),
+        }
+    }
+
+    fn visit_fixed<T: ArgType>(self) -> Column {
+        self.payload.flush_type_column::<T>(self.offset, self.state)
+    }
+
+    fn visit_decimal<Num: Decimal>(self, size: DecimalSize) -> Column {
+        self.payload
+            .flush_decimal_column::<Num>(self.offset, self.state, size)
+    }
+
+    fn visit_bytes(self, data_type: &DataType) -> Column {
+        let (payload, offset, state) = (self.payload, self.offset, self.state);
+        match data_type {
+            DataType::String => Column::String(payload.flush_string_column(offset, state)),
+            DataType::Binary => Column::Binary(payload.flush_binary_column(offset, state)),
+            DataType::Bitmap => Column::Bitmap(payload.flush_binary_column(offset, state)),
+            DataType::Variant => Column::Variant(payload.flush_binary_column(offset, state)),
+            DataType::Geometry => Column::Geometry(payload.flush_binary_column(offset, state)),
+            _ => unreachable!(),
+        }
+    }
+
+    fn visit_serialized(self, data_type: &DataType) -> Column {
+        self.payload
+            .flush_generic_column(data_type, self.offset, self.state)
+    }
+}
+
 impl PartitionedPayload {
     pub fn aggregate_flush_bucket(&self, bucket: usize) -> Result<DataBlock> {
         self.payloads[bucket].aggregate_flush_all()
@@ -135,10 +185,25 @@ impl PartitionedPayload {
 
 impl Payload {
     pub fn aggregate_flush_all(&self) -> Result<DataBlock> {
+        // A PayloadFlushState is over 100KB, do not allocate one for an empty payload.
+        if self.len() == 0 {
+            return Ok(self.empty_block(0));
+        }
+
         let mut state = PayloadFlushState::default();
+        self.aggregate_flush_all_with_state(&mut state)
+    }
+
+    /// Same as `aggregate_flush_all`, but reuses the caller's flush state, so that
+    /// flushing many payloads does not allocate a new state for each of them.
+    pub fn aggregate_flush_all_with_state(
+        &self,
+        state: &mut PayloadFlushState,
+    ) -> Result<DataBlock> {
+        state.clear();
         let mut blocks = vec![];
 
-        while let Some(block) = self.aggregate_flush(&mut state)? {
+        while let Some(block) = self.aggregate_flush(state)? {
             blocks.push(block);
         }
 
@@ -166,7 +231,10 @@ impl Payload {
                 .zip(builders.iter_mut())
             {
                 let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-                func.batch_serialize(&state.state_places.as_slice()[0..row_count], loc, builders)?;
+                func.serialize(
+                    AggregateStateSet::new(&state.state_places.as_slice()[0..row_count], loc),
+                    builders,
+                )?;
             }
 
             entries.extend(builders.into_iter().map(|builder| builder.build().into()));
@@ -177,6 +245,10 @@ impl Payload {
     }
 
     pub fn group_by_flush_all(&self) -> Result<DataBlock> {
+        if self.len() == 0 {
+            return Ok(self.empty_block(0));
+        }
+
         let mut state = PayloadFlushState::default();
         let mut blocks = vec![];
 
@@ -193,6 +265,20 @@ impl Payload {
     }
 
     pub fn flush(&self, flush_state: &mut PayloadFlushState) -> bool {
+        if !self.scan_rows(flush_state) {
+            return false;
+        }
+
+        flush_state.group_columns.clear();
+        for col_index in 0..self.group_types.len() {
+            let col = self.flush_column(col_index, flush_state);
+            flush_state.group_columns.push(col.into());
+        }
+        true
+    }
+
+    /// Scans the next rows like `flush`, without building their group columns.
+    pub(super) fn scan_rows(&self, flush_state: &mut PayloadFlushState) -> bool {
         let Some(page) = self.pages.get(flush_state.flush_page) else {
             return false;
         };
@@ -202,12 +288,11 @@ impl Payload {
             flush_state.flush_page_row = 0;
             flush_state.row_count = 0;
 
-            return self.flush(flush_state);
+            return self.scan_rows(flush_state);
         }
 
         let end = (flush_state.flush_page_row + BATCH_SIZE).min(page.rows);
         let rows = end - flush_state.flush_page_row;
-        flush_state.group_columns.clear();
         flush_state.row_count = rows;
         let state = &mut *flush_state.probe_state;
         state.row_count = rows;
@@ -221,49 +306,19 @@ impl Payload {
             }
         }
 
-        for col_index in 0..self.group_types.len() {
-            let col = self.flush_column(col_index, flush_state);
-            flush_state.group_columns.push(col.into());
-        }
-
         flush_state.flush_page_row = end;
         true
     }
 
     fn flush_column(&self, col_index: usize, state: &mut PayloadFlushState) -> Column {
-        let len = state.probe_state.row_count;
-
-        let col_offset = self.row_layout.group_offsets[col_index];
-        let col = match self.group_types[col_index].remove_nullable() {
-            DataType::Null => Column::Null { len },
-            DataType::EmptyArray => Column::EmptyArray { len },
-            DataType::EmptyMap => Column::EmptyMap { len },
-            DataType::Boolean => self.flush_type_column::<BooleanType>(col_offset, state),
-            DataType::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
-                NumberDataType::NUM_TYPE =>
-                    self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
-            }),
-            DataType::Decimal(size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 => {
-                    self.flush_decimal_column::<i64>(col_offset, state, size)
-                }
-                DecimalDataKind::Decimal128 => {
-                    self.flush_decimal_column::<i128>(col_offset, state, size)
-                }
-                DecimalDataKind::Decimal256 => {
-                    self.flush_decimal_column::<i256>(col_offset, state, size)
-                }
+        let col = visit_row_type(
+            &self.group_types[col_index].remove_nullable(),
+            FlushColumn {
+                payload: self,
+                state,
+                offset: self.row_layout.group_offsets[col_index],
             },
-            DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
-            DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
-            DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),
-            DataType::String => Column::String(self.flush_string_column(col_offset, state)),
-            DataType::Bitmap => Column::Bitmap(self.flush_binary_column(col_offset, state)),
-            DataType::Variant => Column::Variant(self.flush_binary_column(col_offset, state)),
-            DataType::Geometry => Column::Geometry(self.flush_binary_column(col_offset, state)),
-            DataType::Nullable(_) => unreachable!(),
-            other => self.flush_generic_column(&other, col_offset, state),
-        };
+        );
 
         let validity_offset = self.row_layout.validity_offsets[col_index];
         if self.group_types[col_index].is_nullable() {
@@ -311,8 +366,8 @@ impl Payload {
         let mut binary_builder = BinaryColumnBuilder::with_capacity(len, len * 4);
 
         unsafe {
-            for idx in 0..len {
-                let scalar = state.addresses[idx].read_bytes(col_offset);
+            for address in &state.addresses[..len] {
+                let scalar = address.read_bytes(col_offset);
                 binary_builder.put_slice(scalar);
                 binary_builder.commit_row();
             }
@@ -329,8 +384,8 @@ impl Payload {
         let mut binary_builder = StringColumnBuilder::with_capacity(len);
 
         unsafe {
-            for idx in 0..len {
-                let scalar = state.addresses[idx].read_bytes(col_offset);
+            for address in &state.addresses[..len] {
+                let scalar = address.read_bytes(col_offset);
                 binary_builder.put_and_commit(std::str::from_utf8_unchecked(scalar));
             }
         }
@@ -347,10 +402,9 @@ impl Payload {
         let mut builder = ColumnBuilder::with_capacity(data_type, len);
 
         unsafe {
-            for idx in 0..len {
-                let str_len = state.addresses[idx].read::<u32>(col_offset) as usize;
-                let data_address =
-                    state.addresses[idx].read::<u64>(col_offset + 4) as usize as *const u8;
+            for address in &state.addresses[..len] {
+                let str_len = address.read::<u32>(col_offset) as usize;
+                let data_address = address.read::<u64>(col_offset + 4) as usize as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
                 let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();

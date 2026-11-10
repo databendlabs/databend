@@ -36,13 +36,13 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_resources_management::DummyResourcesManagement;
-use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TempDirManager;
 
@@ -89,6 +89,30 @@ impl GlobalServices {
         // The order of initialization is very important
         // 1. global config init.
         GlobalConfig::init(config, version)?;
+
+        #[cfg(feature = "python-udf")]
+        databend_query_script_udf_support::PythonWorkerManager::init(
+            databend_query_script_udf_support::PythonWorkerConfig {
+                max_workers: config.query.common.python_udf_max_workers,
+                max_workers_per_tenant: config.query.common.python_udf_max_workers_per_tenant,
+                max_workers_per_query: config.query.common.python_udf_max_workers_per_query,
+                max_queued_queries: config.query.common.python_udf_max_queued_queries,
+                queue_timeout: std::time::Duration::from_secs(
+                    config.query.common.python_udf_queue_timeout_secs,
+                ),
+                execution_timeout: std::time::Duration::from_secs(
+                    config.query.common.python_udf_execution_timeout_secs,
+                ),
+                idle_timeout: std::time::Duration::from_secs(
+                    config.query.common.python_udf_worker_idle_timeout_secs,
+                ),
+            }
+            .resolve_limits(if config.query.common.num_cpus == 0 {
+                std::thread::available_parallelism().map_or(1, usize::from)
+            } else {
+                config.query.common.num_cpus as usize
+            })?,
+        )?;
 
         compress::GLOBAL_ENCODER.set_compress(config.meta.compress_values());
 
@@ -177,12 +201,21 @@ impl GlobalServices {
             &config.query.common.share_endpoint_auth_token_file,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
+        // The shared pools are reclaimed when the server memory limit is reached; without an
+        // enforced limit they never would be.
+        if config.cache.shared_memory_enabled && !config.query.common.max_memory_limit_enabled {
+            return Err(ErrorCode::InvalidConfig(
+                "cache.shared_memory_enabled requires a server memory limit: set \
+                 query.max_memory_limit_enabled and query.max_server_memory_usage",
+            ));
+        }
         CacheManager::init(
             &config.cache,
             &config.query.common.max_server_memory_usage,
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
+        FuseCaches::init(&CacheManager::instance());
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config
@@ -230,16 +263,20 @@ impl GlobalServices {
         }
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
+        // The legacy cache backend keeps its old behavior: caches are not shrunk under pressure.
+        if config.cache.shared_memory_enabled {
+            let cache_manager = CacheManager::instance();
+            GLOBAL_QUERIES_MANAGER.set_reclaim_handle(move |relieved| {
+                cache_manager.shrink_for_pressure(relieved).freed
+            });
+        }
 
         Ok(())
     }
 
     async fn init_workload_mgr(config: &InnerConfig) -> Result<()> {
         let meta_api_provider = MetaStoreProvider::new(config.meta.to_meta_grpc_client_conf());
-        let meta_store = match meta_api_provider
-            .create_meta_store::<DatabendRuntime>()
-            .await
-        {
+        let meta_store = match meta_api_provider.create_default_meta_store().await {
             Ok(meta_store) => Ok(meta_store),
             Err(cause) => Err(ErrorCode::MetaServiceError(format!(
                 "Failed to create meta store: {}",

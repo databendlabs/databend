@@ -34,6 +34,7 @@ use crate::ColumnBuilder;
 use crate::ColumnView;
 use crate::DataBlock;
 use crate::LimitType;
+use crate::Scalar;
 use crate::SortColumnDescription;
 use crate::SortCompare;
 use crate::TakeIndex;
@@ -71,6 +72,7 @@ struct TypeHandler {
     push: fn(&mut ColumnStorage, BlockEntry) -> Result<()>,
     replace: fn(&mut ColumnStorage, usize, BlockEntry),
     take: fn(&ColumnStorage, &ChunkIndex) -> BlockEntry,
+    const_scalar: fn(&ColumnStorage, &ChunkIndex) -> Option<Scalar>,
     sort_indices: fn(&mut SortCompare, &ColumnStorage, &RowLocations),
     require_same_type: bool,
 }
@@ -82,6 +84,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<T>,
             replace: DataBlockVec::replace_typed::<T>,
             take: DataBlockVec::take_typed::<T>,
+            const_scalar: DataBlockVec::const_scalar_typed::<T>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<T>,
             require_same_type,
         }
@@ -93,6 +96,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<T>>,
             replace: DataBlockVec::replace_typed::<NullableType<T>>,
             take: DataBlockVec::take_typed::<NullableType<T>>,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<T>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<T>,
             require_same_type: true,
         }
@@ -108,6 +112,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<TColumn>,
             replace: DataBlockVec::replace_typed::<TColumn>,
             take: DataBlockVec::take_primitive::<TSimple>,
+            const_scalar: DataBlockVec::const_scalar_typed::<TColumn>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<TColumn>,
             require_same_type: false,
         }
@@ -123,6 +128,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<TColumn>>,
             replace: DataBlockVec::replace_typed::<NullableType<TColumn>>,
             take: DataBlockVec::take_nullable_primitive::<TSimple>,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<TColumn>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<TColumn>,
             require_same_type: true,
         }
@@ -138,6 +144,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<T>,
             replace: DataBlockVec::replace_typed::<T>,
             take: DataBlockVec::take_binary::<T>,
+            const_scalar: DataBlockVec::const_scalar_typed::<T>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<T>,
             require_same_type: false,
         }
@@ -153,6 +160,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<T>>,
             replace: DataBlockVec::replace_typed::<NullableType<T>>,
             take: DataBlockVec::take_nullable_binary::<T>,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<T>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<T>,
             require_same_type: true,
         }
@@ -164,6 +172,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<StringType>,
             replace: DataBlockVec::replace_typed::<StringType>,
             take: DataBlockVec::take_string,
+            const_scalar: DataBlockVec::const_scalar_typed::<StringType>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<StringType>,
             require_same_type: false,
         }
@@ -175,6 +184,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<StringType>>,
             replace: DataBlockVec::replace_typed::<NullableType<StringType>>,
             take: DataBlockVec::take_nullable_string,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<StringType>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<StringType>,
             require_same_type: true,
         }
@@ -186,6 +196,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<BooleanType>,
             replace: DataBlockVec::replace_typed::<BooleanType>,
             take: DataBlockVec::take_boolean,
+            const_scalar: DataBlockVec::const_scalar_typed::<BooleanType>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<BooleanType>,
             require_same_type: false,
         }
@@ -197,6 +208,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<BooleanType>>,
             replace: DataBlockVec::replace_typed::<NullableType<BooleanType>>,
             take: DataBlockVec::take_nullable_boolean,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<BooleanType>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<BooleanType>,
             require_same_type: true,
         }
@@ -309,7 +321,24 @@ impl DataBlockVec {
             .iter()
             .map(|column| {
                 let handler = Self::handler_for(&column.data_type);
-                (handler.take)(column, indices)
+                // Rows taken only from blocks holding the same constant stay
+                // constant. Aggregate states are stored by their state type,
+                // so they always go through take.
+                let is_state = matches!(
+                    column.data_type.remove_nullable(),
+                    DataType::AggregateState(_)
+                );
+                let scalar = if is_state {
+                    None
+                } else {
+                    (handler.const_scalar)(column, indices)
+                };
+                match scalar {
+                    Some(scalar) => {
+                        BlockEntry::new_const_column(column.data_type.clone(), scalar, num_rows)
+                    }
+                    None => (handler.take)(column, indices),
+                }
             })
             .collect::<Vec<_>>();
 
@@ -563,6 +592,30 @@ impl DataBlockVec {
             .expect("column view storage type mismatch")
     }
 
+    /// The constant of the taken rows, if every block they are taken from holds
+    /// the same constant in this column.
+    fn const_scalar_typed<T: ValueType>(
+        storage: &ColumnStorage,
+        indices: &ChunkIndex,
+    ) -> Option<Scalar> {
+        let views = Self::column_views::<T>(storage);
+        let mut chunks = indices.iter_chunk();
+        let ColumnView::Const(first, _) = &views[chunks.next()?.block() as usize] else {
+            return None;
+        };
+        for chunk in chunks {
+            match &views[chunk.block() as usize] {
+                ColumnView::Const(scalar, _)
+                    if T::equal(T::to_scalar_ref(scalar), T::to_scalar_ref(first)) => {}
+                _ => return None,
+            }
+        }
+        Some(T::upcast_scalar_with_type(
+            first.clone(),
+            &storage.data_type,
+        ))
+    }
+
     fn take_typed<T: ValueType>(storage: &ColumnStorage, indices: &ChunkIndex) -> BlockEntry {
         let views = Self::column_views::<T>(storage);
         let mut builder = ColumnBuilder::with_capacity(&storage.data_type, indices.num_rows());
@@ -656,6 +709,48 @@ impl DataBlockVec {
         locations: &RowLocations,
     ) {
         let views = Self::column_views::<T>(storage);
+        // Local codes are comparable only within one view. Independent dictionaries and
+        // FOR bases across blocks must keep comparing their actual values.
+        if let [ColumnView::Encoded(view)] = views.as_slice() {
+            match view {
+                EncodedView::For(column) => {
+                    crate::with_narrow_buffer!(column.deltas(), |deltas| {
+                        sort_compare.update_permutation_by(None, |left, right| {
+                            deltas[left as usize].cmp(&deltas[right as usize])
+                        });
+                    });
+                    return;
+                }
+                EncodedView::Dict { keys, values }
+                    if T::column_len(values) <= u32::MAX as usize =>
+                {
+                    let compare = |left: usize, right: usize| {
+                        T::compare(unsafe { T::index_column_unchecked(values, left) }, unsafe {
+                            T::index_column_unchecked(values, right)
+                        })
+                    };
+                    let mut order = (0..T::column_len(values) as u32).collect::<Vec<_>>();
+                    order.sort_unstable_by(|left, right| compare(*left as usize, *right as usize));
+                    let mut ranks = vec![0u32; order.len()];
+                    let mut rank = 0;
+                    for pair in order.windows(2) {
+                        // Functions may produce equal values for different codes. Keep
+                        // their ranks equal for subsequent sort keys and LimitRank.
+                        rank += u32::from(!compare(pair[0] as usize, pair[1] as usize).is_eq());
+                        ranks[pair[1] as usize] = rank;
+                    }
+                    drop(order);
+                    crate::with_narrow_buffer!(keys, |keys| {
+                        sort_compare.update_permutation_by(None, |left, right| {
+                            ranks[keys[left as usize] as usize]
+                                .cmp(&ranks[keys[right as usize] as usize])
+                        });
+                    });
+                    return;
+                }
+                _ => {}
+            }
+        }
         sort_compare.update_permutation_by(None, |left, right| {
             let (lhs_block, lhs_row) = locations.get(left);
             let (rhs_block, rhs_row) = locations.get(right);
@@ -688,6 +783,7 @@ impl DataBlockVec {
         let has_null = views.iter().any(|view| match view {
             ColumnView::Const(value, num_rows) => value.is_none() && *num_rows > 0,
             ColumnView::Column(column) => column.validity().null_count() > 0,
+            ColumnView::Encoded(view) => view.iter().any(|value| value.is_none()),
         });
 
         if !has_null {
@@ -701,6 +797,9 @@ impl DataBlockVec {
                     bitmap.extend_constant(*num_rows, value.is_some());
                 }
                 ColumnView::Column(column) => bitmap.extend_from_bitmap(column.validity()),
+                ColumnView::Encoded(view) => {
+                    view.iter().for_each(|value| bitmap.push(value.is_some()))
+                }
             }
         }
         Some(bitmap.into())
@@ -718,6 +817,8 @@ impl DataBlockVec {
             ColumnView::Column(nullable) => unsafe {
                 T::index_column_unchecked(nullable.column(), row)
             },
+            ColumnView::Encoded(view) => unsafe { view.index_unchecked(row) }
+                .expect("validity bitmap mismatch for nullable sort encoded value"),
         }
     }
 }
@@ -738,6 +839,7 @@ impl RowLocations {
         self.data.len()
     }
 
+    #[inline]
     fn get(&self, index: u32) -> (usize, usize) {
         let (block, row) = self.data[index as usize];
         (block as _, row as _)

@@ -30,7 +30,7 @@ impl MemSized for TestKey {
 
 impl Debug for TestKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", &self.0)
+        write!(f, "{:?}", self.0)
     }
 }
 
@@ -45,7 +45,7 @@ impl MemSized for TestValue {
 
 impl Debug for TestValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", &self.0)
+        write!(f, "{:?}", self.0)
     }
 }
 

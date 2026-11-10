@@ -401,7 +401,7 @@ build_exceptions! {
     TagHasUnrecognizedReferences(2754),
 }
 
-// Cloud and Integration Errors [1701-1703]
+// Cloud and Integration Errors [1701-1704]
 build_exceptions! {
     /// Cloud control connect error
     CloudControlConnectError(1701),
@@ -409,6 +409,8 @@ build_exceptions! {
     CloudControlNotEnabled(1702),
     /// Illegal cloud control message format
     IllegalCloudControlMessageFormat(1703),
+    /// Cloud control rejected a notification request
+    CloudControlNotificationRejected(1704),
 }
 
 // UDF and Extension Errors [1810, 2601-2607]
@@ -573,6 +575,8 @@ build_exceptions! {
     InvalidMaterializedView(2328),
     /// Materialized view already exists
     MaterializedViewAlreadyExists(2329),
+    /// Invalid table clone request or lineage state
+    InvalidTableClone(2330),
 }
 
 // Stage and Connection Errors [2501-2505, 2510-2512]
@@ -728,10 +732,15 @@ build_exceptions! {
 build_exceptions! {
     /// Session Idle too long, only used for worksheet for now
     SessionTimeout(5110),
-    /// Server side state lost, mainly because server restarted
+    /// Server side state lost, because the server restarted or the request was
+    /// routed to a node other than the one holding the state
     SessionLost(5111),
     /// Unexpected session state, maybe bug of client or server
     InvalidSessionState(5112),
+    /// The node the session is pinned to (X-DATABEND-STICKY-NODE) is no longer
+    /// in the cluster, so its session state (temp tables, transaction) is gone
+    /// for sure. Clients should drop the sticky state and reconnect.
+    SessionNodeLost(5113),
 }
 
 #[cfg(test)]

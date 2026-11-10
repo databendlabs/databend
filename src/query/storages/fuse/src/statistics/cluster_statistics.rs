@@ -45,6 +45,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
 use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use log::warn;
 
 /// Vector cluster metadata resolved from a vector cluster key expression.
@@ -114,7 +115,12 @@ pub fn vector_cluster_info_from_column(
         .filter(|index| {
             index.index_type == TableIndexType::Vector && index.column_ids.contains(&column_id)
         })
-        .map(|index| index.options.get("distance").map(String::as_str));
+        .map(|index| {
+            index
+                .options
+                .get(VECTOR_INDEX_OPT_DISTANCE)
+                .map(String::as_str)
+        });
 
     let distance_type = VectorDistanceType::from_index_options(column_name, distances)?;
     Ok(VectorClusterInfo {
@@ -140,6 +146,7 @@ pub struct ClusterStatsGenerator {
     pub extra_key_num: usize,
     /// Physical offsets of evaluated PARTITION BY expressions.
     pub partition_key_index: Vec<usize>,
+    pub partition_key_id: Option<u32>,
     pub eval_operators: Vec<BlockOperator>,
     pub out_fields: Vec<DataField>,
     pub func_ctx: FunctionContext,
@@ -161,6 +168,7 @@ impl ClusterStatsGenerator {
         Self {
             cluster_key_id,
             partition_key_index: Vec::new(),
+            partition_key_id: None,
             stats_keys,
             extra_key_num,
             level,
@@ -302,7 +310,10 @@ impl ClusterStatsGenerator {
             }
             values.push(value.to_owned());
         }
-        Ok(Some(PartitionStatistics::new(values)))
+        let partition_key_id = self.partition_key_id.ok_or_else(|| {
+            ErrorCode::Internal("partition key identity is missing before block serialization")
+        })?;
+        Ok(Some(PartitionStatistics::new(partition_key_id, values)))
     }
 
     /// Recompute cluster statistics and reusable direct-column bounds during mutation.
@@ -471,12 +482,11 @@ pub fn sort_by_cluster_stats(
     v2: Option<&ClusterStatistics>,
     default_cluster_key: u32,
 ) -> Ordering {
+    // Stats without the current cluster key are not comparable; sort them last as one group.
+    let v1 = v1.filter(|v| v.cluster_key_id == default_cluster_key);
+    let v2 = v2.filter(|v| v.cluster_key_id == default_cluster_key);
     match (v1, v2) {
         (Some(a), Some(b)) => {
-            if a.cluster_key_id != default_cluster_key && b.cluster_key_id != default_cluster_key {
-                return Ordering::Equal;
-            }
-
             let ord_min = a
                 .min()
                 .iter()
@@ -490,15 +500,22 @@ pub fn sort_by_cluster_stats(
                 .map(Scalar::as_ref)
                 .cmp(b.max().iter().map(Scalar::as_ref))
         }
-        _ => Ordering::Equal,
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
     }
 }
 
+/// Use exact values only when both the definition identity and arity match.
+/// Legacy or stale statistics are unknown, not evidence that rows can be pruned.
 pub(crate) fn partition_values(
     stats: Option<&PartitionStatistics>,
     partition_key_count: usize,
+    partition_key_id: Option<u32>,
 ) -> Option<&[Scalar]> {
+    let partition_key_id = partition_key_id?;
     stats
+        .filter(|stats| stats.partition_key_id == Some(partition_key_id))
         .map(|stats| stats.values.as_slice())
         .filter(|values| values.len() == partition_key_count)
 }
@@ -507,13 +524,14 @@ pub(crate) fn same_partition(
     left: Option<&PartitionStatistics>,
     right: Option<&PartitionStatistics>,
     partition_key_count: usize,
+    partition_key_id: Option<u32>,
 ) -> bool {
     if partition_key_count == 0 {
         return true;
     }
     match (
-        partition_values(left, partition_key_count),
-        partition_values(right, partition_key_count),
+        partition_values(left, partition_key_count, partition_key_id),
+        partition_values(right, partition_key_count, partition_key_id),
     ) {
         (Some(left), Some(right)) => left == right,
         _ => false,
@@ -879,6 +897,85 @@ mod tests {
     }
 
     #[test]
+    fn test_sort_by_cluster_stats_is_total_order_with_mixed_stats() {
+        const KEY: u32 = 7;
+        let matched = |min: i32, max: i32| {
+            Some(ClusterStatistics::new(
+                KEY,
+                vec![int32_scalar(min)],
+                vec![int32_scalar(max)],
+                0,
+            ))
+        };
+        let stale = |min: i32, max: i32| {
+            Some(ClusterStatistics::new(
+                KEY + 1,
+                vec![int32_scalar(min)],
+                vec![int32_scalar(max)],
+                0,
+            ))
+        };
+
+        let mut stats: Vec<Option<ClusterStatistics>> = vec![
+            matched(9, 10),
+            None,
+            matched(1, 2),
+            stale(0, 0),
+            matched(5, 6),
+            None,
+            matched(1, 3),
+            stale(100, 200),
+            matched(0, 1),
+        ];
+        let cmp = |a: &Option<ClusterStatistics>, b: &Option<ClusterStatistics>| {
+            sort_by_cluster_stats(a.as_ref(), b.as_ref(), KEY)
+        };
+
+        for a in &stats {
+            for b in &stats {
+                assert_eq!(cmp(a, b), cmp(b, a).reverse());
+                for c in &stats {
+                    let ab = cmp(a, b);
+                    let bc = cmp(b, c);
+                    if ab == bc {
+                        assert_eq!(cmp(a, c), ab, "{a:?} {b:?} {c:?}");
+                    }
+                    if ab == Ordering::Equal {
+                        assert_eq!(cmp(a, c), cmp(b, c), "{a:?} {b:?} {c:?}");
+                    }
+                }
+            }
+        }
+
+        stats.sort_by(cmp);
+        let ordered: Vec<Option<(i32, i32)>> = stats
+            .iter()
+            .map(|s| {
+                s.as_ref().filter(|s| s.cluster_key_id == KEY).map(|s| {
+                    match (&s.min[0], &s.max[0]) {
+                        (
+                            Scalar::Number(NumberScalar::Int32(min)),
+                            Scalar::Number(NumberScalar::Int32(max)),
+                        ) => (*min, *max),
+                        _ => unreachable!(),
+                    }
+                })
+            })
+            .collect();
+        assert_eq!(ordered, vec![
+            Some((0, 1)),
+            Some((1, 2)),
+            Some((1, 3)),
+            Some((5, 6)),
+            Some((9, 10)),
+            None,
+            None,
+            None,
+            None,
+        ]);
+    }
+
+    #[test]
     fn test_calculate_block_depths_keeps_boundary_touch_semantics() -> Result<()> {
         let ranges = vec![
             (vec![int32_scalar(1)], vec![int32_scalar(2)]),
@@ -921,15 +1018,22 @@ mod tests {
 
     #[test]
     fn test_partition_values_returns_none_for_missing_stats() {
-        assert_eq!(partition_values(None, 1), None);
+        assert_eq!(partition_values(None, 1, Some(0)), None);
     }
 
     #[test]
     fn test_partition_values_returns_exact_values() {
-        let stats = PartitionStatistics::new(vec![int32_scalar(3)]);
-        let values = partition_values(Some(&stats), 1).unwrap();
+        let stats = PartitionStatistics::new(0, vec![int32_scalar(3)]);
+        let values = partition_values(Some(&stats), 1, Some(0)).unwrap();
         assert_eq!(values, &[int32_scalar(3)]);
-        assert_eq!(partition_values(Some(&stats), 2), None);
+        assert_eq!(partition_values(Some(&stats), 2, Some(0)), None);
+        assert_eq!(partition_values(Some(&stats), 1, Some(1)), None);
+        assert_eq!(partition_values(Some(&stats), 1, None), None);
+        let legacy = PartitionStatistics {
+            values: stats.values,
+            partition_key_id: None,
+        };
+        assert_eq!(partition_values(Some(&legacy), 1, Some(0)), None);
     }
 
     #[test]
@@ -977,6 +1081,7 @@ mod tests {
             FunctionContext::default(),
         );
         generator.partition_key_index = vec![2];
+        generator.partition_key_id = Some(0);
 
         let partition_stats = generator.extract_partition_stats(&block)?.unwrap();
         let cluster_stats = generator
@@ -995,24 +1100,27 @@ mod tests {
     #[test]
     fn test_same_partition_returns_false_when_either_side_has_no_stats() {
         // Without partition metadata on either side, compact must not merge the segments.
-        let stats = PartitionStatistics::new(vec![int32_scalar(1)]);
-        assert!(!same_partition(None, None, 1));
-        assert!(!same_partition(Some(&stats), None, 1));
-        assert!(!same_partition(None, Some(&stats), 1));
+        let stats = PartitionStatistics::new(0, vec![int32_scalar(1)]);
+        assert!(!same_partition(None, None, 1, Some(0)));
+        assert!(!same_partition(Some(&stats), None, 1, Some(0)));
+        assert!(!same_partition(None, Some(&stats), 1, Some(0)));
     }
 
     #[test]
     fn test_same_partition_returns_true_when_partition_key_count_is_zero() {
         // Tables without PARTITION BY always treat segments as the same partition.
-        assert!(same_partition(None, None, 0));
+        assert!(same_partition(None, None, 0, None));
     }
 
     #[test]
     fn test_same_partition_distinguishes_different_partition_values() {
-        let left = PartitionStatistics::new(vec![int32_scalar(0)]);
-        let right = PartitionStatistics::new(vec![int32_scalar(1)]);
-        assert!(!same_partition(Some(&left), Some(&right), 1));
-        assert!(same_partition(Some(&left), Some(&left), 1));
+        let left = PartitionStatistics::new(0, vec![int32_scalar(0)]);
+        let right = PartitionStatistics::new(0, vec![int32_scalar(1)]);
+        assert!(!same_partition(Some(&left), Some(&right), 1, Some(0)));
+        assert!(same_partition(Some(&left), Some(&left), 1, Some(0)));
+        let next_key = PartitionStatistics::new(1, left.values.clone());
+        assert!(!same_partition(Some(&left), Some(&next_key), 1, Some(1)));
+        assert!(!same_partition(Some(&left), Some(&left), 1, Some(1)));
     }
 
     #[test]

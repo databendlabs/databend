@@ -12,10 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Write;
 
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::filter::FilterExecutor;
+use databend_common_expression::type_check;
 use databend_common_expression::types::*;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -502,6 +509,74 @@ fn test_gte(file: &mut impl Write) {
     ];
     run_ast(file, "parse_json(lhs) >= parse_json(rhs)", &table);
     run_ast(file, "lhs >= rhs", &table);
+}
+
+#[test]
+fn test_like_filter_operand_order() -> databend_common_exception::Result<()> {
+    let values = vec![
+        Some(""),
+        Some("%"),
+        Some("_"),
+        Some("abc"),
+        None,
+        Some("a%"),
+    ];
+    let column = StringType::from_opt_data(values.clone());
+    let block = DataBlock::new_from_columns(vec![column.clone()]);
+    let cases: &[(&str, &[usize])] = &[
+        ("'' LIKE s", &[0, 1]),
+        ("is_true('' LIKE s)", &[0, 1]),
+        ("NOT ('' LIKE s)", &[2, 3, 5]),
+        ("'a' LIKE s", &[1, 2, 5]),
+        ("NOT ('a' LIKE s)", &[0, 3]),
+        ("s LIKE ''", &[0]),
+        ("NOT (s LIKE '')", &[1, 2, 3, 5]),
+        ("s LIKE '%'", &[0, 1, 2, 3, 5]),
+        ("NOT (s LIKE '%')", &[]),
+        ("'' LIKE s OR s IS NULL", &[0, 1, 4]),
+        ("NOT ('' LIKE s OR s IS NULL)", &[2, 3, 5]),
+        ("'' LIKE s AND s LIKE '%'", &[0, 1]),
+        ("NOT ('' LIKE s AND s LIKE '%')", &[2, 3, 5]),
+    ];
+
+    for (sql, expected_indices) in cases {
+        let raw_expr = super::parser::parse_raw_expr(
+            &format!("is_true({sql})"),
+            &[("s", column.data_type())],
+            &BUILTIN_FUNCTIONS,
+        );
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        let (expr, _) = ConstantFolder::fold(
+            Cow::Owned(expr),
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        );
+        // Exercise both selector and evaluator paths against hand-computed results.
+        for enable_selector in [true, false] {
+            let mut executor = FilterExecutor::new(
+                expr.clone().into_owned(),
+                FunctionContext {
+                    enable_selector_executor: enable_selector,
+                    ..Default::default()
+                },
+                block.num_rows(),
+                None,
+                &BUILTIN_FUNCTIONS,
+                true,
+            );
+            let actual = executor.filter(block.clone())?;
+            let expected = StringType::from_opt_data(
+                expected_indices.iter().map(|&idx| values[idx]).collect(),
+            );
+            assert_eq!(actual.num_rows(), expected_indices.len(), "{sql}");
+            assert_eq!(
+                actual.get_by_offset(0).as_column().unwrap(),
+                &expected,
+                "{sql}, enable_selector={enable_selector}"
+            );
+        }
+    }
+    Ok(())
 }
 
 // typos:off

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::QuerySpecificValues;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
 use databend_common_statistics::StatCount;
@@ -27,10 +28,10 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::ConstantExpr;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
+use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
@@ -39,13 +40,15 @@ pub struct RuleFoldCountAggregate {
     id: RuleID,
     matchers: Vec<Matcher>,
     stat_context: StatContext,
+    query_specific_values: QuerySpecificValues,
 }
 
 impl RuleFoldCountAggregate {
-    pub fn new(stat_context: StatContext) -> Self {
+    pub fn new(stat_context: StatContext, query_specific_values: QuerySpecificValues) -> Self {
         Self {
             id: RuleID::FoldCountAggregate,
             stat_context,
+            query_specific_values,
             //  Aggregate
             //  \
             //   *
@@ -64,10 +67,6 @@ impl Rule for RuleFoldCountAggregate {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let agg: Aggregate = s_expr.plan().clone().try_into()?;
-
-        if agg.mode == AggregateMode::Final || agg.mode == AggregateMode::Partial {
-            return Ok(());
-        }
 
         let rel_expr = RelExpr::with_s_expr(s_expr);
         let input_stat_info = rel_expr.derive_cardinality_child(0, &self.stat_context)?;
@@ -108,6 +107,11 @@ impl Rule for RuleFoldCountAggregate {
                     return Ok(());
                 }
             }
+            if reads_non_deterministic(s_expr.child(0)?) {
+                // The count is computed from statistics derived with e.g. `now()`, which the
+                // estimate does not record.
+                self.query_specific_values.record();
+            }
             let eval_scalar = EvalScalar { items: scalars };
             // Collect source table indexes from the original plan for cache invalidation
             let source_table_indexes = DummyTableScan::collect_source_tables(s_expr);
@@ -125,8 +129,10 @@ impl Rule for RuleFoldCountAggregate {
     }
 }
 
-impl Default for RuleFoldCountAggregate {
-    fn default() -> Self {
-        Self::new(StatContext::default())
-    }
+fn reads_non_deterministic(s_expr: &SExpr) -> bool {
+    s_expr
+        .plan()
+        .scalar_expr_iter()
+        .any(|scalar| !scalar.is_deterministic())
+        || s_expr.children().any(reads_non_deterministic)
 }

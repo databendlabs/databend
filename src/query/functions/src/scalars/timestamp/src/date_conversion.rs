@@ -119,9 +119,10 @@ pub(super) fn register_real_time_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
-    // Preserve the existing conversion folding policy. Its global monotonicity
-    // assumptions need to be addressed separately from the datetime backend.
-    for name in &["to_timestamp", "to_timestamp_tz", "to_date"] {
+    // to_timestamp must not use endpoint evaluation for its String overload:
+    // parsing does not preserve string ordering. Other overloads infer their own domains.
+    // Preserve the existing folding policy for the remaining conversions.
+    for name in &["to_timestamp_tz", "to_date"] {
         registry
             .properties
             .insert(name.to_string(), FunctionProperty::default().monotonicity());

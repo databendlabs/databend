@@ -317,7 +317,7 @@ impl Display for AlterObjectTagAction {
             AlterObjectTagAction::Set { tags } => {
                 write!(f, "SET TAG ")?;
                 if tags.len() == 1 {
-                    write!(f, "{}", &tags[0])?;
+                    write!(f, "{}", tags[0])?;
                 } else {
                     write_comma_separated_list(f, tags)?;
                 }
@@ -325,7 +325,7 @@ impl Display for AlterObjectTagAction {
             AlterObjectTagAction::Unset { tags } => {
                 write!(f, "UNSET TAG ")?;
                 if tags.len() == 1 {
-                    write!(f, "{}", &tags[0])?;
+                    write!(f, "{}", tags[0])?;
                 } else {
                     write_comma_separated_list(f, tags)?;
                 }

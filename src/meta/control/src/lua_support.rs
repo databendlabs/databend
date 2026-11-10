@@ -21,6 +21,7 @@ use std::time::Duration;
 use databend_meta_client::ClientHandle;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::RpcClientTlsConfig;
 use databend_meta_client::errors::CreationError;
 use databend_meta_client::types::ConditionResult;
 use databend_meta_client::types::TxnCondition;
@@ -39,10 +40,22 @@ use serde::Serialize;
 use tokio::time;
 
 use crate::admin::MetaAdminClient;
-use crate::grpc_client_auth::GrpcClientAuth;
+use crate::grpc_client_config::GrpcClientConfig;
 
 const LUA_UTIL: &str = include_str!("../lua/lua_util.lua");
 const ZIPF_LOAD_GENERATOR: &str = include_str!("../lua/zipf_load_generator.lua");
+
+/// Default gRPC RPC timeout for Lua-created clients, in seconds. The Lua
+/// `new_grpc_client(address[, opts])` binding overrides it via `opts.timeout`.
+/// It is deliberately generous: under heavy concurrent load the leader's commit
+/// latency can reach several seconds, and too short a timeout turns overload
+/// into congestion collapse — the client gives up on a write the server is
+/// actually committing, then blind-retries, amplifying the load.
+const DEFAULT_CLIENT_TIMEOUT_SECS: f64 = 60.0;
+
+/// Client RPC calls at least this slow are logged at WARN, so slow paths are
+/// visible without turning on debug logging for every call.
+const SLOW_CLIENT_OP: Duration = Duration::from_millis(500);
 
 fn invalid_input(path: &str, message: impl std::fmt::Display) -> Error {
     Error::RuntimeError(format!("{path}: {message}"))
@@ -260,12 +273,25 @@ where
     F: FnOnce() -> Fut,
     Fut: Future<Output = Result<T, E>>,
 {
-    match f().await {
-        Ok(result) => match lua.to_value(&result) {
-            Ok(v) => Ok((Some(v), None)),
-            Err(e) => Ok((None, Some(format!("Lua conversion error: {e}")))),
-        },
-        Err(e) => Ok((None, Some(format!("{api_err}: {e}")))),
+    let start = std::time::Instant::now();
+    let outcome = f().await;
+    let elapsed = start.elapsed();
+    match outcome {
+        Ok(result) => {
+            if elapsed >= SLOW_CLIENT_OP {
+                log::warn!("lua client op `{api_err}` slow: took {elapsed:?}");
+            } else {
+                log::debug!("lua client op `{api_err}` ok: took {elapsed:?}");
+            }
+            match lua.to_value(&result) {
+                Ok(v) => Ok((Some(v), None)),
+                Err(e) => Ok((None, Some(format!("Lua conversion error: {e}")))),
+            }
+        }
+        Err(e) => {
+            log::warn!("lua client op `{api_err}` failed after {elapsed:?}: {e}");
+            Ok((None, Some(format!("{api_err}: {e}"))))
+        }
     }
 }
 
@@ -380,18 +406,119 @@ impl UserData for LuaTask {
     }
 }
 
-pub fn setup_lua_environment(lua: &Lua, auth: &GrpcClientAuth) -> anyhow::Result<()> {
+/// Read an optional duration field expressed in (possibly fractional) seconds.
+///
+/// Returns `Ok(None)` when the field is absent. A present value must be finite
+/// and representable as a nonzero `Duration`.
+fn read_duration_secs(table: &Table, path: &str, field: &str) -> mlua::Result<Option<Duration>> {
+    let Some(secs) = table.raw_get::<Option<f64>>(field)? else {
+        return Ok(None);
+    };
+    let invalid_duration = || {
+        invalid_input(
+            path,
+            format!(
+                "field `{field}` must be a positive, representable duration in seconds, got {secs}"
+            ),
+        )
+    };
+    let duration = Duration::try_from_secs_f64(secs).map_err(|_| invalid_duration())?;
+    if duration.is_zero() {
+        return Err(invalid_duration());
+    }
+    Ok(Some(duration))
+}
+
+/// Options for `metactl.new_grpc_client(address[, opts])`, parsed from an
+/// optional Lua table. Every field is optional; omitted fields keep the
+/// defaults in [`GrpcClientOptions::new`]. Unknown fields are rejected.
+struct GrpcClientOptions {
+    username: String,
+    password: String,
+    timeout: Option<Duration>,
+    auto_sync_interval: Option<Duration>,
+    max_msg_size: usize,
+    tls: Option<RpcClientTlsConfig>,
+}
+
+impl GrpcClientOptions {
+    fn new(client_config: &GrpcClientConfig) -> Self {
+        Self {
+            username: client_config.auth.username().to_string(),
+            password: client_config.auth.expose_password().to_string(),
+            timeout: Some(Duration::from_secs_f64(DEFAULT_CLIENT_TIMEOUT_SECS)),
+            auto_sync_interval: Some(Duration::from_secs(1)),
+            max_msg_size: DEFAULT_GRPC_MESSAGE_SIZE,
+            tls: client_config.tls.clone(),
+        }
+    }
+
+    const PATH: &'static str = "new_grpc_client options";
+    const FIELDS: &'static [&'static str] = &[
+        "username",
+        "password",
+        "timeout",
+        "auto_sync_interval",
+        "max_msg_size",
+    ];
+
+    /// Parse the optional Lua options table, layering provided fields over the
+    /// defaults.
+    fn from_lua(options: Option<Table>, client_config: &GrpcClientConfig) -> mlua::Result<Self> {
+        let mut opts = Self::new(client_config);
+        let Some(table) = options else {
+            return Ok(opts);
+        };
+        validate_fields(&table, Self::PATH, Self::FIELDS)?;
+        if let Some(username) = table.raw_get::<Option<String>>("username")? {
+            opts.username = username;
+        }
+        if let Some(password) = table.raw_get::<Option<String>>("password")? {
+            opts.password = password;
+        }
+        if let Some(timeout) = read_duration_secs(&table, Self::PATH, "timeout")? {
+            opts.timeout = Some(timeout);
+        }
+        if let Some(interval) = read_duration_secs(&table, Self::PATH, "auto_sync_interval")? {
+            opts.auto_sync_interval = Some(interval);
+        }
+        if let Some(max_msg_size) = table.raw_get::<Option<usize>>("max_msg_size")? {
+            opts.max_msg_size = max_msg_size;
+        }
+        Ok(opts)
+    }
+
+    /// Create a gRPC client for `addresses` with these options.
+    fn create(
+        &self,
+        addresses: Vec<String>,
+    ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
+        MetaGrpcClient::try_create(
+            addresses,
+            &self.username,
+            &self.password,
+            self.timeout,
+            self.auto_sync_interval,
+            self.tls.clone(),
+            self.max_msg_size,
+        )
+    }
+}
+
+pub fn setup_lua_environment(lua: &Lua, client_config: &GrpcClientConfig) -> anyhow::Result<()> {
     // Create metactl table to namespace all functions
     let metactl_table = lua
         .create_table()
         .map_err(|e| anyhow::anyhow!("Failed to create metactl table: {}", e))?;
 
-    // Register new_grpc_client function
-    let auth = auth.clone();
+    // Register new_grpc_client function. The optional second argument is a
+    // table of client options (timeout, auto_sync_interval, username,
+    // password, max_msg_size); see GrpcClientOptions.
+    let client_config = client_config.clone();
     let new_grpc_client = lua
-        .create_function(move |_lua, address: String| {
-            let addresses = vec![address];
-            let client = new_grpc_client(addresses, &auth).map_err(|e| {
+        .create_function(move |_lua, (address, options): (String, Option<Table>)| {
+            let opts = GrpcClientOptions::from_lua(options, &client_config)?;
+            let client = opts.create(vec![address]).map_err(|e| {
                 mlua::Error::external(format!("Failed to create gRPC client: {}", e))
             })?;
 
@@ -496,31 +623,24 @@ pub fn setup_lua_environment(lua: &Lua, auth: &GrpcClientAuth) -> anyhow::Result
 
 pub fn new_grpc_client(
     addresses: Vec<String>,
-    auth: &GrpcClientAuth,
+    client_config: &GrpcClientConfig,
 ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
     eprintln!(
         "Using gRPC API address: {}",
         serde_json::to_string(&addresses).unwrap()
     );
-    MetaGrpcClient::try_create(
-        addresses,
-        auth.username(),
-        auth.expose_password(),
-        Some(Duration::from_secs(2)),
-        Some(Duration::from_secs(1)),
-        None,
-        DEFAULT_GRPC_MESSAGE_SIZE,
-    )
+    let opts = GrpcClientOptions::new(client_config);
+    opts.create(addresses)
 }
 
 pub fn new_admin_client(addr: &str) -> MetaAdminClient {
     MetaAdminClient::new(addr)
 }
 
-pub async fn run_lua_script(script: &str, auth: &GrpcClientAuth) -> anyhow::Result<()> {
+pub async fn run_lua_script(script: &str, client_config: &GrpcClientConfig) -> anyhow::Result<()> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua, auth)?;
+    setup_lua_environment(&lua, client_config)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();
@@ -534,11 +654,11 @@ pub async fn run_lua_script(script: &str, auth: &GrpcClientAuth) -> anyhow::Resu
 
 pub async fn run_lua_script_with_result(
     script: &str,
-    auth: &GrpcClientAuth,
+    client_config: &GrpcClientConfig,
 ) -> anyhow::Result<Result<Option<String>, String>> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua, auth)?;
+    setup_lua_environment(&lua, client_config)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();
@@ -583,6 +703,92 @@ pub async fn run_lua_script_with_result(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_grpc_client_options_inherit_auth() -> anyhow::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let temp_path = temp_dir.keep();
+        let password_file = temp_path.join("password");
+        std::fs::write(&password_file, "secret\n")?;
+        let value = serde_json::json!({"username": "bench", "password_file": password_file});
+        let args: crate::grpc_client_auth::GrpcClientAuthArgs = serde_json::from_value(value)?;
+        let auth = args.load()?;
+        let client_config = GrpcClientConfig { auth, tls: None };
+
+        let opts = GrpcClientOptions::from_lua(None, &client_config).unwrap();
+
+        assert_eq!(opts.username, "bench");
+        assert_eq!(opts.password, "secret");
+        assert_eq!(opts.timeout, Some(Duration::from_secs(60)));
+        std::fs::remove_dir_all(temp_path)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_grpc_client_options_override_auth_keeps_tls() -> mlua::Result<()> {
+        let lua = Lua::new();
+        let tls = RpcClientTlsConfig {
+            rpc_tls_server_root_ca_cert: "ca.pem".to_string(),
+            domain_name: "localhost".to_string(),
+        };
+        let client_config = GrpcClientConfig {
+            tls: Some(tls),
+            ..Default::default()
+        };
+        let table = lua
+            .load(r#"return {username = "bench", password = "secret", timeout = 1.5}"#)
+            .eval::<Table>()?;
+
+        let opts = GrpcClientOptions::from_lua(Some(table), &client_config)?;
+
+        assert_eq!(opts.username, "bench");
+        assert_eq!(opts.password, "secret");
+        assert_eq!(opts.timeout, Some(Duration::from_millis(1500)));
+        let tls = opts.tls.unwrap();
+        assert_eq!(tls.rpc_tls_server_root_ca_cert, "ca.pem");
+        assert_eq!(tls.domain_name, "localhost");
+        Ok(())
+    }
+
+    #[test]
+    fn test_grpc_client_options_reject_invalid_durations() -> mlua::Result<()> {
+        let lua = Lua::new();
+        let client_config = GrpcClientConfig::default();
+        for field in ["timeout", "auto_sync_interval"] {
+            for seconds in [1e100, 1e-12, 0.0, -1.0, f64::NAN, f64::INFINITY] {
+                let table = lua.create_table()?;
+                table.raw_set(field, seconds)?;
+                let result = GrpcClientOptions::from_lua(Some(table), &client_config);
+                let error = result.err().expect("invalid duration must be rejected");
+                let actual = error.to_string();
+                let expected = format!(
+                    "runtime error: new_grpc_client options: field `{field}` must be a \
+                     positive, representable duration in seconds, got {seconds}"
+                );
+                assert_eq!(actual, expected);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_grpc_client_options_accept_positive_durations() -> mlua::Result<()> {
+        let lua = Lua::new();
+        let client_config = GrpcClientConfig::default();
+        for (seconds, duration) in [
+            (1e-9, Duration::from_nanos(1)),
+            (1.5, Duration::from_millis(1500)),
+        ] {
+            let table = lua.create_table()?;
+            table.raw_set("timeout", seconds)?;
+            table.raw_set("auto_sync_interval", seconds)?;
+            let opts = GrpcClientOptions::from_lua(Some(table), &client_config)?;
+            let expected = Some(duration);
+            assert_eq!(opts.timeout, expected);
+            assert_eq!(opts.auto_sync_interval, expected);
+        }
+        Ok(())
+    }
 
     fn parse(lua: &Lua, script: &str) -> TxnRequest {
         let table = lua.load(script).eval::<Table>().unwrap();
@@ -637,8 +843,8 @@ mod tests {
     #[test]
     fn test_transaction_helpers() {
         let lua = Lua::new();
-        let auth = GrpcClientAuth::default();
-        setup_lua_environment(&lua, &auth).unwrap();
+        let client_config = GrpcClientConfig::default();
+        setup_lua_environment(&lua, &client_config).unwrap();
         let actual = parse(
             &lua,
             r#"
@@ -767,8 +973,8 @@ mod tests {
     #[test]
     fn test_to_string_escapes_strings_and_bytes() {
         let lua = Lua::new();
-        let auth = GrpcClientAuth::default();
-        setup_lua_environment(&lua, &auth).unwrap();
+        let client_config = GrpcClientConfig::default();
+        setup_lua_environment(&lua, &client_config).unwrap();
         let string = lua
             .load(r#"return metactl.to_string("a\n\"\\\000\127\128\255")"#)
             .eval::<String>()
@@ -790,8 +996,8 @@ mod tests {
     #[test]
     fn test_zipf_generator_registered() {
         let lua = Lua::new();
-        let auth = GrpcClientAuth::default();
-        setup_lua_environment(&lua, &auth).unwrap();
+        let client_config = GrpcClientConfig::default();
+        setup_lua_environment(&lua, &client_config).unwrap();
         let index = lua
             .load(
                 r#"
@@ -807,8 +1013,8 @@ mod tests {
     #[test]
     fn test_now_ms_is_monotonic() {
         let lua = Lua::new();
-        let auth = GrpcClientAuth::default();
-        setup_lua_environment(&lua, &auth).unwrap();
+        let client_config = GrpcClientConfig::default();
+        setup_lua_environment(&lua, &client_config).unwrap();
         let (a, b) = lua
             .load(
                 r#"

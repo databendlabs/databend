@@ -300,7 +300,7 @@ impl TestHttpQueryRequest {
             .header(header::CONTENT_TYPE, content_type)
             .header(header::AUTHORIZATION, self.auth_header.clone())
             .body(body);
-        req.headers_mut().extend(self.headers.clone().into_iter());
+        req.headers_mut().extend(self.headers.clone());
 
         let resp = self
             .ep
@@ -420,6 +420,32 @@ async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_error_is_returned_unscrubbed() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    // Errors go back to the client that sent the SQL, as is, so that a
+    // value or column named like a credential does not garble them. Only
+    // logs and query history scrub them.
+    for (sql, kept) in [
+        (
+            "CREATE USER u IDNETIFIED BY 'client_visible'",
+            "client_visible",
+        ),
+        (
+            "SELECT * FROM numbers(1) WHERE customer_key = customer_id",
+            "customer_id",
+        ),
+    ] {
+        let (status, result) =
+            post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
+        assert_eq!(status, StatusCode::OK, "{:?}", result);
+        let message = result.error.map(|e| e.message).unwrap_or_default();
+        assert!(message.contains(kept), "{sql}: {message}");
+    }
     Ok(())
 }
 
@@ -1073,7 +1099,7 @@ async fn check_response(response: Response) -> Result<(StatusCode, TestQueryResp
     assert!(
         result.is_ok(),
         "body ='{}', result='{:?}'",
-        &body,
+        body,
         result.err()
     );
     Ok((status, result?))
@@ -1099,7 +1125,7 @@ async fn get_uri_with_headers(ep: &EndpointType, uri: &str, headers: HeaderMap) 
         .method(Method::GET)
         .typed_header(basic)
         .finish();
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     ep.call(req).await.unwrap_or_else(|err| err.into_response())
 }
@@ -1115,7 +1141,7 @@ async fn get_arrow_uri(
         .method(Method::GET)
         .typed_header(basic)
         .finish();
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     let response = ep.call(req).await?;
     assert_eq!(
@@ -1144,7 +1170,7 @@ async fn post_uri(
         .header(header::CONTENT_TYPE, content_type)
         .typed_header(basic)
         .body(body);
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     let response = ep
         .call(req)
@@ -2371,6 +2397,51 @@ async fn test_arrow_query_retry_rejects_unnegotiated_version_switch() -> anyhow:
         body.contains("cannot switch from JSON to Arrow later"),
         "{body}"
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_login_with_catalog() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+
+    let login = |body: serde_json::Value| {
+        let ep = &ep;
+        async move {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                HEADER_CLIENT_CAPABILITIES,
+                HeaderValue::from_static("session_header"),
+            );
+            let response = post_uri(ep, "/v1/session/login", &body, headers).await?;
+            let status = response.status();
+            let body = response.into_body().into_string().await?;
+            anyhow::Ok((status, body))
+        }
+    };
+
+    let (status, body) = login(serde_json::json!({"catalog": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "default", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // An empty catalog falls back to the current catalog.
+    let (status, body) = login(serde_json::json!({"catalog": "", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "default", "database": "not_exists"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    let (status, body) = login(serde_json::json!({"catalog": "not_exists"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "not_exists", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
 
     Ok(())
 }

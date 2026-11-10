@@ -85,6 +85,7 @@ use num_traits::AsPrimitive;
 use crate::date_arithmetic::timestamp_tz_components_via_lut;
 use crate::date_conversion::calc_date_to_timestamp;
 use crate::date_format::pg_format_to_strftime;
+use crate::fixed_offset::local_dates;
 use crate::interval::civil_date_to_days;
 
 const MONTHS_PER_YEAR: i64 = 12;
@@ -306,9 +307,9 @@ fn parse_string_to_timestamp(val: &str, func_ctx: &FunctionContext) -> Result<i6
                 val
             )))
         });
-        match dtparse_result {
-            Ok(ts) => return Ok(ts),
-            Err(e) => return Err(e),
+        {
+            let ts = dtparse_result?;
+            return Ok(ts);
         }
     }
     Err(iso_err)
@@ -345,9 +346,9 @@ fn parse_string_to_date(val: &str, func_ctx: &FunctionContext) -> Result<i32, Er
                 val
             )))
         });
-        match dtparse_result {
-            Ok(days) => return Ok(days),
-            Err(e) => return Err(e),
+        {
+            let days = dtparse_result?;
+            return Ok(days);
         }
     }
     Err(iso_err)
@@ -367,42 +368,9 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _>(
         "to_timestamp",
-        |ctx, d| {
-            let max = d.max.clone().unwrap_or_default();
-            let mut res = Vec::with_capacity(2);
-            for (i, v) in [&d.min, &max].iter().enumerate() {
-                let mut extend_num = 0;
-                if i == 1 && d.max.is_none() {
-                    // the max domain is unbounded
-                    res.push(TIMESTAMP_MAX);
-                    break;
-                }
-                let mut d = string_to_timestamp(v, &ctx.tz);
-                // the string max domain maybe truncated into `"2024-09-02 00:0�"`
-                const MAX_LEN: usize = "1000-01-01".len();
-                if d.is_err()
-                    && v.len() > MAX_LEN
-                    && let Some(prefix) = v.get(..MAX_LEN)
-                {
-                    d = string_to_timestamp(prefix, &ctx.tz);
-                    if i == 0 {
-                        extend_num = -1;
-                    } else {
-                        extend_num = 1;
-                    }
-                }
-
-                if let Ok(ts) = d {
-                    res.push(ts + extend_num * (24 * 60 * 60 * MICROS_PER_SEC - 1));
-                } else {
-                    return FunctionDomain::MayThrow;
-                }
-            }
-            FunctionDomain::Domain(SimpleDomain {
-                min: res[0].clamp(TIMESTAMP_MIN, TIMESTAMP_MAX),
-                max: res[1].clamp(TIMESTAMP_MIN, TIMESTAMP_MAX),
-            })
-        },
+        // String ordering does not preserve timestamp ordering across accepted
+        // formats or timezone offsets. Valid endpoints can also enclose invalid strings.
+        |_, _| FunctionDomain::MayThrow,
         eval_string_to_timestamp,
     );
     registry.register_combine_nullable_1_arg::<StringType, TimestampType, _, _>(
@@ -801,7 +769,6 @@ fn string_to_format_datetime(
             "{timestamp} to datetime error {err}"
         )))
     })?;
-    check_input_year(local.year()).map_err(Box::new)?;
     let micro = local.and_utc().timestamp_subsec_micros();
 
     let micros = match parsed.offset() {
@@ -1137,6 +1104,11 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
     );
 
     fn eval_timestamp_to_date(val: Value<TimestampType>, ctx: &mut EvalContext) -> Value<DateType> {
+        if let Value::Column(col) = &val
+            && let Some(days) = local_dates(col, ctx.validity.as_ref(), &ctx.func_ctx.tz)
+        {
+            return Value::Column(days);
+        }
         vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, ctx| {
             match timestamp_to_date_days(val, &ctx.func_ctx.tz) {
                 Ok(days) => output.push(days),

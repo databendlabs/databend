@@ -24,6 +24,7 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::VectorScalar;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use unicase::Ascii;
 
 use super::TypeCheckAdapter;
@@ -50,21 +51,13 @@ where A: TypeCheckAdapter
     }
 
     fn try_fold_cast_to_vector(&self, expr: &ScalarExpr) -> Option<Vec<F32>> {
-        if expr.evaluable() {
-            let checked_expr = expr.as_expr().ok()?;
-            let deref!((folded, _)) = self.try_fold_constant(checked_expr).ok()?;
-            let constant = match folded {
-                ScalarExpr::ConstantExpr(constant) | ScalarExpr::TypedConstantExpr(constant, _) => {
-                    constant
-                }
-                _ => return None,
-            };
-
-            if let Scalar::Vector(VectorScalar::Float32(values)) = constant.value {
-                return Some(values);
-            }
+        if !(expr.evaluable() && expr.is_deterministic()) {
+            return None;
         }
-        None
+        match expr.constant_value(&self.func_ctx)? {
+            (Scalar::Vector(VectorScalar::Float32(values)), _) => Some(values),
+            _ => None,
+        }
     }
 
     pub(super) fn try_rewrite_vector_function(
@@ -137,7 +130,9 @@ where A: TypeCheckAdapter
                             if vector_index.index_type != TableIndexType::Vector {
                                 continue;
                             }
-                            let Some(distances) = vector_index.options.get("distance") else {
+                            let Some(distances) =
+                                vector_index.options.get(VECTOR_INDEX_OPT_DISTANCE)
+                            else {
                                 continue;
                             };
                             // distance_type must match function name

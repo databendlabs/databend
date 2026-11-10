@@ -68,6 +68,7 @@ impl SetPriorityInterpreter {
             retry_times: settings.get_flight_max_retry_times()?,
             retry_interval: settings.get_flight_retry_interval()?,
             keep_alive: settings.get_flight_keep_alive_params()?,
+            reuse_control_channel: false,
         };
         let res = warehouse
             .do_action::<_, bool>(SET_PRIORITY, message, flight_params)

@@ -209,6 +209,31 @@ fn test_equal_operator_combinations() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_comparisons_with_null_are_not_null_checks() -> anyhow::Result<()> {
+    let mut builder = ExprBuilder::new();
+    let col = builder.column(
+        "A",
+        0,
+        "A",
+        DataType::Number(NumberDataType::Int64).wrap_nullable(),
+        "",
+        0,
+    );
+    // Unlike IS NULL / IS NOT NULL, equality and inequality with NULL cannot
+    // be TRUE in a filter, regardless of which side contains the NULL literal.
+    for predicate in [
+        builder.eq(col.clone(), builder.null()),
+        builder.neq(col.clone(), builder.null()),
+        builder.eq(builder.null(), col.clone()),
+        builder.neq(builder.null(), col),
+    ] {
+        let result = run_optimizer(vec![predicate])?;
+        assert!(builder.is_boolean_constant(&result, false));
+    }
+    Ok(())
+}
+
 // ===== Test Cases for NotEqual Operator =====
 
 #[test]
@@ -1136,11 +1161,31 @@ fn equal_compatibility_cases() -> Vec<EqualCompatibilityCase> {
     ]);
 
     vec![
+        // A coercible bottom type still cannot make SQL equality true, and must
+        // not bridge exact and floating numeric equivalence classes.
         case(
-            "null coerces to number",
+            "null with number is not inferred",
             DataType::Null,
             int64.clone(),
-            true,
+            false,
+        ),
+        case(
+            "number with null is not inferred",
+            int64.clone(),
+            DataType::Null,
+            false,
+        ),
+        case(
+            "null with float is not inferred",
+            DataType::Null,
+            float64.clone(),
+            false,
+        ),
+        case(
+            "null with null is not inferred",
+            DataType::Null,
+            DataType::Null,
+            false,
         ),
         case(
             "empty array coerces to typed array",

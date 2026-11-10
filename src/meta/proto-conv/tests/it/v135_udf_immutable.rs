@@ -53,6 +53,7 @@ fn test_decode_v135_udf_server() -> anyhow::Result<()> {
         name: "my_fn".to_string(),
         description: "This is a description".to_string(),
         definition: UDFDefinition::UDFServer(UDFServer {
+            external_access_integrations: vec![],
             address: "http://127.0.0.1:8888".to_string(),
             handler: "isempty".to_string(),
             headers: BTreeMap::from([
@@ -91,6 +92,7 @@ fn test_decode_v135_udf_script() -> anyhow::Result<()> {
         name: "my_fn".to_string(),
         description: "This is a description".to_string(),
         definition: UDFDefinition::UDFScript(UDFScript {
+            external_access_integrations: vec![],
             code: "some code".to_string(),
             handler: "my_fn".to_string(),
             language: "python".to_string(),

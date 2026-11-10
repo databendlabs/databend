@@ -1,5 +1,5 @@
 name: "Check macOS"
-description: "Run lightweight checks natively on macOS"
+description: "Run cargo clippy natively on macOS to catch platform-specific build breaks"
 runs:
   using: "composite"
   steps:
@@ -12,9 +12,7 @@ runs:
       run: |
         brew unlink python || true
         bash ./scripts/setup/dev_setup.sh -yb
-        rustup component add rustfmt clippy
-        brew install taplo typos-cli
-        python3 -m pip install --user --quiet yamllint
+        rustup component add clippy
 
     - name: Probe sccache
       shell: bash
@@ -50,39 +48,16 @@ runs:
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
         fi
 
-    - name: Check cargo version
-      shell: bash
-      run: rustup show
-
-    - name: Check disk space
-      shell: bash
-      run: df -h
-
     - name: Check system info
       shell: bash
       run: |
+        rustup show
+        df -h
         uname -a
         sysctl -n machdep.cpu.brand_string || true
-        vm_stat
 
-    - name: YAML Lint
-      shell: bash
-      run: python3 -m yamllint -f auto .
-
-    - name: Check typos
-      shell: bash
-      run: typos
-
-    - name: Format
-      shell: bash
-      run: cargo fmt --all -- --check
-
-    - name: Check toml format
-      shell: bash
-      run: |
-        taplo check
-        taplo fmt --check
-
+    # Lint/format checks (typos, fmt, taplo, yamllint) already run on Linux in
+    # the PR workflow; only clippy has macOS-specific value.
     - name: Clippy
       shell: bash
       run: cargo clippy --workspace --all-targets --all-features -- -D warnings

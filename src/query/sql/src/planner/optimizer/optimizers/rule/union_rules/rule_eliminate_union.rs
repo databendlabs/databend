@@ -63,12 +63,7 @@ impl RuleEliminateUnion {
         // Only pass through unary operators that preserve empty input as empty output.
         if matches!(
             s_expr.plan().rel_op(),
-            RelOp::Filter
-                | RelOp::EvalScalar
-                | RelOp::Sort
-                | RelOp::Limit
-                | RelOp::TopN
-                | RelOp::Exchange
+            RelOp::Filter | RelOp::EvalScalar | RelOp::Sort | RelOp::Limit | RelOp::TopN
         ) {
             Self::is_empty_scan(s_expr.child(0)?)
         } else {

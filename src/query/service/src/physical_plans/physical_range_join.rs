@@ -29,9 +29,9 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::JoinPredicate;
 use databend_common_sql::binder::wrap_cast;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::RelationalProperty;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::JoinType;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -209,14 +209,14 @@ impl PhysicalPlanBuilder {
     pub async fn build_range_join(
         &mut self,
         join_type: JoinType,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
     ) -> Result<PhysicalPlan> {
-        let left_prop = RelExpr::with_s_expr(s_expr.right_child()).derive_relational_prop()?;
-        let right_prop = RelExpr::with_s_expr(s_expr.left_child()).derive_relational_prop()?;
+        let left_prop = RelExpr::with_p_expr(s_expr.right_child()).derive_relational_prop()?;
+        let right_prop = RelExpr::with_p_expr(s_expr.left_child()).derive_relational_prop()?;
 
         debug_assert!(!range_conditions.is_empty());
 

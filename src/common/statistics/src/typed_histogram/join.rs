@@ -220,8 +220,10 @@ impl<T: Value> JoinAccumulator<T> {
             right_matched_buckets,
             output_buckets,
         } = self;
-        let accuracy = left.accuracy && right.accuracy;
-        let avg_spacing = left.avg_spacing.or(right.avg_spacing);
+        // Materializing matched buckets must not make a previously thinned
+        // sampled histogram trustworthy again. Join fanout adds rows, not new
+        // evidence about the positions of surviving values.
+        let distinct_retention = left.distinct_retention().min(right.distinct_retention());
 
         JoinEstimation {
             cardinality: counts.cardinality,
@@ -232,24 +234,22 @@ impl<T: Value> JoinAccumulator<T> {
             right_estimated_matched_rows: counts
                 .right_estimated_matched_rows
                 .min(right.num_values()),
-            left_matched_histogram: build_histogram(left_matched_buckets, accuracy, avg_spacing),
-            right_matched_histogram: build_histogram(right_matched_buckets, accuracy, avg_spacing),
-            histogram: build_histogram(output_buckets, accuracy, avg_spacing),
+            left_matched_histogram: build_histogram(left_matched_buckets, distinct_retention),
+            right_matched_histogram: build_histogram(right_matched_buckets, distinct_retention),
+            histogram: build_histogram(output_buckets, distinct_retention),
         }
     }
 }
 
 fn build_histogram<T: Value>(
     buckets: Vec<TypedHistogramBucket<T>>,
-    accuracy: bool,
-    avg_spacing: Option<f64>,
+    distinct_retention: f64,
 ) -> Option<Histogram> {
     (!buckets.is_empty()).then(|| {
         T::into_histogram(TypedHistogram {
-            accuracy,
             row_scale: 1.0,
+            distinct_retention,
             buckets,
-            avg_spacing,
         })
     })
 }
@@ -522,16 +522,14 @@ mod tests {
     #[test]
     fn test_typed_histogram_estimate_join_keeps_point_overlap() {
         let left = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0_u64, 10_u64, 10.0, 10.0)],
-            avg_spacing: None,
         };
         let right = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(10_u64, 20_u64, 10.0, 10.0)],
-            avg_spacing: None,
         };
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
@@ -542,22 +540,19 @@ mod tests {
             left_estimated_matched_rows: 1.0,
             right_estimated_matched_rows: 1.0,
             left_matched_histogram: Some(crate::Histogram::UInt(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(10, 10, 1.0, 1.0)],
-                avg_spacing: None,
             })),
             right_matched_histogram: Some(crate::Histogram::UInt(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(10, 10, 1.0, 1.0)],
-                avg_spacing: None,
             })),
             histogram: Some(crate::Histogram::UInt(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(10, 10, 1.0, 1.0)],
-                avg_spacing: None,
             })),
         });
     }
@@ -565,16 +560,14 @@ mod tests {
     #[test]
     fn test_typed_histogram_estimate_join_models_singleton_bucket_matches() {
         let left = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(10_i64, 10_i64, 4.0, 1.0)],
-            avg_spacing: None,
         };
         let right = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(10_i64, 10_i64, 3.0, 1.0)],
-            avg_spacing: None,
         };
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
@@ -585,22 +578,19 @@ mod tests {
             left_estimated_matched_rows: 4.0,
             right_estimated_matched_rows: 3.0,
             left_matched_histogram: Some(crate::Histogram::Int(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(10, 10, 4.0, 1.0)],
-                avg_spacing: None,
             })),
             right_matched_histogram: Some(crate::Histogram::Int(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(10, 10, 3.0, 1.0)],
-                avg_spacing: None,
             })),
             histogram: Some(crate::Histogram::Int(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(10, 10, 12.0, 1.0)],
-                avg_spacing: None,
             })),
         });
     }
@@ -608,16 +598,14 @@ mod tests {
     #[test]
     fn test_typed_histogram_estimate_join_applies_row_scale_to_counts() {
         let mut left = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(10_i64, 10_i64, 4.0, 1.0)],
-            avg_spacing: None,
         };
         let right = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(10_i64, 10_i64, 3.0, 1.0)],
-            avg_spacing: None,
         };
         left.scale_counts(0.5);
 
@@ -635,16 +623,14 @@ mod tests {
     #[test]
     fn test_typed_histogram_estimate_join_caps_range_ndv_by_scaled_rows() {
         let mut filtered = TypedHistogram {
-            accuracy: false,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0_i64, 999_i64, 2000.0, 1800.0)],
-            avg_spacing: None,
         };
         let grouped = TypedHistogram {
-            accuracy: false,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0_i64, 999_i64, 1800.0, 1800.0)],
-            avg_spacing: None,
         };
         filtered.scale_counts(0.025);
 
@@ -662,26 +648,24 @@ mod tests {
     #[test]
     fn test_typed_histogram_estimate_join_converts_string_output_to_bytes_histogram() {
         let left = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 "a".to_string(),
                 "a".to_string(),
                 2.0,
                 1.0,
             )],
-            avg_spacing: None,
         };
         let right = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 "a".to_string(),
                 "a".to_string(),
                 3.0,
                 1.0,
             )],
-            avg_spacing: None,
         };
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
@@ -692,37 +676,34 @@ mod tests {
             left_estimated_matched_rows: 2.0,
             right_estimated_matched_rows: 3.0,
             left_matched_histogram: Some(crate::Histogram::Bytes(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(
                     b"a".to_vec(),
                     b"a".to_vec(),
                     2.0,
                     1.0,
                 )],
-                avg_spacing: None,
             })),
             right_matched_histogram: Some(crate::Histogram::Bytes(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(
                     b"a".to_vec(),
                     b"a".to_vec(),
                     3.0,
                     1.0,
                 )],
-                avg_spacing: None,
             })),
             histogram: Some(crate::Histogram::Bytes(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(
                     b"a".to_vec(),
                     b"a".to_vec(),
                     6.0,
                     1.0,
                 )],
-                avg_spacing: None,
             })),
         });
     }
@@ -730,16 +711,14 @@ mod tests {
     #[test]
     fn test_typed_histogram_estimate_join_caps_scaled_bucket_expected_count() {
         let left = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0_i64, 10_i64, 0.984, 0.93)],
-            avg_spacing: None,
         };
         let right = TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0_i64, 10_i64, 0.984, 0.93)],
-            avg_spacing: None,
         };
 
         let raw_expected =
@@ -760,16 +739,14 @@ mod tests {
     #[test]
     fn test_typed_histogram_estimate_join_uses_same_scaled_upper_for_expected_count() {
         let left = TypedHistogram {
-            accuracy: true,
             row_scale: 0.1,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0_i64, 10_i64, 0.1, 0.1)],
-            avg_spacing: None,
         };
         let right = TypedHistogram {
-            accuracy: true,
             row_scale: 0.1,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0_i64, 10_i64, 0.1, 0.1)],
-            avg_spacing: None,
         };
 
         let estimation = left.estimate_join(&right);

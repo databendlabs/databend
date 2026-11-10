@@ -43,7 +43,12 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        self.register_1_arg_with_policy(name, calc_domain, PartialEvalPolicy::EvaluateAll, func);
+        self.register_1_arg_with_policy::<I1, O, G>(
+            name,
+            calc_domain,
+            PartialEvalPolicy::EvaluateAll,
+            func,
+        );
     }
 
     pub fn register_1_arg_with_policy<I1: ArgType, O: ArgType, G>(
@@ -82,7 +87,12 @@ impl FunctionRegistry {
             + Send
             + Sync,
     {
-        self.register_2_arg_with_policy(name, calc_domain, PartialEvalPolicy::EvaluateAll, func);
+        self.register_2_arg_with_policy::<I1, I2, O, G>(
+            name,
+            calc_domain,
+            PartialEvalPolicy::EvaluateAll,
+            func,
+        );
     }
 
     pub fn register_2_arg_with_policy<I1: ArgType, I2: ArgType, O: ArgType, G>(

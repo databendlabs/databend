@@ -1,0 +1,9 @@
+CREATE-only role can create ordinary tables
+CREATE and SUPER do not imply ATTACH TABLE
+Database ownership does not imply ATTACH TABLE
+ATTACH TABLE does not replace CREATE
+CREATE with STORAGE_PREFIX cannot bypass ATTACH TABLE
+ATTACH TABLE cannot be granted on a table
+Administrator can grant and revoke ATTACH TABLE directly to USER
+Database ALL includes ATTACH TABLE
+Global ALL includes ATTACH TABLE

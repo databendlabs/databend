@@ -20,17 +20,18 @@ use log::debug;
 use log::info;
 
 use crate::IndexType;
-use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::cost::CostModel;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
+use crate::optimizer::ir::PExpr;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
 use crate::optimizer::optimizers::cascades::rule::StrategyFactory;
 use crate::optimizer::optimizers::cascades::tasks::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
+use crate::optimizer::optimizers::cascades::tasks::SchedulerStat;
 use crate::optimizer::optimizers::cascades::tasks::Task;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
@@ -47,9 +48,13 @@ pub struct CascadesOptimizer {
     pub(crate) memo: Memo,
     pub(crate) cost_model: Box<dyn CostModel>,
     pub(crate) explore_rule_set: RuleSet,
+    /// Scheduler statistics of the last search, for diagnostics and tests.
+    scheduler_stat: Option<SchedulerStat>,
 }
 
 impl CascadesOptimizer {
+    pub const NAME: &'static str = "CascadesOptimizer";
+
     pub fn new(opt_ctx: Arc<OptimizerContext>) -> Result<Self> {
         let table_ctx = opt_ctx.get_table_ctx();
         let settings = table_ctx.get_settings();
@@ -72,7 +77,18 @@ impl CascadesOptimizer {
             memo,
             cost_model,
             explore_rule_set,
+            scheduler_stat: None,
         })
+    }
+
+    pub fn memo(&self) -> &Memo {
+        &self.memo
+    }
+
+    /// Statistics of the task scheduler collected by the last search, for
+    /// diagnostics and tests.
+    pub fn scheduler_stat(&self) -> Option<&SchedulerStat> {
+        self.scheduler_stat.as_ref()
     }
 
     pub(crate) fn enforce_distribution(&self) -> bool {
@@ -86,7 +102,7 @@ impl CascadesOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<PExpr> {
         let opt_ctx = self.opt_ctx.clone();
         let distributed = opt_ctx.get_enable_distributed_optimization();
 
@@ -117,6 +133,7 @@ impl CascadesOptimizer {
                     let mut local_optimizer = CascadesOptimizer::new(opt_ctx)?;
                     let local_expr = local_optimizer.optimize_without_staging(&s_expr)?;
                     self.memo = local_optimizer.memo;
+                    self.scheduler_stat = local_optimizer.scheduler_stat;
                     return Ok(local_expr);
                 }
             }
@@ -128,7 +145,7 @@ impl CascadesOptimizer {
         Ok(optimized_expr)
     }
 
-    fn optimize_without_staging(&mut self, s_expr: &SExpr) -> Result<SExpr> {
+    fn optimize_without_staging(&mut self, s_expr: &SExpr) -> Result<PExpr> {
         match self.optimize_internal(s_expr.clone()) {
             Ok(expr) => Ok(expr),
             Err(e) => {
@@ -137,17 +154,20 @@ impl CascadesOptimizer {
                     e
                 );
 
+                // The input is still logical when Cascades fails (including CBO
+                // disabled). Lower aggregates before either fallback execution path.
+                let fallback = crate::optimizer::ir::DefaultPhysicalPlanner::plan(s_expr)?;
                 if self.opt_ctx.get_enable_distributed_optimization() {
                     let distributed_optimizer = DistributedOptimizer::new(self.opt_ctx.clone());
-                    distributed_optimizer.optimize(s_expr)
+                    distributed_optimizer.optimize(&fallback)
                 } else {
-                    Ok(s_expr.clone())
+                    Ok(fallback)
                 }
             }
         }
     }
 
-    fn optimize_internal(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    fn optimize_internal(&mut self, s_expr: SExpr) -> Result<PExpr> {
         // Update rule set based on current flags
         // This ensures we use the most up-to-date flag values, regardless of when the optimizer was created
         let table_ctx = self.opt_ctx.get_table_ctx();
@@ -204,7 +224,9 @@ impl CascadesOptimizer {
 
         let mut scheduler = TaskManager::new().with_task_limit(task_limit);
         scheduler.add_task(Task::OptimizeGroup(root_task));
-        scheduler.run(self)?;
+        let run_result = scheduler.run(self);
+        self.scheduler_stat = Some(scheduler.into_stat());
+        run_result?;
 
         debug!("Memo:\n{}", self.memo.display()?);
 
@@ -243,7 +265,7 @@ impl CascadesOptimizer {
         &self,
         group_index: IndexType,
         required_property: &RequiredProperty,
-    ) -> Result<SExpr> {
+    ) -> Result<PExpr> {
         let group = self.memo.group(group_index)?;
         let cost_context = group.best_prop(required_property).ok_or_else(|| {
             ErrorCode::Internal(format!("Cannot find best cost of group: {group_index}",))
@@ -262,23 +284,18 @@ impl CascadesOptimizer {
             .map(|(index, required_prop)| Ok(Arc::new(self.find_best_plan(*index, required_prop)?)))
             .collect::<Result<Vec<_>>>()?;
 
-        let result = SExpr::create(m_expr.plan.clone(), children, None, None, None);
+        let result = PExpr::create(
+            m_expr
+                .plan
+                .physical()
+                .cloned()
+                .ok_or_else(|| ErrorCode::Internal("Best Memo candidate must be physical"))?,
+            children,
+            None,
+            None,
+            None,
+        );
 
         Ok(result)
-    }
-}
-
-#[async_trait::async_trait]
-impl Optimizer for CascadesOptimizer {
-    fn name(&self) -> String {
-        "CascadesOptimizer".to_string()
-    }
-
-    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
-        self.optimize_sync(s_expr)
-    }
-
-    fn memo(&self) -> Option<&Memo> {
-        Some(&self.memo)
     }
 }

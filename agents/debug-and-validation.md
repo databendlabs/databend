@@ -9,7 +9,7 @@
 
 ## Changes Intended to Remain in the Branch
 
-- Keep unit tests close to the affected crate with `#[cfg(test)]` modules.
+- Keep unit tests close to the affected crate with `#[cfg(test)]` modules, placed at the end of the file per [`coding-style.md`](coding-style.md#tests-and-fixtures).
 - Put integration behavior in the relevant SQL suites or meta harnesses such as `tests/metactl` and `tests/meta-kvapi`.
 - Every planner, executor, or storage change should add at least one regression SQL file plus expected output when deterministic.
 - Use cluster variants such as `make stateless-cluster-test` and TLS mode when coordination, transactions, or auth are involved.

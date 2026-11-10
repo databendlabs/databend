@@ -1135,7 +1135,7 @@ pub struct TableAlias {
 
 impl Display for TableAlias {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", &self.name)?;
+        write!(f, "{}", self.name)?;
         if !self.columns.is_empty() {
             write!(f, "(")?;
             write_comma_separated_list(f, &self.columns)?;

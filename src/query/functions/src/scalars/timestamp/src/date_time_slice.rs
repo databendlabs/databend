@@ -16,6 +16,7 @@ use chrono::Weekday;
 use chrono_tz::Tz;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -49,19 +50,22 @@ enum TimePart {
 }
 
 impl TimePart {
+    // Parsed for every row, so compared in place rather than uppercased into
+    // a new string.
     fn parse(s: &str) -> Option<Self> {
-        match s.to_ascii_uppercase().as_str() {
-            "YEAR" => Some(Self::Year),
-            "QUARTER" => Some(Self::Quarter),
-            "MONTH" => Some(Self::Month),
-            "WEEK" => Some(Self::Week),
-            "ISOWEEK" => Some(Self::IsoWeek),
-            "DAY" => Some(Self::Day),
-            "HOUR" => Some(Self::Hour),
-            "MINUTE" => Some(Self::Minute),
-            "SECOND" => Some(Self::Second),
-            _ => None,
-        }
+        [
+            ("YEAR", Self::Year),
+            ("QUARTER", Self::Quarter),
+            ("MONTH", Self::Month),
+            ("WEEK", Self::Week),
+            ("ISOWEEK", Self::IsoWeek),
+            ("DAY", Self::Day),
+            ("HOUR", Self::Hour),
+            ("MINUTE", Self::Minute),
+            ("SECOND", Self::Second),
+        ]
+        .into_iter()
+        .find_map(|(name, part)| s.eq_ignore_ascii_case(name).then_some(part))
     }
 
     fn is_date_part(self) -> bool {
@@ -80,10 +84,12 @@ enum StartOrEnd {
 
 impl StartOrEnd {
     fn parse(s: &str) -> Option<Self> {
-        match s.to_ascii_uppercase().as_str() {
-            "START" => Some(Self::Start),
-            "END" => Some(Self::End),
-            _ => None,
+        if s.eq_ignore_ascii_case("START") {
+            Some(Self::Start)
+        } else if s.eq_ignore_ascii_case("END") {
+            Some(Self::End)
+        } else {
+            None
         }
     }
 }
@@ -200,6 +206,13 @@ fn slice_bounds_micros(micros: i64, spec: SliceSpec) -> Option<(i128, i128)> {
         .slice_length
         .checked_mul(unit_seconds)?
         .checked_mul(i128::from(MICROS_PER_SEC))?;
+    // A slice that fits i64 is floored in i64: i128 division is a software
+    // routine, and the dominant cost of this function per row. The bounds
+    // stay i128, so an end past i64 is reported exactly as before.
+    if let Ok(slice) = i64::try_from(slice_micros) {
+        let start = i128::from(micros.div_euclid(slice)) * i128::from(slice);
+        return Some((start, start + i128::from(slice)));
+    }
     let start = floor_to_multiple(i128::from(micros), slice_micros);
     Some((start, start.checked_add(slice_micros)?))
 }
@@ -228,51 +241,107 @@ fn time_slice_timestamp(ts: i64, spec: SliceSpec, tz: &Tz) -> Result<i64, String
     ensure_timestamp_range(micros)
 }
 
+// The binder passes the slice as constants (lower_time_slice_expr), so its
+// spec is built once for a column rather than once per row. A spec that does
+// not parse leaves the column to the per-row path, which reports the error on
+// every row as before.
+fn constant_spec(
+    slice_length: &Value<UInt64Type>,
+    start_or_end: &Value<StringType>,
+    part: &Value<StringType>,
+    week_start: u8,
+    date_input: bool,
+) -> Option<SliceSpec> {
+    let (Value::Scalar(slice_length), Value::Scalar(start_or_end), Value::Scalar(part)) =
+        (slice_length, start_or_end, part)
+    else {
+        return None;
+    };
+    SliceSpec::new(*slice_length, part, start_or_end, week_start, date_input).ok()
+}
+
 pub(super) fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_4_arg::<DateType, UInt64Type, StringType, StringType, DateType, _, _>(
         "time_slice",
         |_, _, _, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_4_arg::<DateType, UInt64Type, StringType, StringType, DateType>(
-            |date, slice_length, start_or_end, part, output, ctx| {
-                let result = SliceSpec::new(
-                    slice_length,
-                    part,
-                    start_or_end,
-                    ctx.func_ctx.week_start,
-                    true,
-                )
-                .and_then(|spec| time_slice_date(date, spec));
-                match result {
-                    Ok(value) => output.push(value),
-                    Err(error) => {
-                        ctx.set_error(output.len(), error);
-                        output.push(0);
+        |date, slice_length, start_or_end, part, ctx| {
+            if let Value::Column(dates) = &date
+                && let Some(spec) =
+                    constant_spec(&slice_length, &start_or_end, &part, ctx.func_ctx.week_start, true)
+            {
+                let mut output = Vec::with_capacity(dates.len());
+                for (row, date) in dates.iter().enumerate() {
+                    match time_slice_date(*date, spec) {
+                        Ok(value) => output.push(value),
+                        Err(error) => {
+                            ctx.set_error(row, error);
+                            output.push(0);
+                        }
                     }
                 }
-            },
-        ),
+                return Value::Column(output.into());
+            }
+            vectorize_with_builder_4_arg::<DateType, UInt64Type, StringType, StringType, DateType>(
+                |date, slice_length, start_or_end, part, output, ctx| {
+                    let result = SliceSpec::new(
+                        slice_length,
+                        part,
+                        start_or_end,
+                        ctx.func_ctx.week_start,
+                        true,
+                    )
+                    .and_then(|spec| time_slice_date(date, spec));
+                    match result {
+                        Ok(value) => output.push(value),
+                        Err(error) => {
+                            ctx.set_error(output.len(), error);
+                            output.push(0);
+                        }
+                    }
+                },
+            )(date, slice_length, start_or_end, part, ctx)
+        },
     );
     registry.register_passthrough_nullable_4_arg::<TimestampType, UInt64Type, StringType, StringType, TimestampType, _, _>(
         "time_slice",
         |_, _, _, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_4_arg::<TimestampType, UInt64Type, StringType, StringType, TimestampType>(
-            |ts, slice_length, start_or_end, part, output, ctx| {
-                let result = SliceSpec::new(
-                    slice_length,
-                    part,
-                    start_or_end,
-                    ctx.func_ctx.week_start,
-                    false,
-                )
-                .and_then(|spec| time_slice_timestamp(ts, spec, &ctx.func_ctx.tz));
-                match result {
-                    Ok(value) => output.push(value),
-                    Err(error) => {
-                        ctx.set_error(output.len(), error);
-                        output.push(0);
+        |ts, slice_length, start_or_end, part, ctx| {
+            if let Value::Column(timestamps) = &ts
+                && let Some(spec) =
+                    constant_spec(&slice_length, &start_or_end, &part, ctx.func_ctx.week_start, false)
+            {
+                let tz = ctx.func_ctx.tz;
+                let mut output = Vec::with_capacity(timestamps.len());
+                for (row, ts) in timestamps.iter().enumerate() {
+                    match time_slice_timestamp(*ts, spec, &tz) {
+                        Ok(value) => output.push(value),
+                        Err(error) => {
+                            ctx.set_error(row, error);
+                            output.push(0);
+                        }
                     }
                 }
-            },
-        ),
+                return Value::Column(output.into());
+            }
+            vectorize_with_builder_4_arg::<TimestampType, UInt64Type, StringType, StringType, TimestampType>(
+                |ts, slice_length, start_or_end, part, output, ctx| {
+                    let result = SliceSpec::new(
+                        slice_length,
+                        part,
+                        start_or_end,
+                        ctx.func_ctx.week_start,
+                        false,
+                    )
+                    .and_then(|spec| time_slice_timestamp(ts, spec, &ctx.func_ctx.tz));
+                    match result {
+                        Ok(value) => output.push(value),
+                        Err(error) => {
+                            ctx.set_error(output.len(), error);
+                            output.push(0);
+                        }
+                    }
+                },
+            )(ts, slice_length, start_or_end, part, ctx)
+        },
     );
 }

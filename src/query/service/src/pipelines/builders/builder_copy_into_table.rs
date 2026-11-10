@@ -180,7 +180,7 @@ impl PipelineBuilder {
                 // we do not need to upsert copied files into meta server
                 info!(
                     "[purge] and [force] are both enabled,  will not update copied-files set. ({})",
-                    &to_table.get_table_info().desc
+                    to_table.get_table_info().desc
                 );
                 None
             } else if copied_file_tree.is_empty() {

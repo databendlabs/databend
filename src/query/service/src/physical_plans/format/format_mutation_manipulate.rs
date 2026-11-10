@@ -63,7 +63,7 @@ impl<'a> PhysicalFormat for MutationManipulateFormatter<'a> {
                 )));
             } else {
                 let mut update_list = evaluator.1.as_ref().unwrap().clone();
-                update_list.sort_by(|a, b| a.0.cmp(&b.0));
+                update_list.sort_by_key(|a| a.0);
                 let update_format = update_list
                     .iter()
                     .map(|(field_idx, expr)| {

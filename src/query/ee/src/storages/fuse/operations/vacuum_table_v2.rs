@@ -15,28 +15,36 @@
 // Logs from this module will show up as "[FUSE-VACUUM2] ...".
 databend_common_tracing::register_module_tag!("[FUSE-VACUUM2]");
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::TableFiles;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_io::Files;
+use databend_common_storages_fuse::operations::slice_summary;
+use databend_storages_common_index::ExternalFile;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 use futures_util::TryStreamExt;
 use log::info;
+use log::warn;
 use opendal::Operator;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -82,21 +90,22 @@ struct BlockGcContext<'a> {
     gc_root_meta_ts: DateTime<Utc>,
     /// Hashes of data block paths still referenced by the gc root or refs.
     gc_root_blocks: &'a HashSet<u128>,
-    /// Inverted index metadata used to derive index object paths from data blocks.
-    inverted_indexes: &'a BTreeMap<String, TableIndex>,
     /// Start time of the block GC phase, used only for status reporting.
     start: std::time::Instant,
 }
 
 /// GC root context derived from the owner table before ref-aware cleanup starts.
 ///
-/// It captures the owner table id, the selected gc-root timestamps, the snapshot
-/// files currently eligible for cleanup, and the segments that must remain
-/// protected while processing branch/tag references.
+/// It carries the refreshed owner used to select the GC root, so subsequent
+/// cleanup observes the same schema and index references, together with the
+/// selected timestamps, eligible snapshots, and protected segments.
 struct GcRootSnapshotCtx {
+    owner: Arc<dyn Table>,
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
     protected_segments: HashSet<Location>,
+    /// Segment zone map files referenced by the gc root or by tagged snapshots.
+    protected_segment_zone_maps: HashSet<String>,
     snapshots_to_gc: Vec<String>,
 }
 
@@ -106,6 +115,9 @@ pub async fn do_vacuum2(
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<()> {
+    // Maintenance, also from a table function or procedure: `CachePolicy::MAINTENANCE` for the
+    // rest of the statement, whose reads are this vacuum's.
+    ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
     let table_info = table.get_table_info();
     {
         if ctx.txn_mgr().lock().is_active() {
@@ -119,15 +131,19 @@ pub async fn do_vacuum2(
 
     let fuse_table = FuseTable::try_from_table(table)?;
     let Some(GcRootSnapshotCtx {
+        owner,
         gc_root_timestamp,
         gc_root_meta_ts,
         protected_segments,
+        protected_segment_zone_maps,
         snapshots_to_gc,
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
         return Ok(());
     };
+    let fuse_table = FuseTable::try_from_table(owner.as_ref())?;
+    let table_info = fuse_table.get_table_info();
 
     let start = std::time::Instant::now();
     let segments_before_gc_root = fuse_table
@@ -154,9 +170,13 @@ pub async fn do_vacuum2(
     ));
 
     let start = std::time::Instant::now();
+    let target_segment_prefix = fuse_table
+        .meta_location_generator()
+        .segment_location_prefix();
     let protected_seg_paths = protected_segments
         .iter()
-        .map(|(p, _)| p)
+        .map(|(path, _)| path)
+        .filter(|path| path.starts_with(target_segment_prefix))
         .collect::<HashSet<_>>();
     let segments_to_gc: Vec<String> = segments_before_gc_root
         .into_iter()
@@ -174,17 +194,53 @@ pub async fn do_vacuum2(
         slice_summary(&stats_to_gc)
     ));
 
+    // Segment zone map files are named like segments (UUID v7 under a vacuum2
+    // prefix) and referenced only by snapshots, so the same selection applies:
+    // everything before the gc root that no protected snapshot points to.
+    let start = std::time::Instant::now();
+    let prefix = fuse_table
+        .meta_location_generator()
+        .segment_zone_map_location_prefix();
+    let mut segment_zone_maps_to_gc = Vec::new();
+    for entry in fuse_table
+        .list_files_until_timestamp(prefix, gc_root_timestamp, false, Some(gc_root_meta_ts))
+        .await?
+    {
+        if !protected_segment_zone_maps.contains(entry.path()) {
+            segment_zone_maps_to_gc.push(entry.path().to_owned());
+        }
+    }
+    ctx.set_status_info(&format!(
+        "Listed segment zone maps before gc_root for table {}, elapsed: {:?}, segment_zone_maps_to_gc: {:?}",
+        table_info.desc,
+        start.elapsed(),
+        slice_summary(&segment_zone_maps_to_gc)
+    ));
+
     let start = std::time::Instant::now();
     let segments_io =
         SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
 
-    // Collect blocks from main gc_root. Read protected segments in chunks to avoid
-    // retaining all CompactSegmentInfo objects in memory at once.
+    // Read all protection roots in chunks, but retain only block and index objects owned by the
+    // target table. Clone descendants can reference segments stored under an ancestor's prefix.
     let protected_segments = protected_segments.into_iter().collect::<Vec<_>>();
     let total_chunks = protected_segments
         .len()
         .div_ceil(VACUUM2_SEGMENT_READ_CHUNK_SIZE);
+    let target_block_prefix = fuse_table.meta_location_generator().block_location_prefix();
+    let target_inverted_index_prefix = fuse_table
+        .meta_location_generator()
+        .inverted_index_v2_location_prefix();
     let mut gc_root_blocks = HashSet::new();
+    let mut protected_inverted_index_locations = HashSet::new();
+    let target_vector_index_prefix = fuse_table
+        .meta_location_generator()
+        .vector_index_v2_location_prefix();
+    let target_legacy_vector_index_prefix = fuse_table
+        .meta_location_generator()
+        .block_vector_index_prefix();
+    // Bundles (`vector_index_metas`) and legacy combined files (`vector_index_location`).
+    let mut protected_vector_locations = HashSet::new();
     for (chunk_idx, segment_chunk) in protected_segments
         .chunks(VACUUM2_SEGMENT_READ_CHUNK_SIZE)
         .enumerate()
@@ -199,15 +255,41 @@ pub async fn do_vacuum2(
         }
 
         let segments = segments_io
-            .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
+            .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, CachePolicy::READ_ONLY)
             .await?;
         for segment in segments {
-            gc_root_blocks.extend(
-                segment?
-                    .block_metas()?
-                    .iter()
-                    .map(|b| block_path_hash(&b.location.0)),
-            );
+            let blocks = segment?.block_metas()?;
+            for block in &blocks {
+                if block.location.0.starts_with(target_block_prefix) {
+                    gc_root_blocks.insert(block_path_hash(&block.location.0));
+                }
+                protected_vector_locations.extend(
+                    block
+                        .vector_index_metas
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|meta| &meta.location.0)
+                        .filter(|path| path.starts_with(target_vector_index_prefix))
+                        .chain(
+                            block
+                                .vector_index_location
+                                .as_ref()
+                                .map(|location| &location.0)
+                                .filter(|path| path.starts_with(target_legacy_vector_index_prefix)),
+                        )
+                        .cloned(),
+                );
+                protected_inverted_index_locations.extend(
+                    block
+                        .inverted_index_metas
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .filter(|meta| meta.location.0.starts_with(target_inverted_index_prefix))
+                        .map(|meta| meta.location.0.clone()),
+                );
+            }
         }
         ctx.set_status_info(&format!(
             "Read protected segment chunk for table {}, elapsed: {:?}, segment chunk: {}/{}, segments in chunk: {}, total protected blocks: {}",
@@ -220,17 +302,94 @@ pub async fn do_vacuum2(
         ));
     }
     ctx.set_status_info(&format!(
-        "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",
+        "Read segments for table {}, elapsed: {:?}, total protected blocks: {}, protected inverted indexes: {}",
         table_info.desc,
         start.elapsed(),
-        gc_root_blocks.len()
+        gc_root_blocks.len(),
+        protected_inverted_index_locations.len(),
     ));
 
     let start = std::time::Instant::now();
-    let inverted_indexes = &table_info.meta.indexes;
+    let removed_inverted_index_v2 = purge_inverted_index_v2_objects(
+        fuse_table.get_operator_ref(),
+        &ctx,
+        target_inverted_index_prefix,
+        &protected_inverted_index_locations,
+        gc_root_timestamp,
+        gc_root_meta_ts,
+    )
+    .await?;
+    ctx.set_status_info(&format!(
+        "Removed unreferenced inverted-index V2 objects for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_inverted_index_v2,
+    ));
 
-    // order is important
-    // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
+    // Column-oriented segments do not carry `vector_index_metas` yet. Never sweep
+    // the namespace based on an incomplete reference set.
+    let start = std::time::Instant::now();
+    let mut removed_vector_index = 0;
+    if !fuse_table.is_column_oriented() {
+        for (prefix, legacy) in [
+            (target_vector_index_prefix, false),
+            (target_legacy_vector_index_prefix, true),
+        ] {
+            removed_vector_index += purge_vector_index_objects(
+                fuse_table.get_operator_ref(),
+                &ctx,
+                prefix,
+                legacy,
+                &protected_vector_locations,
+                gc_root_timestamp,
+                gc_root_meta_ts,
+            )
+            .await?;
+        }
+    }
+    ctx.set_status_info(&format!(
+        "Removed unreferenced vector-index objects for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_vector_index,
+    ));
+
+    // User dictionaries are referenced by index definitions in the table meta, not by snapshots:
+    // pruning always tokenizes with the dictionary of the current index definition.
+    let start = std::time::Instant::now();
+    let protected_dictionaries = table_info
+        .meta
+        .indexes
+        .values()
+        .filter_map(|index| {
+            index
+                .options
+                .get(INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION)
+                .cloned()
+        })
+        .collect::<HashSet<_>>();
+    let removed_dictionaries = purge_inverted_index_dict_objects(
+        fuse_table.get_operator_ref(),
+        &ctx,
+        fuse_table
+            .meta_location_generator()
+            .inverted_index_dict_location_prefix(),
+        &protected_dictionaries,
+        gc_root_timestamp,
+    )
+    .await?;
+    ctx.set_status_info(&format!(
+        "Removed unreferenced inverted-index user dictionaries for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_dictionaries,
+    ));
+
+    let start = std::time::Instant::now();
+
+    // Bloom indexes are still derived from data-block paths. Current `_i_i_v2` objects are deleted
+    // by the reference-aware scan above. Historical `_i_i` objects stay on the old block-addressed
+    // path: they are not vacuumed here.
     let block_location_prefix = fuse_table.meta_location_generator().block_location_prefix();
     let block_gc_ctx = BlockGcContext {
         dal: fuse_table.get_operator_ref(),
@@ -241,7 +400,6 @@ pub async fn do_vacuum2(
         gc_root_timestamp,
         gc_root_meta_ts,
         gc_root_blocks: &gc_root_blocks,
-        inverted_indexes,
         start,
     };
     let block_gc_stats = purge_blocks_before_gc_root(&block_gc_ctx).await?;
@@ -254,7 +412,7 @@ pub async fn do_vacuum2(
         block_gc_stats.removed_files,
     ));
 
-    let file_remover = Files::create(ctx.clone(), fuse_table.get_operator());
+    let file_remover = TableFiles::create(ctx.clone(), fuse_table.get_operator());
 
     // segment stats should be removed before segments.
     if !stats_to_gc.is_empty() {
@@ -263,6 +421,12 @@ pub async fn do_vacuum2(
 
     if !segments_to_gc.is_empty() {
         file_remover.remove_file_in_batch(&segments_to_gc).await?;
+    }
+
+    if !segment_zone_maps_to_gc.is_empty() {
+        file_remover
+            .remove_file_in_batch(&segment_zone_maps_to_gc)
+            .await?;
     }
 
     // Evict snapshot caches from the local node.
@@ -274,24 +438,19 @@ pub async fn do_vacuum2(
     // - TODO: To ensure correctness in such cases, the table's Least Visible Timestamp (LVT),
     //   stored in the meta-server, should be utilized to determine snapshot visibility and
     //   resolve potential issues.
-    if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-        for path in snapshots_to_gc.iter() {
-            snapshot_cache.evict(path);
-        }
+    // The disk cache drops them with the delete.
+    let snapshot_cache = &FuseCaches::instance().snapshots;
+    for path in snapshots_to_gc.iter() {
+        snapshot_cache.evict(path);
     }
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
 
-    // Legacy branch/tag refs were removed without compatibility guarantees.
-    // Vacuum2 cleans up the old ref snapshot prefix opportunistically, and the
-    // operation is idempotent even if the prefix is already absent.
-    let legacy_ref_dir = fuse_table
-        .meta_location_generator()
-        .ref_snapshot_location_prefix();
-    let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
-
-    let removed_files = block_gc_stats.removed_files
+    let removed_files = removed_inverted_index_v2
+        + removed_vector_index
+        + block_gc_stats.removed_files
         + stats_to_gc.len()
         + segments_to_gc.len()
+        + segment_zone_maps_to_gc.len()
         + snapshots_to_gc.len();
     ctx.set_status_info(&format!(
         "Removed files for table {}, elapsed: {:?}, files removed: {}",
@@ -301,6 +460,190 @@ pub async fn do_vacuum2(
     ));
 
     Ok(())
+}
+
+/// Removes user dictionary objects under `prefix` that no current index definition references.
+///
+/// Fresh UUID-v7 objects are kept even if their index has not committed yet.
+async fn purge_inverted_index_dict_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning inverted-index user dictionaries under {prefix}"
+            )));
+        }
+        if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
+            continue;
+        }
+        if !entry
+            .path()
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.starts_with(VACUUM2_OBJECT_KEY_PREFIX))
+        {
+            continue;
+        }
+        match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+            Ok(Some(timestamp)) if timestamp < gc_root_timestamp => {}
+            Ok(_) => continue,
+            Err(error) => {
+                warn!(
+                    "skip user dictionary with unparsable UUID during vacuum: path={}, error={}",
+                    entry.path(),
+                    error
+                );
+                continue;
+            }
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
+}
+
+/// Removes vector index files under `prefix` not referenced by protected blocks.
+///
+/// Bundles (`_i_v_v2`, like inverted-index V2): only `h`-prefixed objects whose
+/// UUID v7 is older than the GC root. Legacy combined files (`_i_v`,
+/// `{uuid}_v{N}.parquet`): no longer written, so like legacy blocks they are
+/// candidates once last modified a full transaction before the GC root.
+async fn purge_vector_index_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    legacy: bool,
+    protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning vector-index objects under {prefix}"
+            )));
+        }
+        if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
+            continue;
+        }
+        if !legacy {
+            match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+                Ok(Some(timestamp)) if timestamp < gc_root_timestamp => {}
+                Ok(_) => continue,
+                Err(error) => {
+                    warn!(
+                        "skip vector-index bundle with unparsable UUID during vacuum: path={}, error={}",
+                        entry.path(),
+                        error
+                    );
+                    continue;
+                }
+            }
+        }
+        if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
+            continue;
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
+}
+
+async fn purge_inverted_index_v2_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning inverted-index V2 objects under {prefix}"
+            )));
+        }
+        if entry.metadata().is_dir() {
+            continue;
+        }
+        // Sibling objects (`<bundle>.idx`, `<bundle>.pos`) share the bundle's protection and the
+        // bundle's UUID; unrecognised names are left alone.
+        let Some(bundle_location) = ExternalFile::bundle_location(entry.path()) else {
+            warn!(
+                "skip object with unrecognised inverted-index naming during vacuum: path={}",
+                entry.path()
+            );
+            continue;
+        };
+        if protected_locations.contains(bundle_location) {
+            continue;
+        }
+        let object_timestamp = match try_extract_uuid_v7_timestamp_from_path(bundle_location) {
+            Ok(Some(timestamp)) => timestamp,
+            Ok(None) => continue,
+            Err(error) => {
+                warn!(
+                    "skip inverted-index V2 object with unparsable UUID during vacuum: path={}, error={}",
+                    entry.path(),
+                    error
+                );
+                continue;
+            }
+        };
+        if object_timestamp >= gc_root_timestamp {
+            continue;
+        }
+        if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
+            continue;
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
 }
 
 /// Hash the full path, including legacy names, prefixes and format versions.
@@ -325,7 +668,7 @@ async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<Bl
 }
 
 async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
-    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
+    let file_remover = TableFiles::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let blocks_before_gc_root = list_gc_candidate_paths_until_prefix_fs(
         block_gc.dal,
         block_gc.block_location_prefix,
@@ -371,7 +714,7 @@ async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result
 async fn purge_blocks_before_gc_root_object_store_streaming(
     block_gc: &BlockGcContext<'_>,
 ) -> Result<BlockGcStats> {
-    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
+    let file_remover = TableFiles::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let mut lister = block_gc.dal.lister(block_gc.block_location_prefix).await?;
     let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut stats = BlockGcStats {
@@ -448,7 +791,7 @@ async fn list_gc_candidate_paths_until_prefix_fs(
 }
 
 async fn purge_block_chunk(
-    file_remover: &Files,
+    file_remover: &TableFiles,
     block_gc: &BlockGcContext<'_>,
     block_chunk: &[String],
     stats: &mut BlockGcStats,
@@ -463,7 +806,7 @@ async fn purge_block_chunk(
     }
 
     let chunk_idx = stats.removed_blocks / VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 1;
-    let indexes_to_gc = collect_block_index_locations(block_chunk, block_gc.inverted_indexes);
+    let indexes_to_gc = collect_block_index_locations(block_chunk);
     block_gc.ctx.set_status_info(&format!(
         "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}, blocks in chunk: {}, indexes_to_gc: {:?}",
         block_gc.table_desc,
@@ -495,25 +838,26 @@ async fn purge_block_chunk(
     Ok(())
 }
 
-fn collect_block_index_locations(
-    blocks_to_gc: &[String],
-    inverted_indexes: &BTreeMap<String, TableIndex>,
-) -> Vec<String> {
-    let mut indexes_to_gc = Vec::with_capacity(blocks_to_gc.len() * (inverted_indexes.len() + 1));
+fn collect_block_index_locations(blocks_to_gc: &[String]) -> Vec<String> {
+    let mut indexes_to_gc = Vec::with_capacity(blocks_to_gc.len());
     for loc in blocks_to_gc {
-        for idx in inverted_indexes.values() {
-            indexes_to_gc.push(
-                TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                    loc,
-                    idx.name.as_str(),
-                    idx.version.as_str(),
-                ),
-            );
-        }
         indexes_to_gc
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
     }
     indexes_to_gc
+}
+
+/// A missing snapshot in any history that GC must observe defers this round instead of failing
+/// the statement: an unproven gap can never be swept over.
+fn defer_on_incomplete_history<T>(result: Result<T>, what: &str) -> Result<Option<T>> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(err) if err.code() == ErrorCode::STORAGE_NOT_FOUND => {
+            info!("defer vacuum: incomplete {what} history: {err}");
+            Ok(None)
+        }
+        Err(err) => Err(err),
+    }
 }
 
 #[async_backtrace::framed]
@@ -522,58 +866,132 @@ async fn vacuum_base_snapshot_phase(
     ctx: &Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<Option<GcRootSnapshotCtx>> {
-    let Some(mut selection) = fuse_table
-        .prepare_snapshot_gc_selection(ctx, respect_flash_back)
-        .await?
+    let catalog = ctx
+        .get_catalog(fuse_table.get_table_info().catalog())
+        .await?;
+    let owner_lvt = catalog
+        .get_table_lvt(&LeastVisibleTimeIdent::new(
+            ctx.get_tenant(),
+            fuse_table.get_id(),
+        ))
+        .await?;
+    let owner_seq = owner_lvt.as_ref().map_or(0, |v| v.seq);
+    let refreshed = fuse_table.refresh(ctx.as_ref()).await?;
+    let fuse_table = FuseTable::try_from_table(refreshed.as_ref())?;
+    let owner_bound = owner_lvt
+        .map(|v| v.data)
+        .unwrap_or_else(LeastVisibleTime::unbounded);
+    let concurrency = ctx.get_settings().get_max_threads()? as usize;
+    let mut protected_segments = HashSet::new();
+    // Select the owner first so a no-op VACUUM does not scan clone descendants. Descendant table
+    // scans still share the configured concurrency budget with one another.
+    let Some(Some(mut selection)) = defer_on_incomplete_history(
+        fuse_table
+            .prepare_snapshot_gc_selection(ctx, respect_flash_back, &owner_bound)
+            .await,
+        "owner",
+    )?
     else {
         return Ok(None);
     };
 
-    let catalog = ctx
-        .get_catalog(fuse_table.get_table_info().catalog())
+    // Existing bindings always use the retention-bounded clone-aware protocol. This is a storage
+    // safety rule, not a user-selectable mode: disabling CREATE TABLE CLONE must not make VACUUM
+    // unsafe for clone groups that already exist.
+    let Some(mut mark) = defer_on_incomplete_history(
+        fuse_table
+            .mark_clone_descendants(
+                ctx.clone(),
+                &catalog,
+                &mut protected_segments,
+                true,
+                concurrency,
+                |status| ctx.set_status_info(&status),
+            )
+            .await,
+        "descendant",
+    )?
+    else {
+        return Ok(None);
+    };
+    protected_segments.extend(selection.gc_root.segments.iter().cloned());
+    // Snapshots after the gc root only point at its zone map or at ones built
+    // later, so protecting it covers every live reference.
+    let mut protected_segment_zone_maps = HashSet::new();
+    protected_segment_zone_maps.extend(
+        selection
+            .gc_root
+            .segment_zone_map_path()
+            .map(str::to_string),
+    );
+    let mut updates = std::mem::take(&mut mark.lvt_updates);
+    // Validate the owner's original fence too: FLASHBACK can change its head while descendants
+    // are being marked. Existing clone bindings always use this one LVT publication protocol.
+    updates.push((
+        fuse_table.get_id(),
+        owner_seq,
+        selection.gc_root_lvt.clone(),
+    ));
+    if !catalog.set_table_lvts(&ctx.get_tenant(), &updates).await? {
+        info!("defer vacuum: LVT fence changed after mark");
+        return Ok(None);
+    }
+    // Like tags, clones created between the mark and publication were validated against the
+    // previous fence. Protect them now instead of deferring the sweep.
+    if defer_on_incomplete_history(
+        fuse_table
+            .mark_new_clone_descendants(
+                ctx.clone(),
+                &catalog,
+                &mut mark,
+                &mut protected_segments,
+                concurrency,
+                |status| ctx.set_status_info(&status),
+            )
+            .await,
+        "new descendant",
+    )?
+    .is_none()
+    {
+        return Ok(None);
+    }
+    fuse_table
+        .extend_clone_descendant_tag_segments(
+            &catalog,
+            &mark.descendant_ids,
+            concurrency,
+            &mut protected_segments,
+            ctx.cache_policy(),
+        )
         .await?;
-    let mut protected_segments = selection
-        .gc_root
-        .segments
-        .iter()
-        .cloned()
-        .collect::<HashSet<_>>();
     fuse_table
         .protect_table_tag_references(
             &catalog,
             &selection.gc_root_path,
             &mut selection.snapshots_to_gc,
             &mut protected_segments,
+            &mut protected_segment_zone_maps,
+            ctx.cache_policy(),
         )
         .await?;
 
+    selection
+        .snapshots_to_gc
+        .retain(|path| !mark.protected_snapshots.contains(path));
+
     Ok(Some(GcRootSnapshotCtx {
-        gc_root_timestamp: selection.gc_root.timestamp.unwrap(),
+        owner: refreshed,
+        gc_root_timestamp: selection.gc_root_lvt.time,
         gc_root_meta_ts: selection.gc_root_meta_ts,
         protected_segments,
+        protected_segment_zone_maps,
         snapshots_to_gc: selection.snapshots_to_gc,
     }))
-}
-
-fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
-    if s.len() > 10 {
-        let first_five = &s[..5];
-        let last_five = &s[s.len() - 5..];
-        format!(
-            "First five: {:?}, Last five: {:?},Len: {}",
-            first_five,
-            last_five,
-            s.len()
-        )
-    } else {
-        format!("{:?}", s)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use chrono::TimeZone;
-    use databend_common_meta_app::schema::TableIndexType;
     use databend_query::test_kits::TestFixture;
     use futures_util::StreamExt;
     use opendal::services::Memory;
@@ -587,30 +1005,10 @@ mod tests {
             "1/2/_b/g0123456789abcdef0123456789abcdef_v2.parquet".to_string(),
             "1/2/_b/hfedcba9876543210fedcba9876543210_v2.parquet".to_string(),
         ];
-        let mut inverted_indexes = BTreeMap::new();
-        inverted_indexes.insert("idx".to_string(), TableIndex {
-            index_type: TableIndexType::Inverted,
-            name: "idx".to_string(),
-            column_ids: vec![0],
-            sync_creation: true,
-            version: "123456789".to_string(),
-            options: BTreeMap::new(),
-        });
-
-        let indexes = collect_block_index_locations(&blocks, &inverted_indexes);
+        let indexes = collect_block_index_locations(&blocks);
 
         assert_eq!(indexes, vec![
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &blocks[0],
-                "idx",
-                "123456789",
-            ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &blocks[1],
-                "idx",
-                "123456789",
-            ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
         ]);
     }
@@ -619,6 +1017,114 @@ mod tests {
         use opendal::Scheme;
 
         use super::*;
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn inverted_index_v2_gc_keeps_protected_objects() -> anyhow::Result<()> {
+            const PREFIX: &str = "1/2/_i_i_v2/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            let dal = Operator::new(Memory::default())?.finish();
+
+            let gc_root_timestamp = Utc
+                .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                .single()
+                .expect("valid gc-root timestamp");
+            let old_timestamp = gc_root_timestamp - chrono::Duration::minutes(2);
+            let old_uuid =
+                databend_storages_common_table_meta::meta::uuid_from_date_time(old_timestamp);
+            let orphan_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
+                old_timestamp + chrono::Duration::milliseconds(1),
+            );
+            let after_cutoff_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
+                gc_root_timestamp + chrono::Duration::seconds(1),
+            );
+
+            let protected = format!("{PREFIX}generation/h{}.index", old_uuid.simple());
+            let orphan = format!("{PREFIX}generation/h{}.index", orphan_uuid.simple());
+            let after_cutoff = format!("{PREFIX}generation/h{}.index", after_cutoff_uuid.simple());
+            let stray = format!("{PREFIX}generation/not-a-uuid.index");
+            let outside = "1/2/_b/outside.parquet".to_string();
+            // Sibling objects follow their bundle: protected stays, orphaned goes.
+            let protected_idx = format!("{protected}.idx");
+            let protected_pos = format!("{protected}.pos");
+            let orphan_idx = format!("{orphan}.idx");
+            dal.write(&protected, vec![1]).await?;
+            dal.write(&orphan, vec![2]).await?;
+            dal.write(&after_cutoff, vec![3]).await?;
+            dal.write(&stray, vec![4]).await?;
+            dal.write(&outside, vec![5]).await?;
+            dal.write(&protected_idx, vec![6]).await?;
+            dal.write(&protected_pos, vec![7]).await?;
+            dal.write(&orphan_idx, vec![8]).await?;
+
+            let protected_locations = HashSet::from([protected.clone()]);
+            let removed = purge_inverted_index_v2_objects(
+                &dal,
+                &ctx,
+                PREFIX,
+                &protected_locations,
+                gc_root_timestamp,
+                Utc::now() + chrono::Duration::days(4),
+            )
+            .await?;
+
+            assert_eq!(removed, 2);
+            assert!(dal.exists(&protected).await?);
+            assert!(dal.exists(&protected_idx).await?);
+            assert!(dal.exists(&protected_pos).await?);
+            assert!(!dal.exists(&orphan).await?);
+            assert!(!dal.exists(&orphan_idx).await?);
+            assert!(dal.exists(&after_cutoff).await?);
+            assert!(dal.exists(&stray).await?);
+            assert!(dal.exists(&outside).await?);
+            Ok(())
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn inverted_index_dict_gc_keeps_referenced_and_recent_objects() -> anyhow::Result<()>
+        {
+            const PREFIX: &str = "1/2/_i_i_d/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            let dal = Operator::new(Memory::default())?.finish();
+            let cutoff = Utc
+                .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                .single()
+                .expect("valid gc-root timestamp");
+            let location = |timestamp| {
+                let uuid =
+                    databend_storages_common_table_meta::meta::uuid_from_date_time(timestamp);
+                format!("{PREFIX}h{}.csv", uuid.simple())
+            };
+            let referenced = location(cutoff - chrono::Duration::minutes(2));
+            let orphan = location(cutoff - chrono::Duration::minutes(1));
+            let at_cutoff = location(cutoff);
+            let recent = location(cutoff + chrono::Duration::seconds(1));
+            let malformed = format!("{PREFIX}hnot-a-uuid.csv");
+            let content = b"AI,noun,AI\n".to_vec();
+            for path in [&referenced, &orphan, &malformed] {
+                dal.write(path, content.clone()).await?;
+            }
+
+            // Vacuum captured its protection set before a new DDL uploaded the same dictionary.
+            // The new upload must have a fresh path and survive even without a protected reference.
+            let protected = HashSet::from([referenced.clone()]);
+            dal.write(&at_cutoff, content.clone()).await?;
+            dal.write(&recent, content.clone()).await?;
+            let removed =
+                purge_inverted_index_dict_objects(&dal, &ctx, PREFIX, &protected, cutoff).await?;
+            assert_eq!(removed, 1);
+            assert!(!dal.exists(&orphan).await?);
+            for path in [&referenced, &at_cutoff, &recent, &malformed] {
+                assert!(dal.exists(path).await?);
+            }
+            assert_eq!(dal.read(&recent).await?.to_vec(), content);
+            Ok(())
+        }
 
         #[tokio::test(flavor = "multi_thread")]
         async fn streaming_block_gc_keeps_protected_and_cutoff_blocks() -> anyhow::Result<()> {
@@ -661,7 +1167,6 @@ mod tests {
                 block_path_hash(&protected_block),
                 block_path_hash(&protected_other_version),
             ]);
-            let inverted_indexes = BTreeMap::new();
             let block_gc = BlockGcContext {
                 dal: &dal,
                 ctx: &ctx,
@@ -671,7 +1176,6 @@ mod tests {
                 gc_root_timestamp,
                 gc_root_meta_ts: gc_root_timestamp,
                 gc_root_blocks: &protected_blocks,
-                inverted_indexes: &inverted_indexes,
                 start: std::time::Instant::now(),
             };
             assert_ne!(dal.info().scheme(), Scheme::Fs.into_static());
@@ -768,7 +1272,6 @@ mod tests {
                 dal.write(&after_cutoff_block, vec![1]).await?;
 
                 let protected_blocks = HashSet::from([block_path_hash(&protected_block)]);
-                let inverted_indexes = BTreeMap::new();
                 let block_gc = BlockGcContext {
                     dal: &dal,
                     ctx: &ctx,
@@ -778,7 +1281,6 @@ mod tests {
                     gc_root_timestamp,
                     gc_root_meta_ts: gc_root_timestamp,
                     gc_root_blocks: &protected_blocks,
-                    inverted_indexes: &inverted_indexes,
                     start: std::time::Instant::now(),
                 };
                 anyhow::ensure!(

@@ -18,9 +18,11 @@ use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
 use chrono::Utc;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -31,6 +33,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::resolve_type_name_by_str;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_license::license::Feature::ComputedColumn;
@@ -46,6 +49,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
+use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Planner;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::binder::validate_constraints_by_schema;
@@ -53,7 +57,7 @@ use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::resolve_type_name_by_str;
+use databend_common_sql::validate_stored_ttl_expr;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::CachedMetaWriter;
@@ -80,20 +84,22 @@ use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use parquet::arrow::ArrowSchemaConverter;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
+use crate::interpreters::build_insert_select_physical_plan;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::common::stored_computed_column_references;
+use crate::interpreters::common::ttl_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::meta_service_error;
-use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
@@ -129,6 +135,7 @@ impl ModifyTableColumnInterpreter {
         table: Arc<dyn Table>,
         using_columns: &[String],
         mask_name: String,
+        where_use_unmasked_value: bool,
     ) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
@@ -185,16 +192,30 @@ impl ModifyTableColumnInterpreter {
             )));
         }
 
+        let target_column_id = schema
+            .column_with_name(&using_columns[0])
+            .ok_or_else(|| {
+                ErrorCode::UnknownColumn(format!("Cannot find column {}", using_columns[0]))
+            })?
+            .1
+            .column_id;
         let mut columns_ids = Vec::with_capacity(using_columns.len());
         for (column, policy_data_type) in using_columns.iter().zip(policy_data_types) {
             let (_, data_field) = schema.column_with_name(column).ok_or_else(|| {
                 ErrorCode::UnknownColumn(format!("Cannot find column {}", column))
             })?;
 
-            if table_info
-                .meta
-                .is_column_reference_policy(&data_field.column_id)
-            {
+            let referenced_by_other_policy = (data_field.column_id != target_column_id
+                && table_info
+                    .meta
+                    .column_mask_policy_columns_ids
+                    .contains_key(&data_field.column_id))
+                || table_info
+                    .meta
+                    .row_access_policy_columns_ids
+                    .as_ref()
+                    .is_some_and(|policy| policy.columns_ids.contains(&data_field.column_id));
+            if referenced_by_other_policy {
                 return Err(ErrorCode::AlterTableError(format!(
                     "Column '{}' is already attached to a security policy. A column cannot be attached to multiple security policies",
                     data_field.name
@@ -212,6 +233,21 @@ impl ModifyTableColumnInterpreter {
             columns_ids.push(data_field.column_id);
         }
 
+        // SET may update WHERE authorization for the same binding, but must not
+        // silently replace an existing policy or change its argument columns.
+        // Switching policies still requires an explicit UNSET first.
+        if let Some(existing) = table_info
+            .meta
+            .column_mask_policy_columns_ids
+            .get(&target_column_id)
+            && (existing.policy_id != *policy_id || existing.columns_ids != columns_ids)
+        {
+            return Err(ErrorCode::AlterTableError(format!(
+                "Column '{}' is already attached to a security policy. Unset the existing policy before replacing it",
+                using_columns[0],
+            )));
+        }
+
         let table_id = table_info.ident.table_id;
 
         let req = SetTableColumnMaskPolicyReq {
@@ -219,6 +255,7 @@ impl ModifyTableColumnInterpreter {
             seq: MatchSeq::Exact(table_info.ident.seq),
             table_id,
             action: SetSecurityPolicyAction::Set(*policy_id, columns_ids),
+            where_use_unmasked_value,
         };
 
         let _resp = catalog.set_table_column_mask_policy(req).await?;
@@ -291,7 +328,11 @@ impl ModifyTableColumnInterpreter {
                 let referenced = cluster_key_referenced_columns(&cluster_key)?;
                 if referenced.iter().any(|v| modified_cols.contains(v)) {
                     let tmp_table = fuse_table.with_schema(new_schema.clone());
-                    if let Err(e) = analyze_cluster_keys(self.ctx.clone(), tmp_table, &cluster_key)
+                    // Legacy metadata may contain an unquoted mixed-case key.
+                    // Preserve stored names instead of folding them with this session.
+                    let names = NameResolutionContext::preserve_identifier_case();
+                    if let Err(e) =
+                        analyze_cluster_keys(self.ctx.clone(), tmp_table, &cluster_key, &names)
                     {
                         return Err(ErrorCode::AlterTableError(format!(
                             "Cannot modify column data type, because it is referenced by cluster key '{}': {}",
@@ -308,6 +349,24 @@ impl ModifyTableColumnInterpreter {
                         "Cannot modify column data type because it is referenced by partition key '{}'",
                         partition_key
                     )));
+                }
+            }
+            // A TTL must stay evaluable as a TIMESTAMP/DATE. Re-validate it
+            // against the new schema rather than assuming the old type holds,
+            // otherwise a type change would leave a TTL that can never be
+            // applied.
+            if let Some(ttl) = &table_info.meta.ttl {
+                let referenced = ttl_referenced_columns(ttl)?;
+                if referenced.iter().any(|v| modified_cols.contains(v)) {
+                    if let Err(e) =
+                        validate_stored_ttl_expr(self.ctx.clone(), new_schema.clone(), ttl)
+                    {
+                        return Err(ErrorCode::AlterTableError(format!(
+                            "Cannot modify column data type, because it is referenced by TTL '{}': {}",
+                            ttl,
+                            e.message()
+                        )));
+                    }
                 }
             }
         }
@@ -409,7 +468,6 @@ impl ModifyTableColumnInterpreter {
                     }
                 }
 
-                // Ignore column comment modify for table branch.
                 if table_info.meta.field_comments[i] != *comment {
                     table_info.meta.field_comments[i] = comment.to_string();
                     modify_comment = true;
@@ -705,14 +763,7 @@ impl ModifyTableColumnInterpreter {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let table_ref = if let Some(branch) = &self.plan.branch {
-            format!(
-                "`{}`.`{}`/`{}`",
-                self.plan.database, self.plan.table, branch
-            )
-        } else {
-            format!("`{}`.`{}`", self.plan.database, self.plan.table)
-        };
+        let table_ref = format!("`{}`.`{}`", self.plan.database, self.plan.table);
         let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
         table_info.meta.schema = new_schema;
 
@@ -792,16 +843,17 @@ impl ModifyTableColumnInterpreter {
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        if let Some(policy) = table_info
+        if table_info
             .meta
             .column_mask_policy_columns_ids
-            .get(&column_id)
+            .contains_key(&column_id)
         {
             let req = SetTableColumnMaskPolicyReq {
                 tenant: self.ctx.get_tenant(),
                 seq: MatchSeq::Exact(table_version),
                 table_id,
-                action: SetSecurityPolicyAction::Unset(policy.policy_id),
+                action: SetSecurityPolicyAction::Unset(u64::from(column_id)),
+                where_use_unmasked_value: false,
             };
 
             let _resp = catalog.set_table_column_mask_policy(req).await?;
@@ -878,14 +930,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
             let tbl_name = self.plan.table.as_str();
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let table = catalog
-                .get_table_with_branch(
-                    &self.ctx.get_tenant(),
-                    db_name,
-                    tbl_name,
-                    self.plan.branch.as_deref(),
-                )
-                .await?;
+            // Preserve the version against which the new column definitions were bound.
+            let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
             table.check_mutable()?;
 
@@ -909,9 +955,19 @@ impl Interpreter for ModifyTableColumnInterpreter {
             // NOTICE: if we support modify column data type,
             // need to check whether this column is referenced by other computed columns.
             let mut build_res = match &self.plan.action {
-                ModifyColumnAction::SetMaskingPolicy(mask_name, using_columns) => {
-                    self.do_set_data_mask_policy(catalog, table, using_columns, mask_name.clone())
-                        .await?
+                ModifyColumnAction::SetMaskingPolicy(
+                    mask_name,
+                    using_columns,
+                    where_use_unmasked_value,
+                ) => {
+                    self.do_set_data_mask_policy(
+                        catalog,
+                        table,
+                        using_columns,
+                        mask_name.clone(),
+                        *where_use_unmasked_value,
+                    )
+                    .await?
                 }
                 ModifyColumnAction::UnsetMaskingPolicy(column) => {
                     self.do_unset_data_mask_policy(catalog, table, column.to_string())
@@ -1136,7 +1192,7 @@ async fn rewrite_decimal_stats_and_commit(
 
     for chunk in base_snapshot.segments.chunks(SEGMENT_READ_CHUNK_SIZE) {
         let segments = segments_io
-            .read_segments::<SegmentInfo>(chunk, false)
+            .read_segments::<SegmentInfo>(chunk, CachePolicy::READ_ONLY)
             .await?;
         for segment in segments {
             let mut segment = segment?;
@@ -1149,10 +1205,11 @@ async fn rewrite_decimal_stats_and_commit(
                 .meta_location_generator()
                 .gen_segment_info_location(table_meta_timestamps, false);
             if let Some(old_stats_location) = segment.summary.additional_stats_loc() {
-                let mut stats = read_segment_stats(operator.clone(), old_stats_location)
-                    .await?
-                    .as_ref()
-                    .clone();
+                let mut stats =
+                    read_segment_stats(operator.clone(), old_stats_location, ctx.cache_policy())
+                        .await?
+                        .as_ref()
+                        .clone();
                 for rewrite in column_rewrites {
                     stats.widen_decimal_column(rewrite.column_id, rewrite.size)?;
                 }
@@ -1183,6 +1240,8 @@ async fn rewrite_decimal_stats_and_commit(
     )?;
     new_snapshot.schema = new_schema.as_ref().clone();
     new_snapshot.segments = new_segment_locations;
+    // Every segment was rewritten, so no row of the segment zone map is live.
+    new_snapshot.segment_zone_map = None;
     for rewrite in column_rewrites {
         new_snapshot
             .summary
@@ -1213,6 +1272,7 @@ async fn rewrite_decimal_stats_and_commit(
         new_snapshot.table_statistics_location = Some(location);
     }
 
+    let gc_safe_time = new_snapshot.timestamp;
     let new_snapshot_location = fuse_table
         .meta_location_generator()
         .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
@@ -1226,7 +1286,14 @@ async fn rewrite_decimal_stats_and_commit(
         new_snapshot_location.clone(),
     );
     new_table_meta.updated_on = Utc::now();
-    update_table_meta(fuse_table, &new_table_meta, catalog, ctx.get_tenant()).await?;
+    update_table_meta(
+        fuse_table,
+        &new_table_meta,
+        catalog,
+        ctx.get_tenant(),
+        gc_safe_time,
+    )
+    .await?;
     FuseTable::write_last_snapshot_hint(
         ctx.as_ref(),
         operator,
@@ -1254,52 +1321,20 @@ pub(crate) async fn build_select_insert_plan(
     prev_snapshot_id: Option<SnapshotId>,
     table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<PipelineBuildResult> {
-    // 1. build plan by sql
-    let mut planner = Planner::new(ctx.clone());
-    let (plan, _extras) = planner.plan_sql(&sql).await?;
-    let select_schema = plan.schema();
-
-    // 2. build physical plan by plan
-    let (select_plan, select_column_bindings) = match plan {
-        Plan::Query {
-            s_expr,
-            metadata,
-            bind_context,
-            ..
-        } => {
-            let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
-            (
-                builder.build(&s_expr, bind_context.column_set()).await?,
-                bind_context.columns.clone(),
-            )
-        }
-        _ => unreachable!(),
-    };
-
-    // 3. define select schema and insert schema of DistributedInsertSelect plan
-    let new_table = FuseTable::create_and_refresh_table_info(
+    let (mut insert_plan, new_table) = build_modify_column_physical_plan(
+        ctx.clone(),
+        &sql,
         table_info,
-        ctx.get_settings().get_s3_storage_class()?,
-    )?;
-
-    // 4. build DistributedInsertSelect plan
-    let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {
-        input: select_plan,
-        table_info: new_table.get_table_info().clone(),
-        select_schema,
-        select_column_bindings,
-        insert_schema: Arc::new(new_schema.into()),
-        cast_needed: true,
-        input_prepared: false,
+        new_schema,
         table_meta_timestamps,
-        meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
-    });
+    )
+    .await?;
 
     let mut index = 0;
     insert_plan.adjust_plan_id(&mut index);
     let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
 
-    // 5. commit new meta schema and snapshots
+    // commit new meta schema and snapshots
     new_table.commit_insertion(
         ctx.clone(),
         &mut build_res.main_pipeline,
@@ -1312,4 +1347,64 @@ pub(crate) async fn build_select_insert_plan(
     )?;
 
     Ok(build_res)
+}
+
+/// Build the physical plan that rewrites a Fuse table with `new_schema`.
+///
+/// Reuses the INSERT SELECT plan builder: with a top Merge exchange, the schema
+/// conversion and block writes are pushed down to every node, and only the
+/// writer metas are merged back to the coordinator for the commit.
+pub async fn build_modify_column_physical_plan(
+    ctx: Arc<QueryContext>,
+    sql: &str,
+    table_info: TableInfo,
+    new_schema: TableSchemaRef,
+    table_meta_timestamps: TableMetaTimestamps,
+) -> Result<(PhysicalPlan, Arc<dyn Table>)> {
+    // 1. build plan by sql
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _extras) = planner.plan_sql(sql).await?;
+    let select_schema = plan.schema();
+
+    // 2. build physical plan by plan
+    let (select_plan, select_column_bindings) = match plan {
+        Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } => {
+            let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+            (
+                builder
+                    .build_query(s_expr.planned()?, bind_context.column_set())
+                    .await?,
+                bind_context.columns.clone(),
+            )
+        }
+        _ => unreachable!(),
+    };
+
+    // 3. the table carrying the new schema, used by writers and the final commit
+    let new_table: Arc<dyn Table> = FuseTable::create_and_refresh_table_info(
+        table_info,
+        ctx.get_settings().get_s3_storage_class()?,
+    )?
+    .into();
+
+    // 4. build the insert plan like INSERT SELECT
+    let distributed = ctx.get_cluster().get_nodes().len() > 1;
+    let insert_plan = build_insert_select_physical_plan(
+        select_plan,
+        select_schema,
+        select_column_bindings,
+        Arc::new(new_schema.into()),
+        new_table.clone(),
+        true,
+        false,
+        table_meta_timestamps,
+        distributed,
+    )?;
+
+    Ok((insert_plan, new_table))
 }

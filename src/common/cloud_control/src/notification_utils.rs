@@ -36,6 +36,11 @@ pub struct WebhookNotification {
     pub url: String,
     pub method: Option<String>,
     pub authorization_header: Option<String>,
+    /// `WEBHOOK_BODY_TEMPLATE`. Absent when not configured or when talking to a
+    /// Cloud Control that predates the field, so it is omitted from the
+    /// serialized `webhook_options` rather than shown as null.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_template: Option<String>,
 }
 
 pub struct Notification {
@@ -83,6 +88,7 @@ impl TryFrom<crate::pb::Notification> for Notification {
                         url: notification.webhook_url,
                         method: notification.webhook_method,
                         authorization_header: notification.webhook_authorization_header,
+                        body_template: notification.webhook_body_template,
                     }),
                     comments: notification.comments,
                     // convert timestamp to DateTime

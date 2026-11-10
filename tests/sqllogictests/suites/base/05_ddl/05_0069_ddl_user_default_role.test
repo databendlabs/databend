@@ -1,0 +1,222 @@
+# CREATE grants non-public DEFAULT_ROLE; ALTER accepts direct and inherited roles.
+statement ok
+DROP USER IF EXISTS default_role_user
+
+statement ok
+DROP ROLE IF EXISTS default_role_missing
+
+statement error 2204
+CREATE USER default_role_user IDENTIFIED BY 'password' WITH DEFAULT_ROLE = default_role_missing
+
+query I
+SELECT count(*) FROM system.users WHERE name = 'default_role_user'
+----
+0
+
+statement ok
+CREATE ROLE default_role_first
+
+statement ok
+CREATE ROLE default_role_second
+
+statement ok
+CREATE USER default_role_user IDENTIFIED BY 'password' WITH DEFAULT_ROLE = default_role_first
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+default_role_first default_role_first
+
+# A failed replacement must leave the existing user untouched.
+statement error 2204
+CREATE OR REPLACE USER default_role_user IDENTIFIED BY 'different' WITH DEFAULT_ROLE = default_role_missing
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+default_role_first default_role_first
+
+# Like other user options, an invalid default is rejected even with IF NOT EXISTS.
+statement error 2204
+CREATE USER IF NOT EXISTS default_role_user IDENTIFIED BY 'password' WITH DEFAULT_ROLE = default_role_missing
+
+# IF NOT EXISTS must not grant another role to an existing user.
+statement ok
+CREATE USER IF NOT EXISTS default_role_user IDENTIFIED BY 'password' WITH DEFAULT_ROLE = default_role_second
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+default_role_first default_role_first
+
+statement error 2204
+ALTER USER default_role_user WITH DEFAULT_ROLE = default_role_missing
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+default_role_first default_role_first
+
+# Even an administrator cannot implicitly grant a role through ALTER.
+statement error 2206
+ALTER USER default_role_user IDENTIFIED BY 'different' WITH DEFAULT_ROLE = default_role_second
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+default_role_first default_role_first
+
+# Grant explicitly before switching defaults; existing grants are preserved.
+statement ok
+GRANT ROLE default_role_second TO USER default_role_user
+
+statement ok
+ALTER USER default_role_user WITH DEFAULT_ROLE = default_role_second
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+default_role_second default_role_first, default_role_second
+
+# Reassigning the same default also validates membership without restoring it.
+statement ok
+REVOKE ROLE default_role_second FROM USER default_role_user
+
+statement error 2206
+ALTER USER default_role_user WITH DEFAULT_ROLE = default_role_second
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+default_role_second default_role_first
+
+# Other ALTERs must not silently restore revoked roles.
+
+statement ok
+ALTER USER default_role_user IDENTIFIED BY 'new-password'
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+default_role_second default_role_first
+
+# Explicitly assigning a dropped role fails even with a stale grant and default.
+statement ok
+GRANT ROLE default_role_second TO USER default_role_user
+
+statement ok
+DROP ROLE default_role_second
+
+statement error 2204
+ALTER USER default_role_user WITH DEFAULT_ROLE = default_role_second
+
+# An unrelated ALTER remains possible with a dangling default role.
+statement ok
+ALTER USER default_role_user WITH DISABLED = TRUE
+
+# Replacement gets only the newly specified role, not the old user's grants.
+statement ok
+CREATE OR REPLACE USER default_role_user IDENTIFIED BY 'password' WITH DEFAULT_ROLE = account_admin
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+account_admin account_admin
+
+# PUBLIC is implicit; selecting it does not modify the grant set.
+statement ok
+ALTER USER default_role_user WITH DEFAULT_ROLE = public
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+public account_admin
+
+statement ok
+REVOKE ROLE account_admin FROM USER default_role_user
+
+statement ok
+ALTER USER default_role_user WITH DEFAULT_ROLE = public
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+public (empty)
+
+# Explicit role options use the final value, including when unchanged.
+statement ok
+ALTER USER default_role_user WITH DEFAULT_ROLE = default_role_missing, DEFAULT_ROLE = public
+
+statement error 2204
+ALTER USER default_role_user WITH DEFAULT_ROLE = public, DEFAULT_ROLE = default_role_missing
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+public (empty)
+
+# CREATE also keeps PUBLIC implicit.
+statement ok
+CREATE USER default_role_public_user IDENTIFIED BY 'password' WITH DEFAULT_ROLE = public
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_public_user'
+----
+public (empty)
+
+statement ok
+DROP USER default_role_public_user
+
+# Match login and SET ROLE membership: a default may be inherited.
+statement ok
+CREATE ROLE default_role_parent
+
+statement ok
+CREATE ROLE default_role_child
+
+statement ok
+GRANT ROLE default_role_child TO ROLE default_role_parent
+
+statement ok
+CREATE USER default_role_inherited_user IDENTIFIED BY 'password'
+
+statement ok
+GRANT ROLE default_role_parent TO USER default_role_inherited_user
+
+statement ok
+ALTER USER default_role_inherited_user WITH DEFAULT_ROLE = default_role_child
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_inherited_user'
+----
+default_role_child default_role_parent
+
+statement ok
+ALTER USER default_role_inherited_user WITH DEFAULT_ROLE = default_role_missing, DEFAULT_ROLE = default_role_child
+
+# Repeating the same default cannot restore a revoked inheritance edge.
+statement ok
+REVOKE ROLE default_role_child FROM ROLE default_role_parent
+
+statement error 2206
+ALTER USER default_role_inherited_user WITH DEFAULT_ROLE = default_role_child
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_inherited_user'
+----
+default_role_child default_role_parent
+
+statement ok
+DROP USER default_role_inherited_user
+
+statement ok
+DROP ROLE default_role_parent
+
+statement ok
+DROP ROLE default_role_child
+
+statement ok
+DROP USER default_role_user
+
+statement ok
+DROP ROLE default_role_first

@@ -28,15 +28,20 @@ use jsonb::jsonpath::JsonPath;
 use jsonb::jsonpath::parse_json_path;
 
 use crate::BlockEntry;
+use crate::Function;
 use crate::FunctionContext;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
+use crate::LikePattern;
 use crate::RemoteExpr;
 use crate::ScalarRef;
+use crate::SelectOp;
 use crate::block::DataBlock;
 use crate::expr::*;
 use crate::expression::Expr;
 use crate::function::EvalContext;
+use crate::kernels::has_nested_decimal;
+use crate::kernels::select_if_then_else;
 use crate::type_check::check_cast_function;
 use crate::type_check::format_function_argument_mismatch_hint;
 use crate::type_check::resolve_cast_function;
@@ -44,6 +49,8 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
+use crate::types::DictColumn;
+use crate::types::EncodedColumn;
 use crate::types::F32;
 use crate::types::NullableType;
 use crate::types::NumberScalar;
@@ -204,6 +211,18 @@ impl<'a> Evaluator<'a> {
         self.func_ctx
     }
 
+    /// Records that a non-deterministic function computed a value valid only for this query.
+    pub(crate) fn record_eval(&self, function: &Function) {
+        if self
+            .fn_registry
+            .properties
+            .get(&function.signature.name)
+            .is_some_and(|property| property.non_deterministic)
+        {
+            self.func_ctx.query_specific_values.record();
+        }
+    }
+
     #[cfg(debug_assertions)]
     fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
@@ -227,11 +246,12 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        self.partial_run(expr, None, &mut EvaluateOptions::default())
+        self.partial_run(expr, None, &mut EvaluateOptions::default(), false)
             .map_err(|err| Self::map_err(err, expr))
     }
 
-    fn map_err(err: ErrorCode, expr: &Expr) -> ErrorCode {
+    /// Adds the expression to an error of evaluating it, like [`Self::run`] does.
+    pub fn map_err(err: ErrorCode, expr: &Expr) -> ErrorCode {
         let expr_str = format!("`{}`", expr.sql_display());
         if err.message().contains(expr_str.as_str()) {
             err
@@ -243,12 +263,17 @@ impl<'a> Evaluator<'a> {
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
+    ///
+    /// `keep_encoded`: the result may be an encoded column (see
+    /// [`crate::types::EncodedColumn`]), otherwise it is decoded. Only set it where the result
+    /// is stored (e.g. into a block) or passed to a function that accepts encoded arguments.
     #[recursive::recursive]
     pub fn partial_run(
         &self,
         expr: &Expr,
         validity: Option<Bitmap>,
         options: &mut EvaluateOptions,
+        keep_encoded: bool,
     ) -> Result<Value<AnyType>> {
         debug_assert!(
             validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
@@ -266,8 +291,11 @@ impl<'a> Evaluator<'a> {
                 expr: inner,
                 dest_type,
             }) => {
-                let value = self.partial_run(inner, validity.clone(), options)?;
                 let src_type = inner.data_type();
+                // A cast that only changes the nullability keeps the values, and their encoding.
+                let keep_encoded =
+                    keep_encoded && src_type.remove_nullable() == dest_type.remove_nullable();
+                let value = self.partial_run(inner, validity.clone(), options, keep_encoded)?;
                 if *is_try {
                     self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
                 } else {
@@ -316,7 +344,7 @@ impl<'a> Evaluator<'a> {
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
-                    .map(|expr| self.partial_run(expr, validity.clone(), options))
+                    .map(|expr| self.partial_run(expr, validity.clone(), options, false))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -356,7 +384,97 @@ impl<'a> Evaluator<'a> {
             )
         }
 
-        Ok(result)
+        Ok(if keep_encoded {
+            result
+        } else {
+            result.decode_owned()
+        })
+    }
+
+    /// `<column> <op> <constant>` over an encoded column, or `<column> <op> <column>` over two
+    /// frame of reference encoded columns, evaluated without decoding (on the deltas / once per
+    /// dictionary value). `None` if the arguments do not have this form.
+    pub fn try_compare_encoded(&self, op: &SelectOp, args: &[Expr]) -> Option<Bitmap> {
+        let encoded = |id: usize| match self.data_block.get_by_offset(id) {
+            BlockEntry::Column(Column::Encoded(encoded)) => Some(encoded),
+            _ => None,
+        };
+        let (id, scalar, op) = match args {
+            [
+                Expr::ColumnRef(ColumnRef { id, .. }),
+                Expr::Constant(Constant { scalar, .. }),
+            ] => (*id, scalar, op.clone()),
+            [
+                Expr::Constant(Constant { scalar, .. }),
+                Expr::ColumnRef(ColumnRef { id, .. }),
+            ] => (*id, scalar, op.reverse()),
+            // `<column> <op> <column>`, both frame of reference encoded.
+            [
+                Expr::ColumnRef(ColumnRef { id: lhs, .. }),
+                Expr::ColumnRef(ColumnRef { id: rhs, .. }),
+            ] => {
+                let rhs = encoded(*rhs)?.as_for()?;
+                return encoded(*lhs)?.as_for()?.compare_for(op, rhs);
+            }
+            _ => return None,
+        };
+        encoded(id)?.compare_scalar(&op, scalar)
+    }
+
+    /// Evaluates a filter's LIKE over a dictionary encoded string column without decoding.
+    /// Nullable columns apply their validity after LIKE / NOT LIKE; NULL selects as false.
+    /// With `rows`, the result is only correct at `rows`, see [`DictColumn::like`].
+    pub fn try_like_encoded(
+        &self,
+        expr: &Expr,
+        pattern: &LikePattern,
+        not: bool,
+        rows: Option<&[u32]>,
+    ) -> Option<Bitmap> {
+        let Expr::ColumnRef(ColumnRef { id, .. }) = expr else {
+            return None;
+        };
+        let BlockEntry::Column(column) = self.data_block.get_by_offset(*id) else {
+            return None;
+        };
+        let (column, validity) = match column {
+            Column::Nullable(column) => (&column.column, Some(&column.validity)),
+            column => (column, None),
+        };
+        let Column::Encoded(encoded) = column else {
+            return None;
+        };
+        let bitmap = encoded.as_dict()?.like(pattern, not, rows)?;
+        Some(match validity {
+            Some(validity) => &bitmap & validity,
+            None => bitmap,
+        })
+    }
+
+    fn take_dictionary_arg(args: &mut [Value<AnyType>]) -> Option<(usize, DictColumn)> {
+        let (index, arg) = args
+            .iter()
+            .enumerate()
+            .filter(|(_, arg)| matches!(arg, Value::Column(_)))
+            .exactly_one()
+            .ok()?;
+        let Value::Column(Column::Encoded(encoded)) = arg else {
+            return None;
+        };
+        let dict = encoded.as_dict()?;
+        if dict.is_empty() || dict.values.len() >= dict.len() {
+            return None;
+        }
+        let original = std::mem::replace(&mut args[index], Value::Scalar(Scalar::Null));
+        let Value::Column(Column::Encoded(encoded)) = original else {
+            args[index] = original;
+            return None;
+        };
+        let EncodedColumn::Dict(dict) = *encoded else {
+            args[index] = Value::Column(Column::Encoded(encoded));
+            return None;
+        };
+        Some((index, dict))
     }
 
     fn eval_common_call(
@@ -384,9 +502,40 @@ impl<'a> Evaluator<'a> {
             child_option.strict_eval = false;
         }
 
+        if args.len() == 2
+            && let Some(op) = SelectOp::try_from_func_name(&function.signature.name)
+            && let Some(bitmap) = self.try_compare_encoded(&op, args)
+        {
+            return Ok(Value::Column(Column::Boolean(bitmap)));
+        }
+
+        let accepts_encoded_args = function
+            .eval
+            .as_scalar()
+            .is_some_and(|(_, _, eval)| eval.accepts_encoded_args());
+        let dictionary_eval = !accepts_encoded_args
+            && validity.is_none()
+            && options.selection.is_none()
+            && !options.suppress_error
+            && !function.signature.return_type.is_nullable_or_null()
+            && function
+                .signature
+                .args_type
+                .iter()
+                .all(|ty| !ty.is_nullable_or_null())
+            && self
+                .fn_registry
+                .properties
+                .get(&function.signature.name)
+                .is_some_and(|property| property.dictionary_eval && !property.non_deterministic);
         let mut args_value = Vec::with_capacity(args.len());
         for expr in args {
-            match self.partial_run(expr, validity.clone(), &mut child_option) {
+            match self.partial_run(
+                expr,
+                validity.clone(),
+                &mut child_option,
+                accepts_encoded_args || dictionary_eval,
+            ) {
                 Ok(value) => args_value.push(value),
                 Err(err) => {
                     return Err(self.attach_function_argument_mismatch_hint(
@@ -398,7 +547,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
         }
-        let args = args_value;
+        let mut args = args_value;
 
         assert!(
             args.iter()
@@ -421,9 +570,28 @@ impl<'a> Evaluator<'a> {
         // would otherwise drop whenever row 0 is not enabled — then expand
         // the recorded error over the enabled rows.
         let all_scalar = args.iter().all(|arg| matches!(arg, Value::Scalar(_)));
+        let dictionary = dictionary_eval
+            .then(|| {
+                let Some((index, DictColumn { keys, values })) =
+                    Self::take_dictionary_arg(&mut args)
+                else {
+                    for arg in &mut args {
+                        if arg.is_encoded() {
+                            *arg =
+                                std::mem::replace(arg, Value::Scalar(Scalar::Null)).decode_owned();
+                        }
+                    }
+                    return None;
+                };
+                args[index] = Value::Column(values);
+                Some((index, keys))
+            })
+            .flatten();
         let mut ctx = EvalContext {
             generics,
-            num_rows: self.data_block.num_rows(),
+            num_rows: dictionary
+                .as_ref()
+                .map_or(self.data_block.num_rows(), |(index, _)| args[*index].len()),
             validity: if all_scalar { None } else { validity.clone() },
             errors,
             func_ctx: self.func_ctx,
@@ -432,7 +600,26 @@ impl<'a> Evaluator<'a> {
         };
 
         let (_, _, eval) = function.eval.as_scalar().unwrap();
-        let result = eval.eval(&args, &mut ctx);
+        self.record_eval(function);
+        let mut result = eval.eval(&args, &mut ctx);
+        if let Some((_, keys)) = dictionary {
+            if let Some((valids, message)) = ctx.errors.take()
+                && keys.iter().any(|key| !valids.get(key as usize))
+            {
+                return Err(ErrorCode::BadArguments(message).set_span(*span));
+            }
+            ctx.num_rows = self.data_block.num_rows();
+            if let Value::Column(values) = result {
+                let dict = DictColumn::new(keys, values);
+                // Consumers read dictionary columns through encoded views, which only some
+                // types support (e.g. not the Boolean result of LIKE): expand the others.
+                result = Value::Column(if DictColumn::supports(&dict.values.data_type()) {
+                    Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
+                } else {
+                    dict.decode()
+                });
+            }
+        }
 
         if all_scalar {
             expand_scalar_error(&mut ctx.errors, validity.as_ref(), ctx.num_rows);
@@ -1686,42 +1873,96 @@ impl<'a> Evaluator<'a> {
             .iter()
             .find_map(|col| col.as_column().map(Column::len));
 
-        // Evaluate the condition first and then partially evaluate the result branches.
+        // Evaluate the conditions in order and each result branch only for the
+        // enabled rows that reach it. A branch that no enabled row reaches is not
+        // evaluated (`None`): with an all-unset validity it would run for nobody,
+        // so it could neither produce a selected value nor report an error.
         let mut validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, num_rows));
         let mut conds = Vec::new();
         let mut flags = Vec::new();
         let mut results = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
-            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()), options)?;
+            if validity.true_count() == 0 {
+                break;
+            }
+            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()), options, false)?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
-                    results.push(Value::Scalar(Scalar::default_value(&generics[0])));
+                    results.push(None);
                     flags.push(Bitmap::new_constant(false, len.unwrap_or(1)));
                 }
                 Value::Scalar(Some(true)) => {
-                    results.push(self.partial_run(
+                    results.push(Some(self.partial_run(
                         &args[cond_idx + 1],
                         Some(validity.clone()),
                         options,
-                    )?);
+                        false,
+                    )?));
                     validity = Bitmap::new_constant(false, num_rows);
                     flags.push(Bitmap::new_constant(true, len.unwrap_or(1)));
                     break;
                 }
                 Value::Column(cond) => {
                     let flag = (&cond.column) & (&cond.validity);
-                    results.push(self.partial_run(
-                        &args[cond_idx + 1],
-                        Some((&validity) & (&flag)),
-                        options,
-                    )?);
+                    let branch_validity = (&validity) & (&flag);
+                    if branch_validity.true_count() == 0 {
+                        results.push(None);
+                    } else {
+                        results.push(Some(self.partial_run(
+                            &args[cond_idx + 1],
+                            Some(branch_validity),
+                            options,
+                            false,
+                        )?));
+                    }
                     validity = (&validity) & (&flag.not());
                     flags.push(flag);
                 }
             };
             conds.push(cond);
         }
-        let else_result = self.partial_run(&args[args.len() - 1], Some(validity), options)?;
+        let else_result = if validity.true_count() == 0 {
+            None
+        } else {
+            Some(self.partial_run(&args[args.len() - 1], Some(validity), options, false)?)
+        };
+
+        let (first_reached, single_branch) = {
+            let mut reached = results.iter().chain([&else_result]).flatten();
+            (reached.next().cloned(), reached.next().is_none())
+        };
+        let Some(first_reached) = first_reached else {
+            // No row is enabled, so every row of the result may hold any value.
+            let default = ColumnBuilder::repeat_default(&generics[0], len.unwrap_or(1));
+            return Ok(match len {
+                Some(_) => Value::Column(default.build()),
+                None => Value::Scalar(default.build_scalar()),
+            });
+        };
+
+        // When every enabled row reaches the same branch, that branch is the
+        // result: the rows that are not enabled may hold any value. A decimal
+        // carried with a non-strict width, also inside a nested type, still goes
+        // through the selection, which converts it to the width of its precision.
+        if let Some(len) = len
+            && single_branch
+            && !has_nested_decimal(&generics[0])
+            && DecimalDataType::from_value(&first_reached).is_none_or(|(ty, _)| ty.is_strict())
+        {
+            return Ok(Value::Column(
+                first_reached.convert_to_full_column(&generics[0], len),
+            ));
+        }
+
+        // The selection reads a branch that no enabled row reaches only on rows
+        // that are not enabled, so any value of the result type can stand in for
+        // it. A reached branch is used because `Scalar::default_value` does not
+        // support every type.
+        let results = results
+            .into_iter()
+            .map(|result| result.unwrap_or_else(|| first_reached.clone()))
+            .collect::<Vec<_>>();
+        let else_result = else_result.unwrap_or(first_reached);
 
         // Assert that all the arguments have the same length.
         assert!(
@@ -1735,6 +1976,17 @@ impl<'a> Evaluator<'a> {
                 })
                 .all_equal()
         );
+
+        if len.is_some()
+            && let ([flag], [then_result]) = (flags.as_slice(), results.as_slice())
+        {
+            return Ok(Value::Column(select_if_then_else(
+                flag,
+                then_result,
+                &else_result,
+                &generics[0],
+            )));
+        }
 
         // Pick the results from the result branches depending on the condition.
         let mut output_builder = ColumnBuilder::with_capacity(&generics[0], len.unwrap_or(1));
@@ -1790,6 +2042,7 @@ impl<'a> Evaluator<'a> {
                 arg,
                 validity.clone(),
                 options,
+                false,
             )?) {
                 Value::Scalar(false) if is_or => {
                     continue;
@@ -2492,7 +2745,7 @@ impl<'a> Evaluator<'a> {
             )),
             Expr::ColumnRef(ColumnRef { id, .. }) => {
                 let entry = self.data_block.get_by_offset(*id);
-                Ok((entry.value().clone(), entry.data_type()))
+                Ok((entry.decoded_value(), entry.data_type()))
             }
             Expr::Cast(Cast {
                 span,
@@ -2594,6 +2847,7 @@ impl<'a> Evaluator<'a> {
                     strict_eval: options.strict_eval,
                 };
                 let (_, _, eval) = function.eval.as_scalar().unwrap();
+                self.record_eval(function);
                 let result = eval.eval(&args, &mut ctx);
 
                 // Same all-scalar rule as `eval_common_call`: an error from a
@@ -2640,7 +2894,9 @@ impl<'a> Evaluator<'a> {
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
-                    .map(|expr| self.partial_run(expr, None, &mut EvaluateOptions::default()))
+                    .map(|expr| {
+                        self.partial_run(expr, None, &mut EvaluateOptions::default(), false)
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()

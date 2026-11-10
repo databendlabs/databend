@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -20,8 +19,6 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::type_check::common_super_type;
@@ -30,6 +27,9 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::DerivedColumnScope;
+use super::row_value::row_value_equality;
+use super::row_value::row_value_fields;
+use super::scalar_aggregate::ScalarSubqueryRewrite;
 use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
@@ -256,6 +256,15 @@ impl SubqueryDecorrelatorOptimizer {
     ) -> Result<(SExpr, UnnestResult, DerivedColumnScope)> {
         match subquery.typ {
             SubqueryType::Scalar => {
+                let generic_plan_is_correct =
+                    match self.try_decorrelate_scalar_aggregate_subquery(outer, subquery)? {
+                        ScalarSubqueryRewrite::Rewritten(rewritten) => {
+                            let (s_expr, derived_columns) = *rewritten;
+                            return Ok((s_expr, UnnestResult::SingleJoin, derived_columns));
+                        }
+                        ScalarSubqueryRewrite::GenericPlan => true,
+                        ScalarSubqueryRewrite::Unsupported => false,
+                    };
                 let correlated_columns = &subquery.outer_columns;
                 let (flatten_plan, derived_columns) = self.flatten_plan(
                     outer,
@@ -264,6 +273,11 @@ impl SubqueryDecorrelatorOptimizer {
                     flatten_info,
                     false,
                 )?;
+                if generic_plan_is_correct {
+                    // The NULL produced for an outer value without aggregate input is already
+                    // the subquery result, e.g. under `HAVING count(*) > 0` or `LIMIT 0`.
+                    flatten_info.from_count_func = false;
+                }
                 // Construct single join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
@@ -274,6 +288,12 @@ impl SubqueryDecorrelatorOptimizer {
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
+
+                // These conditions reconnect the flattened subquery result to the outer row.
+                // They are internal correlation keys rather than user-written equality
+                // predicates, so NULL correlation groups must match each other.
+                let is_null_equal =
+                    Self::nullable_condition_indexes(&left_conditions, &right_conditions);
 
                 let join_type = if matches!(subquery.contain_agg, Some(true)) && {
                     let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
@@ -292,7 +312,7 @@ impl SubqueryDecorrelatorOptimizer {
                     equi_conditions: JoinEquiCondition::new_conditions(
                         left_conditions,
                         right_conditions,
-                        vec![],
+                        is_null_equal,
                     ),
                     non_equi_conditions: vec![],
                     join_type,
@@ -339,16 +359,8 @@ impl SubqueryDecorrelatorOptimizer {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
-                let mut is_null_equal = Vec::new();
-                for (i, (l, r)) in left_conditions
-                    .iter()
-                    .zip(right_conditions.iter())
-                    .enumerate()
-                {
-                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
-                        is_null_equal.push(i);
-                    }
-                }
+                let is_null_equal =
+                    Self::nullable_condition_indexes(&left_conditions, &right_conditions);
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -404,16 +416,8 @@ impl SubqueryDecorrelatorOptimizer {
                     &mut right_conditions,
                 )?;
 
-                let mut is_null_equal = Vec::new();
-                for (i, (l, r)) in left_conditions
-                    .iter()
-                    .zip(right_conditions.iter())
-                    .enumerate()
-                {
-                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
-                        is_null_equal.push(i);
-                    }
-                }
+                let is_null_equal =
+                    Self::nullable_condition_indexes(&left_conditions, &right_conditions);
 
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
@@ -431,11 +435,18 @@ impl SubqueryDecorrelatorOptimizer {
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                let non_equi_conditions = vec![ScalarExpr::FunctionCall(op.to_func_call(
-                    subquery.span,
-                    child_expr,
-                    right_condition,
-                )?)];
+                let non_equi_conditions = if subquery.row_columns.is_empty() {
+                    vec![ScalarExpr::FunctionCall(op.to_func_call(
+                        subquery.span,
+                        child_expr,
+                        right_condition,
+                    )?)]
+                } else {
+                    // Row values are compared field by field so a NULL field
+                    // yields NULL instead of the tuple comparison result.
+                    let (left, right) = row_value_fields(subquery)?;
+                    vec![row_value_equality(subquery, &left, &right)?]
+                };
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -520,6 +531,20 @@ impl SubqueryDecorrelatorOptimizer {
             right_conditions.push(right_column);
         }
         Ok(())
+    }
+
+    pub(crate) fn nullable_condition_indexes(
+        left_conditions: &[ScalarExpr],
+        right_conditions: &[ScalarExpr],
+    ) -> Vec<usize> {
+        left_conditions
+            .iter()
+            .zip(right_conditions)
+            .enumerate()
+            .filter_map(|(index, (left, right))| {
+                (left.data_type().is_nullable() || right.data_type().is_nullable()).then_some(index)
+            })
+            .collect()
     }
 
     // Check if need to join outer and inner table
@@ -626,18 +651,13 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut constant_scalar = None;
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
                     let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
-                    let (folded, _) = ConstantFolder::fold(
-                        Cow::Owned(scalar_expr.as_expr()?),
-                        &func_ctx,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    if let EExpr::Constant(constant) = folded.into_owned() {
+                    if let Some((value, data_type)) = scalar_expr.constant_value(&func_ctx) {
                         constant_scalar = Some(ScalarExpr::TypedConstantExpr(
                             ConstantExpr {
                                 span: scalar_expr.span(),
-                                value: constant.scalar,
+                                value,
                             },
-                            constant.data_type.wrap_nullable(),
+                            data_type.wrap_nullable(),
                         ));
                     }
                 }
@@ -737,7 +757,10 @@ impl SubqueryDecorrelatorOptimizer {
                 if srf.arguments.len() != 1 {
                     return Ok(None);
                 }
-                let Ok(const_scalar) = ConstantExpr::try_from(srf.arguments[0].clone()) else {
+                // Only the array value matters: its elements become constants.
+                let (ScalarExpr::ConstantExpr(const_scalar)
+                | ScalarExpr::TypedConstantExpr(const_scalar, _)) = &srf.arguments[0]
+                else {
                     return Ok(None);
                 };
                 let Some(child_expr) = &subquery.child_expr else {
@@ -805,7 +828,7 @@ impl SubqueryDecorrelatorOptimizer {
                             .ok_or_else(|| {
                                 ErrorCode::IllegalDataType(format!(
                                     "Cannot find common type for inlist subquery value {:?} and expr {:?}",
-                                    &array_value, &child_expr
+                                    array_value, child_expr
                                 ))
                             })?;
 

@@ -29,7 +29,7 @@ select * from t1
 100
 201
 300
-36981140216868864
+36981140216868860
 
 statement ok
 truncate table t1
@@ -48,7 +48,7 @@ select * from t1
 100
 200
 300
-36981140216868864
+36981140216868860
 
 statement ok
 set numeric_cast_option = 'rounding'

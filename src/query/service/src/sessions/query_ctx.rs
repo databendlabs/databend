@@ -39,6 +39,7 @@ use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_ast::parser::SqlSecrets;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -46,6 +47,7 @@ use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::IoStats;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
@@ -53,6 +55,7 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::lock::LockTableOption;
@@ -87,7 +90,6 @@ use databend_common_component::FragmentId;
 use databend_common_component::MutationState;
 use databend_common_component::ReadBlockThresholdsState;
 use databend_common_component::ResultCacheState;
-use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -118,7 +120,6 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::LockGuard;
@@ -132,7 +133,6 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_basic::ResultScan;
-use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
@@ -196,8 +196,6 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: FragmentId,
-    // Used by synchronized generate aggregating indexes when new data written.
-    written_segment_locs: SegmentLocationsState,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
@@ -230,7 +228,6 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Default::default(),
-            written_segment_locs: Default::default(),
             read_block_thresholds: Default::default(),
             m_cte_temp_table: Arc::new(RwLock::new(Vec::new())),
         })
@@ -519,8 +516,16 @@ impl QueryContext {
         self.shared.get_data_metrics()
     }
 
-    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
-        self.shared.merge_io_stats(stats);
+    pub fn get_local_io_stats(&self) -> Arc<IoStats> {
+        self.shared.get_local_io_stats()
+    }
+
+    pub fn get_perf_query_token(&self) -> u64 {
+        self.shared.get_perf_query_token()
+    }
+
+    pub fn merge_remote_io_stats(&self, delta: &IoStatsSnapshot) {
+        self.shared.merge_remote_io_stats(delta);
     }
 
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
@@ -554,6 +559,11 @@ impl QueryContext {
 
     pub fn set_ua(&self, ua: String) {
         *self.shared.user_agent.write() = ua;
+    }
+
+    /// Credential values hidden from the query text, see `add_query_secrets`.
+    pub fn query_secrets(&self) -> SqlSecrets {
+        self.shared.query_secrets.read().clone()
     }
 
     pub fn get_ua(&self) -> String {
@@ -684,7 +694,7 @@ impl QueryContext {
     pub fn get_total_spill_progress(&self) -> SpillProgress {
         let r = self.shared.cluster_spill_progress.read();
         let mut total = SpillProgress::default();
-        for (_, stats) in r.iter() {
+        for stats in r.values() {
             total.incr(stats);
         }
         total
@@ -722,19 +732,8 @@ impl QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        if branch.is_some() {
-            // Legacy experimental table refs were removed. The parser still accepts
-            // `<db>.<table>/<branch>` so the upcoming redesign can reuse the syntax,
-            // but any remaining runtime entry point should still return a user-facing
-            // error instead of looking like an internal server bug.
-            return Err(ErrorCode::Unimplemented(
-                "Legacy experimental table refs were removed: table branch references are reserved for a future redesign and are intentionally rejected.",
-            ));
-        }
-
         let table = self
             .shared
             .get_table(catalog, database, table, max_batch_size)
@@ -744,7 +743,7 @@ impl QueryContext {
         // but there is no way to access dyn TableContext.
         Ok(match table.engine() {
             "PAIMON" => databend_common_storages_paimon::table_from_info(table.get_table_info())?,
-            engine @ ("ICEBERG" | "DELTA") => {
+            "ICEBERG" => {
                 let sp = StageResolver::from_authorization_ref(
                     self.get_tenant(),
                     self.get_current_user()?.identity(),
@@ -757,11 +756,7 @@ impl QueryContext {
                 .await?;
                 let mut info = table.get_table_info().to_owned();
                 info.meta.storage_params = Some(sp);
-                match engine {
-                    "ICEBERG" => IcebergTable::try_create(info)?.into(),
-                    "DELTA" => DeltaTable::try_create(info)?.into(),
-                    _ => unreachable!("engine is already matched"),
-                }
+                IcebergTable::try_create(info)?.into()
             }
             _ => table,
         })
@@ -1046,6 +1041,28 @@ impl QueryContext {
 }
 
 impl QueryContext {
+    #[cfg(feature = "python-udf")]
+    pub(crate) fn python_udf_workers(
+        &self,
+    ) -> Result<Arc<databend_query_script_udf_support::PythonQueryWorkers>> {
+        let max_threads = self.get_settings().get_max_threads()? as usize;
+        let mut workers = self.shared.python_udf_workers.lock();
+        if workers
+            .as_ref()
+            .is_some_and(|workers| workers.is_finished())
+        {
+            // Nested SQL executors can reuse a context for sequential executions.
+            // An ended execution must not donate its interpreter or sealed budget.
+            *workers = None;
+        }
+        Ok(workers
+            .get_or_insert_with(|| {
+                databend_query_script_udf_support::PythonWorkerManager::instance()
+                    .query(self.shared.get_tenant().tenant_name(), max_threads)
+            })
+            .clone())
+    }
+
     pub(crate) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {
         self.shared.get_row_fetch_io_semaphore(max_threads)
     }
@@ -1105,7 +1122,8 @@ mod tests {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
 
-        ctx.merge_io_stats(&IoStatsSnapshot {
+        // Local IO recorded through the shared counter.
+        ctx.get_local_io_stats().merge_snapshot(&IoStatsSnapshot {
             list_count: 1,
             list_duration_ms: 2,
             read_count: 2,
@@ -1115,15 +1133,26 @@ mod tests {
             write_bytes: 5,
             write_duration_ms: 6,
         });
-        ctx.merge_io_stats(&IoStatsSnapshot {
-            list_count: 10,
-            list_duration_ms: 20,
-            read_count: 20,
-            read_bytes: 30,
-            read_duration_ms: 40,
-            write_count: 40,
-            write_bytes: 50,
-            write_duration_ms: 60,
+        // Remote nodes report deltas, which accumulate.
+        ctx.merge_remote_io_stats(&IoStatsSnapshot {
+            list_count: 4,
+            list_duration_ms: 8,
+            read_count: 8,
+            read_bytes: 12,
+            read_duration_ms: 16,
+            write_count: 16,
+            write_bytes: 20,
+            write_duration_ms: 24,
+        });
+        ctx.merge_remote_io_stats(&IoStatsSnapshot {
+            list_count: 6,
+            list_duration_ms: 12,
+            read_count: 12,
+            read_bytes: 18,
+            read_duration_ms: 24,
+            write_count: 24,
+            write_bytes: 30,
+            write_duration_ms: 36,
         });
 
         assert_eq!(ctx.get_io_stats(), IoStatsSnapshot {

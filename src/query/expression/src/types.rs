@@ -22,6 +22,7 @@ pub mod date;
 pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
+pub mod encoded;
 pub mod generic;
 pub mod geography;
 pub mod geometry;
@@ -37,6 +38,7 @@ pub mod string;
 pub mod timestamp;
 pub mod timestamp_tz;
 pub mod tuple;
+pub mod type_name;
 pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
@@ -78,6 +80,11 @@ pub use self::date::DateType;
 pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
+pub use self::encoded::DictColumn;
+pub use self::encoded::EncodedColumn;
+pub use self::encoded::EncodedView;
+pub use self::encoded::ForColumn;
+pub use self::encoded::NarrowBuffer;
 pub use self::generic::GenericType;
 pub use self::geography::GeographyColumn;
 pub use self::geography::GeographyType;
@@ -222,6 +229,11 @@ pub struct AggregateStateDataType {
     pub params: Vec<AggregateFunctionParam>,
     pub argument_types: Vec<DataType>,
     pub state_type: Box<DataType>,
+    /// Version of the serialized aggregate-state protocol.
+    ///
+    /// Version 0 is the protocol used before aggregate states carried an explicit version.
+    #[serde(default)]
+    pub state_version: u64,
 }
 
 impl AggregateStateDataType {
@@ -482,6 +494,7 @@ impl DataType {
                         .map(|ty| ty.remove_generics(generics))
                         .collect(),
                     state_type: Box::new(state.state_type.remove_generics(generics)),
+                    state_version: state.state_version,
                 }))
             }
         }
@@ -610,6 +623,44 @@ impl DataType {
     #[inline]
     pub fn is_date_or_date_time(&self) -> bool {
         matches!(self, DataType::Timestamp | DataType::Date)
+    }
+
+    /// Whether values that are equal as group keys are also indistinguishable to every function,
+    /// so an expression of a group key can be computed after the aggregation from any row of its
+    /// group. Keep this in line with the hash and equality of group keys.
+    pub fn groups_by_exact_value(&self) -> bool {
+        match self {
+            // Equal keys have the same bits.
+            DataType::Boolean
+            | DataType::String
+            | DataType::Date
+            | DataType::Timestamp
+            | DataType::Decimal(_) => true,
+            DataType::Number(ty) => ALL_INTEGER_TYPES.contains(ty),
+            // `NULL` only equals `NULL`.
+            DataType::Nullable(ty) => ty.groups_by_exact_value(),
+            // Floats: `+0.0` equals `-0.0` (`atan2` tells them apart).
+            // TimestampTz: equality ignores the offset. Interval: `1 month` equals `30 days`.
+            // Nested types can hold any of these. The other types are not checked yet.
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Binary
+            | DataType::TimestampTz
+            | DataType::Array(_)
+            | DataType::Map(_)
+            | DataType::Bitmap
+            | DataType::Tuple(_)
+            | DataType::Variant
+            | DataType::Geometry
+            | DataType::Interval
+            | DataType::Geography
+            | DataType::Vector(_)
+            | DataType::Opaque(_)
+            | DataType::AggregateState(_)
+            | DataType::Generic(_)
+            | DataType::StageLocation => false,
+        }
     }
 
     #[inline]
@@ -852,6 +903,17 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain, ErrorCode>;
 
     fn try_downcast_column(col: &Column) -> Result<Self::Column, ErrorCode>;
+
+    fn try_downcast_encoded(_col: &EncodedColumn) -> Option<EncodedView<Self>> {
+        None
+    }
+
+    fn for_scalar_ref<'a>(_raw: i128) -> Self::ScalarRef<'a> {
+        unreachable!(
+            "{} does not read frame of reference columns",
+            std::any::type_name::<Self>()
+        )
+    }
 
     fn column_len(col: &Self::Column) -> usize;
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;

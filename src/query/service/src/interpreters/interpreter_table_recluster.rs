@@ -45,6 +45,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
+use databend_common_storages_fuse::segment_zone_map::RefreshOutcome;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::error;
@@ -70,7 +71,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
@@ -79,6 +80,9 @@ use crate::sessions::TableContextTableManagement;
 use crate::sessions::TableContextTelemetry;
 
 const MAX_SEGMENT_CLAIM_RETRIES: usize = 3;
+/// Committed FINAL rounds between two segment zone map refreshes; the rounds
+/// after the last refresh are covered once the statement ends.
+const ZONE_MAP_REFRESH_ROUNDS: usize = 10;
 
 #[derive(Debug, PartialEq, Eq)]
 enum ReclusterRoundOutcome {
@@ -123,6 +127,10 @@ impl Interpreter for ReclusterTableInterpreter {
         "ReclusterTableInterpreter"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         true
     }
@@ -142,6 +150,7 @@ impl Interpreter for ReclusterTableInterpreter {
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
             let mut committed_rounds = 0;
+            let mut zone_map_rounds = 0;
             let (result, stop_reason) = loop {
                 if let Err(err) = ctx.check_aborting() {
                     error!(
@@ -163,6 +172,12 @@ impl Interpreter for ReclusterTableInterpreter {
                             break (Ok(()), reason);
                         }
                         committed_rounds += 1;
+                        // A FINAL recluster may run for a long time, so the segment
+                        // zone map is refreshed along the way, not only at the end.
+                        if committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
+                            self.refresh_segment_zone_map().await;
+                            zone_map_rounds = committed_rounds;
+                        }
                     }
                     Err(e) => {
                         if is_final
@@ -233,6 +248,9 @@ impl Interpreter for ReclusterTableInterpreter {
                 "Recluster finished"
             );
 
+            if committed_rounds > zone_map_rounds {
+                self.refresh_segment_zone_map().await;
+            }
             if committed_rounds > 0 {
                 self.vacuum_table_history().await;
             }
@@ -244,6 +262,48 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
+    /// Refresh the segment zone map on the snapshot the last round committed,
+    /// subject to its start decision. Recluster is the only writer that builds
+    /// it; every other commit carries the pointer along. Failures never fail
+    /// the recluster.
+    async fn refresh_segment_zone_map(&self) {
+        let result = async {
+            let settings = self.ctx.get_settings();
+            if !settings.get_enable_segment_zone_map()? {
+                return Ok(RefreshOutcome::Skipped);
+            }
+            // The round's on-finished hook evicted the table from the cache, so this
+            // is the snapshot the round committed.
+            self.ctx.clear_table_meta_timestamps_cache();
+            let table = self
+                .ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            let threshold = settings.get_segment_zone_map_full_segment_threshold()?;
+            let ctx = self.ctx.clone();
+            fuse_table.refresh_segment_zone_map(ctx, threshold).await
+        }
+        .await;
+        match result {
+            Ok(RefreshOutcome::Skipped) => {}
+            Ok(outcome) => {
+                info!("recluster: segment zone map refresh finished: {outcome:?}");
+                // The refresh committed a snapshot; the next round must not plan on
+                // the cached table and pay a version-mismatch retry at commit.
+                let evicted = self.ctx.evict_table_from_cache(
+                    &self.plan.catalog,
+                    &self.plan.database,
+                    &self.plan.table,
+                );
+                if let Err(e) = evicted {
+                    warn!("recluster: failed to evict table from cache: {e}");
+                }
+            }
+            Err(e) => warn!("recluster: segment zone map refresh failed: {e}"),
+        }
+    }
+
     async fn vacuum_table_history(&self) {
         if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)
@@ -303,8 +363,7 @@ impl ReclusterTableInterpreter {
         } = &self.plan;
         // Callers that already own the lifecycle lock (for example, MV refresh) disable segment
         // claims to avoid reacquiring the shared table lock at the commit gate.
-        let mut use_segment_claims =
-            self.allow_segment_claims && settings.get_enable_table_lock()?;
+        let use_segment_claims = self.allow_segment_claims && settings.get_enable_table_lock()?;
 
         // Concurrent planning must evict this cache so the claim set is matched against the
         // latest snapshot.
@@ -314,10 +373,8 @@ impl ReclusterTableInterpreter {
         let mut tbl = self.ctx.get_table(catalog, database, table).await?;
         // Temporary tables are session-local, and their IDs are intentionally unsupported by
         // the segment-claim and lock catalog APIs.
-        if tbl.is_temp() {
-            use_segment_claims = false;
-        }
-        let claim_manager = use_segment_claims.then(CoordinationManager::instance);
+        let claim_manager =
+            (use_segment_claims && !tbl.is_temp()).then(CoordinationManager::instance);
         let mut claim_retries = 0;
         let (parts, snapshot, claim_guard) = loop {
             check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
@@ -380,7 +437,7 @@ impl ReclusterTableInterpreter {
             tbl = self.ctx.get_table(catalog, database, table).await?;
         };
         let mut physical_plan =
-            self.build_linear_plan(tbl.as_ref(), parts, snapshot, use_segment_claims)?;
+            self.build_linear_plan(tbl.as_ref(), parts, snapshot, claim_manager.is_some())?;
         physical_plan.adjust_plan_id(&mut 0);
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
@@ -392,7 +449,8 @@ impl ReclusterTableInterpreter {
             let table = self.plan.table.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
-                    ctx.written_segment_locations().clear();
+                    // Retain parent-write refresh hints and published output
+                    // locations; index refresh filters out no-longer-live sources.
                     ctx.evict_table_from_cache(&catalog, &database, &table)?;
 
                     ctx.unload_spill_meta();
@@ -511,13 +569,19 @@ impl ReclusterTableInterpreter {
         let table_info = tbl.get_table_info().clone();
         let ReclusterParts {
             tasks,
+            task_batches,
             remained_blocks,
+            virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
         } = parts;
-        let is_distributed = tasks.len() > 1;
+        // V2 placements are dispatched as batches, including a single batch in
+        // a multi-node cluster. Legacy plans retain their one-task-per-node routing.
+        let is_distributed =
+            !self.ctx.get_cluster().is_empty() && (task_batches.is_some() || tasks.len() > 1);
         let mut input = PhysicalPlan::new(Recluster {
             tasks,
+            task_batches,
             table_meta_timestamps,
             table_info: table_info.clone(),
             meta: PhysicalPlanMeta::new("Recluster"),
@@ -546,11 +610,13 @@ impl ReclusterTableInterpreter {
             table_meta_timestamps,
             recluster_info: Some(ReclusterInfoSideCar {
                 merged_blocks: remained_blocks,
+                virtual_schemas,
                 removed_segment_indexes,
                 removed_statistics: removed_segment_summary,
                 acquire_commit_lock,
             }),
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         }))
     }
 

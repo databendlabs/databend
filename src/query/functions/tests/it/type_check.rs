@@ -75,9 +75,10 @@ fn test_function_call_to_cast_uses_resolved_cast_function() {
     // Aliases are accepted because check_function resolves them to the same FunctionID.
     assert!(checked_function_to_cast("date", &[], DataType::String).is_some());
 
+    // Typed as literal params are, e.g. `to_decimal(10, 2)(x)`.
     let decimal_params = [
-        Scalar::Number(NumberScalar::Int64(10)),
-        Scalar::Number(NumberScalar::Int64(2)),
+        Scalar::Number(NumberScalar::UInt8(10)),
+        Scalar::Number(NumberScalar::UInt8(2)),
     ];
     let cast = checked_function_to_cast(
         "to_numeric",
@@ -92,8 +93,8 @@ fn test_function_call_to_cast_uses_resolved_cast_function() {
 
     // Factory params must match those reconstructed by Expr::Cast.
     let mismatched_decimal_params = [
-        Scalar::Number(NumberScalar::Int64(11)),
-        Scalar::Number(NumberScalar::Int64(2)),
+        Scalar::Number(NumberScalar::UInt8(11)),
+        Scalar::Number(NumberScalar::UInt8(2)),
     ];
     assert!(
         type_check::function_call_to_cast(
@@ -121,9 +122,10 @@ fn test_function_call_to_cast_uses_resolved_cast_function() {
 #[test]
 fn test_nullable_function_call_to_cast_uses_complete_cast_resolution() {
     let nullable = |ty| DataType::Nullable(Box::new(ty));
+    // Typed as literal params are, e.g. `to_decimal(10, 2)(x)`.
     let decimal_params = [
-        Scalar::Number(NumberScalar::Int64(10)),
-        Scalar::Number(NumberScalar::Int64(2)),
+        Scalar::Number(NumberScalar::UInt8(10)),
+        Scalar::Number(NumberScalar::UInt8(2)),
     ];
 
     // Keep this table explicit: every function selected by Expr::Cast must prove that its checked

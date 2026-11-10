@@ -213,7 +213,7 @@ description: A sqllogictest grouping() pattern should still rewrite correctly wh
 sql: SELECT grouping(salary), grouping(depname), sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) FROM empsalary GROUP BY ROLLUP(depname, salary)
 status: ok
 EvalScalar
-├── scalars: [sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) (#8) AS (#8), grouping(1)(_grouping_id (#4)) AS (#9), grouping(0)(_grouping_id (#4)) AS (#10)]
+├── scalars: [sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) (#8) AS (#8), sum_arg_0 (#5) AS (#9), sum_order_0 (#7) AS (#10)]
 └── Window
     ├── aggregate function: sum
     ├── partition items: [plus(grouping(1)(_grouping_id (#4)), grouping(0)(_grouping_id (#4))) AS (#6)]

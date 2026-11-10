@@ -15,6 +15,7 @@ import nox
 
 PYTHON_DRIVER_PINNED = ["0.33.6"]
 PYTHON_DRIVER = ["latest", *PYTHON_DRIVER_PINNED]
+SQLLOGIC_DUCKDB_VERSION = "1.4.3"
 PYTHON_TEST_TIMEZONE = "UTC"
 PYTHON_TEST_ENV = {"TZ": PYTHON_TEST_TIMEZONE}
 # Override with a comma-separated list, for example:
@@ -31,9 +32,7 @@ HTTP_USER_AGENT = "databend-nox-client"
 PYTHON_SOURCE_REPO = "bendsql"
 PYTHON_BINDINGS_TEST_DIR = Path("bindings") / "python"
 PYTHON_CLIENT_ARCHIVE_ROOT = f"{GITHUB_ARCHIVE_ROOT}/{PYTHON_SOURCE_REPO}/archive/refs"
-PYTHON_CLIENT_LATEST_RELEASE_URL = (
-    f"https://github.com/databendlabs/{PYTHON_SOURCE_REPO}/releases/latest"
-)
+PYTHON_CLIENT_PYPI_URL = "https://pypi.org/pypi/databend-driver/json"
 
 JDBC_DRIVER_PINNED = ["0.4.1"]
 JDBC_DRIVER = ["main", "latest", *JDBC_DRIVER_PINNED]
@@ -199,7 +198,9 @@ def resolve_python_driver_version(driver_version):
     if driver_version != "latest":
         return driver_version
 
-    return resolve_latest_release_tag(PYTHON_CLIENT_LATEST_RELEASE_URL).removeprefix("v")
+    # GitHub releases can exist before the Python package is published.
+    with urllib.request.urlopen(get_request(PYTHON_CLIENT_PYPI_URL), timeout=30) as response:
+        return json.load(response)["info"]["version"]
 
 
 def prepare_python_client_source():
@@ -454,6 +455,48 @@ def prepare_go_client_source(source_ref):
         required_path="tests/Makefile",
     )
     return source_dir, resolved_ref
+
+
+@nox.session
+def noxfile_tests(session):
+    session.install("pytest", "nox")
+    session.run("pytest", "test_noxfile.py")
+
+
+@nox.session(name="sqllogic_hook_tests")
+def sqllogic_hook_tests(session):
+    hook_dir = Path(__file__).parent / "sqllogic"
+    hook = hook_dir / "hooks.py"
+    tests = hook_dir / "test_hooks.py"
+    session.install("ruff==0.14.10")
+    session.run("ruff", "check", str(hook), str(tests))
+    session.run("python", str(tests), "-v")
+
+
+@nox.session(name="sqllogic_hook")
+def sqllogic_hook(session):
+    # Usage: nox -f tests/nox/noxfile.py -s sqllogic_hook -- prepare tpch
+    valid_hooks = {
+        ("prepare", "tpch"),
+        ("prepare", "tpcds"),
+        ("prepare", "stage"),
+        ("prepare", "dictionaries"),
+        ("cleanup", "dictionaries"),
+    }
+    if tuple(session.posargs) not in valid_hooks:
+        session.error(
+            "valid hooks: prepare <tpch|tpcds|stage|dictionaries>; "
+            "cleanup dictionaries"
+        )
+    if session.posargs[1] != "dictionaries":
+        session.install(f"databend-driver=={PYTHON_DRIVER_PINNED[0]}")
+        if session.posargs[1] in {"tpch", "tpcds"}:
+            session.install(f"duckdb=={SQLLOGIC_DUCKDB_VERSION}")
+    session.run(
+        "python",
+        str(Path(__file__).parent / "sqllogic" / "hooks.py"),
+        *session.posargs,
+    )
 
 
 @nox.session

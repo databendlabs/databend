@@ -15,25 +15,30 @@
 databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::ReclusterTaskBudget;
 use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
@@ -51,9 +56,13 @@ use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::FuseBlockPartInfo;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
+use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
+use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
@@ -65,6 +74,10 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
+use crate::pipelines::processors::horizontal_recluster::HorizontalReclusterSource;
+use crate::pipelines::processors::horizontal_recluster::TransformPrepareReclusterIndex;
+use crate::pipelines::processors::horizontal_recluster::TransformReclusterOutputOrder;
+use crate::sessions::QueryContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 use crate::spillers::ReclusterSpiller;
@@ -73,6 +86,10 @@ use crate::spillers::ReclusterSpiller;
 pub struct Recluster {
     pub meta: PhysicalPlanMeta,
     pub tasks: Vec<ReclusterTask>,
+    /// V2 executor groups before distribution; each worker receives exactly one
+    /// group with task indices remapped to its local `tasks`. None is the legacy path.
+    #[serde(default)]
+    pub task_batches: Option<Vec<Vec<usize>>>,
     pub table_info: TableInfo,
     pub table_meta_timestamps: TableMetaTimestamps,
 }
@@ -95,6 +112,7 @@ impl IPhysicalPlan for Recluster {
         PhysicalPlan::new(Recluster {
             meta: self.meta.clone(),
             tasks: self.tasks.clone(),
+            task_batches: self.task_batches.clone(),
             table_info: self.table_info.clone(),
             table_meta_timestamps: self.table_meta_timestamps,
         })
@@ -121,215 +139,385 @@ impl IPhysicalPlan for Recluster {
     //      └───►│SerializeBlock├───┘
     //           └──────────────┘
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        match self.tasks.len() {
-            // Keep the pipeline constructible if an empty task list reaches
-            // this layer; normal recluster planning filters no-op parts out.
-            0 => builder.main_pipeline.add_source(EmptySource::create, 1),
-            1 => {
-                let table = builder
-                    .ctx
-                    .build_table_by_table_info(&self.table_info, None)?;
-                let table = FuseTable::try_from_table(table.as_ref())?;
+        if self.tasks.is_empty() {
+            return builder.main_pipeline.add_source(EmptySource::create, 1);
+        }
+        let settings = builder.ctx.get_settings();
+        let threads = settings.get_max_threads()? as usize;
+        let io_requests = threads.max(settings.get_max_storage_io_requests()? as usize);
+        if self.tasks.len() == 1 && self.task_batches.is_none() {
+            return self.build_task_pipeline(builder, &self.tasks[0], threads, io_requests, 0);
+        }
+        let (bytes, budget) = self.validate_node_batch(&builder.ctx, threads)?;
+        log::info!(
+            event = "recluster.node_batch_planned",
+            tasks = self.tasks.len(), input_bytes = bytes, input_budget = budget,
+            threads, io_requests;
+            "Building isolated recluster branches with a shared node budget"
+        );
+        if self.tasks.len() == 1 {
+            return self.build_task_pipeline(builder, &self.tasks[0], threads, io_requests, 0);
+        }
+        let mut outputs = Vec::new();
+        for (idx, task) in self.tasks.iter().enumerate() {
+            let task_threads =
+                threads / self.tasks.len() + usize::from(idx < threads % self.tasks.len());
+            let task_io =
+                io_requests / self.tasks.len() + usize::from(idx < io_requests % self.tasks.len());
+            let child_ctx = QueryContext::create_from(&builder.ctx);
+            // Copy already-validated effective settings as well as shared state:
+            // create_from alone does not inherit context-local overrides.
+            unsafe {
+                child_ctx
+                    .get_settings()
+                    .unchecked_apply_changes(settings.changes());
+            }
+            let parent_ctx = std::mem::replace(&mut builder.ctx, child_ctx);
+            // Restore the parent even if constructing this branch fails.
+            let result = self.build_task_pipeline(builder, task, task_threads, task_io, idx);
+            builder.ctx = parent_ctx;
+            result?;
+            outputs.extend(builder.main_pipeline.take_sinks());
+        }
+        // Merge only serialized mutation output, never the task-local sorted rows.
+        builder.main_pipeline.extend_sinks(outputs);
+        builder.main_pipeline.try_resize(1)
+    }
+}
 
-                let task = &self.tasks[0];
-                if task.parts.is_empty() {
+impl Recluster {
+    fn validate_node_batch(&self, ctx: &QueryContext, threads: usize) -> Result<(usize, usize)> {
+        let settings = ctx.get_settings();
+        let assigned_batch = self.task_batches.as_ref().is_some_and(|batches| {
+            let mut seen = HashSet::new();
+            batches.len() == 1
+                && batches[0].len() == self.tasks.len()
+                && batches[0]
+                    .iter()
+                    .all(|&idx| idx < self.tasks.len() && seen.insert(idx))
+        });
+        // Enforce the same per-node cap as planning, including on remote workers.
+        if self.tasks.len() > threads.min(ReclusterTaskBudget::MAX_TASKS_PER_NODE)
+            || !assigned_batch
+            || !settings.get_enable_recluster_task_selection_v2()?
+            || self.tasks.len() > 1
+                && self
+                    .tasks
+                    .iter()
+                    .any(|task| task.kind != ReclusterTaskKind::MergeBlocks)
+        {
+            return Err(ErrorCode::Internal(
+                "Unsupported recluster executor task batch",
+            ));
+        }
+        let mut bytes = 0usize;
+        let mut inputs = HashSet::new();
+        for task in &self.tasks {
+            bytes = bytes
+                .checked_add(task.total_bytes)
+                .ok_or_else(|| ErrorCode::Internal("Recluster task batch byte count overflow"))?;
+            for part in &task.parts.partitions {
+                let part = FuseBlockPartInfo::from_part(part)?;
+                if !inputs.insert(&part.location) {
                     return Err(ErrorCode::Internal(
-                        "recluster task must have source blocks",
+                        "Shared input in recluster executor task batch",
                     ));
                 }
-                let settings = builder.ctx.get_settings();
-                // Execution-time guard: planning-time admission runs on the
-                // coordinator and cannot see this node's live memory pressure.
-                // Oversized tasks are only tolerable when sort spill can absorb
-                // the pressure; otherwise fail fast instead of risking an OOM kill.
-                if !builder.ctx.get_enable_sort_spill() {
-                    let max_memory_usage = settings.get_max_memory_usage()? as usize;
-                    // `max_memory_usage == 0` means memory usage is unlimited.
-                    if max_memory_usage != 0 {
-                        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
-                        let memory_budget = max_memory_usage.saturating_sub(global_used) * 30 / 100;
-                        if task.total_bytes > memory_budget {
-                            return Err(ErrorCode::MemoryExceedsLimit(format!(
-                                "Not enough memory to execute recluster task on this node: task_bytes = {}, global_used = {}, max_memory_usage = {}.",
-                                task.total_bytes, global_used, max_memory_usage
-                            )));
-                        }
-                    }
+            }
+        }
+        let mut budget = settings.get_recluster_block_size()? as usize;
+        let max_memory = settings.get_max_memory_usage()? as usize;
+        if max_memory != 0 {
+            // Query-level distributed usage is not this executor's live usage.
+            // Keep node admission local; query/spill limits remain shared as before.
+            let used = GLOBAL_MEM_STAT.get_memory_usage();
+            budget = budget.min(max_memory.saturating_sub(used) * 30 / 100);
+        }
+        if bytes > budget {
+            return Err(ErrorCode::MemoryExceedsLimit(format!(
+                "Not enough memory for recluster executor batch: input_bytes = {bytes}, budget = {budget}."
+            )));
+        }
+        Ok((bytes, budget))
+    }
+
+    fn build_task_pipeline(
+        &self,
+        builder: &mut PipelineBuilder,
+        task: &ReclusterTask,
+        max_threads: usize,
+        max_io_requests: usize,
+        task_index: usize,
+    ) -> Result<()> {
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+
+        if task.parts.is_empty() {
+            return Err(ErrorCode::Internal(
+                "recluster task must have source blocks",
+            ));
+        }
+        let settings = builder.ctx.get_settings();
+        // Execution-time guard: planning-time admission runs on the
+        // coordinator and cannot see this node's live memory pressure.
+        // Oversized tasks are only tolerable when sort spill can absorb
+        // the pressure; otherwise fail fast instead of risking an OOM kill.
+        let multiway_merge = task.kind == ReclusterTaskKind::MergeBlocks
+            && settings.get_enable_recluster_multiway_merge()?
+            && matches!(table.get_storage_format(), FuseStorageFormat::Parquet)
+            && !table
+                .schema()
+                .fields()
+                .iter()
+                .any(|field| matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))));
+        if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
+            let max_memory_usage = settings.get_max_memory_usage()? as usize;
+            // `max_memory_usage == 0` means memory usage is unlimited.
+            if max_memory_usage != 0 {
+                let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+                let memory_budget = max_memory_usage.saturating_sub(global_used) * 30 / 100;
+                if task.total_bytes > memory_budget {
+                    return Err(ErrorCode::MemoryExceedsLimit(format!(
+                        "Not enough memory to execute recluster task on this node: task_bytes = {}, global_used = {}, max_memory_usage = {}.",
+                        task.total_bytes, global_used, max_memory_usage
+                    )));
                 }
-                let recluster_block_nums = task.parts.len();
-                let block_thresholds = table.get_block_thresholds();
-                let table_info = table.get_table_info();
-                let schema = table.schema_with_stream();
-                let description = task.stats.get_description(&table_info.desc);
-                let plan = DataSourcePlan {
-                    source_info: DataSourceInfo::TableSource(table_info.clone()),
-                    output_schema: schema.clone(),
-                    parts: task.parts.clone(),
-                    statistics: task.stats.clone(),
-                    description,
-                    tbl_args: table.table_args(),
-                    push_downs: None,
-                    internal_columns: None,
-                    base_block_ids: None,
-                    block_meta_options: BlockMetaOptions::default()
-                        .set_update_stream_columns(table.change_tracking_enabled()),
-                    table_index: usize::MAX,
-                    scan_id: usize::MAX,
-                };
+            }
+        }
+        let recluster_block_nums = task.parts.len();
+        let block_thresholds = table.get_block_thresholds();
+        let table_info = table.get_table_info();
+        let schema = table.schema_with_stream();
+        let description = task.stats.get_description(&table_info.desc);
+        let plan = DataSourcePlan {
+            source_info: DataSourceInfo::TableSource(table_info.clone()),
+            output_schema: schema.clone(),
+            parts: task.parts.clone(),
+            statistics: task.stats.clone(),
+            description,
+            tbl_args: table.table_args(),
+            push_downs: None,
+            internal_columns: None,
+            base_block_ids: None,
+            block_meta_options: BlockMetaOptions::default()
+                .set_update_stream_columns(table.change_tracking_enabled()),
+            table_index: usize::MAX,
+            scan_id: usize::MAX,
+        };
 
-                {
-                    metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);
-                    metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
-                    metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
+        {
+            metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);
+            metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
+            metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
 
-                    // Keep all effective input levels in one event per task pipeline build.
-                    log::info!(
-                        event = "recluster.input_planned",
-                        table_id = table.get_id(),
-                        task_kind :? = task.kind,
-                        input_levels :serde = task.input_level_stats;
-                        "Recluster input planned"
-                    );
-                }
+            // Keep all effective input levels in one event per task pipeline build.
+            log::info!(
+                event = "recluster.input_planned",
+                table_id = table.get_id(),
+                task_index,
+                node_tasks = self.tasks.len(),
+                task_bytes = task.total_bytes,
+                max_threads,
+                max_io_requests,
+                task_kind :? = task.kind,
+                input_levels :serde = task.input_level_stats;
+                "Recluster input planned"
+            );
+        }
 
-                builder.ctx.set_partitions(plan.parts.clone())?;
+        let input_schema = DataSchema::from(table.schema_with_stream()).into();
+        let mut cluster_stats_gen = table.get_cluster_stats_gen(
+            builder.ctx.clone(),
+            task.level + 1,
+            block_thresholds,
+            input_schema,
+        )?;
+        let index_merge = match multiway_merge {
+            true if settings.get_enable_recluster_inverted_index_merge()?
+                && !table.schema().fields().iter().any(|field| {
+                    matches!(field.data_type(), TableDataType::AggregateState { .. })
+                }) =>
+            {
+                ReclusterIndexMergeInputs::try_create(table, task)?
+            }
+            _ => None,
+        };
+        if multiway_merge {
+            if !cluster_stats_gen.is_linear() {
+                return Err(ErrorCode::Internal(
+                    "MergeBlocks requires linear cluster keys",
+                ));
+            }
+            HorizontalReclusterSource::build_pipeline(
+                builder.ctx.clone(),
+                &mut builder.main_pipeline,
+                table.clone(),
+                task,
+                &cluster_stats_gen,
+                index_merge.is_some(),
+                max_threads,
+            )?;
+        } else {
+            builder.ctx.set_partitions(plan.parts.clone())?;
 
-                table.read_data(
-                    builder.ctx.clone(),
-                    &plan,
-                    &mut builder.main_pipeline,
+            table.read_data_with_parallelism(
+                builder.ctx.clone(),
+                &plan,
+                &mut builder.main_pipeline,
+                CachePolicy::READ_ONLY,
+                max_threads,
+                max_io_requests,
+            )?;
+
+            let num_input_columns = schema.fields().len();
+            if table.change_tracking_enabled() {
+                let stream_ctx = StreamContext::try_create(
+                    builder.ctx.get_function_context()?,
+                    schema,
+                    table_info.ident.seq,
+                    false,
                     false,
                 )?;
 
-                let num_input_columns = schema.fields().len();
-                if table.change_tracking_enabled() {
-                    let stream_ctx = StreamContext::try_create(
-                        builder.ctx.get_function_context()?,
-                        schema,
-                        table_info.ident.seq,
-                        false,
-                        false,
-                    )?;
-
-                    builder
-                        .main_pipeline
-                        .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
-                }
-
-                let input_schema = DataSchema::from(table.schema_with_stream()).into();
-                let mut cluster_stats_gen = table.get_cluster_stats_gen(
-                    builder.ctx.clone(),
-                    task.level + 1,
-                    block_thresholds,
-                    input_schema,
-                )?;
-                if !cluster_stats_gen.eval_operators.is_empty() {
-                    let eval_operators = cluster_stats_gen.eval_operators.clone();
-                    let func_ctx2 = cluster_stats_gen.func_ctx.clone();
-                    builder.main_pipeline.add_transformer(move || {
-                        CompoundBlockOperator::new(
-                            eval_operators.clone(),
-                            func_ctx2.clone(),
-                            num_input_columns,
-                        )
-                    });
-                }
-
-                let max_threads = settings.get_max_threads()? as usize;
-
-                let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
-                    task.total_rows,
-                    task.total_bytes,
-                    task.total_compressed,
-                );
-
-                let compact_thresholds = block_thresholds
-                    .set_rows_per_block(rows_per_block)
-                    .set_bytes_per_block(bytes_per_block);
-
-                if task.kind == ReclusterTaskKind::MergeBlocks && !cluster_stats_gen.is_linear() {
-                    return Err(ErrorCode::Internal(
-                        "MergeBlocks requires linear cluster keys",
-                    ));
-                }
-
-                if cluster_stats_gen.is_hilbert() {
-                    Self::build_hilbert_layout_pipeline(
-                        builder,
-                        task,
-                        &mut cluster_stats_gen,
-                        rows_per_block,
-                        compact_thresholds,
-                        max_threads,
-                    )?;
-                } else {
-                    Self::build_regular_layout_pipeline(
-                        builder,
-                        task,
-                        &cluster_stats_gen,
-                        rows_per_block,
-                        compact_thresholds,
-                        max_threads,
-                    )?;
-                }
-
-                let reaggregated = add_aggregate_state_reaggregate_transform(
-                    &mut builder.main_pipeline,
-                    table.engine(),
-                    table.schema().as_ref(),
-                )?;
-                // Re-aggregation flushes rows in hash-table order, which
-                // breaks the ordering the merge sort just established.
-                // Re-sort each block before serialization: serialize-time
-                // cluster statistics read the first and last rows of a
-                // sorted block. Compact relies on the partial sort inside
-                // `cluster_gen_for_append` for the same guarantee.
-                if reaggregated {
-                    let resort_descs: Arc<[_]> = cluster_stats_gen.sort_descs().into();
-                    if !resort_descs.is_empty() {
-                        builder.main_pipeline.add_transformer(move || {
-                            TransformSortPartial::new(LimitType::None, resort_descs.clone())
-                        });
-                    }
-                }
-
-                let virtual_column_layout = task.virtual_column_layout.clone();
-                let query_ctx = builder.ctx.clone();
-                // All layouts share the ordinary block statistics and serialization path after
-                // they have formed output blocks and removed layout-only temporary columns.
-                builder.main_pipeline.add_transform(
-                    move |transform_input_port, transform_output_port| {
-                        let proc = match &virtual_column_layout {
-                            Some(layout) => {
-                                TransformSerializeBlock::try_create_with_virtual_layout(
-                                    query_ctx.clone(),
-                                    transform_input_port,
-                                    transform_output_port,
-                                    table,
-                                    cluster_stats_gen.clone(),
-                                    MutationKind::Recluster,
-                                    Arc::new(layout.clone()),
-                                    self.table_meta_timestamps,
-                                )?
-                            }
-                            None => TransformSerializeBlock::try_create(
-                                query_ctx.clone(),
-                                transform_input_port,
-                                transform_output_port,
-                                table,
-                                cluster_stats_gen.clone(),
-                                MutationKind::Recluster,
-                                self.table_meta_timestamps,
-                            )?,
-                        };
-                        proc.into_processor()
-                    },
-                )
+                builder
+                    .main_pipeline
+                    .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
             }
-            _ => Err(ErrorCode::Internal(
-                "A node can only execute one recluster task".to_string(),
-            )),
+
+            if !cluster_stats_gen.eval_operators.is_empty() {
+                let eval_operators = cluster_stats_gen.eval_operators.clone();
+                let func_ctx2 = cluster_stats_gen.func_ctx.clone();
+                builder.main_pipeline.add_transformer(move || {
+                    CompoundBlockOperator::new(
+                        eval_operators.clone(),
+                        func_ctx2.clone(),
+                        num_input_columns,
+                    )
+                });
+            }
         }
+        if index_merge.is_some() {
+            builder
+                .main_pipeline
+                .add_transformer(|| TransformReclusterOutputOrder { next_row: 0 });
+        }
+        let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
+            task.total_rows,
+            task.total_bytes,
+            task.total_compressed,
+        );
+
+        let compact_thresholds = block_thresholds
+            .set_rows_per_block(rows_per_block)
+            .set_bytes_per_block(bytes_per_block);
+
+        if task.kind == ReclusterTaskKind::MergeBlocks && !cluster_stats_gen.is_linear() {
+            return Err(ErrorCode::Internal(
+                "MergeBlocks requires linear cluster keys",
+            ));
+        }
+
+        if multiway_merge {
+            let extra_key_num = cluster_stats_gen.extra_key_num;
+            builder.main_pipeline.add_accumulating_transformer(move || {
+                OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
+            });
+            builder.main_pipeline.try_resize(max_threads)?;
+            builder
+                .main_pipeline
+                .add_block_meta_transformer(|| TransformCompactBlock);
+        } else if cluster_stats_gen.is_hilbert() {
+            Self::build_hilbert_layout_pipeline(
+                builder,
+                task,
+                &mut cluster_stats_gen,
+                rows_per_block,
+                compact_thresholds,
+                max_threads,
+            )?;
+        } else {
+            Self::build_regular_layout_pipeline(
+                builder,
+                task,
+                &cluster_stats_gen,
+                rows_per_block,
+                compact_thresholds,
+                max_threads,
+            )?;
+        }
+
+        let reaggregated = add_aggregate_state_reaggregate_transform(
+            &mut builder.main_pipeline,
+            table.engine(),
+            table.schema().as_ref(),
+        )?;
+        // Re-aggregation flushes rows in hash-table order, which
+        // breaks the ordering the merge sort just established.
+        // Re-sort each block before serialization: serialize-time
+        // cluster statistics read the first and last rows of a
+        // sorted block. Compact relies on the partial sort inside
+        // `cluster_gen_for_append` for the same guarantee.
+        if reaggregated {
+            let resort_descs: Arc<[_]> = cluster_stats_gen.sort_descs().into();
+            if !resort_descs.is_empty() {
+                builder.main_pipeline.add_transformer(move || {
+                    TransformSortPartial::new(LimitType::None, resort_descs.clone())
+                });
+            }
+        }
+
+        if let Some(index_merge) = &index_merge {
+            let merged_names = index_merge.merged_names();
+            builder
+                .main_pipeline
+                .add_transformer(move || TransformPrepareReclusterIndex {
+                    merged_names: merged_names.clone(),
+                });
+        }
+        let virtual_column_layout = task.virtual_column_layout.clone();
+        let query_ctx = builder.ctx.clone();
+        // All layouts share the ordinary block statistics and serialization path after
+        // they have formed output blocks and removed layout-only temporary columns.
+        let index_merge_table = table.clone();
+        builder.main_pipeline.add_transform(
+            move |transform_input_port, transform_output_port| {
+                let proc = match &virtual_column_layout {
+                    Some(layout) => TransformSerializeBlock::try_create_with_virtual_layout(
+                        query_ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        table,
+                        cluster_stats_gen.clone(),
+                        MutationKind::Recluster,
+                        Arc::new(layout.clone()),
+                        self.table_meta_timestamps,
+                    )?,
+                    None => TransformSerializeBlock::try_create(
+                        query_ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        table,
+                        cluster_stats_gen.clone(),
+                        MutationKind::Recluster,
+                        self.table_meta_timestamps,
+                    )?,
+                };
+                proc.into_processor()
+            },
+        )?;
+        if let Some(index_merge) = index_merge {
+            builder.main_pipeline.try_resize(1)?;
+            builder.main_pipeline.add_accumulating_transformer(|| {
+                TransformReclusterIndexMerge::new(
+                    builder.ctx.clone(),
+                    index_merge_table.clone(),
+                    index_merge.clone(),
+                )
+            });
+        }
+        Ok(())
     }
 }
 
@@ -468,7 +656,8 @@ impl Recluster {
             None,
             builder.ctx.get_settings().get_enable_fixed_rows_sort()?,
         )?
-        .with_block_size_hit(rows_per_block);
+        .with_block_size_hit(rows_per_block)
+        .with_max_threads(max_threads);
         Self::build_recluster_sort_pipeline(
             task.kind,
             sort_pipeline_builder,

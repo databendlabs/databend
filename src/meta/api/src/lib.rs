@@ -17,7 +17,6 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::unnecessary_unwrap)]
-#![feature(try_blocks)]
 
 /// The value type associated with a `kvapi::Key`.
 pub type ValueOf<K> = <K as databend_meta_client::kvapi::Key>::ValueType;

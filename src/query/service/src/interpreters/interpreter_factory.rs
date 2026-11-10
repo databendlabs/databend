@@ -20,7 +20,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
-use databend_common_sql::plans::Mutation;
 use log::error;
 use log::warn;
 
@@ -68,6 +67,7 @@ use crate::interpreters::interpreter_create_workload_group::CreateWorkloadGroupI
 use crate::interpreters::interpreter_drop_warehouse_cluster::DropWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_drop_warehouses::DropWarehouseInterpreter;
 use crate::interpreters::interpreter_drop_workload_group::DropWorkloadGroupInterpreter;
+use crate::interpreters::interpreter_external_access::ExternalAccessInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
@@ -99,8 +99,6 @@ use crate::interpreters::interpreter_show_workload_groups::ShowWorkloadGroupsInt
 use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_add_constraint::AddTableConstraintInterpreter;
-use crate::interpreters::interpreter_table_branch_create::CreateTableBranchInterpreter;
-use crate::interpreters::interpreter_table_branch_drop::DropTableBranchInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_drop_constraint::DropTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
@@ -158,6 +156,8 @@ impl InterpreterFactory {
         access_logger.output();
 
         if lineage_enabled() {
+            // The planner captures lineage from the bound plan; this reads that snapshot rather
+            // than re-deriving it from the optimized plan.
             match plan.query_lineage() {
                 Ok(lineage) => ctx.attach_query_lineage(lineage),
                 Err(err) => {
@@ -280,7 +280,7 @@ impl InterpreterFactory {
             } => Ok(Arc::new(SelectInterpreter::try_create(
                 ctx,
                 *bind_context.clone(),
-                *s_expr.clone(),
+                s_expr.planned()?.clone(),
                 metadata.clone(),
                 formatted_ast.clone(),
                 *ignore_result,
@@ -475,8 +475,17 @@ impl InterpreterFactory {
                     *alter_table_partition_by.clone(),
                 )?))
             }
+            Plan::DropTablePartitionKey(drop_table_partition_key) => {
+                Ok(Arc::new(DropTablePartitionKeyInterpreter::try_create(
+                    ctx,
+                    *drop_table_partition_key.clone(),
+                )?))
+            }
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
+            )),
+            Plan::AlterTableTtl(alter_table_ttl) => Ok(Arc::new(
+                AlterTableTtlInterpreter::try_create(ctx, *alter_table_ttl.clone())?,
             )),
             Plan::RefreshTableCache(refresh_table_cache) => Ok(Arc::new(
                 RefreshTableCacheInterpreter::try_create(ctx, *refresh_table_cache.clone())?,
@@ -534,15 +543,7 @@ impl InterpreterFactory {
             Plan::DropAllTableRowAccessPolicies(p) => Ok(Arc::new(
                 DropAllTableRowAccessPoliciesInterpreter::try_create(ctx, *p.clone())?,
             )),
-            Plan::CreateTableBranch(p) => Ok(Arc::new(CreateTableBranchInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
             Plan::CreateTableTag(p) => Ok(Arc::new(CreateTableTagInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
-            Plan::DropTableBranch(p) => Ok(Arc::new(DropTableBranchInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
@@ -596,8 +597,13 @@ impl InterpreterFactory {
                 *drop_stream.clone(),
             )?)),
 
-            // dynamic tables
-            Plan::CreateDynamicTable(_) => Err(ErrorCode::Unimplemented("todo")),
+            // Dynamic Tables
+            Plan::CreateDynamicTable(dynamic_table) => Ok(Arc::new(
+                CreateDynamicTableInterpreter::try_create(ctx, *dynamic_table.clone())?,
+            )),
+            Plan::RefreshDynamicTable(dynamic_table) => Ok(Arc::new(
+                RefreshDynamicTableInterpreter::try_create(ctx, *dynamic_table.clone())?,
+            )),
 
             // Indexes
             Plan::CreateTableIndex(index) => Ok(Arc::new(CreateTableIndexInterpreter::try_create(
@@ -644,10 +650,10 @@ impl InterpreterFactory {
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
             Plan::DataMutation { s_expr, schema, .. } => {
-                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                let mutation = s_expr.mutation()?;
                 Ok(Arc::new(MutationInterpreter::try_create(
                     ctx,
-                    *s_expr.clone(),
+                    s_expr.planned()?.clone(),
                     schema.clone(),
                     mutation.metadata.clone(),
                 )?))
@@ -874,6 +880,10 @@ impl InterpreterFactory {
             #[cfg(not(feature = "task-support"))]
             Plan::ShowTasks(_) => Err(task_support_disabled("SHOW TASKS")),
 
+            Plan::ExternalAccess(stmt) => Ok(Arc::new(ExternalAccessInterpreter::new(
+                ctx,
+                stmt.as_ref().clone(),
+            ))),
             Plan::CreateConnection(p) => Ok(Arc::new(CreateConnectionInterpreter::try_create(
                 ctx,
                 *p.clone(),

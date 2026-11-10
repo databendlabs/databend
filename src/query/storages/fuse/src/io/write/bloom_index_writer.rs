@@ -25,6 +25,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::BloomIndexType;
@@ -40,6 +41,12 @@ use opendal::Operator;
 
 use crate::FuseStorageFormat;
 use crate::io::BlockReader;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingBloomIndex;
+use crate::io::write::block_index::PendingIndexFile;
 
 #[derive(Debug)]
 pub struct BloomIndexState {
@@ -90,30 +97,6 @@ impl BloomIndexState {
         })
     }
 
-    pub fn from_data_block(
-        ctx: Arc<dyn TableContext>,
-        block: &DataBlock,
-        location: Location,
-        bloom_index_type: BloomIndexType,
-        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-        ngram_args: &[NgramArgs],
-    ) -> Result<Option<Self>> {
-        // write index
-        let mut builder = BloomIndexBuilder::create(
-            ctx.get_function_context()?,
-            bloom_index_type,
-            bloom_columns_map,
-            ngram_args,
-        )?;
-        builder.add_block(block)?;
-        let maybe_bloom_index = builder.finalize()?;
-        if let Some(bloom_index) = maybe_bloom_index {
-            Ok(Some(Self::from_bloom_index(&bloom_index, location)?))
-        } else {
-            Ok(None)
-        }
-    }
-
     pub fn size(&self) -> u64 {
         self.size
     }
@@ -124,6 +107,70 @@ impl BloomIndexState {
 
     pub fn ngram_size(&self) -> Option<u64> {
         self.ngram_size
+    }
+
+    pub(crate) fn into_pending(self) -> PendingBloomIndex {
+        PendingBloomIndex {
+            file: PendingIndexFile {
+                location: self.location,
+                data: self.data,
+            },
+            ngram_size: self.ngram_size,
+            column_distinct_count: self.column_distinct_count,
+        }
+    }
+}
+
+pub struct BloomIndexWriteSpec {
+    bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    ngram_args: Vec<NgramArgs>,
+}
+
+impl BloomIndexWriteSpec {
+    pub fn new(
+        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+        ngram_args: Vec<NgramArgs>,
+    ) -> Self {
+        Self {
+            bloom_columns_map,
+            ngram_args,
+        }
+    }
+}
+
+impl BlockIndexSpec for BloomIndexWriteSpec {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(BloomIndexBlockWriter {
+            builder: BloomIndexBuilder::create(
+                context.func_ctx,
+                context.write_settings.bloom_index_type,
+                self.bloom_columns_map.clone(),
+                &self.ngram_args,
+            )?,
+            location: context.bloom_location,
+        }))
+    }
+}
+
+struct BloomIndexBlockWriter {
+    builder: BloomIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexWriter for BloomIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let Some(bloom_index) = self.builder.finalize()? else {
+            return Ok(PendingBlockIndexOutput::default());
+        };
+        let state = BloomIndexState::from_bloom_index(&bloom_index, self.location)?;
+        Ok(PendingBlockIndexOutput {
+            bloom: Some(state.into_pending()),
+            ..Default::default()
+        })
     }
 }
 
@@ -154,7 +201,7 @@ impl BloomIndexRebuilder {
             self.table_dal.clone(),
             self.table_schema.clone(),
             projection,
-            false,
+            CachePolicy::READ_ONLY,
         )?;
 
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;

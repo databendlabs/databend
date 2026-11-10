@@ -117,3 +117,35 @@ SELECT REGEXP_REPLACE('a b c', 'b', 'X', 1, -1)
 
 statement error 1006
 SELECT REGEXP_REPLACE('a b c', 'b', 'X', 1, 0, '-i')
+
+# Partial evaluation preserves row alignment and NULLs, and masks invalid
+# patterns, match types and positions on inactive rows.
+query T
+SELECT IF(enabled, regexp_replace(source, pat, 'fox', pos, 0, mt), 'skipped')
+FROM (VALUES
+    (0, TRUE,  'dog cat', 'dog', 'c',       1),
+    (1, FALSE, 'dog cat', '[',   'invalid', 0),
+    (2, TRUE,  'cat',     'dog', 'c',       1),
+    (3, TRUE,  NULL,      '[',   'invalid', 0),
+    (4, TRUE,  'dog cat', NULL,  'invalid', 0)
+) AS t(id, enabled, source, pat, mt, pos)
+ORDER BY id
+----
+fox cat
+skipped
+cat
+NULL
+NULL
+
+# Scalar calls still work when row zero is inactive.
+query T
+SELECT IF(number = 1, regexp_replace('dog', 'dog', 'cat'), 'skipped')
+FROM numbers(2)
+ORDER BY number
+----
+skipped
+cat
+
+# An invalid pattern on an active row must still report an error.
+statement error 1006
+SELECT IF(number = 1, regexp_replace(to_string(number), '[', 'x'), '') FROM numbers(2)

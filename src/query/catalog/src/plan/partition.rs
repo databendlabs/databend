@@ -26,9 +26,12 @@ use std::sync::Arc;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_meta_client::types::NodeInfo;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
@@ -72,13 +75,22 @@ pub trait PartInfo: Send + Sync {
     fn is_reshuffle_header(&self) -> bool {
         false
     }
+
+    /// Bytes the part holds, itself and on the heap, for caches of parts. By default the part
+    /// itself only: parts owning heap data count it.
+    fn mem_bytes(&self) -> usize {
+        size_of_val(self)
+    }
 }
 
 impl Debug for Box<dyn PartInfo> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match serde_json::to_string(self) {
-            Ok(str) => write!(f, "{}", str),
-            Err(_cause) => Err(std::fmt::Error {}),
+            Ok(json) => f.write_str(&json),
+            Err(cause) => f
+                .debug_struct("PartInfo")
+                .field("serialization_error", &cause)
+                .finish(),
         }
     }
 }
@@ -173,7 +185,7 @@ impl Partitions {
                     .into_iter()
                     .map(|p| (p.hash() % num_executors as u64, p.clone()))
                     .collect::<Vec<_>>();
-                parts.sort_by(|a, b| a.0.cmp(&b.0));
+                parts.sort_by_key(|a| a.0);
                 parts.into_iter().map(|x| x.1).collect()
             }
             PartitionsShuffleKind::ConsistentHash => {
@@ -209,7 +221,7 @@ impl Partitions {
                     })
                     .collect::<Vec<_>>();
 
-                ring.sort_by(|&(_, a), &(_, b)| a.cmp(&b));
+                ring.sort_by_key(|&(_, a)| a);
 
                 for p in &regular_partitions {
                     let k = p.hash();
@@ -484,14 +496,30 @@ pub struct ReclusterTask {
     pub input_level_stats: Vec<ClusterLevelLogStats>,
     pub kind: ReclusterTaskKind,
     pub virtual_column_layout: Option<VirtualColumnLayout>,
+    /// Index metadata in original input-block order; absent when reuse is disabled.
+    #[serde(default)]
+    pub inverted_index_sources: Vec<Vec<BlockIndexMeta>>,
 }
 
-pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
+/// A surviving block keeps its segment-local virtual-column interpretation
+/// and per-block statistics when maintenance replaces the containing segment.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RetainedBlockMeta {
+    pub block_meta: Arc<BlockMeta>,
+    pub hll: Option<RawBlockHLL>,
+    pub top_n: Option<BlockTopN>,
+    /// Local index into the enclosing container's `virtual_schemas`.
+    pub virtual_schema_index: usize,
+}
 
 #[derive(Clone, Default)]
 pub struct ReclusterParts {
     pub tasks: Vec<ReclusterTask>,
-    pub remained_blocks: Vec<BlockMetaWithHLL>,
+    /// V2 placement witness: indices into `tasks`, grouped by executor. Scheduling
+    /// must preserve these batches rather than reshuffling individual tasks.
+    pub task_batches: Option<Vec<Vec<usize>>>,
+    pub remained_blocks: Vec<RetainedBlockMeta>,
+    pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_segment_summary: Statistics,
 }
@@ -504,7 +532,8 @@ impl ReclusterParts {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ReclusterInfoSideCar {
-    pub merged_blocks: Vec<BlockMetaWithHLL>,
+    pub merged_blocks: Vec<RetainedBlockMeta>,
+    pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_statistics: Statistics,
     /// Acquire the table lock only around refresh, sequence validation, and CAS publish.

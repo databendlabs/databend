@@ -555,11 +555,12 @@ impl Binder {
         s_expr = self.add_bound_columns_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
+        output_context.binding_depth = from_context.depth();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
 
         plan.query = Some(Box::new(Plan::Query {
-            s_expr: Box::new(s_expr),
+            s_expr: Box::new(s_expr.into()),
             metadata: self.metadata.clone(),
             bind_context: Box::new(output_context),
             rewrite_kind: None,

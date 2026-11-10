@@ -616,6 +616,7 @@ proptest! {
                 cardinality.ceil() as u64,
                 Some((min.clone(), max.clone())),
                 DEFAULT_HISTOGRAM_BUCKETS,
+                databend_common_sql::plans::Statistics::histogram_spacing_unit(&case.data_type),
             ).expect("valid histogram for smoke type"))
         } else {
             None

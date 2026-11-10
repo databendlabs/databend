@@ -33,6 +33,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
+use crate::interpreters::common::ttl_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -68,12 +69,7 @@ impl Interpreter for DropTableColumnInterpreter {
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             let table = catalog
-                .get_table_with_branch(
-                    &self.ctx.get_tenant(),
-                    db_name,
-                    tbl_name,
-                    self.plan.branch.as_deref(),
-                )
+                .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
                 .await?;
 
             // check mutability
@@ -84,13 +80,13 @@ impl Interpreter for DropTableColumnInterpreter {
             if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
+                    self.plan.database, self.plan.table, engine
                 )));
             }
             if table_info.db_type != DatabaseType::NormalDB {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table
                 )));
             }
 
@@ -112,6 +108,16 @@ impl Interpreter for DropTableColumnInterpreter {
                     return Err(ErrorCode::AlterTableError(format!(
                         "Cannot drop column '{}' because it is referenced by partition key {}",
                         self.plan.column, partition_key
+                    )));
+                }
+            }
+
+            if let Some(ttl) = &table_info.meta.ttl {
+                let referenced = ttl_referenced_columns(ttl)?;
+                if referenced.contains(self.plan.column.as_str()) {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot drop column '{}' because it is referenced by TTL {}",
+                        self.plan.column, ttl
                     )));
                 }
             }

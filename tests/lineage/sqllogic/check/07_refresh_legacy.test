@@ -17,5 +17,37 @@ WHERE target_database = 'lineage_history_legacy'
 ----
 1 1 1
 
+# The refreshed materialized view edge is id-addressed on both ends and carries a canonical
+# CREATE MATERIALIZED VIEW statement as its backfilled process text.
+query TTTT
+SELECT source_object_database, source_object_name,
+       target_object_database, target_object_name
+FROM get_lineage('lineage_history_legacy.legacy_mv', 'MATERIALIZED_VIEW', 'UPSTREAM', 1)
+----
+lineage_history_legacy src lineage_history_legacy legacy_mv
+
+query ITTTTTT
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
+FROM get_lineage('lineage_history_legacy.legacy_mv.x', 'COLUMN', 'UPSTREAM', 1)
+----
+1 lineage_history_legacy src a lineage_history_legacy legacy_mv x
+
+query BBBB
+SELECT query_info['query_text']::STRING LIKE
+           'CREATE MATERIALIZED VIEW `default`.`lineage_history_legacy`.`legacy_mv` AS%',
+       query_info['backfilled_at']::STRING LIKE '%Z',
+       source_address_kind = 'ID',
+       column_lineage['target_column_address_kind']::STRING = 'ID'
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_legacy'
+  AND target_name = 'legacy_mv'
+  AND lineage_kind = 'CREATE_MATERIALIZED_VIEW'
+----
+1 1 1 1
+
+statement ok
+DROP MATERIALIZED VIEW lineage_history_legacy.legacy_mv
+
 statement ok
 DROP DATABASE lineage_history_legacy

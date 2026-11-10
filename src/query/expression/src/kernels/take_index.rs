@@ -51,6 +51,30 @@ impl TakeIndex for [u32] {
     }
 }
 
+impl TakeIndex for [u8] {
+    type Iter<'a> = Map<Iter<'a, u8>, fn(&u8) -> usize>;
+
+    fn iter(&self) -> Self::Iter<'_> {
+        self.iter().map(|v| *v as usize)
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl TakeIndex for [u16] {
+    type Iter<'a> = Map<Iter<'a, u16>, fn(&u16) -> usize>;
+
+    fn iter(&self) -> Self::Iter<'_> {
+        self.iter().map(|v| *v as usize)
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+
 impl TakeIndex for [u64] {
     type Iter<'a> = Map<Iter<'a, u64>, fn(&u64) -> usize>;
 

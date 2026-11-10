@@ -54,7 +54,7 @@ HashJoin
 │       ├── output rows: <slt:ignore>
 │       ├── output bytes: <slt:ignore>
 │       ├── bytes scanned: <slt:ignore>
-│       ├── read from remote: <slt:ignore>
+│       ├── read from <slt:ignore>
 │       ├── runtime filter bloom time: <slt:ignore>
 │       ├── runtime filter inlist/min-max time: <slt:ignore>
 │       ├── table: default.default.test_a
@@ -64,7 +64,7 @@ HashJoin
 │       ├── read size: 1.06 KiB
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: 10]
 │       └── estimated rows: 10000.00
 └── TableScan(Probe)
@@ -73,7 +73,7 @@ HashJoin
     ├── output rows: <slt:ignore>
     ├── output bytes: <slt:ignore>
     ├── bytes scanned: <slt:ignore>
-    ├── read from remote: <slt:ignore>
+    ├── read from <slt:ignore>
     ├── runtime filter bloom time: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.test_b
@@ -83,7 +83,7 @@ HashJoin
     ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
@@ -122,7 +122,7 @@ HashJoin
 │       ├── output rows: <slt:ignore>
 │       ├── output bytes: <slt:ignore>
 │       ├── bytes scanned: <slt:ignore>
-│       ├── read from remote: <slt:ignore>
+│       ├── read from <slt:ignore>
 │       ├── runtime filter bloom time: <slt:ignore>
 │       ├── runtime filter inlist/min-max time: <slt:ignore>
 │       ├── table: default.default.test_a
@@ -132,7 +132,7 @@ HashJoin
 │       ├── read size: 1.06 KiB
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: 10]
 │       └── estimated rows: 10000.00
 └── TableScan(Probe)
@@ -141,7 +141,7 @@ HashJoin
     ├── output rows: <slt:ignore>
     ├── output bytes: <slt:ignore>
     ├── bytes scanned: <slt:ignore>
-    ├── read from remote: <slt:ignore>
+    ├── read from <slt:ignore>
     ├── parts pruned by runtime filter: 85
     ├── runtime filter bloom time: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
@@ -152,7 +152,7 @@ HashJoin
     ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
@@ -201,7 +201,7 @@ HashJoin
 │       ├── output rows: <slt:ignore>
 │       ├── output bytes: <slt:ignore>
 │       ├── bytes scanned: <slt:ignore>
-│       ├── read from remote: <slt:ignore>
+│       ├── read from <slt:ignore>
 │       ├── runtime filter bloom time: <slt:ignore>
 │       ├── runtime filter inlist/min-max time: <slt:ignore>
 │       ├── table: default.default.test_nullable_string_a
@@ -211,7 +211,7 @@ HashJoin
 │       ├── read size: <slt:ignore>
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: 10]
 │       └── estimated rows: 10000.00
 └── TableScan(Probe)
@@ -220,7 +220,7 @@ HashJoin
     ├── output rows: <slt:ignore>
     ├── output bytes: <slt:ignore>
     ├── bytes scanned: <slt:ignore>
-    ├── read from remote: <slt:ignore>
+    ├── read from <slt:ignore>
     ├── parts pruned by runtime filter: 87
     ├── runtime filter bloom time: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
@@ -231,7 +231,7 @@ HashJoin
     ├── read size: <slt:ignore>
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
@@ -275,7 +275,7 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [], limit: 10]
 │       └── estimated rows: 10000.00
 └── TableScan(Probe)
@@ -286,7 +286,7 @@ HashJoin
     ├── read size: 98.68 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
@@ -379,7 +379,7 @@ HashJoin
 │   ├── output rows: <slt:ignore>
 │   ├── output bytes: <slt:ignore>
 │   ├── bytes scanned: <slt:ignore>
-│   ├── read from remote: <slt:ignore>
+│   ├── read from <slt:ignore>
 │   ├── runtime filter bloom time: <slt:ignore>
 │   ├── runtime filter inlist/min-max time: <slt:ignore>
 │   ├── table: default.default.rf_build_3k
@@ -389,7 +389,7 @@ HashJoin
 │   ├── read size: <slt:ignore>
 │   ├── partitions total: 3
 │   ├── partitions scanned: 3
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3000.00
 └── TableScan(Probe)
@@ -398,7 +398,7 @@ HashJoin
     ├── output rows: <slt:ignore>
     ├── output bytes: <slt:ignore>
     ├── bytes scanned: <slt:ignore>
-    ├── read from remote: <slt:ignore>
+    ├── read from <slt:ignore>
     ├── runtime filter bloom time: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.rf_probe_3k_xor8
@@ -408,7 +408,7 @@ HashJoin
     ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00
@@ -436,7 +436,7 @@ HashJoin
 │   ├── output rows: <slt:ignore>
 │   ├── output bytes: <slt:ignore>
 │   ├── bytes scanned: <slt:ignore>
-│   ├── read from remote: <slt:ignore>
+│   ├── read from <slt:ignore>
 │   ├── runtime filter bloom time: <slt:ignore>
 │   ├── runtime filter inlist/min-max time: <slt:ignore>
 │   ├── table: default.default.rf_build_3k
@@ -446,7 +446,7 @@ HashJoin
 │   ├── read size: <slt:ignore>
 │   ├── partitions total: 3
 │   ├── partitions scanned: 3
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3000.00
 └── TableScan(Probe)
@@ -455,7 +455,7 @@ HashJoin
     ├── output rows: <slt:ignore>
     ├── output bytes: <slt:ignore>
     ├── bytes scanned: <slt:ignore>
-    ├── read from remote: <slt:ignore>
+    ├── read from <slt:ignore>
     ├── parts pruned by runtime filter: 96
     ├── runtime filter bloom time: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
@@ -466,7 +466,7 @@ HashJoin
     ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 100000.00

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
@@ -83,14 +84,8 @@ impl Interpreter for AddTableColumnInterpreter {
             let tbl_name = self.plan.table.as_str();
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let tbl = catalog
-                .get_table_with_branch(
-                    &self.ctx.get_tenant(),
-                    db_name,
-                    tbl_name,
-                    self.plan.branch.as_deref(),
-                )
-                .await?;
+            // Column definitions were bound against this query's cached schema.
+            let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
             // check mutability
             tbl.check_mutable()?;
 
@@ -99,13 +94,13 @@ impl Interpreter for AddTableColumnInterpreter {
             if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
+                    self.plan.database, self.plan.table, engine
                 )));
             }
             if table_info.db_type != DatabaseType::NormalDB {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table
                 )));
             }
             let field = self.plan.field.clone();
@@ -133,13 +128,13 @@ impl Interpreter for AddTableColumnInterpreter {
             if self.plan.is_nextval && num_rows > 0 {
                 return Err(ErrorCode::AlterTableError(format!(
                     "Cannot add column '{}' with `nextval` as default value to non-empty table '{}'",
-                    &self.plan.field.name, &self.plan.table
+                    self.plan.field.name, self.plan.table
                 )));
             }
             if self.plan.is_autoincrement && num_rows > 0 {
                 return Err(ErrorCode::AlterTableError(format!(
                     "Cannot add column '{}' with `AUTOINCREMENT` to non-empty table '{}'",
-                    &self.plan.field.name, &self.plan.table
+                    self.plan.field.name, self.plan.table
                 )));
             }
             if field.default_expr().is_some() {
@@ -175,14 +170,7 @@ impl Interpreter for AddTableColumnInterpreter {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                let table_ref = if let Some(branch) = &self.plan.branch {
-                    format!(
-                        "`{}`.`{}`/`{}`",
-                        self.plan.database, self.plan.table, branch
-                    )
-                } else {
-                    format!("`{}`.`{}`", self.plan.database, self.plan.table)
-                };
+                let table_ref = format!("`{}`.`{}`", self.plan.database, self.plan.table);
 
                 let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
                 return build_select_insert_plan(
@@ -197,12 +185,6 @@ impl Interpreter for AddTableColumnInterpreter {
             }
 
             let need_update = num_rows > 0 && !self.plan.is_deterministic;
-            if self.plan.branch.is_some() && need_update {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Cannot add non-deterministic default column to branch table '{}', UPDATE is not supported on branch tables yet",
-                    table_info.desc
-                )));
-            }
             if need_update && tbl.change_tracking_enabled() {
                 // Rebuild table while change tracking is active may break the consistency
                 // of tracked changes, leading to incorrect change records.
@@ -240,10 +222,10 @@ impl Interpreter for AddTableColumnInterpreter {
                 let mut planner = Planner::new(self.ctx.clone());
                 let (plan, _) = planner.plan_sql(&query).await?;
                 if let Plan::DataMutation { s_expr, schema, .. } = plan {
-                    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                    let mutation: Mutation = s_expr.mutation()?.clone();
                     let interpreter = MutationInterpreter::try_create(
                         self.ctx.clone(),
-                        *s_expr,
+                        (*s_expr).into_planned()?,
                         schema,
                         mutation.metadata.clone(),
                     )?;
@@ -285,8 +267,10 @@ where
         f(&mut new_snapshot, &mut new_table_meta);
 
         let mut new_snapshot_location = None;
+        let mut gc_safe_time = None;
         if let Some(new_snapshot) = new_snapshot {
             // Persist the snapshot
+            gc_safe_time = new_snapshot.timestamp;
             let new_snapshot_loc = fuse_tbl
                 .meta_location_generator()
                 .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
@@ -303,7 +287,14 @@ where
             new_snapshot_location = Some(new_snapshot_loc);
         }
         new_table_meta.updated_on = Utc::now();
-        update_table_meta(fuse_tbl, &new_table_meta, catalog, ctx.get_tenant()).await?;
+        update_table_meta(
+            fuse_tbl,
+            &new_table_meta,
+            catalog,
+            ctx.get_tenant(),
+            gc_safe_time,
+        )
+        .await?;
 
         if let Some(new_snapshot_location) = new_snapshot_location {
             FuseTable::write_last_snapshot_hint(
@@ -324,16 +315,22 @@ pub(crate) async fn update_table_meta(
     new_table_meta: &TableMeta,
     catalog: Arc<dyn Catalog>,
     tenant: Tenant,
+    gc_safe_time: Option<DateTime<Utc>>,
 ) -> Result<()> {
     let table_info = fuse_tbl.get_table_info().clone();
     let table_id = table_info.ident.table_id;
     let table_version = table_info.ident.seq;
+    let lvt_check = if gc_safe_time.is_some() {
+        FuseTable::build_table_lvt_check(&table_info, gc_safe_time)?
+    } else {
+        None
+    };
     let req = UpdateTableMetaReq {
         table_id,
         seq: MatchSeq::Exact(table_version),
         new_table_meta: new_table_meta.clone(),
         base_snapshot_location: fuse_tbl.snapshot_loc(),
-        lvt_check: None,
+        lvt_check,
     };
     catalog
         .update_single_table_meta(&tenant, req, &table_info)

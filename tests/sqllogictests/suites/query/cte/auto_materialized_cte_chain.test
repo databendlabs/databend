@@ -1,0 +1,79 @@
+# Regression test for binding a long chain of multiply-referenced CTEs.
+#
+# Each CTE references the previous one twice, so every level is auto-materialized.
+# Before the fix, every `CteInfo` embedded the whole producer `BindContext` (and
+# therefore all previously bound CTEs), and the binder cloned the full `cte_map`
+# on every table reference. Both made binding time and memory grow exponentially
+# with the number of CTE levels, and a query like this could exhaust memory before
+# execution even started.
+
+statement ok
+SET enable_auto_materialize_cte = 1
+
+statement ok
+DROP DATABASE IF EXISTS auto_m_cte_chain
+
+statement ok
+CREATE DATABASE auto_m_cte_chain
+
+statement ok
+CREATE TABLE auto_m_cte_chain.t(id INT NULL, v INT NULL) ENGINE = FUSE
+
+statement ok
+INSERT INTO auto_m_cte_chain.t VALUES (1, 10), (2, 20), (3, 30)
+
+query II
+WITH
+c0 AS (SELECT id, v FROM auto_m_cte_chain.t),
+c1 AS (SELECT a.id, a.v + b.v AS v FROM c0 a JOIN c0 b ON a.id = b.id),
+c2 AS (SELECT a.id, a.v + b.v AS v FROM c1 a JOIN c1 b ON a.id = b.id),
+c3 AS (SELECT a.id, a.v + b.v AS v FROM c2 a JOIN c2 b ON a.id = b.id),
+c4 AS (SELECT a.id, a.v + b.v AS v FROM c3 a JOIN c3 b ON a.id = b.id),
+c5 AS (SELECT a.id, a.v + b.v AS v FROM c4 a JOIN c4 b ON a.id = b.id),
+c6 AS (SELECT a.id, a.v + b.v AS v FROM c5 a JOIN c5 b ON a.id = b.id),
+c7 AS (SELECT a.id, a.v + b.v AS v FROM c6 a JOIN c6 b ON a.id = b.id),
+c8 AS (SELECT a.id, a.v + b.v AS v FROM c7 a JOIN c7 b ON a.id = b.id)
+SELECT id, v FROM c8 ORDER BY id
+----
+1 2560
+2 5120
+3 7680
+
+# Mixed shape closer to the production query: several base CTEs referenced by
+# multiple summary CTEs, unioned together at the top.
+query I
+WITH
+base_a AS (SELECT id, v FROM auto_m_cte_chain.t WHERE v > 0),
+base_b AS (SELECT id, v FROM auto_m_cte_chain.t WHERE id > 0),
+range_ab AS (
+    SELECT id, v FROM base_a
+    UNION ALL
+    SELECT id, v FROM base_b
+),
+detail AS (SELECT r.id, r.v FROM range_ab r JOIN base_a a ON r.id = a.id),
+status AS (SELECT d.id, COUNT(*) AS c FROM detail d JOIN range_ab r ON d.id = r.id GROUP BY d.id),
+all_events AS (
+    SELECT id, c FROM status
+    UNION ALL
+    SELECT id, c FROM status
+    UNION ALL
+    SELECT id, c FROM status
+    UNION ALL
+    SELECT id, c FROM status
+),
+s1 AS (SELECT e.id, SUM(e.c) AS c FROM all_events e JOIN range_ab r ON e.id = r.id GROUP BY e.id),
+s2 AS (SELECT e.id, SUM(e.c) AS c FROM all_events e JOIN detail d ON e.id = d.id GROUP BY e.id),
+s3 AS (SELECT a.id, a.c + b.c AS c FROM s1 a JOIN s2 b ON a.id = b.id),
+final AS (
+    SELECT id, c FROM s3
+    UNION ALL
+    SELECT id, c FROM s1
+    UNION ALL
+    SELECT id, c FROM s2
+)
+SELECT SUM(c) FROM final
+----
+384
+
+statement ok
+DROP DATABASE auto_m_cte_chain

@@ -1,0 +1,62 @@
+# String ordering does not bound parsed timestamps, even with complete statistics.
+statement ok
+SET timezone = 'UTC';
+
+statement ok
+CREATE OR REPLACE TABLE timestamp_string_domain (a VARCHAR NOT NULL STATS_TRUNCATE_LEN 64);
+
+statement ok
+INSERT INTO timestamp_string_domain VALUES
+    ('2024-01-01 00:00:00'),
+    ('2024-01-01 23:00:00'),
+    ('2024-01-01T01:00:00');
+
+query T
+SELECT a FROM timestamp_string_domain WHERE CAST(a AS TIMESTAMP) > '2024-01-01 12:00:00'::TIMESTAMP;
+----
+2024-01-01 23:00:00
+
+query T
+SELECT a FROM timestamp_string_domain WHERE to_timestamp(a) > '2024-01-01 12:00:00'::TIMESTAMP;
+----
+2024-01-01 23:00:00
+
+query T
+SELECT a FROM timestamp_string_domain WHERE TRY_CAST(a AS TIMESTAMP) > '2024-01-01 12:00:00'::TIMESTAMP;
+----
+2024-01-01 23:00:00
+
+statement ok
+TRUNCATE TABLE timestamp_string_domain;
+
+# Parsed endpoints are 12:00 and 13:00 UTC; interior values lie on either side.
+statement ok
+INSERT INTO timestamp_string_domain VALUES
+    ('2024-01-01 00:00:00-12:00'),
+    ('2024-01-01 01:00:00+14:00'),
+    ('2024-01-01 22:00:00-12:00'),
+    ('2024-01-01 23:00:00+10:00');
+
+query T
+SELECT a FROM timestamp_string_domain WHERE CAST(a AS TIMESTAMP) < '2024-01-01 00:00:00'::TIMESTAMP;
+----
+2024-01-01 01:00:00+14:00
+
+query T
+SELECT a FROM timestamp_string_domain WHERE CAST(a AS TIMESTAMP) > '2024-01-02 00:00:00'::TIMESTAMP;
+----
+2024-01-01 22:00:00-12:00
+
+# Constant folding and nullable conversion keep their existing semantics.
+query T
+SELECT CAST('2024-01-01T01:00:00' AS TIMESTAMP);
+----
+2024-01-01 01:00:00.000000
+
+query TT
+SELECT CAST(NULL AS TIMESTAMP), TRY_CAST('invalid' AS TIMESTAMP);
+----
+NULL NULL
+
+statement ok
+DROP TABLE timestamp_string_domain;

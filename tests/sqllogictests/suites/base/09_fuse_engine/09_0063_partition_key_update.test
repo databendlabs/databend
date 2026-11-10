@@ -1,0 +1,169 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0063
+
+statement ok
+CREATE DATABASE db_09_0063
+
+statement ok
+USE db_09_0063
+
+# ---------------------------------------------------------------------------
+# Changing the partition key value of existing rows.
+#
+# A partition is a property of the block, not a storage location. A mutation
+# that changes the partition key of a row rewrites the row through the append
+# path: the partition expression is evaluated on the new value, the block is
+# split at partition boundaries, and partition statistics are extracted from
+# the data that is actually serialized. Rows moved to another partition must
+# therefore be visible through filters on the new partition, must disappear
+# from the old partition, and must never share a block with another partition.
+# ---------------------------------------------------------------------------
+
+# 60,000 rows, 20,000 per month (Aug/Sep/Oct 2026). Months are interleaved by
+# id so that every input batch mixes all three partitions before splitting.
+# Hash write distribution regroups rows by partition before the split; without
+# it, interleaved partition values would produce one block per row.
+statement ok
+CREATE TABLE moved(id BIGINT, ts TIMESTAMP, grp INT, v STRING) PARTITION BY (DATE_TRUNC(month, ts)) CLUSTER BY (grp, id) ROW_PER_BLOCK=10000 BLOCK_PER_SEGMENT=1000 WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+INSERT INTO moved SELECT number, DATE_ADD(SECOND, (number * 7919) % 2592000, CASE number % 3 WHEN 0 THEN TIMESTAMP '2026-08-01' WHEN 1 THEN TIMESTAMP '2026-09-01' ELSE TIMESTAMP '2026-10-01' END), (number % 50)::INT, 'v' || number::STRING FROM numbers(60000)
+
+# Pruned counts (WHERE on the partition source column) must equal unpruned
+# counts (count_if over a full scan). Columns: aug, aug_truth, sep, sep_truth,
+# oct, oct_truth, nov, nov_truth.
+query IIIIIIII
+SELECT (SELECT count(*) FROM moved WHERE ts >= '2026-08-01' AND ts < '2026-09-01'), (SELECT count_if(ts >= '2026-08-01' AND ts < '2026-09-01') FROM moved), (SELECT count(*) FROM moved WHERE ts >= '2026-09-01' AND ts < '2026-10-01'), (SELECT count_if(ts >= '2026-09-01' AND ts < '2026-10-01') FROM moved), (SELECT count(*) FROM moved WHERE ts >= '2026-10-01' AND ts < '2026-11-01'), (SELECT count_if(ts >= '2026-10-01' AND ts < '2026-11-01') FROM moved), (SELECT count(*) FROM moved WHERE ts >= '2026-11-01' AND ts < '2026-12-01'), (SELECT count_if(ts >= '2026-11-01' AND ts < '2026-12-01') FROM moved)
+----
+20000 20000 20000 20000 20000 20000 0 0
+
+# No block spans two months.
+query I
+SELECT count_if(DATE_TRUNC(month, mn) <> DATE_TRUNC(month, mx)) FROM (SELECT _block_name, min(ts) mn, max(ts) mx FROM moved GROUP BY _block_name)
+----
+0
+
+# MERGE moves 4,000 scattered rows (every 10th id of Aug/Sep) to November and
+# inserts 1,000 new November rows. The moved rows come from every block.
+statement ok
+MERGE INTO moved AS t USING (SELECT number * 10 AS id, DATE_ADD(SECOND, (number * 31) % 2592000, TIMESTAMP '2026-11-01') AS ts, 'upd' AS v FROM numbers(6000) WHERE (number * 10) % 3 <> 2 UNION ALL SELECT 1000000 + number, DATE_ADD(SECOND, number, TIMESTAMP '2026-11-02'), 'new' FROM numbers(1000)) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.ts = s.ts, t.v = s.v WHEN NOT MATCHED THEN INSERT (id, ts, grp, v) VALUES (s.id, s.ts, (s.id % 50)::INT, s.v)
+
+query IIIIIIII
+SELECT (SELECT count(*) FROM moved WHERE ts >= '2026-08-01' AND ts < '2026-09-01'), (SELECT count_if(ts >= '2026-08-01' AND ts < '2026-09-01') FROM moved), (SELECT count(*) FROM moved WHERE ts >= '2026-09-01' AND ts < '2026-10-01'), (SELECT count_if(ts >= '2026-09-01' AND ts < '2026-10-01') FROM moved), (SELECT count(*) FROM moved WHERE ts >= '2026-10-01' AND ts < '2026-11-01'), (SELECT count_if(ts >= '2026-10-01' AND ts < '2026-11-01') FROM moved), (SELECT count(*) FROM moved WHERE ts >= '2026-11-01' AND ts < '2026-12-01'), (SELECT count_if(ts >= '2026-11-01' AND ts < '2026-12-01') FROM moved)
+----
+18000 18000 18000 18000 20000 20000 5000 5000
+
+# Moved rows are found through the new partition and not through the old one.
+query II
+SELECT (SELECT count(*) FROM moved WHERE ts >= '2026-11-01' AND v = 'upd'), (SELECT count(*) FROM moved WHERE ts < '2026-10-01' AND v = 'upd')
+----
+4000 0
+
+query I
+SELECT count_if(DATE_TRUNC(month, mn) <> DATE_TRUNC(month, mx)) FROM (SELECT _block_name, min(ts) mn, max(ts) mx FROM moved GROUP BY _block_name)
+----
+0
+
+# Partition pruning is still applied after the move.
+query T
+EXPLAIN SELECT count(*) FROM moved WHERE ts >= '2026-11-01'
+----
+<slt:ignore>partitions total: <slt:ignore>partitions scanned: <slt:ignore>
+
+query I
+SELECT count(*) FROM moved WHERE id = 0 AND ts >= '2026-11-01'
+----
+1
+
+# UPDATE moves the 400 October rows of one cluster group back to September.
+statement ok
+UPDATE moved SET ts = DATE_ADD(MONTH, -1, ts) WHERE grp = 7 AND ts >= '2026-10-01' AND ts < '2026-11-01'
+
+query IIII
+SELECT (SELECT count(*) FROM moved WHERE ts >= '2026-09-01' AND ts < '2026-10-01'), (SELECT count_if(ts >= '2026-09-01' AND ts < '2026-10-01') FROM moved), (SELECT count(*) FROM moved WHERE ts >= '2026-10-01' AND ts < '2026-11-01'), (SELECT count_if(ts >= '2026-10-01' AND ts < '2026-11-01') FROM moved)
+----
+18400 18400 19600 19600
+
+query I
+SELECT count(*) FROM moved WHERE grp = 7 AND ts >= '2026-09-01' AND ts < '2026-10-01'
+----
+800
+
+query I
+SELECT count_if(DATE_TRUNC(month, mn) <> DATE_TRUNC(month, mx)) FROM (SELECT _block_name, min(ts) mn, max(ts) mx FROM moved GROUP BY _block_name)
+----
+0
+
+# ---------------------------------------------------------------------------
+# ALTER TABLE ... PARTITION BY on a table that already holds data.
+#
+# ALTER only records metadata. Blocks written before it keep rows of several
+# partition values and are not split or backfilled. Reads stay correct (those
+# blocks simply are not pruned). A mutation that has to rewrite such a block
+# must fail instead of serializing partition statistics that do not describe
+# the data; RECLUSTER does not repair the layout either. This documents the
+# current behavior: define PARTITION BY at CREATE TABLE time, or add it only to
+# an empty table.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE altered(id BIGINT, ts TIMESTAMP, grp INT) CLUSTER BY (grp, id) ROW_PER_BLOCK=10000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO altered SELECT number, DATE_ADD(SECOND, (number * 7919) % 5184000, TIMESTAMP '2026-09-01'), (number % 50)::INT FROM numbers(60000)
+
+statement ok
+ALTER TABLE altered PARTITION BY (DATE_TRUNC(day, ts))
+
+# Reads over the pre-existing blocks are correct, only unpruned.
+query II
+SELECT (SELECT count(*) FROM altered WHERE ts >= '2026-10-05' AND ts < '2026-10-06'), (SELECT count_if(ts >= '2026-10-05' AND ts < '2026-10-06') FROM altered)
+----
+1004 1004
+
+# Appends after the alteration use the partitioned layout.
+statement ok
+INSERT INTO altered SELECT 1000000 + number, DATE_ADD(SECOND, number * 60, TIMESTAMP '2026-10-05'), (number % 50)::INT FROM numbers(1000)
+
+query II
+SELECT (SELECT count(*) FROM altered WHERE ts >= '2026-10-05' AND ts < '2026-10-06'), (SELECT count_if(ts >= '2026-10-05' AND ts < '2026-10-06') FROM altered)
+----
+2004 2004
+
+# Rewriting a pre-existing block that mixes partition values is rejected.
+statement error serialized block contains more than one partition
+MERGE INTO altered AS t USING (SELECT number * 10 AS id, TIMESTAMP '2026-10-05 12:00:00' AS ts FROM numbers(600)) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.ts = s.ts
+
+statement error serialized block contains more than one partition
+DELETE FROM altered WHERE id = 8
+
+statement ok
+ALTER TABLE altered RECLUSTER FINAL
+
+statement error serialized block contains more than one partition
+DELETE FROM altered WHERE id = 8
+
+# Data is intact after the failed mutations.
+query II
+SELECT count(*), count_if(ts >= '2026-10-05' AND ts < '2026-10-06') FROM altered
+----
+61000 2004
+
+# Changing an active partition key is rejected; DROP PARTITION KEY is allowed
+# and afterwards the mixed blocks can be mutated again.
+statement error PARTITION BY is already defined
+ALTER TABLE altered PARTITION BY (DATE_TRUNC(month, ts))
+
+statement ok
+ALTER TABLE altered DROP PARTITION KEY
+
+statement ok
+DELETE FROM altered WHERE id = 8
+
+query I
+SELECT count(*) FROM altered
+----
+60999
+
+statement ok
+DROP DATABASE db_09_0063

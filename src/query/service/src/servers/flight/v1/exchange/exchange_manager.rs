@@ -27,9 +27,10 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::CpuProfiler;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::ProfileScope;
 use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -81,9 +82,10 @@ use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
-use crate::servers::flight::v1::network::NetworkInboundChannelSet;
-use crate::servers::flight::v1::network::NetworkInboundSender;
-use crate::servers::flight::v1::network::PingPongExchange;
+use crate::servers::flight::v1::network::MAX_FRAMES_IN_FLIGHT;
+use crate::servers::flight::v1::network::PingPongTransport;
+use crate::servers::flight::v1::network::inbound::ExchangeFrameRouter;
+use crate::servers::flight::v1::network::inbound::ExchangeReceiveChannels;
 use crate::servers::flight::v1::packets::Edge;
 use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
@@ -106,7 +108,7 @@ enum QueryExchange {
     PingPong {
         exchange_id: String,
         target_id: String,
-        exchange: PingPongExchange,
+        exchange: PingPongTransport,
     },
 }
 
@@ -257,6 +259,12 @@ impl DataExchangeManager {
             .collect()
     }
 
+    /// Holds the coordinator lock like `shutdown_query` does, for lock-order tests.
+    #[cfg(test)]
+    pub(crate) fn lock_queries_coordinator_for_test(&self) -> impl Sized + '_ {
+        self.queries_coordinator.lock()
+    }
+
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -299,6 +307,7 @@ impl DataExchangeManager {
             None => env.settings.clone(),
         };
         let keep_alive = settings.get_flight_keep_alive_params()?;
+        let recv_queue_bytes = settings.get_exchange_recv_queue_bytes()?;
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
@@ -361,7 +370,7 @@ impl DataExchangeManager {
                         }
                         Edge::ExchangeFragment { .. } => {
                             // Skip: remote sender will call do_exchange on us,
-                            // handled by handle_do_exchange → NetworkInboundSender
+                            // handled by handle_do_exchange → ExchangeFrameRouter
                         }
                     }
                 }
@@ -372,7 +381,8 @@ impl DataExchangeManager {
                     .edges_directed(index, Direction::Outgoing);
 
                 for edge in outgoing_edges {
-                    let target = env.dataflow_diagram[edge.target()].clone();
+                    let target_index = edge.target();
+                    let target = env.dataflow_diagram[target_index].clone();
                     let edge = edge.weight().clone();
 
                     if let Edge::ExchangeFragment {
@@ -386,10 +396,15 @@ impl DataExchangeManager {
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
                         let num_threads = channels.len();
-                        warn!(
-                            "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
-                            config.query.node_id, target_id, exchange_id, num_threads
-                        );
+                        // The target's receive quota of this exchange is shared evenly
+                        // by every node sending to it.
+                        let num_senders = env
+                            .dataflow_diagram
+                            .edges_directed(target_index, Direction::Incoming)
+                            .filter(|x| matches!(x.weight(), Edge::ExchangeFragment { exchange_id: id, .. } if id == &exchange_id))
+                            .count();
+                        let max_bytes_per_connection =
+                            recv_queue_bytes_per_connection(recv_queue_bytes, num_senders);
 
                         flight_exchanges.push(Box::pin(async move {
                             let (send_tx, response_stream) = {
@@ -401,12 +416,14 @@ impl DataExchangeManager {
                                 )
                                 .await?;
 
-                                let (send_tx, send_rx) = async_channel::bounded(1);
+                                let (send_tx, send_rx) =
+                                    async_channel::bounded(MAX_FRAMES_IN_FLIGHT);
                                 let response_stream = flight_client
                                     .do_exchange(send_rx, DoExchangeParams {
                                         query_id,
                                         num_threads,
                                         exchange_id: exchange_id.clone(),
+                                        max_bytes_per_connection,
                                     })
                                     .await?;
                                 Ok::<_, ErrorCode>((send_tx, response_stream))
@@ -415,7 +432,7 @@ impl DataExchangeManager {
                             Ok::<QueryExchange, ErrorCode>(QueryExchange::PingPong {
                                 target_id: target_id.clone(),
                                 exchange_id,
-                                exchange: PingPongExchange::from_parts(
+                                exchange: PingPongTransport::from_stream(
                                     num_threads,
                                     send_tx,
                                     response_stream,
@@ -429,8 +446,8 @@ impl DataExchangeManager {
 
                 let flight_exchanges = futures::future::try_join_all(flight_exchanges).await?;
 
-                let mut ping_pong_exchanges =
-                    HashMap::<String, HashMap<String, PingPongExchange>>::new();
+                let mut ping_pong_transports =
+                    HashMap::<String, HashMap<String, PingPongTransport>>::new();
 
                 for flight_exchange in flight_exchanges {
                     match flight_exchange {
@@ -450,7 +467,7 @@ impl DataExchangeManager {
                             exchange,
                             target_id,
                         } => {
-                            match ping_pong_exchanges.entry(exchange_id) {
+                            match ping_pong_transports.entry(exchange_id) {
                                 Entry::Occupied(mut v) => {
                                     v.get_mut().insert(target_id, exchange);
                                 }
@@ -466,10 +483,16 @@ impl DataExchangeManager {
 
                 if let Some(query_info) = query_info.as_mut() {
                     let query_id = env.query_id.clone();
+                    // The coordinator sends INIT_QUERY_FRAGMENTS to nodes one by one and each
+                    // node may run heavy work (e.g. lazy block pruning of a large DELETE) before
+                    // START_PREPARED_QUERY is sent, so this timeout must be tunable per query.
+                    let leak_timeout =
+                        Duration::from_secs(settings.get_flight_query_leak_timeout_secs()?);
                     query_info.remove_leak_query_worker =
                         Some(GlobalIORuntime::instance().spawn(async move {
-                            let _ = tokio::time::sleep(Duration::from_secs(180)).await;
-                            DataExchangeManager::instance().remove_if_leak_query(query_id);
+                            let _ = tokio::time::sleep(leak_timeout).await;
+                            DataExchangeManager::instance()
+                                .remove_if_leak_query(query_id, leak_timeout);
                         }));
                 }
 
@@ -483,7 +506,7 @@ impl DataExchangeManager {
                         query_coordinator.is_request_server =
                             GlobalConfig::instance().query.node_id == env.request_server_id;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
-                        query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
+                        query_coordinator.register_ping_pong_transports(ping_pong_transports);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
                     }
                     Entry::Vacant(v) => {
@@ -492,7 +515,7 @@ impl DataExchangeManager {
                         query_coordinator.is_request_server =
                             GlobalConfig::instance().query.node_id == env.request_server_id;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
-                        query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
+                        query_coordinator.register_ping_pong_transports(ping_pong_transports);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
                     }
                 };
@@ -505,7 +528,7 @@ impl DataExchangeManager {
         Ok(())
     }
 
-    fn remove_if_leak_query(&self, query_id: String) {
+    fn remove_if_leak_query(&self, query_id: String, leak_timeout: Duration) {
         let leak_query_id = {
             let queries_coordinator_guard = self.queries_coordinator.lock();
             let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -523,17 +546,13 @@ impl DataExchangeManager {
         };
 
         if let Some(query_id) = leak_query_id {
-            warn!(
-                "Query {} cannot start command while in 180 seconds",
-                query_id
+            let message = format!(
+                "Query {} cannot start command while in {} seconds (flight_query_leak_timeout_secs)",
+                query_id,
+                leak_timeout.as_secs()
             );
-            self.on_finished_query(
-                &query_id,
-                Some(ErrorCode::Internal(format!(
-                    "Query {} cannot start command while in 180 seconds",
-                    query_id
-                ))),
-            );
+            warn!("{}", message);
+            self.on_finished_query(&query_id, Some(ErrorCode::Internal(message)));
         }
     }
 
@@ -699,40 +718,37 @@ impl DataExchangeManager {
 
     /// Handle a do_exchange request from a remote node.
     ///
-    /// Creates a `NetworkInboundSender` for this connection, bound to the
-    /// `NetworkInboundChannelSet` for the given channel_id. The caller (flight_service)
-    /// uses the sender to push incoming FlightData into per-tid queues.
+    /// Creates an `ExchangeFrameRouter` for this connection, bound to the
+    /// `ExchangeReceiveChannels` for the given channel_id. The caller (flight_service)
+    /// uses the router to deliver incoming FlightData to per-thread queues.
     #[fastrace::trace]
     pub fn handle_do_exchange(
         &self,
         query_id: &str,
         channel_id: &str,
         num_threads: usize,
-    ) -> Result<NetworkInboundSender> {
-        warn!(
-            "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
-            query_id, channel_id, num_threads
-        );
+        max_bytes_per_connection: usize,
+    ) -> Result<ExchangeFrameRouter> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        match queries_coordinator.entry(query_id.to_string()) {
-            Entry::Occupied(mut v) => v.get_mut().create_inbound_sender(channel_id, num_threads),
-            Entry::Vacant(v) => v
-                .insert(QueryCoordinator::create())
-                .create_inbound_sender(channel_id, num_threads),
-        }
+        let coordinator = queries_coordinator
+            .entry(query_id.to_string())
+            .or_insert_with(QueryCoordinator::create);
+        let receive_channels =
+            coordinator.get_or_create_exchange_receive_channels(channel_id, num_threads)?;
+        Ok(ExchangeFrameRouter::new(
+            &receive_channels,
+            max_bytes_per_connection,
+        ))
     }
 
-    /// Get the NetworkInboundReceivers for a given query and channel.
-    ///
-    /// Returns one `Arc<NetworkInboundReceiver>` per tid, for building
-    /// `ThreadChannelReader` processors in the pipeline.
-    pub fn get_exchange_channel_set(
+    /// Get the shared per-thread receive channels for a given query and exchange.
+    pub fn get_exchange_receive_channels(
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<Arc<NetworkInboundChannelSet>> {
+    ) -> Result<Arc<ExchangeReceiveChannels>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -741,24 +757,33 @@ impl DataExchangeManager {
                 "Query {} not found in cluster.",
                 query_id
             ))),
-            Some(coordinator) => match coordinator.inbound_channel_sets.get(channel_id) {
-                None => Err(ErrorCode::Internal(format!(
-                    "NetworkInboundChannelSet not found for channel {}",
-                    channel_id
-                ))),
-                Some(channel_set) => Ok(channel_set.clone()),
-            },
+            Some(coordinator) => {
+                let queues = coordinator
+                    .building_receive_channels
+                    .as_ref()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(
+                            "Exchange receive channels are already bound to pipelines",
+                        )
+                    })?;
+                queues.get(channel_id).cloned().ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "ExchangeReceiveChannels not found for channel {}",
+                        channel_id
+                    ))
+                })
+            }
         }
     }
 
-    /// Return the inbound channels for a ping-pong exchange, creating them when
+    /// Return the receive channels for a ping-pong exchange, creating them when
     /// the exchange has only local edges and therefore no do_exchange request.
-    pub fn get_or_create_exchange_channel_set(
+    pub fn get_or_create_exchange_receive_channels(
         &self,
         query_id: &str,
         channel_id: &str,
         num_threads: usize,
-    ) -> Result<Arc<NetworkInboundChannelSet>> {
+    ) -> Result<Arc<ExchangeReceiveChannels>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -768,20 +793,20 @@ impl DataExchangeManager {
                 query_id
             ))),
             Some(coordinator) => {
-                coordinator.get_or_create_inbound_channel_set(channel_id, num_threads)
+                coordinator.get_or_create_exchange_receive_channels(channel_id, num_threads)
             }
         }
     }
 
-    /// Take the PingPongExchanges for a given query and channel.
+    /// Take the ping-pong transports for a given query and channel.
     ///
     /// Returns the exchanges that were created during init_query_env.
     /// The exchanges are removed from the coordinator (taken, not borrowed).
-    pub fn take_ping_pong_exchanges(
+    pub fn take_ping_pong_transports(
         &self,
         query_id: &str,
         channel_id: &str,
-    ) -> Result<HashMap<String, PingPongExchange>> {
+    ) -> Result<HashMap<String, PingPongTransport>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -791,7 +816,7 @@ impl DataExchangeManager {
                 query_id
             ))),
             Some(coordinator) => Ok(coordinator
-                .ping_pong_exchanges
+                .ping_pong_transports
                 .remove(channel_id)
                 .unwrap_or_default()),
         }
@@ -842,6 +867,7 @@ impl DataExchangeManager {
             retry_times: settings.get_flight_max_retry_times()?,
             retry_interval: settings.get_flight_retry_interval()?,
             keep_alive: settings.get_flight_keep_alive_params()?,
+            reuse_control_channel: settings.get_enable_flight_control_channel_reuse()?,
         };
         let mut root_fragment_ids = actions.get_root_fragment_ids()?;
         let conf = GlobalConfig::instance();
@@ -1034,8 +1060,10 @@ pub(crate) struct QueryCoordinator {
     statistics_exchanges: HashMap<String, FlightExchange>,
     flight_data_senders: HashMap<String, Vec<FlightSender>>,
     flight_data_receivers: HashMap<String, Vec<FlightReceiver>>,
-    inbound_channel_sets: HashMap<String, Arc<NetworkInboundChannelSet>>,
-    ping_pong_exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
+    /// Initial endpoints keep queues open while remote connections and local pipelines
+    /// bind their producers. `None` after construction prevents late registration.
+    building_receive_channels: Option<HashMap<String, Arc<ExchangeReceiveChannels>>>,
+    ping_pong_transports: HashMap<String, HashMap<String, PingPongTransport>>,
 }
 
 impl QueryCoordinator {
@@ -1047,8 +1075,8 @@ impl QueryCoordinator {
             flight_data_receivers: HashMap::new(),
             statistics_exchanges: HashMap::new(),
             fragments_coordinator: HashMap::new(),
-            inbound_channel_sets: HashMap::new(),
-            ping_pong_exchanges: HashMap::new(),
+            building_receive_channels: Some(HashMap::new()),
+            ping_pong_transports: HashMap::new(),
         }
     }
 
@@ -1128,12 +1156,12 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn register_ping_pong_exchanges(
+    pub fn register_ping_pong_transports(
         &mut self,
-        exchanges: HashMap<String, HashMap<String, PingPongExchange>>,
+        exchanges: HashMap<String, HashMap<String, PingPongTransport>>,
     ) {
         for (channel, pps) in exchanges {
-            match self.ping_pong_exchanges.entry(channel) {
+            match self.ping_pong_transports.entry(channel) {
                 Entry::Occupied(mut v) => {
                     v.get_mut().extend(pps);
                 }
@@ -1144,44 +1172,29 @@ impl QueryCoordinator {
         }
     }
 
-    /// Create a NetworkInboundSender for a new do_exchange connection.
-    ///
-    /// The `num_threads` value is provided by the coordinator via DoExchangeParams.
-    fn create_inbound_sender(
+    fn get_or_create_exchange_receive_channels(
         &mut self,
         channel_id: &str,
         num_threads: usize,
-    ) -> Result<NetworkInboundSender> {
-        let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
-
-        // TODO: get max_bytes_per_connection from query settings
-        let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
-
-        Ok(NetworkInboundSender::new(
-            &channel_set,
-            max_bytes_per_connection,
-        ))
-    }
-
-    fn get_or_create_inbound_channel_set(
-        &mut self,
-        channel_id: &str,
-        num_threads: usize,
-    ) -> Result<Arc<NetworkInboundChannelSet>> {
-        let channel_set = self
-            .inbound_channel_sets
+    ) -> Result<Arc<ExchangeReceiveChannels>> {
+        let receive_channels = self
+            .building_receive_channels
+            .as_mut()
+            .ok_or_else(|| {
+                ErrorCode::Internal("Exchange receive channels are already bound to pipelines")
+            })?
             .entry(channel_id.to_string())
-            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
+            .or_insert_with(|| Arc::new(ExchangeReceiveChannels::new(num_threads)))
             .clone();
-        if channel_set.channels.len() != num_threads {
+        if receive_channels.receivers.len() != num_threads {
             return Err(ErrorCode::Internal(format!(
-                "NetworkInboundChannelSet {} has {} channels, expected {}",
+                "ExchangeReceiveChannels {} has {} channels, expected {}",
                 channel_id,
-                channel_set.channels.len(),
+                receive_channels.receivers.len(),
                 num_threads
             )));
         }
-        Ok(channel_set)
+        Ok(receive_channels)
     }
 
     pub fn prepare_pipeline(&mut self, fragments: &QueryFragments) -> Result<()> {
@@ -1278,7 +1291,8 @@ impl QueryCoordinator {
         let perf_guard = {
             let pc = info.query_ctx.get_perf_config();
             if pc.profiler_enabled && !self.is_request_server {
-                Some(QueryPerf::start(pc.frequency)?)
+                let scope = ProfileScope::Query(info.query_ctx.get_perf_query_token());
+                Some(CpuProfiler::start(scope, pc.frequency)?)
             } else {
                 None
             }
@@ -1291,7 +1305,10 @@ impl QueryCoordinator {
         }
 
         if self.fragments_coordinator.is_empty() {
-            // Empty fragments if it is a request server, because the pipelines may have been linked.
+            // The request server's pipelines were linked by get_root_pipeline. All
+            // connections were established during INIT_QUERY_ENV; only runtime owners
+            // should now keep the queue endpoints alive.
+            drop(self.building_receive_channels.take());
             return Ok(());
         }
 
@@ -1337,9 +1354,14 @@ impl QueryCoordinator {
                 }
 
                 pipelines.push(build_res.main_pipeline);
-                pipelines.extend(build_res.sources_pipelines.into_iter());
+                pipelines.extend(build_res.sources_pipelines);
             }
         }
+
+        // ExchangeSink::via above binds the remaining local producers. Release the
+        // initial endpoints before starting execution, so the last real sender's
+        // drop produces EOF even while this coordinator remains alive.
+        drop(self.building_receive_channels.take());
 
         let (finished_profiling_tx, finished_profiling_rx) = oneshot::channel();
         if let Some(p) = pipelines.first_mut() {
@@ -1472,10 +1494,12 @@ impl FragmentCoordinator {
                 ExchangeParams::GlobalShuffleExchange(GlobalExchangeParams {
                     query_id: info.query_id.to_string(),
                     executor_id: info.current_executor.to_string(),
-                    schema: self.physical_plan.output_schema()?,
+                    schema: exchange_injector
+                        .global_shuffle_schema(&self.physical_plan.output_schema()?),
                     exchange_id: exchange.id.clone(),
-                    shuffle_keys: exchange.shuffle_keys.clone(),
                     destination_channels: exchange.destination_channels.clone(),
+                    shuffle_scatter: exchange_injector
+                        .flight_scatter(&info.query_ctx, data_exchange)?,
                 }),
             )),
         }
@@ -1508,5 +1532,65 @@ impl FragmentCoordinator {
         }
 
         Ok(())
+    }
+}
+
+/// Lower bound of a connection's receive quota, so that a large cluster still keeps
+/// a few frames in flight per connection.
+const MIN_RECV_QUEUE_BYTES_PER_CONNECTION: usize = 1024 * 1024;
+
+pub(super) fn recv_queue_bytes_per_connection(
+    recv_queue_bytes: usize,
+    num_senders: usize,
+) -> usize {
+    (recv_queue_bytes / num_senders.max(1))
+        .max(MIN_RECV_QUEUE_BYTES_PER_CONNECTION)
+        .min(u32::MAX as usize)
+}
+
+#[cfg(test)]
+mod tests {
+    use async_channel::TryRecvError;
+
+    use super::*;
+
+    #[test]
+    fn test_queue_registration_keeps_endpoints_alive_only_during_construction() {
+        futures::executor::block_on(async {
+            let mut coordinator = QueryCoordinator::create();
+            let queues = coordinator
+                .get_or_create_exchange_receive_channels("exchange", 1)
+                .unwrap();
+            let receiver = queues.receivers[0].clone();
+            let first = ExchangeFrameRouter::new(&queues, 1024);
+            drop(queues);
+            drop(first);
+
+            // An early connection can disappear before the remaining producers bind.
+            assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
+            let queues = coordinator
+                .get_or_create_exchange_receive_channels("exchange", 1)
+                .unwrap();
+            let second = ExchangeFrameRouter::new(&queues, 1024);
+            drop(queues);
+
+            // Match the construction/execution handoff while keeping the coordinator alive.
+            drop(coordinator.building_receive_channels.take());
+            assert!(
+                coordinator
+                    .get_or_create_exchange_receive_channels("exchange", 1)
+                    .is_err()
+            );
+            assert!(
+                coordinator
+                    .get_or_create_exchange_receive_channels("late-exchange", 1)
+                    .is_err()
+            );
+
+            second.route_frame(FlightData::default()).await.unwrap();
+            drop(second);
+            assert!(receiver.try_recv().is_ok());
+            assert!(matches!(receiver.try_recv(), Err(TryRecvError::Closed)));
+        });
     }
 }

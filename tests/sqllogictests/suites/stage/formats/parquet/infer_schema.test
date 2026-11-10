@@ -61,11 +61,31 @@ drop CONNECTION IF EXISTS my_conn
 statement ok
 create CONNECTION my_conn STORAGE_TYPE = 's3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900/' region='auto'
 
-# query
-# select * from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')
-# ----
-# id INT 0 parquet/tuple.parquet 0
-# t TUPLE(A INT32, B STRING) 0 parquet/tuple.parquet 1
+query TTBI
+select column_name, type, nullable, order_id
+from INFER_SCHEMA(location => 's3://testbucket/data/parquet/tuple.parquet', connection_name => 'my_conn')
+----
+id INT 0 0
+t TUPLE(A INT32, B STRING) 0 1
+
+statement ok
+drop stage if exists infer_schema_uri_fs
+
+statement ok
+create stage infer_schema_uri_fs url='fs:///tmp/infer_schema_uri/' file_format = (type = parquet)
+
+statement ok
+remove @infer_schema_uri_fs
+
+statement ok
+copy into @infer_schema_uri_fs from (select 1::int as id, 'alice'::string as name) file_format = (type = parquet)
+
+query TTBI
+select column_name, type, nullable, order_id
+from infer_schema(location => 'fs:///tmp/infer_schema_uri/', file_format => 'PARQUET');
+----
+id INT 0 0
+name VARCHAR 0 1
 
 query T
 select CASE

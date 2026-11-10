@@ -12,30 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::NameResolutionContext;
+use databend_common_sql::analyze_cluster_keys;
+use databend_common_sql::bind_normalized_key_exprs;
+use databend_common_sql::binder::validate_constraints_by_schema;
+use databend_common_sql::binder::validate_security_policies_by_schema;
+use databend_common_sql::binder::validate_table_indexes_by_schema;
+use databend_common_sql::validate_stored_ttl_expr;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
@@ -43,10 +57,10 @@ use opendal::EntryMode;
 
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FuseTable;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::snapshot_history;
 use crate::operations::check_table_ref_access;
 
 impl FuseTable {
@@ -76,8 +90,12 @@ impl FuseTable {
             }
             NavigationPoint::TableTag(tag_name) => {
                 let snapshot_loc = self.get_tag_snapshot_location(ctx, tag_name).await?;
-                let (snapshot, format_version) =
-                    SnapshotsIO::read_snapshot(snapshot_loc, self.get_operator(), true).await?;
+                let (snapshot, format_version) = Self::read_navigation_snapshot(
+                    snapshot_loc,
+                    self.get_operator(),
+                    &format!("TAG '{tag_name}'"),
+                )
+                .await?;
                 self.load_table_by_snapshot(
                     snapshot.as_ref(),
                     format_version,
@@ -104,7 +122,7 @@ impl FuseTable {
             return Ok(table.into());
         };
         let (snapshot, format_version) =
-            SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator(), true).await?;
+            Self::read_navigation_snapshot(snapshot_loc, self.get_operator(), "STREAM").await?;
         self.load_table_by_snapshot(
             snapshot.as_ref(),
             format_version,
@@ -200,13 +218,18 @@ impl FuseTable {
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
         if self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot)? {
+            // Read-only Time Travel discards root-specific virtual metadata and applies
+            // best-effort policy projection, unlike persistent CLONE.
+            table_info.meta.virtual_schema = None;
+            table_info.meta.column_mask_policy = None;
+            table_info.meta.row_access_policy = None;
             self.apply_navigation_metadata(&mut table_info.meta)?;
         }
+        Self::apply_snapshot_statistics(&mut table_info.meta, snapshot);
         table_info
             .meta
             .options
             .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
-        self.apply_snapshot_statistics(&mut table_info.meta, snapshot);
 
         // let's instantiate it
         let table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
@@ -248,7 +271,7 @@ impl FuseTable {
         for vac_prefix in &vacuum_prefixes {
             for suffix in &suffixes {
                 let location = format!("{}{}{}{}", prefix, vac_prefix, snapshot_id, suffix);
-                match SnapshotsIO::read_snapshot(location, op.clone(), true).await {
+                match SnapshotsIO::read_snapshot(location, op.clone(), CachePolicy::DEFAULT).await {
                     Ok((snapshot, format_version)) => {
                         return self.load_table_by_snapshot(
                             snapshot.as_ref(),
@@ -335,7 +358,8 @@ impl FuseTable {
         match first_snapshot_after {
             Some(location) => {
                 let (snapshot, _format_version) =
-                    Self::read_snapshot_for_no_check(location, op.clone()).await?;
+                    Self::read_navigation_snapshot(location, op.clone(), "TIMESTAMP with NO_CHECK")
+                        .await?;
 
                 match snapshot.prev_snapshot_id {
                     Some((prev_id, prev_ver)) => {
@@ -348,8 +372,12 @@ impl FuseTable {
                         let prev_location = self
                             .meta_location_generator()
                             .gen_snapshot_location(&prev_id, prev_ver)?;
-                        let (prev_snapshot, prev_format_version) =
-                            Self::read_snapshot_for_no_check(prev_location, op).await?;
+                        let (prev_snapshot, prev_format_version) = Self::read_navigation_snapshot(
+                            prev_location,
+                            op,
+                            "TIMESTAMP with NO_CHECK",
+                        )
+                        .await?;
                         self.load_table_by_snapshot(
                             prev_snapshot.as_ref(),
                             prev_format_version,
@@ -369,27 +397,32 @@ impl FuseTable {
                     ));
                 };
                 let (snapshot, format_version) =
-                    Self::read_snapshot_for_no_check(location, op).await?;
+                    Self::read_navigation_snapshot(location, op, "TIMESTAMP with NO_CHECK").await?;
                 self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
             }
         }
     }
 
-    /// Read a snapshot for NO_CHECK navigation.
+    /// Read a snapshot that a navigation point (TAG, STREAM, NO_CHECK lookup, revert target)
+    /// resolved to.
     ///
-    /// Missing objects are mapped to `TableHistoricalDataNotFound` so vacuumed
-    /// predecessor snapshots do not surface as raw `StorageNotFound` errors.
-    async fn read_snapshot_for_no_check(
+    /// The snapshot chain and the pointers into it (tags, streams, predecessor ids) can
+    /// outlive the objects once vacuum removes them. A missing object is therefore a
+    /// "historical data is gone" condition and is reported as
+    /// `TableHistoricalDataNotFound`, never as a raw `StorageNotFound` from the object
+    /// store. Every navigation path that reads a snapshot by location goes through here.
+    pub async fn read_navigation_snapshot(
         location: String,
         op: opendal::Operator,
+        point: &str,
     ) -> Result<(Arc<TableSnapshot>, u64)> {
-        match SnapshotsIO::read_snapshot(location, op, true).await {
+        match SnapshotsIO::read_snapshot(location.clone(), op, CachePolicy::DEFAULT).await {
             Ok(v) => Ok(v),
             Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
-                Err(ErrorCode::TableHistoricalDataNotFound(
-                    "No historical data found at given point with NO_CHECK \
-                     (snapshot object is missing, possibly vacuumed)",
-                ))
+                Err(ErrorCode::TableHistoricalDataNotFound(format!(
+                    "No historical data found at {point}: snapshot {location} is missing \
+                     (possibly vacuumed)"
+                )))
             }
             Err(e) => Err(e),
         }
@@ -424,8 +457,8 @@ impl FuseTable {
                 Ok(Some(loc))
             }
             NavigationPoint::TimePoint(time_point) => {
-                // This allows users to query historical states gracefully even if
-                // the table was created *after* the given time.
+                // An empty table has no location. Otherwise, propagate lookup errors: callers
+                // must not publish an empty state when history is unavailable or unreadable.
                 let Some(location) = self.snapshot_loc() else {
                     return Ok(None);
                 };
@@ -437,9 +470,8 @@ impl FuseTable {
                             false
                         }
                     })
-                    .await
-                    .ok();
-                Ok(loc)
+                    .await?;
+                Ok(Some(loc))
             }
             NavigationPoint::StreamInfo(stream_info) => {
                 let options = stream_info.options();
@@ -462,7 +494,6 @@ impl FuseTable {
         }
     }
 
-    // Only used when the table branch is none.
     #[async_backtrace::framed]
     pub async fn find_location<P>(
         &self,
@@ -521,10 +552,14 @@ impl FuseTable {
     {
         let abort_checker = ctx.clone().get_abort_checker();
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let snapshots = FuseCaches::instance()
+            .snapshots
+            .with_policy(ctx.cache_policy());
         // grab the table history as stream
         // snapshots are order by timestamp DESC.
-        let mut snapshot_stream = reader.snapshot_history(
+        let mut snapshot_stream = snapshot_history(
+            &snapshots,
+            self.get_operator(),
             location,
             snapshot_version,
             self.meta_location_generator().clone(),
@@ -562,6 +597,16 @@ impl FuseTable {
         Ok(table_tag.data.snapshot_loc)
     }
 
+    /// Project snapshot metadata and clear incompatible bloom/HLL options when the schema changes.
+    /// Returns whether the schema changed. Constraints, indexes and policies remain untouched;
+    /// callers validate them before publication or apply the read-only Time Travel projection.
+    ///
+    /// This does not prepare `virtual_schema` or the legacy name-based `column_mask_policy` and
+    /// `row_access_policy` fields. Time Travel and FLASHBACK clear these fields when the schema
+    /// changes, before their path-specific projection or validation. CLONE must instead call
+    /// `prepare_persistent_navigation_metadata` and `validate_persistent_navigation_metadata`,
+    /// even when the schema is unchanged: reject unsupported legacy policies rather than silently
+    /// dropping protection, and retain compatible virtual-column definitions but reset progress.
     pub(crate) fn apply_snapshot_metadata_to_meta(
         &self,
         table_meta: &mut TableMeta,
@@ -575,7 +620,6 @@ impl FuseTable {
             }
             None => None,
         };
-
         match snapshot.cluster_type {
             Some(cluster_type) if cluster_key_meta.is_some() => {
                 table_meta
@@ -597,52 +641,51 @@ impl FuseTable {
             .next_column_id()
             .max(historical_schema.next_column_id());
 
-        // Preserve current table-level governance metadata when the target snapshot keeps the
-        // same schema after normalizing next_column_id. Snapshot navigation restores
-        // snapshot-carried metadata such as schema, clustering and statistics, but does not
-        // rewind later governance-only table_meta changes when the visible column layout is
-        // unchanged.
-        if table_meta.schema.as_ref() == &historical_schema {
+        let schema_changed = table_meta.schema.as_ref() != &historical_schema;
+        if schema_changed {
+            table_meta.fill_field_comments();
+            let comment_by_column_id = table_meta
+                .schema
+                .fields()
+                .iter()
+                .enumerate()
+                .map(|(index, field)| {
+                    (
+                        field.column_id(),
+                        table_meta
+                            .field_comments
+                            .get(index)
+                            .cloned()
+                            .unwrap_or_default(),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            table_meta.schema = Arc::new(historical_schema);
+            table_meta.field_comments = snapshot
+                .schema
+                .fields()
+                .iter()
+                .map(|field| {
+                    comment_by_column_id
+                        .get(&field.column_id())
+                        .cloned()
+                        .unwrap_or_default()
+                })
+                .collect();
+        }
+
+        // These settings are owned by columns. Project them by stable ColumnId; settings for
+        // columns that do not exist in the historical structure are not applicable.
+        let column_ids = table_meta.schema.to_column_ids();
+        table_meta
+            .field_stats_truncate_len
+            .retain(|column_id, _| column_ids.contains(column_id));
+        if !schema_changed {
             return Ok(false);
         }
 
-        table_meta.fill_field_comments();
-        let comment_by_column_id = table_meta
-            .schema
-            .fields()
-            .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                (
-                    field.column_id(),
-                    table_meta
-                        .field_comments
-                        .get(index)
-                        .cloned()
-                        .unwrap_or_default(),
-                )
-            })
-            .collect::<std::collections::BTreeMap<_, _>>();
-
-        table_meta.schema = Arc::new(historical_schema);
-        table_meta.field_comments = snapshot
-            .schema
-            .fields()
-            .iter()
-            .map(|field| {
-                comment_by_column_id
-                    .get(&field.column_id())
-                    .cloned()
-                    .unwrap_or_default()
-            })
-            .collect();
-        // Virtual columns are table-level derived metadata and are not versioned in snapshots.
-        // Snapshot navigation cannot prove that the current virtual schema is valid for the
-        // historical point, so clear it conservatively.
-        table_meta.virtual_schema = None;
-        table_meta.column_mask_policy = None;
-        table_meta.row_access_policy = None;
-
+        // Column-selection options must remain applicable to the projected schema.
         if let Some(value) = table_meta.options.get(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
             if let ApproxDistinctColumns::Specify(cols) = value.parse::<ApproxDistinctColumns>()? {
                 let compatible = cols.iter().all(|col| {
@@ -737,11 +780,144 @@ impl FuseTable {
         Ok(())
     }
 
-    pub(crate) fn apply_snapshot_statistics(
+    /// Prepare metadata that will be persisted against a selected snapshot data root.
+    ///
+    /// Reject legacy name-based policy metadata rather than silently removing its protection.
+    /// Virtual-column progress is tied to the previous root; compatible definitions remain
+    /// valid for the selected schema and will be rebuilt lazily.
+    pub(crate) fn prepare_persistent_navigation_metadata(table_meta: &mut TableMeta) -> Result<()> {
+        if table_meta.row_access_policy.is_some()
+            || table_meta
+                .column_mask_policy
+                .as_ref()
+                .is_some_and(|policies| !policies.is_empty())
+        {
+            return Err(ErrorCode::InvalidArgument(
+                "Cannot persist historical metadata with legacy security policies; migrate the policies before CLONE",
+            ));
+        }
+        table_meta.column_mask_policy = None;
+
+        let column_ids = table_meta.schema.to_column_ids();
+        if let Some(virtual_schema) = &mut table_meta.virtual_schema {
+            virtual_schema
+                .fields
+                .retain(|field| column_ids.contains(&field.source_column_id));
+            virtual_schema.number_of_blocks = 0;
+            if virtual_schema.fields.is_empty() {
+                table_meta.virtual_schema = None;
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate current semantic metadata against a projected snapshot structure.
+    ///
+    /// CLONE uses this after projecting field-owned metadata.
+    /// Table-level definitions fail closed when any reference or type cannot be resolved.
+    pub async fn validate_persistent_navigation_metadata(
         &self,
-        table_meta: &mut TableMeta,
-        snapshot: &TableSnapshot,
-    ) {
+        ctx: Arc<dyn TableContext>,
+        table_meta: &TableMeta,
+        operation: &str,
+    ) -> Result<()> {
+        if let Some(ttl) = &table_meta.ttl {
+            validate_stored_ttl_expr(ctx.clone(), table_meta.schema.clone(), ttl).map_err(|e| {
+                ErrorCode::IllegalReference(format!(
+                    "Cannot {operation} the selected snapshot: TTL '{ttl}' is invalid for the \
+                     target schema: {}. Please REMOVE TTL before proceeding.",
+                    e.message()
+                ))
+            })?;
+        }
+
+        validate_constraints_by_schema(ctx.clone(), &table_meta.constraints, &table_meta.schema)?;
+
+        validate_table_indexes_by_schema(&table_meta.indexes, table_meta.schema.clone()).map_err(
+            |err| {
+                ErrorCode::IllegalReference(format!(
+                    "Cannot {operation} the selected snapshot: {}",
+                    err.message()
+                ))
+            },
+        )?;
+
+        if let Some(virtual_schema) = &table_meta.virtual_schema {
+            for virtual_field in &virtual_schema.fields {
+                let source_field = table_meta
+                    .schema
+                    .field_of_column_id(virtual_field.source_column_id)
+                    .map_err(|_| {
+                        ErrorCode::IllegalReference(format!(
+                            "Cannot {operation} the selected snapshot: virtual column '{}' references missing source column ID {}",
+                            virtual_field.name, virtual_field.source_column_id
+                        ))
+                    })?;
+                if source_field.data_type().remove_nullable() != TableDataType::Variant {
+                    return Err(ErrorCode::VirtualColumnError(format!(
+                        "Cannot {operation} the selected snapshot: virtual column '{}' requires VARIANT source column '{}', but its type is {}",
+                        virtual_field.name,
+                        source_field.name(),
+                        source_field.data_type()
+                    )));
+                }
+            }
+        }
+
+        validate_security_policies_by_schema(ctx.clone(), table_meta, operation).await?;
+
+        let cluster_key = table_meta.cluster_key_str();
+        let partition_key = table_meta.options.get(OPT_KEY_PARTITION_BY);
+        if cluster_key.is_some() || partition_key.is_some() {
+            let mut target = self.clone();
+            target.table_info.meta = table_meta.clone();
+            let target: Arc<dyn Table> = Arc::new(target);
+            if let Some(cluster_key) = cluster_key {
+                // Persisted cluster keys are already normalized; resolve them with the session's
+                // name resolution settings like other stored key re-analysis paths.
+                let names = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+                analyze_cluster_keys(ctx.clone(), target.clone(), cluster_key, &names).map_err(|err| {
+                    ErrorCode::InvalidClusterKeys(format!(
+                        "Cannot {operation} the selected snapshot: cluster key is incompatible with its schema: {}",
+                        err.message()
+                    ))
+                })?;
+            }
+            if let Some(partition_key) = partition_key {
+                let expressions = parse_cluster_key_exprs(partition_key)?;
+                bind_normalized_key_exprs(ctx, target, expressions).map_err(|err| {
+                    ErrorCode::IllegalReference(format!(
+                        "Cannot {operation} the selected snapshot: partition key is incompatible with its schema: {}",
+                        err.message()
+                    ))
+                })?;
+            }
+        }
+
+        if let Some(value) = table_meta.options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
+            BloomIndexColumns::verify_definition(
+                value,
+                table_meta.schema.clone(),
+                BloomIndex::supported_type,
+            )?;
+        }
+        for key in [
+            OPT_KEY_APPROX_DISTINCT_COLUMNS,
+            OPT_KEY_ANALYZE_FREQUENCY_COLUMNS,
+        ] {
+            if let Some(value) = table_meta.options.get(key) {
+                ApproxDistinctColumns::verify_definition(
+                    value,
+                    table_meta.schema.clone(),
+                    RangeIndex::supported_table_type,
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn apply_snapshot_statistics(table_meta: &mut TableMeta, snapshot: &TableSnapshot) {
         let summary = &snapshot.summary;
         table_meta.statistics = TableStatistics {
             number_of_rows: summary.row_count,
@@ -756,5 +932,74 @@ impl FuseTable {
             number_of_segments: Some(snapshot.segments.len() as u64),
             number_of_blocks: Some(summary.block_count),
         };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::VariantDataType;
+    use databend_common_expression::VirtualDataField;
+    use databend_common_expression::VirtualDataSchema;
+    use databend_common_meta_app::schema::SecurityPolicyColumnMap;
+    use databend_common_meta_app::schema::TableMeta;
+
+    use crate::FuseTable;
+
+    #[test]
+    fn test_prepare_persistent_navigation_metadata_filters_virtual_schema() {
+        // Legacy policy rejection is covered by the CLONE integration test.
+        let policy = SecurityPolicyColumnMap::new(7, vec![1]);
+        let mut table_meta = TableMeta {
+            schema: Arc::new(TableSchema::new_from_column_ids(
+                vec![TableField::new_from_column_id(
+                    "payload",
+                    TableDataType::Variant,
+                    1,
+                )],
+                Default::default(),
+                2,
+            )),
+            column_mask_policy_columns_ids: [(1, policy.clone())].into(),
+            row_access_policy_columns_ids: Some(policy.clone()),
+            virtual_schema: Some(VirtualDataSchema {
+                fields: vec![
+                    VirtualDataField {
+                        name: "payload['kept']".to_string(),
+                        data_types: vec![VariantDataType::String],
+                        source_column_id: 1,
+                        column_id: 100,
+                    },
+                    VirtualDataField {
+                        name: "removed['field']".to_string(),
+                        data_types: vec![VariantDataType::String],
+                        source_column_id: 2,
+                        column_id: 101,
+                    },
+                ],
+                metadata: Default::default(),
+                next_column_id: 102,
+                number_of_blocks: 42,
+            }),
+            ..Default::default()
+        };
+
+        FuseTable::prepare_persistent_navigation_metadata(&mut table_meta).unwrap();
+
+        // ID-based policies are kept as-is; virtual columns whose source column is gone are
+        // dropped and the block progress is reset for the new root.
+        assert_eq!(
+            table_meta.column_mask_policy_columns_ids.get(&1),
+            Some(&policy)
+        );
+        assert_eq!(table_meta.row_access_policy_columns_ids, Some(policy));
+        let virtual_schema = table_meta.virtual_schema.as_ref().unwrap();
+        assert_eq!(virtual_schema.fields.len(), 1);
+        assert_eq!(virtual_schema.fields[0].source_column_id, 1);
+        assert_eq!(virtual_schema.number_of_blocks, 0);
     }
 }

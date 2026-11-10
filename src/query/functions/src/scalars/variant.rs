@@ -117,7 +117,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.commit_row();
                 return;
             }
-            // Variant value may be an invalid JSON, convert them to string and then parse.
+            if !ctx.func_ctx.enable_parse_json_variant_reparse {
+                output.put_slice(s);
+                output.commit_row();
+                return;
+            }
+            // Legacy behavior: variant value may be an invalid JSONB, convert it to string and
+            // then parse.
             let val = RawJsonb::new(s).to_string();
             if let Err(err) = parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data)
                 && !ctx.func_ctx.disable_variant_check
@@ -157,7 +163,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.push_null();
                 return;
             }
-            // Variant value may be an invalid JSON, convert them to string and then parse.
+            if !ctx.func_ctx.enable_parse_json_variant_reparse {
+                output.push(s);
+                return;
+            }
+            // Legacy behavior: variant value may be an invalid JSONB, convert it to string and
+            // then parse.
             let val = RawJsonb::new(s).to_string();
             match parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.builder.data) {
                 Ok(_) => {

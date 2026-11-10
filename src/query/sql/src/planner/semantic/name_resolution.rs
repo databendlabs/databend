@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::MapAccessor;
@@ -40,6 +42,15 @@ pub enum NameResolutionSuggest {
 }
 
 impl NameResolutionContext {
+    /// Resolve already-persisted identifiers without folding their stored names.
+    pub fn preserve_identifier_case() -> Self {
+        Self {
+            unquoted_ident_case_sensitive: true,
+            quoted_ident_case_sensitive: true,
+            deny_column_reference: false,
+        }
+    }
+
     // Rely on identifier normalization preserving quote information.
     pub fn is_case_sensitive(&self, ident: &Identifier) -> bool {
         (ident.is_quoted() && self.quoted_ident_case_sensitive)
@@ -205,27 +216,23 @@ impl<'a> VariableNormalizer<'a> {
     }
 }
 
+/// Normalize column identifiers for storage without changing JSON path keys.
 #[derive(VisitorMut)]
-#[visitor(Identifier(enter))]
-pub struct ClusterKeyNormalizer {
-    pub force_quoted_ident: bool,
-    pub unquoted_ident_case_sensitive: bool,
-    pub quoted_ident_case_sensitive: bool,
-    pub sql_dialect: Dialect,
+#[visitor(ColumnRef(enter))]
+pub struct StoredKeyNormalizer<'a> {
+    ctx: &'a NameResolutionContext,
 }
 
-impl ClusterKeyNormalizer {
-    fn enter_identifier(&mut self, ident: &mut Identifier) {
-        let case_sensitive = (ident.is_quoted() && self.quoted_ident_case_sensitive)
-            || (!ident.is_quoted() && self.unquoted_ident_case_sensitive);
-        if !case_sensitive {
-            ident.name = ident.name.to_lowercase();
-        }
-        ident.quote = ident_opt_quote(
-            &ident.name,
-            self.force_quoted_ident,
-            self.quoted_ident_case_sensitive,
-            self.sql_dialect,
-        );
+impl<'a> StoredKeyNormalizer<'a> {
+    pub fn new(ctx: &'a NameResolutionContext) -> Self {
+        Self { ctx }
+    }
+
+    fn enter_column_ref(&mut self, column: &mut ColumnRef) {
+        let ColumnID::Name(ident) = &mut column.column else {
+            return;
+        };
+        *ident = self.ctx.normalize_identifier(ident);
+        ident.quote = ident_opt_quote(&ident.name, false, true, Dialect::default());
     }
 }

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::LimitType;
@@ -30,16 +29,10 @@ use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::try_add_multi_sort_merge;
-use databend_common_storage::DataOperator;
-use databend_storages_common_cache::TempDirManager;
 
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextSettings;
 use crate::spillers::SortSpillerImpl;
-use crate::spillers::SpillerConfig;
-use crate::spillers::SpillerDiskConfig;
-use crate::spillers::SpillerType;
 
 type TransformSortBuilder =
     crate::pipelines::processors::transforms::TransformSortBuilder<SortSpillerImpl>;
@@ -54,6 +47,7 @@ pub struct SortPipelineBuilder {
     enable_fixed_rows: bool,
     enable_sort_spill_prefetch: bool,
     enable_sort_spill_stream_regroup: bool,
+    max_threads: Option<usize>,
 }
 
 impl SortPipelineBuilder {
@@ -79,6 +73,7 @@ impl SortPipelineBuilder {
             enable_fixed_rows,
             enable_sort_spill_prefetch,
             enable_sort_spill_stream_regroup,
+            max_threads: None,
         })
     }
 
@@ -90,6 +85,12 @@ impl SortPipelineBuilder {
     // The expected output block size, the actual output block size will be equal to or less than the given value.
     pub fn with_block_size_hit(mut self, block_size: usize) -> Self {
         self.block_size = self.block_size.min(block_size);
+        self
+    }
+
+    /// Limit one branch without overriding the query's settings or executor budget.
+    pub fn with_max_threads(mut self, max_threads: usize) -> Self {
+        self.max_threads = Some(max_threads.max(1));
         self
     }
 
@@ -143,28 +144,7 @@ impl SortPipelineBuilder {
         let settings = self.ctx.get_settings();
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 
-        let spiller = {
-            let temp_dir_manager = TempDirManager::instance();
-            let disk_bytes_limit = GlobalConfig::instance().spill.sort_spill_bytes_limit();
-            let enable_dio = settings.get_enable_dio()?;
-            let disk_spill = temp_dir_manager
-                .get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id())
-                .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
-                .transpose()?;
-
-            let location_prefix = self.ctx.query_id_spill_prefix();
-            let config = SpillerConfig {
-                spiller_type: SpillerType::OrderBy,
-                location_prefix,
-                disk_spill,
-                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
-                writer_pool_bytes: settings
-                    .get_spill_writer_memory_pool_size_mb()?
-                    .saturating_mul(1024 * 1024),
-            };
-            let op = DataOperator::instance().spill_operator();
-            SortSpillerImpl::new(self.ctx.clone(), op, config)?
-        };
+        let spiller = SortSpillerImpl::new(self.ctx.clone())?;
 
         pipeline.add_transform(|input, output| {
             let builder = TransformSortBuilder::new(
@@ -204,7 +184,9 @@ impl SortPipelineBuilder {
         // Multi-pipelines merge sort
         let settings = self.ctx.get_settings();
         if settings.get_enable_parallel_multi_merge_sort()? {
-            let max_threads = settings.get_max_threads()? as usize;
+            let max_threads = self
+                .max_threads
+                .unwrap_or(settings.get_max_threads()? as usize);
             add_k_way_merge_sort(
                 pipeline,
                 self.key_desc.clone(),
@@ -240,20 +222,7 @@ impl SortPipelineBuilder {
             )
         });
 
-        let spiller = {
-            let location_prefix = self.ctx.query_id_spill_prefix();
-            let config = SpillerConfig {
-                spiller_type: SpillerType::OrderBy,
-                location_prefix,
-                disk_spill: None,
-                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
-                writer_pool_bytes: settings
-                    .get_spill_writer_memory_pool_size_mb()?
-                    .saturating_mul(1024 * 1024),
-            };
-            let op = DataOperator::instance().spill_operator();
-            SortSpillerImpl::new(self.ctx.clone(), op, config)?
-        };
+        let spiller = SortSpillerImpl::new(self.ctx.clone())?;
 
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 

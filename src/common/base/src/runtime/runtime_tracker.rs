@@ -149,7 +149,13 @@ pub struct TrackingPayload {
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub processor_interrupt: Option<Arc<AtomicBool>>,
+    /// Read hardware perf counters around processor runs (EXPLAIN PERF).
     pub perf_enabled: bool,
+    /// The query this thread works for, 0 if none. A query-scoped
+    /// `CpuProfiler` samples the threads carrying its token. A plain integer
+    /// so that cloning the payload, done for every processor run, costs no
+    /// atomic operation.
+    pub perf_query_token: u64,
     pub process_rows: AtomicUsize,
 }
 
@@ -188,6 +194,33 @@ impl IoStatsSnapshot {
         self.write_count += other.write_count;
         self.write_bytes += other.write_bytes;
         self.write_duration_ms += other.write_duration_ms;
+    }
+
+    /// The increment from `earlier` to `self`.
+    ///
+    /// Both snapshots must come from the same monotonically increasing
+    /// `IoStats`. Fields are saturating so a torn read never yields a wrap.
+    pub fn delta_since(&self, earlier: &IoStatsSnapshot) -> IoStatsSnapshot {
+        IoStatsSnapshot {
+            list_count: self.list_count.saturating_sub(earlier.list_count),
+            list_duration_ms: self
+                .list_duration_ms
+                .saturating_sub(earlier.list_duration_ms),
+            read_count: self.read_count.saturating_sub(earlier.read_count),
+            read_bytes: self.read_bytes.saturating_sub(earlier.read_bytes),
+            read_duration_ms: self
+                .read_duration_ms
+                .saturating_sub(earlier.read_duration_ms),
+            write_count: self.write_count.saturating_sub(earlier.write_count),
+            write_bytes: self.write_bytes.saturating_sub(earlier.write_bytes),
+            write_duration_ms: self
+                .write_duration_ms
+                .saturating_sub(earlier.write_duration_ms),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        *self == IoStatsSnapshot::default()
     }
 }
 
@@ -328,6 +361,7 @@ impl Clone for TrackingPayload {
             workload_group_resource: self.workload_group_resource.clone(),
             processor_interrupt: self.processor_interrupt.clone(),
             perf_enabled: self.perf_enabled,
+            perf_query_token: self.perf_query_token,
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
             ),
@@ -358,8 +392,8 @@ impl Drop for TrackingGuard {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
 
-            // Sync perf flag when restoring the previous payload
-            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+            // Sync the perf query token of the restored payload for the profiler
+            QueryPerf::sync_from_payload(&thread_tracker.payload);
         });
     }
 }
@@ -415,6 +449,7 @@ impl ThreadTracker {
                 workload_group_resource: None,
                 processor_interrupt: None,
                 perf_enabled: false,
+                perf_query_token: 0,
                 process_rows: AtomicUsize::new(0),
             }),
         }
@@ -446,8 +481,8 @@ impl ThreadTracker {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
 
-            // Sync perf flag from the new payload to thread_local PERF_FLAG
-            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+            // Sync the perf query token of the new payload for the profiler
+            QueryPerf::sync_from_payload(&thread_tracker.payload);
 
             guard
         })
@@ -564,6 +599,12 @@ impl ThreadTracker {
             .unwrap_or(None)
     }
 
+    pub fn perf_query_token() -> u64 {
+        TRACKER
+            .try_with(|tracker| tracker.borrow().payload.perf_query_token)
+            .unwrap_or(0)
+    }
+
     pub fn capture_log_settings() -> Option<&'static Arc<CaptureLogSettings>> {
         TRACKER
             .try_with(|tracker| {
@@ -662,5 +703,43 @@ mod tests {
             write_bytes: 32,
             write_duration_ms: 36,
         });
+    }
+
+    #[test]
+    fn io_stats_snapshot_delta_since() {
+        let stats = IoStats::default();
+        let mut sent = IoStatsSnapshot::default();
+        let receiver = IoStats::default();
+
+        // Nothing recorded yet: nothing to send.
+        assert!(stats.snapshot().delta_since(&sent).is_empty());
+
+        // Repeatedly sending deltas and adding them up on the other side
+        // reproduces the cumulative counter.
+        stats.record_operation_bytes("read", 10);
+        stats.record_operation_duration("read", Duration::from_millis(3));
+        let current = stats.snapshot();
+        let delta = current.delta_since(&sent);
+        assert_eq!(delta.read_count, 1);
+        assert_eq!(delta.read_bytes, 10);
+        assert_eq!(delta.read_duration_ms, 3);
+        receiver.merge_snapshot(&delta);
+        sent = current;
+
+        stats.record_operation_bytes("write", 7);
+        let current = stats.snapshot();
+        let delta = current.delta_since(&sent);
+        assert_eq!(delta, IoStatsSnapshot {
+            write_bytes: 7,
+            ..Default::default()
+        });
+        receiver.merge_snapshot(&delta);
+        sent = current;
+
+        assert_eq!(receiver.snapshot(), stats.snapshot());
+        assert!(stats.snapshot().delta_since(&sent).is_empty());
+
+        // A later snapshot never produces a wrap-around.
+        assert!(sent.delta_since(&stats.snapshot()).is_empty());
     }
 }

@@ -20,6 +20,7 @@ mod traversal;
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -65,6 +66,7 @@ const MAX_DISTANCE: u8 = 5;
 enum ObjectDomain {
     Table,
     View,
+    MaterializedView,
     Stage,
     Column,
 }
@@ -74,10 +76,11 @@ impl ObjectDomain {
         match value.trim().to_ascii_uppercase().as_str() {
             "TABLE" => Ok(Self::Table),
             "VIEW" => Ok(Self::View),
+            "MATERIALIZED_VIEW" => Ok(Self::MaterializedView),
             "STAGE" => Ok(Self::Stage),
             "COLUMN" => Ok(Self::Column),
             other => Err(ErrorCode::BadArguments(format!(
-                "unsupported object_domain '{other}', expected TABLE, VIEW, STAGE, or COLUMN"
+                "unsupported object_domain '{other}', expected TABLE, VIEW, MATERIALIZED_VIEW, STAGE, or COLUMN"
             ))),
         }
     }
@@ -250,7 +253,7 @@ impl Table for GetLineageTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let args = self.args.clone();
         let schema = self.table_info.meta.schema.clone();

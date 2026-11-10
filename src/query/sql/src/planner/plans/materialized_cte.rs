@@ -25,6 +25,7 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -60,14 +61,16 @@ impl Operator for MaterializedCTE {
         rel_expr.derive_relational_prop_child(0)
     }
 
-    /// Derive physical property
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
-    }
-
     /// Derive statistics information
     fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0, stat_ctx)
+    }
+}
+
+impl PhysicalOperator for MaterializedCTE {
+    /// Derive physical property
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        rel_expr.derive_physical_prop_child(0)
     }
 
     /// Compute required property for child with index `child_index`

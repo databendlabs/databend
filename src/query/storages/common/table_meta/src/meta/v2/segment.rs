@@ -31,7 +31,9 @@ use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::Serializer;
 
 use crate::meta::BlockHLLState;
 use crate::meta::BlockTopN;
@@ -44,6 +46,8 @@ use crate::meta::PartitionStatistics;
 use crate::meta::SpatialStatistics;
 use crate::meta::Statistics;
 use crate::meta::StatisticsOfVectorColumns;
+use crate::meta::VectorColumnStatistics;
+use crate::meta::VectorDistanceType;
 use crate::meta::Versioned;
 use crate::meta::v0;
 use crate::meta::v1;
@@ -333,6 +337,65 @@ pub struct DraftVirtualBlockMeta {
     pub path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
 }
 
+/// A per-block index file to read. Not tied to an index type: any index stored
+/// either in the legacy combined file or in its own file uses it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IndexFileLocation {
+    /// Legacy combined file holding all indexes of this type of a block.
+    Legacy { path: String },
+    /// File of a single index; `size` is recorded when the file is written.
+    Bundle { path: String, size: u64 },
+}
+
+impl IndexFileLocation {
+    pub fn path(&self) -> &str {
+        match self {
+            Self::Legacy { path } | Self::Bundle { path, .. } => path,
+        }
+    }
+
+    /// The file of `index_name` at `index_version`: its own file from `metas` (sorted
+    /// by name), else the legacy combined file. An own file of another version is
+    /// stale and must be refreshed, so it does not fall back to the legacy file.
+    pub fn select(
+        legacy: Option<&Location>,
+        metas: Option<&[BlockIndexMeta]>,
+        index_name: &str,
+        index_version: &str,
+    ) -> Option<Self> {
+        let meta = metas.and_then(|metas| {
+            metas
+                .binary_search_by(|meta| meta.index_name.as_str().cmp(index_name))
+                .ok()
+                .map(|index| &metas[index])
+        });
+        if let Some(meta) = meta {
+            return (meta.index_version == index_version).then(|| Self::Bundle {
+                path: meta.location.0.clone(),
+                size: meta.size,
+            });
+        }
+        legacy.map(|location| Self::Legacy {
+            path: location.0.clone(),
+        })
+    }
+}
+
+/// Metadata of one independently stored table-index object generated for a block.
+///
+/// Used by independently stored inverted and vector index objects.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
+pub struct BlockIndexMeta {
+    /// Logical index name.
+    pub index_name: String,
+    /// Complete object location. `Location.1` is the outer object format version of this index.
+    pub location: Location,
+    /// Object size in bytes.
+    pub size: u64,
+    /// Complete `TableIndex.version` identifying the index definition.
+    pub index_version: String,
+}
+
 /// Meta information of a block
 /// Part of and kept inside the [SegmentInfo]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, FrozenAPI)]
@@ -354,12 +417,25 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub inverted_index_size: Option<u64>,
+    /// `None` means legacy metadata without an authoritative index list. `Some` is authoritative,
+    /// including `Some(Vec::new())`. Entries are kept sorted by `index_name`.
+    #[serde(default)]
+    pub inverted_index_metas: Option<Vec<BlockIndexMeta>>,
     pub ngram_filter_index_size: Option<u64>,
     pub vector_index_size: Option<u64>,
+    /// Legacy combined Parquet object. Kept while any index still needs legacy data.
     pub vector_index_location: Option<Location>,
+    /// Independently stored vector indexes, sorted by name.
+    #[serde(default)]
+    pub vector_index_metas: Option<Vec<BlockIndexMeta>>,
     pub spatial_index_size: Option<u64>,
     pub spatial_index_location: Option<Location>,
     pub spatial_stats: Option<HashMap<ColumnId, SpatialStatistics>>,
+    #[serde(
+        default,
+        serialize_with = "serialize_vector_stats",
+        deserialize_with = "deserialize_vector_stats"
+    )]
     pub vector_stats: Option<StatisticsOfVectorColumns>,
     /// The block meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMeta>,
@@ -407,9 +483,11 @@ impl BlockMeta {
             bloom_filter_index_location,
             bloom_filter_index_size,
             inverted_index_size,
+            inverted_index_metas: Some(Vec::new()),
             ngram_filter_index_size,
             vector_index_size,
             vector_index_location,
+            vector_index_metas: None,
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
@@ -419,6 +497,39 @@ impl BlockMeta {
             compression,
             create_on,
         }
+    }
+
+    /// Returns metadata for the named inverted index.
+    ///
+    /// The entries are expected to be sorted by `index_name` and unique.
+    pub fn inverted_index_meta(&self, index_name: &str) -> Option<&BlockIndexMeta> {
+        let metas = self.inverted_index_metas.as_ref()?;
+        metas
+            .binary_search_by(|meta| meta.index_name.as_str().cmp(index_name))
+            .ok()
+            .map(|index| &metas[index])
+    }
+
+    pub fn vector_index_meta(&self, index_name: &str) -> Option<&BlockIndexMeta> {
+        let metas = self.vector_index_metas.as_ref()?;
+        metas
+            .binary_search_by(|meta| meta.index_name.as_str().cmp(index_name))
+            .ok()
+            .map(|index| &metas[index])
+    }
+
+    /// The file of vector index `index_name` at `index_version`.
+    pub fn vector_index_file(
+        &self,
+        index_name: &str,
+        index_version: &str,
+    ) -> Option<IndexFileLocation> {
+        IndexFileLocation::select(
+            self.vector_index_location.as_ref(),
+            self.vector_index_metas.as_deref(),
+            index_name,
+            index_version,
+        )
     }
 
     pub fn compression(&self) -> Compression {
@@ -544,8 +655,10 @@ impl BlockMeta {
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
             inverted_index_size: None,
+            inverted_index_metas: None,
             vector_index_size: None,
             vector_index_location: None,
+            vector_index_metas: None,
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
@@ -578,8 +691,10 @@ impl BlockMeta {
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
             inverted_index_size: None,
+            inverted_index_metas: None,
             vector_index_size: None,
             vector_index_location: None,
+            vector_index_metas: None,
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
@@ -602,4 +717,31 @@ impl From<(v0::SegmentInfo, &[TableField])> for SegmentInfo {
     fn from((v, fields): (v0::SegmentInfo, &[TableField])) -> Self {
         SegmentInfo::from_v0(v, fields)
     }
+}
+
+// JSON needs key/value sequences for tuple keys; binary metadata keeps its native map encoding.
+fn serialize_vector_stats<S>(
+    stats: &Option<StatisticsOfVectorColumns>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if !serializer.is_human_readable() {
+        return stats.serialize(serializer);
+    }
+    let entries = stats.as_ref().map(|stats| stats.iter().collect::<Vec<_>>());
+    entries.serialize(serializer)
+}
+
+fn deserialize_vector_stats<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<StatisticsOfVectorColumns>, D::Error>
+where D: Deserializer<'de> {
+    if !deserializer.is_human_readable() {
+        return Option::<StatisticsOfVectorColumns>::deserialize(deserializer);
+    }
+    let entries: Option<Vec<((ColumnId, VectorDistanceType), VectorColumnStatistics)>> =
+        Deserialize::deserialize(deserializer)?;
+    Ok(entries.map(|entries| entries.into_iter().collect()))
 }

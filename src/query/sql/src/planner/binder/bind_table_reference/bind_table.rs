@@ -36,9 +36,11 @@ use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::BindContext;
 use crate::ColumnEntry;
+use crate::DefinitionScope;
 use crate::LineageSourceRelation;
 use crate::MaterializedCteLineageSource;
 use crate::Metadata;
+use crate::QueryLineageRelationKind;
 use crate::Symbol;
 use crate::ViewLineageSourceColumn;
 use crate::Visibility;
@@ -46,7 +48,6 @@ use crate::binder::Binder;
 use crate::binder::ViewIdent;
 use crate::binder::lineage_enabled;
 use crate::binder::util::TableIdentifier;
-use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
 impl Binder {
     /// A base table is a table that is not a view or CTE.
@@ -65,26 +66,21 @@ impl Binder {
             catalog,
             database,
             table,
-            branch,
         } = table_ref;
-        let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, alias);
-        let catalog = table_identifier.catalog_name();
-        let database = table_identifier.database_name();
+        // Qualified names are tables, except inside a legacy stored definition whose
+        // rewriter qualified CTE references as well. Never enable that mode for ordinary SQL.
+        let may_reference_cte = self
+            .definition_scope
+            .cte_resolution()
+            .may_reference_cte(database.is_some());
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
+        let mut catalog = table_identifier.catalog_name();
+        let mut database = table_identifier.database_name();
         let table_name = table_identifier.table_name();
-        let branch_name = table_identifier.branch_name();
         let table_name_alias = table_identifier.table_name_alias();
 
-        if let Some(branch_name) = branch_name.as_ref() {
-            // Keep parsing `<db>.<table>/<branch>` so the upcoming redesign can
-            // reuse the syntax without reviving the legacy implementation.
-            return Err(legacy_table_ref_removed_error(format!(
-                "table branch reference `{catalog}.{database}.{table_name}/{branch_name}`"
-            ))
-            .set_span(*span));
-        }
-
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
-            if cte_name == &table_name {
+            if may_reference_cte && cte_name == &table_name {
                 return Err(ErrorCode::SemanticError(format!(
                     "The cte {table_name} is not recursive, but it references itself.",
                 ))
@@ -105,15 +101,20 @@ impl Binder {
         // Check and bind common table expression
         let mut cte_suffix_name = None;
         let mut materialized_cte_lineage = None;
-        let cte_map = bind_context.cte_context.cte_map.clone();
-        if let Some(cte_info) = cte_map.get(&table_name) {
+        // Only clone the matching entry: cloning the whole `cte_map` on every table
+        // reference is expensive for queries with many CTEs.
+        let cte_info = may_reference_cte
+            .then(|| bind_context.cte_context.cte_map.get(&table_name).cloned())
+            .flatten();
+        if let Some(cte_info) = cte_info {
+            let cte_info = &cte_info;
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
                 return self.bind_cte_consumer(
                     bind_context,
                     &table_name,
                     alias,
                     cte_info,
-                    &materialized_cte_info.bound_context.columns,
+                    &materialized_cte_info.bound_columns,
                 );
             } else if cte_info.user_specified_materialized {
                 if lineage_enabled() {
@@ -121,24 +122,12 @@ impl Binder {
                     // producer definition that lineage extraction can follow by output position.
                     materialized_cte_lineage = Some(self.bind_cte_definition(
                         &table_name,
-                        cte_map.as_ref(),
+                        bind_context,
                         &cte_info.query,
                     )?);
                 }
                 cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
             } else {
-                if self
-                    .metadata
-                    .read()
-                    .get_table_index(Some(&database), &table_name)
-                    .is_some()
-                {
-                    return Err(ErrorCode::SyntaxException(format!(
-                        "Table name `{}` is misleading, please distinguish it.",
-                        table_name
-                    ))
-                    .set_span(*span));
-                }
                 return if cte_info.recursive {
                     if self
                         .bind_recursive_cte
@@ -156,6 +145,13 @@ impl Binder {
             }
         }
 
+        // User-materialized CTEs scan temporary tables in the session namespace,
+        // even when their producer is bound in a view's namespace.
+        if cte_suffix_name.is_some() {
+            catalog = self.ctx.get_current_catalog();
+            database = self.ctx.get_current_database();
+        }
+
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
         // Resolve table with catalog, allowing internal rewrites to bind an exact table instance.
@@ -166,7 +162,7 @@ impl Binder {
             table.clone()
         } else {
             let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
-                format!("{}${}", &table_name, cte_suffix_name)
+                format!("{}${}", table_name, cte_suffix_name)
             } else {
                 table_name.clone()
             };
@@ -175,26 +171,28 @@ impl Binder {
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
-                branch_name.as_deref(),
                 navigation.as_ref(),
                 max_batch_size,
             ) {
                 Ok(table) => table,
                 Err(e) => {
-                    let mut parent = bind_context.parent.as_mut();
+                    let mut parent = may_reference_cte
+                        .then_some(bind_context.parent.as_mut())
+                        .flatten();
                     loop {
                         if parent.is_none() {
                             break;
                         }
                         let bind_context = parent.unwrap().as_mut();
-                        let cte_map = bind_context.cte_context.cte_map.clone();
-                        if let Some(cte_info) = cte_map.get(&table_name) {
+                        if let Some(cte_info) =
+                            bind_context.cte_context.cte_map.get(&table_name).cloned()
+                        {
                             return self.bind_cte(
                                 *span,
                                 bind_context,
                                 &table_name,
                                 alias,
-                                cte_info,
+                                &cte_info,
                             );
                         }
                         parent = bind_context.parent.as_mut();
@@ -223,7 +221,6 @@ impl Binder {
                         catalog,
                         database.clone(),
                         table_meta.clone(),
-                        branch_name,
                         table_name_alias,
                         !bind_context.binding_views.is_empty(),
                         false,
@@ -290,6 +287,7 @@ impl Binder {
                 }
             }
 
+            new_bind_context.binding_depth = bind_context.next_depth()?;
             new_bind_context.parent = Some(Box::new(bind_context.clone()));
             return Ok((s_expr, new_bind_context));
         }
@@ -308,22 +306,27 @@ impl Binder {
                     .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                 let tokens = tokenize_sql(query.as_str())?;
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                // For view, we need use a new context to bind it.
-                let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                new_bind_context.binding_views.insert(view_ident);
+                // A view definition is an independent name scope: it must not
+                // see the caller's CTEs or columns, otherwise an outer CTE can
+                // capture a table referenced by the view.
+                let mut new_bind_context = bind_context.new_view_scope(view_ident)?;
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(
                         catalog.clone(),
                         database.clone(),
                         table_meta.clone(),
-                        branch_name.clone(),
                         table_name_alias.clone(),
                         false,
                         false,
                         None,
                     );
-                    let (s_expr, mut new_bind_context) =
-                        self.bind_query(&mut new_bind_context, query)?;
+                    let previous_scope = std::mem::replace(
+                        &mut self.definition_scope,
+                        DefinitionScope::from_stored_options(table_meta.options()),
+                    );
+                    let result = self.bind_query(&mut new_bind_context, query);
+                    self.definition_scope = previous_scope;
+                    let (s_expr, mut new_bind_context) = result?;
                     if lineage_enabled() {
                         // Record the view's output identity before an outer table alias can
                         // rename those columns in the current query scope.
@@ -345,9 +348,12 @@ impl Binder {
                             column.table_name = Some(self.normalize_identifier(table).name);
                         }
                     }
-                    // Restore binding_views to the outer scope's value so the
-                    // current view does not leak into sibling/parent contexts.
+                    // Restore the outer scope so the view's binding path and
+                    // CTEs do not leak into sibling/parent contexts.
                     new_bind_context.binding_views = bind_context.binding_views.clone();
+                    new_bind_context.cte_context = bind_context.cte_context.clone();
+                    new_bind_context.definition_scope = bind_context.definition_scope.clone();
+                    new_bind_context.binding_depth = bind_context.next_depth()?;
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))
                 } else {
@@ -368,12 +374,14 @@ impl Binder {
                 sample,
                 cte_suffix_name,
             ),
+            // A Dynamic Table is read exactly like a physical table: queries always see the
+            // result materialized by the last refresh, however stale that is. It therefore needs
+            // no arm of its own and falls through to the ordinary base-table path below.
             _ => {
                 let table_index = self.metadata.write().add_table(
                     catalog.clone(),
                     database.clone(),
                     table_meta.clone(),
-                    branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
                     false,
@@ -462,6 +470,7 @@ impl Binder {
         for (idx, column) in bind_context.columns.iter().enumerate() {
             metadata.add_view_lineage_source_column(column.index, ViewLineageSourceColumn {
                 relation: relation.clone(),
+                kind: QueryLineageRelationKind::View,
                 // View TableMeta has no persisted schema. The bound view query (including an
                 // explicit view column list) is the source of truth for output column names.
                 name: column.column_name.clone(),

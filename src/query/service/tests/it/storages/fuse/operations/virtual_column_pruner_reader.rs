@@ -29,7 +29,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::VariantType;
-use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::VirtualColumnBuilder;
@@ -37,6 +36,7 @@ use databend_common_storages_fuse::io::VirtualColumnLayoutPolicy;
 use databend_common_storages_fuse::io::VirtualColumnReader;
 use databend_common_storages_fuse::pruning::VirtualColumnPruner;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::ProjectedVirtualPath;
 use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
@@ -57,10 +57,6 @@ use parquet::arrow::arrow_reader::RowSelector;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
@@ -116,10 +112,9 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         .clone();
     dal.write(&virtual_location, state.data.clone()).await?;
 
-    let mut column_id = schema.next_column_id();
     let mut virtual_column_fields = Vec::new();
     let mut column_ids = Vec::new();
-    for key_path in [
+    for (column_id, key_path) in (schema.next_column_id()..).zip([
         "{id}",
         "{text}",
         "{user,info}",
@@ -135,17 +130,17 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         "{sparse_jsonb_arr,0}",
         "{container}",
         "{0,k}",
-    ] {
+    ]) {
         let key_paths = parse_key_paths(key_path.as_bytes()).unwrap().to_owned();
         let field = build_virtual_column_field(source_column_id, "v", column_id, key_paths);
         virtual_column_fields.push(field);
         column_ids.push(column_id);
-        column_id += 1;
     }
 
     let mut source_column_ids = HashSet::new();
     source_column_ids.insert(source_column_id);
     let virtual_column_info = VirtualColumnInfo {
+        ignorable_source_column_ids: source_column_ids.clone(),
         source_column_ids,
         virtual_column_fields,
     };
@@ -172,8 +167,9 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         virtual_columns_complete: false,
     };
 
-    let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down.clone()))?
-        .expect("virtual column pruner");
+    let pruner =
+        VirtualColumnPruner::try_create(dal.clone(), CachePolicy::DEFAULT, &Some(push_down))?
+            .expect("virtual column pruner");
     let virtual_block_meta_index = pruner
         .prune_virtual_columns(&Some(virtual_block_meta), None)
         .await?
@@ -264,16 +260,13 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         Some(VirtualColumnSharedDataType::String)
     );
 
-    let plan = table
-        .read_plan(ctx.clone(), Some(push_down), None, false, true)
-        .await?;
     let reader = VirtualColumnReader::try_create(
         ctx.clone(),
         dal.clone(),
         schema.clone(),
-        &plan,
         virtual_column_info,
         write_settings.table_compression,
+        CachePolicy::DEFAULT,
     )?;
 
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
@@ -430,6 +423,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let push_down = PushDownInfo {
         virtual_column: Some(VirtualColumnInfo {
             source_column_ids: HashSet::from([source_column_id]),
+            ignorable_source_column_ids: HashSet::from([source_column_id]),
             virtual_column_fields: vec![field.clone()],
         }),
         ..Default::default()
@@ -441,7 +435,9 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let dal = fuse_table.get_operator();
     dal.write(&draft_columns.virtual_location.0, state.data)
         .await?;
-    let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down))?.unwrap();
+    let pruner =
+        VirtualColumnPruner::try_create(dal.clone(), CachePolicy::DEFAULT, &Some(push_down))?
+            .unwrap();
     let index = pruner
         .prune_virtual_columns(&Some(virtual_block_meta), Some(&projected_segment_schema))
         .await?
@@ -458,19 +454,17 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         DataType::from(&draft_meta.column_meta.data_type())
     );
 
-    let plan = table
-        .read_plan(ctx.clone(), None, None, false, true)
-        .await?;
     let reader = VirtualColumnReader::try_create(
         ctx.clone(),
         dal,
         schema,
-        &plan,
         VirtualColumnInfo {
             source_column_ids: HashSet::from([source_column_id]),
+            ignorable_source_column_ids: HashSet::from([source_column_id]),
             virtual_column_fields: vec![field],
         },
         write_settings.table_compression,
+        CachePolicy::DEFAULT,
     )?;
     let table_ctx: Arc<dyn TableContext> = ctx;
     let read_settings = ReadSettings::from_ctx(&table_ctx)?;

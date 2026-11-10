@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_encoded;
 mod agg_hashtable;
-mod aggregate_case_fixtures;
-mod aggregate_case_support;
 mod aggregate_distinct;
 mod aggregate_if;
-mod aggregate_simulation_support;
 mod any;
 mod approx_count_distinct;
 mod arg_max;
@@ -31,6 +29,7 @@ mod count;
 mod count_distinct;
 mod covar_pop;
 mod covar_samp;
+mod covariance;
 mod group_array_moving_avg;
 mod group_array_moving_sum;
 mod histogram;
@@ -44,6 +43,7 @@ mod max;
 mod median;
 mod median_tdigest;
 mod min;
+mod min_max_any;
 mod mode;
 mod quantile_cont;
 mod quantile_disc;
@@ -57,5 +57,6 @@ mod st_union_agg;
 mod stddev;
 mod string_agg;
 mod sum;
+mod support;
 mod uniq;
 mod window_funnel;

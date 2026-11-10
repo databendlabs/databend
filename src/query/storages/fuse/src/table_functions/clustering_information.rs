@@ -21,7 +21,6 @@ use databend_common_base::runtime::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_args::parse_table_name;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -41,8 +40,10 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_pipeline_transforms::sorts::core::RowConverter;
 use databend_common_pipeline_transforms::sorts::core::VariableRowConverter;
+use databend_common_sql::NameResolutionContext;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::parse_cluster_keys;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -158,14 +159,12 @@ impl SimpleArgFunc for ClusteringInformation {
         args: &Self::Args,
         _plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
-        let (table_name, branch_name) = parse_table_name(args.table_name.as_str())?;
         let current_catalog = ctx.get_current_catalog();
         let tbl = ctx
-            .get_table_with_branch(
+            .get_table(
                 &current_catalog,
                 args.database_name.as_str(),
-                &table_name,
-                branch_name.as_deref(),
+                args.table_name.as_str(),
             )
             .await?;
         check_shared_table_select(
@@ -257,8 +256,10 @@ impl ClusteringInformationImpl<'_> {
         let table: Arc<dyn Table> = Arc::new(self.table.clone());
         match (self.table.cluster_key_str(), cluster_key) {
             (default_key, Some(custom_key)) => {
+                // User-supplied key: resolve names with this session's settings.
+                let names = NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
                 let (normalized_key, custom_exprs) =
-                    analyze_cluster_keys(self.ctx.clone(), table.clone(), custom_key)?;
+                    analyze_cluster_keys(self.ctx.clone(), table.clone(), custom_key, &names)?;
                 if default_key == Some(normalized_key.as_str()) {
                     return self.resolve_default_cluster_key(table, normalized_key);
                 }
@@ -365,8 +366,13 @@ impl ClusteringInformationImpl<'_> {
                 let types = key_types.clone();
                 let exprs = prepared_exprs.clone();
                 tasks.pending.push(runtime.spawn(async move {
-                    let segment =
-                        SegmentsIO::read_compact_segment(operator, location, schema, true).await?;
+                    let segment = SegmentsIO::read_compact_segment(
+                        operator,
+                        location,
+                        schema,
+                        CachePolicy::DEFAULT,
+                    )
+                    .await?;
                     collect_segment_endpoints(&segment, &types, &exprs, cluster_key_id, is_hilbert)
                 }));
             }

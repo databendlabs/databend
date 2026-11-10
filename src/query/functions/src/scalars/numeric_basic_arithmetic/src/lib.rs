@@ -20,10 +20,7 @@
 #![feature(core_intrinsics)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(type_ascription)]
 #![feature(try_blocks)]
-#![feature(downcast_unchecked)]
-#![feature(str_internals)]
 
 pub mod arithmetic_modulo;
 pub mod numeric_basic_arithmetic;

@@ -66,6 +66,7 @@ use databend_common_tracing::TracingConfig as InnerTracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
+use serfig::collectors::IntoCollector;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
@@ -238,14 +239,16 @@ impl Config {
 
             if !final_config_file.is_empty() {
                 let toml = TomlIgnored::new(Box::new(|path| {
-                    log::warn!("unknown field in config: {}", &path);
+                    log::warn!("unknown field in config: {}", path);
                 }));
                 builder = builder.collect(from_file(toml, &final_config_file));
             }
         }
 
         // Then, load from env.
-        builder = builder.collect(from_env());
+        builder = builder
+            .collect(from_env())
+            .collect(Self::from_env_aliases());
 
         // Finally, load from args.
         builder = builder.collect(from_self(self));
@@ -272,20 +275,58 @@ impl Config {
 
             if !config_file.is_empty() {
                 let toml = TomlIgnored::new(Box::new(|path| {
-                    log::warn!("unknown field in config: {}", &path);
+                    log::warn!("unknown field in config: {}", path);
                 }));
                 builder = builder.collect(from_file(toml, &config_file));
             }
         }
 
         // Then, load from env.
-        builder = builder.collect(from_env());
+        builder = builder
+            .collect(from_env())
+            .collect(Self::from_env_aliases());
 
         // Check obsoleted.
         let conf = builder.build()?;
         conf.check_obsoleted()?;
 
         Ok(conf)
+    }
+
+    /// Collector for env aliases of config items, right after `from_env()`.
+    ///
+    /// An alias is another name for the same item: `ALIBABA_CLOUD_ROLE_ARN`
+    /// for `STORAGE_OSS_ROLE_ARN`, etc. It only fills items the Databend name
+    /// leaves unset, so the config reflects the identity reqsign actually uses
+    /// and `init_oss_operator` does not enable anonymous fallback for an
+    /// RRSA-only deployment.
+    ///
+    /// Only the filled items differ from `Config::default()`; serfig skips
+    /// default-valued items when merging, so precedence stays
+    /// `file < env (Databend name, then alias) < args`.
+    fn from_env_aliases() -> impl IntoCollector<Self> {
+        let set = |key: &str| env::var(key).ok().filter(|v| !v.is_empty());
+        let unset = |key: &str| set(key).is_none();
+
+        let mut compat = Self::default();
+
+        if unset("STORAGE_OSS_ROLE_ARN")
+            && let Some(role_arn) = set("ALIBABA_CLOUD_ROLE_ARN")
+        {
+            compat.storage.oss.oss_role_arn = role_arn;
+        }
+
+        // reqsign ignores a half pair; apply both or neither.
+        if unset("STORAGE_OSS_ACCESS_KEY_ID")
+            && unset("STORAGE_OSS_ACCESS_KEY_SECRET")
+            && let Some(ak) = set("ALIBABA_CLOUD_ACCESS_KEY_ID")
+            && let Some(sk) = set("ALIBABA_CLOUD_ACCESS_KEY_SECRET")
+        {
+            compat.storage.oss.oss_access_key_id = ak;
+            compat.storage.oss.oss_access_key_secret = sk;
+        }
+
+        from_self(compat)
     }
 }
 
@@ -1914,11 +1955,53 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_python_script: bool,
 
+    /// Maximum Python scalar UDF processes on this node (0 = effective CPU count).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers: usize,
+
+    /// Python worker budget shared by a tenant (0 = inherit the node limit).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers_per_tenant: usize,
+
+    /// Maximum resident Python workers per query (0 = minimum runtimes plus
+    /// max_threads - 1). Concurrent execution always respects max_threads.
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers_per_query: usize,
+
+    /// Bound Python worker admission waiters independently of running queries.
+    #[clap(long, value_name = "VALUE", default_value = "128")]
+    pub python_udf_max_queued_queries: usize,
+
+    #[clap(long, value_name = "VALUE", default_value = "60")]
+    pub python_udf_queue_timeout_secs: u64,
+
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_execution_timeout_secs: u64,
+
+    /// Recycle idle extra Python workers after this interval; keep one per runtime.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_worker_idle_timeout_secs: u64,
+
+    /// Install Python UDF dependencies from wheels only (`pip --only-binary=:all:`).
+    /// Source distributions run arbitrary build code on the query node at install time.
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub python_udf_pip_only_binary: bool,
+
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_js_script: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_wasm_script: bool,
+
+    /// Memory limit in MiB of each in-process script UDF runtime: the
+    /// JavaScript heap and the WebAssembly linear memory (0 = unlimited).
+    #[clap(long, value_name = "VALUE", default_value = "1024")]
+    pub udf_script_memory_limit_mb: usize,
+
+    /// Interrupt an in-process script UDF call that runs longer than this
+    /// (0 = unlimited). Currently enforced for JavaScript only.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub udf_script_execution_timeout_secs: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_sandbox: bool,
@@ -1926,7 +2009,13 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_server: bool,
 
-    /// A list of allowed udf server addresses.
+    /// Allow integration-bound HTTP(S) access from sandboxed local Python UDFs.
+    /// This does not permit workers to create native network sockets.
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub enable_python_udf_external_access: bool,
+
+    /// Operator hostname ceiling for remote UDFs and Python HTTP(S) access.
+    /// Python destinations with non-public IPs require an explicit IP literal here.
     #[clap(long, value_name = "VALUE")]
     pub udf_server_allow_list: Vec<String>,
 
@@ -2170,7 +2259,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `query.dir` is empty".to_string(),
                 ));
             } else {
-                query.dir = format!("{}/query-details", &file.dir);
+                query.dir = format!("{}/query-details", file.dir);
             }
         }
 
@@ -2181,7 +2270,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `profile.dir` is empty".to_string(),
                 ));
             } else {
-                profile.dir = format!("{}/profiles", &file.dir);
+                profile.dir = format!("{}/profiles", file.dir);
             }
         }
 
@@ -2192,7 +2281,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `structlog.on` is true".to_string(),
                 ));
             } else {
-                structlog.dir = format!("{}/structlogs", &file.dir);
+                structlog.dir = format!("{}/structlogs", file.dir);
             }
         }
 
@@ -3213,29 +3302,41 @@ pub struct CacheConfig {
     )]
     pub disk_cache_inverted_index_meta_size: u64,
 
-    /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
+    /// Max bytes of cached inverted-index term dictionaries and small fieldnorm/fast components
+    /// in memory.
     #[clap(
-        long = "cache-inverted-index-filter-size",
+        long = "cache-inverted-index-lookup-size",
         value_name = "VALUE",
-        default_value = "64424509440"
+        default_value = "8589934592"
     )]
-    pub inverted_index_filter_size: u64,
+    pub inverted_index_lookup_size: u64,
 
-    /// Max bytes of cached inverted index filters on disk. Set it to 0 to disable it.
+    /// Max bytes of cached inverted-index term dictionaries and small fieldnorm/fast components
+    /// on disk.
+    /// Set it to 0 to disable it.
     #[clap(
-        long = "disk-cache-inverted-index-data-size",
+        long = "disk-cache-inverted-index-lookup-size",
         value_name = "VALUE",
         default_value = "0"
     )]
-    pub disk_cache_inverted_index_data_size: u64,
+    pub disk_cache_inverted_index_lookup_size: u64,
 
-    /// Max percentage of in memory inverted index filter cache relative to whole memory. By default it is 0 (disabled).
+    /// Total memory budget for inverted-index payload caches: 75% for pages and 25% for
+    /// complete postings/positions components.
     #[clap(
-        long = "cache-inverted-index-filter-memory-ratio",
+        long = "cache-inverted-index-payload-size",
+        value_name = "VALUE",
+        default_value = "17179869184"
+    )]
+    pub inverted_index_payload_size: u64,
+
+    /// Max bytes of cached inverted-index payload pages on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-inverted-index-payload-size",
         value_name = "VALUE",
         default_value = "0"
     )]
-    pub inverted_index_filter_memory_ratio: u64,
+    pub disk_cache_inverted_index_payload_size: u64,
 
     /// Max number of cached vector index meta objects. Set it to 0 to disable it.
     #[clap(
@@ -3253,13 +3354,24 @@ pub struct CacheConfig {
     )]
     pub disk_cache_vector_index_meta_size: u64,
 
-    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    /// Max bytes of decoded vector indexes cached in memory, including retained search workspaces.
+    /// Set it to 0 to disable retention when vector_index_filter_memory_ratio is also 0.
     #[clap(
         long = "cache-vector-index-filter-size",
         value_name = "VALUE",
         default_value = "64424509440"
     )]
     pub vector_index_filter_size: u64,
+
+    /// Max bytes of FP16 refine pages cached in memory. HNSW components and the
+    /// validity are cached decoded in the vector index cache instead. Set it to 0
+    /// to disable it.
+    #[clap(
+        long = "cache-vector-index-refine-size",
+        value_name = "VALUE",
+        default_value = "34359738368"
+    )]
+    pub vector_index_refine_size: u64,
 
     /// Max bytes of cached vector index filters on disk. Set it to 0 to disable it.
     #[clap(
@@ -3269,7 +3381,8 @@ pub struct CacheConfig {
     )]
     pub disk_cache_vector_index_data_size: u64,
 
-    /// Max percentage of in memory vector index filter cache relative to whole memory. By default it is 0 (disabled).
+    /// Max percentage of memory for decoded vector indexes. A nonzero value overrides
+    /// vector_index_filter_size; 0 uses the byte limit instead.
     #[clap(
         long = "cache-vector-index-filter-memory-ratio",
         value_name = "VALUE",
@@ -3418,12 +3531,69 @@ pub struct CacheConfig {
     )]
     pub table_data_deserialized_memory_ratio: u64,
 
+    /// Max percentage of distinct values to rows for which a block of an in-memory encoded column
+    /// (setting `enable_encoded_columns`) is dictionary encoded. By default it is 100: any block
+    /// may be, but a dictionary built from the column is only kept if it is smaller than the
+    /// regular column.
+    #[clap(
+        long = "cache-table-data-encoded-dictionary-ndv-ratio",
+        value_name = "VALUE",
+        default_value = "100"
+    )]
+    pub table_data_encoded_dictionary_ndv_ratio: u64,
+
     #[clap(
         long = "cache-iceberg-table-meta-count",
         value_name = "VALUE",
         default_value = "1024"
     )]
     pub iceberg_table_meta_count: u64,
+
+    /// Use the shared cache backend: three memory pools (meta, index and data), each sized as a
+    /// percentage of the server memory limit, evicted with S3-FIFO and shrunk under memory
+    /// pressure before queries are killed. Requires a server memory limit
+    /// (`max_memory_limit_enabled` and `max_server_memory_usage`). The per-cache capacity options
+    /// above and `enable_table_meta_cache` are then ignored; disk cache options still apply.
+    #[clap(
+        long = "cache-shared-memory-enabled",
+        value_name = "VALUE",
+        default_value = "false"
+    )]
+    #[serde(default = "bool_false")]
+    pub shared_memory_enabled: bool,
+
+    /// Shared backend: percentage of the server memory limit for table, segment and index
+    /// metadata. The three ratios may sum to at most 80.
+    #[clap(
+        long = "cache-meta-max-ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub meta_max_ratio: u64,
+
+    /// Shared backend: percentage of the server memory limit for bloom, vector, inverted and
+    /// spatial index data.
+    #[clap(
+        long = "cache-index-max-ratio",
+        value_name = "VALUE",
+        default_value = "40"
+    )]
+    pub index_max_ratio: u64,
+
+    /// Shared backend: percentage of the server memory limit for column data.
+    #[clap(
+        long = "cache-data-max-ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub data_max_ratio: u64,
+
+    /// Shared backend: byte limits of single caches within their pool, keyed by their name in
+    /// `system.caches` (e.g. `memory_cache_table_data`); 0 turns a cache off. A cache without an
+    /// entry is on, bounded only by its pool, except `memory_cache_column_data` and
+    /// `memory_cache_segment_block_metas`, off. Config file only: `[cache.kind_max_bytes]`.
+    #[clap(skip)]
+    pub kind_max_bytes: BTreeMap<String, u64>,
 
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
@@ -3451,12 +3621,14 @@ impl Default for CacheConfig {
             disk_cache_table_bloom_index_data_size: 0,
             inverted_index_meta_count: 30000,
             disk_cache_inverted_index_meta_size: 0,
-            inverted_index_filter_size: 64424509440,
-            disk_cache_inverted_index_data_size: 0,
-            inverted_index_filter_memory_ratio: 0,
+            inverted_index_lookup_size: 8589934592,
+            disk_cache_inverted_index_lookup_size: 0,
+            inverted_index_payload_size: 17179869184,
+            disk_cache_inverted_index_payload_size: 0,
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,
             vector_index_filter_size: 64424509440,
+            vector_index_refine_size: 34359738368,
             disk_cache_vector_index_data_size: 0,
             vector_index_filter_memory_ratio: 0,
             spatial_index_meta_count: 30000,
@@ -3473,7 +3645,13 @@ impl Default for CacheConfig {
             data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Reset,
             table_data_deserialized_data_bytes: 0,
             table_data_deserialized_memory_ratio: 0,
+            table_data_encoded_dictionary_ndv_ratio: 100,
             iceberg_table_meta_count: 1024,
+            shared_memory_enabled: false,
+            meta_max_ratio: 10,
+            index_max_ratio: 40,
+            data_max_ratio: 10,
+            kind_max_bytes: BTreeMap::new(),
 
             // ----- the following options/args are all deprecated               ----
             table_meta_segment_count: None,
@@ -3508,10 +3686,11 @@ impl Default for CacheStorageTypeConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum DiskCacheKeyReloadPolicy {
-    // remove all the disk cache during restart
+    // Start with an empty disk cache: what was cached before a restart is never read after it.
     Reset,
-    // recovery the cache keys during restart,
-    // but cache capacity will not be checked
+    // Keep the disk cache across restarts, within the configured capacity. An object rewritten
+    // or deleted just before a host crash may then be read as cached, if the file system lost
+    // the deletion of its cached copy.
     Fuzzy,
 }
 
@@ -3551,6 +3730,8 @@ pub struct DiskCacheConfig {
     ///
     /// Setting this to true improves stability in memory-constrained / containerized environments at the cost
     /// of potentially reduced write performance.
+    ///
+    /// Read at start only.
     #[clap(
         long = "cache-disk-sync-data",
         value_name = "VALUE",
@@ -3558,6 +3739,75 @@ pub struct DiskCacheConfig {
     )]
     #[serde(default = "bool_true")]
     pub sync_data: bool,
+
+    /// Share of `max_bytes` for table, segment and index metadata. The three disk pool ratios
+    /// split `max_bytes` in proportion to their sum, which need not be 100; 0 turns a pool off.
+    #[clap(
+        long = "cache-disk-meta-max-ratio",
+        id = "cache_disk_meta_max_ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub meta_max_ratio: u64,
+
+    /// Share of `max_bytes` for bloom, vector, inverted and spatial index data.
+    #[clap(
+        long = "cache-disk-index-max-ratio",
+        id = "cache_disk_index_max_ratio",
+        value_name = "VALUE",
+        default_value = "20"
+    )]
+    pub index_max_ratio: u64,
+
+    /// Share of `max_bytes` for column data.
+    #[clap(
+        long = "cache-disk-data-max-ratio",
+        id = "cache_disk_data_max_ratio",
+        value_name = "VALUE",
+        default_value = "70"
+    )]
+    pub data_max_ratio: u64,
+
+    /// Bytes waiting to be written to the disk cache, at most. A read whose entry finds the
+    /// queue full waits up to `queue_wait_ms` for room, then is served without filling the
+    /// cache. Read at start only.
+    #[clap(
+        long = "cache-disk-queue-bytes",
+        id = "cache_disk_queue_bytes",
+        value_name = "VALUE",
+        default_value = "268435456"
+    )]
+    pub queue_bytes: u64,
+
+    /// Milliseconds a read waits for room in a full write queue before giving up the fill;
+    /// 0 never waits. Read at start only.
+    #[clap(
+        long = "cache-disk-queue-wait-ms",
+        id = "cache_disk_queue_wait_ms",
+        value_name = "VALUE",
+        default_value = "50"
+    )]
+    pub queue_wait_ms: u64,
+
+    /// Percent of the file system in use above which the disk cache evicts before it writes:
+    /// other files share the disk, spill files among them. 1 to 100; 100 never evicts for it.
+    /// Read at start only.
+    #[clap(
+        long = "cache-disk-watermark-ratio",
+        id = "cache_disk_watermark_ratio",
+        value_name = "VALUE",
+        default_value = "90"
+    )]
+    pub watermark_ratio: u64,
+
+    /// Threads writing the disk cache. Read at start only.
+    #[clap(
+        long = "cache-disk-writer-threads",
+        id = "cache_disk_writer_threads",
+        value_name = "VALUE",
+        default_value = "4"
+    )]
+    pub writer_threads: u64,
 }
 
 impl Default for DiskCacheConfig {
@@ -3566,6 +3816,13 @@ impl Default for DiskCacheConfig {
             max_bytes: 21474836480,
             path: "./.databend/_cache".to_owned(),
             sync_data: true,
+            meta_max_ratio: 10,
+            index_max_ratio: 20,
+            data_max_ratio: 70,
+            queue_bytes: 268435456,
+            queue_wait_ms: 50,
+            watermark_ratio: 90,
+            writer_threads: 4,
         }
     }
 }
@@ -3920,6 +4177,171 @@ mod test {
                     "http://127.0.2.1:1111"
                 );
                 assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
+            },
+        );
+    }
+
+    // Synthetic fixtures: every value names only the layer it comes from.
+    const ALIAS_ROLE_ARN: &str = "acs:ram::0:role/from-alias-env";
+    const DATABEND_ROLE_ARN: &str = "acs:ram::0:role/from-databend-env";
+    const FILE_ROLE_ARN: &str = "acs:ram::0:role/from-file";
+
+    /// Identity comes only from the alias env; neither the config file nor
+    /// Databend's own env set it.
+    #[test]
+    fn test_env_aliases_fills_empty_oss_items() {
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some(ALIAS_ROLE_ARN)),
+                ("ALIBABA_CLOUD_ACCESS_KEY_ID", Some("ak-from-alias-env")),
+                ("ALIBABA_CLOUD_ACCESS_KEY_SECRET", Some("sk-from-alias-env")),
+                ("STORAGE_OSS_ROLE_ARN", None),
+                ("STORAGE_OSS_ACCESS_KEY_ID", None),
+                ("STORAGE_OSS_ACCESS_KEY_SECRET", None),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file("").unwrap();
+                assert_eq!(cfg.storage.oss.oss_role_arn, ALIAS_ROLE_ARN);
+                assert_eq!(cfg.storage.oss.oss_access_key_id, "ak-from-alias-env");
+                assert_eq!(cfg.storage.oss.oss_access_key_secret, "sk-from-alias-env");
+            },
+        );
+    }
+
+    #[test]
+    fn test_env_aliases_databend_env_wins() {
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some(ALIAS_ROLE_ARN)),
+                ("ALIBABA_CLOUD_ACCESS_KEY_ID", Some("ak-from-alias-env")),
+                ("ALIBABA_CLOUD_ACCESS_KEY_SECRET", Some("sk-from-alias-env")),
+                ("STORAGE_OSS_ROLE_ARN", Some(DATABEND_ROLE_ARN)),
+                ("STORAGE_OSS_ACCESS_KEY_ID", Some("ak-from-databend-env")),
+                (
+                    "STORAGE_OSS_ACCESS_KEY_SECRET",
+                    Some("sk-from-databend-env"),
+                ),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file("").unwrap();
+                assert_eq!(cfg.storage.oss.oss_role_arn, DATABEND_ROLE_ARN);
+                assert_eq!(cfg.storage.oss.oss_access_key_id, "ak-from-databend-env");
+                assert_eq!(
+                    cfg.storage.oss.oss_access_key_secret,
+                    "sk-from-databend-env"
+                );
+            },
+        );
+    }
+
+    /// The config file selects OSS and names the bucket but carries no
+    /// credential items at all; the identity comes only from the alias env.
+    /// The alias must land on top of the file layer without disturbing it.
+    #[test]
+    fn test_env_aliases_fills_role_arn_over_file_without_oss_credentials() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            file.path(),
+            r#"
+[query]
+tenant_id = "tenant-from-file"
+cluster_id = "cluster-from-file"
+
+[storage]
+type = "oss"
+
+[storage.oss]
+bucket = "bucket-from-file"
+endpoint_url = "https://oss.example.com"
+"#,
+        )
+        .unwrap();
+
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some(ALIAS_ROLE_ARN)),
+                ("ALIBABA_CLOUD_ACCESS_KEY_ID", None),
+                ("ALIBABA_CLOUD_ACCESS_KEY_SECRET", None),
+                ("STORAGE_OSS_ROLE_ARN", None),
+                ("STORAGE_OSS_ACCESS_KEY_ID", None),
+                ("STORAGE_OSS_ACCESS_KEY_SECRET", None),
+                ("QUERY_TENANT_ID", None),
+                ("QUERY_CLUSTER_ID", None),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file(file.path().to_str().unwrap()).unwrap();
+                // From file, untouched — including a subtree the alias
+                // collector never touches, proving its `Config::default()`
+                // payload does not reset earlier layers.
+                assert_eq!(cfg.query.tenant_id, "tenant-from-file");
+                assert_eq!(cfg.query.cluster_id, "cluster-from-file");
+                assert_eq!(cfg.storage.typ, "oss");
+                assert_eq!(cfg.storage.oss.oss_bucket, "bucket-from-file");
+                assert_eq!(cfg.storage.oss.oss_endpoint_url, "https://oss.example.com");
+                // From alias env.
+                assert_eq!(cfg.storage.oss.oss_role_arn, ALIAS_ROLE_ARN);
+                assert_eq!(cfg.storage.oss.oss_access_key_id, "");
+                assert_eq!(cfg.storage.oss.oss_access_key_secret, "");
+            },
+        );
+    }
+
+    /// The alias sits in the env layer, so like `STORAGE_OSS_ROLE_ARN` it
+    /// overrides the config file (`file < env < args`).
+    #[test]
+    fn test_env_aliases_alias_overrides_file_like_any_env() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            file.path(),
+            format!(
+                r#"
+[storage]
+type = "oss"
+
+[storage.oss]
+bucket = "bucket-from-file"
+role_arn = "{FILE_ROLE_ARN}"
+"#
+            ),
+        )
+        .unwrap();
+
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some(ALIAS_ROLE_ARN)),
+                ("STORAGE_OSS_ROLE_ARN", None),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file(file.path().to_str().unwrap()).unwrap();
+                assert_eq!(cfg.storage.oss.oss_role_arn, ALIAS_ROLE_ARN);
+            },
+        );
+    }
+
+    /// reqsign requires both halves of the static pair; a half pair yields no
+    /// static credential, so the config must stay empty too. Empty values are
+    /// treated as unset.
+    #[test]
+    fn test_env_aliases_ignores_half_pair_and_empty_values() {
+        with_vars(
+            vec![
+                ("ALIBABA_CLOUD_ROLE_ARN", Some("")),
+                ("ALIBABA_CLOUD_ACCESS_KEY_ID", Some("ak-from-alias-env")),
+                ("ALIBABA_CLOUD_ACCESS_KEY_SECRET", None),
+                ("STORAGE_OSS_ROLE_ARN", None),
+                ("STORAGE_OSS_ACCESS_KEY_ID", None),
+                ("STORAGE_OSS_ACCESS_KEY_SECRET", None),
+                ("CONFIG_FILE", None),
+            ],
+            || {
+                let cfg = Config::load_with_config_file("").unwrap();
+                assert_eq!(cfg.storage.oss.oss_role_arn, "");
+                assert_eq!(cfg.storage.oss.oss_access_key_id, "");
+                assert_eq!(cfg.storage.oss.oss_access_key_secret, "");
             },
         );
     }

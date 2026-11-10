@@ -28,6 +28,7 @@ use databend_common_timezone::fast_utc_from_local;
 use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
 use crate::datetime::check_input_year;
 use crate::datetime::check_timezone_offset;
+use crate::datetime::parse_date_prefix;
 use crate::datetime::parse_standard_timestamp as parse_iso_timestamp;
 
 pub enum DateTimeResType {
@@ -124,6 +125,10 @@ fn parse_standard_timestamp(
     tz: &Tz,
     need_date: bool,
 ) -> Option<Result<(usize, DateTimeResType)>> {
+    // Preserve DATE's existing unsigned, four-digit input grammar.
+    if need_date && matches!(input.first(), Some(b'+' | b'-')) {
+        return None;
+    }
     parse_iso_timestamp(input).map(|parsed_result| {
         parsed_result.and_then(|parsed| {
             let value = build_best_effort_result(
@@ -162,7 +167,9 @@ fn build_best_effort_result(
         (year, month, day)
     };
 
-    check_input_year(year)?;
+    if need_date {
+        check_input_year(year)?;
+    }
     let date = NaiveDate::from_ymd_opt(year, month as u32, day as u32).ok_or_else(|| {
         ErrorCode::BadBytes(format!(
             "Invalid date value {:04}-{:02}-{:02}",
@@ -272,7 +279,15 @@ where T: AsRef<[u8]>
             return Ok(value);
         }
 
-        let mut buf = vec![0; DATE_LEN];
+        let remaining = &self.get_ref().as_ref()[self.position() as usize..];
+        let date_len = if need_date {
+            DATE_LEN
+        } else {
+            parse_date_prefix(remaining)
+                .map(|(_, _, _, len)| len)
+                .unwrap_or(DATE_LEN)
+        };
+        let mut buf = vec![0; date_len];
         self.read_exact(buf.as_mut_slice())?;
         let mut v =
             std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
@@ -295,7 +310,9 @@ where T: AsRef<[u8]>
                     v
                 )
             })?;
-        check_input_year(d.year())?;
+        if need_date {
+            check_input_year(d.year())?;
+        }
 
         buf.clear();
         if !self.ignore(|b| b == b' ' || b == b'T') {

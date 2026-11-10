@@ -57,6 +57,25 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_default_cast_rules(CAST_FROM_VARIANT_RULES());
     registry.register_auto_try_cast_rules(CAST_FROM_VARIANT_RULES());
 
+    // Time arithmetic returns a Timestamp even for Date inputs. Prefer parsing strings as
+    // Timestamp so that a time component is not silently discarded by the Date overload.
+    let time_arith_cast_rules = registry
+        .default_cast_rules
+        .iter()
+        .filter(|(src, dest)| !matches!((src, dest), (DataType::String, DataType::Date)))
+        .cloned()
+        .collect::<Vec<_>>();
+    for func_name in [
+        "add_hours",
+        "add_minutes",
+        "add_seconds",
+        "subtract_hours",
+        "subtract_minutes",
+        "subtract_seconds",
+    ] {
+        registry.register_additional_cast_rules(func_name, time_arith_cast_rules.iter().cloned());
+    }
+
     for func_name in ["and", "or", "not", "xor", "and_filters", "or_filters"] {
         for data_type in ALL_INTEGER_TYPES {
             registry.register_additional_cast_rules(func_name, [(

@@ -302,10 +302,7 @@ impl TempDir {
         }
 
         let dir_size = *self.dir_info.size.lock().unwrap();
-        if self.dir_info.limit < dir_size + grow {
-            return Ok(false);
-        }
-        Ok(true)
+        Ok(self.dir_info.limit >= dir_size + grow)
     }
 
     fn init_dir(&self) -> Result<()> {
@@ -437,7 +434,7 @@ impl Drop for InnerPath {
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::assert_matches;
     use std::sync::atomic::Ordering;
 
     use super::*;
@@ -457,7 +454,7 @@ mod tests {
         let dir = mgr.get_disk_spill_dir(1 << 30, "some_query").unwrap();
         let mut path = dir.new_file_with_size(110)?.unwrap();
 
-        println!("{:?}", &path);
+        println!("{:?}", path);
 
         fs::write(&path, vec![b'a'; 100])?;
         path.set_size(100).unwrap();

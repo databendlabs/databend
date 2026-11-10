@@ -57,6 +57,82 @@ pub const MAX_SELECTIVITY: f64 = 1f64;
 const BOOLEAN_VALUE_SELECTIVITY: f64 = 0.5;
 const HISTOGRAM_ROW_COUNT_TOLERANCE: f64 = 1e-9;
 
+/// How estimated selectivities of AND-ed predicates are combined.
+///
+/// Each child of `and_filters` is estimated against the same input rows. Combining
+/// them needs an assumption about how the predicates relate:
+/// - `Independent` (default): predicates on disjoint column sets are assumed
+///   independent and their estimates multiplied; predicates connected by shared
+///   columns are first reduced with `Min`, so a range split into `>=` and `<=` or a
+///   pair like `x = 5 AND x != 3` is not double-counted.
+/// - `Min`: keep the narrowest single estimate (predicates fully correlated).
+///   This was the historical behaviour; it is retained as an escape hatch for
+///   workloads whose filter columns are strongly correlated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilterAndStrategy {
+    Independent,
+    Min,
+}
+
+impl FilterAndStrategy {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "independent" => Some(Self::Independent),
+            "min" => Some(Self::Min),
+            _ => None,
+        }
+    }
+
+    /// Combine numeric child selectivities. `estimates` pairs each estimate with the
+    /// columns its predicate references (empty when unknown).
+    fn combine(self, estimates: &[(f64, ColumnSet)]) -> f64 {
+        match self {
+            Self::Min => estimates.iter().map(|(n, _)| *n).fold(1.0, f64::min),
+            Self::Independent => {
+                // Group predicates whose column sets overlap; take min inside a
+                // group, then multiply across groups. Predicates without column
+                // references (empty set) each form their own group.
+                let mut groups: Vec<(f64, ColumnSet)> = Vec::new();
+                for (n, columns) in estimates {
+                    if columns.is_empty() {
+                        groups.push((*n, ColumnSet::new()));
+                        continue;
+                    }
+                    let mut group_n = *n;
+                    let mut group = columns.clone();
+                    // Existing groups are pairwise disjoint. A child can bridge
+                    // several of them, so consume every intersecting group before
+                    // inserting their union and multiplying independent groups.
+                    groups.retain_mut(|(existing_n, existing_group)| {
+                        if existing_group.is_disjoint(columns) {
+                            return true;
+                        }
+                        group_n = group_n.min(*existing_n);
+                        group.append(existing_group);
+                        false
+                    });
+                    groups.push((group_n, group));
+                }
+                groups.iter().map(|(n, _)| *n).product()
+            }
+        }
+    }
+}
+
+/// Discard histograms once fewer than this fraction of their distinct values
+/// survive. Neither synthetic nor sampled bucket positions describe the survivors
+/// of independent thinning. Keep the separate coarse column stats.
+const MIN_DISTINCT_RETENTION: f64 = 0.5;
+
+fn discard_sparse_histogram(column_stat: &mut ColumnStat) {
+    if column_stat
+        .histogram()
+        .is_some_and(|histogram| histogram.is_range_sparse(MIN_DISTINCT_RETENTION))
+    {
+        column_stat.clear_histogram();
+    }
+}
+
 /// Some constants for like predicate selectivity estimation.
 const FIXED_CHAR_SEL: f64 = 0.5;
 const ANY_CHAR_SEL: f64 = 0.9; // not 1, since it won't match end-of-string
@@ -68,6 +144,7 @@ pub struct SelectivityEstimator {
     top_n: TopNSet,
     count_min_sketch: CountMinSketchSet,
     overrides: ColumnStatSet,
+    and_strategy: FilterAndStrategy,
 }
 
 impl SelectivityEstimator {
@@ -78,7 +155,13 @@ impl SelectivityEstimator {
             top_n: TopNSet::new(),
             count_min_sketch: CountMinSketchSet::new(),
             overrides: ColumnStatSet::new(),
+            and_strategy: FilterAndStrategy::Independent,
         }
+    }
+
+    pub fn with_and_strategy(mut self, and_strategy: FilterAndStrategy) -> Self {
+        self.and_strategy = and_strategy;
+        self
     }
 
     pub fn with_top_n(mut self, top_n: TopNSet) -> Self {
@@ -111,6 +194,25 @@ impl SelectivityEstimator {
     }
 
     pub fn apply(&mut self, predicates: &[ScalarExpr], func_ctx: &FunctionContext) -> Result<f64> {
+        let cardinality = self.apply_predicates(predicates, func_ctx)?;
+        // Keep the input histogram until range comparisons have selected their
+        // sparse fallback, but never export its untrusted positional model. This
+        // also covers constant predicates and columns thinned by this filter.
+        for column_stat in self
+            .column_stats
+            .values_mut()
+            .chain(self.overrides.values_mut())
+        {
+            discard_sparse_histogram(column_stat);
+        }
+        Ok(cardinality)
+    }
+
+    fn apply_predicates(
+        &mut self,
+        predicates: &[ScalarExpr],
+        func_ctx: &FunctionContext,
+    ) -> Result<f64> {
         if self.cardinality == StatCardinality::Exact(0) {
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
@@ -177,6 +279,7 @@ impl SelectivityEstimator {
             column_row_scales: None,
             func_ctx,
             constraints: ValueConstraintState::default(),
+            and_strategy: self.and_strategy,
         };
         visitor.visit_expr(&expr)?;
 
@@ -458,6 +561,9 @@ fn non_null_values(cardinality: f64, null_count: StatCount) -> f64 {
 // it aligns row mass but does not prove which values survived, so NDV is derived
 // from histogram row scaling while preserving the previous upper cap.
 fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f64) -> Option<f64> {
+    // An untrusted positional model must not cap a fallback estimate by its
+    // modeled row mass, even when it is already smaller than the target.
+    discard_sparse_histogram(column_stat);
     if !cardinality.is_finite() || cardinality < 0.0 {
         return None;
     }
@@ -465,7 +571,7 @@ fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f
     let null_count = null_count.expected().min(cardinality).max(0.0);
     let target_num_values = cardinality - null_count;
 
-    match column_stat {
+    let aligned_cardinality = match column_stat {
         ColumnStat::Int { ndv, histogram, .. } => {
             align_typed_histogram(ndv, histogram, target_num_values, null_count, cardinality)
         }
@@ -479,7 +585,9 @@ fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f
             align_typed_histogram(ndv, histogram, target_num_values, null_count, cardinality)
         }
         ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => None,
-    }
+    };
+    discard_sparse_histogram(column_stat);
+    aligned_cardinality
 }
 
 fn align_typed_histogram<T>(
@@ -572,6 +680,7 @@ pub(crate) struct SelectivityVisitor<'a> {
     column_row_scales: Option<&'a HashMap<Symbol, StatCardinality>>,
     func_ctx: &'a FunctionContext,
     constraints: ValueConstraintState,
+    and_strategy: FilterAndStrategy,
 }
 
 #[derive(Clone, Default)]
@@ -598,8 +707,12 @@ impl ValueConstraintState {
     }
 
     fn apply_to_column_stat(&self, index: Symbol, column_stat: &ColumnStat) -> Result<ColumnStat> {
+        let mut column_stat = column_stat.clone();
+        // Coarse bounds remain useful, but clipping sparse buckets would turn
+        // the discarded positional assumption into NDV and cardinality caps.
+        discard_sparse_histogram(&mut column_stat);
         let Some(constraints) = self.pending.get(&index) else {
-            return Ok(column_stat.clone());
+            return Ok(column_stat);
         };
         ValueConstraint::apply_all(column_stat, constraints)
     }
@@ -693,6 +806,7 @@ impl SelectivityVisitor<'_> {
         count_min_sketch: &CountMinSketchSet,
         column_row_scales: &HashMap<Symbol, StatCardinality>,
         func_ctx: &FunctionContext,
+        and_strategy: FilterAndStrategy,
     ) -> Result<Selectivity> {
         if cardinality.is_zero() {
             return Ok(Selectivity::Zero);
@@ -721,6 +835,7 @@ impl SelectivityVisitor<'_> {
             column_row_scales: Some(column_row_scales),
             func_ctx,
             constraints: ValueConstraintState::default(),
+            and_strategy,
         };
         visitor.visit_expr(expr.as_ref())?;
         Ok(visitor.selectivity)
@@ -738,6 +853,7 @@ impl SelectivityVisitor<'_> {
         // Normalize a side-local distribution to the visitor's input population. For Join
         // residuals the scale is the peer cardinality; ordinary filters leave it at one.
         stat.scale_row_mass(self.column_row_scale(index));
+        discard_sparse_histogram(&mut stat);
         stat
     }
 
@@ -888,7 +1004,7 @@ impl SelectivityVisitor<'_> {
 
                 let histogram_is_range_distorted = column_stat
                     .histogram()
-                    .is_some_and(|histogram| histogram.is_range_distorted());
+                    .is_some_and(|histogram| histogram.is_range_sparse(MIN_DISTINCT_RETENTION));
                 let distorted_range = matches!(
                     op,
                     ComparisonOp::GT | ComparisonOp::GTE | ComparisonOp::LT | ComparisonOp::LTE
@@ -1181,6 +1297,7 @@ impl SelectivityVisitor<'_> {
             column_row_scales: self.column_row_scales,
             func_ctx: self.func_ctx,
             constraints: self.constraints.clone(),
+            and_strategy: self.and_strategy,
         }
     }
 
@@ -1229,8 +1346,7 @@ impl SelectivityVisitor<'_> {
                 let mut has_unknown = false;
                 let mut has_lower_bound = false;
                 let mut has_zero = false;
-                let mut has_n = false;
-                let mut acc = 1.0_f64;
+                let mut estimates: Vec<(f64, ColumnSet)> = Vec::new();
                 for arg in &func.args {
                     let mut sub_visitor = self.spawn_child(ConstraintContext::And);
                     sub_visitor.visit_expr(arg)?;
@@ -1242,26 +1358,31 @@ impl SelectivityVisitor<'_> {
                     match selectivity {
                         Selectivity::Unknown => has_unknown = true,
                         Selectivity::LowerBound => has_lower_bound = true,
-                        Selectivity::Zero => {
-                            has_zero = true;
-                            acc = 0.0;
-                        }
+                        Selectivity::Zero => has_zero = true,
                         Selectivity::All => {}
                         Selectivity::N(n) => {
-                            has_n = true;
                             // Constraints are accumulated across AND children,
                             // but each child estimate is still measured against
-                            // the original input rows. Multiplying estimates
-                            // for predicates on different columns would assume
-                            // those columns are independent; without that proof,
-                            // keep the narrowest single estimate. It takes
-                            // priority over fallbacks only when it is below
-                            // the lower-bound selectivity threshold.
-                            acc = acc.min(n);
+                            // the original input rows. How the per-child
+                            // estimates combine depends on whether the predicates
+                            // are assumed correlated (min) or independent
+                            // (product); see `FilterAndStrategy`.
+                            let columns = arg
+                                .column_refs()
+                                .into_keys()
+                                .map(|binding| binding.index)
+                                .collect();
+                            estimates.push((n, columns));
                         }
                     }
                     self.constraints = constraints;
                 }
+                let has_n = !estimates.is_empty();
+                let acc = if has_zero {
+                    0.0
+                } else {
+                    self.and_strategy.combine(&estimates)
+                };
 
                 self.selectivity = if has_zero {
                     Selectivity::Zero

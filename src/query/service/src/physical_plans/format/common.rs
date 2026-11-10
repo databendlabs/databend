@@ -111,6 +111,21 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
         .unwrap();
     }
 
+    // segment zone map pruning status.
+    if info.pruning_stats.segments_zone_map_pruning_before > 0 {
+        if !segments_pruning_description.is_empty() {
+            segments_pruning_description.push_str(", ");
+        }
+        write!(
+            segments_pruning_description,
+            "zone map pruning: {} to {}{}",
+            info.pruning_stats.segments_zone_map_pruning_before,
+            info.pruning_stats.segments_zone_map_pruning_after,
+            format_pruning_cost_suffix(info.pruning_stats.segments_zone_map_pruning_cost)
+        )
+        .unwrap();
+    }
+
     // segment range pruning status.
     if info.pruning_stats.segments_range_pruning_before > 0 {
         if !segments_pruning_description.is_empty() {
@@ -311,7 +326,7 @@ pub fn append_output_rows_info(
     plan_id: u32,
 ) {
     if let Some(prof) = profs.get(&plan_id) {
-        for (_, desc) in get_statistics_desc().iter() {
+        for desc in get_statistics_desc().values() {
             if desc.display_name != "output rows" {
                 continue;
             }

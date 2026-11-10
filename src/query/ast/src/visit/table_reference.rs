@@ -36,7 +36,6 @@ impl Walk for TableReference {
                 sample: _,
                 temporal,
                 unpivot,
-                with_options: _,
                 ..
             } => {
                 if let Some(catalog) = &table.catalog {
@@ -135,7 +134,6 @@ impl WalkMut for TableReference {
                 sample: _,
                 temporal,
                 unpivot,
-                with_options: _,
                 ..
             } => {
                 if let Some(catalog) = &mut table.catalog {

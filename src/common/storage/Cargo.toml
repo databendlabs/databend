@@ -28,17 +28,20 @@ borsh = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
+hmac = { workspace = true }
 http = { workspace = true }
 iceberg = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
 opendal = { workspace = true }
+parking_lot = { workspace = true }
 parquet = { workspace = true }
 prometheus-client = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true }
 simple_hll = { workspace = true, features = ["serde_borsh"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -46,6 +49,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["gzip"] }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

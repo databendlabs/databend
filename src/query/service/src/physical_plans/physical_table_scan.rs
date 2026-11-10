@@ -20,12 +20,15 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
@@ -86,6 +89,20 @@ use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableFactory;
+
+fn should_use_distributed_block_meta_shuffle(
+    enable_distributed_pruning: bool,
+    enable_prune_pipeline: bool,
+    is_multi_node: bool,
+    partitions: &Partitions,
+    is_fuse: bool,
+) -> bool {
+    enable_distributed_pruning
+        && enable_prune_pipeline
+        && is_multi_node
+        && is_fuse
+        && partitions.partitions_type() == PartInfoType::LazyLevel
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
@@ -203,35 +220,48 @@ impl IPhysicalPlan for TableScan {
             builder.ctx.clone(),
             &self.source,
             &mut builder.main_pipeline,
-            true,
+            CachePolicy::DEFAULT,
         )?;
 
-        let schema = self.source.schema();
-        // Fill internal columns if needed.
-        if let Some(internal_columns) = &self.internal_column {
-            builder.main_pipeline.add_transformer(|| {
-                TransformAddInternalColumns::new(internal_columns.clone(), schema.clone())
-            });
-        }
-
-        let mut projection = self
-            .name_mapping
-            .keys()
-            .map(|name| schema.index_of(name.as_str()))
-            .collect::<Result<Vec<usize>>>()?;
-        projection.sort();
-
-        // if projection is sequential, no need to add projection
-        if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
-            let ops = vec![BlockOperator::Project { projection }];
-            let num_input_columns = schema.num_fields();
-            builder.main_pipeline.add_transformer(|| {
-                CompoundBlockOperator::new(ops.clone(), builder.func_ctx.clone(), num_input_columns)
-            });
-        }
-
-        Ok(())
+        build_scan_output_pipeline(
+            builder,
+            &self.source,
+            &self.name_mapping,
+            &self.internal_column,
+        )
     }
+}
+
+pub(crate) fn build_scan_output_pipeline(
+    builder: &mut PipelineBuilder,
+    source: &DataSourcePlan,
+    name_mapping: &BTreeMap<String, String>,
+    internal_column: &Option<BTreeMap<FieldIndex, InternalColumn>>,
+) -> Result<()> {
+    let schema = source.schema();
+    // Fill internal columns if needed.
+    if let Some(internal_columns) = internal_column {
+        builder.main_pipeline.add_transformer(|| {
+            TransformAddInternalColumns::new(internal_columns.clone(), schema.clone())
+        });
+    }
+
+    let mut projection = name_mapping
+        .keys()
+        .map(|name| schema.index_of(name.as_str()))
+        .collect::<Result<Vec<usize>>>()?;
+    projection.sort();
+
+    // if projection is sequential, no need to add projection
+    if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
+        let ops = vec![BlockOperator::Project { projection }];
+        let num_input_columns = schema.num_fields();
+        builder.main_pipeline.add_transformer(|| {
+            CompoundBlockOperator::new(ops.clone(), builder.func_ctx.clone(), num_input_columns)
+        });
+    }
+
+    Ok(())
 }
 
 impl TableScan {
@@ -520,6 +550,18 @@ impl PhysicalPlanBuilder {
         if scan.is_lazy_table {
             let mut metadata = self.metadata.write();
             metadata.set_table_source(scan.table_index, source.clone());
+        }
+
+        let use_distributed_block_meta_shuffle = should_use_distributed_block_meta_shuffle(
+            self.ctx.get_settings().get_enable_distributed_pruning()?,
+            self.ctx.get_settings().get_enable_prune_pipeline()?,
+            !self.ctx.get_cluster().is_empty(),
+            &source.parts,
+            FuseTable::try_from_table(table.as_ref()).is_ok(),
+        );
+
+        if use_distributed_block_meta_shuffle {
+            self.distributed_fuse_pruning_scans.insert(scan.scan_id);
         }
 
         let mut plan = TableScan::create(
@@ -844,7 +886,12 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let virtual_column = self.build_virtual_column(virtual_columns)?;
+        let virtual_column = self.build_virtual_column(
+            virtual_columns,
+            table_schema,
+            output_columns.as_ref().unwrap_or(&projection),
+            prewhere_info.as_ref(),
+        )?;
 
         Ok(PushDownInfo {
             projection: Some(projection),
@@ -925,6 +972,9 @@ impl PhysicalPlanBuilder {
     fn build_virtual_column(
         &self,
         virtual_columns: BTreeMap<Symbol, VirtualColumn>,
+        table_schema: &TableSchema,
+        output_columns: &Projection,
+        prewhere_info: Option<&PrewhereInfo>,
     ) -> Result<Option<VirtualColumnInfo>> {
         if virtual_columns.is_empty() {
             return Ok(None);
@@ -946,8 +996,31 @@ impl PhysicalPlanBuilder {
             virtual_column_fields.push(virtual_column_field);
         }
 
+        // A source column can be skipped only when the scan does not need its own
+        // values: it is neither an output column nor used by prewhere. This is a
+        // query-level property, so compute it once here instead of per block.
+        // The read output schema follows the same rule as `read_plan`: prewhere
+        // output columns take precedence over scan output columns.
+        let output_schema = match prewhere_info {
+            Some(prewhere) => prewhere.output_columns.project_schema(table_schema),
+            None => output_columns.project_schema(table_schema),
+        };
+        let prewhere_schema =
+            prewhere_info.map(|prewhere| prewhere.prewhere_columns.project_schema(table_schema));
+        let ignorable_source_column_ids = source_column_ids
+            .iter()
+            .copied()
+            .filter(|column_id| {
+                output_schema.is_column_deleted(*column_id)
+                    && prewhere_schema
+                        .as_ref()
+                        .is_none_or(|schema| schema.is_column_deleted(*column_id))
+            })
+            .collect();
+
         let virtual_column_info = VirtualColumnInfo {
             source_column_ids,
+            ignorable_source_column_ids,
             virtual_column_fields,
         };
         Ok(Some(virtual_column_info))

@@ -149,11 +149,22 @@ impl PhysicalPlanBuilder {
             })?;
             cte_output_columns.push(index);
         }
-        let mut fields = Vec::new();
-
-        for index in cte_output_columns.iter() {
-            let column = metadata.column(*index);
-            let data_type = column.data_type();
+        let producer_schema = self
+            .cte_schemas
+            .get(&cte_consumer.cte_name)
+            .ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(format!(
+                    "CTE producer schema not found for CTE name: {}",
+                    cte_consumer.cte_name
+                ))
+            })?;
+        let mut fields = Vec::with_capacity(cte_output_columns.len());
+        for index in &cte_output_columns {
+            let producer_index = cte_consumer.column_mapping[index];
+            let data_type = producer_schema
+                .field_with_name(&producer_index.to_string())?
+                .data_type()
+                .clone();
             fields.push(DataField::new(&index.to_string(), data_type));
         }
         let cte_schema = DataSchemaRefExt::create(fields);

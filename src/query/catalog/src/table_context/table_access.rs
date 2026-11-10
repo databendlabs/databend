@@ -35,15 +35,8 @@ pub trait TableContextTableAccess: Send + Sync {
 
     fn get_tenant(&self) -> Tenant;
 
-    async fn get_table(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table_with_branch(catalog, database, table, None)
-            .await
-    }
+    async fn get_table(&self, catalog: &str, database: &str, table: &str)
+    -> Result<Arc<dyn Table>>;
 
     async fn get_zero_table(&self) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog("default").await?;
@@ -57,20 +50,11 @@ pub trait TableContextTableAccess: Send + Sync {
     /// the table level data accessor (e.g., table with customized storage parameters).
     fn get_application_level_data_operator(&self) -> Result<DataOperator>;
 
-    async fn get_table_with_branch(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>>;
-
     async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>>;
 

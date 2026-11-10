@@ -36,13 +36,13 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
-use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
@@ -604,10 +604,12 @@ struct ContainsNextvalVisitor {
 
 impl<'a> Visitor<'a> for CompileTimeEvaluableVisitor {
     fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
-        if BUILTIN_FUNCTIONS
-            .get_property(&func.func_name)
-            .map(|property| property.kind == FunctionKind::SRF)
-            .unwrap_or(false)
+        // `grouping` is a placeholder until the aggregate rewriter replaces it.
+        if func.func_name.eq_ignore_ascii_case("grouping")
+            || BUILTIN_FUNCTIONS
+                .get_property(&func.func_name)
+                .map(|property| property.kind == FunctionKind::SRF)
+                .unwrap_or(false)
         {
             self.evaluable = false;
         } else {
@@ -1061,30 +1063,8 @@ impl<'a> TryFrom<&'a BinaryOperator> for SubqueryComparisonOp {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AggregateFunctionScalarSortDesc {
     pub expr: ScalarExpr,
-    pub is_reuse_index: bool,
     pub nulls_first: bool,
     pub asc: bool,
-}
-
-impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> std::result::Result<AggregateFunctionSortDesc, Self::Error> {
-        let expr = &self.expr;
-        let ScalarExpr::BoundColumnRef(col) = expr else {
-            return Err(ErrorCode::Internal(
-                "Aggregate function sort description must be a BoundColumnRef".to_string(),
-            ));
-        };
-
-        Ok(AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Symbol(col.column.index),
-            is_reuse_index: self.is_reuse_index,
-            data_type: expr.data_type().into_owned(),
-            nulls_first: self.nulls_first,
-            asc: self.asc,
-        })
-    }
 }
 
 #[derive(Clone, Debug, Educe)]
@@ -1103,6 +1083,44 @@ pub struct AggregateFunction {
 }
 
 impl AggregateFunction {
+    pub fn bound_order_by(&self) -> Result<Vec<AggregateBoundOrderByItem>> {
+        let mut input_symbols = self
+            .args
+            .iter()
+            .map(|arg| match arg {
+                ScalarExpr::BoundColumnRef(column) => Ok(column.column.index),
+                _ => Err(ErrorCode::Internal(
+                    "Aggregate function argument must be a BoundColumnRef".to_string(),
+                )),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.sort_descs
+            .iter()
+            .map(|desc| {
+                let ScalarExpr::BoundColumnRef(sort_column) = &desc.expr else {
+                    return Err(ErrorCode::Internal(
+                        "Aggregate function sort description must be a BoundColumnRef".to_string(),
+                    ));
+                };
+                let index = sort_column.column.index;
+                let source = match input_symbols.iter().position(|i| *i == index) {
+                    Some(index) => AggregateBoundOrderBySource::Argument { index },
+                    None => {
+                        input_symbols.push(index);
+                        AggregateBoundOrderBySource::Derived
+                    }
+                };
+                Ok(AggregateBoundOrderByItem {
+                    index,
+                    source,
+                    data_type: desc.expr.data_type().into_owned(),
+                    nulls_first: desc.nulls_first,
+                    asc: desc.asc,
+                })
+            })
+            .collect()
+    }
+
     pub fn exprs(&self) -> impl Iterator<Item = &ScalarExpr> {
         self.args
             .iter()
@@ -1178,6 +1196,54 @@ pub struct LambdaFunc {
     pub return_type: Box<DataType>,
 }
 
+impl LambdaFunc {
+    fn sync_return_type_nullability(&mut self, is_nullable: bool) {
+        if self.return_type.is_nullable() == is_nullable {
+            return;
+        }
+
+        self.return_type = Box::new(if is_nullable {
+            self.return_type.wrap_nullable()
+        } else {
+            self.return_type.remove_nullable()
+        });
+    }
+
+    pub fn with_args(&self, args: Vec<ScalarExpr>) -> Result<Self> {
+        let mut lambda = self.clone();
+        lambda.args = args;
+        lambda.refresh_return_type()?;
+        Ok(lambda)
+    }
+
+    pub fn refresh_return_type(&mut self) -> Result<()> {
+        if self.func_name == "json_path_transform" {
+            let [json, path, ..] = self.args.as_slice() else {
+                return Err(ErrorCode::Internal(
+                    "json_path_transform requires json and path arguments",
+                ));
+            };
+            let is_nullable =
+                json.data_type().is_nullable_or_null() || path.data_type().is_nullable_or_null();
+            self.sync_return_type_nullability(is_nullable);
+            return Ok(());
+        }
+
+        // Captured columns precede the collection argument. Planner rewrites
+        // may change only the collection's outer nullability; its element, key,
+        // and value types remain those used to type-check the lambda body.
+        let collection_type = self
+            .args
+            .last()
+            .ok_or_else(|| ErrorCode::Internal("lambda function requires a collection argument"))?
+            .data_type();
+        if self.func_name != "array_reduce" {
+            self.sync_return_type_nullability(collection_type.is_nullable_or_null());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Educe)]
 #[educe(Debug, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
@@ -1239,6 +1305,10 @@ pub struct SubqueryExpr {
     pub compare_op: Option<SubqueryComparisonOp>,
     // Output column of Any/All and scalar subqueries.
     pub output_column: ColumnBinding,
+    // All output columns when a row value is compared positionally against a
+    // multi-column subquery, such as `(a, b) IN (SELECT x, y FROM t)`.
+    // Empty for every other subquery, including a single tuple-typed column.
+    pub row_columns: Vec<ColumnBinding>,
     pub projection_index: Option<Symbol>,
     pub(crate) data_type: Box<DataType>,
     #[educe(Hash(method = "hash_column_set"))]
@@ -1267,6 +1337,7 @@ fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDFCall {
+    pub external_access_integrations: Vec<String>,
     #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     // name in meta
@@ -1337,6 +1408,8 @@ impl Display for UDFLanguage {
 #[derive(Clone, Debug, Educe, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 #[educe(Hash(bound = false))]
 pub struct UDFScriptCode {
+    #[serde(default)]
+    pub external_access_integrations: Vec<String>,
     pub language: UDFLanguage,
     pub runtime_version: String,
     #[educe(Hash(ignore))]
@@ -1346,17 +1419,61 @@ pub struct UDFScriptCode {
     pub code: Arc<Box<[u8]>>,
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
     Server(String), // server_addr
     Script(Box<UDFScriptCode>),
+    // An old executing node must fail deserialization rather than ignore a
+    // mandatory policy field and run under the legacy network exception.
+    ScriptWithExternalAccess(Box<UDFScriptCode>),
+}
+
+impl serde::Serialize for UDFType {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        #[derive(serde::Serialize)]
+        #[serde(rename = "UDFType")]
+        enum Wire<'a> {
+            Server(&'a str),
+            Script(&'a UDFScriptCode),
+            ScriptWithExternalAccess(&'a UDFScriptCode),
+        }
+        // Enforce fail-closed serialization even if a caller bypasses script().
+        let wire = match self {
+            Self::Server(address) => Wire::Server(address),
+            Self::Script(code) if code.external_access_integrations.is_empty() => {
+                Wire::Script(code)
+            }
+            Self::Script(code) | Self::ScriptWithExternalAccess(code) => {
+                Wire::ScriptWithExternalAccess(code)
+            }
+        };
+        serde::Serialize::serialize(&wire, serializer)
+    }
 }
 
 impl UDFType {
+    pub fn script_code(&self) -> Option<&UDFScriptCode> {
+        match self {
+            Self::Script(code) | Self::ScriptWithExternalAccess(code) => Some(code),
+            Self::Server(_) => None,
+        }
+    }
+
+    pub fn script(code: UDFScriptCode) -> Self {
+        if code.external_access_integrations.is_empty() {
+            Self::Script(Box::new(code))
+        } else {
+            Self::ScriptWithExternalAccess(Box::new(code))
+        }
+    }
+
     pub fn match_type(&self, is_script: bool) -> bool {
         match self {
             UDFType::Server(_) => !is_script,
-            UDFType::Script(_) => is_script,
+            UDFType::Script(_) | UDFType::ScriptWithExternalAccess(_) => is_script,
         }
     }
 }
@@ -1388,6 +1505,7 @@ pub enum AsyncFunctionArgument {
     DictGetFunction(DictGetFunctionArgument),
     // Used by `read_file` function to read stage files.
     ReadFile(ReadFileFunctionArgument),
+    Sleep,
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
@@ -1502,6 +1620,9 @@ impl AsyncFunctionCall {
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
                 Err(ErrorCode::Internal("Cannot generate dict_get function"))
+            }
+            AsyncFunctionArgument::Sleep => {
+                Err(ErrorCode::Internal("Cannot generate sleep function"))
             }
             AsyncFunctionArgument::ReadFile(_) => {
                 Err(ErrorCode::Internal("Cannot generate read_file function"))
@@ -1788,11 +1909,57 @@ impl<'a> Visitor<'a> for IndexPredicateChecker {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use databend_common_expression::types::number::NumberDataType;
 
     use super::*;
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
+
+    #[test]
+    fn script_network_policy_survives_distributed_plan_serialization() {
+        #[derive(serde::Deserialize)]
+        enum LegacyType {
+            Server,
+            Script,
+        }
+        let code = UDFScriptCode {
+            external_access_integrations: vec!["access".into()],
+            language: UDFLanguage::Python,
+            runtime_version: String::new(),
+            imports_stage_info: vec![],
+            imports: vec![],
+            packages: vec![],
+            code: Arc::new(Box::new([])),
+        };
+        // Direct construction must serialize with the fail-closed variant too.
+        let direct = UDFType::Script(Box::new(code.clone()));
+        let plan = UDFType::script(code);
+        let bytes = serde_json::to_vec(&plan).unwrap();
+        assert_eq!(serde_json::to_vec(&direct).unwrap(), bytes);
+        let round_trip: UDFType = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(plan, round_trip);
+        assert!(matches!(round_trip, UDFType::ScriptWithExternalAccess(_)));
+        let error = serde_json::from_slice::<LegacyType>(&bytes).err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("unknown variant `ScriptWithExternalAccess`"),
+            "{error}"
+        );
+        // Keep the existing wire shapes for unbound scripts and remote UDFs.
+        let mut unbound_code = plan.script_code().unwrap().clone();
+        unbound_code.external_access_integrations.clear();
+        let unbound = UDFType::script(unbound_code);
+        let value = serde_json::to_value(&unbound).unwrap();
+        assert!(value.get("Script").is_some());
+        assert_eq!(serde_json::from_value::<UDFType>(value).unwrap(), unbound);
+        assert_eq!(
+            serde_json::to_value(UDFType::Server("address".into())).unwrap(),
+            serde_json::json!({"Server": "address"})
+        );
+    }
 
     fn column_expr(index: usize) -> ScalarExpr {
         ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -1848,6 +2015,21 @@ mod tests {
             expr.data_type().as_ref(),
             expr.as_expr().unwrap().data_type()
         );
+    }
+
+    #[test]
+    fn test_typed_constant_expr_hash_map_lookup() {
+        let expr = ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(NumberScalar::Int64(1)),
+            },
+            DataType::Number(NumberDataType::Int64),
+        );
+        let mut expr_index = HashMap::new();
+        expr_index.insert(expr.clone(), 0);
+
+        assert_eq!(expr_index.get(&expr), Some(&0));
     }
 
     #[test]

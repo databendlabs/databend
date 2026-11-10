@@ -18,9 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::shrink_scalar;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use unicase::Ascii;
 
 use super::AuthFunction;
@@ -101,6 +99,7 @@ impl<'a, A> TypeChecker<'a, A> {
             Ascii::new("current_role"),
             Ascii::new("current_secondary_roles"),
             Ascii::new("current_available_roles"),
+            Ascii::new("current_tenant_id"),
             Ascii::new("is_role_in_session"),
             Ascii::new("connection_id"),
             Ascii::new("client_session_id"),
@@ -186,6 +185,10 @@ impl<'a> CoreExprArena<'a> {
             "current_available_roles" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
                 SpecialFunction::Auth(AuthFunction::CurrentAvailableRoles)
+            }
+            "current_tenant_id" => {
+                check_function_arity(span, func_name, args.len(), 0, Some(0))?;
+                SpecialFunction::Auth(AuthFunction::CurrentTenantId)
             }
             "is_role_in_session" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
@@ -377,10 +380,9 @@ where A: TypeCheckAdapter
             SpecialFunction::IsRoleInSession { role } => {
                 self.resolve_is_role_in_session(arena, span, role)
             }
-            SpecialFunction::Timezone => self.resolve_special_literal(
-                span,
-                Scalar::String(self.adapter.settings().get_timezone().unwrap()),
-            ),
+            SpecialFunction::Timezone => {
+                self.resolve_special_literal(span, Scalar::String(self.adapter.timezone()?))
+            }
             SpecialFunction::LastQueryId { arg } => {
                 let scalar = match arg {
                     Some((_, arg)) => {
@@ -538,22 +540,18 @@ where A: TypeCheckAdapter
         scalar: Option<&ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let index = if let Some(scalar) = scalar {
-            let expr = scalar.as_expr()?;
-            if expr.as_constant().is_none() {
+            if scalar.as_expr()?.as_constant().is_none() {
                 return Err(ErrorCode::BadArguments(
                     "last_query_id argument only support constant argument",
                 )
                 .set_span(span));
             }
-            check_number(span, &self.func_ctx, expr, &BUILTIN_FUNCTIONS)?
+            self.constant_number::<i32>(span, scalar)?
         } else {
             -1
         };
-        self.resolve_special_literal(
-            span,
-            self.adapter
-                .resolve_session_function(SessionFunction::LastQueryId(index as i32))?,
-        )
+        let function = SessionFunction::LastQueryId(index);
+        self.resolve_special_literal(span, self.adapter.resolve_session_function(function)?)
     }
 
     fn resolve_coalesce(
@@ -710,8 +708,10 @@ where A: TypeCheckAdapter
                 ));
             }
         }
-        let nulls_first =
-            nulls_first.unwrap_or_else(|| self.adapter.settings().get_nulls_first()(asc));
+        let nulls_first = match nulls_first {
+            Some(nulls_first) => nulls_first,
+            None => self.adapter.default_nulls_first(asc)?,
+        };
         let func_name = match (asc, nulls_first) {
             (true, true) => "array_sort_asc_null_first",
             (false, true) => "array_sort_desc_null_first",
@@ -785,9 +785,8 @@ where A: TypeCheckAdapter
         if let Ok(arg) = ConstantExpr::try_from(scalar.clone())
             && let Scalar::String(var_name) = arg.value
         {
-            let var_value = self
-                .adapter
-                .resolve_session_function(SessionFunction::Variable(&var_name))?;
+            let function = SessionFunction::Variable(&var_name);
+            let var_value = self.adapter.resolve_session_function(function)?;
             let var_value = shrink_scalar(var_value);
             let data_type = var_value.as_ref().infer_data_type();
             return Ok(Box::new((

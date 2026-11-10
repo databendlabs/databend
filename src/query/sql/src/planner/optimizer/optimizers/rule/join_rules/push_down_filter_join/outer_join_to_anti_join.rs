@@ -25,7 +25,8 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 
 /// Convert an outer-join exclusion pattern to the corresponding anti join when
-/// the null-tested expression is a regular equi-key on the null-extended side:
+/// the null-tested expression is a direct column and a regular equi-key on the
+/// null-extended side:
 ///
 /// ```text
 /// Filter(right_key IS NULL)
@@ -38,6 +39,8 @@ use crate::plans::ScalarItem;
 /// A matched row cannot have a NULL regular equi-join key, even when the source
 /// column itself is nullable. Therefore the filter keeps exactly the preserved
 /// side's unmatched rows. Null-equal join conditions are deliberately excluded.
+/// An arbitrary equi-key expression may map null-extended inputs to a non-NULL
+/// value, so its NULL test does not necessarily select unmatched rows.
 pub fn outer_join_to_anti_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<Option<SExpr>> {
     let filter = s_expr.plan().as_filter().unwrap();
     let join_expr = s_expr.unary_child();
@@ -49,7 +52,8 @@ pub fn outer_join_to_anti_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<
     };
 
     let Some(predicate_index) = filter.predicates.iter().position(|predicate| {
-        let Some(null_tested_expr) = null_tested_expr(predicate) else {
+        let Some(null_tested_expr @ ScalarExpr::BoundColumnRef(_)) = null_tested_expr(predicate)
+        else {
             return false;
         };
 

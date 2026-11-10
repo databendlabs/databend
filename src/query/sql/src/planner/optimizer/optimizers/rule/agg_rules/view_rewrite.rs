@@ -266,7 +266,19 @@ impl QueryInfo {
                 }
                 return Err(ErrorCode::Internal("Can't found column from index"));
             }
-            ScalarExpr::ConstantExpr(_) => scalar.clone(),
+            ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => scalar.clone(),
+            ScalarExpr::LambdaFunction(lambda) => {
+                let mut new_args = Vec::with_capacity(lambda.args.len());
+                for arg in &lambda.args {
+                    let Some(new_arg) =
+                        self.check_output_cols(arg, index_output_cols, new_selection_set)?
+                    else {
+                        return Ok(None);
+                    };
+                    new_args.push(new_arg);
+                }
+                ScalarExpr::LambdaFunction(lambda.with_args(new_args)?)
+            }
             ScalarExpr::FunctionCall(func) => {
                 let mut valid = true;
                 let mut new_args = Vec::with_capacity(func.arguments.len());
@@ -408,23 +420,25 @@ impl PredicatesSplitter {
                     let col1 = BoundColumnRef::try_from(arg1.clone()).unwrap();
                     self.equi_columns_preds.push((col0, col1));
                 }
+                // Ranges compare values, so a typed constant counts by its value.
                 "eq" | "lt" | "lte" | "gt" | "gte"
                     if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
-                        && matches!(func.arguments[1], ScalarExpr::ConstantExpr(_)) =>
+                        && let ScalarExpr::ConstantExpr(val)
+                        | ScalarExpr::TypedConstantExpr(val, _) = &func.arguments[1] =>
                 {
                     let func_name = func.func_name.clone();
                     let arg0 = actual_column_ref(&func.arguments[0], column_map);
                     let col = BoundColumnRef::try_from(arg0.clone()).unwrap();
-                    let val = ConstantExpr::try_from(func.arguments[1].clone()).unwrap();
-                    self.range_preds.push((func_name, col, val));
+                    self.range_preds.push((func_name, col, val.clone()));
                 }
                 "eq" | "lt" | "lte" | "gt" | "gte"
-                    if matches!(func.arguments[0], ScalarExpr::ConstantExpr(_))
+                    if let ScalarExpr::ConstantExpr(val)
+                    | ScalarExpr::TypedConstantExpr(val, _) = &func.arguments[0]
                         && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
                 {
                     let func_name = reverse_op(func.func_name.as_str());
 
-                    let val = ConstantExpr::try_from(func.arguments[0].clone()).unwrap();
+                    let val = val.clone();
                     let arg1 = actual_column_ref(&func.arguments[1], column_map);
                     let col = BoundColumnRef::try_from(arg1.clone()).unwrap();
                     self.range_preds.push((func_name, col, val));
@@ -802,7 +816,7 @@ impl ResidualClasses {
     // Residual subsumption test.
     fn check(&self, view_residual_classes: &ResidualClasses) -> (bool, Option<Vec<ScalarExpr>>) {
         let mut extra_residual_preds = Vec::new();
-        for (view_residual_key, _) in view_residual_classes.residual_preds.iter() {
+        for view_residual_key in view_residual_classes.residual_preds.keys() {
             if !self.residual_preds.contains_key(view_residual_key) {
                 return (false, None);
             }
@@ -1033,8 +1047,7 @@ impl ViewMatcher {
                     Ok(Some(new_residual_pred)) => {
                         new_predicates.push(new_residual_pred);
                     }
-                    Ok(None) => {}
-                    Err(_) => {
+                    Ok(None) | Err(_) => {
                         return false;
                     }
                 }
@@ -1061,11 +1074,16 @@ impl ViewMatcher {
                     new_selection_set,
                 )
                 .is_err()
+                || !Self::selection_contains(new_selection_set, output_item.index)
             {
                 return false;
             }
         }
         true
+    }
+
+    fn selection_contains(selection: &HashSet<ScalarItem>, index: Symbol) -> bool {
+        selection.iter().any(|item| item.index == index)
     }
 
     fn check_aggregation(
@@ -1143,6 +1161,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(&item.scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1156,6 +1175,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(&item.scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1184,6 +1204,7 @@ impl ViewMatcher {
                         .query_info
                         .check_output_cols(scalar, &view_info.output_cols, new_selection_set)
                         .is_err()
+                        || !Self::selection_contains(new_selection_set, item.index)
                     {
                         return false;
                     }
@@ -1208,6 +1229,10 @@ impl ViewMatcher {
                 self.query_info
                     .check_output_cols(predicate, &view_info.output_cols, new_selection_set)
                     .is_ok()
+                    && predicate
+                        .used_columns()
+                        .iter()
+                        .all(|index| Self::selection_contains(new_selection_set, *index))
             })
     }
 }
@@ -1257,6 +1282,10 @@ pub(crate) fn format_scalar(
             s => format_scalar(s, column_map),
         },
         ScalarExpr::ConstantExpr(val) => format!("{}", val.value),
+        // The name matches expressions, so it keeps the declared type.
+        ScalarExpr::TypedConstantExpr(val, data_type) => {
+            format!("cast({} as {})", val.value, data_type)
+        }
         ScalarExpr::FunctionCall(func) => {
             let params = func.params.iter().map(|param| param.to_string()).join(", ");
             let args = func
@@ -1265,9 +1294,9 @@ pub(crate) fn format_scalar(
                 .map(|arg| format_scalar(arg, column_map))
                 .join(", ");
             if !params.is_empty() {
-                format!("{}({})({})", &func.func_name, params, args)
+                format!("{}({})({})", func.func_name, params, args)
             } else {
-                format!("{}({})", &func.func_name, args)
+                format!("{}({})", func.func_name, args)
             }
         }
         ScalarExpr::CastExpr(cast) => {
@@ -1293,9 +1322,9 @@ pub(crate) fn format_scalar(
                 .collect::<Vec<_>>()
                 .join(", ");
             let mut scalar = if !params.is_empty() {
-                format!("{}<{}>({})", &agg.func_name, params, args)
+                format!("{}<{}>({})", agg.func_name, params, args)
             } else {
-                format!("{}({})", &agg.func_name, args)
+                format!("{}({})", agg.func_name, args)
             };
             if !agg.sort_descs.is_empty() {
                 let sort_descs = agg
@@ -1314,11 +1343,11 @@ pub(crate) fn format_scalar(
                 .map(|arg| format_scalar(arg, column_map))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{}({})", &udaf.name, args)
+            format!("{}({})", udaf.name, args)
         }
         ScalarExpr::UDFCall(udf) => format!(
             "{}({})",
-            &udf.handler,
+            udf.handler,
             udf.arguments
                 .iter()
                 .map(|arg| { format_scalar(arg, column_map) })

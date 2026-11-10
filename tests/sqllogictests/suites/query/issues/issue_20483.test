@@ -1,0 +1,78 @@
+# GitHub issue: https://github.com/databendlabs/databend/issues/20483
+#
+# The eager-aggregation rewrite used to move a scalar aggregate (an aggregate
+# that keeps no GROUP BY column of its own) below a CROSS join. A scalar
+# aggregate emits exactly one row even when its input is empty, so the rewritten
+# join gained a one-row build side and emitted probe rows that the zero-match
+# WHERE predicate had removed.
+
+statement ok
+DROP TABLE IF EXISTS issue_20483_t0
+
+statement ok
+DROP TABLE IF EXISTS issue_20483_t1
+
+statement ok
+CREATE TABLE issue_20483_t0(d DATE NOT NULL)
+
+statement ok
+CREATE TABLE issue_20483_t1(v VARCHAR NOT NULL)
+
+statement ok
+INSERT INTO issue_20483_t0 VALUES (DATE '1969-12-27'), (DATE '1969-12-31')
+
+# LENGTH(REGEXP_SUBSTR(v, '[0-9]{3}')) is 3 for a three-digit match and NULL for
+# no match, so `< 2` is never TRUE for any row.
+statement ok
+INSERT INTO issue_20483_t1 VALUES ('a'),('b'),('c'),('d'),('e'),('f'),('g'),('h'),('i')
+
+# The zero-match WHERE predicate must survive the constant-true HAVING branch.
+query I
+SELECT t0.d FROM issue_20483_t0 AS t0, issue_20483_t1 AS t1
+WHERE LENGTH(REGEXP_SUBSTR(t1.v, '[0-9]{3}')) < 2
+GROUP BY t0.d
+HAVING (1=1) OR (COUNT(t1.v) != COUNT(t0.d));
+----
+
+# The same query with the HAVING predicate relocated into a derived table is the
+# reference result.
+query I
+SELECT ref0 FROM (
+  SELECT t0.d AS ref0, ((1=1) OR (COUNT(t1.v) != COUNT(t0.d))) AS ref1
+  FROM issue_20483_t0 AS t0, issue_20483_t1 AS t1
+  WHERE LENGTH(REGEXP_SUBSTR(t1.v, '[0-9]{3}')) < 2
+  GROUP BY t0.d
+) s WHERE ref1;
+----
+
+# The aggregate over the join must agree with the aggregate over a derived empty
+# table: the cross join produces no rows, so there are no groups at all.
+query II
+SELECT t0.d, COUNT(t1.v) FROM issue_20483_t0 AS t0, issue_20483_t1 AS t1
+WHERE LENGTH(REGEXP_SUBSTR(t1.v, '[0-9]{3}')) < 2
+GROUP BY t0.d
+ORDER BY t0.d;
+----
+
+query II
+SELECT t0.d, COUNT(t1.v) FROM issue_20483_t0 AS t0,
+  (SELECT v FROM issue_20483_t1 WHERE 1=0) AS t1
+GROUP BY t0.d
+ORDER BY t0.d;
+----
+
+# Without the WHERE predicate the rewrite is still valid and the count is the
+# full right-hand row count.
+query II
+SELECT t0.d, COUNT(t1.v) FROM issue_20483_t0 AS t0, issue_20483_t1 AS t1
+GROUP BY t0.d
+ORDER BY t0.d;
+----
+1969-12-27	9
+1969-12-31	9
+
+statement ok
+DROP TABLE issue_20483_t0
+
+statement ok
+DROP TABLE issue_20483_t1

@@ -8,9 +8,6 @@ statement ok
 USE test_virtual_column
 
 statement ok
-set enable_experimental_virtual_column = 1;
-
-statement ok
 drop table if exists t1
 
 statement ok
@@ -903,9 +900,6 @@ select id from t_empty_prewhere where id % 2 = 1 and val['d']['e'] > 20 order by
 
 statement ok
 drop table t_empty_prewhere
-
-statement ok
-set enable_experimental_virtual_column = 0;
 
 statement ok
 DROP DATABASE test_virtual_column

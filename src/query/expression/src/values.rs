@@ -43,6 +43,9 @@ use geo::Geometry;
 use geo::Point;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
+use geozero::wkb::FromWkb;
+use geozero::wkb::WkbDialect;
+use geozero::wkt::Ewkt;
 use itertools::Itertools;
 use jsonb::RawJsonb;
 use serde::Deserialize;
@@ -56,6 +59,8 @@ use crate::BlockEntry;
 use crate::ColumnView;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
+use crate::types::EncodedColumn;
+use crate::types::NarrowBuffer;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
@@ -214,6 +219,7 @@ pub enum Column {
     Geography(GeographyColumn),
     Vector(VectorColumn),
     Opaque(OpaqueColumn),
+    Encoded(Box<EncodedColumn>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -259,6 +265,11 @@ pub enum ColumnVec {
     Geography(Vec<GeographyColumn>),
     Vector(VectorColumnVec),
     Opaque(OpaqueColumnVec),
+    /// Dictionary encoded chunks whose keys index one shared dictionary.
+    Dict {
+        keys: Vec<NarrowBuffer>,
+        values: Column,
+    },
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -1099,10 +1110,24 @@ impl<'b> PartialEq<ScalarRef<'b>> for ScalarRef<'_> {
     }
 }
 
+const NULL_HASH_MARKER: [u8; 9] = *b"\xffNULL\x00\x00\x00\x00";
+const EMPTY_ARRAY_HASH_MARKER: [u8; 9] = *b"\xffEARR\x00\x00\x00\x00";
+const EMPTY_MAP_HASH_MARKER: [u8; 9] = *b"\xffEMAP\x00\x00\x00\x00";
+
+/// Hashing must agree with [`PartialEq`] on both `Scalar` and `ScalarRef`:
+/// values that compare equal produce the same hash. Containers hash their
+/// length and every element (including NULLs) so that different NULL
+/// positions stay distinguishable.
 impl Hash for ScalarRef<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            ScalarRef::Null | ScalarRef::EmptyArray | ScalarRef::EmptyMap => {}
+            // Payload-less variants write a marker so that a NULL element
+            // inside a container cannot be confused with a neighbouring value.
+            // The marker is nine bytes long, which no fixed-width value and
+            // no string (bytes followed by 0xff) can produce.
+            ScalarRef::Null => state.write(&NULL_HASH_MARKER),
+            ScalarRef::EmptyArray => state.write(&EMPTY_ARRAY_HASH_MARKER),
+            ScalarRef::EmptyMap => state.write(&EMPTY_MAP_HASH_MARKER),
             ScalarRef::Number(t) => with_number_type!(|NUM_TYPE| match t {
                 NumberScalar::NUM_TYPE(v) => {
                     v.hash(state);
@@ -1120,20 +1145,36 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::TimestampTz(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
             ScalarRef::Interval(v) => v.0.hash(state),
-            ScalarRef::Array(v) => {
-                let str = serialize_column(v);
-                str.hash(state);
+            ScalarRef::Array(v) | ScalarRef::Map(v) => {
+                v.len().hash(state);
+                for value in v.iter() {
+                    value.hash(state);
+                }
             }
-            ScalarRef::Map(v) => {
-                let str = serialize_column(v);
-                str.hash(state);
-            }
-            ScalarRef::Bitmap(v) => v.hash(state),
+            // `Scalar::eq` compares bitmaps by their decoded members, so the
+            // hash must not depend on the encoding. Undecodable payloads only
+            // compare equal bytewise and fall back to hashing the bytes.
+            ScalarRef::Bitmap(v) => match deserialize_bitmap(v) {
+                Ok(bitmap) => {
+                    bitmap.len().hash(state);
+                    for member in bitmap.iter() {
+                        member.hash(state);
+                    }
+                }
+                Err(_) => v.hash(state),
+            },
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
             ScalarRef::Variant(v) => v.hash(state),
-            ScalarRef::Geometry(v) => v.hash(state),
+            // Mirrors `compare_geometry`: decodable geometries compare by their
+            // EWKT text, undecodable ones bytewise.
+            ScalarRef::Geometry(v) => {
+                match Ewkt::from_wkb(&mut std::io::Cursor::new(*v), WkbDialect::Ewkb) {
+                    Ok(ewkt) => ewkt.0.hash(state),
+                    Err(_) => v.hash(state),
+                }
+            }
             ScalarRef::Geography(v) => v.hash(state),
             ScalarRef::Vector(v) => v.hash(state),
             ScalarRef::Opaque(v) => v.hash(state),
@@ -1244,6 +1285,7 @@ impl Column {
             Column::Tuple(fields) => fields[0].len(),
             Column::Variant(col) => col.len(),
             Column::Opaque(col) => col.len(),
+            Column::Encoded(col) => col.len(),
             Column::Geometry(col) => col.len(),
             Column::Geography(col) => col.len(),
             Column::Vector(col) => col.len(),
@@ -1279,6 +1321,7 @@ impl Column {
             Column::Geography(col) => Some(ScalarRef::Geography(col.index(index)?)),
             Column::Vector(col) => Some(ScalarRef::Vector(col.index(index)?)),
             Column::Opaque(col) => col.index(index).map(ScalarRef::Opaque),
+            Column::Encoded(col) => col.index(index),
         }
     }
 
@@ -1315,6 +1358,7 @@ impl Column {
                 Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
                 Column::Vector(col) => ScalarRef::Vector(col.index_unchecked(index)),
                 Column::Opaque(col) => ScalarRef::Opaque(col.index_unchecked(index)),
+                Column::Encoded(col) => col.index_unchecked(index),
             }
         }
     }
@@ -1378,6 +1422,7 @@ impl Column {
             Column::Geography(col) => Column::Geography(col.slice(range)),
             Column::Vector(col) => Column::Vector(col.slice(range)),
             Column::Opaque(col) => Column::Opaque(col.slice(range)),
+            Column::Encoded(col) => Column::Encoded(Box::new(col.slice(range))),
         }
     }
 
@@ -1489,6 +1534,7 @@ impl Column {
             | Column::Geography(_)
             | Column::Vector(_)
             | Column::Opaque(_) => Domain::Undefined,
+            Column::Encoded(col) => col.domain(),
         }
     }
 
@@ -1532,6 +1578,7 @@ impl Column {
             Column::Geography(_) => DataType::Geography,
             Column::Vector(col) => DataType::Vector(col.data_type()),
             Column::Opaque(col) => col.data_type(),
+            Column::Encoded(col) => col.data_type(),
         }
     }
 
@@ -1868,6 +1915,7 @@ impl Column {
             Column::Geography(col) => GeographyType::column_memory_size(col, gc),
             Column::Vector(col) => col.memory_size(),
             Column::Opaque(col) => col.memory_size(),
+            Column::Encoded(col) => col.memory_size(gc),
         }
     }
 
@@ -1904,6 +1952,22 @@ impl Column {
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
             Column::Vector(col) => col.memory_size(),
             Column::Opaque(col) => col.memory_size(), // Same as memory size for opaque types
+            // Encoded columns are decoded before serialization.
+            Column::Encoded(col) => match col.as_ref() {
+                EncodedColumn::For(c) => c.len() * c.decoded_width(),
+                // Rows can select some values more often than others: the size of variable
+                // size values is summed over the rows.
+                EncodedColumn::Dict(c) => match &c.values {
+                    Column::String(values) => {
+                        c.len() * 8
+                            + c.keys
+                                .iter()
+                                .map(|key| values.index(key as usize).unwrap().len())
+                                .sum::<usize>()
+                    }
+                    values => values.serialize_size() / values.len().max(1) * c.len(),
+                },
+            },
         }
     }
 
@@ -2034,6 +2098,7 @@ impl ColumnBuilder {
             Column::Opaque(col) => {
                 ColumnBuilder::Opaque(crate::types::opaque::OpaqueColumnBuilder::from_column(col))
             }
+            Column::Encoded(col) => ColumnBuilder::from_column(col.decode()),
         }
     }
 
@@ -2447,7 +2512,7 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());
-                for (field, scalar) in fields.iter_mut().zip(value.into_iter()) {
+                for (field, scalar) in fields.iter_mut().zip(value) {
                     field.push(scalar);
                 }
             }
@@ -2538,6 +2603,14 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Vector(builder), ScalarRef::Vector(value)) => {
                 builder.push_repeat(value, n);
+            }
+            (ColumnBuilder::Opaque(builder), ScalarRef::Opaque(value)) => {
+                with_opaque_type!(|T| match (builder, value) {
+                    (OpaqueColumnBuilder::T(builder), OpaqueScalarRef::T(value)) => {
+                        builder.extend(std::iter::repeat_n(*value, n));
+                    }
+                    _ => unreachable!("Mismatched Opaque types"),
+                })
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         };
@@ -2984,6 +3057,7 @@ impl ColumnBuilder {
                     _ => unreachable!("Mismatched Opaque types"),
                 })
             }
+            (this, Column::Encoded(other)) => this.append_column(&other.decode()),
             (this, other) => unreachable!(
                 "unable append column(data type: {:?}) into builder(data type: {:?})",
                 other.data_type(),

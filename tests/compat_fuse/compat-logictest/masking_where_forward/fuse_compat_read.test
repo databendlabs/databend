@@ -1,0 +1,20 @@
+# Read by an older query that predates TableMeta field 43. The authorization must
+# not raise min_reader_ver: the table stays readable and the reader falls back to
+# the masked WHERE semantics, which never discloses more than the current query.
+
+query IT
+SELECT id, secret FROM compat_masking_where ORDER BY id
+----
+1 ***
+2 ***
+
+query I
+SELECT count(*) FROM compat_masking_where WHERE secret = 'alice'
+----
+0
+
+statement ok
+SHOW CREATE TABLE compat_masking_where
+
+statement ok
+DESC compat_masking_where

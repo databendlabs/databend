@@ -50,10 +50,13 @@ use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::DataItem;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::io::serialize_block;
+use databend_common_storages_fuse::operations::BlockScanStats;
 use databend_common_storages_fuse::operations::ReadState;
+use databend_common_storages_fuse::operations::ReadStateOutput;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextRuntimeFilter;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use opendal::Buffer;
@@ -105,8 +108,19 @@ async fn run_prewhere_test_with_threshold(
     assert_eq!(read_state.use_single_prewhere_reader, expect_single_reader);
 
     // Use the new unified API that handles all states internally
-    let (data_block, row_selection, bitmap_selection) =
-        read_state.deserialize_and_filter(column_chunks.clone(), &part)?;
+    let ReadStateOutput {
+        block: data_block,
+        bitmap_selection,
+        scan_stats,
+    } = read_state.deserialize_and_filter(column_chunks.clone(), &part)?;
+
+    // Scan statistics describe the whole block that was read and decoded,
+    // not the single row left after prewhere and runtime filters. All five
+    // Int32 columns are projected, so the block is 5 rows * 5 * 4 bytes.
+    assert_eq!(scan_stats, BlockScanStats {
+        rows: num_rows,
+        bytes: num_rows * 5 * std::mem::size_of::<i32>(),
+    });
 
     // Static prewhere leaves one row, and both Bloom filters match it. A zero
     // filtered-row count proves Bloom was not evaluated on the four rows that
@@ -165,7 +179,6 @@ async fn run_prewhere_test_with_threshold(
 
     // Verify the bitmap_selection is present and has the correct format
     {
-        assert!(row_selection.is_some());
         assert!(bitmap_selection.is_some());
         let bitmap = bitmap_selection.unwrap();
         // Row 2 (x=3, y=30, z=300, d=3000) should be the only one selected
@@ -329,7 +342,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         operator.clone(),
         schema.clone(),
         prewhere_info.output_columns.clone(),
-        false,
+        CachePolicy::READ_ONLY,
     )?;
 
     // Extract column chunks from parquet bytes

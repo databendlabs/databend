@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::simd::Select;
 pub use std::simd::f32x8;
 pub use std::simd::f32x16;
 pub use std::simd::f64x8;

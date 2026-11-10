@@ -17,8 +17,8 @@ use std::sync::Arc;
 use databend_common_ast::ast::DeclareItem;
 use databend_common_ast::ast::DeclareVar;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::ScriptStatement;
 use databend_common_ast::parser::ParseMode;
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::tokenize_sql;
@@ -27,7 +27,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
-use databend_common_script::compile;
+use databend_common_script::compile_block;
 use databend_common_sql::plans::CallProcedurePlan;
 
 use crate::interpreters::Interpreter;
@@ -35,6 +35,7 @@ use crate::interpreters::interpreter_execute_immediate::ProcedureState;
 use crate::interpreters::util::ScriptClient;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextSettings;
 
 #[derive(Debug)]
@@ -73,16 +74,14 @@ impl Interpreter for CallProcedureInterpreter {
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             let res: Result<_> = try {
-                let mut src = vec![];
+                let mut declares = vec![];
                 for (arg, arg_name) in self.plan.args.iter().zip(self.plan.arg_names.iter()) {
-                    src.push(ScriptStatement::LetVar {
-                        declare: DeclareVar {
-                            span: None,
-                            name: Identifier::from_name(None, arg_name),
-                            data_type: None,
-                            default: Some(arg.clone()),
-                        },
-                    });
+                    declares.push(DeclareItem::Var(DeclareVar {
+                        span: None,
+                        name: Identifier::from_name(None, arg_name),
+                        data_type: None,
+                        default: Some(arg.clone()),
+                    }));
                 }
                 let settings = self.ctx.get_settings();
                 let sql_dialect = settings.get_sql_dialect()?;
@@ -96,21 +95,16 @@ impl Interpreter for CallProcedureInterpreter {
                 )
                 .map_err(ErrorCode::from)?;
 
-                for declare in ast.declares {
-                    match declare {
-                        DeclareItem::Var(declare) => src.push(ScriptStatement::LetVar { declare }),
-                        DeclareItem::Set(declare) => {
-                            src.push(ScriptStatement::LetStatement { declare })
-                        }
-                    }
-                }
-                src.append(&mut ast.body);
-                let compiled = compile(&src)?;
+                // Arguments must be in scope when block declarations are compiled.
+                declares.append(&mut ast.declares);
+                ast.declares = declares;
+                let span = ast.span;
+                let compiled = compile_block(ast)?;
 
                 let client = ScriptClient {
                     ctx: self.ctx.clone(),
                 };
-                let mut executor = Executor::load(ast.span, client, compiled);
+                let mut executor = Executor::load(span, client, compiled);
                 let script_max_steps = settings.get_script_max_steps()?;
                 let result = executor.run(script_max_steps as usize).await?;
 
@@ -132,7 +126,13 @@ impl Interpreter for CallProcedureInterpreter {
                 }
             };
 
-            res.map_err(|err| err.display_with_sql(&self.plan.script))
+            res.map_err(|err| {
+                // The error is returned as is, but its excerpt of the script
+                // must be scrubbed in query history and logs.
+                self.ctx
+                    .add_query_secrets(mask_raw_sql_with_secrets(&self.plan.script).1);
+                err.display_with_sql(&self.plan.script)
+            })
         })
     }
 }

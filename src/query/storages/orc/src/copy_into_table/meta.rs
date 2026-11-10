@@ -91,6 +91,7 @@ async fn read_one(
         operator: op.clone(),
         size,
         path: path.clone(),
+        read_bytes: Default::default(),
     };
     let builder = ArrowReaderBuilder::try_new_async(file)
         .await

@@ -15,6 +15,7 @@
 use databend_common_catalog::table::CompactionLimits;
 
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug)]
@@ -42,3 +43,5 @@ impl Operator for OptimizeCompactBlock {
         0
     }
 }
+
+impl PhysicalOperator for OptimizeCompactBlock {}

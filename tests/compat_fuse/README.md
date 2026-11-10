@@ -18,6 +18,38 @@ All test cases are defined in `test_cases.yaml`. Each entry specifies:
 
 To add a test case, append an entry to `test_cases.yaml`.
 
+## View CTE compatibility
+
+The `view_cte` suite uses a 1.2.833 writer because its `ViewRewriter` stored CTE
+references as `db.cte_name`, without namespace options. The current reader must
+preserve those views' results (including same-named real tables, nested/scalar
+queries, recursion and repeated references) while ordinary SQL and newly created
+views resolve qualified names strictly as tables. The suite also checks that
+recreating a view adopts the new rules. To retain CTE semantics, recreate from the
+original unqualified SQL; historical `SHOW CREATE` text may already have had a
+database added by the system.
+
+## Segment zone map compatibility
+
+`TableSnapshot` gained a `segment_zone_map` pointer (an optional field; the snapshot
+is MessagePack-encoded by field name, so older readers skip it). Three suites
+cover it:
+
+- `segment_zone_map_backward` (old writer → current reader): the old writer's
+  snapshot has no pointer and reads as such; zone maps are on by default, so the
+  current reader's first recluster round builds one over a table the old writer
+  created (every type with min/max statistics, NULLs), then prunes with it.
+- `segment_zone_map_forward` / `segment_zone_map_rewrite` (shared-data group): the
+  current query reclusters and builds a zone map; an older query reads and
+  writes the table, skipping the unknown field, so its commits drop the pointer;
+  the current query then reads without a zone map and rebuilds it with a
+  recluster over segments written by both versions. The old-reader test must
+  not use the new settings or the new `fuse_snapshot` column.
+
+Recluster is the only statement that builds a zone map, so the writer and
+reader steps that need one run `OPTIMIZE TABLE ... RECLUSTER` after two inserts
+with overlapping cluster key ranges.
+
 ## Usage
 
 Run all cases (CI mode):

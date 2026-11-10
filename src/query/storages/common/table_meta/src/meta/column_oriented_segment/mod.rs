@@ -26,6 +26,7 @@ pub use schema::CLUSTER_STATS;
 pub use schema::COMPRESSION;
 pub use schema::CREATE_ON;
 pub use schema::FILE_SIZE;
+pub use schema::INVERTED_INDEX_METAS;
 pub use schema::INVERTED_INDEX_SIZE;
 pub use schema::LOCATION;
 pub use schema::LOCATION_FORMAT_VERSION;

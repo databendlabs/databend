@@ -22,11 +22,13 @@ use derive_visitor::DriveMut;
 
 use crate::ast::AuthType;
 use crate::ast::CreateOption;
+use crate::ast::Identifier;
 use crate::ast::PrincipalIdentity;
 use crate::ast::ProcedureIdentity;
 use crate::ast::ShowOptions;
 use crate::ast::UserIdentity;
 use crate::ast::UserPrivilegeType;
+use crate::ast::quote::QuotedIdent;
 use crate::ast::write_comma_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -263,9 +265,11 @@ impl Display for AccountMgrSource {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AccountMgrLevel {
+    Integration(Identifier),
     Global,
     Database(Option<String>),
     Table(Option<String>, String),
+    MaterializedView(Option<String>, String),
     UDF(String),
     Stage(String),
     Warehouse(String),
@@ -294,10 +298,18 @@ impl Display for AccountMgrLevel {
                     write!(f, " {table_name}")
                 }
             }
+            AccountMgrLevel::MaterializedView(database_name, view_name) => {
+                write!(f, " MATERIALIZED VIEW ")?;
+                if let Some(database_name) = database_name {
+                    write!(f, "{}.", QuotedIdent(database_name, '"'))?;
+                }
+                write!(f, "{}", QuotedIdent(view_name, '"'))
+            }
             AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}"),
             AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}"),
             AccountMgrLevel::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
             AccountMgrLevel::Connection(c) => write!(f, " CONNECTION {c}"),
+            AccountMgrLevel::Integration(c) => write!(f, " INTEGRATION {c}"),
             AccountMgrLevel::Sequence(s) => write!(f, " SEQUENCE {s}"),
             AccountMgrLevel::Procedure(p) => write!(f, " PROCEDURE {p}"),
             AccountMgrLevel::MaskingPolicy(policy) => write!(f, " MASKING POLICY {policy}"),

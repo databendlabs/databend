@@ -14,11 +14,11 @@ stmt "DROP ROLE IF EXISTS role_rap_apply"
 stmt "DROP ROLE IF EXISTS role_rap_create"
 
 stmt "CREATE TABLE rap_rbac(id INT, region STRING, dept STRING)"
+stmt "CREATE ROLE role_rap_apply"
+stmt "CREATE ROLE role_rap_create"
 stmt "CREATE USER rap_create IDENTIFIED BY '123' with default_role='role_rap_create'"
 stmt "CREATE USER rap_apply IDENTIFIED BY '123' with default_role='role_rap_apply'"
-stmt "CREATE ROLE role_rap_apply"
 stmt "GRANT ROLE role_rap_apply TO rap_apply"
-stmt "CREATE ROLE role_rap_create"
 stmt "GRANT ROLE role_rap_create TO rap_create"
 
 export USER_RAP_CREATE="bendsql_connect_user rap_create 123 -A --quote-style=never"

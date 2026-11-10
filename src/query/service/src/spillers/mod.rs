@@ -19,6 +19,7 @@ mod block_writer;
 mod inner;
 mod partition_buffer;
 mod serialize;
+mod sort;
 #[cfg(test)]
 mod test_memory;
 
@@ -34,3 +35,4 @@ pub use inner::*;
 pub use partition_buffer::PartitionBuffer;
 pub use partition_buffer::PartitionBufferFetchOption;
 pub use serialize::Layout;
+pub use sort::SortSpillerImpl;

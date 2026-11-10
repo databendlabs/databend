@@ -14,7 +14,6 @@
 
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
-#![feature(impl_trait_in_assoc_type)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
 #![feature(iter_intersperse)]

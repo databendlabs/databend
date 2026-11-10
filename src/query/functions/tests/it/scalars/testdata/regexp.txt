@@ -417,7 +417,7 @@ evaluation (internal):
 | source | Column(NullableColumn { column: StringColumn[abc, abc, , abc], validity: [0b____1011] }) |
 | pat    | Column(NullableColumn { column: StringColumn[abc, , , abc], validity: [0b____1001] })    |
 | mt     | Column(NullableColumn { column: StringColumn[, i, i, ], validity: [0b____0111] })        |
-| Output | NullableColumn { column: Boolean([0b____1101]), validity: [0b____0001] }                 |
+| Output | NullableColumn { column: Boolean([0b____0001]), validity: [0b____0001] }                 |
 +--------+------------------------------------------------------------------------------------------+
 
 
@@ -642,7 +642,7 @@ evaluation (internal):
 | repl   | Column(StringColumn[X, X, X, X])                                                                                 |
 | pos    | Column(Int64([1, 1, 4, 4]))                                                                                      |
 | occur  | Column(Int64([0, 2, 1, 1]))                                                                                      |
-| Output | NullableColumn { column: StringColumn[X X X, abc DEF ghi, , abc X ghi], validity: [0b____1001] }                 |
+| Output | NullableColumn { column: StringColumn[X X X, , , abc X ghi], validity: [0b____1001] }                            |
 +--------+------------------------------------------------------------------------------------------------------------------+
 
 
@@ -671,7 +671,7 @@ evaluation (internal):
 | pos    | Column(Int64([1, 1, 4, 4]))                                                                                      |
 | occur  | Column(Int64([0, 2, 1, 1]))                                                                                      |
 | mt     | Column(StringColumn[, c, i, i])                                                                                  |
-| Output | NullableColumn { column: StringColumn[X X X, abc DEF ghi, , abc X ghi], validity: [0b____1001] }                 |
+| Output | NullableColumn { column: StringColumn[X X X, , , abc X ghi], validity: [0b____1001] }                            |
 +--------+------------------------------------------------------------------------------------------------------------------+
 
 

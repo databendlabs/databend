@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use apache_avro::Reader;
 use apache_avro::Schema;
+use apache_avro::error::Details;
 use apache_avro::schema::UnionSchema;
 use apache_avro::types::Value;
 use databend_common_base::base::OrderedFloat;
@@ -167,8 +168,8 @@ impl AvroDecoder {
         let reader = match Reader::new(file_data) {
             Ok(r) => r,
             Err(e) => {
-                let e = match e {
-                    apache_avro::Error::HeaderMagic | apache_avro::Error::ReadHeader(_) => {
+                let e = match e.details() {
+                    Details::HeaderMagic | Details::ReadHeader(_) => {
                         FileParseError::WrongFileType {
                             format: "AVRO".to_string(),
                             message: e.to_string(),
@@ -282,7 +283,7 @@ impl AvroDecoder {
                                 reason: Some(e.reason.unwrap_or_else(|| {
                                     format!(
                                         "can not load value of type {:?} to {}",
-                                        &matched_schema,
+                                        matched_schema,
                                         column_builder.data_type()
                                     )
                                 })),
@@ -744,6 +745,7 @@ mod test {
         let row = Value::Record(values);
         writer.append(row).unwrap();
         writer.flush().unwrap();
+        drop(writer);
         buffer
     }
 

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -25,8 +26,11 @@ use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::AuthType;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateOption::Create;
 use databend_common_meta_app::schema::CreateOption::CreateIfNotExists;
@@ -56,6 +60,7 @@ use databend_common_storages_system::FunctionsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::UsersTable;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_BUILD_PROFILE;
 use databend_common_version::DATABEND_CARGO_CFG_TARGET_FEATURE;
@@ -512,6 +517,92 @@ async fn test_users_table() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_identity_tables_hide_other_users_and_roles() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let tenant = fixture.default_tenant();
+    let api = UserApiProvider::instance();
+    for role in ["visible_parent", "visible_child", "hidden_role"] {
+        let mut info = RoleInfo::new(role, None);
+        if role == "visible_parent" {
+            info.grants.grant_role("visible_child".to_string());
+        }
+        api.create_role(&tenant, info, &Create).await?;
+    }
+
+    let mut current_user = UserInfo::new("visible_user", "%", AuthInfo::None);
+    current_user.grants.grant_role("visible_parent".to_string());
+    current_user
+        .option
+        .set_default_role(Some("visible_parent".to_string()));
+    for user in [
+        current_user.clone(),
+        UserInfo::new("visible_user", "other-host", AuthInfo::None),
+        UserInfo::new("hidden_user", "%", AuthInfo::None),
+    ] {
+        api.create_user(&tenant, user, &Create).await?;
+    }
+    RoleCacheManager::instance().force_reload(&tenant).await?;
+    fixture
+        .default_session()
+        .set_authed_user(current_user.clone(), None)
+        .await?;
+
+    let blocks: Vec<_> = fixture
+        .execute_query("SELECT name, hostname FROM system.users")
+        .await?
+        .try_collect()
+        .await?;
+    assert_eq!(
+        blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        blocks[0].get_by_offset(0).value().index(0),
+        Some(ScalarRef::String("visible_user"))
+    );
+    assert_eq!(
+        blocks[0].get_by_offset(1).value().index(0),
+        Some(ScalarRef::String("%"))
+    );
+
+    let blocks: Vec<_> = fixture
+        .execute_query("SELECT name FROM system.roles")
+        .await?
+        .try_collect()
+        .await?;
+    assert_eq!(
+        blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+        3
+    );
+    let output = pretty_format_blocks(&blocks)?.to_string();
+    assert!(output.contains("visible_parent"));
+    assert!(output.contains("visible_child"));
+    assert!(output.contains("public"));
+    assert!(!output.contains("hidden_role"));
+    assert!(!output.contains("account_admin"));
+
+    // A global GRANT privilege exposes every user in the tenant.
+    let mut granted = current_user;
+    granted.grants.grant_privileges(
+        &GrantObject::Global,
+        UserPrivilegeSet::from(UserPrivilegeType::Grant),
+    );
+    fixture
+        .default_session()
+        .set_authed_user(granted, None)
+        .await?;
+    let blocks: Vec<_> = fixture
+        .execute_query("SELECT name, hostname FROM system.users")
+        .await?
+        .try_collect()
+        .await?;
+    let output = pretty_format_blocks(&blocks)?.to_string();
+    assert!(output.contains("hidden_user"));
+    assert!(output.contains("other-host"));
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_caches_table() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
@@ -596,23 +687,27 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
             },
             source_table_option: None,
             as_dropped: false,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
         })
         .await?;
 
-    let list_tables_error = catalog.list_tables(&tenant, "default").await;
+    let tables = catalog.list_tables(&tenant, "default").await?;
+    assert!(tables.iter().any(|table| table.name() == "healthy"));
     assert!(
-        list_tables_error.is_err(),
-        "loading attached tables without disabling refresh should fail"
+        tables.iter().all(|table| table.name() != "broken_attached"),
+        "a failed attached-table refresh should only skip that table"
     );
 
     let disabled_catalog = catalog.clone().disable_table_info_refresh()?;
-    let disabled_list_tables = disabled_catalog.list_tables(&tenant, "default").await;
+    let disabled_list_tables = disabled_catalog.list_tables(&tenant, "default").await?;
     assert!(
-        disabled_list_tables.is_ok(),
-        "loading attached tables with disable_table_info_refresh should succeed"
+        disabled_list_tables
+            .iter()
+            .any(|table| table.name() == "broken_attached"),
+        "disabling refresh should keep the attached table visible"
     );
 
     mock_server.reset().await;
@@ -651,5 +746,91 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
         "SHOW TABLES should not touch table-level storage when listing system.tables: {requests:?}"
     );
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_history_etl_reads_tenant_meta() -> anyhow::Result<()> {
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::ScalarRef;
+    use databend_meta_client::kvapi::KVApi;
+    use databend_meta_client::types::UpsertKV;
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let meta = UserApiProvider::instance().get_meta_store_client();
+    let prefix = format!("{}/history_log_transform/", ctx.get_tenant().tenant_name());
+    // This node is absent from the reader's cluster. All information must come from meta.
+    for (key, value) in [
+        (
+            format!("{prefix}query_history/heartbeat"),
+            br#"{"from_node_id":"remote-cluster-node"}"#.as_slice(),
+        ),
+        (
+            format!("{prefix}query_history/batch_number"),
+            b"42".as_slice(),
+        ),
+        (
+            format!("{prefix}query_history/last_error"),
+            br#"{"message":"previous failure","time":1788834000000000}"#.as_slice(),
+        ),
+        (
+            format!("{prefix}login_history/last_error"),
+            br#"{"message":"first batch failed","time":1788834000000000}"#.as_slice(),
+        ),
+        (
+            format!("other-{prefix}log_history/batch_number"),
+            b"99".as_slice(),
+        ),
+    ] {
+        meta.upsert_kv(UpsertKV::update(&key, value)).await?;
+    }
+    let blocks = execute_query(
+        ctx,
+        "SELECT table_name, heartbeat_node_id, batch_number,
+        last_success_time IS NOT NULL, last_error_time, last_error
+        FROM system.history_etl ORDER BY table_name",
+    )
+    .await?
+    .try_collect::<Vec<DataBlock>>()
+    .await?;
+    let block = DataBlock::concat(&blocks)?;
+    assert_eq!(block.num_rows(), 2);
+    assert_eq!(
+        block.get_by_offset(0).index(0),
+        Some(ScalarRef::String("login_history"))
+    );
+    assert_eq!(block.get_by_offset(1).index(0), Some(ScalarRef::Null));
+    assert_eq!(block.get_by_offset(2).index(0), Some(ScalarRef::Null));
+    assert_eq!(
+        block.get_by_offset(3).index(0),
+        Some(ScalarRef::Boolean(false))
+    );
+    assert_eq!(
+        block.get_by_offset(0).index(1),
+        Some(ScalarRef::String("query_history"))
+    );
+    assert_eq!(
+        block.get_by_offset(1).index(1),
+        Some(ScalarRef::String("remote-cluster-node"))
+    );
+    assert_eq!(
+        block.get_by_offset(2).index(1),
+        Some(ScalarRef::Number(
+            databend_common_expression::types::number::NumberScalar::UInt64(42)
+        ))
+    );
+    assert_eq!(
+        block.get_by_offset(3).index(1),
+        Some(ScalarRef::Boolean(true))
+    );
+    assert_eq!(
+        block.get_by_offset(4).index(1),
+        Some(ScalarRef::Timestamp(1788834000000000))
+    );
+    assert_eq!(
+        block.get_by_offset(5).index(1),
+        Some(ScalarRef::String("previous failure"))
+    );
     Ok(())
 }

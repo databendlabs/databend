@@ -37,6 +37,10 @@ ALTER TABLE t1 CREATE TAG v1_0;
 statement ok
 INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')
 
+## Missing timestamp history is an error, not an empty table or an empty TAG.
+statement error 2013
+ALTER TABLE t1 CREATE TAG before_history AT (TIMESTAMP => '1970-01-01'::TIMESTAMP)
+
 query IT
 SELECT * FROM t1 ORDER BY a
 ----
@@ -128,6 +132,15 @@ SELECT * FROM t1 at (tag => "v1_0") ORDER BY a
 1 a
 2 b
 3 c
+
+## Ordinary tables retain their existing TAG FLASHBACK behavior after VACUUM.
+statement ok
+ALTER TABLE t1 FLASHBACK TO (TAG => v1_0)
+
+query I
+SELECT count(*) FROM t1
+----
+3
 
 ## Test duplicate tag name
 statement error 2746

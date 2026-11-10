@@ -181,6 +181,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=256)),
                 }),
+                ("enable_experimental_clone_table", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental CREATE TABLE ... CLONE. Clone table data integrity and safety are not guaranteed in mixed-version deployments.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_vacuum_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets the maximum number of threads to execute vacuum operation.",
@@ -280,6 +287,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("flight_query_leak_timeout_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(180),
+                    desc: "Sets the maximum time in seconds a node waits after a distributed query environment is initialized for the coordinator to start the query. Once exceeded, the query is treated as leaked and cleaned up. Raise it when fragment preparation (e.g. lazy block pruning of a large DELETE across many nodes) takes longer than the default.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("flight_client_keep_alive_time_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -456,6 +470,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("filter_and_strategy", DefaultSettingValue {
+                    value: UserSettingValue::String("independent".to_owned()),
+                    desc: "How estimated selectivities of AND-ed filter predicates are combined: independent (multiply estimates for predicates on distinct columns, min within a column) or min (narrowest single predicate, the historical behaviour).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["independent".into(), "min".into()])),
+                }),
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
@@ -473,6 +494,13 @@ impl DefaultSettings {
                 ("enable_top_n", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables the fused TopN algorithm for ORDER BY with LIMIT.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_aggregate_final_top_n", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Lets the final aggregation of a GROUP BY ordered by aggregate results with a LIMIT of at most max_push_down_limit output only the first rows of each hash table.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -653,14 +681,14 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("grouping_sets_to_union", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables grouping sets to union.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_cascading_grouping_sets", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Builds hierarchical grouping sets from the closest available parent grouping.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -821,6 +849,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["before_partial".into(), "before_merge".into()])),
                 }),
+                ("partial_aggregate_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("auto")),
+                    desc: "Partial aggregation mode. 'auto' adapts per thread at runtime; 'bypass' forwards every row to the final aggregation.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["auto".into(), "bypass".into()])),
+                }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
@@ -916,7 +951,7 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enables distributed execution of table compaction.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -993,7 +1028,7 @@ impl DefaultSettings {
                     desc: "The maximum number of segments that can be reclustered automatically triggered after write.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(2..=128)),
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1019,6 +1054,20 @@ impl DefaultSettings {
                 ("replace_into_shuffle_strategy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Choose shuffle strategy: 0 for Block, 1 for Segment level.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_recluster_inverted_index_merge", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Reuse compatible inverted indexes during horizontal multiway recluster.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_recluster_multiway_merge", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable streaming multiway merge for horizontal recluster MergeBlocks tasks.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1063,7 +1112,7 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enable distributed execution of table recluster.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1146,19 +1195,19 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("enable_encoded_columns", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Experimental. Fuse scans keep columns in compact encoded forms (frame of reference for integers, Date, Timestamp and Decimal; dictionary, reusing the Parquet dictionary for String) in memory and in the column array cache. Intended for use with the deserialized column cache (config `cache.table_data_deserialized_data_bytes` or `cache.table_data_deserialized_memory_ratio`): without it, every scan encodes the columns again and may be slower.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["rounding".into(), "truncating".into()])),
-                }),
-                ("enable_experimental_rbac_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting enable stage and udf privilege check(enable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_table_snapshot_stats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1177,20 +1226,6 @@ impl DefaultSettings {
                 ("enable_experimental_row_access_policy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "experiment setting enable row access policy(disable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_connection_privilege_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting enable connection object privilege check(disable by default).",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_sequence_privilege_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting enable sequence object privilege check(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1218,17 +1253,45 @@ impl DefaultSettings {
                 }),
                 ("hash_shuffle_rows_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
-                    desc: "Sets the max rows threshold for hash shuffle block partition stream.",
+                    desc: "Sets the target rows of the blocks a hash shuffle receiver outputs; smaller received blocks are concatenated. 0 disables the row limit.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("hash_shuffle_bytes_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4 * 1024 * 1024),
-                    desc: "Sets the max bytes threshold for hash shuffle block partition stream.",
+                    desc: "Sets the target bytes of the blocks a hash shuffle receiver outputs; smaller received blocks are concatenated. 0 disables the byte limit.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("hash_shuffle_send_buffer_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(256 * 1024 * 1024),
+                    desc: "Sets the bytes all senders of one hash shuffle on a node may buffer; each sender sends all its partitions once it holds its share, and buffers up to its share again while they are sending. Each destination thread then gets about this value / (nodes x threads^2) bytes per send, so raise it on clusters with many nodes and threads: the memory of a node grows with it, but not with the number of nodes.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("exchange_frame_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024 * 1024),
+                    desc: "Sets the maximum bytes of one network frame sent to a node by broadcast and hash shuffle exchanges, at most 4 MiB; up to 4 frames are in flight to a node. Frames are smaller when exchange_send_queue_bytes is shared by many nodes.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u32::MAX as u64)),
+                }),
+                ("exchange_send_queue_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(64 * 1024 * 1024),
+                    desc: "Sets the bytes one broadcast or hash shuffle exchange may queue or have in flight for sending on a node.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u32::MAX as u64)),
+                }),
+                ("exchange_recv_queue_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(64 * 1024 * 1024),
+                    desc: "Sets the bytes one broadcast or hash shuffle exchange may queue for receiving on a node, shared evenly by its sending nodes.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u32::MAX as u64)),
                 }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1268,6 +1331,13 @@ impl DefaultSettings {
                 ("disable_variant_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable variant check to allow insert invalid JSON values",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_parse_json_variant_reparse", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Re-serialize and re-parse VARIANT inputs of parse_json/try_parse_json to repair legacy invalid JSONB values. Set to 0 to return the VARIANT value as is.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1493,6 +1563,27 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_segment_zone_map", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Maintain segment zone maps (per-segment min/max of every column) after each committed recluster round. Turn off to stop building them; existing zone maps stay usable. A table opts out with the table option enable_segment_zone_map = 0.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_segment_zone_map_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use a table's segment zone map, if it has one, to skip segments before reading segment info. Turn off to read every segment as before.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("segment_zone_map_full_segment_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(50),
+                    desc: "Refresh a table's segment zone map after a recluster round once more than this many full segments are estimated to be missing from it.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_prune_pipeline", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable pruning pipeline",
@@ -1520,6 +1611,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=10)),
+                }),
+                ("enable_flight_control_channel_reuse", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Reuses one connection per node for the setup requests of distributed queries, instead of opening a new connection for each request.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("network_policy", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
@@ -1562,6 +1660,20 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("vector_refine_factor", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2),
+                    desc: "Refines limit * factor vector index candidates with the FP16 data of indexes created with refine = true. 0 disables refinement; 1 only reorders the results.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=16)),
+                }),
+                ("vector_search_ef", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "HNSW search candidate list size of vector index queries; never smaller than the candidate count. 0 uses 4 * candidate count.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("copy_dedup_full_path_by_default", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1649,7 +1761,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental virtual column",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1683,12 +1795,12 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("s3_storage_class", DefaultSettingValue {
+                ("experimental_s3_storage_class", DefaultSettingValue {
                     value: {
                         let storage_class = Self::extract_s3_storage_class_config(&global_conf).unwrap_or_default();
                         UserSettingValue::String(storage_class.to_string())
                     },
-                    desc: "Default s3 storage class",
+                    desc: "Experimental. S3 storage class used when writing new data of external fuse tables. Internal tables always follow the storage class of the server configuration.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
@@ -1713,13 +1825,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("force_aggregate_shuffle_mode", DefaultSettingValue {
-                    value: UserSettingValue::String(String::from("auto")),
-                    desc: "For testing only. Shuffle mode for aggregation. Options are 'auto', 'row', 'bucket'. Default is 'auto'.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
                 }),
             ]);
 

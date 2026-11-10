@@ -15,11 +15,11 @@
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
+use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -56,7 +56,6 @@ use databend_common_expression::types::number::F64;
 use databend_common_expression::types::number::Float32Type;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::vectorize_2_arg;
@@ -118,37 +117,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ))
         .register();
-
-    registry.register_1_arg_core::<Float64Type, UInt8Type, _, _>(
-        "sleep",
-        |_, _| FunctionDomain::MayThrow,
-        |a, ctx| {
-            if let Some(val) = a.as_scalar() {
-                let duration =
-                    Duration::try_from_secs_f64((*val).into()).map_err(|x| x.to_string());
-                match duration {
-                    Ok(duration) => {
-                        // Note!!!: Don't increase the sleep time to a large value, it'll block the thread.
-                        if duration.gt(&Duration::from_secs(3)) {
-                            let err = format!(
-                                "The maximum sleep time is 3 seconds. Requested: {:?}",
-                                duration
-                            );
-                            ctx.set_error(0, err);
-                        } else {
-                            std::thread::sleep(duration);
-                        }
-                    }
-                    Err(e) => {
-                        ctx.set_error(0, e);
-                    }
-                }
-            } else {
-                ctx.set_error(0, "Must be constant value");
-            }
-            Value::Scalar(0_u8)
-        },
-    );
 
     registry
         .scalar_builder("rand")
@@ -371,6 +339,12 @@ macro_rules! register_simple_domain_type_run_diff {
 }
 
 fn register_run_diff(registry: &mut FunctionRegistry) {
+    // Its value depends on preceding rows and block boundaries, not just the
+    // current row's argument. Do not move it across filters or cache its value.
+    registry.properties.insert(
+        "running_difference".to_string(),
+        FunctionProperty::default().non_deterministic(),
+    );
     register_simple_domain_type_run_diff!(registry, NumberType<i64>, NumberType<i64>, i64, 0);
     register_simple_domain_type_run_diff!(registry, DateType, NumberType<i32>, i32, 0);
     register_simple_domain_type_run_diff!(registry, TimestampType, NumberType<i64>, i64, 0);
@@ -447,91 +421,60 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<Int64Type, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<Int64Type, StringType, StringType>(
-            |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(builder.len())
-                {
-                    builder.commit_row();
-                    return;
-                }
-
-                // TODO: We should cache FmtCacheEntry
-                match fmt
-                    .parse::<FmtCacheEntry>()
-                    .and_then(|entry| entry.process_i64(value))
-                {
-                    Ok(s) => {
-                        builder.put_and_commit(s);
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.commit_row()
-                    }
-                }
-            },
-        ),
+        |value, fmt, ctx| number_to_char::<Int64Type>(value, fmt, ctx, FmtCacheEntry::process_i64),
     );
 
     registry.register_passthrough_nullable_2_arg::<Float32Type, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<Float32Type, StringType, StringType>(
-            |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(builder.len())
-                {
-                    builder.commit_row();
-                    return;
-                }
-
-                // TODO: We should cache FmtCacheEntry
-                match fmt
-                    .parse::<FmtCacheEntry>()
-                    .and_then(|entry| entry.process_f32(*value))
-                {
-                    Ok(s) => {
-                        builder.put_str(&s);
-                        builder.commit_row()
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.commit_row()
-                    }
-                }
-            },
-        ),
+        |value, fmt, ctx| {
+            number_to_char::<Float32Type>(value, fmt, ctx, |entry, value| entry.process_f32(*value))
+        },
     );
 
     registry.register_passthrough_nullable_2_arg::<Float64Type, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
-            |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(builder.len())
-                {
-                    builder.commit_row();
-                    return;
-                }
-
-                // TODO: We should cache FmtCacheEntry
-                match fmt
-                    .parse::<FmtCacheEntry>()
-                    .and_then(|entry| entry.process_f64(*value))
-                {
-                    Ok(s) => {
-                        builder.put_str(&s);
-                        builder.commit_row()
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.commit_row()
-                    }
-                }
-            },
-        ),
+        |value, fmt, ctx| {
+            number_to_char::<Float64Type>(value, fmt, ctx, |entry, value| entry.process_f64(*value))
+        },
     );
+}
+
+fn number_to_char<I: AccessType>(
+    value: Value<I>,
+    fmt: Value<StringType>,
+    ctx: &mut EvalContext,
+    process: impl Fn(&FmtCacheEntry, I::ScalarRef<'_>) -> Result<String> + Copy + Send + Sync,
+) -> Value<StringType> {
+    // Cache both successful parses and errors for this evaluation only. Errors must
+    // still be reported per valid row to preserve NULL and short-circuit semantics.
+    let cached = fmt.as_scalar().map(|fmt| fmt.parse::<FmtCacheEntry>());
+    vectorize_with_builder_2_arg::<I, StringType, StringType>(|value, fmt, builder, ctx| {
+        if let Some(validity) = &ctx.validity
+            && !validity.get_bit(builder.len())
+        {
+            builder.commit_row();
+            return;
+        }
+
+        let result = match &cached {
+            Some(entry) => entry
+                .as_ref()
+                .map_err(Clone::clone)
+                .and_then(|entry| process(entry, value)),
+            None => fmt
+                .parse::<FmtCacheEntry>()
+                .and_then(|entry| process(&entry, value)),
+        };
+        match result {
+            Ok(s) => builder.put_and_commit(s),
+            Err(e) => {
+                ctx.set_error(builder.len(), e.to_string());
+                builder.commit_row();
+            }
+        }
+    })(value, fmt, ctx)
 }
 
 /// Compute `grouping` by `grouping_id` and `cols`.

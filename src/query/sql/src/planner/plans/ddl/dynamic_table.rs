@@ -12,32 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::InitializeMode;
-use databend_common_ast::ast::RefreshMode;
 use databend_common_ast::ast::TargetLag;
 use databend_common_ast::ast::WarehouseOptions;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
+use crate::plans::CreateTablePlan;
 use crate::plans::TableOptions;
 
 #[derive(Clone, Debug)]
 pub struct CreateDynamicTablePlan {
-    pub create_option: CreateOption,
+    pub table_plan: CreateTablePlan,
+    pub as_query: String,
+    pub target_lag: TargetLag,
+    pub warehouse_opts: WarehouseOptions,
+}
+
+impl CreateDynamicTablePlan {
+    pub fn create_option(&self) -> CreateOption {
+        self.table_plan.create_option
+    }
+
+    pub fn tenant(&self) -> &Tenant {
+        &self.table_plan.tenant
+    }
+
+    pub fn schema(&self) -> TableSchemaRef {
+        self.table_plan.schema.clone()
+    }
+
+    pub fn options(&self) -> &TableOptions {
+        &self.table_plan.options
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RefreshDynamicTablePlan {
     pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
-
-    pub schema: TableSchemaRef,
-    pub options: TableOptions,
-    pub field_comments: Vec<String>,
-    pub cluster_key: Option<String>,
-    pub as_query: String,
-
-    pub target_lag: TargetLag,
-    pub warehouse_opts: WarehouseOptions,
-    pub refresh_mode: RefreshMode,
-    pub initialize: InitializeMode,
 }

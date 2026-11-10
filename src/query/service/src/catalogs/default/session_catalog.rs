@@ -72,10 +72,13 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::ListedMaterializedView;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::LvtUpdate;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -244,6 +247,17 @@ impl Catalog for SessionCatalog {
         }
     }
 
+    async fn mget_table_metas_by_ids(
+        &self,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>> {
+        self.inner.mget_table_metas_by_ids(table_ids).await
+    }
+
+    async fn list_clone_group_bindings(&self, clone_group_id: u64) -> Result<Vec<(u64, u64)>> {
+        self.inner.list_clone_group_bindings(clone_group_id).await
+    }
+
     async fn get_mv_definition(
         &self,
         tenant: &Tenant,
@@ -281,6 +295,14 @@ impl Catalog for SessionCatalog {
         self.inner
             .get_mv_source_binding_snapshot(tenant, source_table_id)
             .await
+    }
+
+    async fn list_materialized_views(
+        &self,
+        tenant: &Tenant,
+        filter: &MaterializedViewListFilter,
+    ) -> Result<Vec<ListedMaterializedView>> {
+        self.inner.list_materialized_views(tenant, filter).await
     }
 
     async fn mget_table_names_by_ids(
@@ -357,37 +379,6 @@ impl Catalog for SessionCatalog {
                 .upsert_table_desc_to_id(table.get_table_info().clone());
         }
         Ok(table)
-    }
-
-    async fn get_table_branch_with_expire_ctl(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        branch_name: &str,
-        include_expired: bool,
-    ) -> Result<Arc<dyn Table>> {
-        {
-            let guard = self.txn_mgr.lock();
-            if guard.is_active() {
-                let branch_desc = format!("'{}'.'{}'/'{}'", db_name, table_name, branch_name);
-                if let Some(table) = guard
-                    .get_table_from_buffer(&branch_desc)
-                    .map(|table_info| self.get_table_by_info(&table_info))
-                {
-                    return table;
-                }
-            }
-        }
-        self.inner
-            .get_table_branch_with_expire_ctl(
-                tenant,
-                db_name,
-                table_name,
-                branch_name,
-                include_expired,
-            )
-            .await
     }
 
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
@@ -495,7 +486,7 @@ impl Catalog for SessionCatalog {
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
-    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+    ) -> Result<(Vec<TableInfo>, Vec<DroppedId>)> {
         self.inner.get_drop_table_infos(req).await
     }
 
@@ -584,9 +575,14 @@ impl Catalog for SessionCatalog {
                         .retryable_update_multi_table_meta(tenant, req)
                         .await?
                 };
-                self.temp_tbl_mgr
-                    .lock()
-                    .update_multi_table_meta(update_temp_tables);
+                // An OCC conflict is an inner Err, not a successful commit.
+                // Keep temporary tables unchanged until persistent updates succeed;
+                // otherwise a failed retry can partially commit a mixed transaction.
+                if reply.is_ok() {
+                    self.temp_tbl_mgr
+                        .lock()
+                        .update_multi_table_meta(update_temp_tables);
+                }
                 Ok(reply)
             }
             TxnState::Active => {
@@ -880,10 +876,22 @@ impl Catalog for SessionCatalog {
         self.inner.set_table_lvt(name_ident, value).await
     }
 
+    async fn mget_table_lvts(
+        &self,
+        tenant: &Tenant,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<LeastVisibleTime>>)>> {
+        self.inner.mget_table_lvts(tenant, table_ids).await
+    }
+
+    async fn set_table_lvts(&self, tenant: &Tenant, updates: &[LvtUpdate]) -> Result<bool> {
+        self.inner.set_table_lvts(tenant, updates).await
+    }
+
     async fn get_table_lvt(
         &self,
         name_ident: &LeastVisibleTimeIdent,
-    ) -> Result<Option<LeastVisibleTime>> {
+    ) -> Result<Option<SeqV<LeastVisibleTime>>> {
         self.inner.get_table_lvt(name_ident).await
     }
 

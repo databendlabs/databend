@@ -20,7 +20,15 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------+
 
 
-error: The arguments of AggregateRetention should be an expression which returns a Boolean result
+ast: retention(NULL, b > 1)
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| b      | Column(UInt64([1, 2, 3, 4])) |
+| Output | Null { len: 1 }              |
++--------+------------------------------+
+
 
 ast: retention(a > 1, b > 1, x_null > 1)
 evaluation (internal):

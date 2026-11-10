@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 
+import dataclasses
 import json
 import subprocess
 import time
 from typing import Dict
 import requests
 from pathlib import Path
-from utils import print_step, BUILD_PROFILE, run_command
+from utils import (
+    print_step,
+    BUILD_PROFILE,
+    run_command,
+    METACTL_BINARY,
+    TEST_CA_CERT,
+    TEST_TLS_DOMAIN,
+    MetaClientProfile,
+    MetaGrpcCredential,
+    MetaSecurityProfile,
+)
 
 metactl_bin = f"./target/{BUILD_PROFILE}/databend-metactl"
 
@@ -132,3 +143,69 @@ def cluster_status(msg: str) -> str:
     print_step(f"Check /v1/cluster/status {msg} end")
 
     return status
+
+
+def client_for(
+    server: MetaSecurityProfile, credential: MetaGrpcCredential, secrets_dir: Path
+) -> MetaClientProfile:
+    """The client `server` accepts with `credential`.
+
+    A server that serves gRPC TLS is assumed to use the certificate under
+    tests/certs, so the client trusts that CA.
+    """
+    client = MetaClientProfile.for_credential(credential, secrets_dir)
+    if server.grpc_tls_server_cert is None:
+        return client
+    return dataclasses.replace(
+        client, grpc_tls_ca_cert=TEST_CA_CERT, grpc_tls_domain_name=TEST_TLS_DOMAIN
+    )
+
+
+class Metactl:
+    """Run databend-metactl against one gRPC endpoint with one client profile.
+
+    A command is given as its subcommand and options, e.g.
+    `["get", "--key", "foo"]`; the endpoint and the profile's options are
+    appended, so `--grpc-api-address` is never part of the caller's list.
+    """
+
+    def __init__(
+        self,
+        grpc_address: str,
+        client: MetaClientProfile = MetaClientProfile(),
+        metactl_bin: Path = METACTL_BINARY,
+    ) -> None:
+        self.grpc_address = grpc_address
+        self.client = client
+        self.metactl_bin = metactl_bin
+        self._endpoint_args = ["--grpc-api-address", grpc_address]
+        self._client_args = client.cli_args()
+
+    def command(self, args: list[str]) -> list[str]:
+        """The full command line for `args`; `lua` takes no endpoint, its script names one."""
+        is_lua = args[0] == "lua"
+        endpoint_args = [] if is_lua else self._endpoint_args
+        return [str(self.metactl_bin), *args, *endpoint_args, *self._client_args]
+
+    def run(self, args: list[str]) -> subprocess.CompletedProcess:
+        """Run one command to completion; the caller checks `returncode`."""
+        cmd = self.command(args)
+        print(f"Running: {cmd}", flush=True)
+        return subprocess.run(
+            cmd,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    def start(self, args: list[str]) -> subprocess.Popen:
+        """Start a long-running command such as `watch`; the caller stops it."""
+        cmd = self.command(args)
+        print(f"Starting: {cmd}", flush=True)
+        return subprocess.Popen(
+            cmd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )

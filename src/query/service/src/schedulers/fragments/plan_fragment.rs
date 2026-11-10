@@ -33,6 +33,7 @@ use crate::physical_plans::CompactSource;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::FusePrune;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
@@ -62,8 +63,8 @@ pub enum FragmentType {
     /// doesn't contain any `TableScan` operator.
     Intermediate,
 
-    /// Leaf fragment of a query plan, which contains
-    /// a `TableScan` operator.
+    /// Leaf fragment of a query plan, which contains a row-producing scan or a metadata-producing
+    /// `FusePrune` source operator.
     Source,
     /// Intermediate fragment of a replace into plan, which contains a `ReplaceInto` operator.
     ReplaceInto,
@@ -419,15 +420,19 @@ impl PlanFragment {
     ) -> Result<()> {
         struct TasksCollector {
             tasks: Vec<ReclusterTask>,
+            batches: Option<Vec<Vec<usize>>>,
         }
 
         impl TasksCollector {
             pub fn create() -> Box<dyn PhysicalPlanVisitor> {
-                Box::new(TasksCollector { tasks: Vec::new() })
+                Box::new(TasksCollector {
+                    tasks: Vec::new(),
+                    batches: None,
+                })
             }
 
-            pub fn take(&mut self) -> Vec<ReclusterTask> {
-                std::mem::take(&mut self.tasks)
+            pub fn take(&mut self) -> (Vec<ReclusterTask>, Option<Vec<Vec<usize>>>) {
+                (std::mem::take(&mut self.tasks), self.batches.take())
             }
         }
 
@@ -442,7 +447,8 @@ impl PlanFragment {
                         unreachable!("logic error, expect only one recluster");
                     }
 
-                    self.tasks = recluster.tasks.clone()
+                    self.tasks = recluster.tasks.clone();
+                    self.batches = recluster.task_batches.clone();
                 }
 
                 Ok(())
@@ -452,23 +458,53 @@ impl PlanFragment {
         let mut visitor = TasksCollector::create();
         self.plan.visit(&mut visitor)?;
 
-        let mut tasks = vec![];
-        if let Some(visitor) = visitor.as_any().downcast_mut::<TasksCollector>() {
-            tasks = visitor.take();
-        }
+        let (tasks, batches) = visitor
+            .as_any()
+            .downcast_mut::<TasksCollector>()
+            .map(|visitor| visitor.take())
+            .unwrap_or_default();
 
-        let executors = Fragmenter::get_executors(ctx);
-        if tasks.len() > executors.len() {
-            return Err(ErrorCode::Internal(format!(
-                "Cannot recluster {} tasks to {} executors",
-                tasks.len(),
-                executors.len()
-            )));
-        }
-
-        let task_reshuffle = Self::reshuffle(executors, tasks)?;
+        let mut executors = Fragmenter::get_executors(ctx);
+        let batched = batches.is_some();
+        let task_reshuffle = if let Some(batches) = batches {
+            if batches.len() > executors.len() {
+                return Err(ErrorCode::Internal(
+                    "Recluster placement exceeds available executors",
+                ));
+            }
+            // Preserve the planning-time placement witness. Round-robin task
+            // redistribution could combine full batches and exceed a node's budget.
+            executors.sort();
+            let mut placement = executors
+                .iter()
+                .map(|id| (id.clone(), Vec::new()))
+                .collect::<HashMap<_, _>>();
+            let mut seen = vec![false; tasks.len()];
+            for (executor, batch) in executors.into_iter().zip(batches) {
+                let assigned = placement.get_mut(&executor).unwrap();
+                for task_idx in batch {
+                    if task_idx >= tasks.len() || std::mem::replace(&mut seen[task_idx], true) {
+                        return Err(ErrorCode::Internal("Invalid recluster task placement"));
+                    }
+                    assigned.push(tasks[task_idx].clone());
+                }
+            }
+            if seen.iter().any(|seen| !seen) {
+                return Err(ErrorCode::Internal("Recluster placement omitted a task"));
+            }
+            placement
+        } else {
+            if tasks.len() > executors.len() {
+                return Err(ErrorCode::Internal(format!(
+                    "Cannot recluster {} tasks to {} executors",
+                    tasks.len(),
+                    executors.len()
+                )));
+            }
+            Self::reshuffle(executors, tasks)?
+        };
         for (executor, tasks) in task_reshuffle.into_iter() {
-            let mut handle = ReclusterDeriveHandle::create(tasks);
+            let mut handle = ReclusterDeriveHandle::create(tasks, batched);
             let plan = self.plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -490,7 +526,7 @@ impl PlanFragment {
             .enumerate()
             .map(|(idx, p)| (idx % num_executors, p))
             .collect::<Vec<_>>();
-        parts.sort_by(|a, b| a.0.cmp(&b.0));
+        parts.sort_by_key(|a| a.0);
         let partitions: Vec<_> = parts.into_iter().map(|x| x.1).collect();
 
         // parts_per_executor = num_parts / num_executors
@@ -548,6 +584,9 @@ impl PlanFragment {
                 if let Some(scan) = TableScan::from_physical_plan(plan) {
                     self.data_sources
                         .insert(plan.get_id(), DataSource::Table(*scan.source.clone()));
+                } else if let Some(prune) = FusePrune::from_physical_plan(plan) {
+                    self.data_sources
+                        .insert(plan.get_id(), DataSource::Table(*prune.source.clone()));
                 } else if let Some(scan) = ConstantTableScan::from_physical_plan(plan) {
                     self.data_sources.insert(
                         plan.get_id(),
@@ -648,6 +687,22 @@ impl DeriveHandle for ReadSourceDeriveHandle {
                 source: Box::new(source),
                 ..table_scan.clone()
             }));
+        } else if let Some(fuse_prune) = FusePrune::from_physical_plan(v) {
+            let Some(source) = self.sources.remove(&fuse_prune.get_id()) else {
+                unreachable!(
+                    "Cannot find data source for Fuse prune plan {}",
+                    fuse_prune.get_id()
+                )
+            };
+
+            let Ok(source) = DataSourcePlan::try_from(source) else {
+                unreachable!("Cannot create data source plan");
+            };
+
+            return Ok(PhysicalPlan::new(FusePrune {
+                source: Box::new(source),
+                ..fuse_prune.clone()
+            }));
         } else if let Some(table_scan) = ConstantTableScan::from_physical_plan(v) {
             let Some(source) = self.sources.remove(&table_scan.get_id()) else {
                 unreachable!(
@@ -673,11 +728,12 @@ impl DeriveHandle for ReadSourceDeriveHandle {
 
 struct ReclusterDeriveHandle {
     tasks: Vec<ReclusterTask>,
+    batched: bool,
 }
 
 impl ReclusterDeriveHandle {
-    pub fn create(tasks: Vec<ReclusterTask>) -> Box<dyn DeriveHandle> {
-        Box::new(ReclusterDeriveHandle { tasks })
+    pub fn create(tasks: Vec<ReclusterTask>, batched: bool) -> Box<dyn DeriveHandle> {
+        Box::new(ReclusterDeriveHandle { tasks, batched })
     }
 }
 
@@ -697,7 +753,10 @@ impl DeriveHandle for ReclusterDeriveHandle {
 
         Ok(PhysicalPlan::new(Recluster {
             tasks: self.tasks.clone(),
-            ..recluster.clone()
+            task_batches: self.batched.then(|| vec![(0..self.tasks.len()).collect()]),
+            meta: recluster.meta.clone(),
+            table_info: recluster.table_info.clone(),
+            table_meta_timestamps: recluster.table_meta_timestamps,
         }))
     }
 }

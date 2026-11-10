@@ -621,6 +621,7 @@ impl FromToProto for ex::TableDataType {
                             params,
                             argument_types,
                             state_type: Box::new(ex::TableDataType::from_pb(*state_type)?),
+                            state_version: state.state_version,
                         }
                     }
                 };
@@ -698,6 +699,7 @@ impl FromToProto for ex::TableDataType {
                 params,
                 argument_types,
                 state_type,
+                state_version,
             } => new_pb_dt24(Dt24::AggregateStateT(Box::new(pb::AggregateState {
                 ver: VER,
                 min_reader_ver: MIN_READER_VER,
@@ -705,6 +707,7 @@ impl FromToProto for ex::TableDataType {
                 params: params.iter().map(FromToProto::to_pb).collect(),
                 argument_types: argument_types.iter().map(FromToProto::to_pb).collect(),
                 state_type: Some(Box::new(state_type.to_pb())),
+                state_version: *state_version,
             }))),
         }
     }

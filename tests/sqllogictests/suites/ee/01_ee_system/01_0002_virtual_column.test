@@ -33,9 +33,6 @@ statement ok
 USE test_vacuum_virtual_column
 
 statement ok
-set enable_experimental_virtual_column = 1;
-
-statement ok
 set data_retention_time_in_days = 0;
 
 statement ok
@@ -120,9 +117,6 @@ remove @vb_stage;
 
 statement ok
 drop stage vb_stage;
-
-statement ok
-set enable_experimental_virtual_column = 0;
 
 statement ok
 DROP DATABASE test_vacuum_virtual_column

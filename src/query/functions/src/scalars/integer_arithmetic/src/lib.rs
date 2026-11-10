@@ -17,13 +17,8 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::type_complexity)]
 #![allow(internal_features)]
-#![feature(core_intrinsics)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(type_ascription)]
-#![feature(try_blocks)]
-#![feature(downcast_unchecked)]
-#![feature(str_internals)]
 
 pub mod integer_arithmetic;
 

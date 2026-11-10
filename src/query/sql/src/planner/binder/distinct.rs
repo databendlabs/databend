@@ -21,7 +21,6 @@ use crate::binder::Binder;
 use crate::binder::project::SelectInfo;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::EvalScalar;
 impl Binder {
     pub fn bind_distinct(
@@ -43,7 +42,6 @@ impl Binder {
         }
 
         let distinct_plan = Aggregate {
-            mode: AggregateMode::Initial,
             group_items,
             from_distinct: true,
             ..Default::default()

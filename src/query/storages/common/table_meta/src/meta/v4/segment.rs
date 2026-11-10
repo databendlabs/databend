@@ -547,16 +547,18 @@ mod tests {
             col_stats: block_col_stats,
             col_metas,
             cluster_stats: None,
-            partition_stats: Some(PartitionStatistics::new(vec![Scalar::String(
+            partition_stats: Some(PartitionStatistics::new(0, vec![Scalar::String(
                 "partition-a".to_string(),
             )])),
             location: ("block.parquet".to_string(), 0),
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             inverted_index_size: None,
+            inverted_index_metas: None,
             ngram_filter_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
+            vector_index_metas: None,
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
@@ -575,7 +577,7 @@ mod tests {
             compressed_byte_size: 16,
             index_size: 0,
             col_stats: summary_col_stats,
-            partition_stats: Some(PartitionStatistics::new(vec![Scalar::String(
+            partition_stats: Some(PartitionStatistics::new(0, vec![Scalar::String(
                 "partition-a".to_string(),
             )])),
             ..Default::default()

@@ -179,6 +179,53 @@ LIMIT 10;
 26 55 58
 29 61 64
 
+# Full-frame windows over a UNION ALL padded with constant NULL columns. The
+# padding is all NULL in most spilled pages and merged blocks; it must read back
+# as NULL and stay NULL through the chained windows.
+query IIIIII
+WITH t AS (
+    SELECT number % 7 AS k1, number % 5 AS k2, number AS v, NULL::BIGINT AS pad_i, NULL::STRING AS pad_s FROM numbers(200000)
+    UNION ALL
+    SELECT number % 7, number % 5, 1, number::BIGINT, 'x' FROM numbers(10)
+)
+SELECT count(*), sum(s1), sum(s2), count(pad_i), count(pad_s), sum(c)
+FROM (
+    SELECT
+        pad_i,
+        pad_s,
+        SUM(v) OVER (PARTITION BY k1) AS s1,
+        SUM(v) OVER (PARTITION BY k2) AS s2,
+        COUNT(pad_i) OVER (PARTITION BY k1) AS c
+    FROM t
+);
+----
+200010 571454286200016 800036000200020 10 10 285732
+
+query ITIII
+WITH t AS (
+    SELECT number % 7 AS k1, number % 5 AS k2, number AS v, NULL::BIGINT AS pad_i, NULL::STRING AS pad_s FROM numbers(200000)
+    UNION ALL
+    SELECT number % 7, number % 5, 1, number::BIGINT, 'x' FROM numbers(10)
+)
+SELECT pad_i, pad_s, s1, s2, c
+FROM (
+    SELECT
+        v,
+        pad_i,
+        pad_s,
+        SUM(v) OVER (PARTITION BY k1) AS s1,
+        SUM(v) OVER (PARTITION BY k2) AS s2,
+        COUNT(pad_i) OVER (PARTITION BY k1) AS c
+    FROM t
+)
+WHERE pad_i < 3 OR v = 199999
+ORDER BY pad_i NULLS LAST;
+----
+0 x 2857157144 3999900002 2
+1 x 2857185716 3999940002 2
+2 x 2857214288 3999980002 2
+NULL NULL 2857214288 4000060002 2
+
 statement ok
 DROP DATABASE test_window_partition_spill;
 

@@ -30,8 +30,6 @@ use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::operations::TruncateGenerator;
-use databend_storages_common_table_meta::meta::BlockHLLState;
-use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
@@ -57,6 +55,9 @@ pub struct CommitSink {
 
     // Used for recluster.
     pub recluster_info: Option<ReclusterInfoSideCar>,
+    /// Present only for materializing a row-level TTL definition.
+    #[serde(default)]
+    pub expected_ttl: Option<String>,
 }
 
 #[typetag::serde]
@@ -98,6 +99,7 @@ impl IPhysicalPlan for CommitSink {
             deduplicated_label: self.deduplicated_label.clone(),
             table_meta_timestamps: self.table_meta_timestamps,
             recluster_info: self.recluster_info.clone(),
+            expected_ttl: self.expected_ttl.clone(),
         })
     }
 
@@ -146,6 +148,7 @@ impl IPhysicalPlan for CommitSink {
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
                         false,
+                        self.expected_ttl.clone(),
                     )
                 })
             }
@@ -177,28 +180,19 @@ impl IPhysicalPlan for CommitSink {
                             // extract re-cluster related mutations from physical plan
                             let recluster_info = self.recluster_info.clone().unwrap_or_default();
 
-                            let extended_merged_blocks = recluster_info
-                                .merged_blocks
-                                .into_iter()
-                                .map(|(block_meta, column_hlls)| {
-                                    Arc::new(ExtendedBlockMeta {
-                                        block_meta: Arc::unwrap_or_clone(block_meta),
-                                        draft_virtual_block_meta: None,
-                                        column_hlls: column_hlls.map(BlockHLLState::Serialized),
-                                        column_top_n: None,
-                                    })
-                                })
-                                .collect::<Vec<Arc<ExtendedBlockMeta>>>();
-
                             TableMutationAggregator::create(
                                 table,
                                 builder.ctx.clone(),
                                 base_segments,
-                                extended_merged_blocks,
+                                vec![],
                                 recluster_info.removed_segment_indexes,
                                 recluster_info.removed_statistics,
                                 *kind,
                                 self.table_meta_timestamps,
+                            )
+                            .with_retained_blocks(
+                                recluster_info.merged_blocks,
+                                recluster_info.virtual_schemas,
                             )
                         });
                 }
@@ -217,6 +211,7 @@ impl IPhysicalPlan for CommitSink {
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
                         acquire_commit_lock,
+                        self.expected_ttl.clone(),
                     )
                 })
             }

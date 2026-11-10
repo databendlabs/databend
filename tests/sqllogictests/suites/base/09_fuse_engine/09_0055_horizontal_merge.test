@@ -1,0 +1,109 @@
+# Experimental complete-row multiway merge. Input blocks have no granule index.
+statement ok
+create or replace database db_horizontal_multiway_merge
+
+statement ok
+use db_horizontal_multiway_merge
+
+statement ok
+set enable_recluster_multiway_merge = 1
+
+statement ok
+set max_threads = 2
+
+statement ok
+set max_block_size = 2
+
+statement ok
+create table t(k int, payload string) cluster by(k) row_per_block=100 block_per_segment=2
+
+statement ok
+insert into t values (1, 'a'), (3, 'c'), (NULL, 'null-a')
+
+statement ok
+insert into t values (2, 'b'), (3, 'duplicate'), (NULL, 'null-b')
+
+statement ok
+set force_sort_data_spill = 1
+
+statement ok
+alter table t recluster final
+
+query IT rowsort
+select k, payload from t
+----
+1 a
+2 b
+3 c
+3 duplicate
+NULL null-a
+NULL null-b
+
+# Existing schema-evolution defaults and computed cluster keys remain supported.
+statement ok
+unset force_sort_data_spill
+
+statement ok
+alter table t add column extra string default 'default-value'
+
+statement ok
+alter table t cluster by(-k)
+
+statement ok
+insert into t(k, payload) values (0, 'zero'), (4, 'four')
+
+statement ok
+alter table t recluster final
+
+query III
+select count(), count(k), count_if(extra = 'default-value') from t
+----
+8 6 8
+
+# Disabling the feature keeps the legacy horizontal path available.
+statement ok
+set enable_recluster_multiway_merge = 0
+
+statement ok
+insert into t(k, payload) values (5, 'five')
+
+statement ok
+alter table t recluster final
+
+query III
+select count(), count(k), sum(k) from t
+----
+9 7 18
+
+# Change tracking origin identities must survive the complete-row merge.
+statement ok
+set enable_recluster_multiway_merge = 1
+
+statement ok
+create table tracked(k int, payload string) cluster by(k) row_per_block=100 change_tracking=true
+
+statement ok
+insert into tracked values (3, 'c'), (1, 'a')
+
+statement ok
+insert into tracked values (4, 'd'), (2, 'b')
+
+statement ok
+alter table tracked recluster final
+
+query III
+select count(), count(distinct (_origin_block_id, _origin_block_row_num)), count(_origin_version) from tracked
+----
+4 4 4
+
+statement ok
+unset max_block_size
+
+statement ok
+unset max_threads
+
+statement ok
+unset enable_recluster_multiway_merge
+
+statement ok
+drop database db_horizontal_multiway_merge

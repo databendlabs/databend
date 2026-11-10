@@ -33,9 +33,12 @@ use databend_common_expression::TableField;
 use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::is_stream_column_id;
 use databend_common_expression::types::DataType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
+use crate::BoundQueryLineage;
+use crate::QueryLineageRelationKind;
 use crate::optimizer::ir::SExpr;
 
 /// Planner use [`usize`] as its index type.
@@ -91,6 +94,11 @@ pub struct Metadata {
     /// one producer definition and its temporary-table output mappings so
     /// lineage extraction can look through that execution detail.
     materialized_cte_lineage_sources: HashMap<IndexType, MaterializedCteLineageSource>,
+    /// Query lineage captured from the bound plan before optimization. Lineage is a
+    /// logical property of what the user wrote, while the optimizer may fold scans into
+    /// constants, decorrelate subqueries into marker joins, or route a scan through a
+    /// materialized view. Capturing here keeps those execution rewrites out of lineage.
+    bound_query_lineage: Option<BoundQueryLineage>,
     next_runtime_filter_id: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
@@ -111,6 +119,19 @@ impl Metadata {
 
     pub fn tables(&self) -> &[TableEntry] {
         self.tables.as_slice()
+    }
+
+    /// Return the logical source table IDs referenced by the query.
+    ///
+    /// Materialized-view rewrite adds candidate read plans to the same metadata. Those
+    /// candidates may register their physical MV tables, but the MV tables are optimizer
+    /// implementation details rather than logical dependencies of the query.
+    pub fn source_table_ids(&self) -> BTreeSet<u64> {
+        self.tables
+            .iter()
+            .filter(|entry| !is_materialized_view_engine(entry.table().engine()))
+            .map(|entry| entry.table().get_id())
+            .collect()
     }
 
     pub fn table_index_by_column_indexes(&self, column_indexes: &ColumnSet) -> Option<IndexType> {
@@ -397,7 +418,6 @@ impl Metadata {
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
-        branch: Option<String>,
         table_alias_name: Option<String>,
         source_of_view: bool,
         source_of_stage: bool,
@@ -414,7 +434,6 @@ impl Metadata {
             database,
             catalog,
             table: table_meta.clone(),
-            branch,
             alias_name: table_alias_name,
             source_of_view,
             source_of_stage,
@@ -546,6 +565,14 @@ impl Metadata {
         self.base_column_scan_id.get(&column_index).cloned()
     }
 
+    pub(crate) fn set_bound_query_lineage(&mut self, lineage: BoundQueryLineage) {
+        self.bound_query_lineage = Some(lineage);
+    }
+
+    pub fn bound_query_lineage(&self) -> Option<&BoundQueryLineage> {
+        self.bound_query_lineage.as_ref()
+    }
+
     pub(crate) fn add_view_lineage_source_column(
         &mut self,
         column_index: Symbol,
@@ -644,7 +671,6 @@ pub struct TableEntry {
     catalog: String,
     database: String,
     name: String,
-    branch: Option<String>,
     alias_name: Option<String>,
     index: IndexType,
     source_of_view: bool,
@@ -666,9 +692,13 @@ pub(crate) struct LineageSourceRelation {
     pub(crate) id: u64,
 }
 
+/// A logical output column of a view-like relation that lineage must not look through.
+/// `kind` is `View` or `MaterializedView`; both expand to a query at bind time, but the
+/// user referenced the object, not the tables behind it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ViewLineageSourceColumn {
     pub(crate) relation: LineageSourceRelation,
+    pub(crate) kind: QueryLineageRelationKind,
     pub(crate) name: String,
     pub(crate) id: ColumnId,
 }
@@ -698,10 +728,6 @@ impl TableEntry {
     /// Get the name of this table entry.
     pub fn name(&self) -> &str {
         &self.name
-    }
-
-    pub fn branch(&self) -> &Option<String> {
-        &self.branch
     }
 
     /// Get the alias name of this table entry.
@@ -738,13 +764,7 @@ impl TableEntry {
     }
 
     pub fn qualified_name(&self) -> String {
-        match &self.branch {
-            None => format!("{}.{}.{}", self.catalog, self.database, self.name),
-            Some(branch) => format!(
-                "{}.{}.{}/{}",
-                self.catalog, self.database, self.name, branch
-            ),
-        }
+        format!("{}.{}.{}", self.catalog, self.database, self.name)
     }
 }
 

@@ -67,6 +67,7 @@ async fn get_running_query_dump(query_id: &str) -> Result<HashMap<String, String
         retry_times: 3,
         retry_interval: 3,
         keep_alive: FlightKeepAliveParams::default(),
+        reuse_control_channel: false,
     };
     cluster
         .do_action::<_, String>(GET_RUNNING_QUERY_DUMP, message, flight_params)

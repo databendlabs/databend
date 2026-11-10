@@ -16,6 +16,8 @@
 mod decorrelate;
 mod flatten_plan;
 mod flatten_scalar;
+mod row_value;
+mod scalar_aggregate;
 mod subquery_decorrelator;
 
 use std::collections::HashMap;
@@ -23,10 +25,14 @@ use std::collections::HashMap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
+pub(crate) use scalar_aggregate::ScalarAggregateMatch;
+pub(crate) use scalar_aggregate::function_call;
+pub(crate) use scalar_aggregate::match_scalar_aggregate;
 pub use subquery_decorrelator::FlattenInfo;
 pub use subquery_decorrelator::SubqueryDecorrelatorOptimizer;
 pub use subquery_decorrelator::UnnestResult;
 
+use crate::ColumnSet;
 use crate::optimizer::ir::SExpr;
 
 type FlattenPlanResult = (SExpr, DerivedColumnScope);
@@ -58,6 +64,27 @@ impl DerivedColumnScope {
                 continue;
             }
             if !self.local.contains_key(&old) {
+                self.local.insert(old, new);
+            }
+        }
+    }
+
+    /// The scope without the mappings to `targets`.
+    fn without_targets(&self, targets: &ColumnSet) -> Self {
+        Self {
+            inherited: self
+                .snapshot()
+                .into_iter()
+                .filter(|(_, new)| !targets.contains(new))
+                .collect(),
+            local: HashMap::new(),
+        }
+    }
+
+    /// Restores the mappings of `scope` to `targets` for columns this scope doesn't resolve.
+    fn restore_targets(&mut self, scope: &Self, targets: &ColumnSet) {
+        for (old, new) in scope.snapshot() {
+            if targets.contains(&new) && self.resolve(old).is_none() {
                 self.local.insert(old, new);
             }
         }

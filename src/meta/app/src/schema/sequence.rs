@@ -73,6 +73,9 @@ pub struct CreateSequenceReq {
 
     /// See: [`SequenceMeta::storage_version`]
     pub storage_version: u64,
+
+    /// Owner written in the same transaction as the sequence; see `create_owned_object`.
+    pub owner_role: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

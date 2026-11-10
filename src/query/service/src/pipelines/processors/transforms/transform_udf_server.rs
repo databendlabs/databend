@@ -31,6 +31,8 @@ use databend_common_expression::udf_client::is_transport_error_message;
 use databend_common_metrics::external_server::record_error_external;
 use databend_common_metrics::external_server::record_retry_external;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_sql::planner::UDFValidator;
+use databend_common_users::UserApiProvider;
 use tokio::sync::Semaphore;
 use tonic::transport::Endpoint;
 
@@ -43,6 +45,7 @@ use crate::sessions::TableContextTableAccess;
 
 pub struct TransformUdfServer {
     ctx: Arc<QueryContext>,
+    user_api: Arc<UserApiProvider>,
     funcs: Vec<UdfFunctionDesc>,
     connect_timeout: u64,
     // request batch rows is used to split the block into smaller blocks and improve concurrency performance.
@@ -97,9 +100,16 @@ impl TransformUdfServer {
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_batch_rows = settings.get_external_server_request_batch_rows()? as usize;
         let retry_times = settings.get_external_server_request_retry_times()? as usize;
+        // A received physical plan must also obey this executor's operator config.
+        for func in &funcs {
+            if !func.external_access_integrations.is_empty() {
+                UDFValidator::is_udf_server_policy_allowed(func.udf_type.as_server().unwrap())?;
+            }
+        }
 
         Ok(Self {
             ctx,
+            user_api: UserApiProvider::instance(),
             funcs,
             connect_timeout,
             request_batch_rows,
@@ -112,6 +122,7 @@ impl TransformUdfServer {
     // data_block is spilt into multiple blocks, each block is processed by transform_inner
     async fn transform_inner(
         ctx: Arc<QueryContext>,
+        user_api: Arc<UserApiProvider>,
         endpoint: Arc<Endpoint>,
         semaphore: Arc<Semaphore>,
         connect_timeout: u64,
@@ -122,6 +133,17 @@ impl TransformUdfServer {
         let permit = semaphore.acquire_owned().await.map_err(|e| {
             ErrorCode::Internal(format!("Udf transformer acquire permit failure. {}", e))
         })?;
+        // Check immediately before every Flight request (including retries),
+        // using the watch-backed policy view or authoritative KV fallback.
+        if !func.external_access_integrations.is_empty() {
+            user_api
+                .validate_external_access(
+                    &ctx.get_tenant(),
+                    func.udf_type.as_server().unwrap(),
+                    &func.external_access_integrations,
+                )
+                .await?;
+        }
         // construct input record_batch
         let num_rows = data_block.num_rows();
         let block_entries = func
@@ -157,6 +179,9 @@ impl TransformUdfServer {
 }
 
 fn retry_on(err: &databend_common_exception::ErrorCode) -> bool {
+    if err.code() == ErrorCode::PERMISSION_DENIED || err.code() == ErrorCode::INVALID_ARGUMENT {
+        return false;
+    }
     if err.code() == ErrorCode::U_D_F_DATA_ERROR {
         let message = err.message();
         // this means the server can't handle the request in 60s
@@ -195,6 +220,7 @@ impl AsyncTransform for TransformUdfServer {
                 .map(|mini_batch| {
                     databend_common_base::runtime::spawn({
                         let ctx = self.ctx.clone();
+                        let user_api = self.user_api.clone();
                         let endpoint = endpoint.clone();
                         let connect_timeout = self.connect_timeout;
                         let semaphore = self.semaphore.clone();
@@ -205,6 +231,7 @@ impl AsyncTransform for TransformUdfServer {
                             move || {
                                 Self::transform_inner(
                                     ctx.clone(),
+                                    user_api.clone(),
                                     endpoint.clone(),
                                     semaphore.clone(),
                                     connect_timeout,

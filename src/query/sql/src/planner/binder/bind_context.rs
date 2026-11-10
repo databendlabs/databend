@@ -51,6 +51,7 @@ use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::ColumnEntry;
 use crate::ColumnSet;
+use crate::DefinitionScope;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -254,6 +255,10 @@ pub struct ViewIdent {
 pub struct BindContext {
     pub parent: Option<Box<BindContext>>,
 
+    /// Depth of the binding path, independent of the name-resolution parent.
+    /// View definitions hide the caller's names but still count toward the limit.
+    pub binding_depth: usize,
+
     pub columns: Vec<ColumnBinding>,
 
     // map internal column: (table_index, column_id) -> column_index
@@ -270,6 +275,12 @@ pub struct BindContext {
     pub srf_info: SetReturningInfo,
 
     pub cte_context: CteContext,
+
+    /// A copy of the binder's definition scope, for binders that the type checker
+    /// creates from this context (scalar subqueries) without access to the binder.
+    /// Every `BindContext` built during binding must copy it; the binder checks this
+    /// with `Binder::debug_assert_definition_scope`. Restored on return from a view.
+    pub definition_scope: DefinitionScope,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -347,15 +358,19 @@ impl CteContext {
     }
 }
 
+/// `CteInfo` is cloned whenever a `CteContext` is cloned, which happens for every
+/// nested `BindContext` and every table reference. Keep the heavy payloads
+/// (`query`, `materialized_cte_info`) behind `Arc` so that cloning the map is
+/// cheap and does not deep-copy previously bound CTE definitions.
 #[derive(Clone, Debug)]
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub virtual_column_outputs: BTreeSet<String>,
-    pub query: Query,
+    pub query: Arc<Query>,
     pub recursive: bool,
     pub logical_recursive_cte_id: Option<u32>,
     pub columns: Vec<ColumnBinding>,
-    pub materialized_cte_info: Option<MaterializedCTEInfo>,
+    pub materialized_cte_info: Option<Arc<MaterializedCTEInfo>>,
     pub user_specified_materialized: bool,
 }
 
@@ -363,13 +378,20 @@ pub struct CteInfo {
 pub struct MaterializedCTEInfo {
     pub cte_name: String,
     pub bound_s_expr: SExpr,
-    pub bound_context: BindContext,
+    /// Output column bindings of the producer side of this CTE.
+    ///
+    /// Only the columns are kept here. Storing the whole producer `BindContext`
+    /// would embed its `cte_map` (and therefore every previously bound CTE)
+    /// into this entry, making the size of `CteInfo` grow exponentially with
+    /// the number of materialized CTEs.
+    pub bound_columns: Vec<ColumnBinding>,
 }
 
 impl BindContext {
     pub fn new() -> Self {
         Self {
             parent: None,
+            binding_depth: 1,
             columns: Vec::new(),
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
@@ -377,6 +399,7 @@ impl BindContext {
             windows: WindowInfo::default(),
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
+            definition_scope: DefinitionScope::session(),
             in_grouping: false,
             binding_views: HashSet::new(),
             have_async_func: false,
@@ -392,11 +415,19 @@ impl BindContext {
         }
     }
 
+    const MAX_DEPTH: usize = 4096;
+
     pub fn depth(&self) -> usize {
-        if let Some(ref p) = self.parent {
-            return p.depth() + 1;
+        self.binding_depth
+    }
+
+    pub fn next_depth(&self) -> Result<usize> {
+        if self.depth() >= Self::MAX_DEPTH {
+            return Err(ErrorCode::Internal(
+                "Query binder exceeds the maximum iterations",
+            ));
         }
-        1
+        Ok(self.depth() + 1)
     }
 
     pub fn with_opt_parent(parent: Option<&BindContext>) -> Result<Self> {
@@ -408,15 +439,10 @@ impl BindContext {
     }
 
     pub fn with_parent(parent: BindContext) -> Result<Self> {
-        const MAX_DEPTH: usize = 4096;
-        if parent.depth() >= MAX_DEPTH {
-            return Err(ErrorCode::Internal(
-                "Query binder exceeds the maximum iterations",
-            ));
-        }
-
+        let binding_depth = parent.next_depth()?;
         Ok(BindContext {
             parent: Some(Box::new(parent.clone())),
+            binding_depth,
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
@@ -424,6 +450,7 @@ impl BindContext {
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
+            definition_scope: parent.definition_scope.clone(),
             in_grouping: false,
             binding_views: parent.binding_views.clone(),
             have_async_func: false,
@@ -443,10 +470,28 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
+        bind_context.binding_depth = self.depth();
         bind_context.cte_context = self.cte_context.clone();
+        bind_context.definition_scope = self.definition_scope.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
         bind_context
+    }
+
+    /// Create the root context for binding the definition of `view`.
+    ///
+    /// A view definition is an independent name scope: it must not resolve the
+    /// caller's CTEs or columns, so the new context has no parent and an empty
+    /// CTE context. Carry over the binding depth to limit acyclic expansion,
+    /// and the view expansion path to detect cycles.
+    pub fn new_view_scope(&self, view: ViewIdent) -> Result<Self> {
+        let mut bind_context = BindContext::new();
+        bind_context.binding_depth = self.next_depth()?;
+        bind_context.binding_views = self.binding_views.clone();
+        bind_context.binding_views.insert(view);
+        bind_context.udf_cache = self.udf_cache.clone();
+        bind_context.planning_materialized_view_rewrite = self.planning_materialized_view_rewrite;
+        Ok(bind_context)
     }
 
     pub fn check_view_loop(&self, ident: &ViewIdent) -> Result<()> {

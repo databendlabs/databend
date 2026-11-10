@@ -14,7 +14,6 @@
 
 // TODO(xuanwo): Add crate level documents here.
 
-#![feature(never_type)]
 #![feature(associated_type_defaults)]
 #[allow(clippy::collapsible_match)]
 pub mod ast;

@@ -1,0 +1,2 @@
+name = "TPC-DS"
+prepare = ["nox", "-f", "tests/nox/noxfile.py", "-s", "sqllogic_hook", "--", "prepare", "tpcds"]

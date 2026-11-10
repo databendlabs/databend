@@ -42,7 +42,15 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------+
 
 
-error: quantile_tdigest_weighted just support numeric type, but got 'Null'
+ast: quantile_tdigest_weighted(0.8)(NULL, b)
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| b      | Column(UInt64([1, 2, 3, 4])) |
+| Output | Null { len: 1 }              |
++--------+------------------------------+
+
 
 ast: quantile_tdigest_weighted(0.8)(x_null, b)
 evaluation (internal):

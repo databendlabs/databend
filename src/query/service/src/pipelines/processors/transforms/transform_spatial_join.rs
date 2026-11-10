@@ -426,7 +426,9 @@ pub struct TransformSpatialJoinProbe {
     output_port: Arc<OutputPort>,
     input_data: Option<DataBlock>,
     output_data: VecDeque<DataBlock>,
-    state: Arc<SpatialJoinState>,
+    // Released once this processor finishes so the build side and R-tree are
+    // freed when the last spatial join processor is done, not when the query ends.
+    state: Option<Arc<SpatialJoinState>>,
     step: SpatialJoinStep,
 }
 
@@ -441,9 +443,21 @@ impl TransformSpatialJoinProbe {
             output_port,
             input_data: None,
             output_data: VecDeque::new(),
-            state,
+            state: Some(state),
             step: SpatialJoinStep::WaitBuild,
         })
+    }
+
+    fn state(&self) -> Result<&Arc<SpatialJoinState>> {
+        self.state
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("Spatial join state is already released"))
+    }
+
+    fn finish(&mut self) -> Event {
+        self.output_data.clear();
+        self.state = None;
+        Event::Finished
     }
 }
 
@@ -462,7 +476,7 @@ impl Processor for TransformSpatialJoinProbe {
             SpatialJoinStep::WaitBuild => Ok(Event::Async),
             SpatialJoinStep::Probe => {
                 if self.output_port.is_finished() {
-                    return Ok(Event::Finished);
+                    return Ok(self.finish());
                 }
                 if !self.output_port.can_push() {
                     return Ok(Event::NeedConsume);
@@ -476,7 +490,7 @@ impl Processor for TransformSpatialJoinProbe {
                 }
                 if self.input_port.is_finished() {
                     self.output_port.finish();
-                    return Ok(Event::Finished);
+                    return Ok(self.finish());
                 }
                 if self.input_port.has_data() {
                     self.input_data = Some(self.input_port.pull_data().unwrap()?);
@@ -491,7 +505,8 @@ impl Processor for TransformSpatialJoinProbe {
 
     fn process(&mut self) -> Result<()> {
         if let Some(block) = self.input_data.take() {
-            self.output_data.extend(self.state.probe_block(block)?);
+            let output = self.state()?.probe_block(block)?;
+            self.output_data.extend(output);
         }
         Ok(())
     }
@@ -499,7 +514,7 @@ impl Processor for TransformSpatialJoinProbe {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let SpatialJoinStep::WaitBuild = self.step {
-            self.state.wait_build_finish().await;
+            self.state()?.wait_build_finish().await;
             self.step = SpatialJoinStep::Probe;
         }
         Ok(())
@@ -507,13 +522,20 @@ impl Processor for TransformSpatialJoinProbe {
 }
 
 pub struct TransformSpatialJoinBuild {
-    state: Arc<SpatialJoinState>,
+    // Released once the sink finishes; see `TransformSpatialJoinProbe::state`.
+    state: Option<Arc<SpatialJoinState>>,
 }
 
 impl TransformSpatialJoinBuild {
     pub fn create(state: Arc<SpatialJoinState>) -> Self {
         state.build_attach();
-        Self { state }
+        Self { state: Some(state) }
+    }
+
+    fn state(&self) -> Result<&Arc<SpatialJoinState>> {
+        self.state
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("Spatial join state is already released"))
     }
 }
 
@@ -522,13 +544,16 @@ impl AsyncSink for TransformSpatialJoinBuild {
     const NAME: &'static str = "TransformSpatialJoinBuild";
 
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
-        self.state.sink_local_build(data_block);
+        self.state()?.sink_local_build(data_block);
         Ok(false)
     }
 
     async fn on_finish(&mut self) -> Result<()> {
-        self.state.finish_local_build()?;
-        self.state.build_detach_and_finish()
+        let Some(state) = self.state.take() else {
+            return Ok(());
+        };
+        state.finish_local_build()?;
+        state.build_detach_and_finish()
     }
 }
 

@@ -55,7 +55,7 @@ pub struct RuntimeLayer {
 
 impl Debug for RuntimeLayer {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", &self.runtime.inner())
+        write!(f, "{:?}", self.runtime.inner())
     }
 }
 

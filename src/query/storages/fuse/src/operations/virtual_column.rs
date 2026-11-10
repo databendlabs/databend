@@ -37,9 +37,8 @@ use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::RefreshSelection;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Table;
-use databend_storages_common_io::Files;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -59,8 +58,10 @@ use crate::FuseTable;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
 use crate::io::BlockReader;
+use crate::io::FuseCaches;
 use crate::io::JsonPathStatisticsBuilder;
-use crate::io::MetaReaders;
+use crate::io::SegmentInfoReader;
+use crate::io::TableFiles;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnBuilder;
 use crate::io::VirtualColumnLayoutPlanner;
@@ -107,7 +108,10 @@ pub async fn prepare_refresh_virtual_column(
         ));
     }
     let start = Instant::now();
-    let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
+    let Some(snapshot) = fuse_table
+        .read_table_snapshot_with_policy(ctx.cache_policy())
+        .await?
+    else {
         // no snapshot
         info!(
             "Prepare virtual column refresh finished in {} ms (no snapshot)",
@@ -146,9 +150,12 @@ pub async fn prepare_refresh_virtual_column(
     );
 
     let projection = Projection::Columns(field_indices);
-    let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
+    let block_reader =
+        fuse_table.create_block_reader(ctx.clone(), projection, CachePolicy::READ_ONLY)?;
 
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     let write_settings = fuse_table.get_write_settings();
     let storage_format = write_settings.storage_format;
@@ -183,19 +190,19 @@ pub async fn prepare_refresh_virtual_column(
             }
             matched_selection = true;
         }
-        let segment_info = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment_info = segment_cache
+            .get(&segment_reader, (location.to_string(), *ver))
             .await?;
+        let block_metas = segment_info.block_metas()?;
         let stats = match segment_info.summary.additional_stats_loc() {
-            Some(loc) => Some(read_segment_stats(operator.clone(), loc).await?),
+            Some(loc) => {
+                let mut stats =
+                    Arc::unwrap_or_clone(read_segment_stats(operator.clone(), loc, policy).await?);
+                stats.align_to_blocks(block_metas.len())?;
+                Some(stats)
+            }
             _ => None,
         };
-        let block_metas = segment_info.block_metas()?;
         if let Some(target) = block_filter.as_ref() {
             if !block_metas
                 .iter()
@@ -375,7 +382,10 @@ pub async fn commit_refresh_virtual_column(
         return Ok(0);
     }
 
-    let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
+    let Some(latest_snapshot) = fuse_table
+        .read_table_snapshot_with_policy(ctx.cache_policy())
+        .await?
+    else {
         info!(
             "Commit virtual column refresh finished in {} ms (no snapshot)",
             start.elapsed().as_millis()
@@ -383,7 +393,9 @@ pub async fn commit_refresh_virtual_column(
         return Ok(0);
     };
     let table_schema = fuse_table.schema();
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     let mut results_by_block = HashMap::with_capacity(results.len());
     for result in results {
@@ -393,13 +405,8 @@ pub async fn commit_refresh_virtual_column(
     let mut mutation_entries = Vec::new();
     let mut applied_blocks = 0;
     for (segment_idx, (location, ver)) in latest_snapshot.segments.iter().enumerate() {
-        let segment_info = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment_info = segment_cache
+            .get(&segment_reader, (location.to_string(), *ver))
             .await?;
         for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
             let block_location = &block_meta.location.0;
@@ -477,6 +484,7 @@ pub async fn commit_refresh_virtual_column(
             None,
             table_meta_timestamps,
             false,
+            None,
         )
     })?;
 
@@ -495,7 +503,10 @@ pub async fn do_vacuum_virtual_column(
     pipeline: &mut Pipeline,
 ) -> Result<VirtualColumnVacuumResult> {
     let start = Instant::now();
-    let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
+    let Some(latest_snapshot) = fuse_table
+        .read_table_snapshot_with_policy(ctx.cache_policy())
+        .await?
+    else {
         info!(
             "Vacuum virtual column finished in {} ms (no snapshot)",
             start.elapsed().as_millis()
@@ -504,7 +515,7 @@ pub async fn do_vacuum_virtual_column(
     };
 
     let mutation_entries =
-        prepare_vacuum_virtual_column_mutations(fuse_table, latest_snapshot.clone()).await?;
+        prepare_vacuum_virtual_column_mutations(&ctx, fuse_table, latest_snapshot.clone()).await?;
 
     let removed_files = mutation_entries.len() as u64;
     let need_commit = !mutation_entries.is_empty();
@@ -548,6 +559,7 @@ pub async fn do_vacuum_virtual_column(
                 None,
                 table_meta_timestamps,
                 false,
+                None,
             )
         })?;
     }
@@ -596,17 +608,14 @@ pub async fn cleanup_vacuum_virtual_column_files(
     };
 
     let table_schema = fuse_table.schema();
-    let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     let mut referenced_virtual_locations = HashSet::new();
     for (location, ver) in &snapshot_referenced_segments {
-        let segment = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment = segment_cache
+            .get(&segment_reader, (location.to_string(), *ver))
             .await?;
 
         for block_meta in segment.block_metas()?.into_iter() {
@@ -637,7 +646,7 @@ pub async fn cleanup_vacuum_virtual_column_files(
         return Ok(0);
     }
 
-    let op = Files::create(ctx, fuse_table.get_operator());
+    let op = TableFiles::create(ctx, fuse_table.get_operator());
     op.remove_file_in_batch(&files_to_remove).await?;
 
     Ok(files_to_remove.len() as u64)
@@ -645,29 +654,28 @@ pub async fn cleanup_vacuum_virtual_column_files(
 
 #[async_backtrace::framed]
 async fn prepare_vacuum_virtual_column_mutations(
+    ctx: &Arc<dyn TableContext>,
     fuse_table: &FuseTable,
     latest_snapshot: Arc<TableSnapshot>,
 ) -> Result<Vec<MutationLogEntry>> {
     let table_schema = fuse_table.schema();
-    let segment_reader =
-        MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema.clone());
+    let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema.clone());
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     let mut mutation_entries = Vec::new();
 
     for (segment_idx, (location, ver)) in latest_snapshot.segments.iter().enumerate() {
-        let segment_info = segment_reader
-            .read(&LoadParams {
-                location: location.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+        let segment_info = segment_cache
+            .get(&segment_reader, (location.to_string(), *ver))
             .await?;
 
         let additional_stats_loc = segment_info.summary.additional_stats_loc();
         let mut segment_stats = None;
+        let blocks = segment_info.block_metas()?;
+        let block_count = blocks.len();
 
-        for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
+        for (block_idx, block_meta) in blocks.into_iter().enumerate() {
             let Some(virtual_block_meta) = &block_meta.virtual_block_meta else {
                 continue;
             };
@@ -683,9 +691,18 @@ async fn prepare_vacuum_virtual_column_mutations(
 
                 if segment_stats.is_none() {
                     segment_stats = match additional_stats_loc.clone() {
-                        Some(loc) => Some(
-                            read_segment_stats(fuse_table.get_operator_ref().clone(), loc).await?,
-                        ),
+                        Some(loc) => {
+                            let mut stats = Arc::unwrap_or_clone(
+                                read_segment_stats(
+                                    fuse_table.get_operator_ref().clone(),
+                                    loc,
+                                    policy,
+                                )
+                                .await?,
+                            );
+                            stats.align_to_blocks(block_count)?;
+                            Some(stats)
+                        }
                         None => None,
                     };
                 }

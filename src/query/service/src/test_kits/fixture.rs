@@ -187,10 +187,18 @@ impl TestFixture {
 
     /// Create a new TestFixture with setup impl.
     pub async fn setup_with_custom(setup: impl Setup) -> Result<TestFixture> {
+        Self::setup_with_custom_and_session_type(setup, SessionType::Dummy).await
+    }
+
+    /// Use a client session type when SQL behavior depends on it, e.g. temporary tables.
+    pub async fn setup_with_custom_and_session_type(
+        setup: impl Setup,
+        session_type: SessionType,
+    ) -> Result<TestFixture> {
         let conf = setup.setup().await?;
 
         // This will use a max_active_sessions number.
-        let default_session = Self::create_session(SessionType::Dummy).await?;
+        let default_session = Self::create_session(session_type).await?;
         let default_ctx = default_session.create_query_context(&BUILD_INFO).await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
@@ -301,6 +309,13 @@ impl TestFixture {
         self.default_session.clone()
     }
 
+    pub fn enable_experimental_clone_table(&self) -> Result<()> {
+        self.default_session.get_settings().set_setting(
+            "enable_experimental_clone_table".to_string(),
+            "1".to_string(),
+        )
+    }
+
     /// returns new QueryContext of default session
     pub async fn new_query_ctx(&self) -> Result<Arc<QueryContext>> {
         self.default_session.create_query_context(&BUILD_INFO).await
@@ -393,11 +408,14 @@ impl TestFixture {
             field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
+            index_user_dictionaries: None,
         }
     }
 
@@ -422,11 +440,14 @@ impl TestFixture {
             field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
+            index_user_dictionaries: None,
         }
     }
 
@@ -467,10 +488,13 @@ impl TestFixture {
             field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_partition: None,
+            index_user_dictionaries: None,
         }
     }
 
@@ -507,10 +531,13 @@ impl TestFixture {
             table_partition: None,
             as_select: None,
             cluster_key: None,
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
+            index_user_dictionaries: None,
         }
     }
 
@@ -555,11 +582,14 @@ impl TestFixture {
             field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
+            index_user_dictionaries: None,
         }
     }
 
@@ -948,6 +978,15 @@ impl TestFixture {
 
     pub async fn execute_query(&self, query: &str) -> Result<SendableDataBlockStream> {
         let ctx = self.new_query_ctx().await?;
+        Self::execute_query_with_ctx(ctx, query).await
+    }
+
+    /// Runs `query` on the given context, so callers can inspect the
+    /// context (progress, metrics, ...) after the query finished.
+    pub async fn execute_query_with_ctx(
+        ctx: Arc<QueryContext>,
+        query: &str,
+    ) -> Result<SendableDataBlockStream> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;

@@ -1,0 +1,88 @@
+# Keep grouping-set expansion above the join: eager aggregates on a pruned join
+# input must not inherit the original grouping-set columns or grouping_id.
+# Exercise both cost-based exploration and the forced heuristic rewrite.
+# run-with-settings: force_eager_aggregate=1, enable_cbo=0
+
+statement ok
+CREATE TABLE eager_grouping_l (k INT, g INT, v INT);
+
+statement ok
+CREATE TABLE eager_grouping_r (k INT);
+
+# Repeated keys make eager aggregation attractive to CBO. Neither join key is in
+# the final GROUP BY, so eager candidates would add temporary grouping keys.
+statement ok
+INSERT INTO eager_grouping_l
+SELECT number % 2, number % 3, number FROM numbers(120);
+
+statement ok
+INSERT INTO eager_grouping_r SELECT number % 2 FROM numbers(120);
+
+statement ok
+ANALYZE TABLE eager_grouping_l;
+
+statement ok
+ANALYZE TABLE eager_grouping_r;
+
+# Ordinary GROUP BY remains eligible and must preserve join multiplicity.
+query II
+SELECT l.g, sum(l.v)
+FROM eager_grouping_l l JOIN eager_grouping_r r ON l.k = r.k
+GROUP BY l.g ORDER BY l.g;
+----
+0 140400
+1 142800
+2 145200
+
+query III
+SELECT l.g, grouping(l.g), sum(l.v)
+FROM eager_grouping_l l JOIN eager_grouping_r r ON l.k = r.k
+GROUP BY GROUPING SETS ((l.g), ())
+ORDER BY grouping(l.g), l.g;
+----
+0 0 140400
+1 0 142800
+2 0 145200
+NULL 1 428400
+
+query III
+SELECT l.g, grouping(l.g), sum(l.v)
+FROM eager_grouping_l l JOIN eager_grouping_r r ON l.k = r.k
+GROUP BY ROLLUP (l.g)
+ORDER BY grouping(l.g), l.g;
+----
+0 0 140400
+1 0 142800
+2 0 145200
+NULL 1 428400
+
+query III
+SELECT l.g, grouping(l.g), sum(l.v)
+FROM eager_grouping_l l JOIN eager_grouping_r r ON l.k = r.k
+GROUP BY CUBE (l.g)
+ORDER BY grouping(l.g), l.g;
+----
+0 0 140400
+1 0 142800
+2 0 145200
+NULL 1 428400
+
+# Grouping sets can also refer to columns from both join inputs.
+query IIII
+SELECT l.g, r.k, grouping(l.g, r.k), sum(l.v)
+FROM eager_grouping_l l JOIN eager_grouping_r r ON l.k = r.k
+GROUP BY GROUPING SETS ((l.g), (r.k), ())
+ORDER BY grouping(l.g, r.k), l.g, r.k;
+----
+0 NULL 1 140400
+1 NULL 1 142800
+2 NULL 1 145200
+NULL 0 2 212400
+NULL 1 2 216000
+NULL NULL 3 428400
+
+statement ok
+DROP TABLE eager_grouping_l;
+
+statement ok
+DROP TABLE eager_grouping_r;
