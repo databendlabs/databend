@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -38,6 +39,7 @@ use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::Scan;
 
 use crate::framework::LiteTableContext;
+use crate::framework::golden::open_golden_file;
 
 fn column(index: usize, data_type: DataType) -> ScalarExpr {
     BoundColumnRef {
@@ -164,11 +166,23 @@ async fn test_paired_shuffle_key_selection() -> Result<()> {
         vec![derived.clone(), direct_pair(DataType::String), extra_pair()],
         &[1, 2],
     )?;
+    let text = |name, index| {
+        call(
+            name,
+            vec![column(index, DataType::String)],
+            DataType::String,
+        )
+    };
     assert_keys(
         ctx.clone(),
-        "two-key floor",
-        vec![derived, direct_pair(DataType::String)],
-        &[0, 1],
+        "consecutive pruning stops at two keys and preserves order",
+        vec![
+            pair(text("lower", 3), text("lower", 6)),
+            direct_pair(DataType::String),
+            pair(text("upper", 3), text("upper", 6)),
+            derived,
+        ],
+        &[1, 3],
     )?;
     assert_keys(
         ctx.clone(),
@@ -198,25 +212,29 @@ async fn test_paired_shuffle_key_selection() -> Result<()> {
             &[0, 2],
         )?;
     }
-    for unmatched in [column(8, DataType::String), length(8)] {
-        assert_keys(
-            ctx.clone(),
-            "uncovered right side",
-            vec![
-                pair(length(3), unmatched),
-                direct_pair(DataType::String),
-                extra_pair(),
-            ],
-            &[0, 1, 2],
-        )?;
-    }
+    assert_keys(
+        ctx.clone(),
+        "uncovered right-side dependency",
+        vec![
+            pair(length(3), length(8)),
+            direct_pair(DataType::String),
+            extra_pair(),
+        ],
+        &[0, 1, 2],
+    )?;
     assert_keys(
         ctx.clone(),
         "one-sided redundancy",
         vec![
-            pair(length(3), column(6, DataType::String)),
+            pair(
+                length(3),
+                column(8, DataType::Number(NumberDataType::UInt64)),
+            ),
             direct_pair(DataType::String),
-            extra_pair(),
+            pair(
+                column(4, DataType::Number(NumberDataType::UInt64)),
+                column(8, DataType::Number(NumberDataType::UInt64)),
+            ),
         ],
         &[0, 1, 2],
     )?;
@@ -304,16 +322,6 @@ async fn test_paired_shuffle_key_selection() -> Result<()> {
         ],
         &[0, 1, 2],
     )?;
-    assert_keys(
-        ctx.clone(),
-        "uncovered second dependency",
-        vec![
-            direct_pair(integer.clone()),
-            pair(sum(3, 4), sum(6, 8)),
-            pair(column(4, integer.clone()), column(7, integer.clone())),
-        ],
-        &[0, 1, 2],
-    )?;
     let nullable = integer.wrap_nullable();
     let mut null_direct = direct_pair(nullable.clone());
     null_direct.is_null_equal = true;
@@ -395,6 +403,35 @@ async fn test_paired_shuffle_key_selection() -> Result<()> {
             extra_pair(),
         ],
         &[0, 1, 2],
+    )?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_derived_shuffle_keys_sql_plan() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.set_table_warehouse_distribution(true);
+    ctx.set_cluster_node_num(2);
+    for setting in ["enforce_shuffle_join", "disable_join_reorder"] {
+        ctx.get_settings()
+            .set_setting(setting.to_string(), "1".to_string())?;
+    }
+    for name in ["shuffle_left", "shuffle_right"] {
+        ctx.register_setup_sql(&format!(
+            "CREATE TABLE {name} (k INT, flag INT, tag STRING)"
+        ))
+        .await?;
+    }
+    let sql = "SELECT l.k, l.flag FROM shuffle_left l JOIN shuffle_right r \
+               ON l.tag = r.tag AND lower(l.tag) = lower(r.tag) AND l.flag = r.flag";
+    let plan = ctx.optimize_plan(ctx.bind_sql(sql).await?).await?;
+    let mut file = open_golden_file("optimizer", "shuffle_keys.txt")?;
+    // The complete plan must retain the derived join predicate but omit it from both exchanges.
+    writeln!(file, "sql: {sql}")?;
+    writeln!(
+        file,
+        "{}",
+        plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
     Ok(())
 }

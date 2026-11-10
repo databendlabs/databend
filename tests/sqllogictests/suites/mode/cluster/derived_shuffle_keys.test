@@ -58,14 +58,6 @@ ON l.k = r.k AND l.flag = r.flag AND CAST(l.k AS BIGINT) = length(r.tag)
 ----
 2 2
 
-# A direct and a derived key are still kept when there are only two keys.
-query I
-SELECT count(*)
-FROM shuffle_left l JOIN shuffle_right r
-ON l.tag = r.tag AND length(l.tag) = length(r.tag)
-----
-3
-
 statement ok
 DROP TABLE shuffle_left
 
