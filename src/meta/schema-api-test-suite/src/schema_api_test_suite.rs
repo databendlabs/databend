@@ -2801,11 +2801,6 @@ impl SchemaApiTestSuite {
                 .is_none()
         );
         assert!(mt.get_pb(&current_relationship_ident).await?.is_none());
-        assert!(
-            mt.has_mvs_by_source_table_id(&tenant, source_table_id)
-                .await?,
-            "the stale dependency still counts as an MV on the source"
-        );
 
         // Replacing with another source removes the old definition and moves the source index.
         let replacement = {
@@ -2824,14 +2819,6 @@ impl SchemaApiTestSuite {
                 mt.get_pb(&source_mv_ident(source_table_id, mv_id))
                     .await?
                     .is_none()
-            );
-            assert!(
-                !mt.has_mvs_by_source_table_id(&tenant, source_table_id)
-                    .await?
-            );
-            assert!(
-                mt.has_mvs_by_source_table_id(&tenant, replacement_source_table_id)
-                    .await?
             );
 
             let mvs = mt

@@ -44,11 +44,12 @@ pub async fn check_policy_target_without_materialized_view(
     ctx: &QueryContext,
     table: &dyn Table,
 ) -> Result<()> {
-    if UserApiProvider::instance()
+    if !UserApiProvider::instance()
         .get_meta_store_client()
-        .has_mvs_by_source_table_id(&ctx.get_tenant(), table.get_id())
+        .list_mvs_by_source_table_id(&ctx.get_tenant(), table.get_id())
         .await
         .map_err(meta_service_error)?
+        .is_empty()
     {
         return Err(ErrorCode::AlterTableError(format!(
             "Cannot attach a row access or masking policy to table '{}' because one or more materialized views depend on it; drop the materialized views first",

@@ -356,26 +356,6 @@ where
         list_mvs_by_source_table_id_impl(self, tenant, source_table_id, None).await
     }
 
-    /// Whether any MV, including an invalid one, depends on a source table.
-    ///
-    /// Reads at most one dependency edge and no MV metadata.
-    #[logcall::logcall]
-    #[fastrace::trace]
-    async fn has_mvs_by_source_table_id(
-        &self,
-        tenant: &Tenant,
-        source_table_id: u64,
-    ) -> Result<bool, MetaError> {
-        let source_mv_prefix = DirName::new(SourceTableMVIdent::new_generic(
-            tenant,
-            SourceTableMV::new(source_table_id, 0),
-        ));
-        Ok(!self
-            .list_pb_vec(ListOptions::limited(&source_mv_prefix, 1))
-            .await?
-            .is_empty())
-    }
-
     /// List materialized views for management and system-table consumers.
     #[logcall::logcall]
     #[fastrace::trace]

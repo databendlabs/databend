@@ -48,7 +48,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::MaterializedViewChecker;
 use databend_common_sql::Planner;
-use databend_common_sql::check_materialized_view_source_without_policy;
 use databend_common_sql::parse_materialized_view_query;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::validate_materialized_view_source;
@@ -174,10 +173,6 @@ impl<'a> MaterializedViewRefresh<'a> {
                 database, view_name, source_table_id
             )));
         }
-        check_materialized_view_source_without_policy(
-            &source_meta.data,
-            &format!("{database}.{view_name}"),
-        )?;
         let mut source_seq = source_meta.seq;
         let mut source_snapshot_location = source_meta
             .data

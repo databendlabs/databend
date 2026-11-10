@@ -68,7 +68,8 @@ pub fn parse_materialized_view_query(sql: &str, error: impl Into<String>) -> Res
     Ok(*query)
 }
 
-/// Require a bound persisted MV definition to resolve to its original single source table.
+/// Require a bound persisted MV definition to resolve to its original single source table
+/// without row access or masking policies.
 pub fn validate_materialized_view_source(
     metadata: &MetadataRef,
     expected_source_table_id: u64,
@@ -81,7 +82,12 @@ pub fn validate_materialized_view_source(
                 "materialized view {materialized_view_name} physical definition must resolve to exactly one source table"
             )));
         };
-        source.table().get_id()
+        let table = source.table();
+        check_materialized_view_source_without_policy(
+            &table.get_table_info().meta,
+            materialized_view_name,
+        )?;
+        table.get_id()
     };
     if actual_source_table_id != expected_source_table_id {
         return Err(ErrorCode::InvalidMaterializedView(format!(

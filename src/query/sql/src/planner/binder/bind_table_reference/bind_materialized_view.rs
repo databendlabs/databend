@@ -65,7 +65,6 @@ use crate::binder::ScalarBinder;
 use crate::binder::ViewIdent;
 use crate::binder::ddl::materialized_view::find_materialized_view_aggregate;
 use crate::binder::lineage_enabled;
-use crate::check_materialized_view_source_without_policy;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::plans::Aggregate;
@@ -772,10 +771,6 @@ impl Binder {
                 ))
             })?
         };
-        check_materialized_view_source_without_policy(
-            &source_table.get_table_info().meta,
-            table_meta.name(),
-        )?;
         // MV results depend on both persisted storage and the live source endpoint. Include both
         // identities in the result-cache key so a source append cannot reuse a previously fresh
         // storage-only result. Sequence values distinguish no-snapshot endpoints and metadata
