@@ -47,6 +47,7 @@ use crate::ast::TableReference;
 use crate::ast::quote::QuotedIdent;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+use crate::parser::error::EXPR_STACK_LIMIT;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::token::*;
@@ -719,6 +720,7 @@ where
     let expr = parser
         .parse_input(&mut iter, Precedence(0))
         .map_err(|err| {
+            let stack_limit = matches!(&err, PrattError::UserError(EXPR_STACK_LIMIT));
             let err_kind = match err {
                 PrattError::EmptyInput => ErrorKind::other("expecting an operand"),
                 PrattError::UnexpectedNilfix(i) => {
@@ -745,7 +747,13 @@ where
                 // It's safe to slice one more token because input must contain EOI.
                 .unwrap_or_else(|| rest.slice(..1));
 
-            nom::Err::Error(Error::from_error_kind(span, err_kind))
+            let error = Error::from_error_kind(span, err_kind);
+            if stack_limit {
+                // Retrying another grammar branch cannot recover stack space.
+                nom::Err::Failure(error)
+            } else {
+                nom::Err::Error(error)
+            }
         })?;
     if let Some(elem) = iter.peek() {
         Ok((input.slice(input.offset(&elem.span)..), expr))
