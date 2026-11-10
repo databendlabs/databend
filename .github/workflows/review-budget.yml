@@ -1,42 +1,44 @@
 name: review-budget
 
-# Warns (never blocks) when a PR keeps re-running an automated reviewer.
-# See AI_POLICY.md -> "AI review discipline": two rounds per PR, only on the
-# incremental diff, then human triage instead of another bot pass.
-
 on:
   issue_comment:
     types: [created]
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - .github/scripts/check_review_budget.py
-      - .github/scripts/test_check_review_budget.py
-      - .github/workflows/review-budget.yml
 
 permissions:
   contents: read
   issues: write
-  pull-requests: write
 
 jobs:
-  test:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Test review budget checker
-        run: python3 .github/scripts/test_check_review_budget.py
-
   budget:
-    if: github.event_name == 'issue_comment' && github.event.issue.pull_request
+    if: github.event.issue.pull_request
     runs-on: ubuntu-latest
     steps:
-      # issue_comment workflows run from the default branch, never PR code.
-      - uses: actions/checkout@v6
       - name: Check automated review rounds
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Repo variable MAX_REVIEW_ROUNDS overrides the default of 2.
-          MAX_REVIEW_ROUNDS: ${{ vars.MAX_REVIEW_ROUNDS || '2' }}
-        run: python3 .github/scripts/check_review_budget.py
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          MAX_ROUNDS: ${{ vars.MAX_REVIEW_ROUNDS || '2' }}
+        run: |
+          set -euo pipefail
+          trigger=$(printf '%s' "$COMMENT_BODY" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+          case "$trigger" in '@codexreview'|'/review') ;; *) exit 0 ;; esac
+          case "$MAX_ROUNDS" in ''|*[!0-9]*) MAX_ROUNDS=2 ;; esac
+
+          labels=$(gh api "repos/$GH_REPO/issues/$NUMBER" --jq '[.labels[].name] | join("\n")')
+          case "$labels" in *review-budget-override*|*review-budget-exceeded*) exit 0 ;; esac
+
+          rounds=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments" --paginate \
+            --jq '.[] | select(.body | test("^\\s*(@codex\\s+review|/review)\\s*$"; "i")) | .id' \
+            | wc -l | tr -d '[:space:]')
+          if [ "$rounds" -le "$MAX_ROUNDS" ]; then exit 0; fi
+
+          gh api -X POST "repos/$GH_REPO/labels" \
+            -f name=review-budget-exceeded -f color=e11d48 \
+            -f description='Too many automated review rounds; escalate to a human reviewer' >/dev/null || true
+          echo '{"labels":["review-budget-exceeded"]}' | \
+            gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" --input - >/dev/null
+          jq -n --arg r "$rounds" --arg m "$MAX_ROUNDS" \
+            '{body: ("<!-- review-budget -->\nThis PR has had " + $r + " automated review requests (budget " + $m + "). Please escalate to a human reviewer instead of re-running the bot on the whole PR. See AI_POLICY.md -> AI review discipline; add the `review-budget-override` label to silence this.")}' | \
+            gh api -X POST "repos/$GH_REPO/issues/$NUMBER/comments" --input - >/dev/null

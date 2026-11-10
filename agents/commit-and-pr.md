@@ -11,7 +11,7 @@
 - Optional PR title scopes may contain only lowercase letters, digits, and hyphens, such as `query` or `admin-status`.
 - Follow `PULL_REQUEST_TEMPLATE.md` without changing its structure:
   - Put everything you want to say under `## Summary`: motivation, key changes, test coverage, linked issues or RFCs, risks. Keep it short.
-  - For bug fixes, state how the new regression test was shown to fail on the parent commit or a reverted fix (command and result); a test that passes either way is not evidence.
+  - For bug fixes, state how the regression test was shown to fail without the fix (command and result).
   - Do not add new sections (`## Changes`, `## Implementation`, ...).
   - In `## Tests` and `## Type of change`, only tick checkboxes. Do not add, remove, or reword items, and do not append text below the list. Describe test files and cases in Summary, including the reason when ticking `No Test`.
   - In `## AI assistance`, only fill in the existing fields.

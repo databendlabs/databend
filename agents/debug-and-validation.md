@@ -17,14 +17,11 @@
 
 ## Test admission for AI-assisted changes
 
-Generated tests fail in a specific way: they are easy to produce and hard to reject, because volume looks like coverage. Apply these before a test enters the branch:
+See `AI_POLICY.md` -> Test admission. In this repository that means:
 
-- Write one sentence stating which implementation mistake the test would catch; if none, delete the test.
-- Expected values come from an independent source (SQL semantics, another engine, a spec, hand computation). A test that re-derives its expectation with the implementation's own logic proves nothing.
-- For a bug fix, verify the regression test fails on the parent commit or with the fix reverted; report the command and result in the PR summary. Tests that pass either way are padding.
-- One behavior per test. If several inputs are needed, use a table and name the axes; do not copy a test body with different literals.
-- Prefer a deterministic SQL logic test for behavior changes; keep unit tests for pure logic that SQL cannot reach. Do not add tests for constructors, constants, or getters.
-- A review finding is not a reason to add a test by itself. If the fix is a simplification or a reasoned refusal, no new test is required.
+- Add SQL logic cases to the existing suite file covering that function or operator; do not create a new `.test` file for a handful of cases.
+- Prefer one multi-column query over several near-identical cases. Keep unit tests for logic SQL cannot reach.
+- For bug fixes, run the new case against the parent commit or with the fix reverted, and report the command and failing result in the PR summary.
 
 ## Temporary Investigation Outputs
 
