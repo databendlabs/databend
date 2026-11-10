@@ -14,6 +14,7 @@
 
 use std::cmp;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -71,6 +72,9 @@ pub(crate) struct ReclusterProperties {
     pub(crate) split_sort_tasks: bool,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) scalar_cluster_key_types: Vec<DataType>,
+    /// Blocks of the final full pass of a vector RECLUSTER FINAL, which are
+    /// rewritten once regardless of level; see `ReclusterFinalCarry`.
+    pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
 }
 
 impl ReclusterProperties {
@@ -129,6 +133,7 @@ impl ReclusterProperties {
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
+            vector_full_pass: None,
         };
         Ok((properties, strategy))
     }
@@ -176,6 +181,7 @@ impl ReclusterProperties {
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
+            vector_full_pass: None,
         };
         (properties, strategy)
     }
@@ -198,6 +204,18 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
         window_len: usize,
     ) -> Result<Vec<Vec<SelectedReclusterSegment>>>;
+
+    /// The blocks of a level group that may be rewritten. Applied before every
+    /// selection path, including small-block compaction, so a strategy can keep
+    /// blocks out of rewrites regardless of their size.
+    fn eligible_blocks(
+        &self,
+        _properties: &ReclusterProperties,
+        indices: Vec<usize>,
+        _blocks: &[&ReclusterBlock],
+    ) -> Vec<usize> {
+        indices
+    }
 
     fn fetch_task_candidates(
         &self,
