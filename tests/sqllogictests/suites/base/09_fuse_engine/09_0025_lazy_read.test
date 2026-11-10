@@ -158,3 +158,72 @@ select * from t_row_fetch_segment order by k limit 15
 
 statement ok
 drop table t_row_fetch_segment
+
+# Row fetch decodes only the requested rows of a block, whatever their order.
+statement ok
+set lazy_read_threshold = 100
+
+statement ok
+create or replace table t_row_fetch_select (k int, v int, s string null, t tuple(a int, b int), l array(int))
+
+statement ok
+insert into t_row_fetch_select values
+  (0, 0, 's0', (0,0), [0]),
+  (1, 10, null, (1,1), []),
+  (2, 20, 's2', (2,2), [2, 2]),
+  (3, 30, null, (3,3), [3]),
+  (4, 40, 's4', (4,4), []),
+  (5, 50, 's5', (5,5), [5, 5, 5])
+
+query I
+select block_count from fuse_snapshot('default', 't_row_fetch_select')
+----
+1
+
+# A few rows of the block, against the row order of the block.
+query IIT??
+select * from t_row_fetch_select order by k desc limit 3
+----
+5 50 s5 (5,5) [5,5,5]
+4 40 s4 (4,4) []
+3 30 NULL (3,3) [3]
+
+# Rows that are not adjacent in the block.
+query IIT??
+select * from t_row_fetch_select where k % 2 = 1 order by k desc limit 2
+----
+5 50 s5 (5,5) [5,5,5]
+3 30 NULL (3,3) [3]
+
+# All rows of the block.
+query IIT??
+select * from t_row_fetch_select order by k desc limit 6
+----
+5 50 s5 (5,5) [5,5,5]
+4 40 s4 (4,4) []
+3 30 NULL (3,3) [3]
+2 20 s2 (2,2) [2,2]
+1 10 NULL (1,1) []
+0 0 s0 (0,0) [0]
+
+# A join requests the same row of the block many times.
+statement ok
+create or replace table t_row_fetch_probe (k int, p int)
+
+statement ok
+insert into t_row_fetch_probe values (4, 1), (1, 2), (4, 3), (1, 4), (4, 5)
+
+query IITI
+select t.k, t.v, t.s, p.p from t_row_fetch_probe p inner join t_row_fetch_select t on p.k = t.k order by p.p limit 5
+----
+4 40 s4 1
+1 10 NULL 2
+4 40 s4 3
+1 10 NULL 4
+4 40 s4 5
+
+statement ok
+drop table t_row_fetch_probe
+
+statement ok
+drop table t_row_fetch_select

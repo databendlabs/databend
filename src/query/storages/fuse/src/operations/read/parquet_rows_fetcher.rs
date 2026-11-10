@@ -12,21 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::future::Future;
 use std::sync::Arc;
 
-use databend_common_base::runtime::spawn;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::block_idx_in_segment;
 use databend_common_catalog::plan::split_prefix;
-use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::MutableBitmap;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
@@ -36,56 +40,21 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use futures_util::stream::FuturesUnordered;
-use futures_util::stream::StreamExt;
-use itertools::Itertools;
-use tokio::sync::Semaphore;
-use tokio::task::JoinHandle;
 
-use super::fuse_rows_fetcher::RowsFetchMetadata;
-use super::fuse_rows_fetcher::RowsFetcher;
+use super::fuse_rows_fetcher::RowFetchTask;
+use super::fuse_rows_fetcher::RowFetched;
+use super::fuse_rows_fetcher::take_row_fetch_meta;
 use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
 use crate::io::BlockReader;
 use crate::io::FuseCaches;
+use crate::io::RowSelection;
 use crate::io::SegmentCache;
 use crate::io::SegmentInfoReader;
 use crate::io::cache::BlockMetas;
 
-struct AbortOnDropTasks<T> {
-    inner: FuturesUnordered<JoinHandle<T>>,
-}
-
-impl<T> AbortOnDropTasks<T> {
-    fn new() -> Self {
-        Self {
-            inner: FuturesUnordered::new(),
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    fn push(&self, task: JoinHandle<T>) {
-        self.inner.push(task);
-    }
-
-    async fn next(&mut self) -> Option<std::result::Result<T, tokio::task::JoinError>> {
-        self.inner.next().await
-    }
-}
-
-impl<T> Drop for AbortOnDropTasks<T> {
-    fn drop(&mut self) {
-        for task in self.inner.iter() {
-            task.abort();
-        }
-    }
-}
-
-pub struct RowsFetchMetadataImpl {
+pub struct RowsFetchMetadata {
     // Average bytes per row
     pub row_bytes: usize,
 
@@ -95,32 +64,13 @@ pub struct RowsFetchMetadataImpl {
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
 }
 
-impl RowsFetchMetadata for RowsFetchMetadataImpl {
-    fn row_bytes(&self) -> usize {
-        self.row_bytes
-    }
-}
-
+/// Looks up the metadata of the blocks to fetch rows from.
 pub(super) struct ParquetRowsFetcher {
     snapshot: Option<Arc<TableSnapshot>>,
     table: Arc<FuseTable>,
     projection: Projection,
     // Column nodes of the table schema, to project the block metas.
     column_nodes: ColumnNodes,
-    settings: ReadSettings,
-
-    reader: Arc<BlockReader>,
-    // Per-lane cap on the number of block-fetch tasks spawned at once, so a single
-    // `fetch()` call does not spawn one task per hit block up front.
-    max_threads: usize,
-    // Shared across every RowFetch lane of the query. A mutation plan can fan
-    // RowFetch out to `max_threads` lanes (see physical_row_fetch.rs), each with
-    // its own fetcher; without a shared gate the aggregate in-flight decoded
-    // chunks would be `lanes * max_threads`, so peak memory would not be bounded
-    // by `max_threads` and could OOM on wide/long string columns. Each in-flight
-    // `fetch_block` holds one permit for the lifetime of its decoded chunk, so the
-    // query-wide count of concurrently-held chunks never exceeds the permit count.
-    io_semaphore: Arc<Semaphore>,
 
     segment_cache: SegmentCache,
     segment_reader: SegmentInfoReader,
@@ -130,16 +80,34 @@ pub(super) struct ParquetRowsFetcher {
     fetched_segments: RowFetchSegmentCache,
 }
 
-#[async_trait::async_trait]
-impl RowsFetcher for ParquetRowsFetcher {
-    type Metadata = Arc<RowsFetchMetadataImpl>;
+impl ParquetRowsFetcher {
+    pub(super) fn create(
+        table: Arc<FuseTable>,
+        projection: Projection,
+        reader: &BlockReader,
+    ) -> Self {
+        let schema = table.schema();
+        let operator = table.operator.clone();
+        let segment_reader = SegmentInfoReader::new(operator, schema.clone());
+        let column_nodes = ColumnNodes::new_from_schema(&schema.as_ref().into(), Some(&schema));
+        ParquetRowsFetcher {
+            segment_cache: FuseCaches::instance().segments.with_policy(reader.policy),
+            table,
+            snapshot: None,
+            segment_reader,
+            projection,
+            column_nodes,
+            fetched_segments: RowFetchSegmentCache::new(SEGMENT_CACHE_CAPACITY),
+        }
+    }
 
     #[async_backtrace::framed]
-    async fn initialize(&mut self) -> Result<()> {
+    pub(super) async fn initialize(&mut self) -> Result<()> {
         self.snapshot = self.table.read_table_snapshot().await?;
         Ok(())
     }
-    async fn fetch_metadata(&mut self, block_id: u64) -> Result<Self::Metadata> {
+
+    pub(super) async fn fetch_metadata(&mut self, block_id: u64) -> Result<Arc<RowsFetchMetadata>> {
         let (segment, block) = split_prefix(block_id);
         let blocks = self
             .fetched_segments
@@ -162,171 +130,7 @@ impl RowsFetcher for ParquetRowsFetcher {
         Ok(Arc::new(self.build_metadata(&blocks[block_idx])?))
     }
 
-    #[async_backtrace::framed]
-    async fn fetch(
-        &mut self,
-        row_ids: &[u64],
-        metadata: HashMap<u64, Self::Metadata>,
-    ) -> Result<DataBlock> {
-        let final_block_index = metadata
-            .keys()
-            .enumerate()
-            .map(|(idx, id)| (*id, idx as u32))
-            .collect::<HashMap<_, _>>();
-
-        // take rows from one block
-        let mut tasks_indices = HashMap::with_capacity(metadata.len());
-        // take rows from blocks
-        let mut final_indices = Vec::with_capacity(row_ids.len());
-
-        for row_id in row_ids {
-            let (block_id, idx) = split_row_id(*row_id);
-            match tasks_indices.entry(block_id) {
-                Entry::Occupied(mut v) => {
-                    let task_indices: &mut Vec<_> = v.get_mut();
-
-                    let final_index = task_indices.len() as u32;
-                    task_indices.push(idx as u32);
-                    final_indices.push((final_block_index[&block_id], final_index));
-                }
-                Entry::Vacant(v) => {
-                    v.insert(vec![idx as u32]);
-                    final_indices.push((final_block_index[&block_id], 0_u32));
-                }
-            }
-        }
-
-        let mut final_blocks = HashMap::with_capacity(tasks_indices.len());
-
-        // Concurrency is bounded in two layers, neither of which is the old
-        // accumulated-byte barrier (which collapsed to a single in-flight task
-        // whenever one block's chunk already exceeded the budget — common for
-        // wide/long string columns — and thereby serialized the whole fetch;
-        // see #19677 and the row-fetch perf regression):
-        //   1. This per-lane window (FuturesUnordered) caps how many fetch tasks
-        //      one `fetch()` call keeps in flight, draining by completion order
-        //      so S3 tail latency on one block does not stall the window.
-        //   2. `io_semaphore` (shared across all RowFetch lanes of the query) caps
-        //      how many decoded column chunks are actually alive at once, so peak
-        //      memory stays bounded even when a mutation plan fans RowFetch out to
-        //      `max_threads` lanes.
-        let max_concurrency = self.max_threads.max(1);
-        let mut in_flight = AbortOnDropTasks::new();
-        let mut tasks_indices = tasks_indices.into_iter();
-        loop {
-            // Fill the window up to max_concurrency.
-            while in_flight.len() < max_concurrency {
-                let Some((block_id, task_indices)) = tasks_indices.next() else {
-                    break;
-                };
-                let metadata = &metadata[&block_id];
-                let final_take_index = final_block_index[&block_id];
-                in_flight.push(spawn(self.fetch_block(
-                    metadata.clone(),
-                    final_take_index,
-                    task_indices,
-                )));
-            }
-
-            // Drain the first completed task to make room for the next block.
-            let Some(result) = in_flight.next().await else {
-                break;
-            };
-            let (final_index, block) = match result.expect("row-fetch task panicked") {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
-            final_blocks.insert(final_index, block);
-        }
-
-        let final_blocks = final_blocks
-            .into_iter()
-            .sorted_by_key(|(idx, _)| *idx)
-            .map(|(_idx, block)| block)
-            .collect::<Vec<_>>();
-
-        // check if row index is in valid bounds cause we don't ensure rowid is valid
-        for (block_idx, row_idx) in final_indices.iter() {
-            if *block_idx as usize >= final_blocks.len()
-                || *row_idx as usize >= final_blocks[*block_idx as usize].num_rows()
-            {
-                return Err(ErrorCode::Internal(format!(
-                    "RowID is invalid, block idx {block_idx}, row idx {row_idx}, blocks len {}, block idx len {:?}",
-                    final_blocks.len(),
-                    final_blocks.get(*block_idx as usize).map(|b| b.num_rows()),
-                )));
-            }
-        }
-
-        Ok(DataBlock::take_blocks(&final_blocks, &final_indices))
-    }
-}
-
-impl ParquetRowsFetcher {
-    pub fn create(
-        table: Arc<FuseTable>,
-        projection: Projection,
-        reader: Arc<BlockReader>,
-        settings: ReadSettings,
-        max_threads: usize,
-        io_semaphore: Arc<Semaphore>,
-    ) -> Self {
-        let schema = table.schema();
-        let operator = table.operator.clone();
-        let segment_reader = SegmentInfoReader::new(operator, schema.clone());
-        let segment_cache = FuseCaches::instance().segments.with_policy(reader.policy);
-        let column_nodes = ColumnNodes::new_from_schema(&schema.as_ref().into(), Some(&schema));
-        ParquetRowsFetcher {
-            table,
-            snapshot: None,
-            segment_reader,
-            projection,
-            column_nodes,
-            reader,
-            settings,
-            max_threads: max_threads.max(1),
-            io_semaphore,
-            segment_cache,
-            fetched_segments: RowFetchSegmentCache::new(SEGMENT_CACHE_CAPACITY),
-        }
-    }
-
-    fn fetch_block(
-        &self,
-        metadata: Arc<RowsFetchMetadataImpl>,
-        final_index: u32,
-        take_indices: Vec<u32>,
-    ) -> impl Future<Output = Result<(u32, DataBlock)>> + use<> {
-        {
-            let settings = self.settings;
-            let reader = self.reader.clone();
-            let io_semaphore = self.io_semaphore.clone();
-            async move {
-                // Hold a permit for the whole decode: the query-wide number of
-                // decoded chunks alive at once is capped by the shared semaphore,
-                // regardless of how many RowFetch lanes the plan created.
-                let _permit = io_semaphore
-                    .acquire_owned()
-                    .await
-                    .expect("row-fetch io semaphore never closed");
-                let chunk = reader
-                    .read_columns_data_by_merge_io(
-                        &settings,
-                        &metadata.location,
-                        &metadata.columns_meta,
-                        &None,
-                    )
-                    .await?;
-
-                Ok((
-                    final_index,
-                    Self::build_block(&reader, &metadata, chunk)?.take(take_indices.as_slice())?,
-                ))
-            }
-        }
-    }
-
-    fn build_metadata(&self, block_meta: &BlockMeta) -> Result<RowsFetchMetadataImpl> {
+    fn build_metadata(&self, block_meta: &BlockMeta) -> Result<RowsFetchMetadata> {
         let part_info = FuseTable::projection_part(
             block_meta,
             &None,
@@ -353,7 +157,7 @@ impl ParquetRowsFetcher {
             average_bytes += estimate_memory_size / fuse_part.nums_rows;
         }
 
-        Ok(RowsFetchMetadataImpl {
+        Ok(RowsFetchMetadata {
             row_bytes: average_bytes,
             nums_rows: fuse_part.nums_rows,
             compression: fuse_part.compression,
@@ -361,21 +165,206 @@ impl ParquetRowsFetcher {
             columns_meta: fuse_part.columns_meta.clone(),
         })
     }
+}
 
-    fn build_block(
-        reader: &BlockReader,
-        metadata: &RowsFetchMetadataImpl,
-        chunk: BlockReadResult,
-    ) -> Result<DataBlock> {
-        let columns_chunks = chunk.columns_chunks()?;
-        reader.deserialize_parquet_chunks(
+/// Fetches the rows of a block, one task at a time: reads the column chunks of the
+/// block asynchronously, then deserializes the requested rows synchronously.
+pub(super) struct TransformRowFetch {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    reader: Arc<BlockReader>,
+    settings: ReadSettings,
+
+    task: Option<RowFetchTask>,
+    chunk: Option<BlockReadResult>,
+    output_data: Option<DataBlock>,
+}
+
+impl TransformRowFetch {
+    pub(super) fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        reader: Arc<BlockReader>,
+        settings: ReadSettings,
+    ) -> Box<dyn Processor> {
+        Box::new(TransformRowFetch {
+            input,
+            output,
+            reader,
+            settings,
+            task: None,
+            chunk: None,
+            output_data: None,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl Processor for TransformRowFetch {
+    fn name(&self) -> String {
+        String::from("TransformRowFetch")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if let Some(data) = self.output_data.take() {
+            self.output.push_data(Ok(data));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.chunk.is_some() {
+            return Ok(Event::Sync);
+        }
+
+        if self.task.is_some() {
+            return Ok(Event::Async);
+        }
+
+        if self.input.has_data() {
+            let task: RowFetchTask = take_row_fetch_meta(self.input.pull_data().unwrap()?)?;
+            if task.block.is_some() {
+                self.task = Some(task);
+                return Ok(Event::Async);
+            }
+            self.output
+                .push_data(Ok(DataBlock::empty_with_meta(Box::new(RowFetched {
+                    batch: task.batch,
+                    block: None,
+                }))));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    fn process(&mut self) -> Result<()> {
+        let (Some(task), Some(chunk)) = (self.task.take(), self.chunk.take()) else {
+            return Err(ErrorCode::Internal("Row fetch deserializes nothing"));
+        };
+        let batch = task.batch;
+        let task = task
+            .block
+            .ok_or_else(|| ErrorCode::Internal("Row fetch deserializes no block"))?;
+        let metadata = &task.metadata;
+
+        let rows = BlockRowsSelection::try_create(metadata.nums_rows, task.take_indices)?;
+        let block = self.reader.deserialize_parquet_chunks(
             metadata.nums_rows,
             &metadata.columns_meta,
-            columns_chunks,
+            chunk.columns_chunks()?,
             &metadata.compression,
             &metadata.location,
-            None,
-        )
+            rows.selection.as_ref(),
+        )?;
+        let block = rows.take_decoded_rows(&block)?;
+
+        self.output_data = Some(DataBlock::empty_with_meta(Box::new(RowFetched {
+            batch,
+            block: Some((task.part, block)),
+        })));
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn async_process(&mut self) -> Result<()> {
+        let metadata = self
+            .task
+            .as_ref()
+            .and_then(|task| task.block.as_ref())
+            .map(|block| block.metadata.clone())
+            .ok_or_else(|| ErrorCode::Internal("Row fetch reads no block"))?;
+        let chunk = self
+            .reader
+            .read_columns_data_by_merge_io(
+                &self.settings,
+                &metadata.location,
+                &metadata.columns_meta,
+                &None,
+            )
+            .await?;
+        self.chunk = Some(chunk);
+        Ok(())
+    }
+}
+
+/// The rows to decode from a block for a fetch. A fetch usually wants a few rows
+/// of a block, and most of the decoding cost is in the values, not in the
+/// decompression of their pages, so the other rows are skipped.
+struct BlockRowsSelection {
+    /// The requested rows, `None` if that is all rows of the block.
+    selection: Option<RowSelection>,
+    /// The rows to take from the decoded block, one for each requested row, in
+    /// the requested order. Decoding yields each selected row once, in row order,
+    /// while requests come in any order and may repeat a row: a join can match
+    /// one fetched row many times.
+    take_indices: Vec<u32>,
+}
+
+impl BlockRowsSelection {
+    fn try_create(num_rows: usize, take_indices: Vec<u32>) -> Result<Self> {
+        let mut rows = take_indices.clone();
+        rows.sort_unstable();
+        rows.dedup();
+
+        if let Some(row) = rows.last().filter(|row| **row as usize >= num_rows) {
+            return Err(ErrorCode::Internal(format!(
+                "RowID is invalid, row idx {row}, block rows {num_rows}"
+            )));
+        }
+
+        if rows.len() == num_rows {
+            return Ok(BlockRowsSelection {
+                selection: None,
+                take_indices,
+            });
+        }
+
+        let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
+        for row in &rows {
+            bitmap.set(*row as usize, true);
+        }
+        let bitmap: Bitmap = bitmap.into();
+
+        let take_indices = take_indices
+            .iter()
+            // `rows` holds every requested row.
+            .map(|row| rows.binary_search(row).unwrap() as u32)
+            .collect();
+
+        Ok(BlockRowsSelection {
+            selection: Some(RowSelection::from(&bitmap)),
+            take_indices,
+        })
+    }
+
+    /// Takes the requested rows of a decoded block. The strings of a sparse decode
+    /// point into whole decompressed pages, and `Assemble` keeps the block until its
+    /// batch is complete, so they are copied out to release the pages.
+    fn take_decoded_rows(&self, block: &DataBlock) -> Result<DataBlock> {
+        let indices = self.take_indices.as_slice();
+        match self.selection {
+            Some(_) => block.take_with_optimize_size(indices),
+            None => block.take(indices),
+        }
     }
 }
 
@@ -425,22 +414,65 @@ impl RowFetchSegmentCache {
 
 #[cfg(test)]
 mod tests {
-    use std::future::pending;
-    use std::time::Duration;
-
-    use tokio::sync::oneshot;
-    use tokio::time::timeout;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::StringType;
 
     use super::*;
 
-    struct DropSignal(Option<oneshot::Sender<()>>);
+    #[test]
+    fn test_block_rows_selection_maps_requested_rows() -> Result<()> {
+        // Out of order, and row 7 is requested twice.
+        let rows = BlockRowsSelection::try_create(10, vec![7, 2, 7, 5])?;
 
-    impl Drop for DropSignal {
-        fn drop(&mut self) {
-            if let Some(sender) = self.0.take() {
-                let _ = sender.send(());
-            }
-        }
+        let selection = rows.selection.unwrap();
+        assert_eq!(selection.selected_rows, 3);
+        assert_eq!(selection.bitmap.len(), 10);
+        let selected = selection
+            .bitmap
+            .iter()
+            .enumerate()
+            .filter_map(|(row, selected)| selected.then_some(row))
+            .collect::<Vec<_>>();
+        assert_eq!(selected, vec![2, 5, 7]);
+
+        // Row 7 is the third decoded row, row 2 the first and row 5 the second.
+        assert_eq!(rows.take_indices, vec![2, 0, 2, 1]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_rows_selection_all_rows_decodes_block() -> Result<()> {
+        let rows = BlockRowsSelection::try_create(3, vec![2, 0, 1, 0])?;
+
+        assert!(rows.selection.is_none());
+        assert_eq!(rows.take_indices, vec![2, 0, 1, 0]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_rows_selection_sparse_decode_releases_pages() -> Result<()> {
+        // Two rows decoded from a page: their strings point into the whole page.
+        let page = StringType::from_data(vec!["x".repeat(1024); 1024]);
+        let decoded = DataBlock::new_from_columns(vec![page.slice(0..2)]);
+        let total_buffer_len = |block: &DataBlock| {
+            let column = block.get_by_offset(0).to_column();
+            column.as_string().unwrap().total_buffer_len()
+        };
+        assert!(total_buffer_len(&decoded) >= 1024 * 1024);
+
+        let rows = BlockRowsSelection::try_create(1024, vec![1, 0])?;
+        let taken = rows.take_decoded_rows(&decoded)?;
+
+        assert_eq!(taken.num_rows(), 2);
+        assert!(total_buffer_len(&taken) <= 2 * 1024);
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_rows_selection_rejects_row_out_of_block() {
+        let result = BlockRowsSelection::try_create(3, vec![1, 3]);
+
+        assert!(result.err().unwrap().message().contains("RowID is invalid"));
     }
 
     #[tokio::test]
@@ -468,52 +500,5 @@ mod tests {
         get(0).await?;
         assert_eq!(loads.load(Ordering::Relaxed), 4);
         Ok(())
-    }
-
-    #[tokio::test]
-    async fn aborts_running_and_waiting_tasks_on_drop() {
-        let semaphore = Arc::new(Semaphore::new(1));
-        let tasks = AbortOnDropTasks::new();
-
-        let (running_started_tx, running_started_rx) = oneshot::channel();
-        let (running_dropped_tx, running_dropped_rx) = oneshot::channel();
-        let running_semaphore = semaphore.clone();
-        tasks.push(spawn(async move {
-            let _drop_signal = DropSignal(Some(running_dropped_tx));
-            let _permit = running_semaphore.acquire_owned().await.unwrap();
-            running_started_tx.send(()).unwrap();
-            pending::<()>().await;
-        }));
-
-        running_started_rx.await.unwrap();
-
-        let (waiting_started_tx, waiting_started_rx) = oneshot::channel();
-        let (waiting_dropped_tx, waiting_dropped_rx) = oneshot::channel();
-        let waiting_semaphore = semaphore.clone();
-        tasks.push(spawn(async move {
-            let _drop_signal = DropSignal(Some(waiting_dropped_tx));
-            waiting_started_tx.send(()).unwrap();
-            let _permit = waiting_semaphore.acquire_owned().await.unwrap();
-            pending::<()>().await;
-        }));
-
-        waiting_started_rx.await.unwrap();
-        drop(tasks);
-
-        timeout(Duration::from_secs(1), running_dropped_rx)
-            .await
-            .expect("running task should be aborted")
-            .unwrap();
-        timeout(Duration::from_secs(1), waiting_dropped_rx)
-            .await
-            .expect("task waiting for a permit should be aborted")
-            .unwrap();
-
-        let permit = timeout(Duration::from_secs(1), semaphore.acquire())
-            .await
-            .expect("aborted task should release its permit")
-            .unwrap();
-        drop(permit);
-        assert_eq!(semaphore.available_permits(), 1);
     }
 }
