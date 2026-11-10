@@ -98,7 +98,7 @@ async fn run_prewhere_test_with_threshold(
     )?;
 
     // Create ReadState which combines prewhere and runtime filter logic
-    let read_state = ReadState::create(
+    let mut read_state = ReadState::create(
         ctx.clone(),
         scan_id,
         Some(&prewhere_info),
