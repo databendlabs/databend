@@ -58,6 +58,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_query::sessions::TableContextTelemetry;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
@@ -270,7 +271,7 @@ async fn test_compact_segment_parallel_groups_preserve_hll_and_top_n_order() -> 
                 dal.clone(),
                 (path.clone(), SegmentInfo::VERSION),
                 TestFixture::default_table_schema(),
-                false,
+                CachePolicy::READ_ONLY,
             )
             .await?;
             let stats_loc = &segment
@@ -279,7 +280,8 @@ async fn test_compact_segment_parallel_groups_preserve_hll_and_top_n_order() -> 
                 .as_ref()
                 .unwrap()
                 .location;
-            let stats = read_segment_stats(dal.clone(), stats_loc.clone()).await?;
+            let stats =
+                read_segment_stats(dal.clone(), stats_loc.clone(), CachePolicy::DEFAULT).await?;
             let expected_hlls = [first, second]
                 .into_iter()
                 .flat_map(|source| expected_stats[source].block_hlls.iter().cloned())
@@ -332,7 +334,7 @@ async fn test_compact_segment_single_group_many_sources() -> anyhow::Result<()> 
             dal.clone(),
             (state.new_segment_paths[0].clone(), SegmentInfo::VERSION),
             TestFixture::default_table_schema(),
-            false,
+            CachePolicy::READ_ONLY,
         )
         .await?;
         assert_eq!(merged.block_metas()?, expected);
@@ -375,7 +377,7 @@ async fn test_compact_segment_skips_incomplete_stats() -> anyhow::Result<()> {
         dal.clone(),
         (state.new_segment_paths[0].clone(), SegmentInfo::VERSION),
         TestFixture::default_table_schema(),
-        false,
+        CachePolicy::READ_ONLY,
     )
     .await?;
     assert!(merged.summary.additional_stats_meta.is_none());
@@ -417,6 +419,7 @@ async fn compact_segments(
         operator,
         &location_gen,
         TestFixture::default_table_meta_timestamps(),
+        CachePolicy::DEFAULT,
     )
     .compact(segments, limit, |_| {})
     .await
@@ -1123,6 +1126,7 @@ impl CompactSegmentTestFixture {
             data_accessor,
             location_gen,
             TestFixture::default_table_meta_timestamps(),
+            CachePolicy::DEFAULT,
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -1290,7 +1294,7 @@ impl CompactSegmentTestFixture {
         // traverse the paths of new segments  in reversed order
         for (idx, x) in new_segment_paths.iter().rev().enumerate() {
             let compact_segment = compact_segment_reader
-                .read(&(x.to_string(), SegmentInfo::VERSION))
+                .read(&(x.to_string(), SegmentInfo::VERSION), &CachePolicy::BYPASS)
                 .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             assert_eq!(
@@ -1367,7 +1371,7 @@ impl CompactCase {
         // 4. input blocks should be there and in the original order
         for location in output.iter().rev() {
             let compact_segment = compact_segment_reader
-                .read(&(location.0.clone(), location.1))
+                .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)
                 .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary, None);
@@ -1493,6 +1497,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             &data_accessor,
             &location_gen,
             TestFixture::default_table_meta_timestamps(),
+            CachePolicy::DEFAULT,
         );
         let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
         let state = seg_acc
@@ -1513,7 +1518,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
         let mut output_block_id = Vec::with_capacity(number_of_blocks);
         for location in output.iter().rev() {
             let compact_segment = compact_segment_reader
-                .read(&(location.0.clone(), location.1))
+                .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)
                 .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
             merge_statistics_mut(

@@ -28,6 +28,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::expr::Constant;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::SpatialPredicate;
 use databend_storages_common_index::SpatialPredicateOp;
 use databend_storages_common_index::collect_spatial_predicates;
@@ -57,6 +58,7 @@ impl SpatialIndexPruner {
         spatial_index_columns: &HashSet<ColumnId>,
         operator: Operator,
         settings: ReadSettings,
+        cache_policy: CachePolicy,
     ) -> Result<Option<Arc<SpatialIndexPruner>>> {
         if spatial_index_columns.is_empty() {
             return Ok(None);
@@ -78,7 +80,8 @@ impl SpatialIndexPruner {
                 column_ids.push(predicate.column_id);
             }
         }
-        let reader = SpatialIndexReader::create(operator.clone(), settings, column_ids);
+        let reader =
+            SpatialIndexReader::create(operator.clone(), settings, cache_policy, column_ids);
 
         let base_domains = ConstantFolder::full_input_domains(&result.expr);
 

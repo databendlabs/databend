@@ -1,3 +1,4 @@
+// Copyright Qdrant
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,25 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use bytes::Bytes;
-use databend_common_exception::Result;
-
-/// Serialization of the values of kinds that have a disk tier.
-pub trait DiskCodec: Sized {
-    fn encode(&self) -> Result<Vec<u8>>;
-
-    fn decode(bytes: Bytes) -> Result<Self>;
-}
-
-/// For kinds whose entries are handed out as `Arc<T>`.
-impl<T: DiskCodec> DiskCodec for Arc<T> {
-    fn encode(&self) -> Result<Vec<u8>> {
-        T::encode(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        T::decode(bytes).map(Arc::new)
-    }
-}
+pub mod simple;
+#[cfg(target_arch = "x86_64")]
+mod simple_avx;
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+mod simple_neon;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod simple_sse;

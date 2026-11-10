@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -311,7 +312,7 @@ impl PhysicalPlanBuilder {
                 cols_to_fetch,
                 fetched_fields,
                 need_wrap_nullable: false,
-                populate_cache: true,
+                cache_policy: CachePolicy::DEFAULT,
                 enable_block_id_repartition: false,
                 stat_info: Some(stat_info.clone()),
             });

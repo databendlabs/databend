@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_config::CacheConfig;
-use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_cache::legacy::LegacyCapacity;
@@ -42,7 +42,7 @@ fn configured() -> CacheConfig {
         inverted_index_lookup_size: 16,
         inverted_index_payload_size: 400,
         spatial_index_filter_size: 17,
-        data_cache_storage: CacheStorageTypeInnerConfig::Disk,
+        // No longer read: column chunks are kept only on disk.
         data_cache_in_memory_bytes: 18,
         table_data_deserialized_data_bytes: 19,
         ..CacheConfig::default()
@@ -76,6 +76,7 @@ fn test_each_kind_reads_its_option() {
         ("memory_cache_column_oriented_segment_info", Bytes(3)),
         ("memory_cache_segment_block_metas", Items(4)),
         ("memory_cache_segment_statistics", Bytes(5)),
+        ("memory_cache_segment_zone_map_meta_data", Items(1024)),
         ("memory_cache_bloom_index_file_meta_data", Items(6)),
         ("memory_cache_inverted_index_meta_data", Items(7)),
         ("memory_cache_vector_index_file_meta_data", Items(8)),
@@ -85,13 +86,14 @@ fn test_each_kind_reads_its_option() {
         ("memory_cache_iceberg_table", Items(11)),
         ("memory_cache_prune_partitions", Items(12)),
         ("memory_cache_bloom_index_filter", Bytes(13)),
+        ("memory_cache_segment_zone_map_chunk", Bytes(536870912)),
         ("memory_cache_vector_index_file", Bytes(14)),
         ("memory_cache_vector_index_refine", Bytes(15)),
         ("memory_cache_inverted_index_lookup", Bytes(16)),
         ("memory_cache_inverted_index_payload", Bytes(300)),
         ("memory_cache_inverted_index_full_payload", Bytes(100)),
         ("memory_cache_spatial_index_file", Bytes(17)),
-        ("memory_cache_column_data", Bytes(18)),
+        ("memory_cache_column_data", Disabled),
         ("memory_cache_table_data", Bytes(19)),
     ]);
 }
@@ -104,7 +106,7 @@ fn test_defaults() {
         capacity(&config, memory, "memory_cache_table_snapshot"),
         LegacyCapacity::Items(256)
     );
-    // Off unless configured: block metas, and column data without the disk data cache storage.
+    // Off unless configured: block metas; column data is never kept in memory as raw bytes.
     assert_eq!(
         capacity(&config, memory, "memory_cache_segment_block_metas"),
         LegacyCapacity::Disabled
@@ -139,7 +141,8 @@ fn test_memory_ratio_overrides_bytes() {
     );
 }
 
-/// `enable_table_meta_cache = false` turns off every kind outside the data pool.
+/// `enable_table_meta_cache = false` turns off every kind outside the data pool. Raw column data
+/// is off in any case.
 #[test]
 fn test_meta_cache_switch() {
     let config = CacheConfig {
@@ -147,7 +150,7 @@ fn test_meta_cache_switch() {
         ..configured()
     };
     for (kind, capacity) in LegacyKinds::global().capacities(&config, 1 << 30) {
-        let kept = kind.pool() == Pool::Data;
+        let kept = kind.pool() == Pool::Data && kind != CacheKind::of::<column::Data>();
         assert_eq!(capacity != LegacyCapacity::Disabled, kept, "{kind:?}");
     }
 }
@@ -202,7 +205,6 @@ fn test_ignored_options() {
         "inverted_index_lookup_size",
         "inverted_index_payload_size",
         "spatial_index_filter_size, spatial_index_filter_memory_ratio",
-        "data_cache_in_memory_bytes",
         "table_data_deserialized_data_bytes, table_data_deserialized_memory_ratio",
     ]);
 }

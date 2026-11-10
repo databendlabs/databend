@@ -2115,7 +2115,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8cf2a2c93cd704877c0858356ed03480ff301ee950b43f1cbe4573b088bfa6c"
 dependencies = [
  "crypto-common 0.2.2",
- "inout 0.2.5",
+ "inout 0.2.6",
 ]
 
 [[package]]
@@ -3082,7 +3082,6 @@ dependencies = [
 name = "databend-common-base"
 version = "0.1.0"
 dependencies = [
- "anyerror",
  "anyhow",
  "async-backtrace",
  "borsh",
@@ -3827,7 +3826,6 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-schema-api-test-suite",
  "databend-common-meta-store",
- "databend-common-version",
  "databend-meta-client 260205.13.5",
  "databend-meta-runtime",
  "databend-meta-test-harness",
@@ -3860,9 +3858,7 @@ dependencies = [
 name = "databend-common-metrics"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "databend-common-base",
- "procfs",
  "prometheus-client 0.22.3",
 ]
 
@@ -4025,13 +4021,10 @@ dependencies = [
  "databend-common-expression",
  "databend-common-expression-test-support",
  "databend-common-functions",
- "databend-common-grpc",
- "databend-common-io",
  "databend-common-license",
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-meta-store",
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-script",
@@ -4046,9 +4039,7 @@ dependencies = [
  "databend-enterprise-materialized-view",
  "databend-enterprise-row-access-policy-feature",
  "databend-meta-client 260205.13.5",
- "databend-meta-runtime",
  "databend-storages-common-cache",
- "databend-storages-common-session",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "databend_educe",
@@ -4061,7 +4052,6 @@ dependencies = [
  "indexmap 2.14.0",
  "itertools 0.13.0",
  "jsonb",
- "jwt-simple",
  "log",
  "num-derive",
  "num-traits",
@@ -4127,7 +4117,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -4549,7 +4538,6 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-sql",
  "databend-common-storage",
@@ -4805,13 +4793,11 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-index",
  "databend-storages-common-io",
- "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
  "fastrace",
  "futures",
  "futures-util",
  "http 1.3.1",
- "jsonb",
  "jsonwebtoken",
  "jwt-simple",
  "log",
@@ -4819,7 +4805,6 @@ dependencies = [
  "parking_lot 0.12.3",
  "reqsign",
  "reqwest",
- "serde",
  "serde_json",
  "siphasher 0.3.11",
  "tempfile",
@@ -5866,7 +5851,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_stacker",
- "serde_yaml",
  "sha2 0.10.9",
  "socket2 0.5.9",
  "sqlx",
@@ -6015,7 +5999,6 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "async-backtrace",
- "async-trait",
  "bytes",
  "chrono",
  "crc32fast",
@@ -6031,13 +6014,13 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-storage",
  "databend-storages-common-index",
+ "databend-storages-common-io",
  "databend-storages-common-table-meta",
  "divan",
  "futures",
  "hex",
- "libc",
  "log",
- "mockall",
+ "opendal 0.55.0",
  "parking_lot 0.12.3",
  "parquet",
  "prometheus-client 0.22.3",
@@ -6159,6 +6142,7 @@ dependencies = [
  "opendal 0.55.0",
  "parking_lot 0.12.3",
  "serde",
+ "tokio",
  "uuid",
 ]
 
@@ -6423,12 +6407,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
 
 [[package]]
-name = "difflib"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6601,12 +6579,6 @@ name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
-
-[[package]]
-name = "downcast"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
 name = "downcast-rs"
@@ -7159,15 +7131,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "float-cmp"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "float_eq"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7211,12 +7174,6 @@ checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
 ]
-
-[[package]]
-name = "fragile"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28dd6caf6059519a65843af8fe2a3ae298b14b80179855aeb4adc2c1934ee619"
 
 [[package]]
 name = "fs-err"
@@ -8813,9 +8770,9 @@ dependencies = [
 
 [[package]]
 name = "inout"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b5cf4372d022092674a83b8febf5865f7a573cc0c5baec5e49c879b6a20978f"
+checksum = "3a580c13f0ffc335ef42dd3f6b1a41b726051c5e1656d9a3aa6fddb3c5dfbbf9"
 dependencies = [
  "hybrid-array",
 ]
@@ -10031,33 +9988,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mockall"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c84490118f2ee2d74570d114f3d0493cbf02790df303d2707606c3e14e07c96"
-dependencies = [
- "cfg-if",
- "downcast",
- "fragile",
- "lazy_static",
- "mockall_derive",
- "predicates",
- "predicates-tree",
-]
-
-[[package]]
-name = "mockall_derive"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22ce75669015c4f47b289fd4d4f56e894e4c96003ffdf3ac51313126f94c6cbb"
-dependencies = [
- "cfg-if",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "moka"
 version = "0.12.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10327,12 +10257,6 @@ dependencies = [
  "quote",
  "syn 2.0.106",
 ]
-
-[[package]]
-name = "normalize-line-endings"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
 name = "ntapi"
@@ -11570,36 +11494,6 @@ name = "pratt"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17e0a4425d076f0718b820673a38fbf3747080c61017eeb0dd79bc7e472b8bb8"
-
-[[package]]
-name = "predicates"
-version = "2.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
-dependencies = [
- "difflib",
- "float-cmp",
- "itertools 0.10.5",
- "normalize-line-endings",
- "predicates-core",
- "regex",
-]
-
-[[package]]
-name = "predicates-core"
-version = "1.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "727e462b119fe9c93fd0eb1429a5f7647394014cf3c04ab2c0350eeb09095ffa"
-
-[[package]]
-name = "predicates-tree"
-version = "1.0.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72dd2d6d381dfb73a193c7fca536518d7caee39fc8503f74e7dc0be0531b425c"
-dependencies = [
- "predicates-core",
- "termtree",
-]
 
 [[package]]
 name = "pretty_assertions"
@@ -15089,12 +14983,6 @@ dependencies = [
  "rustix 1.0.7",
  "windows-sys 0.59.0",
 ]
-
-[[package]]
-name = "termtree"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-harness"

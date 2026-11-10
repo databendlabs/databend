@@ -21,9 +21,9 @@ mod legacy;
 mod manager;
 mod mem_bytes_accuracy;
 mod metrics;
+mod read;
 mod registry;
 mod shared;
-mod ttl;
 
 #[global_allocator]
 static ALLOCATOR: mem_bytes_accuracy::CountingAlloc = mem_bytes_accuracy::CountingAlloc;

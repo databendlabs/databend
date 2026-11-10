@@ -60,6 +60,7 @@ pub mod io;
 pub mod operations;
 pub mod pruning;
 mod pruning_pipeline;
+pub mod segment_zone_map;
 pub mod statistics;
 pub mod table_functions;
 

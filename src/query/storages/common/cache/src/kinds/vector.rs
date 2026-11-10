@@ -18,8 +18,6 @@ use std::mem::size_of;
 use std::mem::size_of_val;
 use std::sync::Arc;
 
-use bytes::Bytes;
-use databend_common_exception::Result;
 use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_index::VectorIndexFile;
 use databend_storages_common_index::VectorIndexMeta;
@@ -27,8 +25,6 @@ use databend_storages_common_index::VectorIndexMeta;
 use super::index_file::index_meta;
 use crate::CacheDef;
 use crate::CachedItem;
-use crate::Disk;
-use crate::DiskCodec;
 use crate::Pool;
 use crate::size::btree_map;
 
@@ -41,18 +37,20 @@ impl CacheDef for Meta {
     const POOL: Pool = Pool::Meta;
     /// Index files are written once, under new locations.
     const SHARE_LOADS: bool = true;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("vector_index_meta_v1", |c| {
-        c.disk_cache_vector_index_meta_size
-    }));
+    const DISK: bool = true;
 }
 
-/// Decoded HNSW indexes, by index location and column.
+/// Decoded HNSW indexes, by index location and column. The compressed component bytes they are
+/// decoded from are kept in the disk cache: every query of a table searches the HNSW index of
+/// each of its blocks, so after a restart or an eviction they are read from local disk, not
+/// from storage.
 pub struct Index;
 
 impl CacheDef for Index {
     type Value = CachedVectorIndex;
     const NAME: &'static str = "memory_cache_vector_index_file";
     const POOL: Pool = Pool::Index;
+    const DISK: bool = true;
 }
 
 /// FP16 refine pages, by `{index_location}:{page}`.
@@ -62,9 +60,7 @@ impl CacheDef for Refine {
     type Value = VectorIndexFile;
     const NAME: &'static str = "memory_cache_vector_index_refine";
     const POOL: Pool = Pool::Index;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("vector_index_file_v1", |c| {
-        c.disk_cache_vector_index_data_size
-    }));
+    const DISK: bool = true;
 }
 
 /// A decoded HNSW index. Readers holding it keep it charged to the cache, so pinned indexes
@@ -113,15 +109,5 @@ impl CachedItem for VectorIndexMeta {
 
     fn legacy_bytes(&self) -> usize {
         0
-    }
-}
-
-impl DiskCodec for VectorIndexMeta {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
     }
 }

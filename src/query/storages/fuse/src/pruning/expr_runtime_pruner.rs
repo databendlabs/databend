@@ -30,6 +30,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -47,6 +48,7 @@ pub struct ExprRuntimePruner {
     table_schema: TableSchemaRef,
     dal: Operator,
     settings: ReadSettings,
+    cache_policy: CachePolicy,
     inlist_bloom_prune_threshold: usize,
     exprs: Vec<RuntimeFilterExpr>,
 }
@@ -185,6 +187,7 @@ impl ExprRuntimePruner {
         table_schema: TableSchemaRef,
         dal: Operator,
         settings: ReadSettings,
+        cache_policy: CachePolicy,
         inlist_bloom_prune_threshold: usize,
         exprs: Vec<RuntimeFilterExpr>,
     ) -> Self {
@@ -193,6 +196,7 @@ impl ExprRuntimePruner {
             table_schema,
             dal,
             settings,
+            cache_policy,
             inlist_bloom_prune_threshold,
             exprs,
         }
@@ -269,6 +273,7 @@ impl ExprRuntimePruner {
             &self.func_ctx,
             &self.dal,
             &self.settings,
+            self.cache_policy,
             &self.table_schema,
             filter,
             part,
@@ -389,6 +394,7 @@ mod tests {
             schema,
             operator,
             test_read_settings(),
+            CachePolicy::DEFAULT,
             3,
             vec![RuntimeFilterExpr {
                 filter_id: 0,
@@ -420,6 +426,7 @@ mod tests {
             schema,
             operator,
             test_read_settings(),
+            CachePolicy::DEFAULT,
             3,
             vec![RuntimeFilterExpr {
                 filter_id: 0,
@@ -445,6 +452,7 @@ mod tests {
             schema,
             operator,
             test_read_settings(),
+            CachePolicy::DEFAULT,
             3,
             vec![RuntimeFilterExpr {
                 filter_id: 0,
@@ -542,6 +550,7 @@ mod tests {
             schema,
             operator,
             test_read_settings(),
+            CachePolicy::DEFAULT,
             1,
             vec![RuntimeFilterExpr {
                 filter_id: 0,
@@ -752,6 +761,7 @@ mod tests {
             schema,
             operator,
             test_read_settings(),
+            CachePolicy::DEFAULT,
             2,
             vec![RuntimeFilterExpr {
                 filter_id: 0,
@@ -782,6 +792,7 @@ mod tests {
             schema,
             operator,
             test_read_settings(),
+            CachePolicy::DEFAULT,
             10,
             vec![RuntimeFilterExpr {
                 filter_id: 0,
