@@ -2095,6 +2095,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        expected_table_id: None,
                         limit: CompactionLimits {
                             segment_limit: limit,
                             block_limit: None,
@@ -2137,6 +2138,7 @@ impl Binder {
                     database,
                     table,
                     target,
+                    expected_table_id: None,
                     limit,
                     selection: selection.as_deref().cloned(),
                     is_final: *is_final,
