@@ -168,6 +168,7 @@ pub fn run_parser<O>(
         tokens,
         dialect,
         mode,
+        expr_depth: 0,
     };
     match parser(input) {
         Ok((rest, res)) => {

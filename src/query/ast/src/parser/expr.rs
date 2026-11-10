@@ -30,6 +30,7 @@ use crate::ast::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::common::*;
+use crate::parser::error::EXPR_DEPTH_LIMIT;
 use crate::parser::error::EXPR_STACK_LIMIT;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
@@ -52,8 +53,22 @@ pub fn values(i: Input) -> IResult<Vec<Expr>> {
     map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v).parse(i)
 }
 
+// Bound structural recursion before expr_element() can allocate another stack segment.
+const MAX_EXPR_DEPTH: usize = 256;
+
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
+        if i.expr_depth >= MAX_EXPR_DEPTH {
+            return Err(nom::Err::Failure(Error::from_error_kind(
+                i,
+                ErrorKind::other(EXPR_DEPTH_LIMIT),
+            )));
+        }
+        let parent_depth = i.expr_depth;
+        let i = Input {
+            expr_depth: parent_depth + 1,
+            ..i
+        };
         let higher_prec_expr_element = |i| {
             expr_element(i).and_then(|(rest, elem)| match elem.elem.affix() {
                 Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
@@ -138,7 +153,15 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
 
-        run_pratt_parser(ExprParser, expr_elements, rest, i)
+        let (rest, expr) = run_pratt_parser(ExprParser, expr_elements, rest, i)?;
+        // Sibling expressions must share the parent's budget, not accumulate depth.
+        Ok((
+            Input {
+                expr_depth: parent_depth,
+                ..rest
+            },
+            expr,
+        ))
     }
 }
 

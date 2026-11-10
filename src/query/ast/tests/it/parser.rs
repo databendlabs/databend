@@ -83,6 +83,66 @@ fn test_deep_expression_parsing() {
 }
 
 #[test]
+fn test_structural_expression_depth_limit() {
+    // A large stack isolates the structural budget from Pratt's stack-space check.
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| {
+            for (prefix, suffix) in [
+                ("(", ")"),
+                ("abs(", ")"),
+                ("{'a':", "}"),
+                ("[", "]"),
+                ("(SELECT ", ")"),
+            ] {
+                for depth in [8, 256, 1_024] {
+                    let sql = format!("{}1{}", prefix.repeat(depth), suffix.repeat(depth));
+                    let tokens = tokenize_sql(&sql).unwrap();
+                    if depth == 8 {
+                        parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+                        continue;
+                    }
+                    let input = Input {
+                        tokens: &tokens,
+                        dialect: Dialect::PostgreSQL,
+                        mode: ParseMode::Default,
+                        expr_depth: 0,
+                    };
+                    let err = expr(input).unwrap_err();
+                    assert!(matches!(err, nom::Err::Failure(error) if error.errors.contains(
+                        &ErrorKind::other("expression nesting exceeds the maximum parsing depth")
+                    )));
+                }
+            }
+
+            // The root expression also consumes one of the 256 levels.
+            let sql = format!("{}1{}", "(".repeat(255), ")".repeat(255));
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+
+            // The fatal depth error must survive SELECT/parenthesis backtracking.
+            let sql = format!("SELECT {}1{}", "(".repeat(1_024), ")".repeat(1_024));
+            let tokens = tokenize_sql(&sql).unwrap();
+            let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+            assert!(err.1.contains("expression nesting exceeds the maximum parsing depth"));
+
+            // Siblings, including precedence-limited BETWEEN operands, share the parent budget.
+            let args = vec!["abs(1) BETWEEN 0 AND 2"; 1_000].join(", ");
+            let sql = format!("concat({args})");
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+            let sql = format!("SELECT {args}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            let tokens = tokenize_sql("1 + 2").unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
 fn test_external_access_sql() {
     for sql in [
         "CREATE NETWORK RULE video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443', 'other.example.com')",
@@ -313,6 +373,7 @@ fn run_parser_with_dialect<P, O>(
         tokens: &tokens,
         dialect,
         mode,
+        expr_depth: 0,
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
@@ -2256,6 +2317,7 @@ fn test_ambiguous_trailing_lambda_argument() {
         tokens: &tokens,
         dialect: Dialect::PostgreSQL,
         mode: ParseMode::Default,
+        expr_depth: 0,
     };
     let (_, expr) = expr(input).unwrap();
     let Expr::FunctionCall { func, .. } = expr else {
@@ -2278,6 +2340,7 @@ fn test_json_arrow_argument_before_aggregate_filter() {
         tokens: &tokens,
         dialect: Dialect::PostgreSQL,
         mode: ParseMode::Default,
+        expr_depth: 0,
     };
     let (_, expr) = expr(input).unwrap();
     let Expr::FunctionCall { func, .. } = expr else {

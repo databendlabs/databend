@@ -22,7 +22,7 @@ macro_rules! try_dispatch {
             } {
                 match result {
                     Ok(output) => return Ok(output),
-                    Err(nom::Err::Failure(error)) if error.is_stack_limit() => {
+                    Err(nom::Err::Failure(error)) if error.is_expression_limit() => {
                         return Err(nom::Err::Failure(error));
                     }
                     Err(nom::Err::Error(error) | nom::Err::Failure(error)) => {
