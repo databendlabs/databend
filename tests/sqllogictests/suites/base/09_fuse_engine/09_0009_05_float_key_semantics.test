@@ -128,9 +128,6 @@ SELECT count(*) FROM (SELECT [d] FROM signed_zero GROUP BY [d])
 
 # Single, nullable, fixed composite and serialized composite hash join keys.
 statement ok
-SET nested_loop_join_threshold = 0
-
-statement ok
 SET inlist_runtime_filter_threshold = 0
 
 statement ok
@@ -170,7 +167,7 @@ SELECT count(*) FROM signed_zero a JOIN signed_zero b ON [a.d] = [b.d]
 6
 
 statement ok
-UNSET (nested_loop_join_threshold, inlist_runtime_filter_threshold, join_runtime_filter_selectivity_threshold, enforce_shuffle_join)
+UNSET (inlist_runtime_filter_threshold, join_runtime_filter_selectivity_threshold, enforce_shuffle_join)
 
 # REPLACE INTO uses a separate row hash for detecting conflicts.
 statement ok
@@ -343,9 +340,6 @@ SELECT count(*) FROM (SELECT [d] FROM float_nan GROUP BY [d])
 3
 
 statement ok
-SET nested_loop_join_threshold = 0
-
-statement ok
 SET inlist_runtime_filter_threshold = 0
 
 statement ok
@@ -385,7 +379,7 @@ SELECT count(*) FROM float_nan a JOIN float_nan b ON [a.d] = [b.d]
 6
 
 statement ok
-UNSET (nested_loop_join_threshold, inlist_runtime_filter_threshold, join_runtime_filter_selectivity_threshold, enforce_shuffle_join)
+UNSET (inlist_runtime_filter_threshold, join_runtime_filter_selectivity_threshold, enforce_shuffle_join)
 
 statement ok
 REPLACE INTO float_nan ON (f, d) VALUES (5, 'nan', 'nan', 'nan', 'k')

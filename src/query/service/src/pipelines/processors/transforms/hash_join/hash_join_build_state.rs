@@ -770,7 +770,6 @@ impl HashJoinBuildState {
                     "Aborted query, because the hash table is uninitialized.",
                 ));
             }
-            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::UniqueSerializer(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
@@ -969,7 +968,6 @@ mod tests {
             probe_to_build: vec![],
             build_schema: schema.clone(),
             probe_schema: schema.clone(),
-            nested_loop_filter: None,
         };
         let state = HashJoinState::try_create(
             ctx.clone(),

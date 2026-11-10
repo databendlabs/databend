@@ -33,7 +33,6 @@ mod util;
 pub use common::wrap_nullable_block;
 pub use common::wrap_true_validity;
 pub use desc::HashJoinDesc;
-pub use desc::NestedLoopDesc;
 pub use desc::RuntimeFilterDesc;
 pub(crate) use desc::probes_all_pairs;
 pub use hash_join_build_state::HashJoinBuildState;

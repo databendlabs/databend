@@ -48,7 +48,6 @@ pub struct BasicHashJoin {
     pub(crate) method: HashMethodKind,
     pub(crate) function_ctx: FunctionContext,
     pub(crate) state: Arc<BasicHashJoinState>,
-    nested_loop_join_threshold: usize,
 }
 
 impl BasicHashJoin {
@@ -58,7 +57,6 @@ impl BasicHashJoin {
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
         state: Arc<BasicHashJoinState>,
-        nested_loop_join_threshold: usize,
     ) -> Result<Self> {
         let squash_block = SquashBlocks::new(
             settings.get_max_block_size()? as _,
@@ -71,7 +69,6 @@ impl BasicHashJoin {
             method,
             function_ctx,
             squash_block,
-            nested_loop_join_threshold,
         })
     }
 
@@ -89,14 +86,8 @@ impl BasicHashJoin {
     }
 
     pub(crate) fn final_build<const SCAN_MAP: bool>(&mut self) -> Result<Option<ProgressValues>> {
-        match self.state.hash_table.deref() {
-            HashJoinHashTable::Null => match self.init_memory_hash_table() {
-                Some(true) => return Ok(Some(self.build_nested_loop())),
-                Some(false) => return Ok(None),
-                None => {}
-            },
-            HashJoinHashTable::NestedLoop(_) => return Ok(None),
-            _ => {}
+        if matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
+            self.init_memory_hash_table();
         }
 
         let Some(chunk_index) = self.state.steal_chunk_index() else {
@@ -165,11 +156,6 @@ impl BasicHashJoin {
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        debug_assert!(!matches!(
-            self.state.hash_table.deref(),
-            HashJoinHashTable::NestedLoop(_)
-        ));
-
         if !self.state.columns.is_empty() {
             return;
         }
@@ -196,20 +182,12 @@ impl BasicHashJoin {
         *self.state.columns.as_mut() = columns;
     }
 
-    fn init_memory_hash_table(&mut self) -> Option<bool> {
+    fn init_memory_hash_table(&mut self) {
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        match self.state.hash_table.deref() {
-            HashJoinHashTable::Null => {}
-            HashJoinHashTable::NestedLoop(_) => return Some(false),
-            _ => return None,
-        }
-
-        let build_num_rows = *self.state.build_rows.deref();
-        if build_num_rows < self.nested_loop_join_threshold {
-            *self.state.hash_table.as_mut() = HashJoinHashTable::NestedLoop(vec![]);
-            return Some(true);
+        if !matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
+            return;
         }
 
         let unique_entry = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny)
@@ -315,7 +293,6 @@ impl BasicHashJoin {
                 ))
             }
         };
-        None
     }
 
     fn build_hash_table(&self, keys: DataBlock, chunk_idx: usize) -> Result<()> {
@@ -323,7 +300,6 @@ impl BasicHashJoin {
 
         match self.state.hash_table.deref() {
             HashJoinHashTable::Null => (),
-            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Serializer(v) => v.insert(keys, chunk_idx, &mut arena)?,
             HashJoinHashTable::SingleBinary(v) => v.insert(keys, chunk_idx, &mut arena)?,
             HashJoinHashTable::KeysU8(v) => v.insert(keys, chunk_idx, &mut arena)?,
@@ -349,22 +325,5 @@ impl BasicHashJoin {
         }
 
         Ok(())
-    }
-
-    fn build_nested_loop(&self) -> ProgressValues {
-        let mut progress = ProgressValues::default();
-        let mut plain = vec![];
-        while let Some(chunk_index) = self.state.steal_chunk_index() {
-            let chunk_block = &self.state.chunks[chunk_index];
-            progress.rows += chunk_block.num_rows();
-            progress.bytes += chunk_block.memory_size();
-            plain.push(chunk_block.clone());
-        }
-        debug_assert!(matches!(
-            *self.state.hash_table,
-            HashJoinHashTable::NestedLoop(_)
-        ));
-        *self.state.hash_table.as_mut() = HashJoinHashTable::NestedLoop(plain);
-        progress
     }
 }

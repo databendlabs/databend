@@ -80,7 +80,6 @@ impl SemiLeftHashJoin {
             method,
             desc.clone(),
             state.clone(),
-            0,
         )?;
 
         Ok(SemiLeftHashJoin {
@@ -143,9 +142,6 @@ impl Join for SemiLeftHashJoin {
 
                 let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
                 table.probe_matched(probe_data)
-            }
-            HashJoinHashTable::NestedLoop(_) => {
-                unreachable!()
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
