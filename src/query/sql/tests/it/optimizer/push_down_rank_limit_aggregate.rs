@@ -93,22 +93,34 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
             sql: "SELECT category, sum(value * value) FROM events GROUP BY category ORDER BY category LIMIT 3",
         },
         SqlTestCase {
-            name: "multiple_group_keys_do_not_push_scan_order",
-            description: "Rank limits with multiple group keys must not install scan ordering for the runtime single-key filter.",
+            name: "multiple_group_keys_push_scan_order",
+            description: "Rank limits with multiple group keys push all rank keys as scan ordering, so the scan can prune by the runtime boundary on the first key.",
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY category LIMIT 3",
         },
         SqlTestCase {
             name: "rank_limit_follows_order_by_key_order",
-            description: "When ORDER BY lists the group keys in a different order, the rank limit keys must follow the ORDER BY order.",
+            description: "When ORDER BY lists the group keys in a different order, the rank limit keys and the scan ordering must follow the ORDER BY order.",
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY value DESC, category LIMIT 3",
         },
         SqlTestCase {
             name: "repeated_order_key_keeps_single_rank_key",
-            description: "A repeated ORDER BY column keeps only its first occurrence, so the single-key rank limit still pushes scan ordering.",
+            description: "A repeated ORDER BY column keeps only its first occurrence, so the rank limit and the scan ordering have a single key.",
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, count(*) FROM events GROUP BY category ORDER BY category ASC, category DESC LIMIT 3",
+        },
+        SqlTestCase {
+            name: "group_by_limit_pushes_group_key_order",
+            description: "A limited aggregate without ORDER BY ranks by its group keys and pushes them as scan ordering.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, value, count(*) FROM events GROUP BY category, value LIMIT 3",
+        },
+        SqlTestCase {
+            name: "order_by_aggregate_output_does_not_push_scan_order",
+            description: "Ordering by an aggregate result cannot bound the group keys, so no scan ordering is pushed.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, count(*) AS c FROM events GROUP BY category ORDER BY c DESC LIMIT 3",
         },
         SqlTestCase {
             name: "join_input_does_not_push_scan_order",
