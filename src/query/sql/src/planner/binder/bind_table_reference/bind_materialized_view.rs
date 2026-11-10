@@ -996,6 +996,7 @@ impl Binder {
         // Do not leak the MV definition's scope into sibling query references.
         result.bind_context.binding_views = bind_context.binding_views.clone();
         result.bind_context.cte_context = bind_context.cte_context.clone();
+        result.bind_context.recursive_cte_id = bind_context.recursive_cte_id;
         result.bind_context.binding_depth = bind_context.next_depth()?;
         result.bind_context.parent = Some(Box::new(bind_context.clone()));
         Ok((result.s_expr, result.bind_context))
