@@ -20,6 +20,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -316,7 +317,7 @@ impl Table for GetLineageNeighborsTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        put_cache: bool,
+        cache_policy: CachePolicy,
     ) -> Result<()> {
         if plan.parts.is_empty() {
             pipeline.add_source(EmptySource::create, 1)?;
@@ -333,7 +334,7 @@ impl Table for GetLineageNeighborsTable {
                 .map(Ok)
                 .unwrap_or_else(|| ctx.build_table_from_source_plan(&target_plan))?;
             ctx.set_partitions(target_plan.parts.clone())?;
-            target.read_data(ctx.clone(), &target_plan, pipeline, put_cache)?;
+            target.read_data(ctx.clone(), &target_plan, pipeline, cache_policy)?;
         }
         pipeline.try_resize(1)?;
         let args = self.args.clone();

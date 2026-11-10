@@ -1,3 +1,5 @@
+const { canRetryWorkflowRun, maxAutoRetries } = require('./pr_ci_lifecycle');
+
 const TITLE = '## 🤖 CI Job Analysis';
 
 function isRetryableError(errorMessage) {
@@ -373,7 +375,7 @@ Higher priority request detected - retry cancelled to avoid conflicts.
 - **Code Issues:** ${codeIssuesCount}
 
 ### 🚫 **MAX RETRIES REACHED**
-Maximum retry count (3) has been reached. Manual intervention required.
+Maximum retry count (${maxAutoRetries(workflowRun)}) has been reached. Manual intervention required.
 
 [View Workflow](${displayRunURL})`;
 
@@ -543,6 +545,9 @@ module.exports = async ({ github, context, core }) => {
     if (failedJobs.length === 0) {
         return;
     }
+    if (!await canRetryWorkflowRun(github, context, core, workflowRun)) {
+        return;
+    }
 
     // Analyze all failed jobs
     const { jobsToRetry, analyzedJobs, priorityCancelled } = await analyzeAllJobs(github, context, core, failedJobs);
@@ -554,10 +559,10 @@ module.exports = async ({ github, context, core }) => {
         return;
     }
 
-    // Check retry count limit (max 3 retries)
+    // Check retry count limit (1 for PR runs, 3 for Main and Release)
     const currentRetryCount = getCurrentRetryCount(workflowRun);
     core.info(`Current retry attempt: ${workflowRun.run_attempt || 1} (previous retries: ${currentRetryCount})`);
-    const maxRetries = 3;
+    const maxRetries = maxAutoRetries(workflowRun);
 
     if (currentRetryCount >= maxRetries) {
         core.info(`Maximum retry count (${maxRetries}) reached. Skipping retry.`);
@@ -569,6 +574,11 @@ module.exports = async ({ github, context, core }) => {
     if (jobsToRetry.length === 0) {
         core.info('No jobs found with retryable errors. Skipping retry.');
         await addCommentToPR(github, context, core, workflowRun, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, false);
+        return;
+    }
+
+    // Analysis may take time. Recheck live PR state immediately before rerunning.
+    if (!await canRetryWorkflowRun(github, context, core, workflowRun)) {
         return;
     }
 

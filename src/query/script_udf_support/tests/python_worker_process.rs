@@ -55,6 +55,7 @@ fn function(name: &str, code: &str) -> ScriptUdfFunctionDesc {
         data_type: Box::new(DataType::Number(NumberDataType::Int64)),
         headers: BTreeMap::new(),
         udf_type: UDFType::Script(Box::new(UDFScriptCode {
+            external_access_integrations: vec![],
             language: UDFLanguage::Python,
             runtime_version: String::new(),
             imports_stage_info: vec![],
@@ -323,6 +324,72 @@ async fn pids(transforms: &mut [TransformUdfScript]) -> BTreeSet<String> {
                 .to_string()
         })
         .collect()
+}
+
+// Unbound workers must fail network access as SQL-layer errors, not NULL values.
+#[cfg(target_os = "linux")]
+async fn network_policy_tests() {
+    fn nullable_transform(
+        query: Arc<PythonQueryWorkers>,
+        name: &str,
+        code: &str,
+    ) -> TransformUdfScript {
+        let mut descriptor = function(name, code);
+        descriptor.data_type = Box::new(descriptor.data_type.wrap_nullable());
+        let functions = vec![descriptor];
+        let runtimes = TransformUdfScript::init_runtime_for_query(&functions, query).unwrap();
+        TransformUdfScript::new(FunctionContext::default(), functions, runtimes)
+    }
+
+    let code = r#"
+import urllib.request
+
+def handler(x):
+    with urllib.request.urlopen('http://127.0.0.1:1/snapshot', timeout=2) as response:
+        assert response.read() == b'7'
+    return x
+"#;
+    let denied = PythonWorkerManager::new(PythonWorkerConfig::default())
+        .unwrap()
+        .query("denied", 1);
+    let mut udf = nullable_transform(denied.clone(), "network_denied", code);
+    let error = udf
+        .transform(input(7))
+        .await
+        .expect_err("network denial must not return NULL");
+    assert!(error.message().contains("execution failed"), "{error}");
+    assert!(error.message().contains("Permission denied"), "{error}");
+    denied.finish();
+
+    // No administrator override may weaken networking or the other restrictions.
+    let restricted_query = PythonWorkerManager::new(PythonWorkerConfig::default())
+        .unwrap()
+        .query("restricted", 1);
+    let mut restricted = nullable_transform(
+        restricted_query.clone(),
+        "network_still_sandboxed",
+        r#"
+import socket, subprocess
+
+def handler(x):
+    actions = [lambda: open('/etc/passwd').read(),
+               lambda: socket.socket(socket.AF_UNIX),
+               lambda: socket.socket(socket.AF_INET),
+               lambda: socket.socket(socket.AF_INET6),
+               lambda: subprocess.run(['/bin/true']),
+               lambda: socket.socket().bind(('127.0.0.1', 0))]
+    for action in actions:
+        try:
+            action()
+        except PermissionError:
+            continue
+        raise AssertionError('sandbox restriction was not enforced')
+    return x
+"#,
+    );
+    let result = restricted.transform(input(7)).await.unwrap();
+    assert_eq!(result.get_by_offset(1).index(0).unwrap().to_string(), "7");
+    restricted_query.finish();
 }
 
 async fn parallel_pool_tests() {
@@ -597,6 +664,8 @@ def handler(x):
     hardening_tests().await;
     #[cfg(target_os = "linux")]
     sandbox_tests().await;
+    #[cfg(target_os = "linux")]
+    network_policy_tests().await;
     udaf_tests().await;
     parallel_pool_tests().await;
     idle_pool_tests().await;
@@ -640,6 +709,7 @@ def finish(state):
 fn udaf(query: &Arc<PythonQueryWorkers>, name: &str, code: &str) -> AggregateCallRef {
     let int64 = DataType::Number(NumberDataType::Int64);
     let code = UDFScriptCode {
+        external_access_integrations: vec![],
         language: UDFLanguage::Python,
         runtime_version: String::new(),
         imports_stage_info: vec![],

@@ -21,4 +21,6 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        # EE tests run with the disk cache, which is EE only; 01_0004_disk_cache checks it.
+        CACHE_DATA_CACHE_STORAGE: disk
       run: bash ./scripts/ci/ci-run-ee-sqllogic-tests.sh ${{ inputs.dirs }}

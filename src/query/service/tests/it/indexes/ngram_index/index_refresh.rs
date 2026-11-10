@@ -20,6 +20,7 @@ use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bl
 use databend_query::sessions::TableContext;
 use databend_query::storages::index::filters::BlockFilter;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use futures_util::StreamExt;
 
@@ -129,6 +130,7 @@ async fn get_block_filter(fixture: &TestFixture, columns: &[String]) -> Result<B
         columns,
         path,
         *length.as_number().unwrap().as_u_int64().unwrap(),
+        CachePolicy::DEFAULT,
     )
     .await
 }

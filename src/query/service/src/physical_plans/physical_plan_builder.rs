@@ -20,6 +20,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -31,6 +32,7 @@ use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::PhysicalRelOperator;
+use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -47,6 +49,7 @@ pub struct PhysicalPlanBuilder {
     // DataMutation info, used to build MergeInto physical plan
     pub mutation_build_info: Option<MutationBuildInfo>,
     pub cte_required_columns: HashMap<String, ColumnSet>,
+    pub cte_schemas: HashMap<String, DataSchemaRef>,
     pub is_cte_required_columns_collected: bool,
     pub build_depth: usize,
     /// Scan IDs that can use the post-pruning block metadata exchange if their finalized
@@ -64,6 +67,7 @@ impl PhysicalPlanBuilder {
             dry_run,
             mutation_build_info: None,
             cte_required_columns: HashMap::new(),
+            cte_schemas: HashMap::new(),
             is_cte_required_columns_collected: false,
             build_depth: 0,
             distributed_fuse_pruning_scans: HashSet::new(),
@@ -122,7 +126,12 @@ impl PhysicalPlanBuilder {
         plan.get_all_data_source(&mut sources);
 
         for (plan_id, source) in sources {
-            if source.statistics.pruning_stats != Default::default() {
+            // Lazy sources are pruned by a pipeline later, which publishes the
+            // complete statistics then; what they carry now (such as zone map
+            // pruning numbers) is an input to that pipeline, not a result.
+            let first = source.parts.partitions.first();
+            let is_lazy = first.is_some_and(|p| p.as_any().is::<FuseLazyPartInfo>());
+            if !is_lazy && source.statistics.pruning_stats != Default::default() {
                 self.ctx
                     .set_pruned_partitions_stats(plan_id, source.statistics);
             }

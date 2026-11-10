@@ -42,7 +42,6 @@
 #![feature(iter_order_by)]
 #![feature(int_roundings)]
 #![feature(try_blocks)]
-#![feature(debug_closure_helpers)]
 #![feature(iter_map_windows)]
 #![feature(likely_unlikely)]
 #![feature(portable_simd)]

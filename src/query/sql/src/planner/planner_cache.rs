@@ -56,6 +56,9 @@ pub struct PlanCacheItem {
     pub(crate) plan: Plan,
     pub(crate) setting_changes: Vec<(String, ChangeValue)>,
     pub(crate) variables: HashMap<String, Scalar>,
+    /// Binding marked the query result cache unusable, for example because the statement calls
+    /// `now()`. A plan cache hit skips binding, so the flag is kept here and applied on hit.
+    pub(crate) result_cache_uncacheable: bool,
 }
 
 static PLAN_CACHE: LazyLock<InMemoryLruCache<PlanCacheItem>> =
@@ -184,19 +187,37 @@ impl Planner {
         };
 
         let metadata = metadata.read();
-        cache_ctx
-            .matches_metadata_tables(metadata.tables())
-            .then(|| plan_item.as_ref().clone())
+        if !cache_ctx.matches_metadata_tables(metadata.tables()) {
+            return None;
+        }
+
+        if plan_item.result_cache_uncacheable {
+            self.ctx.result_cache_state().set_cacheable(false);
+        }
+        Some(plan_item.as_ref().clone())
     }
 
-    pub(crate) fn set_cache(&self, cache_ctx: PlanCacheContext, plan: Plan) {
+    pub(crate) fn set_cache(&self, cache_ctx: PlanCacheContext, plan: Plan) -> Result<()> {
+        if self
+            .ctx
+            .get_function_context()?
+            .query_specific_values
+            .recorded()
+        {
+            // Planning computed a value valid only for this query, such as the value of
+            // `VALUES (now())`, and the plan may hold it.
+            return Ok(());
+        }
+
         let plan_item = PlanCacheItem {
             plan,
             setting_changes: self.setting_changes(),
             variables: self.ctx.get_all_variables(),
+            result_cache_uncacheable: !self.ctx.result_cache_state().cacheable(),
         };
         let cache = LazyLock::force(&PLAN_CACHE);
         cache.insert(cache_ctx.cache_key, plan_item);
+        Ok(())
     }
 
     fn setting_changes(&self) -> Vec<(String, ChangeValue)> {
@@ -351,21 +372,11 @@ impl TableRefVisitor {
             let catalog_name = normalize_identifier(&catalog, &self.name_resolution_ctx).name;
             let database_name = normalize_identifier(&database, &self.name_resolution_ctx).name;
             let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
-            let branch = table
-                .branch
-                .as_ref()
-                .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name);
 
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table) = self
                     .ctx
-                    .resolve_data_source(
-                        &catalog_name,
-                        &database_name,
-                        &table_name,
-                        branch.as_deref(),
-                        None,
-                    )
+                    .resolve_data_source(&catalog_name, &database_name, &table_name, None)
                     .await
                 {
                     if table.engine() == MATERIALIZED_VIEW_ENGINE {

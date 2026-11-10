@@ -13,5 +13,7 @@
 // limitations under the License.
 
 mod rule_eliminate_union;
+mod rule_push_down_top_n_union_scan;
 
 pub use rule_eliminate_union::RuleEliminateUnion;
+pub use rule_push_down_top_n_union_scan::RulePushDownTopNUnionScan;

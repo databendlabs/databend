@@ -29,3 +29,28 @@ pub fn check_process_stopped(stopped: &AtomicBool) -> Result<()> {
     }
     Ok(())
 }
+
+/// Whether the ids of a batch are nearly consecutive, so that the hardware
+/// prefetcher already streams their vectors.
+pub fn is_dense_batch(ids: &[u32]) -> bool {
+    if ids.len() < 2 {
+        return false;
+    }
+    let (min, max) = ids
+        .iter()
+        .fold((u32::MAX, 0), |(min, max), &id| (min.min(id), max.max(id)));
+    ((max - min) as usize) < ids.len() * 2
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_dense_batch() {
+        assert!(!is_dense_batch(&[]));
+        assert!(!is_dense_batch(&[7]));
+        assert!(is_dense_batch(&[3, 1, 2, 5]));
+        assert!(!is_dense_batch(&[1, 900, 37, 4000]));
+    }
+}

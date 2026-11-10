@@ -1014,20 +1014,29 @@ impl BindContext {
             self.get_internal_column_table_index(column_binding)?
         };
 
-        let (column_index, is_new) =
-            match self.bound_internal_columns.entry((table_index, column_id)) {
-                btree_map::Entry::Vacant(e) => {
-                    let mut metadata = metadata.write();
-                    let column_index = metadata
-                        .add_internal_column(table_index, column_binding.internal_column.clone());
-                    e.insert(column_index);
-                    (column_index, true)
-                }
-                btree_map::Entry::Occupied(e) => {
-                    let column_index = e.get();
-                    (*column_index, false)
-                }
-            };
+        let (column_index, is_new) = match self
+            .bound_internal_columns
+            .entry((table_index, column_id))
+        {
+            btree_map::Entry::Vacant(e) => {
+                let mut metadata = metadata.write();
+                // The column may already be in the metadata without a binding in this
+                // context: lazy materialization of a subquery adds `_row_id` to the metadata
+                // directly. The scan keeps one column per internal column name, so reuse it
+                // instead of adding a second one that would never be read.
+                let column_index = match metadata.internal_column_index(table_index, column_id) {
+                    Some(index) => index,
+                    None => metadata
+                        .add_internal_column(table_index, column_binding.internal_column.clone()),
+                };
+                e.insert(column_index);
+                (column_index, true)
+            }
+            btree_map::Entry::Occupied(e) => {
+                let column_index = e.get();
+                (*column_index, false)
+            }
+        };
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);

@@ -105,6 +105,8 @@ jobs:
         run: |
           python3 .github/scripts/test_check_pr_ai_assistance.py
           python3 .github/scripts/test_check_pr_quality.py
+      - name: Test PR CI lifecycle
+        run: node --test .github/scripts/test_pr_ci_lifecycle.js
 
   ready:
     if: always()

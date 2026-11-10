@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
@@ -46,7 +47,7 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
         ctx.set_partitions(plan.parts.clone())?;
-        self.read_data(ctx.clone(), plan, &mut pipeline, true)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline, CachePolicy::DEFAULT)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);

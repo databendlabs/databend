@@ -29,9 +29,9 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
 
 use crate::FuseTable;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::snapshot_history;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::check_shared_table_select;
@@ -109,11 +109,13 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
                 .and_then(|v| v.limit)
                 .unwrap_or(DEFAULT_SNAPSHOT_LIMIT);
 
-            let table_snapshot_reader = MetaReaders::table_snapshot_reader(table.operator.clone());
+            let caches = FuseCaches::instance();
             let format_version =
                 TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
 
-            let lite_snapshot_stream = table_snapshot_reader.snapshot_history(
+            let lite_snapshot_stream = snapshot_history(
+                &caches.snapshots,
+                table.operator.clone(),
                 snapshot_location,
                 format_version,
                 meta_location_generator.clone(),

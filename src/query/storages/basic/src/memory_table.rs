@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -217,7 +218,7 @@ impl Table for MemoryTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let numbers = ctx.get_settings().get_max_threads()? as usize;
         let read_data_blocks = self.get_read_data_blocks();

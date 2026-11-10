@@ -29,14 +29,14 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::read::read_column_oriented_segment;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reduce_block_metas;
 use databend_query::test_kits::BlockWriter;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -376,20 +376,18 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     operator
         .write(&location, column_oriented_segment.serialize().unwrap())
         .await?;
-    let cache = CacheManager::instance()
-        .get_column_oriented_segment_info_cache()
-        .unwrap();
-    assert!(cache.get(&location).is_none());
+    let cache = FuseCaches::instance().segments.clone();
+    assert!(cache.lookup_column_oriented(&location).is_none());
 
     // 1. only read and cache block level meta
     let _column_oriented_segment = read_column_oriented_segment(
         operator.clone(),
         &location,
         &block_level_field_names(),
-        true,
+        CachePolicy::DEFAULT,
     )
     .await?;
-    let cached = cache.get(&location).unwrap();
+    let cached = cache.lookup_column_oriented(&location).unwrap();
     assert_eq!(cached.segment_schema.fields.len(), 11);
     assert_eq!(cached.segment_schema, segment_schema(&TableSchema::empty()));
     check_summary(&block_metas, &cached);
@@ -400,9 +398,14 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     let mut projection = block_level_field_names();
     projection.insert(meta_name(col_id));
     projection.insert(stat_name(col_id));
-    let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
-    let cached = cache.get(&location).unwrap();
+    let _column_oriented_segment = read_column_oriented_segment(
+        operator.clone(),
+        &location,
+        &projection,
+        CachePolicy::DEFAULT,
+    )
+    .await?;
+    let cached = cache.lookup_column_oriented(&location).unwrap();
     assert_eq!(cached.segment_schema.fields.len(), 13);
 
     let column_1 = table_schema.field_of_column_id(col_id).unwrap();
@@ -423,9 +426,14 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     let mut projection = block_level_field_names();
     projection.insert(meta_name(col_id));
     projection.insert(stat_name(col_id));
-    let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
-    let cached = cache.get(&location).unwrap();
+    let _column_oriented_segment = read_column_oriented_segment(
+        operator.clone(),
+        &location,
+        &projection,
+        CachePolicy::DEFAULT,
+    )
+    .await?;
+    let cached = cache.lookup_column_oriented(&location).unwrap();
     // column 2 does not have stats
     assert_eq!(cached.segment_schema.fields.len(), 14);
     check_summary(&block_metas, &cached);
@@ -437,9 +445,14 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     let mut projection = block_level_field_names();
     projection.insert(meta_name(col_id));
     projection.insert(stat_name(col_id));
-    let column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
-    let cached = cache.get(&location).unwrap();
+    let column_oriented_segment = read_column_oriented_segment(
+        operator.clone(),
+        &location,
+        &projection,
+        CachePolicy::DEFAULT,
+    )
+    .await?;
+    let cached = cache.lookup_column_oriented(&location).unwrap();
     // column 2 does not have stats
     assert_eq!(cached.segment_schema.fields.len(), 14);
     check_summary(&block_metas, &cached);
