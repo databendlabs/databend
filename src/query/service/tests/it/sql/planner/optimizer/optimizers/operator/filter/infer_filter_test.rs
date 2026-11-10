@@ -32,11 +32,10 @@ fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
 }
 
 #[test]
-fn test_timezone_equality_does_not_transfer_display_predicates() -> anyhow::Result<()> {
+fn test_nested_timezone_equality_does_not_transfer_display_predicates() -> anyhow::Result<()> {
     let timezone = DataType::TimestampTz;
+    // Scalar and nullable timestamp predicates are covered by timezone_key_representation.test.
     for data_type in [
-        timezone.clone(),
-        timezone.clone().wrap_nullable(),
         DataType::Array(Box::new(timezone.clone())),
         DataType::Map(Box::new(DataType::Tuple(vec![
             DataType::String,

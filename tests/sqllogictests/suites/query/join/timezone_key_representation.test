@@ -33,13 +33,29 @@ WHERE to_string(l.k) LIKE '%+0030';
 ----
 1
 
-# Nested keys also compare by instant, without replacing projected values.
-query TT
-SELECT right(to_string(l.k), 5), right(to_string(r.k), 5)
-FROM tz_left l JOIN tz_right r ON [l.k] = [r.k]
-WHERE to_string(l.k) LIKE '%+0030';
+# Isolate predicate inference from join-key serialization: equal instants do not
+# make the stored offsets interchangeable, even within a single table.
+statement ok
+CREATE OR REPLACE TABLE tz_pair (a TIMESTAMP_TZ, b TIMESTAMP_TZ);
+
+statement ok
+INSERT INTO tz_pair VALUES
+('2001-02-03 05:00:00 +0030', '2001-02-03 04:30:00 +0000');
+
+query I
+SELECT count(*) FROM tz_pair
+WHERE a = b AND to_string(a) LIKE '%+0030';
 ----
-+0030 +0000
+1
+
+statement ok
+DROP TABLE tz_pair;
+
+# Array equality matches both the equal instant and the [NULL] pair.
+query I
+SELECT count(*) FROM tz_left l JOIN tz_right r ON [l.k] = [r.k];
+----
+2
 
 # Materialized container keys must not substitute one side's projected array.
 query TT
