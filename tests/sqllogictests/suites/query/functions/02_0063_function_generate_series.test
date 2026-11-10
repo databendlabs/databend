@@ -111,3 +111,255 @@ from (select 1 as start, 3 as finish) t, lateral generate_series(t.start, t.fini
 1 1
 1 2
 1 3
+
+# Issue #20998: stop before the next value overflows, without wrapping around.
+query I
+select * from generate_series(0, -9223372036854775807, -9223372036854775807);
+----
+0
+-9223372036854775807
+
+query I
+select * from generate_series(9223372036854775800, 9223372036854775807, 5);
+----
+9223372036854775800
+9223372036854775805
+
+# The endpoint need not be an Int64 limit for the next addition to overflow.
+query I
+select * from generate_series(9223372036854775800, 9223372036854775806, 5);
+----
+9223372036854775800
+9223372036854775805
+
+query I
+select * from generate_series(-9223372036854775801, -9223372036854775807, -5);
+----
+-9223372036854775801
+-9223372036854775806
+
+query I
+select * from generate_series(-9223372036854775801, -9223372036854775808, -5);
+----
+-9223372036854775801
+-9223372036854775806
+
+# Include either extreme exactly once, including equal start and end.
+query I
+select * from generate_series(9223372036854775806, 9223372036854775807);
+----
+9223372036854775806
+9223372036854775807
+
+query I
+select * from generate_series(-9223372036854775807, -9223372036854775808, -1);
+----
+-9223372036854775807
+-9223372036854775808
+
+query I
+select * from generate_series(9223372036854775807, 9223372036854775807);
+----
+9223372036854775807
+
+query I
+select * from generate_series(-9223372036854775808, -9223372036854775808, -1);
+----
+-9223372036854775808
+
+# Extreme steps and distances larger than Int64::MAX.
+query I
+select * from generate_series(0, -9223372036854775808, -9223372036854775808);
+----
+0
+-9223372036854775808
+
+query I
+select * from generate_series(0, 9223372036854775807, 9223372036854775807);
+----
+0
+9223372036854775807
+
+query I
+select * from generate_series(-9223372036854775808, 9223372036854775807, 9223372036854775807);
+----
+-9223372036854775808
+-1
+9223372036854775806
+
+query I
+select * from generate_series(9223372036854775807, -9223372036854775808, -9223372036854775808);
+----
+9223372036854775807
+-1
+
+# Correlated arguments must use the same overflow-safe iteration.
+query II rowsort
+select t.id, s.generate_series
+from (select 1 as id, 9223372036854775800::int64 as start, 9223372036854775807::int64 as finish, 5::int64 as step
+      union all
+      select 2, (-9223372036854775801)::int64, (-9223372036854775808)::int64, (-5)::int64) t,
+     lateral generate_series(t.start, t.finish, t.step) s;
+----
+1 9223372036854775800
+1 9223372036854775805
+2 -9223372036854775801
+2 -9223372036854775806
+
+# range() uses a streaming table source and must keep its exclusive endpoint.
+query I
+select * from range(9223372036854775800, 9223372036854775807, 5);
+----
+9223372036854775800
+9223372036854775805
+
+query I
+select * from range(-9223372036854775801, -9223372036854775808, -5);
+----
+-9223372036854775801
+-9223372036854775806
+
+query I
+select * from range(0, -9223372036854775807, -9223372036854775807);
+----
+0
+
+query I
+select * from range(0, -9223372036854775808, -9223372036854775808);
+----
+0
+
+query I
+select * from range(0, 9223372036854775807, 9223372036854775807);
+----
+0
+
+query I
+select * from range(-9223372036854775808, 9223372036854775807, 9223372036854775807);
+----
+-9223372036854775808
+-1
+9223372036854775806
+
+query I
+select * from range(9223372036854775807, -9223372036854775808, -9223372036854775808);
+----
+9223372036854775807
+-1
+
+query I
+select * from range(9223372036854775807, 9223372036854775807);
+----
+
+query I
+select * from range(-9223372036854775808, -9223372036854775808, -1);
+----
+
+# Cross the source's 1,048,576-row block boundary near both Int64 limits.
+query III
+select count(*), min(`range`), max(`range`)
+from range(9223372036854775807::int64 - 1048578, 9223372036854775807);
+----
+1048578 9223372036853727229 9223372036854775806
+
+query III
+select count(*), min(`range`), max(`range`)
+from range((-9223372036854775808)::int64 + 1048578, -9223372036854775808, -1);
+----
+1048578 -9223372036854775807 -9223372036853727230
+
+# Overflow on the last row of a full block must not repeat that row next time.
+query III
+select count(*), min(`range`), max(`range`)
+from range(9223372036854775807::int64 - 3145726, 9223372036854775807, 3);
+----
+1048576 9223372036851630081 9223372036854775806
+
+query III
+select count(*), min(`range`), max(`range`)
+from range((-9223372036854775808)::int64 + 3145726, -9223372036854775808, -3);
+----
+1048576 -9223372036854775807 -9223372036851630082
+
+# Large steps also terminate correctly for timestamps and dates.
+query ?
+select * from generate_series('2021-01-01'::timestamp, '2021-01-02'::timestamp, 9223372036854775807);
+----
+2021-01-01 00:00:00.000000
+
+query ?
+select * from generate_series('1969-12-31'::timestamp, '1969-12-30'::timestamp, -9223372036854775808);
+----
+1969-12-31 00:00:00.000000
+
+query ?
+select * from range('2021-01-01'::timestamp, '2021-01-02'::timestamp, 9223372036854775807);
+----
+2021-01-01 00:00:00.000000
+
+query ?
+select * from range('1969-12-31'::timestamp, '1969-12-30'::timestamp, -9223372036854775808);
+----
+1969-12-31 00:00:00.000000
+
+query ?
+select * from generate_series('2021-01-01'::date, '2021-01-02'::date, 9223372036854775807);
+----
+2021-01-01
+
+query ?
+select * from generate_series('1969-12-31'::date, '1969-12-30'::date, -9223372036854775808);
+----
+1969-12-31
+
+query ?
+select * from range('2021-01-01'::date, '2021-01-02'::date, 9223372036854775807);
+----
+2021-01-01
+
+query ?
+select * from range('1969-12-31'::date, '1969-12-30'::date, -9223372036854775808);
+----
+1969-12-31
+
+# Keep existing argument validation rather than interpreting invalid directions as overflow.
+query error step must not be zero
+select * from generate_series(0, 1, 0);
+
+query error step must not be zero
+select * from range(0, 1, 0);
+
+# Preserve empty inclusive ranges with adjacent, reversed bounds.
+query I
+select * from generate_series(1, 0);
+----
+
+query I
+select * from generate_series(0, 1, -1);
+----
+
+query I
+select * from generate_series(9223372036854775807, 9223372036854775806);
+----
+
+query I
+select * from generate_series(-9223372036854775808, -9223372036854775807, -1);
+----
+
+query error start must be less than or equal to end when step is positive
+select * from range(1, 0);
+
+query error start must be greater than or equal to end when step is negative
+select * from range(0, 1, -1);
+
+query error start must be less than or equal to end when step is positive
+select * from generate_series(9223372036854775807, -9223372036854775808, 1);
+
+query error start must be greater than or equal to end when step is negative
+select * from generate_series(-9223372036854775808, 9223372036854775807, -1);
+
+query error start must be less than or equal to end when step is positive
+select * from range(9223372036854775807, -9223372036854775808, 1);
+
+query error start must be greater than or equal to end when step is negative
+select * from range(-9223372036854775808, 9223372036854775807, -1);
