@@ -28,6 +28,10 @@ use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_io::ReadSettings;
@@ -54,6 +58,7 @@ pub trait BloomBlockFilterReader {
         settings: &ReadSettings,
         columns: &[String],
         index_length: u64,
+        policy: CachePolicy,
     ) -> Result<BlockFilter>;
 }
 
@@ -68,6 +73,7 @@ impl BloomBlockFilterReader for Location {
         settings: &ReadSettings,
         columns: &[String],
         index_length: u64,
+        policy: CachePolicy,
     ) -> Result<BlockFilter> {
         let (path, ver) = &self;
         let index_version = BlockBloomFilterIndexVersion::try_from(*ver)?;
@@ -78,8 +84,15 @@ impl BloomBlockFilterReader for Location {
             BlockBloomFilterIndexVersion::V2(_)
             | BlockBloomFilterIndexVersion::V3(_)
             | BlockBloomFilterIndexVersion::V4(_) => {
-                let res = load_bloom_filter_by_columns(dal, settings, columns, path, index_length)
-                    .await?;
+                let res = load_bloom_filter_by_columns(
+                    dal,
+                    settings,
+                    columns,
+                    path,
+                    index_length,
+                    policy,
+                )
+                .await?;
                 Ok(res)
             }
         }
@@ -94,21 +107,28 @@ pub async fn load_bloom_filter_by_columns<'a>(
     column_needed: &'a [String],
     index_path: &'a str,
     index_length: u64,
+    policy: CachePolicy,
 ) -> Result<BlockFilter> {
     // 0. Fast path: every requested filter is already cached. Serving them
     // straight from the filter cache needs neither the index meta nor the
     // index file, so a miss in the (count bounded) meta cache does not turn
     // into a remote read of the index file on every query.
-    if let Some(block_filter) = load_cached_bloom_filters(index_path, column_needed) {
+    if let Some(block_filter) = load_cached_bloom_filters(index_path, column_needed, policy) {
         return Ok(block_filter);
     }
 
     let whole_file =
-        prepare_bloom_index_read_source(&dal, settings, index_path, index_length).await?;
+        prepare_bloom_index_read_source(&dal, settings, index_path, index_length, policy).await?;
 
     // 1. load index meta
-    let bloom_index_meta =
-        load_index_meta(dal.clone(), index_path, index_length, whole_file.as_ref()).await?;
+    let bloom_index_meta = load_index_meta(
+        dal.clone(),
+        index_path,
+        index_length,
+        whole_file.as_ref(),
+        policy,
+    )
+    .await?;
 
     // 2. filter out columns that needed and exist in the index
     // 2.1 dedup the columns
@@ -126,6 +146,14 @@ pub async fn load_bloom_filter_by_columns<'a>(
     }
 
     // 3. load filters
+    let whole_file = match whole_file {
+        Some(whole_file) => Some(whole_file),
+        None => {
+            let names = col_metas.values().map(|(name, _)| name.as_str());
+            let storage = DiskCachedStorage::new(dal.clone());
+            cached_whole_file(&storage, index_path, names, policy).await?
+        }
+    };
     let bloom_index_fields: Vec<_> = bloom_index_meta
         .columns
         .iter()
@@ -146,6 +174,7 @@ pub async fn load_bloom_filter_by_columns<'a>(
                 &dal,
                 bloom_index_schema_desc.clone(),
                 whole_file.as_ref(),
+                policy,
             )
         })
         .collect::<Vec<_>>();
@@ -170,13 +199,9 @@ pub async fn load_bloom_filter_by_columns<'a>(
 /// in-memory tier of the bloom filter cache, `None` otherwise (including when
 /// the cache is disabled).
 ///
-/// Only the in-memory tier is probed, because this runs on the caller's
-/// thread. A hit in the on-disk tier needs a synchronous file read and
-/// decode, so such filters are left to the full load path, which reads them on
-/// the I/O runtime, concurrently across columns. For the same reason a memory
-/// hit here does not re-populate the on-disk tier (that serializes the
-/// filter); the full load path re-populates it once the filter is loaded
-/// again.
+/// The lookups follow `policy`: when it does not read the memory cache, every
+/// lookup misses and the request takes the full load path. Only the memory
+/// cache is probed; this runs on the caller's thread and does no I/O.
 ///
 /// The returned filters keep the order of `column_needed` with duplicates
 /// removed, so callers that rewrite the index (e.g. ngram index refresh) get
@@ -189,11 +214,15 @@ pub async fn load_bloom_filter_by_columns<'a>(
 /// emits no filter for a column with fewer than 2 distinct values in the
 /// block (e.g. constant or all-NULL) or for an over-long string column, while
 /// the pruner still asks for it by the table schema.
-fn load_cached_bloom_filters(index_path: &str, column_needed: &[String]) -> Option<BlockFilter> {
+fn load_cached_bloom_filters(
+    index_path: &str,
+    column_needed: &[String],
+    policy: CachePolicy,
+) -> Option<BlockFilter> {
     if column_needed.is_empty() {
         return None;
     }
-    let cache = &FuseCaches::instance().bloom_filters;
+    let cache = FuseCaches::instance().bloom_filters.with_policy(policy);
     let mut seen = HashSet::with_capacity(column_needed.len());
     let mut fields = Vec::with_capacity(column_needed.len());
     let mut filters = Vec::with_capacity(column_needed.len());
@@ -201,7 +230,7 @@ fn load_cached_bloom_filters(index_path: &str, column_needed: &[String]) -> Opti
         if !seen.insert(name) {
             continue;
         }
-        let filter = cache.lookup_memory(&BloomColumnFilterReader::cache_key(index_path, name))?;
+        let filter = cache.lookup(&BloomColumnFilterReader::cache_key(index_path, name))?;
         fields.push(TableField::new(name, TableDataType::Binary));
         filters.push(Arc::clone(&filter));
     }
@@ -222,6 +251,7 @@ async fn load_column_bloom_filter<'a>(
     dal: &'a Operator,
     bloom_index_schema_desc: SchemaDescPtr,
     whole_file: Option<&Arc<Bytes>>,
+    policy: CachePolicy,
 ) -> Result<Arc<FilterImpl>> {
     let storage_runtime = GlobalIORuntime::instance();
     let bytes = {
@@ -232,6 +262,7 @@ async fn load_column_bloom_filter<'a>(
             col_chunk_meta,
             dal.clone(),
             bloom_index_schema_desc,
+            policy,
         );
         let whole_file = whole_file.cloned();
         async move { column_data_reader.read(whole_file.as_ref()).await }
@@ -249,8 +280,9 @@ pub async fn load_index_meta(
     path: &str,
     length: u64,
     whole_file: Option<&Arc<Bytes>>,
+    policy: CachePolicy,
 ) -> Result<Arc<BloomIndexMeta>> {
-    let cache = FuseCaches::instance().index_metas.bloom.clone();
+    let cache = FuseCaches::instance().index_metas.bloom.with_policy(policy);
     if let Some(whole_file) = whole_file {
         let meta = load_index_meta_from_bytes(whole_file)?;
         return Ok(Arc::clone(&cache.fill(path, Arc::new(meta))));
@@ -266,26 +298,69 @@ pub async fn load_index_meta(
     .await?
 }
 
+/// A small index file whose footer is not cached yet is read whole, as one unit of the disk
+/// cache: its footer and filters come from these bytes.
 async fn prepare_bloom_index_read_source(
     dal: &Operator,
     settings: &ReadSettings,
     path: &str,
     index_length: u64,
+    policy: CachePolicy,
 ) -> Result<Option<Arc<Bytes>>> {
-    if should_read_whole_bloom_index(path, settings, index_length) {
-        let data = dal.read(path).await?;
-        return Ok(Some(Arc::new(data.to_bytes())));
+    let storage = DiskCachedStorage::new(dal.clone());
+    if should_read_whole_bloom_index(path, settings, index_length, &storage, policy) {
+        let data = storage
+            .read(CacheKind::of::<bloom::Filter>(), path, None, policy.disk)
+            .await?;
+        return Ok(Some(Arc::new(data)));
     }
 
     Ok(None)
 }
 
-fn should_read_whole_bloom_index(path: &str, settings: &ReadSettings, index_length: u64) -> bool {
+/// Whether to read the index file whole: it is small, its footer is not in memory, and the
+/// disk cache can keep it whole, as a filter unit, or keeps no footer either. Read whole, the
+/// footer is not read through the meta pool, which would then never serve it. With the footer
+/// in memory, see `cached_whole_file`.
+fn should_read_whole_bloom_index(
+    path: &str,
+    settings: &ReadSettings,
+    index_length: u64,
+    storage: &DiskCachedStorage,
+    policy: CachePolicy,
+) -> bool {
     if index_length > settings.parquet_fast_read_bytes {
         return false;
     }
+    if policy.memory.reads() && FuseCaches::instance().index_metas.bloom.contains(path) {
+        return false;
+    }
+    let fill = policy.disk;
+    storage.admits(CacheKind::of::<bloom::Filter>(), index_length, fill)
+        || !storage.uses_disk(CacheKind::of::<bloom::IndexMeta>(), fill)
+}
 
-    !FuseCaches::instance().index_metas.bloom.contains(path)
+/// With the footer in memory: the whole file, when a filter of `names` misses memory and the
+/// disk cache holds the file whole, as a cold read left it. Its filters are not on disk by range,
+/// so range reads would go to storage. Filters all in memory need no read at all.
+async fn cached_whole_file<'a>(
+    storage: &DiskCachedStorage,
+    path: &str,
+    mut names: impl Iterator<Item = &'a str>,
+    policy: CachePolicy,
+) -> Result<Option<Arc<Bytes>>> {
+    let filters = &FuseCaches::instance().bloom_filters;
+    let in_memory =
+        |name: &str| policy.memory.reads() && filters.contains(&format!("{path}-{name}"));
+    if names.all(in_memory) {
+        return Ok(None);
+    }
+    let kind = CacheKind::of::<bloom::Filter>();
+    if !storage.holds(kind, path, None, policy.disk) {
+        return Ok(None);
+    }
+    let bytes = storage.read(kind, path, None, policy.disk).await?;
+    Ok(Some(Arc::new(bytes)))
 }
 
 fn load_index_meta_from_bytes(data: &Bytes) -> Result<BloomIndexMeta> {
@@ -357,11 +432,13 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::Int32Type;
     use databend_storages_common_blocks::blocks_to_parquet;
+    use databend_storages_common_cache::DiskCache;
     use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::BloomIndexBuilder;
     use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
     use databend_storages_common_index::filters::Filter;
+    use databend_storages_common_index::filters::Xor8Filter;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;
 
@@ -406,20 +483,98 @@ mod tests {
     #[test]
     fn test_should_read_whole_bloom_index_by_threshold_and_cache() -> Result<()> {
         init_test_globals()?;
-        let path = "bloom_index";
+        // Its own path: the meta cache is shared by the tests running alongside.
+        let path = "should_read_whole/bloom_index";
         let settings = ReadSettings {
             max_gap_size: 0,
             max_range_size: 0,
             parquet_fast_read_bytes: 1024,
         };
 
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let storage = DiskCachedStorage::with_disk(operator.clone(), None);
         let cache = &FuseCaches::instance().index_metas.bloom;
         cache.evict(path);
-        assert!(should_read_whole_bloom_index(path, &settings, 512));
-        assert!(!should_read_whole_bloom_index(path, &settings, 2048));
+        let policy = CachePolicy::DEFAULT;
+        assert!(should_read_whole_bloom_index(
+            path, &settings, 512, &storage, policy
+        ));
+        assert!(!should_read_whole_bloom_index(
+            path, &settings, 2048, &storage, policy
+        ));
+
+        // With a disk cache: read whole when the file can be kept whole in the index pool,
+        // not when only the footer would be kept, in the meta pool: the index pool is off, or
+        // too small for the file (an entry is at most a quarter of its pool).
+        let dir = tempfile::TempDir::new()?;
+        for (index_pool, whole) in [(1 << 20, true), (0, false), (1_000, false)] {
+            let disk = DiskCache::new(dir.path(), 1 << 30, [1 << 20, index_pool, 1 << 20], false)?;
+            let storage = DiskCachedStorage::with_disk(operator.clone(), Some(Arc::new(disk)));
+            assert_eq!(
+                should_read_whole_bloom_index(path, &settings, 512, &storage, policy),
+                whole,
+                "index pool {index_pool}"
+            );
+        }
 
         cache.put(path, Arc::new(BloomIndexMeta { columns: vec![] }));
-        assert!(!should_read_whole_bloom_index(path, &settings, 512));
+        assert!(!should_read_whole_bloom_index(
+            path, &settings, 512, &storage, policy
+        ));
+        // A read that bypasses the disk cache keeps no footer there: read whole.
+        assert!(should_read_whole_bloom_index(
+            path,
+            &settings,
+            512,
+            &storage,
+            CachePolicy::BYPASS
+        ));
+        Ok(())
+    }
+
+    /// With the footer in memory, a filter missing from memory is read from the whole file the
+    /// disk cache holds, and filters all in memory read nothing.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cached_whole_file_serves_filters_missing_from_memory() -> Result<()> {
+        init_test_globals()?;
+        // Its own path: the filter cache is shared by the tests running alongside.
+        let path = "cached_whole_file/bloom_index";
+        let name = "filter";
+        let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+        let dir = tempfile::TempDir::new()?;
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 1 << 20, 1 << 20],
+            false,
+        )?);
+        let storage = DiskCachedStorage::with_disk(operator, Some(disk.clone()));
+        let filters = &FuseCaches::instance().bloom_filters;
+        let filter_key = format!("{path}-{name}");
+        filters.evict(&filter_key);
+        let policy = CachePolicy::DEFAULT;
+        let whole = |storage: &DiskCachedStorage| {
+            let storage = storage.clone();
+            async move { cached_whole_file(&storage, path, [name].into_iter(), policy).await }
+        };
+
+        // Nothing on disk: the filter is read by range.
+        assert!(whole(&storage).await?.is_none());
+
+        // The whole file on disk and the filter missing from memory: read from that entry.
+        let kind = CacheKind::of::<bloom::Filter>();
+        let key = databend_storages_common_cache::DiskKey::whole(path);
+        assert!(disk.put(kind, &key, Bytes::from_static(b"whole")).await);
+        let bytes = whole(&storage).await?.expect("the whole file");
+        assert_eq!(bytes.as_ref().as_ref(), b"whole");
+
+        // The filter in memory: nothing is read.
+        let filter = FilterImpl::Xor(Xor8Filter::default());
+        filters.put(&filter_key, Arc::new(filter));
+        if filters.contains(&filter_key) {
+            assert!(whole(&storage).await?.is_none());
+        }
+        filters.evict(&filter_key);
         Ok(())
     }
 
@@ -433,15 +588,20 @@ mod tests {
         FuseCaches::instance().index_metas.bloom.evict(path);
 
         let len = data.len() as u64;
-        let meta = load_index_meta(operator.clone(), path, len, None).await?;
+        let policy = CachePolicy::DEFAULT;
+        let meta = load_index_meta(operator.clone(), path, len, None, policy).await?;
         assert_eq!(meta.columns.len(), 1);
 
         // Served from the cache once the file is gone.
         operator.delete(path).await?;
-        let cached = load_index_meta(operator.clone(), path, len, None).await?;
+        let cached = load_index_meta(operator.clone(), path, len, None, policy).await?;
         assert!(Arc::ptr_eq(&meta, &cached));
         FuseCaches::instance().index_metas.bloom.evict(path);
-        assert!(load_index_meta(operator, path, len, None).await.is_err());
+        assert!(
+            load_index_meta(operator, path, len, None, policy)
+                .await
+                .is_err()
+        );
         Ok(())
     }
 
@@ -470,6 +630,7 @@ mod tests {
             &[filter_name.clone()],
             path,
             data.len() as u64,
+            CachePolicy::DEFAULT,
         )
         .await?;
 
@@ -515,6 +676,7 @@ mod tests {
             &[filter_name.clone()],
             path,
             data.len() as u64,
+            CachePolicy::DEFAULT,
         )
         .await?;
         let cached = Arc::clone(&filter_cache.lookup(&filter_key).unwrap());
@@ -539,6 +701,7 @@ mod tests {
             &[other_name.clone(), filter_name.clone(), other_name.clone()],
             path,
             data.len() as u64,
+            CachePolicy::DEFAULT,
         )
         .await?;
         let names = block_filter
@@ -551,6 +714,21 @@ mod tests {
         assert_eq!(block_filter.filters.len(), 2);
         assert!(Arc::ptr_eq(&block_filter.filters[1], &cached));
 
+        // A policy that does not read the memory cache does not take the fast
+        // path either: the full path runs and fails because the file is gone.
+        assert!(
+            load_bloom_filter_by_columns(
+                operator.clone(),
+                &settings,
+                &[filter_name.clone()],
+                path,
+                data.len() as u64,
+                CachePolicy::BYPASS,
+            )
+            .await
+            .is_err()
+        );
+
         // A filter that is not cached still goes through the full path (and
         // fails here because the file is gone), so the fast path is only taken
         // when every requested filter is cached.
@@ -562,6 +740,7 @@ mod tests {
                 &[filter_name.clone(), missing],
                 path,
                 data.len() as u64,
+                CachePolicy::DEFAULT,
             )
             .await
             .is_err()

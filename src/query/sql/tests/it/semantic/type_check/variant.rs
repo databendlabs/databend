@@ -353,7 +353,6 @@ pub(super) fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Re
         "default".to_string(),
         table.into(),
         None,
-        None,
         false,
         false,
         None,

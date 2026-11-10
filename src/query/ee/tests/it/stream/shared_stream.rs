@@ -149,7 +149,7 @@ async fn test_shared_stream_read_only_cache_and_navigation() -> anyhow::Result<(
                 ctx.get_table("default", "shared", "t").await?;
             }
             let table = ctx
-                .resolve_data_source("default", "local_db", "s", None, Some(1))
+                .resolve_data_source("default", "local_db", "s", Some(1))
                 .await?;
             let source = StreamTable::try_from_table(table.as_ref())?
                 .source_table(ctx.clone())

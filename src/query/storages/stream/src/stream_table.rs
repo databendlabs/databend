@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -405,10 +406,10 @@ impl Table for StreamTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        put_cache: bool,
+        cache_policy: CachePolicy,
     ) -> Result<()> {
         let table = databend_common_base::runtime::block_on(self.source_table(ctx.clone()))?;
-        table.read_data(ctx, plan, pipeline, put_cache)
+        table.read_data(ctx, plan, pipeline, cache_policy)
     }
 
     async fn table_statistics(

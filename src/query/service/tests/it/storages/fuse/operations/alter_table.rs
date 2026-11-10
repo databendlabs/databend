@@ -43,6 +43,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -79,7 +80,7 @@ async fn check_segment_column_ids(
     let reader = SnapshotReader::new(fuse_table.get_operator());
     let snapshot = FuseCaches::instance()
         .snapshots
-        .read_only()
+        .with_policy(CachePolicy::READ_ONLY)
         .get(&reader, snapshot_loc.clone(), TableSnapshot::VERSION)
         .await?;
     if let Some(expected_column_min_max) = expected_column_min_max {
@@ -100,7 +101,10 @@ async fn check_segment_column_ids(
         );
         for (seg_loc, _) in &snapshot.segments {
             let compact_segment_info = compact_segment_reader
-                .read(&(seg_loc.clone(), SegmentInfo::VERSION))
+                .read(
+                    &(seg_loc.clone(), SegmentInfo::VERSION),
+                    &CachePolicy::BYPASS,
+                )
                 .await?;
             let segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
@@ -155,7 +159,6 @@ async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        branch: None,
         column: "t".to_string(),
     };
     let ctx = fixture.new_query_ctx().await?;
@@ -177,7 +180,6 @@ async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        branch: None,
         if_not_exists: false,
         field,
         comment: "".to_string(),

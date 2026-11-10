@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::NaiveDate;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -124,7 +125,7 @@ impl Table for BillingUsageDailyTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         pipeline.add_source(
             |output| BillingUsageDailySource::create(ctx.clone(), output, self.args_parsed.clone()),

@@ -516,14 +516,7 @@ impl AccessLogger {
                 column_name: field.name.clone(),
             })
             .collect::<Vec<_>>();
-        let object_name = if let Some(branch) = &plan.branch {
-            format!(
-                "{}.{}.{}/{}",
-                plan.catalog, plan.database, plan.table, branch
-            )
-        } else {
-            format!("{}.{}.{}", plan.catalog, plan.database, plan.table)
-        };
+        let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
         let modified_object = AccessObject {
             object_domain: ObjectDomain::Table,
             object_name,

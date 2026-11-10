@@ -41,7 +41,7 @@ async fn test_clustering_information() -> anyhow::Result<()> {
         .build_router()
         .get_response(
             Request::builder()
-                .uri(Uri::from_maybe_shared(uri)?)
+                .uri(Uri::from_maybe_shared(uri.clone())?)
                 .header(header::CONTENT_TYPE, "application/json")
                 .method(Method::GET)
                 .finish(),
@@ -56,6 +56,19 @@ async fn test_clustering_information() -> anyhow::Result<()> {
     assert!(resp["timestamp"].as_i64().is_some());
     assert_eq!(resp["info"]["total_block_count"].as_u64(), Some(0));
     assert_eq!(resp["info"]["constant_block_count"].as_u64(), Some(0));
+
+    // Removed branch selectors must not silently return the base table's statistics.
+    let response = srv
+        .build_router()
+        .get_response(
+            Request::builder()
+                .uri(Uri::from_maybe_shared(format!("{uri}?branch=old"))?)
+                .header(header::CONTENT_TYPE, "application/json")
+                .method(Method::GET)
+                .finish(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 
     Ok(())
 }

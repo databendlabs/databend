@@ -1,3 +1,11 @@
+# Keep explicit coverage of AggregateExpand after the default switches to UNION ALL.
+statement ok
+set grouping_sets_to_union = 0;
+
+# Preserve the shared-base hierarchy snapshot; cascading is covered by optimizer tests.
+statement ok
+set enable_cascading_grouping_sets = 0;
+
 query T
 explain select number % 2 as a, number % 3 as b, number % 5 as c from numbers(1) group by rollup(a, b, c);
 ----
