@@ -49,8 +49,33 @@ fn test_deep_expression_parsing() {
                 format!("{}1", "1 ^ ".repeat(300)),
             ] {
                 let tokens = tokenize_sql(&sql).unwrap();
-                parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+                // The exact accepted depth depends on build mode and stack size.
+                if let Err(err) = parse_expr(&tokens, Dialect::PostgreSQL) {
+                    assert!(
+                        err.1
+                            .contains("expression nesting exceeds the available stack space")
+                    );
+                }
             }
+            for (prefix, value) in [("NOT ", "true"), ("1 ^ ", "1")] {
+                let sql = format!("{}{value}", prefix.repeat(10_000));
+                let tokens = tokenize_sql(&sql).unwrap();
+                let err = parse_expr(&tokens, Dialect::PostgreSQL).unwrap_err();
+                assert!(
+                    err.1
+                        .contains("expression nesting exceeds the available stack space")
+                );
+                // The stack error must survive parenthesis/subquery backtracking.
+                let sql = format!("SELECT ((({sql})))");
+                let tokens = tokenize_sql(&sql).unwrap();
+                let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+                assert!(
+                    err.1
+                        .contains("expression nesting exceeds the available stack space")
+                );
+            }
+            let tokens = tokenize_sql("1 + 2").unwrap();
+            assert!(parse_expr(&tokens, Dialect::PostgreSQL).is_ok());
         })
         .unwrap()
         .join()

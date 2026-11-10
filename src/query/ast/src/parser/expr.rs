@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::Peekable;
-
 use ethnum::i256;
 use itertools::Itertools;
 use nom::Parser;
@@ -23,7 +21,6 @@ use nom::error::context;
 use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
-use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
@@ -33,6 +30,7 @@ use crate::ast::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::common::*;
+use crate::parser::error::EXPR_STACK_LIMIT;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::query::*;
@@ -552,41 +550,21 @@ impl Expr {
 
 struct ExprParser;
 
+// Reserve room for the next Pratt frame and error propagation.
+const MIN_PRATT_STACK: usize = 256 * 1024;
+
 impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
     type Error = &'static str;
     type Input = WithSpan<'a, ExprElement>;
     type Output = Expr;
 
-    // Keep the default Pratt algorithm, but grow the stack on recursive descent
-    // into prefix operands and right-associative operators.
-    #[recursive::recursive]
-    fn parse_input(
-        &mut self,
-        tail: &mut Peekable<I>,
-        rbp: Precedence,
-    ) -> Result<Self::Output, PrattError<Self::Input, Self::Error>> {
-        if let Some(head) = tail.next() {
-            let info = PrattParser::<I>::query(self, &head).map_err(PrattError::UserError)?;
-            let mut nbp = PrattParser::<I>::nbp(self, info);
-            let mut node = self.nud(head, tail, info);
-            while let Some(head) = tail.peek() {
-                let info = PrattParser::<I>::query(self, head).map_err(PrattError::UserError)?;
-                let lbp = PrattParser::<I>::lbp(self, info);
-                if rbp < lbp && lbp < nbp {
-                    let head = tail.next().unwrap();
-                    nbp = PrattParser::<I>::nbp(self, info);
-                    node = self.led(head, tail, info, node?);
-                } else {
-                    break;
-                }
-            }
-            node
-        } else {
-            Err(PrattError::EmptyInput)
-        }
-    }
-
     fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
+        // Pratt calls query() before descending into operands, so stop here
+        // rather than replacing its default recursive parser.
+        let remaining = stacker::remaining_stack().ok_or(EXPR_STACK_LIMIT)?;
+        if remaining < MIN_PRATT_STACK {
+            return Err(EXPR_STACK_LIMIT);
+        }
         Ok(elem.elem.affix())
     }
 
