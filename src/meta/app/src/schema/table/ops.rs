@@ -85,18 +85,10 @@ impl TableMeta {
         Ok(())
     }
 
-    /// Whether any row access or masking policy is attached, including legacy bindings.
+    /// Whether any row access or masking policy is attached.
     pub fn has_security_policy(&self) -> bool {
         !self.column_mask_policy_columns_ids.is_empty()
-            || self
-                .column_mask_policy
-                .as_ref()
-                .is_some_and(|policies| !policies.is_empty())
             || self.row_access_policy_columns_ids.is_some()
-            || self
-                .row_access_policy
-                .as_ref()
-                .is_some_and(|policy| !policy.is_empty())
     }
 
     /// Check if a column reference a security policy.
@@ -237,27 +229,5 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code(), ErrorCode::ALTER_TABLE_ERROR);
-    }
-
-    #[test]
-    fn test_has_security_policy() {
-        use crate::schema::SecurityPolicyColumnMap;
-
-        let mut meta = create_test_table_meta();
-        assert!(!meta.has_security_policy());
-        meta.row_access_policy = Some(String::new());
-        assert!(!meta.has_security_policy());
-        meta.row_access_policy = Some("legacy".to_string());
-        assert!(meta.has_security_policy());
-
-        let mut meta = create_test_table_meta();
-        let policy = SecurityPolicyColumnMap::new(7, vec![0]);
-        meta.column_mask_policy_columns_ids
-            .insert(0, policy.clone());
-        assert!(meta.has_security_policy());
-
-        let mut meta = create_test_table_meta();
-        meta.row_access_policy_columns_ids = Some(policy);
-        assert!(meta.has_security_policy());
     }
 }
