@@ -1,0 +1,52 @@
+name: Feature request
+title: "Feature: "
+description: Suggest an idea for Databend
+labels: [ "C-feature" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement to Databend!
+
+        For open-ended ideas or help wanted, please go to: [Discussion](https://github.com/databendlabs/databend/discussions)
+
+  - type: checkboxes
+    attributes:
+      label: Search before asking
+      description: >
+        Please make sure to search in the [issues](https://github.com/databendlabs/databend/issues) first to see
+        whether the same feature was requested already.
+      options:
+        - label: >
+            I had searched in the [issues](https://github.com/databendlabs/databend/issues) and found no similar
+            feature requirement.
+          required: true
+
+  - type: textarea
+    attributes:
+      label: What problem does this feature solve?
+      description: >
+        Start from the problem, not the solution: what are you trying to do,
+        what blocks you today, and who else runs into this.
+      placeholder: >
+        e.g. We ingest ... and currently cannot ... because ...
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Proposed solution
+      description: >
+        Describe the behavior you want, concisely and in your own words.
+        Do not paste AI-generated essays - submissions with bloated,
+        repetitive, or pasted content are closed by the automated quality gate.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Alternatives considered
+      description: >
+        Workarounds you use today, or other designs you rejected, and why.
+    validations:
+      required: false

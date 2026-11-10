@@ -84,7 +84,7 @@ impl RulePushDownRankLimitAggregate {
         let agg = s_expr.unary_child();
         let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
 
-        let sort_items = agg_limit
+        let rank_items = agg_limit
             .group_items
             .iter()
             .map(|g| SortItem {
@@ -93,7 +93,10 @@ impl RulePushDownRankLimitAggregate {
                 nulls_first: false,
             })
             .collect::<Vec<_>>();
-        agg_limit.rank_limit = Some((sort_items, count));
+        // The scans below can prune by the runtime rank-limit boundary on the first key.
+        let aggregate_input = push_down_scan_order(agg.unary_child(), &rank_items)
+            .map_or_else(|| agg.unary_child_arc(), Arc::new);
+        agg_limit.rank_limit = Some((rank_items, count));
 
         let mut sort_items = Vec::new();
         for item in &agg_limit.group_items {
@@ -119,7 +122,7 @@ impl RulePushDownRankLimitAggregate {
             });
         }
 
-        let agg = agg.unary_child_arc().ref_build_unary(agg_limit);
+        let agg = aggregate_input.ref_build_unary(agg_limit);
         let mut result = if sort_items.is_empty() {
             s_expr.replace_children(vec![Arc::new(agg)])
         } else {
@@ -207,9 +210,9 @@ impl RulePushDownRankLimitAggregate {
 
         agg_limit.rank_limit = Some((sort_items.clone(), limit));
 
-        // A single group key also lets the scans below, including every branch
-        // of a UNION ALL, prune by the runtime rank-limit boundary.
-        let aggregate_input = (is_order_subset && sort_items.len() == 1)
+        // The group keys also let the scans below, including every branch of a
+        // UNION ALL, prune by the runtime rank-limit boundary on the first key.
+        let aggregate_input = is_order_subset
             .then(|| push_down_scan_order(agg_limit_expr.unary_child(), &sort_items))
             .flatten()
             .map_or_else(|| agg_limit_expr.unary_child_arc(), Arc::new);
