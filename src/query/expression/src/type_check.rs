@@ -1214,8 +1214,6 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast<'_> {
     }
 }
 
-/// Rewrite a LIKE pattern using `escape_char` into one using the default `\`.
-/// With a custom escape character, a bare `\` is a plain literal.
 pub fn convert_escape_pattern(pattern: &str, escape_char: char) -> String {
     let mut result = String::with_capacity(pattern.len() + 2);
     let mut chars = pattern.chars();

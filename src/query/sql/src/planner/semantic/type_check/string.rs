@@ -209,8 +209,6 @@ enum LikePatternKind {
     Other,
 }
 
-// Patterns containing `\` are left to the `like` function, which owns the
-// escape semantics (including the VARIANT traversal rule for escaped patterns).
 fn classify_like_pattern(like_str: &str) -> LikePatternKind {
     if like_str.is_empty() {
         return LikePatternKind::Const(String::new());
