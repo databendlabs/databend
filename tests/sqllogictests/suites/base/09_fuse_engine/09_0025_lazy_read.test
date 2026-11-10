@@ -184,5 +184,11 @@ select count(*) from (select _row_id, a from (select _row_id, a, b from t_lazy_r
 ----
 9
 
+# The reverse: `_row_id` added by the subquery's lazy materialization, bound by the outer query.
+query I
+select count(*) from (select _row_id, a from (select a from t_lazy_row_id where b > 0 limit 10))
+----
+9
+
 statement ok
 drop table t_lazy_row_id
