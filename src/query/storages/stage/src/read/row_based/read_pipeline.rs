@@ -22,23 +22,33 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::utils::sort_key_order::SortKeyEvaluator;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileCompression;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline::sources::PrefetchAsyncSourcer;
+use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_settings::Settings;
 use databend_common_storage::init_stage_operator;
 
 use crate::compression::get_compression_with_path;
 use crate::read::load_context::LoadContext;
+use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::format::create_row_based_file_format;
 use crate::read::row_based::processors::BlockBuilder;
 use crate::read::row_based::processors::BytesReader;
 use crate::read::row_based::processors::DecodingTransformer;
 use crate::read::row_based::processors::Decompressor;
 use crate::read::row_based::processors::Separator;
+use crate::read::row_based::processors::ordered::OrderedBatchStitcher;
+use crate::read::row_based::processors::ordered::OrderedBlockBuilder;
+use crate::read::row_based::processors::ordered::SeqAssigner;
 
 pub struct RowBasedReadPipelineBuilder<'a> {
     pub(crate) stage_table_info: &'a StageTableInfo,
@@ -144,6 +154,16 @@ impl RowBasedReadPipelineBuilder<'_> {
             }
         }
 
+        if let Some(sort_keys) = OrderedBlockBuilder::create_sort_key_evaluator(&load_ctx)? {
+            return Self::read_data_in_file_order(
+                pipeline,
+                load_ctx,
+                format,
+                sort_keys,
+                max_threads,
+            );
+        }
+
         pipeline.try_add_accumulating_transformer(|| {
             Separator::try_create(load_ctx.clone(), format.clone())
         })?;
@@ -154,6 +174,47 @@ impl RowBasedReadPipelineBuilder<'_> {
         pipeline
             .try_add_accumulating_transformer(|| BlockBuilder::create(load_ctx.clone(), &format))?;
 
+        Ok(())
+    }
+
+    /// `FILE_SORTED_BY`: decode batches in parallel, then stitch them back in file order, so
+    /// that each block holds a contiguous range of one file. See [`OrderedBatchStitcher`].
+    fn read_data_in_file_order(
+        pipeline: &mut Pipeline,
+        load_ctx: Arc<LoadContext>,
+        format: Arc<dyn RowBasedFileFormat>,
+        sort_keys: SortKeyEvaluator,
+        max_threads: usize,
+    ) -> Result<()> {
+        pipeline.try_add_accumulating_transformer(|| {
+            Separator::try_create(load_ctx.clone(), format.clone())
+                .map(Separator::with_file_end_marker)
+        })?;
+
+        pipeline.try_resize(1)?;
+        pipeline.add_transformer(SeqAssigner::create);
+        pipeline.try_resize(max_threads)?;
+        pipeline.try_add_transformer(|| {
+            OrderedBlockBuilder::try_create(load_ctx.clone(), &format, sort_keys.clone())
+        })?;
+
+        let inputs = (0..pipeline.output_len())
+            .map(|_| InputPort::create())
+            .collect::<Vec<_>>();
+        let output = OutputPort::create();
+        let stitcher = OrderedBatchStitcher::create(
+            inputs.clone(),
+            output.clone(),
+            load_ctx.block_compact_thresholds,
+        );
+        pipeline.add_pipe(Pipe::create(inputs.len(), 1, vec![PipeItem::create(
+            stitcher,
+            inputs,
+            vec![output],
+        )]));
+
+        pipeline.try_resize(max_threads)?;
+        pipeline.add_block_meta_transformer(|| TransformCompactBlock);
         Ok(())
     }
 }

@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::vec;
 
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
+use databend_common_expression::utils::sort_key_order::compare_sort_key_rows;
+use databend_common_expression::utils::sort_key_order::sample_rows;
 
 use crate::DataTypeFilter;
 use crate::rand_block_for_all_types;
@@ -238,4 +242,28 @@ fn sort_concat() {
             assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
+}
+
+#[test]
+fn test_sample_rows() {
+    assert_eq!(sample_rows(1, 4, 0), vec![0]);
+    assert_eq!(sample_rows(5, 4, 7), vec![0, 1, 2, 3, 4]);
+
+    for seed in 0..16 {
+        let rows = sample_rows(1000, 4, seed);
+        assert_eq!(rows.len(), 6);
+        assert_eq!(rows[0], 0);
+        assert_eq!(rows[5], 999);
+        assert!(rows.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+    assert_ne!(sample_rows(1000, 4, 1), sample_rows(1000, 4, 2));
+}
+
+#[test]
+fn test_compare_sort_key_rows_nulls_last() {
+    let one = vec![Scalar::Number(NumberScalar::Int32(1))];
+    let null = vec![Scalar::Null];
+    assert_eq!(compare_sort_key_rows(&one, &null), Ordering::Less);
+    assert_eq!(compare_sort_key_rows(&null, &one), Ordering::Greater);
+    assert_eq!(compare_sort_key_rows(&null, &null), Ordering::Equal);
 }

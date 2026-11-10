@@ -25,6 +25,7 @@ use crate::ast::CopyIntoTableOption;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
 use crate::ast::CopySchemaEvolutionOptions;
+use crate::ast::FileSortedBy;
 use crate::ast::Identifier;
 use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
@@ -222,6 +223,9 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             rule! { RETURN_FAILED_ONLY ~ "=" ~ #literal_bool },
             |(_, _, return_failed_only)| CopyIntoTableOption::ReturnFailedOnly(return_failed_only),
         ),
+        map(rule! { FILE_SORTED_BY ~ "=" ~ ^CLUSTER_KEY }, |_| {
+            CopyIntoTableOption::FileSortedBy(FileSortedBy::ClusterKey)
+        }),
         map_res(
             rule! { SCHEMA_EVOLUTION ~ "=" ~ "(" ~ #comma_separated_list0(schema_evolution_option) ~ ")" },
             |(_, _, _, opts, _)| {

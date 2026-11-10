@@ -193,6 +193,19 @@ impl FileFormatParams {
                 }
             }
         }
+        if options.file_sorted_by.is_some()
+            && !matches!(
+                self,
+                FileFormatParams::Csv(_)
+                    | FileFormatParams::NdJson(_)
+                    | FileFormatParams::Text(_)
+                    | FileFormatParams::Parquet(_)
+            )
+        {
+            return Err(ErrorCode::BadArguments(
+                "FILE_SORTED_BY only supports CSV, NDJSON, TEXT and PARQUET files for now.",
+            ));
+        }
         Ok(())
     }
 
