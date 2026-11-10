@@ -117,7 +117,31 @@ impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
     }
 }
 
+/// Cross joins, and Inner joins without equi keys, have nothing to hash: the
+/// probe streams every build/probe pair through the Cross cursor, filtered by
+/// the non-equi conditions. A rewritten scalar subquery keeps the Inner hash
+/// join for its single-row check.
+pub(crate) fn probes_all_pairs(
+    join_type: JoinType,
+    has_keys: bool,
+    single_to_inner: Option<JoinType>,
+) -> bool {
+    match join_type {
+        JoinType::Cross => true,
+        JoinType::Inner => !has_keys && single_to_inner.is_none(),
+        _ => false,
+    }
+}
+
 impl HashJoinDesc {
+    pub(crate) fn probes_all_pairs(&self) -> bool {
+        probes_all_pairs(
+            self.join_type,
+            !self.build_keys.is_empty(),
+            self.single_to_inner,
+        )
+    }
+
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
         let other_predicate = Self::join_predicate(&join.join_type, &join.non_equi_conditions)?;
 
@@ -344,4 +368,22 @@ pub struct NestedLoopDesc {
     pub projections: BTreeSet<usize>,
     pub field_reorder: Option<Vec<FieldIndex>>,
     pub nested_loop_join_threshold: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn joins_without_keys_probe_all_pairs() {
+        assert!(probes_all_pairs(JoinType::Cross, false, None));
+        assert!(probes_all_pairs(JoinType::Inner, false, None));
+        assert!(!probes_all_pairs(JoinType::Inner, true, None));
+        assert!(!probes_all_pairs(
+            JoinType::Inner,
+            false,
+            Some(JoinType::LeftSingle)
+        ));
+        assert!(!probes_all_pairs(JoinType::Left, false, None));
+    }
 }

@@ -1,0 +1,196 @@
+# Cross joins, and Inner joins without equi keys, stream all pairs through the
+# legacy executor's Cross cursor. Exercise bounded batches and replay with
+# duplicate/NULL rows, predicate-only columns, and completely pruned inputs.
+
+statement ok
+set max_block_size = 3;
+
+statement ok
+set max_threads = 2;
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+create or replace table cross_streaming_l(k int, payload string);
+
+statement ok
+insert into cross_streaming_l values (0, 'zero'), (1, 'one'), (1, 'one-again'), (null, 'null');
+
+statement ok
+create or replace table cross_streaming_r(k int, payload string);
+
+statement ok
+insert into cross_streaming_r values (0, 'zero'), (2, 'two'), (null, 'null');
+
+query III
+select count(*), count(l.k), count(r.k) from cross_streaming_l l cross join cross_streaming_r r;
+----
+12 9 8
+
+# One probe row must also be able to walk a larger build block incrementally.
+query I
+select count(*) from (select * from cross_streaming_l where k = 0) l cross join cross_streaming_r r;
+----
+3
+
+# The mixed-side expression intentionally remains above Cross in today's planner.
+query I
+select count(*) from cross_streaming_l l cross join cross_streaming_r r
+where coalesce(l.k, 10) + coalesce(r.k, 20) = 3;
+----
+2
+
+# A small probe reuses the same build window without expanding its constant
+# payload. Compare every row, including duplicate probe keys and a NULL build key.
+statement ok
+set max_block_size = 16;
+
+query TI
+select l.payload, coalesce(r.k, -1) from cross_streaming_l l cross join cross_streaming_r r
+where l.k = 1 order by 1, 2;
+----
+one -1
+one 0
+one 2
+one-again -1
+one-again 0
+one-again 2
+
+# `<>` is neither an equi nor a range condition, so this Inner join has no
+# keys: it streams all pairs like a Cross join, filtered by the condition.
+query TT
+select l.payload, r.payload from cross_streaming_l l join cross_streaming_r r on l.k <> r.k
+order by 1, 2;
+----
+one two
+one zero
+one-again two
+one-again zero
+zero two
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 0;
+
+statement ok
+set force_join_data_spill = 1;
+
+# Check the complete bag, not just count: replay must neither lose nor repeat pairs.
+query II
+select coalesce(l.k, -1), coalesce(r.k, -1) from cross_streaming_l l cross join cross_streaming_r r
+order by 1, 2;
+----
+-1 -1
+-1 0
+-1 2
+0 -1
+0 0
+0 2
+1 -1
+1 -1
+1 0
+1 0
+1 2
+1 2
+
+query I
+select count(*) from cross_streaming_l l cross join cross_streaming_r r;
+----
+12
+
+# Either original side can be completely pruned. The planner makes it the
+# counting build, which never spills; the payload side stays streaming.
+query I
+select coalesce(r.k, -1) from numbers(2) l cross join cross_streaming_r r order by 1;
+----
+-1
+-1
+0
+0
+2
+2
+
+query I
+select coalesce(l.k, -1) from cross_streaming_r l cross join numbers(2) r order by 1;
+----
+-1
+-1
+0
+0
+2
+2
+
+query I
+select count(*) from cross_streaming_l l cross join cross_streaming_r r
+where coalesce(l.k, 10) + coalesce(r.k, 20) = 3;
+----
+2
+
+query TI
+select l.payload, coalesce(r.k, -1) from cross_streaming_l l cross join cross_streaming_r r
+where l.k = 1 order by 1, 2;
+----
+one -1
+one 0
+one 2
+one-again -1
+one-again 0
+one-again 2
+
+# `<>` is neither an equi nor a range condition, so this Inner join has no
+# keys: it streams all pairs like a Cross join, filtered by the condition.
+query TT
+select l.payload, r.payload from cross_streaming_l l join cross_streaming_r r on l.k <> r.k
+order by 1, 2;
+----
+one two
+one zero
+one-again two
+one-again zero
+zero two
+
+# Downstream may finish with an active cursor, including while replay is enabled.
+query I
+select count(*) from (select l.payload, r.payload from cross_streaming_l l cross join cross_streaming_r r limit 1);
+----
+1
+
+# Empty build/probe must not leave a pending Cross cursor.
+query I
+select count(*) from cross_streaming_l l cross join (select * from cross_streaming_r where k = 100) r;
+----
+0
+
+query I
+select count(*) from (select * from cross_streaming_l where k = 100) l cross join cross_streaming_r r;
+----
+0
+
+# One worker must replay every probe file against every build round, not just
+# the first file. Keep both payload columns so neither side becomes a row count.
+statement ok
+set max_threads = 1;
+
+statement ok
+set max_block_size = 3;
+
+query III
+select count(*), sum(a.number), sum(b.number)
+from numbers(31) a cross join numbers(37) b;
+----
+1147 17205 20646
+
+query III
+select count(*), sum(a.number), sum(b.number)
+from numbers(31) a join numbers(37) b on a.number <> b.number;
+----
+1116 16740 20181
+
+statement ok
+unset (force_join_data_spill, join_spilling_buffer_threshold_per_proc_mb, max_block_size, max_threads, disable_join_reorder);
+
+statement ok
+drop table cross_streaming_l;
+
+statement ok
+drop table cross_streaming_r;

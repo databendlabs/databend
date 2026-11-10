@@ -21,3 +21,5 @@ mod left_semi_join;
 mod right_join;
 mod right_mark_join;
 mod right_semi_anti_join;
+
+pub(super) use cross_join::CrossJoinProbe;

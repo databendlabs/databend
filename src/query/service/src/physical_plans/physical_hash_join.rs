@@ -74,6 +74,7 @@ use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
+use crate::pipelines::processors::transforms::probes_all_pairs;
 use crate::sessions::QueryContext;
 
 // Type aliases to simplify complex return types
@@ -283,7 +284,9 @@ impl IPhysicalPlan for HashJoin {
         let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
         let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
 
+        // Joins without anything to hash stream all pairs on this executor.
         if desc.single_to_inner.is_none()
+            && !desc.probes_all_pairs()
             && matches!(
                 self.join_type,
                 JoinType::Inner
@@ -324,6 +327,30 @@ impl IPhysicalPlan for HashJoin {
 }
 
 impl HashJoin {
+    /// When the probe streams all pairs, a side without required columns
+    /// contributes only its row count, which the build side keeps without
+    /// retaining or spilling any block. Build it from that side. The
+    /// zero-column side occupies no projected positions, so join conditions
+    /// and the output keep the same column offsets.
+    fn build_zero_column_side(&mut self) {
+        // Merge into and build-side caches consume the build state of the
+        // side the planner chose.
+        if !probes_all_pairs(
+            self.join_type,
+            !self.build_keys.is_empty(),
+            self.single_to_inner,
+        ) || !self.probe_projections.is_empty()
+            || self.build_projections.is_empty()
+            || self.need_hold_hash_table
+            || self.build_side_cache_info.is_some()
+        {
+            return;
+        }
+        debug_assert!(self.build_keys.is_empty() && self.probe_to_build.is_empty());
+        std::mem::swap(&mut self.probe, &mut self.build);
+        std::mem::swap(&mut self.probe_projections, &mut self.build_projections);
+    }
+
     fn build_state(&self, builder: &mut PipelineBuilder) -> Result<Arc<HashJoinState>> {
         let (enable_optimization, is_distributed) = builder.merge_into_get_optimization_flag(self);
         HashJoinState::try_create(
@@ -1379,7 +1406,7 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-        Ok(PhysicalPlan::new(HashJoin {
+        let mut hash_join = HashJoin {
             projections,
             build_projections,
             probe_projections,
@@ -1402,7 +1429,9 @@ impl PhysicalPlanBuilder {
             runtime_filter,
             broadcast_id,
             nested_loop_filter,
-        }))
+        };
+        hash_join.build_zero_column_side();
+        Ok(PhysicalPlan::new(hash_join))
     }
 }
 
@@ -1418,9 +1447,99 @@ mod tests {
     use databend_common_sql::plans::JoinEquiCondition;
 
     use super::*;
+    use crate::physical_plans::ConstantTableScan;
 
     fn int64_type() -> DataType {
         DataType::Number(NumberDataType::Int64)
+    }
+
+    fn cross_join(probe_projections: BTreeSet<usize>) -> HashJoin {
+        let scan = |name: &str| {
+            PhysicalPlan::new(ConstantTableScan {
+                meta: PhysicalPlanMeta::new("ConstantTableScan"),
+                values: vec![],
+                num_rows: 0,
+                output_schema: DataSchemaRefExt::create(vec![DataField::new(name, int64_type())]),
+            })
+        };
+        HashJoin {
+            meta: PhysicalPlanMeta::new("HashJoin"),
+            projections: BTreeSet::from([0]),
+            probe_projections,
+            build_projections: BTreeSet::from([0]),
+            build: scan("build"),
+            probe: scan("probe"),
+            build_keys: vec![],
+            probe_keys: vec![],
+            is_null_equal: vec![],
+            non_equi_conditions: vec![],
+            join_type: JoinType::Cross,
+            marker_index: None,
+            from_correlated_subquery: false,
+            probe_to_build: vec![],
+            output_schema: DataSchemaRefExt::create(vec![DataField::new("build", int64_type())]),
+            need_hold_hash_table: false,
+            stat_info: None,
+            single_to_inner: None,
+            build_side_cache_info: None,
+            runtime_filter: Default::default(),
+            broadcast_id: None,
+            nested_loop_filter: None,
+        }
+    }
+
+    fn build_side(join: &HashJoin) -> Result<String> {
+        Ok(join.build.output_schema()?.field(0).name().clone())
+    }
+
+    // Inner joins that keep their hash join execution.
+    fn hash_table_variants() -> [fn(&mut HashJoin); 4] {
+        [
+            |join| {
+                let key = RemoteExpr::ColumnRef {
+                    span: None,
+                    id: 0,
+                    data_type: int64_type(),
+                    display_name: "key".to_string(),
+                };
+                join.probe_keys = vec![key.clone()];
+                join.build_keys = vec![key];
+            },
+            |join| join.single_to_inner = Some(JoinType::LeftSingle),
+            |join| join.need_hold_hash_table = true,
+            |join| join.build_side_cache_info = Some((0, HashMap::new())),
+        ]
+    }
+
+    #[test]
+    fn zero_column_side_becomes_build() -> Result<()> {
+        for join_type in [JoinType::Cross, JoinType::Inner] {
+            let mut join = cross_join(BTreeSet::new());
+            join.join_type = join_type;
+            join.build_zero_column_side();
+            assert_eq!(build_side(&join)?, "probe");
+            assert_eq!(join.join_type, join_type);
+            assert_eq!(join.probe_projections, BTreeSet::from([0]));
+            assert!(join.build_projections.is_empty());
+        }
+
+        let mut join = cross_join(BTreeSet::from([0]));
+        join.build_zero_column_side();
+        assert_eq!(build_side(&join)?, "build");
+
+        let mut join = cross_join(BTreeSet::new());
+        join.need_hold_hash_table = true;
+        join.build_zero_column_side();
+        assert_eq!(build_side(&join)?, "build");
+
+        for variant in hash_table_variants() {
+            let mut join = cross_join(BTreeSet::new());
+            join.join_type = JoinType::Inner;
+            variant(&mut join);
+            join.build_zero_column_side();
+            assert_eq!(build_side(&join)?, "build");
+        }
+        Ok(())
     }
 
     fn typed_column(index: usize, data_type: DataType) -> ScalarExpr {
