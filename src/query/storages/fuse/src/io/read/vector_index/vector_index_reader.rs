@@ -16,9 +16,11 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use bytes::Bytes;
 use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::Fp16QueryScorer;
 use databend_storages_common_index::HNSWIndex;
@@ -47,6 +49,7 @@ impl VectorIndexReader {
     pub fn create(
         operator: Operator,
         settings: ReadSettings,
+        policy: CachePolicy,
         distance_type: DistanceType,
         query_values: Vec<f32>,
         identity: VectorIndexIdentity,
@@ -58,8 +61,14 @@ impl VectorIndexReader {
             .refine_factor
             .map(|_| Arc::new(Fp16QueryScorer::new(query_values.clone(), distance_type)));
         let query_values = HNSWIndex::preprocess_query(distance_type, query_values);
-        let loader =
-            VectorIndexLoader::new(operator.clone(), settings, distance_type, dim, identity);
+        let loader = VectorIndexLoader::new(
+            operator.clone(),
+            settings,
+            policy,
+            distance_type,
+            dim,
+            identity,
+        );
         Self {
             loader,
             query_values,
@@ -104,8 +113,8 @@ impl VectorIndexReader {
     }
 
     /// FP16 scores of every valid row, for paths that output the scores of all rows
-    /// with refinement enabled. Reads the whole FP16 data of the block in one
-    /// request, bypassing the refine data cache.
+    /// with refinement enabled. Reads the whole FP16 data of the block page by page
+    /// (`RefineData::read_all`), bypassing the memory cache of refine pages.
     #[fastrace::trace]
     pub async fn generate_refined_scores(
         &self,
@@ -121,12 +130,22 @@ impl VectorIndexReader {
         }
         let start = Instant::now();
         let (scorer, refine) = self.open_refine(row_count, location).await?;
-        let data = refine.read_all(&self.settings).await?;
-        let scores = scorer.score_page(&data, 0, &offsets)?;
+        let pages = refine.read_all(&self.settings).await?;
+        // `offsets` ascend: each page scores the run of them in its rows.
+        let mut scores = Vec::with_capacity(offsets.len());
+        let mut rest = offsets.as_slice();
+        for (ordinal, page) in pages.iter().enumerate() {
+            let rows = refine.page_row_range(ordinal)?;
+            let len = rest.partition_point(|&offset| (offset as u64) < rows.end);
+            let (in_page, after) = rest.split_at(len);
+            scores.extend(scorer.score_page(page, rows.start as usize, in_page)?);
+            rest = after;
+        }
         debug!(
-            "Vector FP16 full read: rows={}, bytes={}, elapsed_ms={}",
+            "Vector FP16 full read: rows={}, pages={}, bytes={}, elapsed_ms={}",
             offsets.len(),
-            data.len(),
+            pages.len(),
+            pages.iter().map(Bytes::len).sum::<usize>(),
             start.elapsed().as_millis()
         );
         Ok(scores)
@@ -142,8 +161,14 @@ impl VectorIndexReader {
             .refine_scorer
             .as_deref()
             .ok_or_else(|| ErrorCode::BadArguments("FP16 refinement is not enabled"))?;
-        let refine =
-            RefineData::open(&self.operator, location, self.loader.identity(), row_count).await?;
+        let refine = RefineData::open(
+            &self.operator,
+            location,
+            self.loader.identity(),
+            row_count,
+            self.loader.policy(),
+        )
+        .await?;
         if refine.dimension != scorer.dimension() {
             return Err(ErrorCode::StorageOther("FP16 bundle dimension mismatch"));
         }
@@ -220,6 +245,7 @@ mod tests {
                 max_range_size: 1024 * 1024,
                 parquet_fast_read_bytes: 0,
             },
+            CachePolicy::DEFAULT,
             DistanceType::L2,
             vec![1.0; DIM],
             VectorIndexIdentity {
@@ -310,7 +336,8 @@ mod tests {
             max_range_size: 1024 * 1024,
             parquet_fast_read_bytes: 0,
         };
-        let mut refine = RefineData::open(&operator, &location, &identity, ROWS).await?;
+        let mut refine =
+            RefineData::open(&operator, &location, &identity, ROWS, CachePolicy::DEFAULT).await?;
         let whole = refine.read_pages(&settings, &[0]).await?.remove(0);
         assert_eq!(whole.len(), ROWS * DIM * 2);
 

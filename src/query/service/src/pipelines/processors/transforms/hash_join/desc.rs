@@ -20,6 +20,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
@@ -219,11 +220,15 @@ impl HashJoinDesc {
     pub fn probe_key(&self, block: &DataBlock, ctx: &FunctionContext) -> Result<Vec<BlockEntry>> {
         let build_keys = &self.probe_keys;
         let evaluator = Evaluator::new(block, ctx, &BUILTIN_FUNCTIONS);
+        // A single string key is serialized by `HashMethodSerializer`, which probes a dictionary
+        // encoded key once per dictionary value (see `SerializerHashJoinHashTable::probe`).
+        let keep_encoded = matches!(build_keys.as_slice(), [expr] if expr.data_type().remove_nullable().is_string());
         build_keys
             .iter()
             .map(|expr| {
                 Ok(evaluator
-                    .run(expr)?
+                    .partial_run(expr, None, &mut EvaluateOptions::default(), keep_encoded)
+                    .map_err(|err| Evaluator::map_err(err, expr))?
                     .convert_to_full_column(expr.data_type(), block.num_rows())
                     .into())
             })

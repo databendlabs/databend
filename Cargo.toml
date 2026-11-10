@@ -176,6 +176,7 @@ anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.21.0", features = ["snappy", "zstandard", "xz", "bzip"] }
 approx = "0.5.1"
+argminmax = { version = "0.7.1", default-features = false, features = ["float"] }
 arrow = { version = "58.4.0" }
 arrow-array = { version = "58.4.0" }
 arrow-buffer = { version = "58.4.0" }
@@ -190,7 +191,7 @@ arrow-select = { version = "58.4.0" }
 # `javascript-runtime` rather than `javascript`: the latter also pulls in `javascript-fetch`,
 # which requires reqwest (with native-tls by default) for a `fetch()` API we never enable —
 # `Runtime::enable_fetch()` is not called anywhere.
-arrow-udf-python-worker = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "83f98e348881e427df97301ffa1a05fbf9fba52b" }
+arrow-udf-python-worker = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "6a49de9d03e85722313f32b202edddb2456ca865" }
 arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript-runtime", "wasm"] }
 async-backtrace = "0.2"
 async-channel = "2.3.1"
@@ -293,6 +294,7 @@ hex = "0.4.3"
 hickory-resolver = "0.25"
 hmac = "0.12.1"
 http = "1"
+http-body-util = "0.1"
 humantime = "2.1.0"
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
@@ -344,7 +346,6 @@ md-5 = "0.10.5"
 memchr = { version = "2", default-features = false }
 micromarshal = "0.7.0"
 mlua = { version = "0.11", features = ["lua54", "vendored", "async", "serialize"] }
-mockall = "0.11.2"
 mysql_async = { version = "0.37.1", default-features = false, features = [
     "minimal-rust",
     "rustls-tls",
@@ -499,7 +500,7 @@ wkt = "0.14.0"
 xorf = "0.12.0"
 xorfilter-rs = { version = "0.5", features = ["cbordata"] }
 zerocopy = { version = "0.8.26", features = ["derive"] }
-zip = { version = "4.6.1", default-features = false, features = [
+zip = { version = "9.0.1", default-features = false, features = [
     "aes-crypto",
     "bzip2",
     "deflate",
@@ -639,7 +640,7 @@ arrow-select = { version = "=58.4.0" }
 
 [patch.crates-io]
 # Kept from main: crates.io 0.8.0 does not resolve here (pyo3 0.24 vs bendpy's 0.28).
-arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "83f98e348881e427df97301ffa1a05fbf9fba52b" }
+arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "6a49de9d03e85722313f32b202edddb2456ca865" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }

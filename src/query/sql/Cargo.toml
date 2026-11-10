@@ -84,15 +84,9 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression-test-support = { workspace = true }
-databend-common-grpc = { workspace = true }
-databend-common-io = { workspace = true }
-databend-common-meta-store = { workspace = true }
 databend-common-sql-test-support = { workspace = true }
-databend-meta-runtime = { workspace = true }
-databend-storages-common-session = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
-jwt-simple = { workspace = true }
 proptest = { workspace = true }
 serde_yaml = { workspace = true }
 

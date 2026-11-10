@@ -22,6 +22,19 @@ use databend_common_sql::parse_computed_expr;
 
 use crate::sessions::TableContext;
 
+/// Check table identity before planning or executing automatic maintenance.
+pub(crate) fn check_expected_table_id(actual_id: u64, expected_id: Option<u64>) -> Result<()> {
+    if let Some(expected_id) = expected_id {
+        if actual_id != expected_id {
+            return Err(ErrorCode::InvalidOperation(format!(
+                "Maintenance target changed: expected table id {}, found table id {}",
+                expected_id, actual_id,
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn check_referenced_computed_columns(
     ctx: Arc<dyn TableContext>,
     schema: DataSchemaRef,

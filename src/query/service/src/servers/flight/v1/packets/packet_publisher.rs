@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::runtime::PerfConfig;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
@@ -41,6 +42,7 @@ use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextQueryIdentity;
 
@@ -168,6 +170,10 @@ pub struct QueryEnv {
     #[serde(default)]
     pub perf_config: PerfConfig,
     pub user: UserInfo,
+    /// What the statement's reads may do with the caches, on every node: maintenance
+    /// statements bypass the disk cache (`TableContextCachePolicy`).
+    #[serde(default)]
+    pub cache_policy: CachePolicy,
 }
 
 impl QueryEnv {
@@ -213,6 +219,7 @@ impl QueryEnv {
 
         query_ctx.update_init_query_id(self.query_id.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());
+        query_ctx.set_cache_policy(self.cache_policy);
 
         Ok(query_ctx)
     }

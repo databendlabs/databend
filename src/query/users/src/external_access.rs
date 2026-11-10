@@ -236,13 +236,43 @@ impl UserApiProvider {
         address: &str,
         integrations: &[String],
     ) -> Result<()> {
+        let url = Url::parse(address).map_err(|e| ErrorCode::InvalidArgument(e.to_string()))?;
+        let target = endpoint(&url)?;
+        let mut allowed = false;
+        self.external_access_targets(tenant, integrations, |candidate| {
+            allowed |= candidate == target
+        })
+        .await?;
+        if !allowed {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "UDF server address '{address}' is not allowed by external access integrations"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Resolve enabled bindings for Script UDF creation and connection checks.
+    /// Callers enforce CREATE/ALTER and integration USAGE before persisting them.
+    pub async fn validate_external_access_bindings(
+        &self,
+        tenant: &Tenant,
+        integrations: &[String],
+    ) -> Result<()> {
+        self.external_access_targets(tenant, integrations, |_| {})
+            .await
+    }
+
+    async fn external_access_targets(
+        &self,
+        tenant: &Tenant,
+        integrations: &[String],
+        mut visit: impl FnMut((String, u16)) + Send,
+    ) -> Result<()> {
         if integrations.is_empty() {
             return Err(ErrorCode::InvalidArgument(
                 "Expected at least one external access integration",
             ));
         }
-        let url = Url::parse(address).map_err(|e| ErrorCode::InvalidArgument(e.to_string()))?;
-        let target = endpoint(&url)?;
         let integrations = integrations.iter().collect::<BTreeSet<_>>();
         let keys = integrations
             .iter()
@@ -271,18 +301,12 @@ impl UserApiProvider {
         let values = self
             .external_access_values(tenant, &self.network_rule_cache, keys)
             .await?;
-        let mut allowed = false;
         for value in values.into_iter().flatten() {
             let rule = decode_pb::<NetworkRule>(&value.data)
                 .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
             for value in &rule.value_list {
-                allowed |= network_rule_endpoint(value)? == target;
+                visit(network_rule_endpoint(value)?);
             }
-        }
-        if !allowed {
-            return Err(ErrorCode::PermissionDenied(format!(
-                "UDF server address '{address}' is not allowed by external access integrations"
-            )));
         }
         Ok(())
     }

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use opendal::Operator;
 
@@ -31,12 +32,18 @@ pub struct SpatialIndexReadResult {
 pub struct SpatialIndexReader {
     operator: Operator,
     settings: ReadSettings,
+    policy: CachePolicy,
     column_id_to_index: HashMap<ColumnId, usize>,
     column_names: Vec<String>,
 }
 
 impl SpatialIndexReader {
-    pub fn create(operator: Operator, settings: ReadSettings, column_ids: Vec<ColumnId>) -> Self {
+    pub fn create(
+        operator: Operator,
+        settings: ReadSettings,
+        policy: CachePolicy,
+        column_ids: Vec<ColumnId>,
+    ) -> Self {
         let mut column_id_to_index = HashMap::with_capacity(column_ids.len());
         let mut column_names = Vec::with_capacity(column_ids.len() * 2);
         for column_id in &column_ids {
@@ -47,6 +54,7 @@ impl SpatialIndexReader {
         Self {
             operator,
             settings,
+            policy,
             column_id_to_index,
             column_names,
         }
@@ -58,6 +66,7 @@ impl SpatialIndexReader {
             &self.settings,
             &self.column_names,
             location,
+            self.policy,
         )
         .await?;
 

@@ -186,7 +186,7 @@ pub fn build_virtual_segment_schema(
                 drafts.push(Some(draft));
             }
             VirtualBlockInput::Existing { schema } => {
-                input_schemas.push(schema.map(Arc::unwrap_or_clone));
+                input_schemas.push(schema);
                 drafts.push(None);
             }
         }

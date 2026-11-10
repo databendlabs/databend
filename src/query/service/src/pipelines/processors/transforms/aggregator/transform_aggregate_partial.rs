@@ -66,8 +66,11 @@ pub fn parse_partial_aggregate_mode(mode: &str) -> Result<PartialAggregateMode> 
 /// input blocks are forwarded unchanged as raw rows for the final aggregate to aggregate. The
 /// partial aggregate never spills: the state bounds the table and the final aggregate spills.
 pub struct TransformPartialAggregate {
-    /// Taken out when the input ends.
+    /// Created on the first rows to aggregate, so that the processors of a scan pruned to zero
+    /// rows (or in bypass) do not each pay for a table while the pipeline is being built. Taken
+    /// out when the input ends.
     table: Option<AggregateHashTable>,
+    config: HashTableConfig,
     probe_state: ProbeState,
     params: Arc<AggregatorParams>,
     statistics: AggregationStatistics,
@@ -116,18 +119,12 @@ impl TransformPartialAggregate {
         mode: PartialAggregateMode,
         max_table_bytes: usize,
     ) -> Result<Box<dyn Processor>> {
-        let table = AggregateHashTable::new(
-            params.group_data_types.clone(),
-            params.aggregate_functions.clone(),
-            config,
-            Arc::new(Bump::new()),
-        );
-
         Ok(AccumulatingTransformer::create(
             input,
             output,
             TransformPartialAggregate {
-                table: Some(table),
+                table: None,
+                config,
                 probe_state: ProbeState::default(),
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
                 statistics: AggregationStatistics::new("PartialAggregate"),
@@ -189,9 +186,15 @@ impl TransformPartialAggregate {
         let group_columns = ProjectedBlock::project(&self.params.group_columns, block);
         let params_columns =
             Self::aggregate_arguments(block, &self.params.aggregate_functions_arguments);
-        let Some(table) = self.table.as_mut() else {
-            unreachable!("[TRANSFORM-AGGREGATOR] Partial table already taken")
-        };
+        let (params, config) = (&self.params, &self.config);
+        let table = self.table.get_or_insert_with(|| {
+            AggregateHashTable::new(
+                params.group_data_types.clone(),
+                params.aggregate_functions.clone(),
+                config.clone(),
+                Arc::new(Bump::new()),
+            )
+        });
         let capacity = self.state.capacity();
         let stats = self.memory.track(|| {
             table.add_groups_partial(
@@ -289,13 +292,13 @@ impl AccumulatingTransform for TransformPartialAggregate {
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
-        let Some(table) = self.table.take() else {
-            return Ok(vec![]);
-        };
-        self.statistics.log_partial_finish_statistics(
-            self.output_rows + table.len(),
-            table.hash_index_resize_count(),
-        );
+        // No table means no rows were aggregated: they were bypassed, or there were none.
+        let table = self.table.take();
+        let (table_rows, hash_index_resizes) = table.as_ref().map_or((0, 0), |table| {
+            (table.len(), table.hash_index_resize_count())
+        });
+        self.statistics
+            .log_partial_finish_statistics(self.output_rows + table_rows, hash_index_resizes);
         let total = &self.total;
         log::info!(
             "[PartialAggregate] Adaptive: final_state={:?}, rows={}, new_groups={}, windows={}, emits={:?}, group_bytes={}",
@@ -306,9 +309,100 @@ impl AccumulatingTransform for TransformPartialAggregate {
             self.emits,
             Self::group_bytes(&self.memory, total),
         );
-        if !output {
-            return Ok(vec![]);
+        match table {
+            Some(table) if output => Ok(self.emit(table.payload)),
+            _ => Ok(vec![]),
         }
-        Ok(self.emit(table.payload))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::BlockMetaInfoDowncast;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::UInt64Type;
+
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    // Boxed like in the pipeline: the probe state alone is about 100KB, too large to
+    // keep several transforms in the test future on the test thread's stack.
+    fn create_transform(ctx: &Arc<QueryContext>) -> Result<Box<TransformPartialAggregate>> {
+        let key_type = DataType::Number(NumberDataType::UInt64);
+        let params = AggregatorParams::try_create(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "key",
+                key_type.clone(),
+            )])),
+            vec![key_type],
+            &[0],
+            &[],
+            &[],
+            false,
+            1024,
+            1024 * 1024,
+        )?;
+        Ok(Box::new(TransformPartialAggregate {
+            table: None,
+            config: HashTableConfig::partial_aggregate(),
+            probe_state: ProbeState::default(),
+            params,
+            statistics: AggregationStatistics::new("PartialAggregate"),
+            settings: MemorySettings::from_aggregate_settings(ctx)?,
+            state: PartialState::new(PartialAggregateMode::Auto),
+            max_table_bytes: 64 * 1024 * 1024,
+            memory: MemoryMeter::default(),
+            output_rows: 0,
+            total: PartialAddStats::default(),
+            emits: EmitCounts::default(),
+        }))
+    }
+
+    fn output_rows(blocks: &[DataBlock]) -> usize {
+        blocks
+            .iter()
+            .map(|block| {
+                let meta = block.get_meta().and_then(AggregateMeta::downcast_ref_from);
+                let Some(AggregateMeta::Partitioned {
+                    data: PartitionedData::AggregatePayload(payloads),
+                    ..
+                }) = meta
+                else {
+                    unreachable!("partial aggregate only outputs aggregate payloads here")
+                };
+                payloads.iter().map(|p| p.payload.len()).sum::<usize>()
+            })
+            .sum()
+    }
+
+    // The hash table is created on the first rows to aggregate, not before.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_partial_aggregate_creates_table_on_first_rows() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        let mut transform = create_transform(&ctx)?;
+        assert!(transform.table.is_none());
+        assert!(transform.on_finish(true)?.is_empty());
+
+        // An empty block aggregates nothing and creates no table.
+        let mut transform = create_transform(&ctx)?;
+        let empty = DataBlock::new_from_columns(vec![UInt64Type::from_data(Vec::<u64>::new())]);
+        assert!(transform.transform(empty)?.is_empty());
+        assert!(transform.table.is_none());
+        assert!(transform.on_finish(true)?.is_empty());
+
+        let mut transform = create_transform(&ctx)?;
+        let rows = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![1, 2, 2, 3])]);
+        assert!(transform.transform(rows)?.is_empty());
+        assert!(transform.table.is_some());
+        let blocks = transform.on_finish(true)?;
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(output_rows(&blocks), 3);
+        Ok(())
     }
 }

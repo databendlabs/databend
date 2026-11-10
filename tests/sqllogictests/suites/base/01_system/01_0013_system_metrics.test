@@ -44,6 +44,16 @@ SELECT sum(to_int32(to_float32(value) > 5)) > 1 FROM system.metrics where metric
 ----
 1
 
+query B
+SELECT count() > 0 FROM system.metrics WHERE metric = 'cache_enabled' AND kind = 'gauge'
+----
+1
+
+query B
+SELECT count() > 0 FROM system.metrics WHERE metric = 'cache_items' AND labels LIKE '%"cache_name":"memory_cache_table_snapshot"%'
+----
+1
+
 onlyif mysql
 statement ok
 truncate table system.metrics

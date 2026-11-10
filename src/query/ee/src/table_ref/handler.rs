@@ -24,9 +24,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::TableLvtCheck;
-use databend_common_sql::plans::CreateTableBranchPlan;
 use databend_common_sql::plans::CreateTableTagPlan;
-use databend_common_sql::plans::DropTableBranchPlan;
 use databend_common_sql::plans::DropTableTagPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::check_table_ref_access;
@@ -37,21 +35,8 @@ use databend_storages_common_table_meta::meta::is_uuid_v7;
 
 pub struct RealTableRefHandler {}
 
-const LEGACY_TABLE_REF_HANDLER_MESSAGE: &str = "Legacy experimental table refs were removed; binder should reject CREATE/DROP BRANCH|TAG before execution";
-
 #[async_trait::async_trait]
 impl TableRefHandler for RealTableRefHandler {
-    #[async_backtrace::framed]
-    async fn do_create_table_branch(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _plan: &CreateTableBranchPlan,
-    ) -> Result<()> {
-        // Keep this placeholder for the upcoming table-ref redesign. The legacy
-        // implementation has been removed, so reaching this handler is unexpected.
-        Err(ErrorCode::Unimplemented(LEGACY_TABLE_REF_HANDLER_MESSAGE))
-    }
-
     #[async_backtrace::framed]
     async fn do_create_table_tag(
         &self,
@@ -119,15 +104,6 @@ impl TableRefHandler for RealTableRefHandler {
                 },
             })
             .await
-    }
-
-    #[async_backtrace::framed]
-    async fn do_drop_table_branch(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _plan: &DropTableBranchPlan,
-    ) -> Result<()> {
-        Err(ErrorCode::Unimplemented(LEGACY_TABLE_REF_HANDLER_MESSAGE))
     }
 
     #[async_backtrace::framed]

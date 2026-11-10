@@ -21,6 +21,7 @@ use databend_common_expression::ColumnId;
 use opendal::Buffer;
 
 type ChunkIndex = usize;
+#[derive(Clone)]
 pub struct OwnerMemory {
     pub chunks: HashMap<ChunkIndex, Buffer>,
 }
@@ -42,6 +43,8 @@ impl OwnerMemory {
     }
 }
 
+/// Cheap to clone: the chunks are shared buffers.
+#[derive(Clone)]
 pub struct MergeIOReadResult {
     pub block_path: String,
     pub columns_chunk_offsets: HashMap<ColumnId, (ChunkIndex, Range<usize>)>,

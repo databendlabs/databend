@@ -62,6 +62,7 @@ use crate::ViewLineageSourceColumn;
 use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
+use crate::binder::ViewIdent;
 use crate::binder::ddl::materialized_view::find_materialized_view_aggregate;
 use crate::binder::lineage_enabled;
 use crate::optimizer::ir::SExpr;
@@ -565,7 +566,6 @@ impl Binder {
             catalog_name.to_string(),
             database.to_string(),
             table_meta,
-            None,
             table_name_alias,
             !bind_context.binding_views.is_empty(),
             false,
@@ -673,7 +673,22 @@ impl Binder {
         .with_subquery_executor(self.subquery_executor.clone());
         let mut definition_context = BindContext::new();
         definition_context.binding_depth = bind_context.next_depth()?;
-        let (definition_expr, _) = definition_binder.bind_query(&mut definition_context, &query)?;
+        // The persisted definition names the source captured by CREATE. A missing database or
+        // table means the source was dropped, renamed, or replaced, which REFRESH also reports as
+        // InvalidMaterializedView. Other errors keep their original code.
+        let (definition_expr, _) = definition_binder
+            .bind_query(&mut definition_context, &query)
+            .map_err(|error| match error.code() {
+                ErrorCode::UNKNOWN_DATABASE | ErrorCode::UNKNOWN_TABLE => {
+                    ErrorCode::InvalidMaterializedView(format!(
+                        "materialized view {} source table changed: expected table id {}: {}",
+                        table_meta.name(),
+                        source_table_id,
+                        error
+                    ))
+                }
+                _ => error,
+            })?;
         validate_materialized_view_source(
             &definition_metadata,
             source_table_id,
@@ -878,7 +893,6 @@ impl Binder {
             catalog_name.to_string(),
             database.to_string(),
             table_meta,
-            None,
             table_name_alias,
             !bind_context.binding_views.is_empty(),
             false,
@@ -927,8 +941,30 @@ impl Binder {
         cte_suffix_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let mv_table_id = table_meta.get_id();
-        let result = self.bind_materialized_view_with_mode(
-            bind_context,
+        let view_ident = ViewIdent {
+            catalog: catalog_name.to_string(),
+            database: database.to_string(),
+            name: table_name.to_string(),
+        };
+        bind_context.check_view_loop(&view_ident)?;
+        // Retain the user-visible MV as the authorization target even when the read
+        // falls back entirely to its source. Like a regular view, its definition is
+        // bound in an independent scope and its internal scans need no caller grants.
+        {
+            let mut metadata = self.metadata.write();
+            metadata.add_table(
+                catalog_name.to_string(),
+                database.to_string(),
+                table_meta.clone(),
+                table_name_alias.clone(),
+                !bind_context.binding_views.is_empty(),
+                false,
+                cte_suffix_name.clone(),
+            );
+        }
+        let mut definition_context = bind_context.new_view_scope(view_ident)?;
+        let mut result = self.bind_materialized_view_with_mode(
+            &mut definition_context,
             catalog_name,
             database,
             table_name,
@@ -954,6 +990,11 @@ impl Binder {
                 &result.mv_definition.logical_schema,
             );
         }
+        // Do not leak the MV definition's scope into sibling query references.
+        result.bind_context.binding_views = bind_context.binding_views.clone();
+        result.bind_context.cte_context = bind_context.cte_context.clone();
+        result.bind_context.binding_depth = bind_context.next_depth()?;
+        result.bind_context.parent = Some(Box::new(bind_context.clone()));
         Ok((result.s_expr, result.bind_context))
     }
 

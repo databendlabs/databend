@@ -40,6 +40,7 @@ use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
@@ -52,9 +53,11 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
+use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::QuerySpecificValues;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
@@ -142,10 +145,14 @@ pub struct QueryContextShared {
     /// Do not combine it with worker-local wall-clock timestamps to calculate
     /// elapsed time; use `created_time` for local context timing instead.
     pub(super) query_created_time: SystemTime,
+    /// Shared by every function context of this query, for the planner cache.
+    pub(super) query_specific_values: QuerySpecificValues,
     // now it is only set in query_log::log_query_finished
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
     pub(super) mutation_state: MutationState,
+    // Commit sinks in local fragments and the outer refresh hook must see the same hints.
+    pub(super) written_segment_locs: SegmentLocationsState,
     pub(super) result_cache_state: ResultCacheState,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
@@ -193,6 +200,8 @@ pub struct QueryContextShared {
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
+    /// What the reads of the statement may do with the caches (`TableContextCachePolicy`).
+    pub(super) cache_policy: RwLock<CachePolicy>,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
@@ -263,9 +272,11 @@ impl QueryContextShared {
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time,
             query_created_time,
+            query_specific_values: QuerySpecificValues::tracked(),
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),
+            written_segment_locs: Default::default(),
             result_cache_state: Default::default(),
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
@@ -297,6 +308,7 @@ impl QueryContextShared {
             },
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
+            cache_policy: RwLock::new(CachePolicy::DEFAULT),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),

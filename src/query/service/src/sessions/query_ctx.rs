@@ -55,6 +55,7 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::lock::LockTableOption;
@@ -89,7 +90,6 @@ use databend_common_component::FragmentId;
 use databend_common_component::MutationState;
 use databend_common_component::ReadBlockThresholdsState;
 use databend_common_component::ResultCacheState;
-use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -196,8 +196,6 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: FragmentId,
-    // Used by synchronized generate aggregating indexes when new data written.
-    written_segment_locs: SegmentLocationsState,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
@@ -230,7 +228,6 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Default::default(),
-            written_segment_locs: Default::default(),
             read_block_thresholds: Default::default(),
             m_cte_temp_table: Arc::new(RwLock::new(Vec::new())),
         })
@@ -735,19 +732,8 @@ impl QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        if branch.is_some() {
-            // Legacy experimental table refs were removed. The parser still accepts
-            // `<db>.<table>/<branch>` so the upcoming redesign can reuse the syntax,
-            // but any remaining runtime entry point should still return a user-facing
-            // error instead of looking like an internal server bug.
-            return Err(ErrorCode::Unimplemented(
-                "Legacy experimental table refs were removed: table branch references are reserved for a future redesign and are intentionally rejected.",
-            ));
-        }
-
         let table = self
             .shared
             .get_table(catalog, database, table, max_batch_size)

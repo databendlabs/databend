@@ -64,6 +64,9 @@ fn test_external_access_sql() {
         "CREATE EXTERNAL ACCESS INTEGRATION \"QuotedAccess\" ALLOWED_NETWORK_RULES = (\"QuotedRule\") ENABLED = TRUE",
         "CREATE FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access, other_access)",
         "ALTER FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i, \"MixedCase\")",
+        "ALTER FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+        "CREATE FUNCTION a(INT) STATE {s INT} RETURNS INT LANGUAGE python AS $$class A: pass$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
     ] {
         let tokens = tokenize_sql(sql).unwrap();
         let (stmt, _) =
@@ -86,7 +89,8 @@ fn test_external_access_sql() {
         "CREATE EXTERNAL ACCESS INTEGRATION i ENABLED = TRUE ENABLED = FALSE ALLOWED_NETWORK_RULES = (r)",
         "ALTER EXTERNAL ACCESS INTEGRATION i SET ALLOWED_NETWORK_RULES = (r) ALLOWED_NETWORK_RULES = (r2)",
         "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = ()",
-        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = ()",
+        "CREATE FUNCTION a(INT) STATE {s INT} RETURNS INT LANGUAGE python ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = (i)",
     ] {
         let tokens = tokenize_sql(sql).unwrap();
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
@@ -597,7 +601,7 @@ SELECT * from s;"#,
         r#"create user `a'a` identified by '123'"#,
         r#"drop role if exists test"#,
         r#"drop role if exists 'test'"#,
-        r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
+        r#"OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t COMPACT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t PURGE;"#,
         r#"OPTIMIZE TABLE db.t PURGE;"#,
@@ -647,9 +651,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t ADD CHECK (a != 1);"#,
         r#"ALTER TABLE t DROP CONSTRAINT a_not_1;"#,
         r#"ALTER TABLE t FLASHBACK TO (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5');"#,
-        r#"ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS;"#,
         r#"ALTER TABLE t CREATE TAG tag1 AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) RETAIN 30 SECONDS;"#,
-        r#"ALTER TABLE t DROP BRANCH b1;"#,
         r#"ALTER TABLE t DROP TAG tag1;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
@@ -1534,7 +1536,6 @@ fn test_statement_error() {
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
         r#"show columns from db1.t from ctl.db"#,
-        r#"alter table t1 create branch from_dev at (branch => dev)"#,
         r#"SELECT c a as FROM t"#,
         r#"SELECT c a as b FROM t"#,
         r#"SELECT top -1 c a as b FROM t"#,
@@ -1636,8 +1637,13 @@ fn test_statement_error() {
 }
 
 #[test]
-fn test_removed_vacuum_syntax() {
+fn test_removed_syntax() {
     let cases = [
+        "ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS",
+        "ALTER TABLE t DROP BRANCH b1",
+        "SELECT * FROM db.t/b1",
+        "INSERT INTO db.t/b1 VALUES (1)",
+        "ALTER TABLE db.t/b1 ADD COLUMN a INT",
         "VACUUM TABLE t DRY RUN",
         "VACUUM TABLE t DRY RUN SUMMARY",
         "VACUUM TABLE catalog.db.t",

@@ -60,8 +60,6 @@ use databend_common_sql::plans::UDFScriptCode;
 #[cfg(feature = "python-udf")]
 use super::python_worker::AggregateOp;
 #[cfg(feature = "python-udf")]
-use super::python_worker::python_function;
-#[cfg(feature = "python-udf")]
 use super::python_worker::PythonQueryWorkers;
 #[cfg(feature = "python-udf")]
 use super::python_worker::PythonRuntime;
@@ -73,6 +71,8 @@ use super::python_worker::array_batch;
 use super::python_worker::decode_batch;
 #[cfg(feature = "python-udf")]
 use super::python_worker::encode_aggregate_request;
+#[cfg(feature = "python-udf")]
+use super::python_worker::python_function;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
 use super::script_udf_limits::ScriptUdfLimits;
@@ -280,7 +280,9 @@ impl AggregateUdfScript {
                 continue;
             }
             places.push(state);
-            others.push(deserialize_state(&mut data).map_err(|e| ErrorCode::Internal(e.to_string()))?);
+            others.push(
+                deserialize_state(&mut data).map_err(|e| ErrorCode::Internal(e.to_string()))?,
+            );
         }
         if others.is_empty() {
             return Ok(());
@@ -404,7 +406,10 @@ fn compact_row(array: &Arc<dyn Array>, row: usize) -> Result<Arc<dyn Array>> {
     Ok(arrow_select::take::take(array.as_ref(), &index, None)?)
 }
 
-fn serialize_state(state: &Arc<dyn Array>, writer: &mut Vec<u8>) -> std::result::Result<(), ArrowError> {
+fn serialize_state(
+    state: &Arc<dyn Array>,
+    writer: &mut Vec<u8>,
+) -> std::result::Result<(), ArrowError> {
     let schema = arrow_schema::Schema::new(vec![arrow_schema::Field::new(
         "state",
         state.data_type().clone(),
@@ -442,7 +447,17 @@ pub fn create_udaf_script_function(
     output_type: DataType,
     #[cfg(feature = "python-udf")] python_workers: Option<Arc<PythonQueryWorkers>>,
 ) -> Result<AggregateCallRef> {
-    let UDFScriptCode { language, code, .. } = code;
+    let UDFScriptCode {
+        language,
+        code,
+        external_access_integrations,
+        ..
+    } = code;
+    if !external_access_integrations.is_empty() && *language != UDFLanguage::Python {
+        return Err(ErrorCode::InvalidArgument(
+            "External access requires a Python worker",
+        ));
+    }
     let state_type = ArrowType::Struct(
         state_fields
             .iter()
@@ -483,6 +498,11 @@ pub fn create_udaf_script_function(
             )?;
             // Like scalar Python UDFs, aggregates run in sandboxed worker
             // processes owned by the query.
+            if python_workers.is_none() && !external_access_integrations.is_empty() {
+                return Err(ErrorCode::InvalidArgument(
+                    "Policy-bound Python aggregates require the query's tenant context",
+                ));
+            }
             let query = python_workers
                 .unwrap_or_else(|| PythonWorkerManager::instance().query("default", 1));
             let function = python_function(
@@ -493,7 +513,7 @@ pub fn create_udaf_script_function(
                 Some(arrow_schema::Field::new(&name, state_type, true)),
             );
             UDAFRuntime::Python(PythonUdaf {
-                runtime: query.aggregate_runtime(function)?,
+                runtime: query.aggregate_runtime(function, external_access_integrations.clone())?,
                 handle: tokio::runtime::Handle::try_current()
                     .unwrap_or_else(|_| GlobalIORuntime::instance().inner()),
                 output_type: output_type.clone(),
@@ -684,11 +704,7 @@ impl UDAFRuntime {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance()
-                    .block_on(async move {
-                        Ok(runtime
-                            .create_state(&pool.builder.name)
-                            .await?)
-                    })
+                    .block_on(async move { Ok(runtime.create_state(&pool.builder.name).await?) })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
@@ -706,15 +722,17 @@ impl UDAFRuntime {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance()
                     .block_on(async move {
-                        Ok(runtime
-                            .accumulate(&pool.builder.name, state, input)
-                            .await?)
+                        Ok(runtime.accumulate(&pool.builder.name, state, input).await?)
                     })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(python) => python
-                .accumulate(vec![state.clone()], vec![0; input.num_rows()], input.clone())
+                .accumulate(
+                    vec![state.clone()],
+                    vec![0; input.num_rows()],
+                    input.clone(),
+                )
                 .map_err(worker_error),
         }?;
         Ok(UdfAggState(Some(state)))
@@ -725,11 +743,7 @@ impl UDAFRuntime {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance()
-                    .block_on(async move {
-                        Ok(runtime
-                            .merge(&pool.builder.name, states)
-                            .await?)
-                    })
+                    .block_on(async move { Ok(runtime.merge(&pool.builder.name, states).await?) })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
@@ -748,11 +762,7 @@ impl UDAFRuntime {
         match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance()
-                    .block_on(async move {
-                        Ok(runtime
-                            .finish(&pool.builder.name, state)
-                            .await?)
-                    })
+                    .block_on(async move { Ok(runtime.finish(&pool.builder.name, state).await?) })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]

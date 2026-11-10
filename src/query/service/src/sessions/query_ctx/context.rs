@@ -41,7 +41,7 @@ impl TableContext for QueryContext {
     }
 
     fn written_segment_locations(&self) -> &SegmentLocationsState {
-        &self.written_segment_locs
+        &self.shared.written_segment_locs
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -317,6 +317,7 @@ impl TableContextSettings for QueryContext {
             random_function_seed,
             week_start,
             date_format_style,
+            query_specific_values: self.shared.query_specific_values.clone(),
         })
     }
 

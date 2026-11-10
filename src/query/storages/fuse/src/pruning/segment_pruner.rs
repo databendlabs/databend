@@ -67,11 +67,12 @@ impl SegmentPruner {
             let info = pruning_cost
                 .measure_async(
                     PruningCostKind::SegmentsRead,
-                    T::SegmentReader::read_compact_segment_through_cache(
+                    T::SegmentReader::read_compact_segment(
                         self.pruning_ctx.dal.clone(),
                         segment_location.location.clone(),
                         &self.projection,
                         self.table_schema.clone(),
+                        self.pruning_ctx.ctx.cache_policy(),
                     ),
                 )
                 .await?;

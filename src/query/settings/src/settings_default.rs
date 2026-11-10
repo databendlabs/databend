@@ -681,14 +681,14 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("grouping_sets_to_union", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables grouping sets to union.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_cascading_grouping_sets", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Builds hierarchical grouping sets from the closest available parent grouping.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -951,7 +951,7 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enables distributed execution of table compaction.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1028,7 +1028,7 @@ impl DefaultSettings {
                     desc: "The maximum number of segments that can be reclustered automatically triggered after write.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(2..=128)),
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1112,7 +1112,7 @@ impl DefaultSettings {
                 }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enable distributed execution of table recluster.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1555,6 +1555,27 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_segment_zone_map", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Maintain segment zone maps (per-segment min/max of every column) after each committed recluster round. Turn off to stop building them; existing zone maps stay usable. A table opts out with the table option enable_segment_zone_map = 0.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_segment_zone_map_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use a table's segment zone map, if it has one, to skip segments before reading segment info. Turn off to read every segment as before.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("segment_zone_map_full_segment_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(50),
+                    desc: "Refresh a table's segment zone map after a recluster round once more than this many full segments are estimated to be missing from it.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_prune_pipeline", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

@@ -1,4 +1,4 @@
-SELECT REGEXP_REPLACE(Referer, '^https?://(?:www\.)?([^/]+)/.*$', '\1') AS k,
+SELECT REGEXP_REPLACE(Referer, '^https?://(?:www\.)?([^/]+)/.*$', '$1') AS k,
     AVG(length(Referer)) AS l,
     COUNT(*) AS c,
     MIN(Referer)

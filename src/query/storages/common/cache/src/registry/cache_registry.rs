@@ -17,7 +17,6 @@ use std::fmt;
 use std::sync::LazyLock;
 
 use crate::CacheDef;
-use crate::DiskInfo;
 use crate::KindLimit;
 use crate::Pool;
 
@@ -54,6 +53,11 @@ impl CacheKind {
         self.info().pool
     }
 
+    /// See `CacheDef::DISK`.
+    pub fn on_disk(self) -> bool {
+        self.info().disk
+    }
+
     /// Position in the registry, for per-kind state kept in a slice.
     pub const fn index(self) -> usize {
         self.0 as usize
@@ -66,13 +70,13 @@ impl fmt::Debug for CacheKind {
     }
 }
 
-/// What the backends and the disk tiers know about a kind, taken from its `CacheDef`.
+/// What the backends know about a kind, taken from its `CacheDef`.
 #[derive(Debug)]
 pub struct KindInfo {
     pub name: &'static str,
     pub pool: Pool,
     pub shared_default: KindLimit,
-    pub disk: Option<DiskInfo>,
+    pub disk: bool,
     def: TypeId,
 }
 
@@ -90,7 +94,7 @@ impl CacheRegistry {
         &REGISTRY
     }
 
-    /// Every kind registers the same way; a disk tier comes with its definition.
+    /// Every kind registers the same way.
     pub fn register<D: CacheDef>(&mut self) -> &mut Self {
         assert!(
             self.find(D::NAME).is_none() && self.position::<D>().is_none(),
@@ -101,7 +105,7 @@ impl CacheRegistry {
             name: D::NAME,
             pool: D::POOL,
             shared_default: D::SHARED_DEFAULT,
-            disk: D::DISK.map(|disk| disk.info),
+            disk: D::DISK,
             def: TypeId::of::<D>(),
         });
         self

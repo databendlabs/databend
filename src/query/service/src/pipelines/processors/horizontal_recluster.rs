@@ -22,6 +22,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
@@ -700,7 +701,7 @@ impl ReclusterMergeFactory {
             table.get_operator(),
             schema.clone(),
             Projection::Columns((0..schema.num_fields()).collect()),
-            false,
+            CachePolicy::READ_ONLY,
         )?;
         let defaults = block_reader.default_values().to_vec();
         let read_settings = ReadSettings {
@@ -1469,7 +1470,7 @@ mod tests {
         let snapshot = fuse.read_table_snapshot().await?.unwrap();
         let segments =
             SegmentsIO::create(admission_ctx.clone(), fuse.get_operator(), fuse.schema())
-                .read_segments::<SegmentInfo>(&snapshot.segments, true)
+                .read_segments::<SegmentInfo>(&snapshot.segments, CachePolicy::DEFAULT)
                 .await?;
         let mut blocks = Vec::new();
         for segment in segments {
@@ -1600,7 +1601,7 @@ mod tests {
         let fuse = FuseTable::try_from_table(table.as_ref())?;
         let snapshot = fuse.read_table_snapshot().await?.unwrap();
         let segments = SegmentsIO::create(ctx.clone(), fuse.get_operator(), fuse.schema())
-            .read_segments::<SegmentInfo>(&snapshot.segments, true)
+            .read_segments::<SegmentInfo>(&snapshot.segments, CachePolicy::DEFAULT)
             .await?;
         let mut source_index = None;
         for segment in segments {

@@ -41,7 +41,6 @@ use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
-use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -2089,9 +2088,7 @@ impl AccessChecker for PrivilegeAccess {
                         if !checked_tables.insert((catalog_name, db_name, table_name, bound_table_id)) {
                             continue;
                         }
-                        if is_materialized_view_engine(catalog_table.engine()) {
-                            self.validate_mv_source_access(catalog_table.as_ref()).await?;
-                        } else if let Some((db_id, table_id)) = self.check_table_select_grants(catalog_name, db_name, table_name).await? {
+                        if let Some((db_id, table_id)) = self.check_table_select_grants(catalog_name, db_name, table_name).await? {
                             pending_ownerships.push(PendingSelectOwnership { catalog_name, db_name, table_name, db_id, table_id });
                         }
                     }
@@ -2211,19 +2208,15 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateUDF(plan) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
                     .await?;
-                if let UDFDefinition::UDFServer(server) = &plan.udf.definition {
-                    for name in &server.external_access_integrations {
-                        self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
-                    }
+                for name in plan.udf.definition.external_access_integrations() {
+                    self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
                 }
             }
             Plan::AlterUDF(plan) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
                     .await?;
-                if let UDFDefinition::UDFServer(server) = &plan.udf.definition {
-                    for name in &server.external_access_integrations {
-                        self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
-                    }
+                for name in plan.udf.definition.external_access_integrations() {
+                    self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
                 }
             }
             Plan::DropUDF(plan) => {
@@ -2522,13 +2515,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AlterTableTtl(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
             }
-            Plan::CreateTableBranch(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
-            }
             Plan::CreateTableTag(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
-            }
-            Plan::DropTableBranch(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::DropTableTag(plan) => {
