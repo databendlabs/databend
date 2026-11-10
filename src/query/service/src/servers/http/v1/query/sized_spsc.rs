@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Sized SPSC result channel with memory buffering and spill/restore.
+//!
+//! A bounded TLA+ model of this channel's protocol is maintained in
+//! `tests/nox/tla/result_spill/ResultSpill.tla`.
+
 use std::cmp::min;
 use std::collections::VecDeque;
 use std::fmt::Debug;
@@ -431,7 +436,7 @@ where S: DataBlockSpill
                     }
                     Err(_) => {
                         debug!("Long polling timeout reached");
-                        if let Some(page) = self.try_take_current_page().await? {
+                        if let Some(page) = self.try_take_page_after_timeout().await? {
                             return Ok((page, self.chan.is_close()));
                         }
                         return Ok((BlocksSerializer::empty(), self.chan.is_close()));
@@ -453,9 +458,16 @@ where S: DataBlockSpill
         self.deserialize_page(page).await
     }
 
-    #[fastrace::trace(name = "SizedChannelReceiver::try_take_current_page")]
-    async fn try_take_current_page(&mut self) -> Result<Option<BlocksSerializer>> {
-        let page = self.chan.buffer.lock().unwrap().take_current_page();
+    #[fastrace::trace(name = "SizedChannelReceiver::try_take_page_after_timeout")]
+    async fn try_take_page_after_timeout(&mut self) -> Result<Option<BlocksSerializer>> {
+        let page = {
+            let mut buffer = self.chan.buffer.lock().unwrap();
+            // A producer may have queued an earlier page after recv timed out.
+            // Select the queued page or partial page under the same lock.
+            buffer
+                .prepare_page_read()
+                .or_else(|| buffer.take_current_page())
+        };
         self.deserialize_page(page).await
     }
 
@@ -846,6 +858,125 @@ mod tests {
 
         assert!(receiver.close().is_none());
         send_task.await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_timeout_preserves_page_order() {
+        for enable_spill in [false, true] {
+            let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(4, 4);
+            let spiller = enable_spill.then(MockSpiller::default);
+            sender.plan_ready(OutputFormatSettings::default(), spiller);
+
+            // Deterministically pause at the timeout/fallback boundary: recv
+            // observed an empty queue, then the producer publishes full pages
+            // and a partial page before the fallback acquires the buffer lock.
+            assert!(
+                tokio::time::timeout_at(tokio::time::Instant::now(), receiver.chan.recv())
+                    .await
+                    .is_err()
+            );
+            let rows = if enable_spill { 9 } else { 5 };
+            let values = (1..=rows).collect::<Vec<i32>>();
+            assert!(
+                sender
+                    .send(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                        values.clone(),
+                    )]))
+                    .await
+                    .unwrap()
+            );
+            if enable_spill {
+                assert!(matches!(
+                    receiver.chan.buffer.lock().unwrap().pages.get(1),
+                    Some(Page::Spilled(_))
+                ));
+            }
+
+            for expected in values.chunks(4) {
+                let page = receiver
+                    .try_take_page_after_timeout()
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let expected = expected
+                    .iter()
+                    .map(|value| vec![value.to_string()])
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    serde_json::to_value(&page).unwrap(),
+                    serde_json::json!(expected),
+                    "spill enabled: {enable_spill}"
+                );
+            }
+            assert!(
+                receiver
+                    .try_take_page_after_timeout()
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+
+            sender.finish();
+            let (page, is_end) = receiver.next_page(&Wait::Async).await.unwrap();
+            assert!(page.is_empty());
+            assert!(is_end);
+            assert_eq!(receiver.close().is_some(), enable_spill);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_timeout_spilled_page_survives_cancelled_restore() {
+        let (_sender, mut receiver) = sized_spsc::<BlockingRestoreSpiller>(4, 4);
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3, 4])]);
+        let (spiller, location) = BlockingRestoreSpiller::with_page("spilled_page", block);
+        let restore_started = spiller.restore_started.clone();
+
+        assert!(
+            tokio::time::timeout_at(tokio::time::Instant::now(), receiver.chan.recv())
+                .await
+                .is_err()
+        );
+        {
+            let mut buffer = receiver.chan.buffer.lock().unwrap();
+            buffer.pages.push_back(Page::Spilled(location));
+            assert!(
+                buffer
+                    .try_add_block(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                        vec![5],
+                    )]))
+                    .is_ok()
+            );
+        }
+        *receiver.chan.spiller.lock().unwrap() = Some(spiller);
+
+        let mut cancelled_restore = Box::pin(receiver.try_take_page_after_timeout());
+        tokio::select! {
+            result = &mut cancelled_restore => {
+                panic!("restore completed before it could be cancelled: {}", result.is_ok());
+            }
+            _ = restore_started.notified() => {}
+        }
+        drop(cancelled_restore);
+
+        let page = receiver
+            .try_take_page_after_timeout()
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&page).unwrap(),
+            serde_json::json!([["1"], ["2"], ["3"], ["4"]])
+        );
+        let page = receiver
+            .try_take_page_after_timeout()
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&page).unwrap(),
+            serde_json::json!([["5"]])
+        );
+        assert!(receiver.close().is_some());
     }
 
     #[tokio::test(flavor = "multi_thread")]
