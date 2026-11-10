@@ -36,6 +36,28 @@ use nom::Parser;
 use nom_rule::rule;
 
 #[test]
+fn test_deep_expression_parsing() {
+    // Do not let a larger test-thread stack hide missing recursion guards.
+    std::thread::Builder::new()
+        .stack_size(2 * 1024 * 1024)
+        .spawn(|| {
+            for sql in [
+                format!("{}1{}", "(".repeat(100), ")".repeat(100)),
+                format!("{}1{}", "abs(".repeat(100), ")".repeat(100)),
+                format!("{}1{}", "{'a':".repeat(100), "}".repeat(100)),
+                format!("{}true", "NOT ".repeat(300)),
+                format!("{}1", "1 ^ ".repeat(300)),
+            ] {
+                let tokens = tokenize_sql(&sql).unwrap();
+                parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+            }
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
 fn test_external_access_sql() {
     for sql in [
         "CREATE NETWORK RULE video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443', 'other.example.com')",

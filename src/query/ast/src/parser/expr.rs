@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::Peekable;
+
 use ethnum::i256;
 use itertools::Itertools;
 use nom::Parser;
@@ -21,6 +23,7 @@ use nom::error::context;
 use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
+use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
 
@@ -554,6 +557,35 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     type Input = WithSpan<'a, ExprElement>;
     type Output = Expr;
 
+    // Keep the default Pratt algorithm, but grow the stack on recursive descent
+    // into prefix operands and right-associative operators.
+    #[recursive::recursive]
+    fn parse_input(
+        &mut self,
+        tail: &mut Peekable<I>,
+        rbp: Precedence,
+    ) -> Result<Self::Output, PrattError<Self::Input, Self::Error>> {
+        if let Some(head) = tail.next() {
+            let info = PrattParser::<I>::query(self, &head).map_err(PrattError::UserError)?;
+            let mut nbp = PrattParser::<I>::nbp(self, info);
+            let mut node = self.nud(head, tail, info);
+            while let Some(head) = tail.peek() {
+                let info = PrattParser::<I>::query(self, head).map_err(PrattError::UserError)?;
+                let lbp = PrattParser::<I>::lbp(self, info);
+                if rbp < lbp && lbp < nbp {
+                    let head = tail.next().unwrap();
+                    nbp = PrattParser::<I>::nbp(self, info);
+                    node = self.led(head, tail, info, node?);
+                } else {
+                    break;
+                }
+            }
+            node
+        } else {
+            Err(PrattError::EmptyInput)
+        }
+    }
+
     fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
         Ok(elem.elem.affix())
     }
@@ -1050,6 +1082,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     }
 }
 #[allow(unreachable_code)]
+#[recursive::recursive]
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(column_id, |column| ExprElement::ColumnRef {
         column: ColumnRef {
