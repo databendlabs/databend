@@ -168,3 +168,206 @@ impl BlockMeta {
             .sum()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::meta::Compression;
+    use crate::meta::v0;
+
+    const ID: ColumnId = 0;
+    const A: ColumnId = 1;
+    const B: ColumnId = 2;
+
+    fn col_metas(ids: &[ColumnId]) -> HashMap<ColumnId, ColumnMeta> {
+        ids.iter()
+            .map(|id| {
+                (
+                    *id,
+                    ColumnMeta::Parquet(v0::ColumnMeta {
+                        offset: *id as u64 * 10,
+                        len: 10,
+                        num_values: 3,
+                    }),
+                )
+            })
+            .collect()
+    }
+
+    fn legacy_block_with(col_metas: HashMap<ColumnId, ColumnMeta>) -> BlockMeta {
+        BlockMeta::new(
+            3,
+            300,
+            100,
+            HashMap::new(),
+            col_metas,
+            None,
+            ("d0.parquet".to_string(), 2),
+            Some(("d0_bloom.parquet".to_string(), 4)),
+            7,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Compression::Lz4,
+            None,
+        )
+    }
+
+    fn legacy_block() -> BlockMeta {
+        legacy_block_with(col_metas(&[ID, A, B]))
+    }
+
+    fn group(name: &str, ids: &[ColumnId]) -> ColumnGroupFileMeta {
+        ColumnGroupFileMeta {
+            location: (format!("{name}.parquet"), 2),
+            file_size: 10 * ids.len() as u64,
+            leaf_column_metas: col_metas(ids),
+            bloom: None,
+        }
+    }
+
+    fn served(block: &BlockMeta) -> Vec<(String, Vec<ColumnId>)> {
+        block
+            .column_groups
+            .iter()
+            .map(|g| {
+                let mut ids: Vec<_> = g.leaf_column_metas.keys().copied().collect();
+                ids.sort();
+                (g.location.0.clone(), ids)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn append_follows_design_example() -> Result<()> {
+        let mut block = legacy_block();
+        assert!(!block.is_split());
+        block.check_column_groups()?;
+
+        block.append_column_group(group("d1", &[A]))?;
+        assert_eq!(served(&block), vec![
+            ("d0.parquet".to_string(), vec![ID, B]),
+            ("d1.parquet".to_string(), vec![A]),
+        ]);
+        let legacy = &block.column_groups[0];
+        assert_eq!(legacy.file_size, 100);
+        assert_eq!(
+            legacy.bloom,
+            Some(ColumnGroupBloomMeta {
+                location: ("d0_bloom.parquet".to_string(), 4),
+                file_size: 7,
+            })
+        );
+
+        block.append_column_group(group("d2", &[B]))?;
+        assert_eq!(served(&block), vec![
+            ("d0.parquet".to_string(), vec![ID]),
+            ("d1.parquet".to_string(), vec![A]),
+            ("d2.parquet".to_string(), vec![B]),
+        ]);
+
+        block.append_column_group(group("d3", &[A]))?;
+        assert_eq!(served(&block), vec![
+            ("d0.parquet".to_string(), vec![ID]),
+            ("d2.parquet".to_string(), vec![B]),
+            ("d3.parquet".to_string(), vec![A]),
+        ]);
+
+        assert!(block.is_split());
+        assert_eq!(block.location, ("d3.parquet".to_string(), 2));
+        assert_eq!(block.file_size, 100 + 10 + 10);
+        assert!(block.col_metas.is_empty());
+        assert_eq!(block.bloom_filter_index_location, None);
+        assert_eq!(block.bloom_filter_index_size, 7);
+        block.check_column_groups()
+    }
+
+    #[test]
+    fn append_rejects_empty_group() {
+        let mut block = legacy_block();
+        assert!(block.append_column_group(group("d1", &[])).is_err());
+        assert!(!block.is_split());
+    }
+
+    #[test]
+    fn append_rejects_legacy_block_without_col_metas() {
+        let mut block = legacy_block_with(HashMap::new());
+        assert!(block.append_column_group(group("d1", &[A])).is_err());
+        assert!(!block.is_split());
+        assert_eq!(block.location, ("d0.parquet".to_string(), 2));
+    }
+
+    #[test]
+    fn check_detects_broken_invariants() -> Result<()> {
+        let mut valid = legacy_block();
+        valid.append_column_group(group("d1", &[A]))?;
+        valid.check_column_groups()?;
+
+        let mut twice = valid.clone();
+        twice.column_groups[1] = group("d1", &[A, B]);
+        assert!(twice.check_column_groups().is_err());
+
+        let mut stale_location = valid.clone();
+        stale_location.location = ("d0.parquet".to_string(), 2);
+        assert!(stale_location.check_column_groups().is_err());
+
+        let mut wrong_size = valid.clone();
+        wrong_size.file_size += 1;
+        assert!(wrong_size.check_column_groups().is_err());
+
+        let mut legacy_fields = valid.clone();
+        legacy_fields.col_metas = col_metas(&[ID]);
+        assert!(legacy_fields.check_column_groups().is_err());
+
+        let mut legacy_bloom = valid.clone();
+        legacy_bloom.bloom_filter_index_location = Some(("x".to_string(), 4));
+        assert!(legacy_bloom.check_column_groups().is_err());
+
+        let mut wrong_bloom_size = valid;
+        wrong_bloom_size.bloom_filter_index_size = 0;
+        assert!(wrong_bloom_size.check_column_groups().is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn message_pack_round_trip() -> Result<()> {
+        let mut block = legacy_block();
+        block.append_column_group(group("d1", &[A]))?;
+        block.append_column_group(group("d2", &[B]))?;
+
+        let bytes = rmp_serde::to_vec_named(&block).unwrap();
+        let decoded: BlockMeta = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(decoded, block);
+        Ok(())
+    }
+
+    #[test]
+    fn metadata_without_the_field_reads_as_legacy() {
+        let mut json = serde_json::to_value(legacy_block()).unwrap();
+        json.as_object_mut().unwrap().remove("column_groups");
+        let decoded: BlockMeta = serde_json::from_value(json).unwrap();
+        assert_eq!(decoded, legacy_block());
+    }
+
+    #[test]
+    fn readers_without_the_field_skip_it() -> Result<()> {
+        #[derive(Deserialize)]
+        struct OlderBlockMeta {
+            row_count: u64,
+            location: Location,
+        }
+
+        let mut block = legacy_block();
+        block.append_column_group(group("d1", &[A]))?;
+        let bytes = rmp_serde::to_vec_named(&block).unwrap();
+        let older: OlderBlockMeta = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(older.row_count, 3);
+        assert_eq!(older.location, ("d1.parquet".to_string(), 2));
+        Ok(())
+    }
+}
