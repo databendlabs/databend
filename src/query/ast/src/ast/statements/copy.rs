@@ -89,6 +89,7 @@ impl CopyIntoTableStmt {
                 self.options.column_match_mode = Some(ColumnMatchMode::from_str(&v)?)
             }
             CopyIntoTableOption::SchemaEvolution(v) => self.options.schema_evolution = Some(v),
+            CopyIntoTableOption::FileSortedBy(v) => self.options.file_sorted_by = Some(v),
         }
         Ok(())
     }
@@ -148,6 +149,9 @@ pub struct CopyIntoTableOptions {
     pub return_failed_only: bool,
     pub column_match_mode: Option<ColumnMatchMode>,
     pub schema_evolution: Option<CopySchemaEvolutionOptions>,
+    /// Rows within each input file are declared to be ordered by these keys.
+    #[serde(default)]
+    pub file_sorted_by: Option<FileSortedBy>,
 
     // not used for now
     pub size_limit: usize,
@@ -251,6 +255,9 @@ impl Display for CopyIntoTableOptions {
         }
         if let Some(schema_evolution) = &self.schema_evolution {
             write!(f, " SCHEMA_EVOLUTION = ({schema_evolution})")?;
+        }
+        if let Some(file_sorted_by) = &self.file_sorted_by {
+            write!(f, " FILE_SORTED_BY = {file_sorted_by}")?;
         }
         Ok(())
     }
@@ -713,6 +720,7 @@ pub enum CopyIntoTableOption {
     OnError(String),
     ColumnMatchMode(String),
     SchemaEvolution(CopySchemaEvolutionOptions),
+    FileSortedBy(FileSortedBy),
 }
 
 pub enum CopyIntoLocationOption {
@@ -852,6 +860,21 @@ impl FromStr for OnErrorMode {
                     }
                 }
             }
+        }
+    }
+}
+
+/// The order that `FILE_SORTED_BY` declares for the rows within each input file.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut, Eq)]
+pub enum FileSortedBy {
+    /// The target table's cluster key.
+    ClusterKey,
+}
+
+impl Display for FileSortedBy {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            FileSortedBy::ClusterKey => write!(f, "CLUSTER_KEY"),
         }
     }
 }

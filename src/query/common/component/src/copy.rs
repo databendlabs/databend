@@ -19,6 +19,7 @@ use std::sync::RwLock;
 use dashmap::DashMap;
 use dashmap::mapref::multiple::RefMulti;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_pipeline::core::InputError;
 use databend_common_storage::CopyStatus;
@@ -30,6 +31,8 @@ pub struct CopyState {
     on_error_map: RwLock<Option<OnErrorMap>>,
     on_error_mode: RwLock<Option<OnErrorMode>>,
     copy_status: Arc<CopyStatus>,
+    /// `FILE_SORTED_BY` keys of the running COPY: when set, each input file's order is preserved.
+    file_sort_keys: RwLock<Option<Arc<[RemoteExpr<String>]>>>,
 }
 
 impl Default for CopyState {
@@ -38,6 +41,7 @@ impl Default for CopyState {
             on_error_map: RwLock::new(None),
             on_error_mode: RwLock::new(None),
             copy_status: Default::default(),
+            file_sort_keys: RwLock::new(None),
         }
     }
 }
@@ -65,6 +69,15 @@ impl CopyState {
 
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {
         *self.on_error_mode.write().unwrap() = Some(mode);
+    }
+
+    pub fn set_file_sort_keys(&self, keys: Option<Vec<RemoteExpr<String>>>) {
+        *self.file_sort_keys.write().unwrap() = keys.map(Into::into);
+    }
+
+    /// The `FILE_SORTED_BY` keys of the running COPY, if the input order must be preserved.
+    pub fn get_file_sort_keys(&self) -> Option<Arc<[RemoteExpr<String>]>> {
+        self.file_sort_keys.read().unwrap().clone()
     }
 
     pub fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {

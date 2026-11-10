@@ -1,0 +1,204 @@
+# COPY ... FILE_SORTED_BY = CLUSTER_KEY: the rows of each file are declared to be ordered by the
+# cluster key, so the blocks written from one file must not overlap on the cluster key.
+
+statement ok
+CREATE OR REPLACE STAGE s_file_sorted_by
+
+statement ok
+REMOVE @s_file_sorted_by
+
+statement ok
+SET enable_compact_after_write = 0
+
+# One sorted CSV file, and three sorted CSV files with disjoint key ranges.
+statement ok
+COPY INTO @s_file_sorted_by/csv_one/ FROM (SELECT number // 1000 AS k, number AS v FROM numbers(200000) ORDER BY v) FILE_FORMAT = (TYPE = CSV) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+statement ok
+COPY INTO @s_file_sorted_by/csv_many/a FROM (SELECT number // 1000 AS k, number AS v FROM numbers(200000) WHERE number < 70000 ORDER BY v) FILE_FORMAT = (TYPE = CSV) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+statement ok
+COPY INTO @s_file_sorted_by/csv_many/b FROM (SELECT number // 1000 AS k, number AS v FROM numbers(200000) WHERE number >= 70000 AND number < 140000 ORDER BY v) FILE_FORMAT = (TYPE = CSV) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+statement ok
+COPY INTO @s_file_sorted_by/csv_many/c FROM (SELECT number // 1000 AS k, number AS v FROM numbers(200000) WHERE number >= 140000 ORDER BY v) FILE_FORMAT = (TYPE = CSV) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+# Sorted Parquet files with disjoint key ranges, each larger than parquet_fast_read_bytes, so
+# that without FILE_SORTED_BY several sources read them in parallel and their blocks interleave.
+statement ok
+COPY INTO @s_file_sorted_by/parquet/ FROM (SELECT number // 20000 AS k, number AS v FROM numbers(4000000) ORDER BY v) FILE_FORMAT = (TYPE = PARQUET) MAX_FILE_SIZE = 1600000
+
+# A sorted CSV file with one invalid row.
+statement ok
+COPY INTO @s_file_sorted_by/csv_bad_row/ FROM (SELECT number // 1000 AS k, if(number = 5000, 'bad', number::STRING) AS v FROM numbers(20000) ORDER BY number) FILE_FORMAT = (TYPE = CSV) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+# Files that are not ordered by k.
+statement ok
+COPY INTO @s_file_sorted_by/csv_unordered/ FROM (SELECT number % 200 AS k, number AS v FROM numbers(200000) ORDER BY v) FILE_FORMAT = (TYPE = CSV) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+statement ok
+COPY INTO @s_file_sorted_by/parquet_unordered/ FROM (SELECT number % 200 AS k, number AS v FROM numbers(200000) ORDER BY v) FILE_FORMAT = (TYPE = PARQUET) SINGLE = TRUE MAX_FILE_SIZE = 10000000000
+
+# Small read batches, so that a block is built from many batches decoded in parallel.
+statement ok
+SET input_read_buffer_size = 65536
+
+statement ok
+SET max_threads = 8
+
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by(k INT NOT NULL, v INT NOT NULL) CLUSTER BY (k) ROW_PER_BLOCK = 10000
+
+statement ok
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/csv_one/ FILE_FORMAT = (TYPE = CSV) FILE_SORTED_BY = CLUSTER_KEY
+
+query II
+SELECT count(*), sum(v) FROM t_file_sorted_by
+----
+200000 19999900000
+
+# No two blocks overlap on k beyond a shared endpoint.
+query I
+WITH b AS (SELECT _block_name n, min(k) lo, max(k) hi FROM t_file_sorted_by GROUP BY _block_name)
+SELECT count(*) FROM b x, b y WHERE x.n < y.n AND x.lo < y.hi AND y.lo < x.hi
+----
+0
+
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by(k INT NOT NULL, v INT NOT NULL) CLUSTER BY (k) ROW_PER_BLOCK = 10000
+
+statement ok
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/csv_many/ FILE_FORMAT = (TYPE = CSV) FILE_SORTED_BY = CLUSTER_KEY
+
+query II
+SELECT count(*), sum(v) FROM t_file_sorted_by
+----
+200000 19999900000
+
+query I
+WITH b AS (SELECT _block_name n, min(k) lo, max(k) hi FROM t_file_sorted_by GROUP BY _block_name)
+SELECT count(*) FROM b x, b y WHERE x.n < y.n AND x.lo < y.hi AND y.lo < x.hi
+----
+0
+
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by(k INT NOT NULL, v INT NOT NULL) CLUSTER BY (k) ROW_PER_BLOCK = 10000
+
+statement ok
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/parquet/ FILE_FORMAT = (TYPE = PARQUET) FILE_SORTED_BY = CLUSTER_KEY
+
+query II
+SELECT count(*), sum(v) FROM t_file_sorted_by
+----
+4000000 7999998000000
+
+query I
+WITH b AS (SELECT _block_name n, min(k) lo, max(k) hi FROM t_file_sorted_by GROUP BY _block_name)
+SELECT count(*) FROM b x, b y WHERE x.n < y.n AND x.lo < y.hi AND y.lo < x.hi
+----
+0
+
+# Rows skipped by ON_ERROR = CONTINUE do not break the order.
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by(k INT NOT NULL, v INT NOT NULL) CLUSTER BY (k) ROW_PER_BLOCK = 1000
+
+statement ok
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/csv_bad_row/ FILE_FORMAT = (TYPE = CSV) ON_ERROR = CONTINUE FILE_SORTED_BY = CLUSTER_KEY
+
+query I
+SELECT count(*) FROM t_file_sorted_by
+----
+19999
+
+query I
+WITH b AS (SELECT _block_name n, min(k) lo, max(k) hi FROM t_file_sorted_by GROUP BY _block_name)
+SELECT count(*) FROM b x, b y WHERE x.n < y.n AND x.lo < y.hi AND y.lo < x.hi
+----
+0
+
+# Control: the overlap check does detect overlapping blocks.
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by(k INT NOT NULL, v INT NOT NULL) CLUSTER BY (k) ROW_PER_BLOCK = 10000
+
+statement ok
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/csv_unordered/ FILE_FORMAT = (TYPE = CSV)
+
+query I
+WITH b AS (SELECT _block_name n, min(k) lo, max(k) hi FROM t_file_sorted_by GROUP BY _block_name)
+SELECT to_int64(count(*) > 0) FROM b x, b y WHERE x.n < y.n AND x.lo < y.hi AND y.lo < x.hi
+----
+1
+
+# A file that does not follow the declared order is rejected.
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by(k INT NOT NULL, v INT NOT NULL) CLUSTER BY (k) ROW_PER_BLOCK = 10000
+
+statement error .*not ordered by FILE_SORTED_BY
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/csv_unordered/ FILE_FORMAT = (TYPE = CSV) FILE_SORTED_BY = CLUSTER_KEY
+
+statement error .*not ordered by FILE_SORTED_BY
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/parquet_unordered/ FILE_FORMAT = (TYPE = PARQUET) FILE_SORTED_BY = CLUSTER_KEY
+
+query I
+SELECT count(*) FROM t_file_sorted_by
+----
+0
+
+# Only the cluster key can be declared.
+statement error .*CLUSTER_KEY
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/csv_one/ FILE_FORMAT = (TYPE = CSV) FILE_SORTED_BY = (k)
+
+statement error .*FILE_SORTED_BY is not supported for COPY with a transform
+COPY INTO t_file_sorted_by FROM (SELECT $1, $2 FROM @s_file_sorted_by/csv_one/) FILE_FORMAT = (TYPE = CSV) FILE_SORTED_BY = CLUSTER_KEY
+
+statement error .*FILE_SORTED_BY only supports
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/csv_one/ FILE_FORMAT = (TYPE = ORC) FILE_SORTED_BY = CLUSTER_KEY
+
+statement error .*MISSING_FIELD_AS
+COPY INTO t_file_sorted_by FROM @s_file_sorted_by/parquet/ FILE_FORMAT = (TYPE = PARQUET MISSING_FIELD_AS = NULL) FILE_SORTED_BY = CLUSTER_KEY
+
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by_no_cluster(k INT NOT NULL, v INT NOT NULL)
+
+statement error .*requires the target table to have a linear cluster key
+COPY INTO t_file_sorted_by_no_cluster FROM @s_file_sorted_by/csv_one/ FILE_FORMAT = (TYPE = CSV) FILE_SORTED_BY = CLUSTER_KEY
+
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by_partitioned(k INT NOT NULL, v INT NOT NULL) PARTITION BY (v % 2) CLUSTER BY (k)
+
+statement error .*not supported for tables with PARTITION BY
+COPY INTO t_file_sorted_by_partitioned FROM @s_file_sorted_by/csv_one/ FILE_FORMAT = (TYPE = CSV) FILE_SORTED_BY = CLUSTER_KEY
+
+# A column filled by its default is not in the files.
+statement ok
+CREATE OR REPLACE TABLE t_file_sorted_by_default(k INT NOT NULL DEFAULT 0, v INT NOT NULL) CLUSTER BY (k)
+
+statement error .*not loaded from the files
+COPY INTO t_file_sorted_by_default(v) FROM @s_file_sorted_by/csv_one/ FILE_FORMAT = (TYPE = CSV) FILE_SORTED_BY = CLUSTER_KEY
+
+statement ok
+DROP TABLE t_file_sorted_by
+
+statement ok
+DROP TABLE t_file_sorted_by_no_cluster
+
+statement ok
+DROP TABLE t_file_sorted_by_partitioned
+
+statement ok
+DROP TABLE t_file_sorted_by_default
+
+statement ok
+UNSET enable_compact_after_write
+
+statement ok
+UNSET input_read_buffer_size
+
+statement ok
+UNSET max_threads
+
+statement ok
+REMOVE @s_file_sorted_by
+
+statement ok
+DROP STAGE s_file_sorted_by

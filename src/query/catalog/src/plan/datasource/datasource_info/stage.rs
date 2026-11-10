@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteDefaultExpr;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::StageInfo;
@@ -48,6 +49,10 @@ pub struct StageTableInfo {
     pub is_select: bool,
     pub copy_into_table_options: CopyIntoTableOptions,
     pub is_variant: bool,
+    /// Keys that the rows within each input file are declared to be ordered by
+    /// (`FILE_SORTED_BY`), bound to the target table columns by name.
+    #[serde(default)]
+    pub file_sort_keys: Option<Vec<RemoteExpr<String>>>,
 
     // temp work round, when enable_schema_evolution, set it before read partition,
     // then the StageTableInfo will be dropped, so no need to free it

@@ -71,14 +71,14 @@ impl BlockBuilder {
     }
 }
 
-impl AccumulatingTransform for BlockBuilder {
-    const NAME: &'static str = "BlockBuilder";
+impl BlockBuilder {
+    /// Decodes one batch into a block of its own, without accumulating across batches.
+    pub fn decode_batch(&mut self, batch: RowBatchWithPosition) -> Result<Option<DataBlock>> {
+        self.add_batch(batch)?;
+        Ok(self.flush_block(false)?.pop())
+    }
 
-    fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
-        let batch = data
-            .get_owned_meta()
-            .and_then(RowBatchWithPosition::downcast_from)
-            .unwrap();
+    fn add_batch(&mut self, batch: RowBatchWithPosition) -> Result<()> {
         if self.state.file_path != batch.start_pos.path {
             self.state.file_path = batch.start_pos.path.clone();
             self.state.file_content_key = batch.start_pos.content_key.clone();
@@ -88,7 +88,19 @@ impl AccumulatingTransform for BlockBuilder {
         self.decoder.add(&mut self.state, batch)?;
         self.state
             .add_internals_columns_batch(self.state.num_rows - num_rows);
-        self.state.flush_status(&self.ctx.table_context)?;
+        self.state.flush_status(&self.ctx.table_context)
+    }
+}
+
+impl AccumulatingTransform for BlockBuilder {
+    const NAME: &'static str = "BlockBuilder";
+
+    fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
+        let batch = data
+            .get_owned_meta()
+            .and_then(RowBatchWithPosition::downcast_from)
+            .unwrap();
+        self.add_batch(batch)?;
         let blocks = self.try_flush_block_by_memory()?;
         Ok(blocks)
     }

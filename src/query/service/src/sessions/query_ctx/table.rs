@@ -536,6 +536,7 @@ impl TableContextTableManagement for QueryContext {
                         default_exprs: None,
                         copy_into_table_options: copy_options.clone(),
                         is_variant: true,
+                        file_sort_keys: None,
                         parquet_metas: None,
                     };
                     StageTable::try_create(info)

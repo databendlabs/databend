@@ -30,6 +30,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TopKSorter;
 use databend_common_pipeline::core::Event;
@@ -46,6 +47,7 @@ use crate::ParquetFileMeta;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetReaderBuilder;
+use crate::file_order::FileOrder;
 use crate::meta::check_parquet_schema;
 use crate::meta::read_metadata_async_cached;
 use crate::parquet_part::DeleteTask;
@@ -162,6 +164,8 @@ pub struct ParquetSource {
     push_downs: Option<PushDownInfo>,
     topk: Arc<Option<TopK>>,
     op_registry: Arc<dyn OperatorRegistry>,
+    /// COPY with `FILE_SORTED_BY`: build blocks from consecutive rows of one file.
+    file_order: Option<FileOrder>,
 }
 
 impl ParquetSource {
@@ -187,6 +191,21 @@ impl ParquetSource {
             .as_ref()
             .map(|t| TopKSorter::new(t.limit, t.asc));
 
+        let file_order = match ctx.copy_state().get_file_sort_keys() {
+            Some(keys) if is_copy && source_type == ParquetSourceType::StageTable => {
+                let output_schema =
+                    PushDownInfo::projection_of_push_downs(&table_schema, push_downs.as_ref())
+                        .project_schema(&table_schema);
+                Some(FileOrder::try_create(
+                    &keys,
+                    &DataSchema::from(&output_schema),
+                    ctx.get_function_context()?,
+                    ctx.read_block_thresholds().get(),
+                )?)
+            }
+            _ => None,
+        };
+
         Ok(ProcessorPtr::create(Box::new(Self {
             source_type,
             output,
@@ -206,6 +225,7 @@ impl ParquetSource {
             push_downs,
             topk,
             op_registry,
+            file_order,
         })))
     }
 }
@@ -280,9 +300,18 @@ impl Processor for ParquetSource {
                                 error: None,
                             });
                         }
-                        self.generated_data = Some(block);
+                        self.generated_data = match &mut self.file_order {
+                            Some(file_order) => file_order.add(&location, block)?,
+                            None => Some(block),
+                        };
                     } else {
                         vs.pop_front();
+                        if vs.is_empty()
+                            && let Some(file_order) = &mut self.file_order
+                        {
+                            // The part holds the whole file: its last rows end here.
+                            self.generated_data = file_order.flush()?;
+                        }
                     }
                     self.state = State::ReadRowGroup {
                         readers: vs,
