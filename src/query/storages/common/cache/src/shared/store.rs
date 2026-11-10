@@ -395,6 +395,14 @@ impl KindStore for SharedStore {
         }
     }
 
+    fn kind_byte_limit(&self, kind: CacheKind) -> Option<usize> {
+        let pool_cap = self.pool(kind.pool()).cap();
+        Some(match self.kind(kind).limit().max_bytes {
+            Some(limit) => limit.min(pool_cap),
+            None => pool_cap,
+        })
+    }
+
     fn pool_stats(&self) -> Vec<PoolStats> {
         self.pools
             .iter()

@@ -152,6 +152,10 @@ pub trait KindStore: Send + Sync {
 
     fn kind_stats(&self, kind: CacheKind) -> KindStats;
 
+    /// Bytes the kind may hold at most right now: its own limit or its pool's cap, whichever is
+    /// lower. `None` when it is not bounded in bytes.
+    fn kind_byte_limit(&self, kind: CacheKind) -> Option<usize>;
+
     fn pool_stats(&self) -> Vec<PoolStats>;
 
     /// Evicts unreferenced entries under memory pressure until `relieved` returns true or nothing

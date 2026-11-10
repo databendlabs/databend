@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use arrow_schema::Field;
 use arrow_schema::Fields;
+use databend_common_catalog::cache_policy::TableDataCacheWriteBudget;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -52,6 +53,8 @@ pub struct BlockReader {
     pub(crate) default_vals: Vec<Scalar>,
     pub(crate) all_field_default_vals: Vec<Scalar>,
     pub policy: CachePolicy,
+    /// What the statement may still put into the in-memory cache of decoded columns.
+    pub(crate) cache_write_budget: Arc<TableDataCacheWriteBudget>,
     /// In-memory encoding of the projected columns that are kept encoded, by column id; see
     /// `enable_encoded_columns`. Nested columns are never encoded. Fixed per reader, so computed
     /// once here and shared with [`BlockReadContext`], which builds the cache keys.
@@ -198,6 +201,7 @@ impl BlockReader {
                 .map(|field| field.column_id),
         );
 
+        let cache_write_budget = ctx.table_data_cache_write_budget();
         Ok(Arc::new(BlockReader {
             ctx,
             operator,
@@ -208,6 +212,7 @@ impl BlockReader {
             default_vals,
             all_field_default_vals,
             policy,
+            cache_write_budget,
             column_encodings: Arc::new(column_encodings),
             dictionary_ndv_ratio,
             parquet_hint_fields,

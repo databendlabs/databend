@@ -20,6 +20,7 @@ use std::sync::Barrier;
 
 use databend_common_base::runtime::Thread;
 use databend_storages_common_cache::KindLimit;
+use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::PoolCaps;
 use databend_storages_common_cache::backend::KindStore;
 use databend_storages_common_cache::shared::SharedStore;
@@ -279,4 +280,22 @@ fn test_reapplying_limit_reclaims_previously_held_entries() {
     assert_eq!((kind.resident, kind.in_cache, kind.items), (0, 0, 0));
     assert_eq!(live.count(), 0);
     assert!(cache.put("new", live.item(50)).is_charged());
+}
+
+/// What a kind may hold at most is its own limit or its pool's cap, whichever is lower, and
+/// follows both as they change; a kind turned off may hold nothing.
+#[test]
+fn test_kind_byte_limit_is_the_lower_of_kind_and_pool() {
+    let store = shared_store(10_000, 0, 4_000);
+    let data = cache(&store, data_kind());
+    assert_eq!(data.byte_limit(), Some(4_000), "bounded by the pool alone");
+    store.set_kind_limit(data_kind(), KindLimit::bytes(1_000));
+    assert_eq!(data.byte_limit(), Some(1_000), "the kind's limit is lower");
+    store.set_kind_limit(data_kind(), KindLimit::bytes(9_000));
+    assert_eq!(data.byte_limit(), Some(4_000), "the pool's cap is lower");
+    store.set_pool_cap(Pool::Data, 2_000).unwrap();
+    assert_eq!(data.byte_limit(), Some(2_000), "follows the cap");
+    store.set_kind_limit(data_kind(), KindLimit::DISABLED);
+    assert_eq!(data.byte_limit(), Some(0));
+    assert!(!data.is_enabled());
 }

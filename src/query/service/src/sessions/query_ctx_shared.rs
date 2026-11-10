@@ -41,6 +41,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::cache_policy::CachePolicy;
+use databend_common_catalog::cache_policy::TableDataCacheWriteBudget;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
@@ -202,6 +203,8 @@ pub struct QueryContextShared {
     pub(super) perf_config: Mutex<PerfConfig>,
     /// What the reads of the statement may do with the caches (`TableContextCachePolicy`).
     pub(super) cache_policy: RwLock<CachePolicy>,
+    /// What the statement may still put into the in-memory cache of decoded columns.
+    pub(super) table_data_cache_write_budget: Arc<TableDataCacheWriteBudget>,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
@@ -309,6 +312,7 @@ impl QueryContextShared {
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             cache_policy: RwLock::new(CachePolicy::DEFAULT),
+            table_data_cache_write_budget: Arc::default(),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),

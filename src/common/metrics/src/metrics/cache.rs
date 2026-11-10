@@ -40,6 +40,14 @@ static CACHE_POPULATION_PENDING_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_population_pending_count"));
 static CACHE_POPULATION_OVERFLOW_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_population_overflow_count"));
+static CACHE_WRITE_SKIPPED_BYTES: LazyLock<FamilyCounter<CacheWriteSkipLabels>> =
+    LazyLock::new(|| register_counter_family("cache_write_skipped_bytes"));
+
+#[derive(Clone, Debug, EncodeLabelSet, Hash, PartialEq, Eq)]
+struct CacheWriteSkipLabels {
+    cache_name: String,
+    reason: String,
+}
 
 /// The lookup counters of one cache, looked up once: counting a lookup is then an atomic
 /// addition per counter, with no label to build and find. For caches counted on every lookup;
@@ -154,6 +162,16 @@ pub fn metrics_inc_cache_population_pending_count(c: i64, cache_name: &str) {
             cache_name: cache_name.to_string(),
         })
         .inc_by(c as u64);
+}
+
+/// Bytes a read decoded but did not put in `cache_name`, by the reason it was held back.
+pub fn metrics_inc_cache_write_skipped_bytes(c: u64, cache_name: &str, reason: &str) {
+    CACHE_WRITE_SKIPPED_BYTES
+        .get_or_create(&CacheWriteSkipLabels {
+            cache_name: cache_name.to_string(),
+            reason: reason.to_string(),
+        })
+        .inc_by(c);
 }
 
 pub fn metrics_inc_cache_population_overflow_count(c: i64, cache_name: &str) {

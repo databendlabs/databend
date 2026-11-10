@@ -29,7 +29,10 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visitor::ValueVisitor;
+use databend_common_metrics::cache::metrics_inc_cache_write_skipped_bytes;
 use databend_storages_common_cache::CachedColumnArray;
+use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
@@ -101,6 +104,24 @@ impl BlockReader {
         let caches = FuseCaches::instance();
         let array_cache = Some(&caches.column_arrays)
             .filter(|cache| self.policy.memory.writes() && !has_selection && cache.is_enabled());
+        // Decoded columns are put in the cache within the statement's budget. A cache without a
+        // byte limit takes everything.
+        let byte_limit = array_cache.and_then(|cache| cache.byte_limit());
+        let fill = |cache: &MemCache<SizedColumnArray>, key: &str, value: SizedColumnArray| {
+            let bytes = value.1 as u64;
+            let admitted = match byte_limit {
+                Some(limit) => self.cache_write_budget.admit(bytes, limit as u64),
+                None => Ok(()),
+            };
+            match admitted {
+                Ok(()) => {
+                    cache.fill(key, value);
+                }
+                Err(refusal) => {
+                    metrics_inc_cache_write_skipped_bytes(bytes, cache.name(), refusal.reason())
+                }
+            }
+        };
 
         for ((i, field), column_node) in self
             .projected_schema
@@ -152,7 +173,8 @@ impl BlockReader {
                             )?;
                             if let Some(cache) = cache {
                                 let memory_size = column.memory_size(false);
-                                cache.fill(
+                                fill(
+                                    cache,
                                     cache_key().as_ref(),
                                     (CachedColumnArray::Column(column.clone()), memory_size),
                                 );
@@ -162,7 +184,8 @@ impl BlockReader {
                         None => {
                             if let Some(cache) = cache {
                                 let array_memory_size = arrow_array.get_array_memory_size();
-                                cache.fill(
+                                fill(
+                                    cache,
                                     cache_key().as_ref(),
                                     (arrow_array.clone().into(), array_memory_size),
                                 );

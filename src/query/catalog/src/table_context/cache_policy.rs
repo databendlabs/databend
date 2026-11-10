@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::cache_policy::CachePolicy;
+use crate::cache_policy::TableDataCacheWriteBudget;
 
 /// The cache policy of the statement: readers built from the context apply it, together with
 /// their own (`CachePolicy::at_most`).
@@ -24,5 +27,11 @@ pub trait TableContextCachePolicy: Send + Sync {
     /// Sets the statement's policy, for the reads of the statement on every node from then on.
     fn set_cache_policy(&self, _policy: CachePolicy) {
         unimplemented!()
+    }
+
+    /// What the statement may still put into the in-memory cache of decoded columns, shared by
+    /// its scans on this node. The default is a budget of its own per call: no bound.
+    fn table_data_cache_write_budget(&self) -> Arc<TableDataCacheWriteBudget> {
+        Arc::default()
     }
 }

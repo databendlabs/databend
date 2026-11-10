@@ -126,6 +126,11 @@ impl<T: CachedItem> MemCache<T> {
         self.store.kind_stats(self.kind)
     }
 
+    /// Bytes the cache may hold at most right now, see [`KindStore::kind_byte_limit`].
+    pub fn byte_limit(&self) -> Option<usize> {
+        self.store.kind_byte_limit(self.kind)
+    }
+
     pub fn lookup(&self, key: &str) -> Option<CacheRef<T>> {
         self.lookup_tiers(key, None)
     }

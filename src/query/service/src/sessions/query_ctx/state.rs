@@ -38,6 +38,10 @@ impl TableContextCachePolicy for QueryContext {
     fn set_cache_policy(&self, policy: CachePolicy) {
         *self.shared.cache_policy.write() = policy;
     }
+
+    fn table_data_cache_write_budget(&self) -> Arc<TableDataCacheWriteBudget> {
+        self.shared.table_data_cache_write_budget.clone()
+    }
 }
 
 impl TableContextPerf for QueryContext {

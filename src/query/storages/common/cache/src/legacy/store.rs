@@ -296,6 +296,14 @@ impl KindStore for LegacyStore {
         ))
     }
 
+    fn kind_byte_limit(&self, kind: CacheKind) -> Option<usize> {
+        match *self.kind(kind).capacity.lock() {
+            LegacyCapacity::Bytes(n) => Some(n),
+            LegacyCapacity::Disabled => Some(0),
+            LegacyCapacity::Items(_) => None,
+        }
+    }
+
     fn kind_stats(&self, kind: CacheKind) -> KindStats {
         let state = self.kind(kind);
         let (capacity, unit) = match *state.capacity.lock() {

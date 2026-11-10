@@ -12,5 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod expected_decoded_bytes;
 mod selected_row_offsets;
 mod vector_index_bundle_loader;

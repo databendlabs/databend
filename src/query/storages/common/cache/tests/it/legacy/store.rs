@@ -333,3 +333,32 @@ fn test_payload_limit_covers_full_components() {
     store.set_kind_limit(CacheKind::of::<inverted::Payload>(), KindLimit::DISABLED);
     assert!(!store.is_enabled(CacheKind::of::<inverted::FullPayload>()));
 }
+
+/// A kind bounded in bytes reports its capacity; one bounded in items has no byte limit; one
+/// turned off may hold nothing.
+#[test]
+fn test_kind_byte_limit() {
+    let store = legacy(&[
+        (
+            CacheKind::of::<table::Snapshot>(),
+            LegacyCapacity::Bytes(4_000),
+        ),
+        (CacheKind::of::<column::Array>(), LegacyCapacity::Items(3)),
+        (
+            CacheKind::of::<bloom::IndexMeta>(),
+            LegacyCapacity::Disabled,
+        ),
+    ]);
+    assert_eq!(
+        store.kind_byte_limit(CacheKind::of::<table::Snapshot>()),
+        Some(4_000)
+    );
+    assert_eq!(
+        store.kind_byte_limit(CacheKind::of::<column::Array>()),
+        None
+    );
+    assert_eq!(
+        store.kind_byte_limit(CacheKind::of::<bloom::IndexMeta>()),
+        Some(0)
+    );
+}

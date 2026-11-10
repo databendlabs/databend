@@ -173,6 +173,10 @@ impl KindStore for MissThenHit {
         self.inner.kind_stats(kind)
     }
 
+    fn kind_byte_limit(&self, kind: CacheKind) -> Option<usize> {
+        self.inner.kind_byte_limit(kind)
+    }
+
     fn pool_stats(&self) -> Vec<PoolStats> {
         self.inner.pool_stats()
     }

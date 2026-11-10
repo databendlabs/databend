@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
@@ -24,14 +25,18 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
+use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CachePolicy;
 
+use crate::FuseBlockPartInfo;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::io::BlockReader;
+use crate::io::FuseCaches;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_partitions_source_pipeline;
@@ -65,6 +70,45 @@ impl FuseTable {
             ),
             policy,
         )
+    }
+
+    /// Charges the statement's budget for the cache of decoded columns with what this scan is
+    /// expected to put there, before it reads anything; see `TableDataCacheWriteBudget`. Only
+    /// the columns the scan reads in full count: with a prewhere, the prewhere columns, as the
+    /// others are read by the rows it selects and those reads are not cached. Summed over the
+    /// block parts that carry column statistics, so nothing is charged for a scan whose blocks
+    /// are still to be pruned while it runs; the running count then bounds its writes alone.
+    fn expect_table_data_cache_writes(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        policy: CachePolicy,
+    ) -> Result<()> {
+        let cache = &FuseCaches::instance().column_arrays;
+        if !policy.memory.writes() || !cache.is_enabled() {
+            return Ok(());
+        }
+        let Some(limit) = cache.byte_limit() else {
+            return Ok(());
+        };
+        let schema = self.schema_with_stream();
+        let projection = match plan.push_downs.as_ref().and_then(|p| p.prewhere.as_ref()) {
+            Some(prewhere) => prewhere.prewhere_columns.clone(),
+            None => PushDownInfo::projection_of_push_downs(&schema, plan.push_downs.as_ref()),
+        };
+        let arrow_schema = schema.as_ref().into();
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
+        let leaf_column_ids: Vec<ColumnId> = projection
+            .project_column_nodes(&column_nodes)?
+            .iter()
+            .flat_map(|node| node.leaf_column_ids.iter().copied())
+            .collect();
+        let expected = expected_decoded_bytes(&plan.parts.partitions, &leaf_column_ids);
+        if expected > 0 {
+            ctx.table_data_cache_write_budget()
+                .expect(expected, limit as u64);
+        }
+        Ok(())
     }
 
     pub(crate) fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
@@ -173,6 +217,7 @@ impl FuseTable {
         }
 
         let (block_reader, virtual_reader) = self.build_data_readers(ctx.clone(), plan, policy)?;
+        self.expect_table_data_cache_writes(&ctx, plan, block_reader.policy)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;
@@ -247,4 +292,17 @@ impl FuseTable {
 
         Ok(())
     }
+}
+
+/// Decoded bytes of `columns` over the block parts of `parts` that carry column statistics.
+/// Parts of other kinds, as segments still to be pruned, and blocks without statistics add
+/// nothing: a lower bound.
+pub fn expected_decoded_bytes(parts: &[PartInfoPtr], columns: &[ColumnId]) -> u64 {
+    parts
+        .iter()
+        .filter_map(|part| part.as_any().downcast_ref::<FuseBlockPartInfo>())
+        .filter_map(|block| block.columns_stat.as_ref())
+        .flat_map(|stats| columns.iter().filter_map(|id| stats.get(id)))
+        .map(|stat| stat.in_memory_size)
+        .sum()
 }
