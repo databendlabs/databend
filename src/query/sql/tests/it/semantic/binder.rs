@@ -130,6 +130,34 @@ async fn test_recursive_cte_subquery() -> Result<()> {
     .await
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_recursive_cte_materialized_reference() -> Result<()> {
+    let case = SqlTestCase {
+        name: "recursive_cte_materialized_reference",
+        description: "Explicit materialization cannot capture the active recursive generation.",
+        setup_sqls: &[],
+        sql: "SELECT 1",
+    };
+    let ctx = setup_context(&case).await?;
+    for query in [
+        "WITH q AS MATERIALIZED (SELECT n FROM m) SELECT n FROM q",
+        "WITH q AS MATERIALIZED (SELECT (SELECT n FROM m) AS n) SELECT n FROM q",
+        "WITH q AS (SELECT n FROM m), r AS MATERIALIZED (SELECT n FROM q) SELECT n FROM r",
+    ] {
+        let sql = format!(
+            "WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL \
+             SELECT n + 1 FROM m WHERE n < 3 AND n IN ({query})) SELECT n FROM m"
+        );
+        let err = ctx.bind_sql(&sql).await.unwrap_err();
+        assert_eq!(err.code(), 1002);
+        assert_eq!(
+            err.message(),
+            "AS MATERIALIZED CTEs cannot reference the active recursive CTE"
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn test_deep_left_join_binding() -> Result<()> {
     // Leave room for AST cloning without letting the debug query runtime's larger
