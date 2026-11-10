@@ -19,10 +19,12 @@ use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::InternalColumnMeta;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::F32;
 use databend_storages_common_pruner::BlockMetaIndex as PrunedBlockMetaIndex;
 use databend_storages_common_pruner::VectorScores;
@@ -30,6 +32,18 @@ use roaring::RoaringTreemap;
 
 use crate::FuseBlockPartInfo;
 use crate::operations::BlockMetaIndex;
+
+/// Offsets of the rows selected by a block's row selection, for the internal
+/// columns (`_row_id` and the others) of the rows read. The selection is by runs
+/// of set bits: a TopN query selects a few rows out of a block of hundreds of
+/// thousands, and a test of every bit would cost more than reading the rows.
+pub fn selected_row_offsets(selection: &Bitmap) -> RoaringTreemap {
+    // The slices are in order and apart, so the offsets are appended in order.
+    RoaringTreemap::from_sorted_iter(
+        SlicesIterator::new(selection).flat_map(|(start, len)| start as u64..(start + len) as u64),
+    )
+    .unwrap()
+}
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
     let merge_into_join = ctx.get_merge_into_join();
