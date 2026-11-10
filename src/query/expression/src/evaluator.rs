@@ -28,6 +28,7 @@ use jsonb::jsonpath::JsonPath;
 use jsonb::jsonpath::parse_json_path;
 
 use crate::BlockEntry;
+use crate::Function;
 use crate::FunctionContext;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
@@ -208,6 +209,18 @@ impl<'a> Evaluator<'a> {
 
     pub fn func_ctx(&self) -> &FunctionContext {
         self.func_ctx
+    }
+
+    /// Records that a non-deterministic function computed a value valid only for this query.
+    pub(crate) fn record_eval(&self, function: &Function) {
+        if self
+            .fn_registry
+            .properties
+            .get(&function.signature.name)
+            .is_some_and(|property| property.non_deterministic)
+        {
+            self.func_ctx.query_specific_values.record();
+        }
     }
 
     #[cfg(debug_assertions)]
@@ -587,6 +600,7 @@ impl<'a> Evaluator<'a> {
         };
 
         let (_, _, eval) = function.eval.as_scalar().unwrap();
+        self.record_eval(function);
         let mut result = eval.eval(&args, &mut ctx);
         if let Some((_, keys)) = dictionary {
             if let Some((valids, message)) = ctx.errors.take()
@@ -2833,6 +2847,7 @@ impl<'a> Evaluator<'a> {
                     strict_eval: options.strict_eval,
                 };
                 let (_, _, eval) = function.eval.as_scalar().unwrap();
+                self.record_eval(function);
                 let result = eval.eval(&args, &mut ctx);
 
                 // Same all-scalar rule as `eval_common_call`: an error from a

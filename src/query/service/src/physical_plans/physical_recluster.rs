@@ -20,6 +20,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -244,7 +245,7 @@ impl IPhysicalPlan for Recluster {
                         builder.ctx.clone(),
                         &plan,
                         &mut builder.main_pipeline,
-                        false,
+                        CachePolicy::READ_ONLY,
                     )?;
 
                     let num_input_columns = schema.fields().len();

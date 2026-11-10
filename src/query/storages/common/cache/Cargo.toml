@@ -17,15 +17,17 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-storages-common-index = { workspace = true }
+databend-storages-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 async-backtrace = { workspace = true }
-async-trait = { workspace = true }
 bytes = { workspace = true }
 crc32fast = { workspace = true }
 crossbeam-channel = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true }
+opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 prometheus-client = { workspace = true }
@@ -39,14 +41,8 @@ chrono = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 divan = { workspace = true }
-futures = { workspace = true }
-mockall = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
-
-[[bench]]
-name = "read_cache_content"
-harness = false
 
 [[bench]]
 name = "store"
@@ -56,8 +52,9 @@ harness = false
 name = "pressure_shrink"
 harness = false
 
-[target.'cfg(unix)'.dependencies]
-libc = { workspace = true }
+[[bench]]
+name = "metrics_read"
+harness = false
 
 [lints]
 workspace = true

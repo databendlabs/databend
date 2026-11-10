@@ -576,7 +576,6 @@ impl<'a> MaterializedViewRefresh<'a> {
                 catalog: Some(Identifier::from_name(None, &self.catalog)),
                 database: Some(Identifier::from_name(None, &self.database)),
                 table: Identifier::from_name(None, &self.view_name),
-                branch: None,
             },
             columns: vec![],
             source: InsertSource::Select {

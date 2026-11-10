@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
@@ -46,6 +47,7 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextSettings;
@@ -132,6 +134,9 @@ pub(crate) async fn execute_compact_hook(
     trace_ctx: CompactHookTraceCtx,
     lock_opt: LockTableOption,
 ) -> Result<()> {
+    // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context of
+    // the write, whose own reads are done by now.
+    ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
     let op_name = &trace_ctx.operation_name;
     let Some(compact_target) = resolve_compact_target(&ctx, compact_target).await? else {
         return Ok(());

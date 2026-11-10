@@ -33,6 +33,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+use databend_storages_common_cache::CachePolicy;
 
 use crate::Table;
 use crate::sessions::TableContext;
@@ -172,7 +173,7 @@ impl<T: SimpleTableFunc> Table for TableFunctionTemplate<T> {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         pipeline.add_source(
             |output| {

@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::IcebergTableCacheValue;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::TTLReader;
@@ -61,7 +62,7 @@ impl Reader for IcebergTableLoader {
     }
 
     #[async_backtrace::framed]
-    async fn read(&self, key: &String) -> Result<IcebergTableCacheValue> {
+    async fn read(&self, key: &String, _ctx: &CachePolicy) -> Result<IcebergTableCacheValue> {
         let (database_name, table_name) = parse_table_cache_key(key)?;
         let iceberg = IcebergTable::try_create_from_iceberg_catalog(
             self.catalog.clone(),

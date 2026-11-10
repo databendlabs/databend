@@ -25,6 +25,7 @@ pub const FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP: &str =
     "data_retention_num_snapshots_to_keep";
 pub const FUSE_OPT_KEY_ENABLE_AUTO_VACUUM: &str = "enable_auto_vacuum";
 pub const FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE: &str = "enable_auto_analyze";
+pub const FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP: &str = "enable_segment_zone_map";
 pub const FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN: &str = "enable_virtual_column";
 pub const FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS: &str =
     "virtual_column_max_direct_columns";
@@ -50,6 +51,7 @@ pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
 pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
 pub const FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX: &str = "_ts";
 pub const FUSE_TBL_SEGMENT_STATISTICS_PREFIX: &str = "_hs";
+pub const FUSE_TBL_SEGMENT_ZONE_MAP_PREFIX: &str = "_zm";
 pub const FUSE_TBL_LAST_SNAPSHOT_HINT: &str = "last_snapshot_location_hint";
 pub const FUSE_TBL_LAST_SNAPSHOT_HINT_V2: &str = "last_snapshot_location_hint_v2";
 pub const FUSE_TBL_VIRTUAL_BLOCK_PREFIX: &str = "_vb_v2";
@@ -67,7 +69,6 @@ pub const FUSE_TBL_VECTOR_INDEX_PREFIX: &str = "_i_v";
 /// selects the bundle reader.
 pub const FUSE_TBL_VECTOR_INDEX_PREFIX_V2: &str = "_i_v_v2";
 pub const FUSE_TBL_SPATIAL_INDEX_PREFIX: &str = "_i_s";
-pub const LEGACY_FUSE_TBL_REF_PREFIX: &str = "_ref";
 
 pub const DEFAULT_ROW_PER_PAGE: usize = 8192;
 pub const DEFAULT_ROW_PER_INDEX: usize = 100000;

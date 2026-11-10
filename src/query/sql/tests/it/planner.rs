@@ -437,16 +437,16 @@ async fn test_optimizer_context_rule_settings() -> Result<()> {
     )
     .with_settings(&ctx.get_settings())?;
 
-    // Defaults: empty skip list, grouping sets to union disabled.
+    // Defaults: empty skip list, grouping sets to union enabled.
     assert!(!opt_ctx.get_enable_trace());
     assert!(!opt_ctx.is_rule_disabled(RuleID::PushDownLimit));
-    assert!(opt_ctx.is_rule_disabled(RuleID::GroupingSetsToUnion));
-    assert!(opt_ctx.is_rule_disabled(RuleID::HierarchicalGroupingSetsToUnion));
-    assert!(opt_ctx.is_optimizer_disabled(&RuleID::GroupingSetsToUnion.to_string()));
+    assert!(!opt_ctx.is_rule_disabled(RuleID::GroupingSetsToUnion));
+    assert!(!opt_ctx.is_rule_disabled(RuleID::HierarchicalGroupingSetsToUnion));
+    assert!(!opt_ctx.is_optimizer_disabled(&RuleID::GroupingSetsToUnion.to_string()));
 
     let settings = ctx.get_settings();
     settings.set_optimizer_skip_list("pUsHdOwNlImIt, CollectStatisticsOptimizer".to_string())?;
-    settings.set_setting("grouping_sets_to_union".to_string(), "1".to_string())?;
+    settings.set_setting("grouping_sets_to_union".to_string(), "0".to_string())?;
     settings.set_setting("enable_optimizer_trace".to_string(), "1".to_string())?;
 
     let opt_ctx = OptimizerContext::new(
@@ -458,8 +458,9 @@ async fn test_optimizer_context_rule_settings() -> Result<()> {
     assert!(opt_ctx.get_enable_trace());
     assert!(opt_ctx.is_rule_disabled(RuleID::PushDownLimit));
     assert!(!opt_ctx.is_rule_disabled(RuleID::MergeLimit));
-    assert!(!opt_ctx.is_rule_disabled(RuleID::GroupingSetsToUnion));
-    assert!(!opt_ctx.is_rule_disabled(RuleID::HierarchicalGroupingSetsToUnion));
+    assert!(opt_ctx.is_rule_disabled(RuleID::GroupingSetsToUnion));
+    assert!(opt_ctx.is_rule_disabled(RuleID::HierarchicalGroupingSetsToUnion));
+    assert!(opt_ctx.is_optimizer_disabled(&RuleID::GroupingSetsToUnion.to_string()));
     assert!(opt_ctx.is_optimizer_disabled("COLLECTSTATISTICSOPTIMIZER"));
 
     Ok(())

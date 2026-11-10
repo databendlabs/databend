@@ -24,19 +24,19 @@
 1
 copy1
 <<<<
-a/bc/data_UUID_0000_00000000.csv	2	1
-a/bc/data_UUID_0000_00000001.csv	2	1
-a/bc/data_UUID_0000_00000002.csv	2	1
-a/bc/data_UUID_0000_00000003.csv	2	1
-a/bc/data_UUID_0000_00000004.csv	2	1
-a/bc/data_UUID_0000_00000005.csv	2	1
-a/bc/data_UUID_0000_00000006.csv	2	1
-a/bc/data_UUID_0000_00000007.csv	2	1
-a/bc/data_UUID_0000_00000008.csv	2	1
-a/bc/data_UUID_0000_00000009.csv	2	1
+a/bc/data_UUID_0000_00000000.csv	4	1
+a/bc/data_UUID_0000_00000001.csv	4	1
+a/bc/data_UUID_0000_00000002.csv	4	1
+a/bc/data_UUID_0000_00000003.csv	4	1
+a/bc/data_UUID_0000_00000004.csv	4	1
+a/bc/data_UUID_0000_00000005.csv	4	1
+a/bc/data_UUID_0000_00000006.csv	4	1
+a/bc/data_UUID_0000_00000007.csv	4	1
+a/bc/data_UUID_0000_00000008.csv	4	1
+a/bc/data_UUID_0000_00000009.csv	4	1
 copy2
 >>>> copy into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=false
-10	20	20
+10	40	40
 <<<<
 copy3
 <<<<
