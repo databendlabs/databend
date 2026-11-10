@@ -21,7 +21,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::utils::sort_key_order::RangeCheck;
 use databend_common_expression::utils::sort_key_order::SortKeyEvaluator;
 use databend_common_expression::utils::sort_key_order::SortKeyRow;
 use databend_common_expression::utils::sort_key_order::compare_sort_key_rows;
@@ -31,16 +30,12 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 /// Builds the blocks of a COPY with `FILE_SORTED_BY` while one source reads a whole file:
 /// consecutive blocks of the file are concatenated into blocks of the target size, and the
 /// key ranges of the read blocks are checked not to go back, taking each range from the first
-/// and last rows and checking a sample of the rows inside it. A block never spans two files.
-/// The rows of each read block checked to fall inside the range of its first and last rows.
-const SAMPLED_ROWS_PER_BLOCK: usize = 64;
-
+/// and last rows. A block never spans two files.
 pub(crate) struct FileOrder {
     sort_keys: SortKeyEvaluator,
     thresholds: BlockThresholds,
     location: String,
     rows_read: usize,
-    blocks_read: u64,
     /// The sort key of the last row of the current file so far.
     last_key: Option<SortKeyRow>,
     blocks: Vec<DataBlock>,
@@ -65,7 +60,6 @@ impl FileOrder {
             thresholds,
             location: String::new(),
             rows_read: 0,
-            blocks_read: 0,
             last_key: None,
             blocks: Vec::new(),
             rows: 0,
@@ -80,7 +74,6 @@ impl FileOrder {
             output = self.flush()?;
             self.location = location.to_string();
             self.rows_read = 0;
-            self.blocks_read = 0;
             self.last_key = None;
         }
         if block.is_empty() {
@@ -89,46 +82,31 @@ impl FileOrder {
 
         // The rows of a block are sorted again on write, so only the ranges matter: each block
         // must start at or after the end of the block before it in the same file.
-        match self.sort_keys.check_range(
-            &block,
-            SAMPLED_ROWS_PER_BLOCK,
-            self.blocks_read,
-            &BUILTIN_FUNCTIONS,
-        )? {
-            None => {}
-            Some(RangeCheck::InRange { first, last }) => {
-                if let Some(previous) = &self.last_key
-                    && compare_sort_key_rows(&first, previous) == Ordering::Less
-                {
-                    return Err(self.violation(
-                        self.rows_read + 1,
-                        format!(
-                            "the rows from here start at {}, below {} of the rows before",
-                            display_sort_key_row(&first),
-                            display_sort_key_row(previous),
-                        ),
-                    ));
-                }
-                self.last_key = Some(last);
-            }
-            Some(RangeCheck::OutOfRange {
-                row,
-                key,
-                first,
-                last,
-            }) => {
+        if let Some((first, last)) = self.sort_keys.boundary_keys(&block, &BUILTIN_FUNCTIONS)? {
+            if compare_sort_key_rows(&first, &last) == Ordering::Greater {
                 return Err(self.violation(
-                    self.rows_read + row + 1,
+                    self.rows_read + 1,
                     format!(
-                        "{} is outside the range {} to {} of the rows around it",
-                        display_sort_key_row(&key),
+                        "the rows from here start at {}, above {} where they end",
                         display_sort_key_row(&first),
                         display_sort_key_row(&last),
                     ),
                 ));
             }
+            if let Some(previous) = &self.last_key
+                && compare_sort_key_rows(&first, previous) == Ordering::Less
+            {
+                return Err(self.violation(
+                    self.rows_read + 1,
+                    format!(
+                        "the rows from here start at {}, below {} of the rows before",
+                        display_sort_key_row(&first),
+                        display_sort_key_row(previous),
+                    ),
+                ));
+            }
+            self.last_key = Some(last);
         }
-        self.blocks_read += 1;
         self.rows_read += block.num_rows();
 
         self.rows += block.num_rows();

@@ -32,8 +32,8 @@
 //!
 //! `FILE_SORTED_BY` is checked at batch granularity: the rows of a block are sorted again on
 //! write, so what keeps the blocks of a file from overlapping is that each batch starts at or
-//! after the end of the batch before it in the same file. The range of a batch is taken from
-//! its first and last rows, and a sample of its rows is checked to fall inside it.
+//! after the end of the batch before it in the same file. Only the first and last rows of a
+//! batch are checked.
 
 use std::any::Any;
 use std::cmp::Ordering;
@@ -49,7 +49,6 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::local_block_meta_serde;
-use databend_common_expression::utils::sort_key_order::RangeCheck;
 use databend_common_expression::utils::sort_key_order::SortKeyEvaluator;
 use databend_common_expression::utils::sort_key_order::SortKeyRow;
 use databend_common_expression::utils::sort_key_order::compare_sort_key_rows;
@@ -154,9 +153,6 @@ impl Transform for SeqAssigner {
     }
 }
 
-/// The rows of each batch checked to fall inside the range of its first and last rows.
-const SAMPLED_ROWS_PER_BATCH: usize = 64;
-
 /// Decodes each batch into exactly one block, and finds its range of sort keys.
 pub struct OrderedBlockBuilder {
     builder: BlockBuilder,
@@ -220,32 +216,20 @@ impl Transform for OrderedBlockBuilder {
 
         // The rows of a block are sorted again on write, so only its range matters: blocks of one
         // file must not overlap, which the stitcher checks between consecutive batches.
-        let bounds = match self.sort_keys.check_range(
-            &block,
-            SAMPLED_ROWS_PER_BATCH,
-            sequenced.seq,
-            &BUILTIN_FUNCTIONS,
-        )? {
-            None => None,
-            Some(RangeCheck::InRange { first, last }) => Some((first, last)),
-            Some(RangeCheck::OutOfRange {
-                row,
-                key,
-                first,
-                last,
-            }) => {
-                return Err(file_sorted_by_violation(
-                    &sequenced.path,
-                    start_row + row + 1,
-                    format!(
-                        "{} is outside the range {} to {} of the rows around it",
-                        display_sort_key_row(&key),
-                        display_sort_key_row(&first),
-                        display_sort_key_row(&last),
-                    ),
-                ));
-            }
-        };
+        let bounds = self.sort_keys.boundary_keys(&block, &BUILTIN_FUNCTIONS)?;
+        if let Some((first, last)) = &bounds
+            && compare_sort_key_rows(first, last) == Ordering::Greater
+        {
+            return Err(file_sorted_by_violation(
+                &sequenced.path,
+                start_row + 1,
+                format!(
+                    "the rows from here start at {}, above {} where they end",
+                    display_sort_key_row(first),
+                    display_sort_key_row(last),
+                ),
+            ));
+        }
         block.add_meta(Some(Box::new(SequencedBlock {
             seq: sequenced.seq,
             path: sequenced.path,
