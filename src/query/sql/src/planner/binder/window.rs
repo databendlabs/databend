@@ -42,8 +42,6 @@ use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::plans::Sort;
-use crate::plans::SortItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
 use crate::plans::Window;
@@ -52,7 +50,6 @@ use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowGroup;
 use crate::plans::WindowOrderBy;
-use crate::plans::WindowPartition;
 use crate::plans::walk_expr_mut;
 
 /// Deterministic window inputs available to consumers in the same query block.
@@ -685,50 +682,9 @@ pub fn bind_window_function_info(
         child
     };
 
-    let settings = ctx.get_settings();
-    let default_nulls_first = settings.get_nulls_first();
-
-    let mut sort_items: Vec<SortItem> = vec![];
-    if !window_plan.partition_by.is_empty() {
-        for part in window_plan.partition_by.iter() {
-            sort_items.push(SortItem {
-                index: part.index,
-                asc: true,
-                nulls_first: default_nulls_first(true),
-            });
-        }
-    }
-
-    for order in window_plan.order_by.iter() {
-        let asc = order.asc.unwrap_or(true);
-        sort_items.push(SortItem {
-            index: order.order_by_item.index,
-            asc,
-            nulls_first: order
-                .nulls_first
-                .unwrap_or_else(|| default_nulls_first(asc)),
-        });
-    }
-
-    let child = if !sort_items.is_empty() {
-        let sort_plan = Sort {
-            items: sort_items,
-            limit: None,
-            after_exchange: None,
-            pre_projection: None,
-            window_partition: if window_plan.partition_by.is_empty() {
-                None
-            } else {
-                Some(WindowPartition {
-                    partition_by: window_plan.partition_by.clone(),
-                    top: None,
-                    func: window_plan.function.clone(),
-                })
-            },
-        };
-        SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
-    } else {
-        child
+    let child = match window_plan.input_sort(ctx.get_settings().get_nulls_first()) {
+        Some(sort_plan) => SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child)),
+        None => child,
     };
 
     Ok(SExpr::create_unary(

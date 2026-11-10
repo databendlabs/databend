@@ -59,7 +59,6 @@ use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sequence;
 use crate::plans::Sort;
-use crate::plans::SortItem;
 use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::plans::WindowFuncFrame;
@@ -67,7 +66,6 @@ use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowGroup;
-use crate::plans::WindowPartition;
 
 /// How to treat filter aliases inherited by an operator, see
 /// [`SubqueryDecorrelatorOptimizer::filter_alias_action`].
@@ -1011,35 +1009,13 @@ impl SubqueryDecorrelatorOptimizer {
             row_number_type.clone(),
         );
 
-        let sort_settings = self.ctx.get_table_ctx().get_settings();
-        let default_nulls_first = sort_settings.get_nulls_first();
-
-        let mut sort_items = Vec::with_capacity(partition_by.len() + order_by.len());
-        for part in &partition_by {
-            sort_items.push(SortItem {
-                index: part.index,
-                asc: true,
-                nulls_first: default_nulls_first(true),
-            });
-        }
-        for order in &order_by {
-            let asc = order.asc.unwrap_or(true);
-            sort_items.push(SortItem {
-                index: order.order_by_item.index,
-                asc,
-                nulls_first: order
-                    .nulls_first
-                    .unwrap_or_else(|| default_nulls_first(asc)),
-            });
-        }
-
         let window_plan = Window {
             span: None,
             index: row_number_index,
             function: WindowFuncType::RowNumber,
             arguments: vec![],
-            partition_by: partition_by.clone(),
-            order_by: order_by.clone(),
+            partition_by,
+            order_by,
             frame: WindowFuncFrame {
                 units: WindowFuncFrameUnits::Rows,
                 start_bound: WindowFuncFrameBound::Preceding(None),
@@ -1049,24 +1025,10 @@ impl SubqueryDecorrelatorOptimizer {
             top: None,
         };
 
-        let window_child = if sort_items.is_empty() {
-            flatten_plan
-        } else {
-            flatten_plan.build_unary(Sort {
-                items: sort_items,
-                limit: None,
-                after_exchange: None,
-                pre_projection: None,
-                window_partition: if partition_by.is_empty() {
-                    None
-                } else {
-                    Some(WindowPartition {
-                        partition_by: partition_by.clone(),
-                        top: None,
-                        func: WindowFuncType::RowNumber,
-                    })
-                },
-            })
+        let settings = self.ctx.get_table_ctx().get_settings();
+        let window_child = match window_plan.input_sort(settings.get_nulls_first()) {
+            Some(sort) => flatten_plan.build_unary(sort),
+            None => flatten_plan,
         };
 
         let row_number_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -1259,37 +1221,10 @@ impl SubqueryDecorrelatorOptimizer {
         // TransformWindow consumes contiguous, ordered partitions. Even OVER ()
         // needs a sort now that each outer row defines a separate partition.
         let settings = self.ctx.get_table_ctx().get_settings();
-        let default_nulls_first = settings.get_nulls_first();
-        let items = window
-            .partition_by
-            .iter()
-            .map(|part| SortItem {
-                index: part.index,
-                asc: true,
-                nulls_first: default_nulls_first(true),
-            })
-            .chain(window.order_by.iter().map(|order| {
-                let asc = order.asc.unwrap_or(true);
-                SortItem {
-                    index: order.order_by_item.index,
-                    asc,
-                    nulls_first: order
-                        .nulls_first
-                        .unwrap_or_else(|| default_nulls_first(asc)),
-                }
-            }))
-            .collect();
-        let flatten_plan = flatten_plan.build_unary(Sort {
-            items,
-            limit: None,
-            after_exchange: None,
-            pre_projection: None,
-            window_partition: Some(WindowPartition {
-                partition_by: window.partition_by.clone(),
-                top: None,
-                func: window.function.clone(),
-            }),
-        });
+        let flatten_plan = match window.input_sort(settings.get_nulls_first()) {
+            Some(sort) => flatten_plan.build_unary(sort),
+            None => flatten_plan,
+        };
 
         Ok((flatten_plan.build_unary(window), derived_columns))
     }
