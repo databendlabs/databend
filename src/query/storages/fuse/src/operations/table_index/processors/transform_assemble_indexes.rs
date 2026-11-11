@@ -49,6 +49,7 @@ use crate::io::BloomIndexState;
 use crate::io::SpatialIndexBuilder;
 use crate::io::SpatialIndexResult;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::read::bloom::BloomColumnFilterReader;
 use crate::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use crate::io::read::load_spatial_index_files;
 use crate::io::read::load_vector_index_meta;
@@ -282,7 +283,7 @@ impl AssembleIndexes {
         block.ngram_filter_index_size = state.ngram_size();
         let old_filter_keys = old_ngram_names
             .iter()
-            .map(|name| format!("{path}-{name}"))
+            .map(|name| BloomColumnFilterReader::cache_key(&path, name))
             .collect();
         BlockWriter::rewrite_bloom_index_state(&self.operator, state, old_filter_keys).await?;
         Ok(())

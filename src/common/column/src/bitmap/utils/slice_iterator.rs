@@ -102,24 +102,34 @@ impl Iterator for SlicesIterator<'_> {
             }
 
             if self.mask == 1 {
-                // at the beginning of a byte => try to skip it all together
-                match (self.on_region, self.current_byte) {
-                    (true, &255u8) => {
-                        self.len = std::cmp::min(self.max_len - self.start, self.len + 8);
-                        if let Some(v) = self.values.next() {
-                            self.current_byte = v;
-                        };
-                        continue;
+                // At the beginning of a byte: a byte of the current region's kind (all
+                // zeros off a region, all ones on one) is skipped whole, followed by the
+                // 64-bit words of that kind after it, so a sparse bitmap costs one
+                // comparison per word rather than one step per byte.
+                let same = if self.on_region { u8::MAX } else { 0 };
+                if *self.current_byte == same {
+                    let word = [same; 8];
+                    let words = self
+                        .values
+                        .as_slice()
+                        .as_chunks::<8>()
+                        .0
+                        .iter()
+                        .take_while(|chunk| **chunk == word)
+                        .count();
+                    if words > 0 {
+                        self.values.nth(words * 8 - 1);
                     }
-                    (false, &0) => {
-                        self.len = std::cmp::min(self.max_len - self.start, self.len + 8);
-                        if let Some(v) = self.values.next() {
-                            self.current_byte = v;
-                        };
-                        continue;
-                    }
-                    _ => (), // we need to run over all bits of this byte
+                    // The bytes skipped may reach past the end of the bitmap. Clamping the
+                    // length to it is also what ends the iteration: the loop stops when
+                    // `current_len()` is exactly `max_len`.
+                    self.len = std::cmp::min(self.max_len - self.start, self.len + 8 + words * 64);
+                    if let Some(v) = self.values.next() {
+                        self.current_byte = v;
+                    };
+                    continue;
                 }
+                // otherwise we need to run over all bits of this byte
             };
 
             let value = (self.current_byte & self.mask) != 0;

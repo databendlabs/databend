@@ -35,7 +35,10 @@ body:
   - type: textarea
     attributes:
       label: What's Wrong?
-      description: Describe the bug.
+      description: >
+        Describe the bug in your own words: what you did, what you expected, what happened.
+        Be concise - do not paste long logs, stack traces, or AI transcripts here;
+        attach files or link a gist instead.
       placeholder: >
         Describe the specific problem, the more detailed the better.
     validations:
@@ -44,6 +47,9 @@ body:
   - type: textarea
     attributes:
       label: How to Reproduce?
+      description: >
+        A report without reproduction steps usually cannot be acted on.
+        Keep only the minimal steps needed; attach long logs as files or gists.
       placeholder: >
         Please try to give reproducing steps to facilitate quick location of the problem.
 
@@ -53,6 +59,8 @@ body:
         - Cluster information: number of nodes, configuration, etc.
 
         If it is hard to reproduce, please also explain the general scene.
+    validations:
+      required: true
 
 
   - type: checkboxes
