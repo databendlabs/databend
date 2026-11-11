@@ -37,6 +37,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::DefaultSettings;
 use databend_common_settings::ScopeLevel;
@@ -670,6 +671,7 @@ pub enum TimeoutResult {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) user_name: String,
+    tenant: Tenant,
     pub(crate) client_session_id: Option<String>,
     pagination: PaginationConf,
 
@@ -735,6 +737,9 @@ impl HttpQuery {
         arrow_result_version: Option<u64>,
         arrow_features: Option<ArrowFeatures>,
     ) -> Result<HttpQuery> {
+        // Capture the authenticated tenant before restoring query settings,
+        // which may select a sandbox tenant for execution only.
+        let tenant = http_ctx.session.get_current_tenant();
         http_ctx.try_set_worksheet_session(&req.session).await?;
         let (session, ctx) = http_ctx
             .create_session(&req.session, SessionType::HTTPQuery)
@@ -779,6 +784,7 @@ impl HttpQuery {
         Ok(HttpQuery {
             id: query_id,
             user_name: http_ctx.user_name.clone(),
+            tenant,
             client_session_id: http_ctx.client_session_id.clone(),
             pagination: req.pagination,
             execute_state: executor,
@@ -1107,13 +1113,22 @@ impl HttpQuery {
         }
     }
 
+    /// Query access is restricted to the originating tenant, user and client session.
+    /// These fields are immutable, including after the executor releases its session.
+    pub(crate) fn check_access(&self, ctx: &HttpQueryContext) -> poem::error::Result<()> {
+        if self.tenant != ctx.session.get_current_tenant() || self.user_name != ctx.user_name {
+            return Err(poem::error::Error::from_string(
+                "Authentication error: query owner mismatch",
+                StatusCode::UNAUTHORIZED,
+            ));
+        }
+        self.check_client_session_id(&ctx.client_session_id)
+    }
+
     pub fn check_client_session_id(&self, id: &Option<String>) -> poem::error::Result<()> {
         if *id != self.client_session_id {
             return Err(poem::error::Error::from_string(
-                format!(
-                    "Authentication error: wrong client_session_id, expected {:?}, got {id:?}",
-                    self.client_session_id
-                ),
+                "Authentication error: client session mismatch",
                 StatusCode::UNAUTHORIZED,
             ));
         }

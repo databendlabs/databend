@@ -33,6 +33,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::time::sleep;
 
+use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::ClientStateClosed;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
@@ -90,13 +91,14 @@ impl Queries {
         query_id: &str,
         reason: CloseReason,
         now: u64,
-        client_session_id: &Option<String>,
-        check_client_session_id: bool,
+        ctx: Option<&HttpQueryContext>,
     ) -> poem::error::Result<(Option<Arc<HttpQuery>>, Option<ClientStateClosed>)> {
         let q = self.active.get(query_id).cloned();
         if let Some(q) = q {
-            if check_client_session_id {
-                q.check_client_session_id(client_session_id)?;
+            // Authorize and mark closed under the same queries write lock. Only
+            // the server-side timeout task closes queries without a request context.
+            if let Some(ctx) = ctx {
+                q.check_access(ctx)?;
             }
             let closed_state = q.mark_closed(reason);
             if let Some(st) = closed_state {
@@ -175,7 +177,7 @@ impl HttpQueryManager {
                     match expire_res {
                         TimeoutResult::TimedOut => {
                             _ = self_clone
-                                .close_query(&query_id_clone, CloseReason::TimedOut, &None, false)
+                                .close_query(&query_id_clone, CloseReason::TimedOut, None)
                                 .await
                                 .ok();
                         }
@@ -199,20 +201,13 @@ impl HttpQueryManager {
         self: &Arc<Self>,
         query_id: &str,
         reason: CloseReason,
-        client_session_id: &Option<String>,
-        check_client_session_id: bool,
+        ctx: Option<&HttpQueryContext>,
     ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let (query, closed_state) = self.queries.write().close(
-            query_id,
-            reason,
-            now,
-            client_session_id,
-            check_client_session_id,
-        )?;
+        let (query, closed_state) = self.queries.write().close(query_id, reason, now, ctx)?;
         if let Some(q) = &query {
             if let Some(st) = closed_state {
                 q.kill(st.error_code(q.result_timeout_secs)).await;
@@ -275,14 +270,20 @@ impl HttpQueryManager {
         Ok(())
     }
 
-    pub(crate) fn on_heartbeat(&self, query_ids: Vec<String>) -> Vec<String> {
+    pub(crate) fn on_heartbeat(
+        &self,
+        query_ids: Vec<String>,
+        ctx: &HttpQueryContext,
+    ) -> Vec<String> {
         let mut to_stop = vec![];
         for query_id in query_ids {
             let stop_heartbeat = self
                 .queries
                 .read()
                 .get(&query_id)
-                .map(|q| q.on_heartbeat())
+                // Treat inaccessible queries like missing ones in this batch API.
+                // Never refresh their expiration time or disclose their state.
+                .map(|q| q.check_access(ctx).is_err() || q.on_heartbeat())
                 .unwrap_or(true);
             if stop_heartbeat {
                 to_stop.push(query_id);

@@ -18,9 +18,13 @@ use std::sync::Arc;
 use databend_common_ast::parser::mask_log_sql_secrets;
 use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
+use databend_common_base::headers::HEADER_SESSION;
+use databend_common_base::headers::HEADER_SESSION_ID;
+use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
@@ -522,12 +526,7 @@ async fn query_final_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .close_query(
-                &query_id,
-                CloseReason::Finalized,
-                &ctx.client_session_id,
-                true,
-            )
+            .close_query(&query_id, CloseReason::Finalized, Some(ctx))
             .await?
         {
             Some(query) => {
@@ -575,12 +574,7 @@ async fn query_cancel_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .close_query(
-                &query_id,
-                CloseReason::Canceled,
-                &ctx.client_session_id,
-                true,
-            )
+            .close_query(&query_id, CloseReason::Canceled, Some(ctx))
             .await?
         {
             Some(_) => Ok(StatusCode::OK),
@@ -603,6 +597,7 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                query.check_access(ctx)?;
                 if let Some(reason) = query.check_closed() {
                     Ok(StateResponse::closed(&query_id, reason.reason).into_response())
                 } else {
@@ -633,6 +628,7 @@ async fn query_page_handler(
         return Err(query_id_not_found(&query_id, &ctx.node_id));
     };
 
+    query.check_access(ctx)?;
     ctx.try_refresh_worksheet_session().await.ok();
 
     let query_mem_stat = query.query_mem_stat.clone();
@@ -641,17 +637,6 @@ async fn query_page_handler(
     let query_page_handle = {
         let query_id = query_id.clone();
         async move {
-            if query.user_name != ctx.user_name {
-                return Err(poem::error::Error::from_string(
-                    format!(
-                        "Authentication error: query {} expected user {}, but got {}",
-                        query_id, query.user_name, ctx.user_name
-                    ),
-                    StatusCode::UNAUTHORIZED,
-                ));
-            }
-
-            query.check_client_session_id(&ctx.client_session_id)?;
             if let Some(st) = query.check_closed() {
                 info!(
                     "/query/{}/page/{} - query is close (reason: {:?})",
@@ -959,7 +944,7 @@ pub async fn heartbeat_handler(
     let mut nodes_to_forwards = vec![];
     for (node_id, queries) in body.node_to_queries {
         if node_id == local_id {
-            queries_to_remove.extend(HttpQueryManager::instance().on_heartbeat(queries));
+            queries_to_remove.extend(HttpQueryManager::instance().on_heartbeat(queries, ctx));
         } else if let Some(node) = ClusterDiscovery::instance()
             .find_node_by_id(&node_id)
             .await
@@ -997,6 +982,20 @@ pub async fn heartbeat_handler(
                 .expect("heartbeat request should contain auth header")
                 .to_owned(),
         );
+        // Preserve the caller's tenant and session identity on the destination
+        // node, including worksheet detection via the original User-Agent.
+        for name in [
+            HEADER_TENANT,
+            HEADER_CLIENT_CAPABILITIES,
+            HEADER_SESSION,
+            HEADER_SESSION_ID,
+            "cookie",
+            "user-agent",
+        ] {
+            if let Some(value) = req.headers().get(name) {
+                headers.insert(name, value.clone());
+            }
+        }
         for (node, body) in nodes_to_forwards {
             let uri = uri.clone();
             let method = method.clone();
