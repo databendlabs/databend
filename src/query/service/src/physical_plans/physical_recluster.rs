@@ -282,11 +282,17 @@ impl IPhysicalPlan for Recluster {
                 }
                 let max_threads = settings.get_max_threads()? as usize;
 
-                let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
-                    task.total_rows,
-                    task.total_bytes,
-                    task.total_compressed,
-                );
+                let (mut rows_per_block, bytes_per_block) = block_thresholds
+                    .calc_rows_for_recluster(
+                        task.total_rows,
+                        task.total_bytes,
+                        task.total_compressed,
+                    );
+                // The rows come from the task input, not from the table thresholds:
+                // keep the blocks cut at them within the vector index limit.
+                if let Some(rows) = table.vector_index_rows_per_block() {
+                    rows_per_block = rows_per_block.min(rows);
+                }
 
                 // Cut lines never drop below the table thresholds, so every output block,
                 // including a constant-key one, is large enough to be judged complete.
@@ -525,11 +531,14 @@ impl Recluster {
             let distance_type = vector_operator.info.distance_type;
             builder.main_pipeline.try_resize(1)?;
             builder.main_pipeline.add_accumulating_transformer(move || {
+                // The blocks are cut after the sort at `compact_thresholds`, which
+                // bound them, so the k-means batch needs no vector index limit.
                 TransformVectorCluster::new(
                     vector_column_input_offset,
                     dimension,
                     distance_type,
                     rows_per_block,
+                    None,
                 )
             });
             builder.main_pipeline.try_resize(max_threads)?;

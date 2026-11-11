@@ -1664,7 +1664,7 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
     let thresholds = BlockThresholds::new(1000, 100, 100, 1);
 
     // (level, full pass of RECLUSTER FINAL)
-    for (level, full_pass) in [(0, false), (1, false), (1, true)] {
+    for (level, full_pass) in [(0, false), (1, false), (2, false), (1, true), (2, true)] {
         let segment_locations = gen_recluster_segments_by_vector_stats(
             &data_accessor,
             &location_generator,
@@ -1696,8 +1696,15 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
 
         // Selected by overlap, and with larger thresholds by the shared small-block
         // compaction: vector recluster output may stay below them, so level >= 1
-        // blocks must not be compacted either.
-        for mutator_thresholds in [thresholds, BlockThresholds::new(10000, 10000, 10000, 1)] {
+        // blocks must not be compacted either. FINAL runs in the aggressive mode on
+        // tables with the `aggressive_recluster` option, whose groups differ.
+        let large = BlockThresholds::new(10000, 10000, 10000, 1);
+        for (mutator_thresholds, mode) in [
+            (thresholds, ReclusterMode::Conservative),
+            (large, ReclusterMode::Conservative),
+            (thresholds, ReclusterMode::Aggressive),
+            (large, ReclusterMode::Aggressive),
+        ] {
             let vector_cluster_info = VectorClusterInfo {
                 key_index: 0,
                 column_id: 1,
@@ -1715,7 +1722,7 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
                 ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
                 0,
                 1,
-                ReclusterMode::Conservative,
+                mode,
                 Some(vector_cluster_info),
             );
             let mutator = if full_pass {
@@ -1747,15 +1754,22 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
                 }
                 continue;
             }
+            let case = format!("level {level}, full pass {full_pass}, mode {mode:?}");
             let (block_num, parts) =
-                materialize_candidate_window(&mutator, vector_window.unwrap(), 1).await?;
-            assert_eq!(block_num, 2);
-            assert_eq!(parts.tasks.len(), 1);
+                materialize_candidate_window(&mutator, vector_window.expect(&case), 1).await?;
+            // Also two blocks at level 2, which recluster otherwise leaves alone.
+            assert_eq!(block_num, 2, "{case}");
+            assert_eq!(parts.tasks.len(), 1, "{case}");
             assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
             assert_eq!(task_part_counts(&parts), vec![2]);
-            // The full pass rewrites clustered blocks as level 0 input, so its output is
-            // level 1 again.
-            assert_eq!(parts.tasks[0].level, 0);
+            // Level-0 blocks are rewritten as level-0 input (output level 1). The full
+            // pass rewrites its blocks as level-1 input whatever their level and the
+            // mode, so its output is level 2, the mixed level, and levels stay bounded.
+            assert_eq!(
+                parts.tasks[0].level,
+                if full_pass { 1 } else { 0 },
+                "{case}"
+            );
         }
     }
 

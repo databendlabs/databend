@@ -52,6 +52,7 @@ impl TransformVectorCluster {
         dimension: usize,
         distance_type: VectorDistanceType,
         rows_per_block: usize,
+        max_rows: Option<usize>,
     ) -> Self {
         let rows_per_block = rows_per_block.max(1);
         Self {
@@ -59,7 +60,7 @@ impl TransformVectorCluster {
             dimension,
             distance_type,
             kmeans: KMeans::new(dimension, rows_per_block, distance_type),
-            batch_rows: kmeans_batch_rows(rows_per_block),
+            batch_rows: kmeans_batch_rows(rows_per_block, max_rows),
             pending_blocks: vec![],
             pending_rows: 0,
         }
@@ -155,11 +156,14 @@ impl AccumulatingTransform for TransformVectorCluster {
     }
 }
 
-fn kmeans_batch_rows(rows_per_block: usize) -> usize {
+/// Rows of a k-means batch. Each batch is written as one block, so `max_rows`, the
+/// vector index limit of a block (`FuseTable::vector_index_rows_per_block`), caps it.
+fn kmeans_batch_rows(rows_per_block: usize, max_rows: Option<usize>) -> usize {
     rows_per_block
         .saturating_mul(KMEANS_BATCH_CLUSTER_COUNT)
         .min(KMEANS_MAX_BATCH_ROWS)
         .max(rows_per_block)
+        .min(max_rows.unwrap_or(usize::MAX))
         .max(1)
 }
 

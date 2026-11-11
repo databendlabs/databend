@@ -187,6 +187,7 @@ impl FuseTable {
             let vector_column_input_offset = vector_operator.vector_column_input_offset;
             let dimension = vector_operator.info.dimension;
             let distance_type = vector_operator.info.distance_type;
+            let max_rows = self.vector_index_rows_per_block();
             let mut builder = pipeline.add_transform_with_specified_len(
                 move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(
@@ -197,6 +198,7 @@ impl FuseTable {
                             dimension,
                             distance_type,
                             rows_per_block,
+                            max_rows,
                         ),
                     )))
                 },
@@ -287,12 +289,14 @@ impl FuseTable {
             let vector_column_input_offset = vector_operator.vector_column_input_offset;
             let dimension = vector_operator.info.dimension;
             let distance_type = vector_operator.info.distance_type;
+            let max_rows = self.vector_index_rows_per_block();
             pipeline.add_accumulating_transformer(move || {
                 TransformVectorCluster::new(
                     vector_column_input_offset,
                     dimension,
                     distance_type,
                     rows_per_block,
+                    max_rows,
                 )
             });
         }

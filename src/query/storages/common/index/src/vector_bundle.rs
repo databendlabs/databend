@@ -71,6 +71,20 @@ pub const VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE: usize = 64 * 1024;
 const TRAILER_MAGIC: &[u8; 4] = b"DBVI";
 const FOOTER_MAGIC: &[u8; 4] = b"DBVF";
 const MAX_COMPONENT_SIZE: u64 = 1024 * 1024 * 1024;
+
+/// The most rows of a block whose vector index components each stay within
+/// `MAX_COMPONENT_SIZE`. Bytes per row, upper bounds:
+/// - SQ8: `dimension` + 15 padding + 4;
+/// - FP16 (`refine`): 2 × `dimension`;
+/// - HNSW links: 3m links of 4 bytes, the point id and two offsets.
+pub fn vector_index_max_rows(dimension: usize, m: usize, refine: bool) -> usize {
+    let sq8 = dimension + 15 + size_of::<f32>();
+    let fp16 = if refine { dimension * 2 } else { 0 };
+    let links = 3 * m * size_of::<u32>() + size_of::<u32>() + 2 * size_of::<u64>();
+    let row_bytes = sq8.max(fp16).max(links);
+    (MAX_COMPONENT_SIZE as usize / row_bytes).max(1)
+}
+
 /// ZSTD level for HNSW components. Level 1 matches the legacy Parquet default and,
 /// for SQ8 data (few repeats, skewed bytes), compresses better than higher levels:
 /// ~43% vs ~50% at level 3, and several times faster.

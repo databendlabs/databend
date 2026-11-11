@@ -58,6 +58,7 @@ use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -73,6 +74,7 @@ use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -97,6 +99,7 @@ use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_index::vector_index_max_rows;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -163,6 +166,7 @@ use crate::io::SnapshotReader;
 use crate::io::SnapshotStatsReader;
 use crate::io::TableFiles;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::VectorIndexOptions;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
@@ -1120,6 +1124,42 @@ impl FuseTable {
             })
     }
 
+    /// The rows per block that keep the vector index components of every block within
+    /// the bundle size limit, or `None` without a vector index. A block holds all
+    /// indexes, so the least limit applies. `BlockThresholds` lets blocks reach 1.6
+    /// times the rows per block, so it is 5/8 of the limit.
+    pub fn vector_index_rows_per_block(&self) -> Option<usize> {
+        let schema = self.schema();
+        let fields = schema.fields();
+        self.table_info
+            .meta
+            .indexes
+            .values()
+            .filter(|index| index.index_type == TableIndexType::Vector)
+            .filter_map(|index| {
+                // Skip indexes the writer does not build.
+                let options = VectorIndexOptions::parse(&index.options).ok()?;
+                (!options.distances.is_empty()).then_some((index, options))
+            })
+            .flat_map(|(index, VectorIndexOptions { m, refine, .. })| {
+                index.column_ids.iter().filter_map(move |column_id| {
+                    let field = fields
+                        .iter()
+                        .find(|field| field.column_id() == *column_id)?;
+                    match field.data_type().remove_nullable() {
+                        TableDataType::Vector(vector) => Some(vector_index_max_rows(
+                            vector.dimension() as usize,
+                            m,
+                            refine,
+                        )),
+                        _ => None,
+                    }
+                })
+            })
+            .min()
+            .map(|max_rows| (max_rows / 8 * 5).max(1))
+    }
+
     pub fn enable_stream_block_write(&self, ctx: Arc<dyn TableContext>) -> Result<bool> {
         Ok(ctx.get_settings().get_enable_block_stream_write()?
             && matches!(self.storage_format, FuseStorageFormat::Parquet)
@@ -1599,8 +1639,11 @@ impl Table for FuseTable {
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {
-        let max_rows_per_block =
+        let mut max_rows_per_block =
             self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT);
+        if let Some(rows) = self.vector_index_rows_per_block() {
+            max_rows_per_block = max_rows_per_block.min(rows);
+        }
         let bytes_per_block = self.get_option(
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,

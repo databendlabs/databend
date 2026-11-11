@@ -257,6 +257,20 @@ impl VectorReclusterStrategy {
     }
 }
 
+/// Recluster levels of the blocks of a table with a vector cluster key:
+/// - `VECTOR_LEVEL_NEW`: not clustered by recluster yet, such as INSERT output;
+/// - level 1: clustered among new data only, by a recluster that rewrites level-0
+///   blocks (the recluster after writes, or the rounds of a FINAL with `WHERE`), so
+///   its clusters may overlap those of other batches;
+/// - `VECTOR_LEVEL_MIXED`: rewritten by the full pass of RECLUSTER FINAL together with
+///   all other blocks.
+///
+/// Blocks at lower levels are not mixed yet, and decide when FINAL makes the full
+/// pass (see `vector_final_plan`). Higher levels written by earlier versions count as
+/// mixed.
+pub(crate) const VECTOR_LEVEL_NEW: i32 = 0;
+pub(crate) const VECTOR_LEVEL_MIXED: i32 = 2;
+
 impl ReclusterStrategy for VectorReclusterStrategy {
     fn select_segments(
         &self,
@@ -277,9 +291,10 @@ impl ReclusterStrategy for VectorReclusterStrategy {
     /// by k-means, and are not rewritten again: in high dimensions their spheres
     /// overlap regardless, and they may stay below the small-block compaction
     /// threshold. Selecting them by overlap or by size would rewrite the same rows
-    /// every round, until the level limit, without improving the layout. Only blocks not clustered by a recluster task yet
-    /// (level 0, such as INSERT output) are eligible, except in the full pass of
-    /// RECLUSTER FINAL, whose blocks were selected by the mutator.
+    /// every round, until the level limit, without improving the layout. Only blocks
+    /// not clustered by a recluster task yet (`VECTOR_LEVEL_NEW`, such as INSERT
+    /// output) are eligible, except in the full pass of RECLUSTER FINAL, whose blocks
+    /// were selected by the mutator.
     fn eligible_blocks(
         &self,
         properties: &ReclusterProperties,
@@ -291,7 +306,7 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         }
         indices
             .into_iter()
-            .filter(|idx| blocks[*idx].stats().level == 0)
+            .filter(|idx| blocks[*idx].stats().level == VECTOR_LEVEL_NEW)
             .collect()
     }
 

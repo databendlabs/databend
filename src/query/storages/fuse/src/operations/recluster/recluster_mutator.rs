@@ -71,6 +71,7 @@ use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
 use crate::operations::recluster::SelectedReclusterSegment;
+use crate::operations::recluster::VECTOR_LEVEL_MIXED;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::VectorClusterInfo;
 use crate::statistics::partition_values;
@@ -145,10 +146,10 @@ pub struct ReclusterFinalCarry {
     pub(crate) cluster_key_id: u32,
     // Reuse block-meta decode workers across rounds of one FINAL statement.
     pub(crate) decode_runtime: Option<Arc<Runtime>>,
-    // Vector RECLUSTER FINAL only selects blocks that no recluster task has written
-    // (level 0). After those rounds, the blocks present at that point are rewritten
-    // once more together, regardless of level, so new data is mixed with older
-    // clustered blocks. Blocks written by this pass are not in the set, which ends it.
+    // The full pass of a vector RECLUSTER FINAL (see `vector_final_plan`): the blocks
+    // present when it starts, rewritten once together regardless of level, so new
+    // data is mixed with older clustered blocks. Blocks written by this pass are not
+    // in the set, which ends it.
     pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
 }
 
@@ -158,11 +159,6 @@ impl ReclusterFinalCarry {
     pub fn start_vector_full_pass(&mut self, blocks: HashSet<String>) {
         self.reset();
         self.vector_full_pass = Some(Arc::new(blocks));
-    }
-
-    /// Whether the full pass of a vector RECLUSTER FINAL has started.
-    pub fn in_vector_full_pass(&self) -> bool {
-        self.vector_full_pass.is_some()
     }
 
     /// Forgets the scan state, keeping a started vector full pass.
@@ -475,21 +471,26 @@ impl ReclusterMutator {
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         let mut blocks_map: BTreeMap<(ReclusterGroup, Vec<Scalar>), Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
-            let mut level = block.stats().level;
+            let level = block.stats().level;
             if level < 0 {
                 continue;
             }
-            if let Some(full_pass) = &self.properties.vector_full_pass {
+            let group = if let Some(full_pass) = &self.properties.vector_full_pass {
                 // The full pass rewrites the blocks present when it started, in one
-                // group whose output is level 1 again, so levels stay bounded.
+                // group whose output (the group level + 1) is `VECTOR_LEVEL_MIXED`, so
+                // levels stay bounded. A level group, in every mode: the aggressive
+                // low-maturity group would take the output level from the levels of
+                // the blocks.
                 if !full_pass.contains(&block.meta.location.0) {
                     continue;
                 }
-                level = 0;
+                ReclusterGroup::Level(VECTOR_LEVEL_MIXED - 1)
             } else if level >= MAX_RECLUSTER_LEVEL {
                 // Terminal-level blocks are excluded from further rewrite tasks.
                 continue;
-            }
+            } else {
+                ReclusterGroup::assign(level, self.properties.mode)
+            };
             let partition = if self.properties.partition_key_count == 0 {
                 Vec::new()
             } else if let Some(partition) = partition_values(
@@ -503,13 +504,7 @@ impl ReclusterMutator {
                 // together with another partition.
                 continue;
             };
-            blocks_map
-                .entry((
-                    ReclusterGroup::assign(level, self.properties.mode),
-                    partition,
-                ))
-                .or_default()
-                .push(idx);
+            blocks_map.entry((group, partition)).or_default().push(idx);
         }
 
         let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
@@ -756,7 +751,10 @@ impl ReclusterMutator {
         if block_count < 2 && !self.properties.split_sort_tasks {
             return Ok(Vec::new());
         }
+        // The full pass of a vector RECLUSTER FINAL rewrites every block it holds
+        // once, whatever their level, so that new data mixes with all of them.
         if block_count == 2
+            && self.properties.vector_full_pass.is_none()
             && indices
                 .iter()
                 .all(|idx| blocks[*idx].stats().level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS)

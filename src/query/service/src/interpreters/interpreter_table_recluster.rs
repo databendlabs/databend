@@ -44,7 +44,10 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
+use databend_common_storages_fuse::operations::VectorFinalPlan;
+use databend_common_storages_fuse::operations::VectorReclusterBlock;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
+use databend_common_storages_fuse::operations::vector_final_plan;
 use databend_common_storages_fuse::segment_zone_map::RefreshOutcome;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -149,16 +152,38 @@ impl Interpreter for ReclusterTableInterpreter {
             let start = SystemTime::now();
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
-            // Vector FINAL: blocks already clustered by recluster before this
-            // statement, which get one full pass after the level-0 rounds.
-            let vector_clustered_before = if is_final {
-                match self.vector_clustered_blocks().await {
-                    Ok(blocks) => blocks,
-                    Err(e) => return Err(e.with_context("failed to execute")),
-                }
-            } else {
-                None
-            };
+            // Vector FINAL: what it does is decided from the blocks when it starts (see
+            // `vector_final_plan`); the full pass starts at once. This scans every block
+            // meta, so it is skipped when FINAL rewrites part of the table at most:
+            // `LIMIT 0` does no work, and a `WHERE` selection only rewrites the selected
+            // segments, which the scan would not tell apart. These recluster the level-0
+            // blocks by rounds, as a recluster without FINAL does.
+            let vector_plan =
+                if is_final && self.plan.limit != Some(0) && self.plan.selection.is_none() {
+                    match self.vector_recluster_blocks().await {
+                        Ok(Some(blocks)) => {
+                            let plan = vector_final_plan(&blocks);
+                            if plan == VectorFinalPlan::FullPass {
+                                let blocks: HashSet<String> = blocks
+                                    .into_iter()
+                                    .filter(|block| block.level >= 0)
+                                    .map(|block| block.location)
+                                    .collect();
+                                info!(
+                                    event = "recluster.vector_full_pass",
+                                    blocks = blocks.len();
+                                    "Recluster starts the vector full pass"
+                                );
+                                linear_final_carry.start_vector_full_pass(blocks);
+                            }
+                            plan
+                        }
+                        Ok(None) => VectorFinalPlan::Rounds,
+                        Err(e) => return Err(e.with_context("failed to execute")),
+                    }
+                } else {
+                    VectorFinalPlan::Rounds
+                };
             let mut committed_rounds = 0;
             let mut zone_map_rounds = 0;
             let (result, stop_reason) = loop {
@@ -170,6 +195,11 @@ impl Interpreter for ReclusterTableInterpreter {
                     );
                     break (Err(err.with_context("failed to execute")), "aborted");
                 }
+                if vector_plan == VectorFinalPlan::Skip {
+                    // Rows not mixed yet are below the full pass threshold, or none:
+                    // they keep their level to add up.
+                    break (Ok(()), "vector rows not mixed below full pass threshold");
+                }
 
                 rounds += 1;
                 let res = self
@@ -178,39 +208,16 @@ impl Interpreter for ReclusterTableInterpreter {
 
                 match res {
                     Ok(outcome) => {
+                        // The full pass ends when only blocks it wrote remain.
                         if let Some(reason) = outcome.stop_reason() {
-                            let full_pass = matches!(outcome, ReclusterRoundOutcome::NoParts)
-                                && committed_rounds > 0
-                                && !linear_final_carry.in_vector_full_pass()
-                                && vector_clustered_before
-                                    .as_ref()
-                                    .is_some_and(|blocks| !blocks.is_empty());
-                            if !full_pass {
-                                break (Ok(()), reason);
-                            }
-                            // The level-0 rounds clustered new data on its own; rewrite
-                            // the current blocks once more so it mixes with older
-                            // clustered blocks. The pass ends when only blocks it wrote
-                            // remain.
-                            match self.current_vector_blocks().await {
-                                Ok(blocks) => {
-                                    info!(
-                                        event = "recluster.vector_full_pass",
-                                        blocks = blocks.len();
-                                        "Recluster starts the vector full pass"
-                                    );
-                                    linear_final_carry.start_vector_full_pass(blocks);
-                                }
-                                Err(e) => break (Err(e), "error"),
-                            }
-                        } else {
-                            committed_rounds += 1;
-                            // A FINAL recluster may run for a long time, so the segment
-                            // zone map is refreshed along the way, not only at the end.
-                            if committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
-                                self.refresh_segment_zone_map().await;
-                                zone_map_rounds = committed_rounds;
-                            }
+                            break (Ok(()), reason);
+                        }
+                        committed_rounds += 1;
+                        // A FINAL recluster may run for a long time, so the segment
+                        // zone map is refreshed along the way, not only at the end.
+                        if committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
+                            self.refresh_segment_zone_map().await;
+                            zone_map_rounds = committed_rounds;
                         }
                     }
                     Err(e) => {
@@ -296,7 +303,7 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
-    async fn vector_recluster_blocks(&self) -> Result<Option<Vec<(String, i32)>>> {
+    async fn vector_recluster_blocks(&self) -> Result<Option<Vec<VectorReclusterBlock>>> {
         let ReclusterPlan {
             catalog,
             database,
@@ -309,30 +316,6 @@ impl ReclusterTableInterpreter {
             return Ok(None);
         };
         fuse_table.vector_recluster_blocks(self.ctx.clone()).await
-    }
-
-    /// Blocks of a vector-clustered table that recluster has written (level >= 1),
-    /// or `None` for other tables.
-    async fn vector_clustered_blocks(&self) -> Result<Option<HashSet<String>>> {
-        Ok(self.vector_recluster_blocks().await?.map(|blocks| {
-            blocks
-                .into_iter()
-                .filter(|(_, level)| *level >= 1)
-                .map(|(location, _)| location)
-                .collect()
-        }))
-    }
-
-    /// All blocks of a vector-clustered table, which the full pass rewrites.
-    async fn current_vector_blocks(&self) -> Result<HashSet<String>> {
-        Ok(self
-            .vector_recluster_blocks()
-            .await?
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|(_, level)| *level >= 0)
-            .map(|(location, _)| location)
-            .collect())
     }
 
     /// Refresh the segment zone map on the snapshot the last round committed,
