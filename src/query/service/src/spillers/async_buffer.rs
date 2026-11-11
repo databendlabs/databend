@@ -25,6 +25,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use bytes::BytesMut;
@@ -583,10 +584,14 @@ impl SpillsDataReader {
             ));
         }
 
+        // Read back the arrow types the writer used. Without them, byte columns are
+        // inferred as Binary/Utf8, whose i32 offsets overflow once a column of the
+        // row group, which is decoded as one batch, holds more than 2 GiB.
+        let arrow_schema = Schema::from(infer_table_schema(&data_schema)?.as_ref());
         let field_levels = parquet_to_arrow_field_levels(
             row_groups[0].schema_descr(),
             ProjectionMask::all(),
-            None,
+            Some(arrow_schema.fields()),
         )?;
 
         let (tx, rx) = async_channel::bounded(1);
@@ -613,6 +618,16 @@ impl SpillsDataReader {
     }
 
     pub fn read(&mut self) -> Result<Option<DataBlock>> {
+        let Some(batch) = self.read_record_batch()? else {
+            return Ok(None);
+        };
+        Ok(Some(DataBlock::from_record_batch_keep_null_const(
+            &self.data_schema,
+            &batch,
+        )?))
+    }
+
+    fn read_record_batch(&mut self) -> Result<Option<RecordBatch>> {
         let start = Instant::now();
 
         let fetched = match self.receiver.recv_blocking() {
@@ -641,10 +656,7 @@ impl SpillsDataReader {
         };
         debug_assert!(reader.next().is_none());
         record_read_profile(self.target, start.elapsed(), fetched.read_bytes);
-        Ok(Some(DataBlock::from_record_batch_keep_null_const(
-            &self.data_schema,
-            &batch,
-        )?))
+        Ok(Some(batch))
     }
 }
 
@@ -868,9 +880,20 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
 
+    use arrow_schema::DataType as ArrowDataType;
     use databend_common_base::runtime::spawn;
+    use databend_common_expression::Column;
     use databend_common_expression::FromData;
+    use databend_common_expression::block_debug::pretty_format_blocks;
+    use databend_common_expression::types::BinaryType;
+    use databend_common_expression::types::BooleanType;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::VariantType;
     use opendal::Operator;
 
     use super::*;
@@ -1079,6 +1102,167 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![3]
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spill_reads_byte_columns_with_writer_types() {
+        let pool = SpillsBufferPool::create(1).unwrap();
+        let operator = create_test_operator().unwrap();
+        let path = "spill_byte_column_types".to_string();
+
+        let variants = || {
+            ["[1,\"a\"]", "{\"k\":null}"]
+                .iter()
+                .map(|json| jsonb::parse_value(json.as_bytes()).unwrap().to_vec())
+                .collect::<Vec<_>>()
+        };
+        // The last column has the shape of an arg_max state: (has_value, key, value).
+        let block = DataBlock::new_from_columns(vec![
+            StringType::from_data(vec!["a", "bc"]),
+            StringType::from_opt_data(vec![Some("d"), None]),
+            BinaryType::from_data(vec![b"ef".as_slice(), b"".as_slice()]),
+            VariantType::from_data(variants()),
+            Column::Tuple(vec![
+                BooleanType::from_data(vec![true, false]),
+                Int64Type::from_data(vec![1, 2]),
+                VariantType::from_data(variants()),
+            ]),
+            // Types whose hinted arrow type also differs from the parquet default.
+            Column::random(
+                &DataType::Decimal(DecimalSize::new(10, 2).unwrap()),
+                2,
+                None,
+            ),
+            Column::random(
+                &DataType::Array(Box::new(DataType::Number(NumberDataType::Int32))),
+                2,
+                None,
+            ),
+            Column::random(
+                &DataType::Nullable(Box::new(DataType::Tuple(vec![
+                    DataType::String,
+                    DataType::Variant,
+                ]))),
+                2,
+                None,
+            ),
+        ]);
+        let data_schema = Arc::new(block.infer_schema());
+
+        let mut writer = pool
+            .writer(
+                operator.clone(),
+                path.clone(),
+                CHUNK_SIZE,
+                SpillTarget::Local,
+            )
+            .unwrap();
+        writer.write(block.clone()).unwrap();
+        let (_, row_groups) = writer.close().unwrap();
+
+        let mut reader = pool
+            .reader(
+                operator,
+                path,
+                data_schema.clone(),
+                row_groups,
+                SpillTarget::Local,
+                ReadSettings::default(),
+            )
+            .unwrap();
+        let batch = reader.read_record_batch().unwrap().unwrap();
+
+        // Binary/Utf8 would be decoded with i32 offsets and overflow at 2 GiB.
+        let types = batch
+            .schema()
+            .fields()
+            .iter()
+            .map(|field| field.data_type().clone())
+            .collect::<Vec<_>>();
+        assert_eq!(&types[..4], &[
+            ArrowDataType::Utf8View,
+            ArrowDataType::Utf8View,
+            ArrowDataType::LargeBinary,
+            ArrowDataType::LargeBinary,
+        ]);
+        let ArrowDataType::Struct(state_fields) = &types[4] else {
+            panic!("expected a struct column, got {:?}", types[4]);
+        };
+        assert_eq!(state_fields[2].data_type(), &ArrowDataType::LargeBinary);
+
+        let restored = DataBlock::from_record_batch_keep_null_const(&data_schema, &batch).unwrap();
+        assert_eq!(
+            pretty_format_blocks(&[restored]).unwrap(),
+            pretty_format_blocks(&[block]).unwrap()
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "decodes a byte column of more than 2 GiB in memory"]
+    async fn test_spill_reads_byte_column_over_2gib() {
+        // A leaf of one row group with more than i32::MAX bytes. The row count stays
+        // far below the writer's row group limit, so it is not split. Values stay
+        // small because the writer checks the page size only every 1024 values.
+        const ROWS: usize = 33_000;
+        const VALUE_BYTES: usize = 64 << 10;
+        assert!(ROWS * VALUE_BYTES > i32::MAX as usize);
+
+        let pool = SpillsBufferPool::create(1).unwrap();
+        let operator = create_test_operator().unwrap();
+        let path = "spill_byte_column_over_2gib".to_string();
+
+        let value = vec![0u8; VALUE_BYTES];
+        let block = DataBlock::new_from_columns(vec![Column::Tuple(vec![
+            Int64Type::from_data((0..ROWS as i64).collect::<Vec<_>>()),
+            BinaryType::from_data(vec![value.as_slice(); ROWS]),
+        ])]);
+        let data_schema = Arc::new(block.infer_schema());
+
+        let mut writer = pool
+            .writer(
+                operator.clone(),
+                path.clone(),
+                CHUNK_SIZE,
+                SpillTarget::Local,
+            )
+            .unwrap();
+        writer.write(block).unwrap();
+        let (_, row_groups) = writer.close().unwrap();
+        assert_eq!(row_groups.len(), 1);
+
+        let reader = |row_groups: Vec<RowGroupMetaData>| {
+            pool.reader(
+                operator.clone(),
+                path.clone(),
+                data_schema.clone(),
+                row_groups,
+                SpillTarget::Local,
+                ReadSettings::default(),
+            )
+            .unwrap()
+        };
+
+        // Without the writer's types, the bytes are decoded with i32 offsets.
+        let mut unhinted = reader(row_groups.clone());
+        unhinted.field_levels = parquet_to_arrow_field_levels(
+            row_groups[0].schema_descr(),
+            ProjectionMask::all(),
+            None,
+        )
+        .unwrap();
+        let err = unhinted.read().unwrap_err();
+        assert!(
+            err.message().contains("index overflow decoding byte array"),
+            "{err}"
+        );
+
+        let restored = reader(row_groups).read().unwrap().unwrap();
+        assert_eq!(restored.num_rows(), ROWS);
+        let Column::Tuple(fields) = restored.columns()[0].to_column() else {
+            panic!("expected a tuple column");
+        };
+        let values = fields[1].as_binary().unwrap();
+        assert_eq!(values.total_bytes_len(), ROWS * VALUE_BYTES);
     }
 
     #[tokio::test(flavor = "multi_thread")]
