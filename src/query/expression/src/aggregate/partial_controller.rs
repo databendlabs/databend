@@ -19,13 +19,16 @@
 //!
 //! * `Learning` (start): a small, cache-resident index that restarts in place when full (a
 //!   "window") while the payload keeps the groups. This absorbs locality and hot keys at a low,
-//!   bounded cost. At geometric row checkpoints, with `R` rows, `M` groups materialized and a
-//!   sampled estimate `D` of the distinct groups:
-//!   - `M / R` and `D / R` both close to 1: nothing to absorb, switch to `Bypass`.
-//!   - `M > 2 * D`: keys recur beyond a window, so switch to `Grown`.
-//! * `Grown`: the index is grown at once to hold the `D` groups, if they fit in
-//!   [`MAX_GROW_CAPACITY`] slots and, with the bytes a group takes, in the memory of the table.
-//!   When it fills up it restarts in place like a window.
+//!   bounded cost. At geometric row checkpoints, with `R` rows, `M` groups materialized, a
+//!   sampled estimate `D` of the distinct groups and `G` the groups the best table it can build
+//!   would emit: `D` if an index holding them fits (see `Grown`), else `M`, the window's:
+//!   - `G / R` close to 1: no table absorbs much (`G <= M`, so neither does the window), switch
+//!     to `Bypass`.
+//!   - `M > 2 * G`: keys recur beyond a window and a grown table holds them, switch to `Grown`.
+//! * `Grown`: the index restarts at its initial capacity and, when it fills up, grows at once to
+//!   hold `D` groups with a `GROW_MARGIN`, which fit in [`MAX_GROW_CAPACITY`] slots and, with
+//!   the bytes a group takes, in the memory of the table. When it fills up again it restarts in
+//!   place like a window.
 //! * `Shrunk`: a grown table met memory pressure, emitted its groups and went back to the small
 //!   index for the rest of the input, without further decisions.
 //! * `Bypass`: forward every row to the final aggregate as raw input, for the rest of the input.
@@ -42,20 +45,23 @@ use std::ops::AddAssign;
 use simple_hll::HyperLogLog;
 
 use crate::AggregateHashTable;
+use crate::aggregate::hash_index::CHUNK_SLOTS;
 
 /// First learning checkpoint, in rows since learning started.
 const FIRST_CHECK_ROWS: usize = 256 * 1024;
 /// Each following checkpoint is this many times the previous one.
 const CHECK_GROWTH: usize = 4;
-/// Bypass when both the materialized and the estimated distinct ratio reach this.
+/// Bypass when the best table an instance can build emits this share of the rows.
 const BYPASS_DISTINCT_RATIO: f64 = 0.9;
 /// Grow when materialized groups exceed the estimated distinct groups by this factor.
 const GROW_DEDUP_RATIO: f64 = 2.0;
-/// The largest grown index: 4M slots, 36 MiB of index for up to 3.1M groups per instance. Every
-/// instance holds the keys it sees, so a larger table multiplies their memory by the number of
-/// threads, while a table that cannot hold the distinct groups absorbs little of them. Keys
-/// beyond it are left to the final aggregate.
-pub const MAX_GROW_CAPACITY: usize = 1 << 22;
+/// The largest grown index: 2^19 chunks, 6M slots and 32 MiB of index for up to 4.6M groups per
+/// instance, `D` up to 4.2M with the `GROW_MARGIN`. An index is a power of two of chunks, so the
+/// limit is one of its sizes. Every instance holds the keys it sees, so a larger table
+/// multiplies their memory by the number of threads, while a table that cannot hold the
+/// distinct groups absorbs little of them. Keys beyond it are left to the final aggregate. The
+/// memory of the table bounds the groups that grow too, see [`partial_table_bytes`].
+pub const MAX_GROW_CAPACITY: usize = (1 << 19) * CHUNK_SLOTS;
 /// Bounds of the memory of a partial table, see [`partial_table_bytes`].
 pub const MIN_PARTIAL_TABLE_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_PARTIAL_TABLE_BYTES: usize = 256 * 1024 * 1024;
@@ -157,8 +163,8 @@ const PARTIAL_TABLE_MEMORY_PERCENT: usize = 2;
 /// grown table must fit in it, and the table is emitted once it holds that much, which mostly
 /// bounds the memory aggregate states own outside the arena (the values of `array_agg`, a
 /// distinct set), as the index and the payload are bounded otherwise. The bounds keep a table
-/// that can grow on small machines, and one that is not larger than the 4M-slot index needs
-/// when there are few threads.
+/// that can grow on small machines, and one that is not larger than the largest grown index
+/// needs when there are few threads.
 pub fn partial_table_bytes(max_memory_usage: usize, threads: usize) -> usize {
     let share = max_memory_usage / 100 * PARTIAL_TABLE_MEMORY_PERCENT / threads.max(1);
     share.clamp(MIN_PARTIAL_TABLE_BYTES, MAX_PARTIAL_TABLE_BYTES)
@@ -180,8 +186,8 @@ pub struct PartialObservation {
 }
 
 /// Why [`PartialState::step`] asks the caller to emit the groups of the table to the final
-/// aggregate and restart the index at the capacity of the new state. A grown index is rebuilt
-/// from the payload, which must hold one row per key, so every change of state emits.
+/// aggregate and restart the index at its initial capacity. A grown index is rebuilt from the
+/// payload, which must hold one row per key, so every change of state emits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EmitReason {
     Grow,
@@ -196,7 +202,8 @@ pub enum EmitReason {
 pub enum PartialState {
     Learning(Learning),
     Grown {
-        /// Index capacity the table grows to at once when full.
+        /// Index capacity the table grows to at once when full: `D` groups with a
+        /// `GROW_MARGIN`.
         capacity: usize,
     },
     Shrunk,
@@ -312,21 +319,23 @@ impl Learning {
             Some(distinct) => (distinct as f64).min(materialized),
         };
 
-        if materialized / rows >= BYPASS_DISTINCT_RATIO && distinct / rows >= BYPASS_DISTINCT_RATIO
-        {
+        // A table that holds the distinct groups emits them once each. When it does not fit, the
+        // window is the best this instance can do, and as the distinct groups only grow, the
+        // table will not fit later either.
+        let groups = (distinct * GROW_MARGIN) as usize;
+        let capacity = AggregateHashTable::capacity_for_groups(groups);
+        let bytes = AggregateHashTable::index_bytes_for(capacity)
+            .saturating_add(groups.saturating_mul(group_bytes));
+        let fits = capacity <= MAX_GROW_CAPACITY && bytes <= max_table_bytes;
+        let reachable = if fits { distinct } else { materialized };
+
+        if reachable / rows >= BYPASS_DISTINCT_RATIO {
             return Some(PartialState::Bypass);
         }
-        if materialized > distinct * GROW_DEDUP_RATIO {
-            let groups = (distinct * GROW_MARGIN) as usize;
-            let capacity = AggregateHashTable::capacity_for_groups(groups);
-            let bytes = AggregateHashTable::index_bytes_for(capacity)
-                .saturating_add(groups.saturating_mul(group_bytes));
-            if capacity > AggregateHashTable::capacity_for_groups(0)
-                && capacity <= MAX_GROW_CAPACITY
-                && bytes <= max_table_bytes
-            {
-                return Some(PartialState::Grown { capacity });
-            }
+        if materialized > reachable * GROW_DEDUP_RATIO
+            && capacity > AggregateHashTable::capacity_for_groups(0)
+        {
+            return Some(PartialState::Grown { capacity });
         }
         None
     }
