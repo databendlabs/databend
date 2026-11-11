@@ -269,5 +269,29 @@ w09 -2.5 hour 1712415600 2024-04-07 01:30:00.000000
 w10 +0.5 week 1712799000 2024-04-11 12:00:00.000000
 w11 +0.5 month 1713403800 2024-04-18 12:00:00.000000
 
+# TIMESTAMP_TZ keeps its own UTC offset, so the session time zone and its DST
+# changes do not apply to the arithmetic.
+statement ok
+SET timezone = 'America/Los_Angeles'
+
+query TIT
+SELECT label, to_unix_timestamp(r::TIMESTAMP), to_string(r)
+FROM (
+    SELECT label, if(op = '+', start::TIMESTAMP_TZ + to_interval(iv), start::TIMESTAMP_TZ - to_interval(iv)) AS r
+    FROM (VALUES ('s01 +1.5 day', '2024-03-09 12:00:00 -08:00', '+', '1.5 day'),
+       ('s02 +23.6 hour', '2024-03-09 12:00:00 -08:00', '+', '23.6 hour'),
+       ('s03 -1.5 day', '2024-03-11 12:00:00 -07:00', '-', '1.5 day'),
+       ('w01 +1.5 day', '2024-11-02 12:00:00 -07:00', '+', '1.5 day'),
+       ('w02 +24.4 hour', '2024-11-02 12:00:00 -07:00', '+', '24.4 hour'),
+       ('w03 +0.5 month', '2024-10-14 12:00:00 -07:00', '+', '0.5 month')) AS t(label, start, op, iv)
+) ORDER BY label
+----
+s01 +1.5 day 1710187200 2024-03-11 12:00:00.000000 -0800
+s02 +23.6 hour 1710100800 2024-03-10 12:00:00.000000 -0800
+s03 -1.5 day 1710010800 2024-03-09 12:00:00.000000 -0700
+w01 +1.5 day 1730746800 2024-11-04 12:00:00.000000 -0700
+w02 +24.4 hour 1730660400 2024-11-03 12:00:00.000000 -0700
+w03 +0.5 month 1731610800 2024-11-14 12:00:00.000000 -0700
+
 statement ok
 UNSET timezone
