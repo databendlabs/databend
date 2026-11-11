@@ -423,10 +423,8 @@ impl<E> HTTPSessionEndpoint<E> {
                 Ok(Tenant::new_or_err(name, func_name!())?)
             })
             .transpose()?;
-        if !matches!(&credential, Credential::QueryToken { .. }) {
-            if let Some(tenant) = &requested_tenant {
-                session.set_current_tenant(tenant.clone())?;
-            }
+        if let Some(tenant) = &requested_tenant {
+            session.set_current_tenant(tenant.clone())?;
         }
         let (user_name, authed_client_session_id) = self
             .auth_manager
@@ -437,8 +435,10 @@ impl<E> HTTPSessionEndpoint<E> {
             )
             .await?;
         login_history.user_name = user_name.clone();
+        let authenticated_tenant = session.get_current_tenant();
         if matches!(&credential, Credential::QueryToken { .. })
-            && requested_tenant.is_some_and(|tenant| tenant != session.get_current_tenant())
+            && GlobalConfig::instance().query.common.management_mode
+            && requested_tenant.is_some_and(|tenant| tenant != authenticated_tenant)
         {
             return Err(ErrorCode::AuthenticateFailure(
                 "Query token tenant mismatch",
@@ -507,6 +507,7 @@ impl<E> HTTPSessionEndpoint<E> {
         let version = GlobalConfig::version();
         Ok(HttpQueryContext {
             session,
+            authenticated_tenant,
             query_id,
             is_query_id_from_client,
             node_id,
@@ -746,7 +747,13 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     login_history.event_type = LoginEventType::LoginFailed;
                     login_history.error_message = err.to_string();
                     login_history.write_to_log();
-                    let err = HttpErrorCode::error_code(err);
+                    let err = if err.code() == ErrorCode::UNKNOWN_QUERY
+                        && matches!(self.endpoint_kind, EndpointKind::PollQuery)
+                    {
+                        HttpErrorCode::new(err, StatusCode::NOT_FOUND)
+                    } else {
+                        HttpErrorCode::error_code(err)
+                    };
                     if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(
                             "Authentication failure: {method} {uri}, headers={:?}, error={}",

@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
-use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -141,27 +140,17 @@ impl AuthMgr {
                         "Query tokens cannot authenticate this endpoint",
                     ));
                 }
-                let query = HttpQueryManager::instance()
-                    .get_query(query_id)
-                    .filter(|q| q.query_token.verify(token))
-                    .ok_or_else(|| {
-                        ErrorCode::AuthenticateFailure(
-                            "Invalid query token or query no longer exists",
-                        )
-                    })?;
-                session.set_current_tenant(query.tenant.clone())?;
-                // Sandbox tenants are selected through settings, rather than
-                // current_tenant, in SessionContext::get_current_tenant().
-                if GlobalConfig::instance()
-                    .query
-                    .common
-                    .internal_enable_sandbox_tenant
-                {
-                    session.get_settings().set_setting(
-                        "sandbox_tenant".to_string(),
-                        query.tenant.tenant_name().to_string(),
-                    )?;
+                let manager = HttpQueryManager::instance();
+                let query = manager.get_query(query_id).ok_or_else(|| {
+                    ErrorCode::UnknownQuery(format!(
+                        "Query ID {query_id} not found on node {}",
+                        manager.server_info.id
+                    ))
+                })?;
+                if !query.query_token.verify(token) {
+                    return Err(ErrorCode::AuthenticateFailure("Invalid query token"));
                 }
+                session.set_current_tenant(query.owner_tenant.clone())?;
                 Ok((query.user_name.clone(), query.client_session_id.clone()))
             }
             Credential::DatabendToken { token } => {

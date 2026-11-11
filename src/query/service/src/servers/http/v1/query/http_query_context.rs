@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::tenant::Tenant;
 use http::StatusCode;
 use log::warn;
 use poem::FromRequest;
@@ -41,6 +42,8 @@ use crate::sessions::TableContextSettings;
 #[derive(Clone)]
 pub struct HttpQueryContext {
     pub session: Arc<Session>,
+    /// Snapshot before request-body settings can change the execution tenant.
+    pub authenticated_tenant: Tenant,
     pub credential: Credential,
     pub query_id: String,
     pub is_query_id_from_client: bool,
@@ -124,7 +127,7 @@ impl HttpQueryContext {
             _ => false,
         };
         if invalid_token
-            || query.tenant != self.session.get_current_tenant()
+            || query.owner_tenant != self.authenticated_tenant
             || query.user_name != self.user_name
         {
             return Err(poem::Error::from_string(

@@ -20,6 +20,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE;
 use databend_common_base::headers::HEADER_AUTH_METHOD;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
+use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_SESSION;
 use databend_common_base::headers::HEADER_TENANT;
@@ -152,6 +153,8 @@ async fn test_query_token_followups_and_retries() -> anyhow::Result<()> {
     )
     .await;
     assert_eq!(state.status(), StatusCode::OK);
+    let state: serde_json::Value = state.into_body().into_json().await?;
+    assert!(state.get("query_token").is_none());
 
     let page = result.next_uri.as_ref().unwrap();
     for _ in 0..2 {
@@ -194,7 +197,6 @@ async fn test_query_token_scope_and_auth_dispatch() -> anyhow::Result<()> {
         second.next_uri.clone().unwrap(),
         second.final_uri.clone().unwrap(),
         second.kill_uri.clone().unwrap(),
-        "/v1/query/nonexistent/page/1".to_string(),
     ] {
         let response = request(&ep, Method::GET, &uri, token_headers(token), json!(null)).await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -325,6 +327,64 @@ async fn test_query_token_scope_and_auth_dispatch() -> anyhow::Result<()> {
         .await;
         assert_eq!(response.status(), StatusCode::OK);
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_missing_query_and_routing() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let result = start(&ep, HeaderMap::new()).await?;
+    let token = result.query_token.as_ref().unwrap();
+    for suffix in ["", "/page/1", "/final", "/kill"] {
+        for method in [Method::GET, Method::POST] {
+            if method == Method::POST && !matches!(suffix, "/final" | "/kill") {
+                continue;
+            }
+            let response = request(
+                &ep,
+                method,
+                &format!("/v1/query/missing-query{suffix}"),
+                token_headers(token),
+                json!(null),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            let body = response.into_body().into_string().await?;
+            assert!(body.contains("not found on node"), "{body}");
+            assert!(!body.contains(token));
+        }
+    }
+    let mut wrong_node = token_headers(token);
+    wrong_node.insert(
+        HEADER_NODE_ID,
+        HeaderValue::from_static("another-query-node"),
+    );
+    let response = request(
+        &ep,
+        Method::GET,
+        result.next_uri.as_ref().unwrap(),
+        wrong_node.clone(),
+        json!(null),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(
+        response
+            .into_body()
+            .into_string()
+            .await?
+            .contains("Routing error:")
+    );
+    let response = request(
+        &ep,
+        Method::GET,
+        "/v1/query/missing-query/page/1",
+        wrong_node,
+        json!(null),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     Ok(())
 }
 
@@ -566,7 +626,169 @@ async fn test_query_token_tenant_and_session_isolation() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_query_token_restores_sandbox_tenant() -> anyhow::Result<()> {
+async fn test_sandbox_owner_with_legacy_auth() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().build();
+    config.query.common.internal_enable_sandbox_tenant = true;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+    let ep = create_endpoint()?;
+    let basic = basic_headers("root", "");
+    let mut session = basic.clone();
+    session.insert(
+        HEADER_CLIENT_CAPABILITIES,
+        HeaderValue::from_static("session_header"),
+    );
+    session.insert(
+        HEADER_SESSION,
+        client_session_header("sandbox-legacy-session"),
+    );
+    let login = request(
+        &ep,
+        Method::POST,
+        "/v1/session/login",
+        session.clone(),
+        json!({}),
+    )
+    .await;
+    assert_eq!(login.status(), StatusCode::OK);
+    let login: serde_json::Value = login.into_body().into_json().await?;
+    let token = login["tokens"]["session_token"].as_str().unwrap();
+    session.insert(
+        http::header::AUTHORIZATION,
+        format!("Bearer {token}").parse()?,
+    );
+
+    for (method, headers) in [("basic", basic), ("session", session)] {
+        // Mirror the HTTP sqllogictest flow: SET returns session settings that
+        // are sent back in the next query body, but never on follow-up GETs.
+        let response = request(
+            &ep,
+            Method::POST,
+            "/v1/query",
+            headers.clone(),
+            json!({
+                "sql": "SET sandbox_tenant = 'legacy-sandbox'",
+                "pagination": {"wait_time_secs": 5}
+            }),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let settings_query: TestQueryResponse = response.into_body().into_json().await?;
+        assert!(settings_query.error.is_none(), "{:?}", settings_query.error);
+        assert_eq!(settings_query.state.to_string(), "Succeeded");
+        let restored = settings_query.session.as_ref().unwrap();
+        assert_eq!(
+            restored.settings.as_ref().unwrap()["sandbox_tenant"],
+            "legacy-sandbox"
+        );
+        let response = request(
+            &ep,
+            Method::GET,
+            settings_query.next_uri.as_ref().unwrap(),
+            headers.clone(),
+            json!(null),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK, "{method} SET final");
+        for close in ["final", "kill"] {
+            let mut headers = headers.clone();
+            headers.insert(
+                HEADER_QUERY_ID,
+                format!("sandbox-{method}-{close}").parse()?,
+            );
+            // This header is ineffective outside management mode, including
+            // when sandbox selection comes from the request body's settings.
+            headers.insert(
+                HEADER_TENANT,
+                HeaderValue::from_static("ignored-header-tenant"),
+            );
+            let body = json!({
+                "sql": "SELECT * FROM numbers(5)",
+                "pagination": {"wait_time_secs": 5, "max_rows_per_page": 1},
+                "session": restored
+            });
+            let response = request(
+                &ep,
+                Method::POST,
+                "/v1/query",
+                headers.clone(),
+                body.clone(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let mut result: TestQueryResponse = response.into_body().into_json().await?;
+            assert!(result.error.is_none(), "{:?}", result.error);
+            let retry = request(&ep, Method::POST, "/v1/query", headers.clone(), body).await;
+            assert_eq!(
+                retry.status(),
+                StatusCode::OK,
+                "{method} sandbox submission retry"
+            );
+            let retry: TestQueryResponse = retry.into_body().into_json().await?;
+            assert_eq!(retry.query_token, result.query_token);
+            let mut capability = headers.clone();
+            capability.extend(token_headers(result.query_token.as_ref().unwrap()));
+            let response = request(
+                &ep,
+                Method::GET,
+                result.stats_uri.as_ref().unwrap(),
+                capability,
+                json!(null),
+            )
+            .await;
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "{method} ignored tenant header with query token"
+            );
+            let state = request(
+                &ep,
+                Method::GET,
+                result.stats_uri.as_ref().unwrap(),
+                headers.clone(),
+                json!(null),
+            )
+            .await;
+            assert_eq!(state.status(), StatusCode::OK, "{method} sandbox state");
+            let mut rows = result.data.len();
+            while result
+                .next_uri
+                .as_ref()
+                .is_some_and(|uri| uri.contains("/page/"))
+            {
+                let response = request(
+                    &ep,
+                    Method::GET,
+                    result.next_uri.as_ref().unwrap(),
+                    headers.clone(),
+                    json!(null),
+                )
+                .await;
+                assert_eq!(response.status(), StatusCode::OK, "{method} sandbox page");
+                result = response.into_body().into_json().await?;
+                rows += result.data.len();
+            }
+            assert_eq!(rows, 5);
+            let uri = if close == "final" {
+                result.final_uri.as_ref()
+            } else {
+                result.kill_uri.as_ref()
+            }
+            .unwrap();
+            for verb in [Method::GET, Method::POST] {
+                let response = request(&ep, verb, uri, headers.clone(), json!(null)).await;
+                assert_eq!(
+                    response.status(),
+                    StatusCode::OK,
+                    "{method} sandbox {close}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_preserves_sandbox_owner() -> anyhow::Result<()> {
     let mut config = ConfigBuilder::create().build();
     config.query.common.internal_enable_sandbox_tenant = true;
     let _fixture = TestFixture::setup_with_config(&config).await?;
@@ -656,7 +878,7 @@ async fn test_query_token_expires_with_query_state() -> anyhow::Result<()> {
             json!(null),
         )
         .await;
-        if response.status() == StatusCode::UNAUTHORIZED {
+        if response.status() == StatusCode::NOT_FOUND {
             return Ok(());
         }
         assert_eq!(response.status(), StatusCode::OK);
@@ -736,7 +958,7 @@ async fn test_query_token_invalid_after_query_manager_reset() -> anyhow::Result<
                     json!(null),
                 )
                 .await;
-                assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+                assert_eq!(response.status(), StatusCode::NOT_FOUND);
                 let replacement = start(&ep, headers).await?;
                 assert_eq!(replacement.id, result.id);
                 assert_ne!(replacement.query_token, result.query_token);

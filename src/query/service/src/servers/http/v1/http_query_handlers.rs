@@ -736,7 +736,7 @@ pub(crate) async fn query_handler(
         if ctx.is_query_id_from_client {
             if let Some(query) = http_query_manager.get_query(&ctx.query_id) {
                 return if query.user_name != ctx.user_name
-                    || query.tenant != ctx.session.get_current_tenant()
+                    || query.owner_tenant != ctx.authenticated_tenant
                     || query.client_session_id != ctx.client_session_id
                 {
                     Err(poem::Error::from_string(
