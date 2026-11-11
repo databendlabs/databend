@@ -1,4 +1,7 @@
-# Synthetic bitmap keys exercise both scalar and materialized shuffle inputs.
+# Integration smoke coverage for scalar/materialized bitmap shuffle inputs,
+# single/composite keys and NULLs. to_bitmap canonicalizes member order, so
+# these are not cross-encoding regressions; those require the Rust fixtures.
+# Cross-encoding JOIN key serialization remains outside this hash-only fix.
 
 statement ok
 set prefer_broadcast_join = 0

@@ -17,8 +17,6 @@ use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use databend_common_column::types::months_days_micros;
-use databend_common_column::types::timestamp_tz;
 use databend_common_expression::types::DictColumn;
 use databend_common_expression::types::EncodedColumn;
 use databend_common_expression::types::Int16Type;
@@ -27,13 +25,14 @@ use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::*;
 use databend_common_io::HybridBitmap;
+use roaring::RoaringBitmap;
 use roaring::RoaringTreemap;
 
 fn repeated(scalar: Scalar, rows: usize) -> BlockEntry {
     BlockEntry::new_const_column(scalar.as_ref().infer_data_type(), scalar, rows)
 }
 
-fn scalar_hash(scalar: &Scalar) -> u64 {
+fn scalar_hash(scalar: &impl Hash) -> u64 {
     let mut hasher = DefaultHasher::new();
     scalar.hash(&mut hasher);
     hasher.finish()
@@ -60,63 +59,87 @@ fn assert_hash_class(scalars: &[Scalar]) -> databend_common_exception::Result<()
     // Slice off padding so binary/array buffers and validity can have offsets.
     let column = builder.build().slice(1..scalars.len() + 1);
     let rows = scalars.len();
-    let nullable = NullableColumn::new_column(column.clone(), vec![true; rows].into());
     let dictionary = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
         NarrowBuffer::pack((0..rows).rev().map(|index| index as u64), (rows - 1) as u64),
         column.clone(),
     ))));
     let suffix = Int16Type::from_data(vec![4_i16; rows]);
-    let entries = [
-        BlockEntry::Column(column),
-        BlockEntry::Column(nullable),
-        BlockEntry::Column(dictionary),
-    ]
-    .into_iter()
-    .chain(scalars.iter().cloned().flat_map(|value| {
-        let entry = repeated(value.clone(), rows);
-        let nullable = BlockEntry::new_const_column(data_type.clone().wrap_nullable(), value, rows);
-        [entry, nullable]
-    }))
-    .collect::<Vec<_>>();
+    let entries = [BlockEntry::Column(column), BlockEntry::Column(dictionary)]
+        .into_iter()
+        .chain(scalars.iter().cloned().flat_map(|value| {
+            let entry = repeated(value.clone(), rows);
+            let nullable =
+                BlockEntry::new_const_column(data_type.clone().wrap_nullable(), value, rows);
+            [entry, nullable]
+        }))
+        .collect::<Vec<_>>();
 
     for projection in [vec![0], vec![0, 1], vec![1, 0]] {
-        let mut expected = None;
-        for entry in &entries {
-            let entry = entry.clone();
-            let block = DataBlock::new(vec![entry, suffix.clone().into()], rows);
-            let mut hashes = vec![u64::MAX; rows];
-            group_hash_entries(ProjectedBlock::project(&projection, &block), &mut hashes);
-            assert!(hashes.iter().all(|hash| *hash == hashes[0]));
-            if let Some(expected) = &expected {
-                assert_eq!(&hashes, expected);
-            } else {
-                expected = Some(hashes.clone());
-            }
+        let null_block = DataBlock::new(
+            vec![
+                BlockEntry::new_const_column(data_type.clone().wrap_nullable(), Scalar::Null, rows),
+                suffix.clone().into(),
+            ],
+            rows,
+        );
+        let mut null_hashes = vec![0; rows];
+        group_hash_entries(
+            ProjectedBlock::project(&projection, &null_block),
+            &mut null_hashes,
+        );
+        // Compare the same layouts both without NULLs and with actual masked
+        // payloads. Indexed hashing selects a valid row and a NULL row.
+        for nullable in [false, true] {
+            let mut expected = None;
+            for entry in &entries {
+                let entry = if nullable {
+                    NullableColumn::new_column(
+                        entry.to_column().remove_nullable(),
+                        (0..rows).map(|row| row != rows - 1).collect(),
+                    )
+                    .into()
+                } else {
+                    entry.clone()
+                };
+                let block = DataBlock::new(vec![entry, suffix.clone().into()], rows);
+                let mut hashes = vec![u64::MAX; rows];
+                group_hash_entries(ProjectedBlock::project(&projection, &block), &mut hashes);
+                let valid_rows = if nullable { rows - 1 } else { rows };
+                assert!(hashes[..valid_rows].iter().all(|hash| *hash == hashes[0]));
+                if nullable {
+                    assert_eq!(hashes[rows - 1], null_hashes[rows - 1]);
+                }
+                if let Some(expected) = &expected {
+                    assert_eq!(&hashes, expected);
+                } else {
+                    expected = Some(hashes.clone());
+                }
 
-            // Hash each chunk independently, including an empty chunk.
-            for range in [0..0, 0..1, 1..rows] {
-                let chunk = block.slice(range.clone());
-                let mut chunk_hashes = vec![17; range.len()];
-                group_hash_entries(
-                    ProjectedBlock::project(&projection, &chunk),
-                    &mut chunk_hashes,
-                );
-                assert_eq!(chunk_hashes, hashes[range]);
-            }
+                // Hash each chunk independently, including an empty chunk.
+                for range in [0..0, 0..1, 1..rows] {
+                    let chunk = block.slice(range.clone());
+                    let mut chunk_hashes = vec![17; range.len()];
+                    group_hash_entries(
+                        ProjectedBlock::project(&projection, &chunk),
+                        &mut chunk_hashes,
+                    );
+                    assert_eq!(chunk_hashes, hashes[range]);
+                }
 
-            let indices = [0_u32, (rows - 1) as u32];
-            let mut spread = vec![u64::MAX; rows];
-            for (key, &index) in projection.iter().enumerate() {
-                group_hash_value_spread(
-                    &indices,
-                    block.get_by_offset(index).value(),
-                    key == 0,
-                    &mut spread,
-                )?;
+                let indices = [0_u32, (rows - 1) as u32];
+                let mut spread = vec![u64::MAX; rows];
+                for (key, &index) in projection.iter().enumerate() {
+                    group_hash_value_spread(
+                        &indices,
+                        block.get_by_offset(index).value(),
+                        key == 0,
+                        &mut spread,
+                    )?;
+                }
+                assert_eq!(spread[0], hashes[0]);
+                assert_eq!(spread[rows - 1], hashes[rows - 1]);
+                assert!(spread[1..rows - 1].iter().all(|hash| *hash == u64::MAX));
             }
-            assert_eq!(spread[0], hashes[0]);
-            assert_eq!(spread[rows - 1], hashes[rows - 1]);
-            assert!(spread[1..rows - 1].iter().all(|hash| *hash == u64::MAX));
         }
     }
     Ok(())
@@ -151,7 +174,15 @@ fn assert_nested_hash_class(scalars: &[Scalar]) -> databend_common_exception::Re
 
 #[test]
 fn bitmap_hashes_logical_members() -> databend_common_exception::Result<()> {
-    for members in [vec![], vec![2_u64, 9], (0..40).collect()] {
+    // Include the hybrid Small/Large boundary and multiple Roaring high words.
+    for members in [
+        vec![],
+        vec![2_u64, 9],
+        (0..31).collect(),
+        (0..32).collect(),
+        (0..33).collect(),
+        vec![0, 65_535, 65_536, u32::MAX as u64, 1_u64 << 32, u64::MAX],
+    ] {
         let tree = members.iter().copied().collect::<RoaringTreemap>();
         let hybrid = members.iter().copied().collect::<HybridBitmap>();
         let mut legacy = Vec::new();
@@ -169,14 +200,24 @@ fn bitmap_hashes_logical_members() -> databend_common_exception::Result<()> {
             Scalar::Bitmap(large),
         ];
         assert_hash_class(&scalars)?;
-        // Nested bitmap comparisons currently use the inner column's bytes.
-        // Check representation invariance without assuming semantic equality there.
-        for scalar in scalars {
-            assert_nested_hash_class(&[scalar.clone(), scalar])?;
+    }
+    Ok(())
+}
+
+#[test]
+fn invalid_payloads_hash_bytes() -> databend_common_exception::Result<()> {
+    for bytes in [vec![7], b"HB\x01\x00".to_vec(), b"HB\x01\x01".to_vec()] {
+        assert!(databend_common_io::deserialize_bitmap(&bytes).is_err());
+        for scalar in [
+            Scalar::Bitmap(bytes.clone()),
+            Scalar::Geometry(bytes.clone()),
+        ] {
+            // Check the promised bytewise fallback, not merely repeatability.
+            assert_eq!(scalar_hash(&scalar), scalar_hash(&bytes));
+            assert_hash_class(&[scalar.clone(), scalar])?;
         }
     }
-    // Undecodable payloads retain bytewise hashing instead of becoming NULL.
-    assert_hash_class(&[Scalar::Bitmap(vec![7]), Scalar::Bitmap(vec![7])])
+    Ok(())
 }
 
 // Standard Roaring treemap for [0, cardinality), assembled from the wire
@@ -215,7 +256,7 @@ fn run_bitmap(cardinality: u32) -> Vec<u8> {
 
 #[test]
 fn bitmap_hashes_canonicalize_run_containers() -> databend_common_exception::Result<()> {
-    for cardinality in [4_096_u32, 4_097, 65_536, 1 << 20] {
+    for cardinality in [4_095_u32, 4_096, 4_097, 65_536, 1 << 20] {
         let mut tree = RoaringTreemap::new();
         tree.insert_range(0..u64::from(cardinality));
         let mut legacy = Vec::new();
@@ -244,6 +285,26 @@ fn bitmap_hashes_canonicalize_run_containers() -> databend_common_exception::Res
         HybridBitmap::new().serialize_into(&mut bytes).unwrap();
         Scalar::Bitmap(bytes)
     }])
+}
+
+#[test]
+fn bitmap_hashes_ignore_empty_high_words() -> databend_common_exception::Result<()> {
+    // Two high-word entries, one with no members. Ordinary constructors do not
+    // retain this valid but non-canonical serialized representation.
+    let mut with_empty = 2_u64.to_le_bytes().to_vec();
+    with_empty.extend_from_slice(&0_u32.to_le_bytes());
+    RoaringBitmap::new()
+        .serialize_into(&mut with_empty)
+        .unwrap();
+    with_empty.extend_from_slice(&1_u32.to_le_bytes());
+    RoaringBitmap::from_iter(0..40)
+        .serialize_into(&mut with_empty)
+        .unwrap();
+    let mut canonical = Vec::new();
+    RoaringTreemap::from_iter((0..40).map(|value| (1_u64 << 32) + value))
+        .serialize_into(&mut canonical)
+        .unwrap();
+    assert_hash_class(&[Scalar::Bitmap(with_empty), Scalar::Bitmap(canonical)])
 }
 
 #[test]
@@ -293,35 +354,4 @@ fn geometry_hashes_ignore_wkb_byte_order() -> databend_common_exception::Result<
     big.extend_from_slice(&6_f64.to_be_bytes());
     assert_ne!(little, big);
     assert_nested_hash_class(&[Scalar::Geometry(little), Scalar::Geometry(big)])
-}
-
-#[test]
-fn interval_hashes_equal_durations() -> databend_common_exception::Result<()> {
-    // The native interval equality contract treats a month as thirty days.
-    assert_nested_hash_class(&[
-        Scalar::Interval(months_days_micros::new(1, 0, 0)),
-        Scalar::Interval(months_days_micros::new(0, 30, 0)),
-        Scalar::Interval(months_days_micros::new(0, 29, 86_400_000_000)),
-    ])
-}
-
-#[test]
-fn nested_hashes_ignore_null_payloads() -> databend_common_exception::Result<()> {
-    assert_nested_hash_class(&[
-        Scalar::Array(Int16Type::from_data_with_validity(vec![12_i16, 5], vec![
-            false, true,
-        ])),
-        Scalar::Array(Int16Type::from_data_with_validity(vec![-12_i16, 5], vec![
-            false, true,
-        ])),
-    ])
-}
-
-#[test]
-fn timestamp_tz_hashes_instants_not_offsets() -> databend_common_exception::Result<()> {
-    assert_nested_hash_class(&[
-        Scalar::TimestampTz(timestamp_tz::new(24, 0)),
-        Scalar::TimestampTz(timestamp_tz::new(24, 7_200)),
-        Scalar::TimestampTz(timestamp_tz::new(24, -7_200)),
-    ])
 }

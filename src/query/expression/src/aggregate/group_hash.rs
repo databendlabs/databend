@@ -676,8 +676,6 @@ mod tests {
     use databend_common_column::bitmap::Bitmap;
     use databend_common_column::types::months_days_micros;
     use databend_common_column::types::timestamp_tz;
-    use databend_common_io::HybridBitmap;
-    use roaring::RoaringTreemap;
 
     use super::*;
     use crate::BlockEntry;
@@ -686,7 +684,6 @@ mod tests {
     use crate::ProjectedBlock;
     use crate::Value;
     use crate::types::ArgType;
-    use crate::types::BitmapType;
     use crate::types::DecimalSize;
     use crate::types::Int32Type;
     use crate::types::NullableColumn;
@@ -985,35 +982,6 @@ mod tests {
                 &target
             );
         }
-        Ok(())
-    }
-
-    #[test]
-    fn test_bitmap_group_hash_legacy_bytes_normalized() -> Result<()> {
-        let values = [1_u64, 5, 42];
-
-        let mut hybrid = HybridBitmap::new();
-        for v in values {
-            hybrid.insert(v);
-        }
-        let mut hybrid_bytes = Vec::new();
-        hybrid.serialize_into(&mut hybrid_bytes).unwrap();
-
-        let mut tree = RoaringTreemap::new();
-        for v in values {
-            tree.insert(v);
-        }
-        let mut legacy_bytes = Vec::new();
-        tree.serialize_into(&mut legacy_bytes).unwrap();
-
-        let bitmap_column = BitmapType::from_data(vec![hybrid_bytes, legacy_bytes]);
-        let block = DataBlock::new(vec![bitmap_column.into()], 2);
-
-        let mut hashes = vec![0_u64; block.num_rows()];
-        group_hash_entries(ProjectedBlock::from(block.columns()), &mut hashes);
-
-        // Legacy-encoded bitmap should hash identically to hybrid-encoded bitmap.
-        assert_eq!(hashes[0], hashes[1]);
         Ok(())
     }
 }

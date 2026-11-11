@@ -1,19 +1,52 @@
-# Equal durations must remain equal at hash-based scalar boundaries.
+# Scalar interval hashes must follow duration equality, including inside
+# arrays, tuples and maps. Keep these SQL-visible cases here rather than
+# duplicating them in the expression crate's group-hash layout tests.
 
+# Establish the equality contract independently of hash-based deduplication.
+skipif mysql
+query BB
+select to_interval('1 month') = to_interval('30 days'), to_interval('30 days') = to_interval('29 days 24 hours')
+----
+1 1
+
+# Constant folding: three storage representations of one duration.
 skipif mysql
 query I
 select array_length(array_distinct([to_interval('1 month'), to_interval('30 days'), to_interval('29 days 24 hours')]))
 ----
 1
 
+# Runtime evaluation: expose each row instead of hiding the result in a sum.
 skipif mysql
-query I
-select sum(array_length(array_distinct([to_interval(if(number % 2 = 0, '1 month', '30 days')), to_interval('30 days')]))) from numbers(4)
+query II
+select number, array_length(array_distinct([to_interval(if(number % 2 = 0, '1 month', '30 days')), to_interval('30 days')])) from numbers(4) order by number
 ----
-4
+0 1
+1 1
+2 1
+3 1
 
+# Recursive scalar hashing must use the same duration semantics in every
+# supported nested container, including a tuple with a NULL field.
+skipif mysql
+query III
+select
+    array_length(array_distinct([[to_interval('1 month')], [to_interval('30 days')]])),
+    array_length(array_distinct([tuple(null, to_interval('1 month')), tuple(null, to_interval('30 days'))])),
+    array_length(array_distinct([map(['key'], [to_interval('1 month')]), map(['key'], [to_interval('30 days')])]))
+----
+1 1 1
+
+# Negative durations must canonicalize too, not only positive intervals.
 skipif mysql
 query I
-select array_length(array_distinct([[to_interval('1 month')], [to_interval('30 days')]]))
+select array_length(array_distinct([to_interval('-1 month'), to_interval('-30 days'), to_interval('-29 days -24 hours')]))
 ----
 1
+
+# Do not collapse a genuinely different duration; NULL is ignored by array_distinct.
+skipif mysql
+query I
+select array_length(array_distinct([null, to_interval('1 month'), to_interval('30 days'), to_interval('31 days')]))
+----
+2
