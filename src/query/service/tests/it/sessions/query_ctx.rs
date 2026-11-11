@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::LockKey;
@@ -28,7 +29,9 @@ use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_runtime::DatabendRuntime;
 use databend_query::interpreters::interpreter_plan_sql;
+use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextQueryIdentity;
+use databend_query::sessions::TableContextQueryInfo;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
@@ -180,6 +183,34 @@ async fn test_execute_immediate_planner_history() -> anyhow::Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_attach_query_kind_keeps_first_known_kind() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+
+    // A statement planned later on a shared context, such as a subquery of
+    // COPY, attaches its own kind; the kind of the query is kept.
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.attach_query_kind(QueryKind::CopyIntoTable);
+    let shared = QueryContext::create_from(ctx.as_ref());
+    shared.attach_query_kind(QueryKind::Query);
+    shared.attach_query_str(QueryKind::Query, "SELECT 1".to_string());
+    assert_eq!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
+    // The first text is still attached as before.
+    assert_eq!(ctx.get_query_str(), "SELECT 1");
+
+    // An unknown kind does not replace a known one, and is replaced by one.
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.attach_query_kind(QueryKind::Unknown);
+    assert_eq!(ctx.get_query_kind(), QueryKind::Unknown);
+    ctx.attach_query_str(QueryKind::Unknown, "SELEC 1".to_string());
+    ctx.attach_query_kind(QueryKind::Insert);
+    assert_eq!(ctx.get_query_kind(), QueryKind::Insert);
+    ctx.attach_query_str(QueryKind::Unknown, "other text".to_string());
+    assert_eq!(ctx.get_query_kind(), QueryKind::Insert);
+    assert_eq!(ctx.get_query_str(), "SELEC 1");
     Ok(())
 }
 

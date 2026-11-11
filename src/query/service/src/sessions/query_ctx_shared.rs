@@ -701,23 +701,29 @@ impl QueryContextShared {
     }
 
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
+        self.attach_query_kind(kind);
+
         // `create view as view_query` the view_query should not cover create view
         if !self.get_query_str().is_empty() {
             return;
         }
-        {
-            let mut running_query = self.running_query.write();
-            // Callers attach masked SQL, see `Statement::to_mask_sql`.
-            *running_query = Some(short_sql(
-                query,
-                self.get_settings()
-                    .get_short_sql_max_length()
-                    .unwrap_or(1000),
-            ));
-        }
+        let mut running_query = self.running_query.write();
+        // Callers attach masked SQL, see `Statement::to_mask_sql`.
+        *running_query = Some(short_sql(
+            query,
+            self.get_settings()
+                .get_short_sql_max_length()
+                .unwrap_or(1000),
+        ));
+    }
 
-        {
-            let mut running_query_kind = self.running_query_kind.write();
+    /// The first known kind wins, see `TableContextQueryIdentity::attach_query_kind`.
+    pub fn attach_query_kind(&self, kind: QueryKind) {
+        if kind == QueryKind::Unknown {
+            return;
+        }
+        let mut running_query_kind = self.running_query_kind.write();
+        if matches!(*running_query_kind, None | Some(QueryKind::Unknown)) {
             *running_query_kind = Some(kind);
         }
     }

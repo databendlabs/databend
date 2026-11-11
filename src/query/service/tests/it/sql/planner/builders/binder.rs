@@ -17,7 +17,10 @@ use databend_common_catalog::session_type::SessionType;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::Planner;
 use databend_common_sql::optimizer::ir::StatContext;
+use databend_query::interpreters::interpreter_plan_sql;
+use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextQueryInfo;
+use databend_query::sessions::TableContextSession;
 use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
 
@@ -117,5 +120,104 @@ async fn test_execute_immediate_uses_inner_timezone_for_statistics() -> anyhow::
         plans[1], plans[2],
         "dynamic SQL must use its inner timezone"
     );
+    Ok(())
+}
+
+/// Planning can fail after the statement is parsed but before its text is
+/// attached. Such failures keep the kind of the statement, not `Unknown`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_query_kind_of_early_planning_failures() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE TABLE default.query_kind_t(a INT)")
+        .await?;
+
+    #[derive(Clone, Copy)]
+    enum Setup {
+        None,
+        MaxSetOperators,
+        AbortedTransaction,
+    }
+    let params = serde_json::json!({ "y": 1 });
+    // (SQL, HTTP parameters, failure set up on the session, expected kind)
+    let cases = [
+        // `SETTINGS` clauses are applied before binding.
+        (
+            "SETTINGS (max_threads = 'abc') INSERT INTO default.query_kind_t VALUES (1)",
+            None,
+            Setup::None,
+            QueryKind::Insert,
+        ),
+        (
+            "SETTINGS (max_threads = 'abc') COPY INTO default.query_kind_t FROM @~/ \
+             FILE_FORMAT = (TYPE = 'csv')",
+            None,
+            Setup::None,
+            QueryKind::CopyIntoTable,
+        ),
+        (
+            "SETTINGS (max_threads = 'abc') COPY INTO @~/query_kind/ FROM default.query_kind_t",
+            None,
+            Setup::None,
+            QueryKind::CopyIntoLocation,
+        ),
+        // Parameters are substituted after parsing.
+        (
+            "INSERT INTO default.query_kind_t SELECT :x",
+            Some(&params),
+            Setup::None,
+            QueryKind::Insert,
+        ),
+        (
+            "COPY INTO @~/query_kind/ FROM (SELECT :x)",
+            Some(&params),
+            Setup::None,
+            QueryKind::CopyIntoLocation,
+        ),
+        // The AST is rewritten and checked right after parsing.
+        (
+            "DELETE FROM default.query_kind_t \
+             WHERE a IN (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3)",
+            None,
+            Setup::MaxSetOperators,
+            QueryKind::Update,
+        ),
+        // The transaction state is checked before planning.
+        (
+            "MERGE INTO default.query_kind_t USING (SELECT 1 AS a) AS s ON query_kind_t.a = s.a \
+             WHEN MATCHED THEN DELETE",
+            None,
+            Setup::AbortedTransaction,
+            QueryKind::Update,
+        ),
+        // Without a statement the kind stays unknown.
+        ("SELEC 1", None, Setup::None, QueryKind::Unknown),
+    ];
+    for (sql, params, setup, expected) in cases {
+        let session = fixture
+            .new_session_with_type(SessionType::HTTPQuery)
+            .await?;
+        let ctx = session
+            .create_query_context(&databend_common_version::BUILD_INFO)
+            .await?;
+        match setup {
+            Setup::None => {}
+            Setup::MaxSetOperators => ctx
+                .get_settings()
+                .set_setting("max_set_operator_count".to_string(), "1".to_string())?,
+            Setup::AbortedTransaction => {
+                let txn_mgr = ctx.txn_mgr();
+                let mut txn_mgr = txn_mgr.lock();
+                txn_mgr.begin();
+                txn_mgr.set_fail();
+            }
+        }
+
+        let result = interpreter_plan_sql(ctx.clone(), sql, false, params).await;
+        assert!(result.is_err(), "{sql}");
+        assert_eq!(ctx.get_query_kind(), expected, "{sql}");
+        // The failure handler still attaches the text.
+        assert!(!ctx.get_query_str().is_empty(), "{sql}");
+    }
     Ok(())
 }
