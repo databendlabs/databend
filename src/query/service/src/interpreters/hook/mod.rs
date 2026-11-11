@@ -14,6 +14,7 @@
 
 pub(crate) mod analyze_hook;
 pub(crate) mod compact_hook;
+pub(crate) mod recluster_hook;
 pub(crate) mod refresh_hook;
 pub(crate) mod table_hook_scheduler;
 pub(crate) mod table_hook_task;

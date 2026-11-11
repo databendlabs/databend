@@ -31,6 +31,7 @@ use crate::interpreters::hook::resolve_current_table_name_by_id;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextProgress;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) struct TableHookTaskKey {
@@ -107,7 +108,8 @@ impl TableHookTask {
     /// Release any handed-over statement lock after refresh and before analyze.
     ///
     /// Each stage lives with its own hook module: `execute_compact` in `compact_hook.rs`,
-    /// `execute_refresh` in `refresh_hook.rs`, and `execute_analyze` in `analyze_hook.rs`.
+    /// `execute_recluster` in `recluster_hook.rs`, `execute_refresh` in `refresh_hook.rs`,
+    /// and `execute_analyze` in `analyze_hook.rs`.
     async fn execute_stages(mut self, is_async: bool) {
         if is_async {
             info!(
@@ -121,12 +123,24 @@ impl TableHookTask {
             );
         }
         if self.hook_settings.compact_after_write {
-            self.execute_compact().await.unwrap_or_else(|e| {
-                warn!(
+            match self.execute_compact().await {
+                // A recluster round follows only a successful compaction.
+                Ok(Some(compacted)) => {
+                    self.execute_recluster(&compacted)
+                        .await
+                        .unwrap_or_else(|e| {
+                            warn!(
+                                "Table hook recluster failed, table_id={}: {e}",
+                                self.target.table_id
+                            )
+                        });
+                }
+                Ok(None) => {}
+                Err(e) => warn!(
                     "Table hook compact failed, table_id={}: {e}",
                     self.target.table_id
-                )
-            });
+                ),
+            }
         }
         self.execute_refresh().await;
         if let Some(guard) = self.lock_guard.take() {
@@ -202,6 +216,21 @@ impl TableHookTaskSettings {
     fn merge(&mut self, other: Self) {
         self.compact_after_write |= other.compact_after_write;
     }
+}
+
+/// Run maintenance work without adding its reads and writes to the progress of `ctx`. On an
+/// autocommit task the context still belongs to the triggering statement.
+pub(super) async fn keep_progress<T>(ctx: &Arc<QueryContext>, work: impl Future<Output = T>) -> T {
+    let write_progress = ctx.get_write_progress();
+    let write_progress_value = write_progress.as_ref().get_values();
+    let scan_progress = ctx.get_scan_progress();
+    let scan_progress_value = scan_progress.as_ref().get_values();
+
+    let output = work.await;
+
+    write_progress.set(&write_progress_value);
+    scan_progress.set(&scan_progress_value);
+    output
 }
 
 #[cfg(test)]
