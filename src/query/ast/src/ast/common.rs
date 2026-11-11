@@ -160,7 +160,6 @@ pub struct TableRef {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub branch: Option<Identifier>,
 }
 
 impl Display for TableRef {
@@ -174,9 +173,6 @@ impl Display for TableRef {
         }
         write!(f, "{}", self.table)?;
 
-        if let Some(branch) = &self.branch {
-            write!(f, "/{branch}")?;
-        }
         Ok(())
     }
 }

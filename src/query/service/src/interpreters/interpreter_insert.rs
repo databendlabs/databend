@@ -422,12 +422,7 @@ impl Interpreter for InsertInterpreter {
                     .get_table_by_info(table_info)?
             } else {
                 self.ctx
-                    .get_table_with_branch(
-                        &self.plan.catalog,
-                        &self.plan.database,
-                        &self.plan.table,
-                        self.plan.branch.as_deref(),
-                    )
+                    .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
                     .await?
             };
 
@@ -518,17 +513,15 @@ impl Interpreter for InsertInterpreter {
                             table_meta_timestamps,
                         )?;
 
-                        if self.plan.branch.is_none() {
-                            let hook_operator = HookOperator::create(
-                                self.ctx.clone(),
-                                self.plan.catalog.clone(),
-                                self.plan.database.clone(),
-                                self.plan.table.clone(),
-                                MutationKind::Insert,
-                                hook_lock_opt.clone(),
-                            );
-                            hook_operator.execute(&mut build_res.main_pipeline).await;
-                        }
+                        let hook_operator = HookOperator::create(
+                            self.ctx.clone(),
+                            self.plan.catalog.clone(),
+                            self.plan.database.clone(),
+                            self.plan.table.clone(),
+                            MutationKind::Insert,
+                            hook_lock_opt.clone(),
+                        );
+                        hook_operator.execute(&mut build_res.main_pipeline).await;
 
                         return Ok(build_res);
                     }
@@ -656,17 +649,15 @@ impl Interpreter for InsertInterpreter {
                     )?;
 
                     //  Execute the hook operator.
-                    if self.plan.branch.is_none() {
-                        let hook_operator = HookOperator::create(
-                            self.ctx.clone(),
-                            self.plan.catalog.clone(),
-                            self.plan.database.clone(),
-                            self.plan.table.clone(),
-                            MutationKind::Insert,
-                            hook_lock_opt.clone(),
-                        );
-                        hook_operator.execute(&mut build_res.main_pipeline).await;
-                    }
+                    let hook_operator = HookOperator::create(
+                        self.ctx.clone(),
+                        self.plan.catalog.clone(),
+                        self.plan.database.clone(),
+                        self.plan.table.clone(),
+                        MutationKind::Insert,
+                        hook_lock_opt.clone(),
+                    );
+                    hook_operator.execute(&mut build_res.main_pipeline).await;
 
                     return Ok(build_res);
                 }
@@ -726,17 +717,15 @@ impl Interpreter for InsertInterpreter {
             )?;
 
             //  Execute the hook operator.
-            if self.plan.branch.is_none() {
-                let hook_operator = HookOperator::create(
-                    self.ctx.clone(),
-                    self.plan.catalog.clone(),
-                    self.plan.database.clone(),
-                    self.plan.table.clone(),
-                    MutationKind::Insert,
-                    hook_lock_opt,
-                );
-                hook_operator.execute(&mut build_res.main_pipeline).await;
-            }
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                self.plan.catalog.clone(),
+                self.plan.database.clone(),
+                self.plan.table.clone(),
+                MutationKind::Insert,
+                hook_lock_opt,
+            );
+            hook_operator.execute(&mut build_res.main_pipeline).await;
 
             Ok(build_res)
         })

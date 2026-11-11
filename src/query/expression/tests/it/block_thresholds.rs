@@ -159,3 +159,31 @@ fn test_calc_rows_for_recluster() {
         (667, 1_666_667)
     );
 }
+
+#[test]
+fn test_recluster_output_thresholds_never_below_table() {
+    // Table: 1000 rows / 1_000_000 bytes per block, cut lines at 80%.
+    let t = default_thresholds();
+
+    // Task targets below the table targets are raised to them, so the cut lines
+    // equal the table's own (800 rows, 800_000 bytes).
+    let out = t.recluster_output_thresholds(834, 166_667);
+    assert_eq!(out.max_rows_per_block, 1000);
+    assert_eq!(out.min_rows_per_block, 800);
+    assert_eq!(out.max_bytes_per_block, 2_000_000);
+    assert_eq!(out.min_bytes_per_block, 800_000);
+    assert!(out.check_large_enough(800, 1));
+    assert!(!out.check_large_enough(799, 799_999));
+
+    // Larger task targets are kept; recluster may grow blocks, never shrink them.
+    let out = t.recluster_output_thresholds(2_000, 1_500_000);
+    assert_eq!(out.max_rows_per_block, 2_000);
+    assert_eq!(out.min_rows_per_block, 1_600);
+    assert_eq!(out.max_bytes_per_block, 3_000_000);
+    assert_eq!(out.min_bytes_per_block, 1_200_000);
+
+    // Each dimension is floored independently.
+    let out = t.recluster_output_thresholds(2_000, 1);
+    assert_eq!(out.min_rows_per_block, 1_600);
+    assert_eq!(out.min_bytes_per_block, 800_000);
+}

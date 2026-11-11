@@ -30,6 +30,8 @@ use crate::ast::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::common::*;
+use crate::parser::error::EXPR_DEPTH_LIMIT;
+use crate::parser::error::EXPR_STACK_LIMIT;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::query::*;
@@ -51,8 +53,22 @@ pub fn values(i: Input) -> IResult<Vec<Expr>> {
     map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v).parse(i)
 }
 
+// Bound structural recursion before expr_element() can allocate another stack segment.
+const MAX_EXPR_DEPTH: usize = 256;
+
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
+        if i.expr_depth >= MAX_EXPR_DEPTH {
+            return Err(nom::Err::Failure(Error::from_error_kind(
+                i,
+                ErrorKind::other(EXPR_DEPTH_LIMIT),
+            )));
+        }
+        let parent_depth = i.expr_depth;
+        let i = Input {
+            expr_depth: parent_depth + 1,
+            ..i
+        };
         let higher_prec_expr_element = |i| {
             expr_element(i).and_then(|(rest, elem)| match elem.elem.affix() {
                 Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
@@ -137,7 +153,15 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
 
-        run_pratt_parser(ExprParser, expr_elements, rest, i)
+        let (rest, expr) = run_pratt_parser(ExprParser, expr_elements, rest, i)?;
+        // Sibling expressions must share the parent's budget, not accumulate depth.
+        Ok((
+            Input {
+                expr_depth: parent_depth,
+                ..rest
+            },
+            expr,
+        ))
     }
 }
 
@@ -549,12 +573,21 @@ impl Expr {
 
 struct ExprParser;
 
+// Reserve room for the next Pratt frame and error propagation.
+const MIN_PRATT_STACK: usize = 256 * 1024;
+
 impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
     type Error = &'static str;
     type Input = WithSpan<'a, ExprElement>;
     type Output = Expr;
 
     fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
+        // Pratt calls query() before descending into operands, so stop here
+        // rather than replacing its default recursive parser.
+        let remaining = stacker::remaining_stack().ok_or(EXPR_STACK_LIMIT)?;
+        if remaining < MIN_PRATT_STACK {
+            return Err(EXPR_STACK_LIMIT);
+        }
         Ok(elem.elem.affix())
     }
 
@@ -1050,6 +1083,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     }
 }
 #[allow(unreachable_code)]
+#[recursive::recursive]
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(column_id, |column| ExprElement::ColumnRef {
         column: ColumnRef {

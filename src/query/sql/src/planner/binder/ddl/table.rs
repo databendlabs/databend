@@ -151,7 +151,6 @@ use crate::binder::ConstraintExprBinder;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::scalar::ScalarBinder;
-use crate::binder::util::legacy_table_ref_removed_error;
 use crate::materialize_ttl_predicate;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
@@ -1406,29 +1405,15 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let (catalog, database, table, branch) =
-            if let TableReference::Table { table, .. } = table_reference {
-                let branch = table
-                    .branch
-                    .as_ref()
-                    .map(|b| normalize_identifier(b, &self.name_resolution_ctx).name);
-                let (catalog, database, table) = self.normalize_object_identifier_triple(
-                    &table.catalog,
-                    &table.database,
-                    &table.table,
-                );
-                (catalog, database, table, branch)
-            } else {
-                return Err(ErrorCode::Internal(
-                    "should not happen, parser should have report error already",
-                ));
-            };
-
-        if let Some(branch_name) = branch.as_ref() {
-            return Err(legacy_table_ref_removed_error(format!(
-                "ALTER TABLE on branch reference `{catalog}.{database}.{table}/{branch_name}`"
-            )));
-        }
+        let (catalog, database, table) = if let TableReference::Table { table, .. } =
+            table_reference
+        {
+            self.normalize_object_identifier_triple(&table.catalog, &table.database, &table.table)
+        } else {
+            return Err(ErrorCode::Internal(
+                "should not happen, parser should have report error already",
+            ));
+        };
 
         match action {
             AlterTableAction::RenameTable { new_table } => {
@@ -1477,7 +1462,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
+                    .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
                 let (new_schema, old_column, new_column) = self
@@ -1488,7 +1473,6 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    branch,
                     schema: new_schema,
                     old_column,
                     new_column,
@@ -1501,7 +1485,7 @@ impl Binder {
             } => {
                 let schema = self
                     .ctx
-                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
+                    .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
@@ -1518,7 +1502,6 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    branch,
                     if_not_exists: *if_not_exists,
                     field,
                     comment,
@@ -1634,7 +1617,7 @@ impl Binder {
                             .map(SharedLockGuard::new);
                         let schema = self
                             .ctx
-                            .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
+                            .get_table(&catalog, &database, &table)
                             .await?
                             .schema();
                         for column in column_def_vec {
@@ -1648,7 +1631,7 @@ impl Binder {
                         let mut field_and_comment = Vec::with_capacity(column_comments.len());
                         let schema = self
                             .ctx
-                            .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
+                            .get_table(&catalog, &database, &table)
                             .await?
                             .schema();
 
@@ -1665,7 +1648,6 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    branch,
                     action: action_in_plan,
                     lock_guard,
                 })))
@@ -1676,15 +1658,11 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    branch,
                     column,
                 })))
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                let tbl = self
-                    .ctx
-                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
-                    .await?;
+                let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
                 let cluster_keys = self
                     .analyze_cluster_keys(
                         cluster_by,
@@ -1704,7 +1682,6 @@ impl Binder {
                         database,
                         table,
                         target: MaintenanceTarget::Table,
-                        branch,
                         cluster_keys,
                         cluster_type: cluster_by.cluster_type.to_string().parse()?,
                     },
@@ -1810,7 +1787,6 @@ impl Binder {
                     database,
                     table,
                     target: MaintenanceTarget::Table,
-                    branch,
                 },
             ))),
             AlterTableAction::SetTableTtl { .. } | AlterTableAction::RemoveTableTtl => {
@@ -2031,14 +2007,6 @@ impl Binder {
                     name,
                 })))
             }
-            AlterTableAction::CreateTableBranch { .. }
-            | AlterTableAction::DropTableBranch { .. } => {
-                // Keep the grammar reserved for the upcoming redesign, but do
-                // not generate legacy branch/tag DDL plans anymore.
-                Err(legacy_table_ref_removed_error(
-                    "ALTER TABLE ... CREATE/DROP BRANCH",
-                ))
-            }
         }
     }
 
@@ -2127,6 +2095,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        expected_table_id: None,
                         limit: CompactionLimits {
                             segment_limit: limit,
                             block_limit: None,
@@ -2169,6 +2138,7 @@ impl Binder {
                     database,
                     table,
                     target,
+                    expected_table_id: None,
                     limit,
                     selection: selection.as_deref().cloned(),
                     is_final: *is_final,

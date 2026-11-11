@@ -88,3 +88,35 @@ ORDER BY a NULLS LAST, grouping(a)
 1 54 0
 NULL 54 0
 NULL 108 1
+
+# A ROLLUP without aggregate functions must not build a hierarchical CTE chain:
+# its grand-total level has no columns and the materialized CTE never completes.
+query TII rowsort
+SELECT depname, salary, grouping(depname, salary)
+FROM (VALUES ('develop', 5200), ('sales', 5000), ('personnel', 3500), ('sales', 4800), ('develop', 4200)) e(depname, salary)
+GROUP BY ROLLUP(depname, salary)
+----
+NULL NULL 3
+develop 4200 0
+develop 5200 0
+develop NULL 1
+personnel 3500 0
+personnel NULL 1
+sales 4800 0
+sales 5000 0
+sales NULL 1
+
+query I rowsort
+SELECT grouping(depname, salary)
+FROM (VALUES ('develop', 5200), ('sales', 5000), ('personnel', 3500), ('sales', 4800), ('develop', 4200)) e(depname, salary)
+GROUP BY ROLLUP(depname, salary)
+----
+0
+0
+0
+0
+0
+1
+1
+1
+3

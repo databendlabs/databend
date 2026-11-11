@@ -37,3 +37,4 @@ pub use read_state::BlockScanStats;
 pub use read_state::ReadState;
 pub use read_state::ReadStateOutput;
 pub use util::need_reserve_block_info;
+pub use util::selected_row_offsets;

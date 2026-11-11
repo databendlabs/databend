@@ -27,6 +27,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -223,20 +224,19 @@ impl DeserializeDataTransform {
         num_rows: usize,
         bitmap: Option<&Bitmap>,
     ) -> RoaringTreemap {
-        let mut offsets = RoaringTreemap::new();
         match bitmap {
-            Some(bitmap) => {
-                for index in 0..bitmap.len() {
-                    if unsafe { bitmap.get_bit_unchecked(index) } {
-                        offsets.insert((start_row + index) as u64);
-                    }
-                }
-            }
+            // Select by runs of set bits, as `selected_row_offsets` does: a TopN
+            // query keeps a few rows out of a block of hundreds of thousands.
+            Some(bitmap) => RoaringTreemap::from_sorted_iter(SlicesIterator::new(bitmap).flat_map(
+                |(start, len)| (start_row + start) as u64..(start_row + start + len) as u64,
+            ))
+            .unwrap(),
             None => {
+                let mut offsets = RoaringTreemap::new();
                 offsets.insert_range(start_row as u64..(start_row + num_rows) as u64);
+                offsets
             }
         }
-        offsets
     }
 
     fn decode_normal_range(
@@ -269,7 +269,7 @@ impl DeserializeDataTransform {
             mut scan_stats,
         } = self
             .read_state
-            .as_ref()
+            .as_mut()
             .unwrap()
             .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
 

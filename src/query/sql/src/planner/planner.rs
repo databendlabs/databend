@@ -42,6 +42,7 @@ use log::info;
 use log::warn;
 use parking_lot::RwLock;
 
+use super::execution::RecordingQueryExecutor;
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use super::statement_settings::apply_statement_settings;
@@ -351,6 +352,7 @@ impl Planner {
             }
         }
 
+        let query_specific_values = self.ctx.get_function_context()?.query_specific_values;
         let metadata = Arc::new(RwLock::new(Metadata::default()));
         let binder = Binder::new(
             self.ctx.clone(),
@@ -359,7 +361,11 @@ impl Planner {
             metadata.clone(),
         )
         .with_materialized_view_rewrite(enable_materialized_view_rewrite)
-        .with_subquery_executor(self.query_executor.clone())
+        .with_subquery_executor(
+            self.query_executor
+                .clone()
+                .map(|executor| RecordingQueryExecutor::wrap(executor, query_specific_values)),
+        )
         .with_definition_scope(self.definition_scope.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.
@@ -393,7 +399,7 @@ impl Planner {
         let optimized_plan = optimize(opt_ctx, plan).await?;
 
         if let Some(cache_ctx) = plan_cache_context {
-            self.set_cache(cache_ctx, optimized_plan.clone());
+            self.set_cache(cache_ctx, optimized_plan.clone())?;
         }
 
         info!(

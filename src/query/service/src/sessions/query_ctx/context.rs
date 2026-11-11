@@ -317,6 +317,7 @@ impl TableContextSettings for QueryContext {
             random_function_seed,
             week_start,
             date_format_style,
+            query_specific_values: self.shared.query_specific_values.clone(),
         })
     }
 

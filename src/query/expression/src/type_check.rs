@@ -1202,17 +1202,27 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast<'_> {
 }
 
 pub fn convert_escape_pattern(pattern: &str, escape_char: char) -> String {
-    let mut result = String::with_capacity(pattern.len());
-    let mut chars = pattern.chars().peekable();
+    let mut result = String::with_capacity(pattern.len() + 2);
+    let mut chars = pattern.chars();
 
     while let Some(c) = chars.next() {
         if c == escape_char {
-            if let Some(next_char) = chars.next() {
-                result.push('\\');
-                result.push(next_char);
-            } else {
-                result.push(escape_char);
+            match chars.next() {
+                Some(next_char @ ('%' | '_' | '\\')) => {
+                    result.push('\\');
+                    result.push(next_char);
+                }
+                Some(next_char) => result.push(next_char),
+                None => {
+                    if escape_char == '\\' {
+                        result.push_str("\\\\");
+                    } else {
+                        result.push(escape_char);
+                    }
+                }
             }
+        } else if c == '\\' {
+            result.push_str("\\\\");
         } else {
             result.push(c);
         }

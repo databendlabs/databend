@@ -47,6 +47,7 @@ use crate::ast::TableReference;
 use crate::ast::quote::QuotedIdent;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+use crate::parser::error::EXPR_STACK_LIMIT;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::token::*;
@@ -326,36 +327,7 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
                 catalog,
                 database,
                 table,
-                branch: None,
             },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-    )
-    .parse(i)
-}
-
-/// Parse a table reference for DDL that supports an optional `/branch` suffix.
-///
-/// Examples:
-/// - `table`
-/// - `db.table`
-/// - `catalog.db.table`
-/// - `table/branch`
-/// - `db.table/branch`
-/// - `catalog.db.table/branch`
-pub fn table_reference_only_with_branch(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #table_ref
-        }),
-        |(span, table)| TableReference::Table {
-            span: transform_span(span.tokens),
-            table,
             alias: None,
             temporal: None,
             with_options: None,
@@ -380,7 +352,6 @@ pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> 
                         catalog,
                         database,
                         table,
-                        branch: None,
                     },
                     alias: None,
                     temporal: None,
@@ -455,48 +426,15 @@ pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Ide
     .parse(i)
 }
 
-/// Parse one to three idents separated by dots, with optional "/ref" at the end.
-///
-/// Compatible with `dot_separated_idents_1_to_3`.
-///
-/// Examples:
-/// - `table`
-/// - `db.table`
-/// - `catalog.db.table`
-/// - `table/branch`
-/// - `db.table/branch`
-/// - `catalog.db.table/tag_v1`
+/// Parse one to three dot-separated identifiers as a table reference.
 pub fn table_ref(i: Input) -> IResult<TableRef> {
-    map(
-        rule! {
-            // 1~3 dot-separated identifiers
-            #ident ~ ( "." ~ #ident ~ ( "." ~ #ident )? )? ~ ( "/" ~ #ident )?
-        },
-        |res| match res {
-            (ident2, None, opt_ref) => TableRef {
-                catalog: None,
-                database: None,
-                table: ident2,
-                branch: opt_ref.map(|(_, r)| r),
-            },
-
-            // db.table / db.table@ref
-            (ident1, Some((_, ident2, None)), opt_ref) => TableRef {
-                catalog: None,
-                database: Some(ident1),
-                table: ident2,
-                branch: opt_ref.map(|(_, r)| r),
-            },
-
-            // catalog.db.table / catalog.db.table@ref
-            (ident0, Some((_, ident1, Some((_, ident2)))), opt_ref) => TableRef {
-                catalog: Some(ident0),
-                database: Some(ident1),
-                table: ident2,
-                branch: opt_ref.map(|(_, r)| r),
-            },
-        },
-    )
+    map(dot_separated_idents_1_to_3, |(catalog, database, table)| {
+        TableRef {
+            catalog,
+            database,
+            table,
+        }
+    })
     .parse(i)
 }
 
@@ -782,6 +720,7 @@ where
     let expr = parser
         .parse_input(&mut iter, Precedence(0))
         .map_err(|err| {
+            let stack_limit = matches!(&err, PrattError::UserError(EXPR_STACK_LIMIT));
             let err_kind = match err {
                 PrattError::EmptyInput => ErrorKind::other("expecting an operand"),
                 PrattError::UnexpectedNilfix(i) => {
@@ -808,7 +747,13 @@ where
                 // It's safe to slice one more token because input must contain EOI.
                 .unwrap_or_else(|| rest.slice(..1));
 
-            nom::Err::Error(Error::from_error_kind(span, err_kind))
+            let error = Error::from_error_kind(span, err_kind);
+            if stack_limit {
+                // Retrying another grammar branch cannot recover stack space.
+                nom::Err::Failure(error)
+            } else {
+                nom::Err::Error(error)
+            }
         })?;
     if let Some(elem) = iter.peek() {
         Ok((input.slice(input.offset(&elem.span)..), expr))

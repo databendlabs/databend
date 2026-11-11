@@ -907,8 +907,6 @@ impl FuseTable {
     }
 
     /// Collect segments from snapshots in a given prefix
-    ///
-    /// This is a helper function used by both main branch and branch refs
     #[async_backtrace::framed]
     async fn collect_snapshots_segments<T>(
         snapshots_io: &SnapshotsIO,
@@ -966,7 +964,7 @@ impl FuseTable {
         Ok(())
     }
 
-    /// Get all segments referenced by snapshots, including branches and tags, plus every
+    /// Get all segments referenced by snapshots and tags, plus every
     /// snapshot of this table's clone descendants that could still be published.
     #[async_backtrace::framed]
     pub async fn get_snapshot_referenced_segments<T>(

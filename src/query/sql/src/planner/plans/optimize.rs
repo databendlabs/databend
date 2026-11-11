@@ -31,6 +31,8 @@ pub struct OptimizeCompactBlock {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    /// Automatic maintenance must not follow a name reused by another table.
+    pub expected_table_id: Option<u64>,
     pub limit: CompactionLimits,
 }
 

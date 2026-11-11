@@ -20,6 +20,7 @@ pub use transaction::TxnManager;
 pub use transaction::TxnManagerRef;
 pub use transaction::TxnState;
 pub use transaction::TxnTableDelta;
+pub use transaction::TxnTableHook;
 mod session_state;
 pub use session_state::SessionState;
 pub use temp_table::abort_staged_temp_table;

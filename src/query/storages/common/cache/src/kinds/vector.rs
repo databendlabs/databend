@@ -40,13 +40,17 @@ impl CacheDef for Meta {
     const DISK: bool = true;
 }
 
-/// Decoded HNSW indexes, by index location and column.
+/// Decoded HNSW indexes, by index location and column. The compressed component bytes they are
+/// decoded from are kept in the disk cache: every query of a table searches the HNSW index of
+/// each of its blocks, so after a restart or an eviction they are read from local disk, not
+/// from storage.
 pub struct Index;
 
 impl CacheDef for Index {
     type Value = CachedVectorIndex;
     const NAME: &'static str = "memory_cache_vector_index_file";
     const POOL: Pool = Pool::Index;
+    const DISK: bool = true;
 }
 
 /// FP16 refine pages, by `{index_location}:{page}`.

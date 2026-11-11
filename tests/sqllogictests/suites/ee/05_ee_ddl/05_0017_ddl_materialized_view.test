@@ -1374,6 +1374,52 @@ DROP MATERIALIZED VIEW mv_guard_recreated
 statement ok
 DROP TABLE mv_guard_source
 
+# After three MV refreshes, synchronous post-commit maintenance must compact
+# the three small blocks into one block containing all three rows.
+statement ok
+CREATE TABLE mv_post_commit_source(id INT) auto_compaction_imperfect_blocks_threshold = 0
+
+statement ok
+CREATE MATERIALIZED VIEW mv_post_commit AS SELECT id FROM mv_post_commit_source WHERE 1 = 1
+
+statement ok
+ALTER MATERIALIZED VIEW mv_post_commit SET OPTIONS (row_per_block = 3, auto_compaction_imperfect_blocks_threshold = 3)
+
+statement ok
+SET acquire_lock_timeout = 2
+
+statement ok
+INSERT INTO mv_post_commit_source VALUES (1)
+
+statement ok
+REFRESH MATERIALIZED VIEW mv_post_commit
+
+statement ok
+INSERT INTO mv_post_commit_source VALUES (2)
+
+statement ok
+REFRESH MATERIALIZED VIEW mv_post_commit
+
+statement ok
+INSERT INTO mv_post_commit_source VALUES (3)
+
+statement ok
+REFRESH MATERIALIZED VIEW mv_post_commit
+
+query II
+SELECT block_count, row_count FROM fuse_snapshot('test_mv_ddl', 'mv_post_commit') ORDER BY timestamp DESC LIMIT 1
+----
+1 3
+
+statement ok
+UNSET acquire_lock_timeout
+
+statement ok
+DROP MATERIALIZED VIEW mv_post_commit
+
+statement ok
+DROP TABLE mv_post_commit_source
+
 # Cleanup
 statement ok
 DROP MATERIALIZED VIEW IF EXISTS test_mv2
