@@ -2,6 +2,7 @@ import json
 import os
 import platform
 import shutil
+import sys
 import tarfile
 import tempfile
 import time
@@ -12,6 +13,8 @@ from pathlib import Path
 
 import nox
 
+# nox also loads this file via --noxfile from outside tests/nox.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 PYTHON_DRIVER_PINNED = ["0.33.6"]
 PYTHON_DRIVER = ["latest", *PYTHON_DRIVER_PINNED]
@@ -570,6 +573,40 @@ def go_client(session, source_ref):
     session.log(f"running databend-go integration tests from {resolved_ref}")
     with session.chdir(str(test_dir)):
         session.run(*make_args, external=True, env=merge_env(env))
+
+
+def prepare_tlc():
+    # Keep TLA imports local: release testsuites do not include the tla package.
+    from tla import run as tla_runner
+
+    target = tla_runner.cached_jar(CACHE_DIR)
+    if target.exists():
+        tla_runner.verify_jar(target)
+        return target
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=target.parent) as directory:
+        staged = download_file(tla_runner.TLC_URL, Path(directory) / target.name)
+        tla_runner.verify_jar(staged)
+        staged.replace(target)
+    return target
+
+
+@nox.session(python=False, default=False)
+def tla(session):
+    """Check a TLA+ model: nox -s tla -- <model-dir> [--case NAME]."""
+    from tla import run as tla_runner
+
+    args = list(session.posargs)
+    if args and not any(arg in args for arg in ("--list", "--help", "-h")):
+        jar = prepare_tlc()
+        args = ["--jar", str(jar), *args]
+    session.run(
+        sys.executable,
+        str(Path(tla_runner.__file__).resolve()),
+        *args,
+        external=True,
+    )
 
 
 # test API with requests directly.

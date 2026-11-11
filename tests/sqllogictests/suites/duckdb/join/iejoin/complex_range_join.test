@@ -457,3 +457,40 @@ FROM many_values, many_bounds
 WHERE val BETWEEN lo AND hi;
 ----
 2001
+
+# Regression for #20991: NULL range keys must not hide non-NULL matches.
+# Keep both inputs in a single block pair so NULL keys cannot be isolated by partitioning.
+statement ok
+set max_threads = 1;
+
+statement ok
+create or replace table ie_r(i int, lo int, hi int);
+
+statement ok
+insert into ie_r values (5, NULL, 140), (7, 150, 160), (1, 90, 100), (2, 100, 110), (4, 120, 130), (8, 160, 170);
+
+statement ok
+create or replace table ie_l(z int);
+
+statement ok
+insert into ie_l values (168), (NULL);
+
+query II
+select i, z from ie_r, ie_l where z between lo and hi;
+----
+8 168
+
+query II
+select i, z from ie_r, ie_l where z >= lo and z <= hi;
+----
+8 168
+
+statement ok
+drop table ie_r;
+
+statement ok
+drop table ie_l;
+
+statement ok
+unset max_threads;
+

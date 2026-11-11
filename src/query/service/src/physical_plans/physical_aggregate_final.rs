@@ -55,7 +55,7 @@ use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+use crate::pipelines::processors::transforms::aggregator::build_final_aggregates;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
@@ -159,17 +159,11 @@ impl IPhysicalPlan for AggregateFinal {
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
 
-        let mut is_cluster_aggregate = false;
-        if ExchangeSource::check_physical_plan(&self.input) {
-            is_cluster_aggregate = true;
-        }
-
         let mut params = PipelineBuilder::build_aggregator_params(
             &builder.ctx,
             self.before_group_by_schema.clone(),
             &self.group_by,
             &self.agg_funcs,
-            is_cluster_aggregate,
             max_block_rows,
             max_block_bytes,
         )?;
@@ -205,8 +199,7 @@ impl IPhysicalPlan for AggregateFinal {
         let old_inject = builder.exchange_injector.clone();
 
         if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector =
-                AggregateInjector::create(builder.ctx.clone(), params.clone());
+            builder.exchange_injector = AggregateInjector::create(params.clone());
         }
 
         self.input.build_pipeline(builder)?;
@@ -219,7 +212,7 @@ impl IPhysicalPlan for AggregateFinal {
         };
 
         builder.exchange_injector = old_inject;
-        build_partition_bucket(
+        build_final_aggregates(
             &mut builder.main_pipeline,
             params.clone(),
             after_group_parallel,

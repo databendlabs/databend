@@ -130,6 +130,7 @@ impl Binder {
                 spec,
                 &window_specs,
                 &mut resolved_window_specs,
+                &mut HashSet::new(),
             )?;
             window_definitions.insert(name.clone(), new_spec);
         }
@@ -172,6 +173,7 @@ impl Binder {
         window_spec: &WindowSpec,
         window_list: &HashMap<String, WindowSpec>,
         resolved_window: &mut HashMap<String, WindowSpec>,
+        visiting: &mut HashSet<String>,
     ) -> Result<WindowSpec> {
         if window_spec.existing_window_name.is_some() {
             let referenced_name = window_spec
@@ -180,6 +182,11 @@ impl Binder {
                 .unwrap()
                 .name
                 .clone();
+            if !visiting.insert(referenced_name.clone()) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Cyclic window reference: {referenced_name}"
+                )));
+            }
             // check if spec is resolved first, so that we no need to resolve again.
             let referenced_window_spec = {
                 resolved_window.get(&referenced_name).unwrap_or(
@@ -195,9 +202,11 @@ impl Binder {
                     &referenced_window_spec,
                     window_list,
                     resolved_window,
+                    visiting,
                 )?,
                 None => referenced_window_spec.clone(),
             };
+            visiting.remove(&referenced_name);
 
             // add to resolved.
             resolved_window.insert(referenced_name, resolved_spec.clone());

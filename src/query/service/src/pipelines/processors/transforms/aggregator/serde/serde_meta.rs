@@ -24,29 +24,15 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 
-pub const BUCKET_TYPE: usize = 1;
-
-// Cannot change to enum, because bincode cannot deserialize custom enum.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct AggregateSerdeMeta {
-    pub typ: usize,
     pub bucket: isize,
-    pub max_partition_count: usize,
     pub is_empty: bool,
 }
 
 impl AggregateSerdeMeta {
-    pub fn create_agg_payload(
-        bucket: isize,
-        max_partition_count: usize,
-        is_empty: bool,
-    ) -> BlockMetaInfoPtr {
-        Box::new(AggregateSerdeMeta {
-            typ: BUCKET_TYPE,
-            bucket,
-            max_partition_count,
-            is_empty,
-        })
+    pub fn create_agg_payload(bucket: isize, is_empty: bool) -> BlockMetaInfoPtr {
+        Box::new(AggregateSerdeMeta { bucket, is_empty })
     }
 }
 
@@ -105,7 +91,6 @@ impl AggregateStatesMeta {
             payloads.push(SerializedPayload {
                 bucket,
                 data_block: block.slice(start..offset),
-                max_partition_count: 0,
             });
         }
 
@@ -114,10 +99,9 @@ impl AggregateStatesMeta {
                 "Aggregate states rows do not match block rows".to_string(),
             ));
         }
-        Ok(AggregateMeta::Partitioned {
-            bucket: None,
-            data: PartitionedData::Serialized(payloads),
-        })
+        Ok(AggregateMeta::Partitioned(PartitionedData::Serialized(
+            payloads,
+        )))
     }
 }
 

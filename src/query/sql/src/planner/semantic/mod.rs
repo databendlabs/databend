@@ -34,6 +34,7 @@ pub use grouping_check::GroupingChecker;
 pub use lowering::*;
 pub use materialized_view_rewriter::MaterializedViewChecker;
 pub use materialized_view_rewriter::MaterializedViewRewriter;
+pub use materialized_view_rewriter::check_materialized_view_source_without_policy;
 pub use materialized_view_rewriter::parse_materialized_view_query;
 pub use materialized_view_rewriter::validate_materialized_view_source;
 pub use name_resolution::IdentifierNormalizer;

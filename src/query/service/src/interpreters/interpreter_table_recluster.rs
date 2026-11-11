@@ -55,6 +55,7 @@ use rand::Rng;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::interpreters::common::check_expected_table_id;
 use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
@@ -313,9 +314,8 @@ impl ReclusterTableInterpreter {
         }
 
         let result = async {
-            // RECLUSTER resolves the table by name for every round. The deferred vacuum follows
-            // the same name-bound semantics and bypasses the query-level table cache instead of
-            // pinning the table ID for the statement.
+            // Bypass the query-level cache. Automatic maintenance must verify the original
+            // table ID again; user RECLUSTER statements keep their name-bound semantics.
             let table = self
                 .ctx
                 .get_catalog(&self.plan.catalog)
@@ -326,6 +326,7 @@ impl ReclusterTableInterpreter {
                     &self.plan.table,
                 )
                 .await?;
+            check_expected_table_id(table.get_id(), self.plan.expected_table_id)?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             // Transient tables retain their existing per-commit PurgeAllHistory behavior.
             if fuse_table.is_transient() {
@@ -371,6 +372,7 @@ impl ReclusterTableInterpreter {
             self.ctx.evict_table_from_cache(catalog, database, table)?;
         }
         let mut tbl = self.ctx.get_table(catalog, database, table).await?;
+        check_expected_table_id(tbl.get_id(), self.plan.expected_table_id)?;
         // Temporary tables are session-local, and their IDs are intentionally unsupported by
         // the segment-claim and lock catalog APIs.
         let claim_manager =
@@ -435,6 +437,7 @@ impl ReclusterTableInterpreter {
 
             self.ctx.evict_table_from_cache(catalog, database, table)?;
             tbl = self.ctx.get_table(catalog, database, table).await?;
+            check_expected_table_id(tbl.get_id(), self.plan.expected_table_id)?;
         };
         let mut physical_plan =
             self.build_linear_plan(tbl.as_ref(), parts, snapshot, claim_manager.is_some())?;
