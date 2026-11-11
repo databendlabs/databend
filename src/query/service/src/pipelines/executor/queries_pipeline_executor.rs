@@ -94,6 +94,14 @@ impl QueriesPipelineExecutor {
     }
 
     pub fn send_graph(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
+        // No worker is left to run the graph: fail the query instead of
+        // leaving it in the queue forever.
+        if self.is_finished() {
+            let cause = self.finished_error.lock().clone();
+            return Err(cause
+                .unwrap_or_else(|| ErrorCode::Internal("The queries executor has been finished")));
+        }
+
         // Bind waker
         self.bind_waker_for_graph(&graph);
 
@@ -221,8 +229,13 @@ impl QueriesPipelineExecutor {
                                         && !graph.is_should_finish()
                                     {
                                         // We immediately schedule the processor again.
-                                        let schedule_queue_res =
-                                            graph.clone().schedule_queue(executed_pid);
+                                        // It runs `Processor::event`: a panic of it
+                                        // must only fail its query, as one of
+                                        // `process` does, not finish the executor.
+                                        let schedule_queue_res = catch_unwind(|| {
+                                            graph.clone().schedule_queue(executed_pid)
+                                        })
+                                        .flatten();
                                         match schedule_queue_res {
                                             Ok(schedule_queue) => {
                                                 schedule_queue.schedule_with_condition(
