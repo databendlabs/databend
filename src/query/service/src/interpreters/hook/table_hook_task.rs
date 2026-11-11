@@ -87,6 +87,8 @@ pub struct TableHookTask {
     /// triggering statement's context and is accounted to that statement.
     pub tracking: Option<Arc<TrackingPayload>>,
     pub target: TableHookTarget,
+    /// The target the compact stage compacted. A recluster round follows it.
+    pub recluster_target: Option<TableHookTarget>,
     pub hook_settings: TableHookTaskSettings,
     pub lock_opt: LockTableOption,
     /// Only synchronous autocommit tasks carry a statement lock. Queued and post-commit
@@ -97,20 +99,44 @@ pub struct TableHookTask {
 }
 
 impl TableHookTask {
-    pub(crate) async fn execute(self, is_async: bool) {
+    /// Compact before the triggering statement returns, in both modes. Records the compacted
+    /// target so that the remaining stages follow it with a recluster round.
+    pub(crate) async fn execute_compact_stage(&mut self) {
         match self.tracking.clone() {
-            Some(tracking) => tracking.tracking(self.execute_stages(is_async)).await,
-            None => self.execute_stages(is_async).await,
+            Some(tracking) => tracking.tracking(self.compact_stage()).await,
+            None => self.compact_stage().await,
         }
     }
 
-    /// Run the same maintenance chain for autocommit and post-commit hooks, in both modes.
+    /// Run the stages after compaction: recluster after a successful compaction, refresh,
+    /// then analyze. Synchronous tasks run them on the caller; asynchronous tasks run them
+    /// in the background scheduler.
+    pub(crate) async fn execute_remaining_stages(self, is_async: bool) {
+        match self.tracking.clone() {
+            Some(tracking) => tracking.tracking(self.remaining_stages(is_async)).await,
+            None => self.remaining_stages(is_async).await,
+        }
+    }
+
+    async fn compact_stage(&mut self) {
+        if !self.hook_settings.compact_after_write {
+            return;
+        }
+        match self.execute_compact().await {
+            Ok(compacted) => self.recluster_target = compacted,
+            Err(e) => warn!(
+                "Table hook compact failed, table_id={}: {e}",
+                self.target.table_id
+            ),
+        }
+    }
+
     /// Release any handed-over statement lock after refresh and before analyze.
     ///
     /// Each stage lives with its own hook module: `execute_compact` in `compact_hook.rs`,
     /// `execute_recluster` in `recluster_hook.rs`, `execute_refresh` in `refresh_hook.rs`,
     /// and `execute_analyze` in `analyze_hook.rs`.
-    async fn execute_stages(mut self, is_async: bool) {
+    async fn remaining_stages(mut self, is_async: bool) {
         if is_async {
             info!(
                 "Start async table hook job for operation {}, table_id={}, table={}",
@@ -122,25 +148,15 @@ impl TableHookTask {
                 self.operation_name, self.target.table_id, self.target.table
             );
         }
-        if self.hook_settings.compact_after_write {
-            match self.execute_compact().await {
-                // A recluster round follows only a successful compaction.
-                Ok(Some(compacted)) => {
-                    self.execute_recluster(&compacted)
-                        .await
-                        .unwrap_or_else(|e| {
-                            warn!(
-                                "Table hook recluster failed, table_id={}: {e}",
-                                self.target.table_id
-                            )
-                        });
-                }
-                Ok(None) => {}
-                Err(e) => warn!(
-                    "Table hook compact failed, table_id={}: {e}",
-                    self.target.table_id
-                ),
-            }
+        if let Some(compacted) = self.recluster_target.take() {
+            self.execute_recluster(&compacted)
+                .await
+                .unwrap_or_else(|e| {
+                    warn!(
+                        "Table hook recluster failed, table_id={}: {e}",
+                        self.target.table_id
+                    )
+                });
         }
         self.execute_refresh().await;
         if let Some(guard) = self.lock_guard.take() {
@@ -194,6 +210,11 @@ impl SchedulerTask for TableHookTask {
             other.ctx.set_enable_auto_analyze(true);
         }
 
+        // Each compacted write asks for a recluster round; one round covers them all.
+        if other.recluster_target.is_none() {
+            other.recluster_target = self.recluster_target.take();
+        }
+
         other.main_operation_start = self.main_operation_start;
         other.operation_name = self.operation_name.clone();
 
@@ -244,6 +265,7 @@ mod tests {
         TableHookTask {
             ctx,
             tracking: None,
+            recluster_target: None,
             target: TableHookTarget {
                 catalog: "default".to_string(),
                 database: "default".to_string(),

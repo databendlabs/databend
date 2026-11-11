@@ -59,7 +59,8 @@ enum TableHookState<T> {
 
 impl TableHookScheduler {
     pub fn init(max_concurrency: usize) -> Result<()> {
-        let runner: SchedulerRunner<TableHookTask> = Arc::new(|task| Box::pin(task.execute(true)));
+        let runner: SchedulerRunner<TableHookTask> =
+            Arc::new(|task| Box::pin(task.execute_remaining_stages(true)));
         let spawner: SchedulerSpawner = Arc::new(|future, name| {
             GlobalIORuntime::instance().spawn_named(future, name);
         });

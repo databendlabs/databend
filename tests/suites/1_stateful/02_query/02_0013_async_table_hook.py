@@ -288,8 +288,9 @@ def run_case():
         )
 
         # These writes reproduce the auto-compaction case from 09_0041_auto_compaction:
-        # several small/imperfect blocks are committed first, then the async table hook
-        # should compact them in the background into a single segment with 3 blocks.
+        # several small/imperfect blocks are committed first. Compaction runs before each
+        # write returns, and the remaining stages of the async table hook run in the
+        # background; the result is a single segment with 3 blocks.
         execute(f"insert into {TEST_NAME}.t values(0)")
         execute(f"insert into {TEST_NAME}.t select number from numbers(12)")
         execute(f"insert into {TEST_NAME}.t select number from numbers(2)")

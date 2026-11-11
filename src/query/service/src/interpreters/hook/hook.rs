@@ -110,9 +110,12 @@ impl HookOperator {
 
     /// Execute the hook operator.
     /// The hook operator will:
-    /// 1. Compact/recluster if needed.
-    /// 2. Refresh indexes if needed.
-    /// 3. Analyze if needed.
+    /// 1. Compact if needed, before the statement returns.
+    /// 2. Recluster after a successful compaction.
+    /// 3. Refresh indexes if needed.
+    /// 4. Analyze if needed.
+    ///
+    /// In async mode, steps 2 to 4 run in the background scheduler.
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute(&self, pipeline: &mut Pipeline) {
@@ -129,7 +132,8 @@ impl HookOperator {
         let is_async = TableHookScheduler::is_async_enabled();
         let lock_opt = if is_async {
             // Async hooks acquire maintenance locks where required. Release the statement lock
-            // before the success callback enqueues the task, even if task creation fails.
+            // before the success callback compacts and enqueues the task, even if task
+            // creation fails.
             self.release_lock_guard(pipeline);
             LockTableOption::LockWithRetry
         } else {
@@ -141,16 +145,18 @@ impl HookOperator {
             }
             pipeline.set_on_finished(move |info: &ExecutionInfo| {
                 if info.res.is_ok() {
-                    if is_async {
-                        enqueue_table_hook(task);
-                    } else {
-                        GlobalIORuntime::instance()
-                            .block_on(async move {
-                                task.execute(is_async).await;
-                                Ok::<_, databend_common_exception::ErrorCode>(())
-                            })
-                            .unwrap_or_else(|e| warn!("Table hook execution failed: {e}"));
-                    }
+                    GlobalIORuntime::instance()
+                        .block_on(async move {
+                            // Compaction always finishes before the statement returns.
+                            task.execute_compact_stage().await;
+                            if is_async {
+                                enqueue_table_hook(task);
+                            } else {
+                                task.execute_remaining_stages(false).await;
+                            }
+                            Ok::<_, databend_common_exception::ErrorCode>(())
+                        })
+                        .unwrap_or_else(|e| warn!("Table hook execution failed: {e}"));
                 }
                 Ok(())
             });
@@ -231,6 +237,7 @@ impl HookOperator {
         Some(TableHookTask {
             ctx: self.ctx.clone(),
             tracking: None,
+            recluster_target: None,
             target: TableHookTarget {
                 catalog: self.catalog.clone(),
                 database: self.database.clone(),
@@ -267,7 +274,7 @@ pub(crate) async fn execute_deferred_table_hooks(
     for hook in hooks {
         let table_id = hook.table_id;
         log::info!("Dispatch post-commit table hook, txn_id={txn_id}, table_id={table_id}");
-        let task = match create_deferred_table_hook_task(&ctx, hook).await {
+        let mut task = match create_deferred_table_hook_task(&ctx, hook).await {
             Ok(task) => task,
             Err(e) => {
                 warn!(
@@ -276,10 +283,12 @@ pub(crate) async fn execute_deferred_table_hooks(
                 continue;
             }
         };
+        // Compaction always finishes before COMMIT returns.
+        task.execute_compact_stage().await;
         if is_async {
             enqueue_table_hook(task);
         } else {
-            task.execute(is_async).await;
+            task.execute_remaining_stages(false).await;
         }
     }
 }
@@ -296,6 +305,7 @@ async fn create_deferred_table_hook_task(
     Ok(TableHookTask {
         ctx,
         tracking: Some(tracking),
+        recluster_target: None,
         target: TableHookTarget {
             catalog: hook.catalog,
             database: hook.database,
