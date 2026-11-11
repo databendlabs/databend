@@ -26,6 +26,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use arrow_array::RecordBatch;
+use arrow_schema::Fields;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use bytes::BytesMut;
@@ -587,11 +588,20 @@ impl SpillsDataReader {
         // Read back the arrow types the writer used. Without them, byte columns are
         // inferred as Binary/Utf8, whose i32 offsets overflow once a column of the
         // row group, which is decoded as one batch, holds more than 2 GiB.
+        // Hint fields must carry the names in the file, which the writer takes
+        // from the block rather than from `data_schema`.
+        let schema_descr = row_groups[0].schema_descr();
         let arrow_schema = Schema::from(infer_table_schema(&data_schema)?.as_ref());
+        let hint = arrow_schema
+            .fields()
+            .iter()
+            .zip(schema_descr.root_schema().get_fields())
+            .map(|(field, column)| field.as_ref().clone().with_name(column.name()))
+            .collect::<Vec<_>>();
         let field_levels = parquet_to_arrow_field_levels(
-            row_groups[0].schema_descr(),
+            schema_descr,
             ProjectionMask::all(),
-            Some(arrow_schema.fields()),
+            Some(&Fields::from(hint)),
         )?;
 
         let (tx, rx) = async_channel::bounded(1);
@@ -883,6 +893,8 @@ mod tests {
     use arrow_schema::DataType as ArrowDataType;
     use databend_common_base::runtime::spawn;
     use databend_common_expression::Column;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
     use databend_common_expression::FromData;
     use databend_common_expression::block_debug::pretty_format_blocks;
     use databend_common_expression::types::BinaryType;
@@ -1147,7 +1159,16 @@ mod tests {
                 None,
             ),
         ]);
-        let data_schema = Arc::new(block.infer_schema());
+        // Callers name the fields on their own, unlike the writer, which takes
+        // the names from the block.
+        let data_schema = Arc::new(DataSchema::new(
+            block
+                .columns()
+                .iter()
+                .enumerate()
+                .map(|(i, entry)| DataField::new(&format!("field_{i}"), entry.data_type()))
+                .collect(),
+        ));
 
         let mut writer = pool
             .writer(
