@@ -146,6 +146,12 @@ impl Session {
         }
     }
 
+    /// Cancel only the matching query, never a subsequent statement on this connection.
+    /// Check and pin the query context atomically, then cancel only that context.
+    pub fn force_kill_query_if_id<C>(&self, query_id: &str, cause: ErrorCode<C>) -> bool {
+        self.session_ctx.force_kill_query_if_id(query_id, cause)
+    }
+
     /// Derive an internal session from the current authenticated execution environment.
     /// Settings are copied and the temporary-table manager is shared, but transactions,
     /// query history and connection state remain independent of the caller.

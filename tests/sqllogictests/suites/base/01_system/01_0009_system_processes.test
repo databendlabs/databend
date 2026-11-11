@@ -3,6 +3,17 @@ SELECT count(*)>0 FROM system.processes
 ----
 1
 
+# SQL connection ids and system.processes use the reserved session namespace.
+query B
+SELECT starts_with(connection_id(), 'session-')
+----
+1
+
+query B
+SELECT count(*) > 0 FROM system.processes WHERE id = connection_id() AND starts_with(id, 'session-')
+----
+1
+
 # now() uses the coordinator query creation time, including during planning.
 query B
 SELECT count(*) > 0 FROM system.processes WHERE created_time = now()

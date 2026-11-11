@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::session_type::SessionType;
+use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryState;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::UserIdentity;
@@ -25,6 +26,8 @@ use databend_query::servers::flight::v1::actions::KILL_QUERY;
 use databend_query::servers::flight::v1::actions::KILL_QUERY_V2;
 use databend_query::servers::flight::v1::actions::KillQueryRequest;
 use databend_query::servers::flight::v1::actions::flight_actions;
+use databend_query::sessions::SESSION_ID_PREFIX;
+use databend_query::sessions::SessionManager;
 use databend_query::test_kits::TestFixture;
 
 #[test]
@@ -85,11 +88,40 @@ async fn test_unknown_kill_action_fails_closed() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_kill_query_id_ignores_fragment_sessions() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let coordinator = fixture.new_session_with_type(SessionType::MySQL).await?;
+    let coordinator_ctx = coordinator.create_query_context(&BUILD_INFO).await?;
+    let fragment = fixture
+        .new_session_with_type(SessionType::FlightRPC)
+        .await?;
+    let fragment_ctx = fragment.create_query_context(&BUILD_INFO).await?;
+    let id = coordinator_ctx.get_id();
+    fragment_ctx.update_init_query_id(id.clone());
+    assert!(fragment.get_id().starts_with(SESSION_ID_PREFIX));
+    let manager = SessionManager::instance();
+    assert_eq!(
+        manager.get_session_by_query_id(&id).unwrap().get_id(),
+        coordinator.get_id()
+    );
+    drop(coordinator_ctx);
+    drop(coordinator);
+    assert!(manager.get_session_by_query_id(&id).is_none());
+    assert!(
+        fragment_ctx
+            .get_abort_checker()
+            .try_check_aborting()
+            .is_ok()
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let actions = flight_actions();
 
-    for kill_connection in [false, true] {
+    for (kill_connection, by_query_id) in [(false, false), (true, false), (false, true)] {
         for (user, tenant, is_super, expected) in [
             ("u2", "test", false, false),
             ("u1", "other_tenant", false, false),
@@ -103,7 +135,11 @@ async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
             let target_ctx = target.create_query_context(&BUILD_INFO).await?;
             let request = KillQueryRequest {
                 plan: KillPlan {
-                    id: target.get_id(),
+                    id: if by_query_id {
+                        target_ctx.get_id()
+                    } else {
+                        target.get_id()
+                    },
                     kill_connection,
                 },
                 access: KillQueryAccess {
@@ -114,8 +150,12 @@ async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
             };
             let response = actions
                 .do_action(KILL_QUERY_V2, &serde_json::to_vec(&request)?)
-                .await?;
-            assert_eq!(serde_json::from_slice::<bool>(&response)?, expected);
+                .await;
+            if expected {
+                assert!(serde_json::from_slice::<bool>(&response?)?);
+            } else {
+                assert_eq!(response.unwrap_err().code(), ErrorCode::PERMISSION_DENIED);
+            }
             assert_eq!(
                 target_ctx.get_abort_checker().try_check_aborting().is_err(),
                 expected

@@ -2,7 +2,7 @@
 
 Run with: nox -s test_suites -- suites/http_handler/test_kill_privileges.py
 The cluster deployment exposes a second node on port 8002 (as in test_forward.py).
-These tests use session IDs from system.processes, not the HTTP query-kill API.
+These tests use prefixed session IDs and query IDs, not the HTTP query-kill API.
 """
 
 import time
@@ -79,10 +79,13 @@ def query_state(query_id, auth):
     return response.json()
 
 
-@pytest.mark.parametrize("kind", ["QUERY", "CONNECTION"])
+@pytest.mark.parametrize(
+    "kind,id_type",
+    [("QUERY", "session"), ("CONNECTION", "session"), ("QUERY", "query")],
+)
 @pytest.mark.parametrize("killer", ["owner", "root"])
 @pytest.mark.parametrize("remote", [False, True], ids=["local", "remote"])
-def test_sql_kill_privileges(users, kind, killer, remote):
+def test_sql_kill_privileges(users, kind, id_type, killer, remote):
     kill_url = BASE_URL
     if remote:
         nodes = succeed("SELECT count(*) FROM system.clusters")
@@ -91,7 +94,7 @@ def test_sql_kill_privileges(users, kind, killer, remote):
         kill_url = "http://localhost:8002"
 
     owner, other = users
-    query_id = f"kill_privileges_{uuid.uuid4().hex}"
+    query_id = uuid.uuid4().hex
     started = query(
         "SELECT sleep(0.5), number FROM numbers(15000000000)",
         owner,
@@ -100,6 +103,8 @@ def test_sql_kill_privileges(users, kind, killer, remote):
     )
     session_id = None
     try:
+        # State-only polling responses do not include pagination URIs.
+        next_uri = started.get("next_uri")
         # wait=0 can return before asynchronous planning and execution have started.
         deadline = time.monotonic() + 15
         while started["state"] == "Starting" and time.monotonic() < deadline:
@@ -117,12 +122,20 @@ def test_sql_kill_privileges(users, kind, killer, remote):
                 break
             time.sleep(0.1)
         assert session_id is not None, "running query has no session"
+        assert session_id.startswith("session-"), session_id
+        assert str(
+            uuid.UUID(session_id.removeprefix("session-"))
+        ) == session_id.removeprefix("session-")
+        target_id = query_id if id_type == "query" else session_id
 
-        denied, _ = command(f"KILL {kind} '{session_id}'", other, kill_url)
-        assert denied["error"]["code"] == 1053, denied  # UnknownSession
-        assert denied["error"]["message"] == f"Not found session id {session_id}", (
-            denied
-        )
+        if id_type == "query":
+            rejected, _ = command(f"KILL CONNECTION '{query_id}'", owner, kill_url)
+            assert rejected["error"]["code"] == 1006, rejected  # BadArguments
+            assert "not a query id" in rejected["error"]["message"], rejected
+
+        denied, _ = command(f"KILL {kind} '{target_id}'", other, kill_url)
+        assert denied["error"]["code"] == 1063, denied  # PermissionDenied
+        assert "not owner of target" in denied["error"]["message"], denied
         assert query_state(query_id, owner)["state"] == "Running"
         assert succeed(
             f"SELECT id FROM system.processes WHERE current_query_id = '{query_id}'"
@@ -130,7 +143,7 @@ def test_sql_kill_privileges(users, kind, killer, remote):
 
         # A fresh HTTP session of the same user is sufficient; no session reuse.
         succeed(
-            f"KILL {kind} '{session_id}'",
+            f"KILL {kind} '{target_id}'",
             owner if killer == "owner" else ROOT,
             kill_url,
         )
@@ -142,6 +155,14 @@ def test_sql_kill_privileges(users, kind, killer, remote):
             time.sleep(0.1)
         assert state["state"] == "Failed", state
         assert state["error"]["code"] == 1043, state  # AbortedQuery
+        if id_type == "query":
+            assert next_uri is not None
+            page_response = requests.get(BASE_URL + next_uri, auth=owner, timeout=30)
+            page_response.raise_for_status()
+            page = page_response.json()
+            assert page["state"] == "Failed", page
+            assert page["error"]["code"] == 1043, page
+            assert "canceled" in page["error"]["message"], page
     finally:
         if session_id is not None:
             # Cleanup even if an assertion fails; do not use the HTTP kill endpoint.

@@ -33,6 +33,9 @@ use crate::servers::flight::v1::actions::KILL_QUERY_V2;
 use crate::servers::flight::v1::actions::KillQueryRequest;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
+use crate::sessions::SESSION_ID_PREFIX;
+use crate::sessions::Session;
+use crate::sessions::SessionManager;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 
@@ -47,6 +50,27 @@ pub struct KillQueryAccess {
 impl KillQueryAccess {
     pub fn can_kill(&self, target_tenant: &str, target_user: Option<&UserIdentity>) -> bool {
         self.is_super || (self.tenant == target_tenant && target_user == Some(&self.user))
+    }
+}
+
+/// Unprefixed strings are ambiguous during rolling upgrades: prefer a query id,
+/// then fall back to a legacy session id. Numeric ids retain MySQL semantics.
+#[derive(Debug, PartialEq, Eq)]
+pub enum KillTarget<'a> {
+    MySqlConnection(u32),
+    Session(&'a str),
+    QueryOrLegacySession(&'a str),
+}
+
+impl<'a> KillTarget<'a> {
+    pub fn parse(id: &'a str) -> Self {
+        if let Ok(id) = id.parse::<u32>() {
+            Self::MySqlConnection(id)
+        } else if id.starts_with(SESSION_ID_PREFIX) {
+            Self::Session(id)
+        } else {
+            Self::QueryOrLegacySession(id)
+        }
     }
 }
 
@@ -131,7 +155,7 @@ impl KillInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute_kill(&self, session_id: &str) -> Result<PipelineBuildResult> {
+    async fn execute_kill(&self) -> Result<PipelineBuildResult> {
         let access = match &self.access {
             Some(access) => access.clone(),
             None => {
@@ -146,23 +170,45 @@ impl KillInterpreter {
             }
         };
 
-        let Some(kill_session) = self.ctx.get_session_by_id(session_id) else {
+        let manager = SessionManager::instance();
+        let (target, by_query_id) = match KillTarget::parse(&self.plan.id) {
+            KillTarget::MySqlConnection(id) => {
+                // MySQL connection ids are node-local. Do not broadcast them to peers.
+                let session_id = manager
+                    .get_id_by_mysql_conn_id(&Some(id))
+                    .ok_or_else(|| self.unknown_session())?;
+                (manager.get_session_by_id(&session_id), false)
+            }
+            KillTarget::Session(id) => (manager.get_session_by_id(id), false),
+            KillTarget::QueryOrLegacySession(id) => match manager.get_session_by_query_id(id) {
+                Some(session) => {
+                    if self.plan.kill_connection {
+                        return Err(ErrorCode::BadArguments(
+                            "KILL CONNECTION requires a connection id or session id, not a query id",
+                        ));
+                    }
+                    (Some(session), true)
+                }
+                None => (manager.get_session_by_id(id), false),
+            },
+        };
+
+        let Some(kill_session) = target else {
             return match self.proxy_to_warehouse {
                 true => self.kill_warehouse_query(&access).await,
                 false => Err(self.unknown_session()),
             };
         };
+        self.check_access(&access, &kill_session)?;
 
-        let target_user = kill_session
-            .get_current_user()
-            .ok()
-            .map(|user| user.identity());
-        if !access.can_kill(
-            kill_session.get_current_tenant().tenant_name(),
-            target_user.as_ref(),
-        ) {
-            // Do not reveal whether another user's session exists.
-            return Err(self.unknown_session());
+        if by_query_id {
+            return match kill_session.force_kill_query_if_id(
+                &self.plan.id,
+                ErrorCode::AbortedQuery("Query canceled by KILL QUERY"),
+            ) {
+                true => Ok(PipelineBuildResult::create()),
+                false => Err(self.unknown_session()),
+            };
         }
 
         // Queued queries must pass the same authorization as running queries.
@@ -180,10 +226,27 @@ impl KillInterpreter {
         Ok(PipelineBuildResult::create())
     }
 
+    fn check_access(&self, access: &KillQueryAccess, kill_session: &Session) -> Result<()> {
+        let target_user = kill_session
+            .get_current_user()
+            .ok()
+            .map(|user| user.identity());
+        if !access.can_kill(
+            kill_session.get_current_tenant().tenant_name(),
+            target_user.as_ref(),
+        ) {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied: not owner of target {}; global SUPER privilege is required",
+                self.plan.id
+            )));
+        }
+        Ok(())
+    }
+
     fn unknown_session(&self) -> ErrorCode {
         let message = match self.plan.id.parse::<u32>() {
             Ok(id) => format!("MySQL connection id {} not found session id", id),
-            Err(_) => format!("Not found session id {}", self.plan.id),
+            Err(_) => format!("Not found query or session id {}", self.plan.id),
         };
         ErrorCode::UnknownSession(message)
     }
@@ -202,20 +265,6 @@ impl Interpreter for KillInterpreter {
     #[async_backtrace::framed]
     #[fastrace::trace]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
-        Box::pin(async move {
-            let id = &self.plan.id;
-            // If press Ctrl + C, MySQL Client will create a new session and send query
-            // `kill query mysql_connection_id` to server.
-            // the type of connection_id is u32, if parse success get session by connection_id,
-            // otherwise use the session_id.
-            // More info Link to: https://github.com/datafuselabs/databend/discussions/5405.
-            match id.parse::<u32>() {
-                Ok(mysql_conn_id) => match self.ctx.get_id_by_mysql_conn_id(&Some(mysql_conn_id)) {
-                    Some(get) => self.execute_kill(&get).await,
-                    None => Err(self.unknown_session()),
-                },
-                Err(_) => self.execute_kill(id).await,
-            }
-        })
+        Box::pin(self.execute_kill())
     }
 }

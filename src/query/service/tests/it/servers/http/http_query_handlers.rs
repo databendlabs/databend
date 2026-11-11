@@ -590,6 +590,159 @@ async fn test_client_query_id() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
+    use databend_query::sessions::QueriesQueueManager;
+    use databend_query::sessions::QueryEntry;
+    use databend_query::sessions::SessionManager;
+
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.max_running_queries = 1;
+    config.query.common.global_statement_queue = false;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let ep = create_endpoint()?;
+    let queue = QueriesQueueManager::instance();
+    let (_, created) = post_sql_to_endpoint(
+        &ep,
+        "CREATE TABLE kill_http_queue ENGINE = MEMORY AS SELECT 1 AS n",
+        5,
+    )
+    .await?;
+    assert!(created.error.is_none(), "{created:?}");
+
+    for queued in [false, true] {
+        let holder_ctx = fixture.new_query_ctx().await?;
+        let _holder = if queued {
+            Some(
+                queue
+                    .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
+                    .await?,
+            )
+        } else {
+            None
+        };
+        let id = uuid::Uuid::new_v4().simple().to_string();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-databend-query-id", id.parse()?);
+        let (_, started) = post_json_to_endpoint(
+            &ep,
+            &serde_json::json!({
+                // numbers() alone is a light system-table query and bypasses the queue.
+                "sql": "SELECT sleep(0.5), number FROM numbers(15000000000) CROSS JOIN kill_http_queue",
+                "session": {"settings": {"http_handler_result_timeout_secs": "5"}},
+                "pagination": {"wait_time_secs": 0, "max_rows_in_buffer": 2, "max_rows_per_page": 2},
+            }),
+            headers,
+        ).await?;
+        let state_uri = started.stats_uri.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if queued {
+                    if queue.length() == 1 {
+                        break;
+                    }
+                } else {
+                    let state: serde_json::Value = serde_json::from_str(
+                        &get_uri(&ep, &state_uri)
+                            .await
+                            .into_body()
+                            .into_string()
+                            .await?,
+                    )?;
+                    assert_ne!(state["state"], "Failed", "{state}");
+                    if state["state"] == "Running" {
+                        break;
+                    }
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+            anyhow::Ok(())
+        })
+        .await??;
+        assert!(
+            SessionManager::instance()
+                .get_session_by_query_id(&id)
+                .is_some()
+        );
+
+        let (_, killed) = post_sql_to_endpoint(&ep, &format!("KILL QUERY '{}'", id), 5).await?;
+        assert!(killed.error.is_none(), "{killed:?}");
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let state: serde_json::Value = serde_json::from_str(
+                    &get_uri(&ep, &state_uri)
+                        .await
+                        .into_body()
+                        .into_string()
+                        .await?,
+                )?;
+                if state["state"] == "Failed" {
+                    assert_eq!(state["error"]["code"], ErrorCode::ABORTED_QUERY);
+                    break;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+            anyhow::Ok(())
+        })
+        .await??;
+        assert_eq!(queue.length(), 0);
+
+        // SQL KILL leaves the HTTP result lifecycle intact: page/final return a
+        // normal HTTP 200 envelope with Failed/AbortedQuery, not HTTP /kill's 400.
+        let (status, page) = get_uri_checked(&ep, started.next_uri.as_ref().unwrap()).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(page.state, ExecuteStateKind::Failed);
+        let error = page.error.unwrap();
+        assert_eq!(error.code, ErrorCode::ABORTED_QUERY);
+        if !queued {
+            assert!(error.message.contains("canceled"), "{error:?}");
+        }
+        let (status, finalized) = get_uri_checked(&ep, started.final_uri.as_ref().unwrap()).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(finalized.state, ExecuteStateKind::Failed);
+        assert_eq!(finalized.error.unwrap().code, ErrorCode::ABORTED_QUERY);
+
+        // Finalized records are retained briefly, then HttpQueryManager removes them.
+        tokio::time::timeout(Duration::from_secs(15), async {
+            loop {
+                if get_uri(&ep, &state_uri).await.status() == StatusCode::NOT_FOUND {
+                    break;
+                }
+                sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_client_query_id_rejects_reserved_session_prefix() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    for id in ["session-", "session-55b05b74-80a6-49fd-b813-3ef25bf0f110"] {
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/v1/query".parse()?)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::AUTHORIZATION, "Basic cm9vdDo=")
+            .header("X-DATABEND-QUERY-ID", id)
+            // Rejection must happen before sticky-node lookup/forwarding.
+            .header("X-DATABEND-STICKY-NODE", "nonexistent-peer")
+            .body(r#"{"sql":"select 1"}"#);
+        let response = ep.get_response(req).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(
+            response
+                .into_body()
+                .into_string()
+                .await?
+                .contains("reserved session prefix")
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_client_compatible_query_id() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 

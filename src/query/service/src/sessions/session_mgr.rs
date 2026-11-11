@@ -157,7 +157,7 @@ impl SessionManager {
         user: Option<UserInfo>,
         mysql_conn_id: Option<u32>,
     ) -> Result<Session> {
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = format!("{}{}", super::SESSION_ID_PREFIX, uuid::Uuid::new_v4());
         let mysql_conn_id = match typ {
             SessionType::MySQL => Some(
                 mysql_conn_id
@@ -205,6 +205,15 @@ impl SessionManager {
     pub fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
         let sessions = self.active_sessions.read();
         sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
+    }
+
+    /// Only coordinator/client sessions are registered here; FlightRPC fragment sessions
+    /// deliberately stay out of active_sessions even when they share the query id.
+    pub fn get_session_by_query_id(&self, query_id: &str) -> Option<Arc<Session>> {
+        self.active_sessions_snapshot()
+            .into_iter()
+            .filter_map(|session| session.upgrade())
+            .find(|session| session.get_current_query_id().as_deref() == Some(query_id))
     }
 
     pub fn get_id_by_mysql_conn_id(&self, mysql_conn_id: &Option<u32>) -> Option<String> {

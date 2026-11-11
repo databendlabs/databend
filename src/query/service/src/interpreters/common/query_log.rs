@@ -517,6 +517,16 @@ mod tests {
     }
 
     #[test]
+    fn killed_query_is_logged_as_aborted() {
+        let err = ErrorCode::AbortedQuery("Query canceled by KILL QUERY");
+        let (log_type, code, message, _) =
+            error_fields(LogType::Finish, Some(err), &SqlSecrets::default());
+        assert!(matches!(log_type, LogType::Aborted));
+        assert_eq!(code, i32::from(ErrorCode::ABORTED_QUERY));
+        assert!(message.contains("Query canceled by KILL QUERY"));
+    }
+
+    #[test]
     fn error_fields_scrubs_query_secrets() {
         let err = ErrorCode::SyntaxException(
             "can't parse script\n2 | IDENTIFIED\n3 | BY 'exception_secret'\n4 | invalid",
