@@ -35,6 +35,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::parse_cluster_keys;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
@@ -271,6 +272,8 @@ impl TableMutationAggregator {
             schema: table.schema(),
             kind,
             table_meta_timestamps,
+            // The rewritten segments are not read again soon: look them up, do not cache them.
+            cache_policy: CachePolicy::READ_ONLY.at_most(ctx.cache_policy()),
         };
         TableMutationAggregator {
             ctx,
@@ -627,7 +630,7 @@ impl TableMutationAggregator {
                         write_segment_ctx.dal.clone(),
                         loc,
                         write_segment_ctx.schema.clone(),
-                        false,
+                        write_segment_ctx.cache_policy,
                     )
                     .await?;
                     let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
@@ -638,8 +641,12 @@ impl TableMutationAggregator {
                         .map(Arc::new);
                     let stats = match segment_info.summary.additional_stats_loc() {
                         Some(loc) => {
-                            let stats =
-                                read_segment_stats(write_segment_ctx.dal.clone(), loc).await?;
+                            let stats = read_segment_stats(
+                                write_segment_ctx.dal.clone(),
+                                loc,
+                                write_segment_ctx.cache_policy,
+                            )
+                            .await?;
                             let mut stats = (*stats).clone();
                             stats.align_to_blocks(segment_info.blocks.len())?;
                             Some(stats)
@@ -922,6 +929,7 @@ struct WriteSegmentCtx {
     schema: TableSchemaRef,
     kind: MutationKind,
     table_meta_timestamps: TableMetaTimestamps,
+    cache_policy: CachePolicy,
 }
 
 impl WriteSegmentCtx {

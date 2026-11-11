@@ -39,6 +39,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -121,7 +122,10 @@ async fn check_partitions(parts: &Vec<PartInfoPtr>, fixture: &TestFixture) -> Re
             TestFixture::default_table_schema(),
         );
         let compact_segment_info = compact_segment_reader
-            .read(&(segment.0.clone(), SegmentInfo::VERSION))
+            .read(
+                &(segment.0.clone(), SegmentInfo::VERSION),
+                &CachePolicy::BYPASS,
+            )
             .await?;
         let segment_info = SegmentInfo::try_from(compact_segment_info)?;
 

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
@@ -204,7 +205,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        cache_policy: CachePolicy,
     ) -> Result<()> {
         let internal_columns = plan
             .internal_columns
@@ -220,13 +221,13 @@ impl Table for StageTable {
         match &stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(_) => {
                 if stage_table_info.is_variant {
-                    ParquetVariantTable::do_read_data(ctx, plan, pipeline, _put_cache)
+                    ParquetVariantTable::do_read_data(ctx, plan, pipeline, cache_policy)
                 } else {
-                    ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
+                    ParquetTableForCopy::do_read_data(ctx, plan, pipeline, cache_policy)
                 }
             }
             FileFormatParams::Orc(_) => {
-                OrcTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
+                OrcTableForCopy::do_read_data(ctx, plan, pipeline, cache_policy)
             }
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Text(_) => {
                 let compact_threshold = ctx.read_block_thresholds().get();

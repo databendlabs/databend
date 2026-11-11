@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Cache kinds, by domain. Each file defines its kinds (`CacheDef`) next to their values: how
-//! much memory a value takes (`CachedItem`) and, for kinds with a disk tier, how it is stored
-//! (`DiskCodec`). Kinds are registered in `CacheRegistry::builtin`.
+//! Cache kinds, by domain. Each file defines its kinds (`CacheDef`) next to their values and how
+//! much memory a value takes (`CachedItem`). Kinds are registered in `CacheRegistry::builtin`.
+//! A kind also labels its bytes in the disk cache, which stores raw object bytes, not values.
 
 pub mod bloom;
 pub mod column;
@@ -27,3 +27,4 @@ pub mod spatial;
 pub mod table;
 pub mod vector;
 pub mod virtual_column;
+pub mod zone_map;

@@ -256,3 +256,27 @@ fn test_concurrent_turnover_stays_within_the_limit() {
     assert_eq!(events.rejected_kind_limit, 0);
     assert_eq!(events.evicted_for_capacity, (THREADS * 500 - 50) as u64);
 }
+
+/// Releasing a pinned handle does not itself evict the cached value. Reapplying the limit
+/// after readers finish must reclaim what the earlier resize could not.
+#[test]
+fn test_reapplying_limit_reclaims_previously_held_entries() {
+    let store = one_shard_store(10_000);
+    let cache = cache(&store, meta_kind());
+    let live = Live::default();
+    let held = cache.put("held", live.item(100));
+
+    store.set_kind_limit(meta_kind(), KindLimit::bytes(50));
+    let kind = store.kind_stats(meta_kind());
+    assert_eq!((kind.resident, kind.in_cache, kind.items), (100, 100, 1));
+    assert!(!cache.put("new", live.item(10)).is_charged());
+
+    drop(held);
+    let kind = store.kind_stats(meta_kind());
+    assert_eq!((kind.resident, kind.in_cache, kind.items), (100, 100, 1));
+    store.set_kind_limit(meta_kind(), KindLimit::bytes(50));
+    let kind = store.kind_stats(meta_kind());
+    assert_eq!((kind.resident, kind.in_cache, kind.items), (0, 0, 0));
+    assert_eq!(live.count(), 0);
+    assert!(cache.put("new", live.item(50)).is_charged());
+}

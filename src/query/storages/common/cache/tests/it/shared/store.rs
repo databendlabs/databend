@@ -122,7 +122,7 @@ fn test_disable_clears_and_rejects() {
     let cache = cache(&store, meta_kind());
     let live = Live::default();
     cache.put("a", live.item(100));
-    let manager = CacheManager::new(store.clone(), Default::default());
+    let manager = CacheManager::new(store.clone(), None);
     manager
         .set_cache_capacity("memory_cache_table_snapshot", 0)
         .unwrap();
@@ -144,7 +144,7 @@ fn test_pool_cap_by_name() {
     for i in 0..10 {
         cache.put(&i.to_string(), live.item(100));
     }
-    let manager = CacheManager::new(store.clone(), Default::default());
+    let manager = CacheManager::new(store.clone(), None);
     manager.set_cache_capacity("pool:meta", 500).unwrap();
     assert_eq!(pool_resident(&*store, Pool::Meta), 500);
     manager.set_cache_capacity("all", 0).unwrap();

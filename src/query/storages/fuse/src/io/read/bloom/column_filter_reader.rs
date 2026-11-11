@@ -18,7 +18,11 @@ use bytes::Bytes;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_metrics::storage::metrics_inc_block_index_read_bytes;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -43,6 +47,11 @@ pub struct BloomColumnFilterReader {
 }
 
 impl BloomColumnFilterReader {
+    /// Cache key of the filter of `filter_name` inside the index file at `index_path`.
+    pub fn cache_key(index_path: &str, filter_name: &str) -> String {
+        format!("{index_path}-{filter_name}")
+    }
+
     pub fn new(
         index_path: String,
         column_ordinal: BloomIndexColumnOrdinal,
@@ -50,8 +59,9 @@ impl BloomColumnFilterReader {
         column_chunk_meta: &SingleColumnMeta,
         operator: Operator,
         schema_desc: SchemaDescPtr,
+        policy: CachePolicy,
     ) -> Self {
-        let cache_key = format!("{index_path}-{filter_name}");
+        let cache_key = Self::cache_key(&index_path, filter_name);
 
         let SingleColumnMeta {
             offset,
@@ -61,7 +71,7 @@ impl BloomColumnFilterReader {
 
         let loader = BloomFilterLoader {
             cache_key,
-            operator,
+            storage: DiskCachedStorage::new(operator),
             offset: *offset,
             len: *len,
             num_values: *num_values,
@@ -70,7 +80,7 @@ impl BloomColumnFilterReader {
         };
 
         BloomColumnFilterReader {
-            cache: FuseCaches::instance().bloom_filters.clone(),
+            cache: FuseCaches::instance().bloom_filters.with_policy(policy),
             loader,
             index_path,
         }
@@ -86,7 +96,7 @@ impl BloomColumnFilterReader {
         let filter = if let Some(data) = whole_file {
             self.loader.load_from_source(data.as_ref())?
         } else {
-            self.loader.load(&self.index_path).await?
+            self.loader.load(&self.index_path, &self.cache).await?
         };
         Ok(Arc::clone(&self.cache.fill(cache_key, Arc::new(filter))))
     }
@@ -100,18 +110,24 @@ pub struct BloomFilterLoader {
     pub schema_desc: SchemaDescPtr,
     pub column_ordinal: BloomIndexColumnOrdinal,
     pub cache_key: String,
-    pub operator: Operator,
+    pub storage: DiskCachedStorage,
 }
 
 impl BloomFilterLoader {
+    /// The filter's column chunk is a unit of the disk cache.
     #[async_backtrace::framed]
-    async fn load(&self, path: &str) -> Result<FilterImpl> {
+    async fn load(&self, path: &str, cache: &MemCache<Arc<FilterImpl>>) -> Result<FilterImpl> {
+        let range = self.offset..self.offset + self.len;
         let chunk = self
-            .operator
-            .read_with(path)
-            .range(self.offset..self.offset + self.len)
+            .storage
+            .read(
+                CacheKind::of::<bloom::Filter>(),
+                path,
+                Some(range),
+                cache.policy().disk,
+            )
             .await?;
-        self.decode_filter(chunk.to_bytes())
+        self.decode_filter(chunk)
     }
 
     fn load_from_source(&self, data: &Bytes) -> Result<FilterImpl> {

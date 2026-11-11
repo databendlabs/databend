@@ -50,6 +50,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
+use crate::cache_policy::CachePolicy;
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
@@ -242,9 +243,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        put_cache: bool,
+        cache_policy: CachePolicy,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, plan, pipeline, put_cache);
+        let (_, _, _, _) = (ctx, plan, pipeline, cache_policy);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'read_data' operation is not implemented for the table '{}'. Table engine type: '{}'.",

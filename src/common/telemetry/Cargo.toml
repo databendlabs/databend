@@ -10,6 +10,5 @@ edition = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-
 [lints]
 workspace = true

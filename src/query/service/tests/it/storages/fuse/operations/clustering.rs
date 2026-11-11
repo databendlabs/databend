@@ -258,7 +258,6 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
         target: MaintenanceTarget::Table,
-        branch: None,
         cluster_keys: vec!["id".to_string()],
         cluster_type: ClusterType::Linear,
     };
@@ -284,7 +283,6 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
         target: MaintenanceTarget::Table,
-        branch: None,
     };
     let interpreter =
         DropTableClusterKeyInterpreter::try_create(ctx.clone(), drop_table_cluster_key_plan)?;

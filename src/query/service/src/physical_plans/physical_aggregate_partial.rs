@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_exception::Result;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
@@ -165,9 +166,8 @@ impl IPhysicalPlan for AggregatePartial {
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let runtime_top_n_filter = self.rank_limit.as_ref().and_then(|(order_by, limit)| {
-            let [desc] = order_by.as_slice() else {
-                return None;
-            };
+            // The scans prune by the first sort key, see `TransformRankLimitSort`.
+            let desc = order_by.first()?;
             if !self.group_by.contains(&desc.order_by) {
                 return None;
             }
@@ -209,15 +209,19 @@ impl IPhysicalPlan for AggregatePartial {
         if let Some((sort_desc, limit)) =
             self.resolve_rank_limit_descriptions(&schema_before_group_by)
         {
-            let filter = runtime_top_n_filter
-                .as_ref()
-                .map(|filter| (sort_desc[0].offset, filter.clone()));
+            // Share the boundary between the streams even when no scan prunes by it.
+            let boundary = runtime_top_n_filter.unwrap_or_else(|| {
+                Arc::new(RuntimeTopNBoundary::new(
+                    sort_desc[0].asc,
+                    sort_desc[0].nulls_first,
+                ))
+            });
             builder.main_pipeline.add_accumulating_transformer(|| {
                 TransformRankLimitSort::new(
                     limit,
                     sort_desc.clone(),
                     max_block_rows,
-                    filter.clone(),
+                    boundary.clone(),
                 )
             });
         }

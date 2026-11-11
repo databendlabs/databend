@@ -187,6 +187,24 @@ impl VectorBundleEntry {
             checksum: None,
         })
     }
+
+    /// Checks the reads of all rows of the component, in row order, as `row_range_read`
+    /// gives them, against its size and checksum, which no single page read is. The
+    /// reads are not joined.
+    pub fn check_rows(&self, reads: &[Bytes]) -> Result<()> {
+        let length = reads.iter().map(|read| read.len() as u64).sum::<u64>();
+        if length != self.raw_length {
+            return Err(invalid("FP16 rows do not cover the component"));
+        }
+        let mut hasher = crc32fast::Hasher::new();
+        for read in reads {
+            hasher.update(read);
+        }
+        if hasher.finalize() != self.checksum {
+            return Err(invalid("Vector component checksum mismatch"));
+        }
+        Ok(())
+    }
 }
 
 /// Byte range plus decoding information for one read (a whole component or a page).

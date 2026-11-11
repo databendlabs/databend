@@ -68,6 +68,8 @@ mod persisted;
 pub use persisted::PersistedTypeCheckAdapter;
 mod resolve;
 mod rewrite_function;
+mod scalar_constant;
+mod scalar_fold;
 mod scalar_function;
 mod scalar_rewrite;
 mod search;

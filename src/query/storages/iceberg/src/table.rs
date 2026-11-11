@@ -20,6 +20,7 @@ use std::sync::Arc;
 use arrow_schema::Schema;
 use async_trait::async_trait;
 use chrono::Utc;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumnType;
@@ -701,7 +702,7 @@ impl Table for IcebergTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline)
     }

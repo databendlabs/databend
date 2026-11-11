@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use arrow::datatypes::Schema;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
@@ -148,7 +149,7 @@ impl Table for ResultScan {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let read_options = ParquetReadOptions::default();
         let op = Arc::new(DataOperator::instance().operator());

@@ -55,6 +55,7 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::lock::LockTableOption;
@@ -731,19 +732,8 @@ impl QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        if branch.is_some() {
-            // Legacy experimental table refs were removed. The parser still accepts
-            // `<db>.<table>/<branch>` so the upcoming redesign can reuse the syntax,
-            // but any remaining runtime entry point should still return a user-facing
-            // error instead of looking like an internal server bug.
-            return Err(ErrorCode::Unimplemented(
-                "Legacy experimental table refs were removed: table branch references are reserved for a future redesign and are intentionally rejected.",
-            ));
-        }
-
         let table = self
             .shared
             .get_table(catalog, database, table, max_batch_size)
