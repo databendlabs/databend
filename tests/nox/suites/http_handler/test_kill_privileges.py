@@ -98,9 +98,15 @@ def test_sql_kill_privileges(users, kind, killer, remote):
         query_id=query_id,
         wait=0,
     )
-    assert started["state"] == "Running", started
     session_id = None
     try:
+        # wait=0 can return before asynchronous planning and execution have started.
+        deadline = time.monotonic() + 15
+        while started["state"] == "Starting" and time.monotonic() < deadline:
+            time.sleep(0.1)
+            started = query_state(query_id, owner)
+        assert started["state"] == "Running", started
+
         deadline = time.monotonic() + 15
         while time.monotonic() < deadline:
             rows = succeed(
