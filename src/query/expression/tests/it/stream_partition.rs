@@ -108,6 +108,62 @@ fn assert_same_as_expanded(
 }
 
 #[test]
+fn test_partition_preserves_timezone_representations() {
+    use databend_common_column::types::timestamp_tz;
+    use databend_common_expression::Column;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::ArrayColumn;
+
+    // Equal instants in successive constant blocks must not coalesce their offsets.
+    for nested in [false, true] {
+        let make_block = |offset, constant| {
+            let value = timestamp_tz::new(13, offset);
+            let mut column = Column::TimestampTz(vec![value; 2].into());
+            if nested {
+                column = Column::Array(Box::new(ArrayColumn::new(column, vec![0, 1, 2].into())));
+            }
+            let entry = if constant {
+                BlockEntry::new_const_column(
+                    column.data_type(),
+                    column.index(0).unwrap().to_owned(),
+                    2,
+                )
+            } else {
+                column.into()
+            };
+            DataBlock::new(vec![entry], 2)
+        };
+        for constant in [false, true] {
+            let mut stream = BlockPartitionStream::create(0, 0, 2);
+            for offset in [-7200, 1800] {
+                assert!(
+                    stream
+                        .partition(vec![0, 1], make_block(offset, constant), false)
+                        .is_empty()
+                );
+            }
+            for id in 0..2 {
+                let output = stream.finalize_partition(id).unwrap();
+                assert_eq!(output.num_rows(), 2);
+                let column = output.get_by_offset(0).to_column();
+                let values = if let Column::Array(array) = &column {
+                    array.values()
+                } else {
+                    &column
+                };
+                for (row, expected_offset) in [-7200, 1800].into_iter().enumerate() {
+                    let ScalarRef::TimestampTz(value) = values.index(row).unwrap() else {
+                        unreachable!()
+                    };
+                    assert_eq!(value.timestamp(), 13);
+                    assert_eq!(value.seconds_offset(), expected_offset);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn test_partition_keeps_constants() {
     let blocks = vec![const_block(5, 0, "x"), const_block(7, 5, "x")];
     let output = assert_same_as_expanded(&blocks, |row| (row % 2) as u64, 0, 0);
