@@ -528,8 +528,10 @@ impl VectorIndexPruner {
         let mut semaphore = self.pruning_ctx.pruning_semaphore.clone();
         // The index search is CPU bound. The runtime of a query has `max_threads`
         // threads; the global one may have more, and must not run more of them.
+        // The tasks read the index too: never allow more than the I/O limit.
         let max_threads = self.pruning_ctx.ctx.get_settings().get_max_threads()? as usize;
-        if max_threads < runtime.inner().metrics().num_workers() {
+        let workers = runtime.inner().metrics().num_workers();
+        if max_threads < workers.min(semaphore.available_permits()) {
             semaphore = Arc::new(Semaphore::new(max_threads.max(1)));
         }
         let abort_notify = self.pruning_ctx.ctx.get_abort_notify();
