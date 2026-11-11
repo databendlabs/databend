@@ -2543,30 +2543,23 @@ async fn test_repacks_max_level_without_rewrite() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_max_level_narrow_blocks_are_not_rewritten() -> anyhow::Result<()> {
+async fn test_max_level_blocks_are_never_rewritten() -> anyhow::Result<()> {
     // min_rows_per_block = 800, min_bytes_per_block = 80.
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Narrow-table blocks hit the row limit first: rows sit just below
-    // min_rows_per_block and bytes stay far below min_bytes_per_block. Rewriting
-    // them produces blocks of the same shape, so selecting them again would
-    // make RECLUSTER FINAL loop until timeout.
-    let parts = materialize_terminal_blocks(780, 50, 50, 3, thresholds).await?;
-
-    assert!(parts.tasks.is_empty());
-    assert_eq!(parts.remained_blocks.len(), 3);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_max_level_fragments_are_consolidated() -> anyhow::Result<()> {
-    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    // Fragments below half of every minimum threshold still merge into one block.
-    let parts = materialize_terminal_blocks(100, 10, 10, 3, thresholds).await?;
-
-    assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(task_part_counts(&parts), vec![3]);
-    assert_eq!(parts.tasks[0].total_rows, 300);
+    // Terminal-level blocks stay excluded regardless of size. Narrow-table
+    // blocks (rows just below the minimum, bytes far below it) and tiny
+    // fragments both used to be reselected by size-based exceptions, and
+    // rewriting them produced blocks of the same shape, so RECLUSTER FINAL
+    // looped until timeout.
+    for (row_count, block_size, file_size) in [(780, 50, 50), (100, 10, 10)] {
+        let parts =
+            materialize_terminal_blocks(row_count, block_size, file_size, 3, thresholds).await?;
+        assert!(
+            parts.tasks.is_empty(),
+            "{row_count} rows, {block_size} bytes"
+        );
+        assert_eq!(parts.remained_blocks.len(), 3);
+    }
 
     Ok(())
 }
@@ -2741,7 +2734,9 @@ async fn test_block_reduction_respects_level_guards() -> anyhow::Result<()> {
     let schema = test_cluster_schema();
     let ctx: Arc<dyn TableContext> = ctx;
 
-    for (level, block_count, expected_tasks) in [(32, 3, 1), (2, 2, 0)] {
+    // Block reduction honours the same level guards as depth selection:
+    // terminal-level blocks are never rewritten, and two mature blocks stay put.
+    for (level, block_count, expected_tasks) in [(32, 3, 0), (2, 2, 0)] {
         let blocks = (0..block_count)
             .map(|idx| {
                 let key = idx * 10;
