@@ -35,9 +35,12 @@ use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline::sinks::SyncSenderSink;
 use databend_common_pipeline::sources::BlocksSource;
 use databend_common_pipeline_transforms::processors::TransformDummy;
+use databend_query::pipelines::executor::CompletedAsyncTask;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::ExecutorTask;
 use databend_query::pipelines::executor::ExecutorWorkerContext;
+use databend_query::pipelines::executor::QueriesExecutorTasksQueue;
+use databend_query::pipelines::executor::QueriesPipelineExecutor;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::executor::WorkersCondvar;
@@ -185,6 +188,46 @@ async fn test_resize_pipeline_init_queue() -> anyhow::Result<()> {
             }"
         );
     }
+
+    Ok(())
+}
+
+/// A waker may carry a worker id that is not one of the shared executor's, as
+/// the fuse sources do with `max_storage_io_requests` above the worker count.
+/// It must not panic: a panic finishes the executor of all the queries.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_queries_executor_completed_async_task_of_foreign_worker() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let graph = create_simple_pipeline(ctx)?;
+
+    let workers = 2;
+    let condvar = WorkersCondvar::create(workers);
+    let queue = QueriesExecutorTasksQueue::create(workers);
+    for worker_id in [workers, 2 * workers + 1] {
+        condvar.inc_active_async_worker();
+        queue.completed_async_task(
+            condvar.clone(),
+            CompletedAsyncTask::create(NodeIndex::new(0), worker_id, Ok(()), graph.clone()),
+        );
+    }
+    assert!(!condvar.has_waiting_async_task());
+
+    // Both tasks are still handed to the workers of the executor.
+    let executor = QueriesPipelineExecutor::create(workers)?;
+    let mut received = vec![];
+    for _ in 0..16 {
+        let mut context = ExecutorWorkerContext::create(0, condvar.clone());
+        queue.steal_task_to_context(&mut context, &executor);
+        if let ExecutorTask::AsyncCompleted(task) = context.take_task() {
+            received.push(task.worker_id);
+        }
+        if received.len() == 2 {
+            break;
+        }
+    }
+    received.sort();
+    assert_eq!(received, vec![workers, 2 * workers + 1]);
 
     Ok(())
 }
